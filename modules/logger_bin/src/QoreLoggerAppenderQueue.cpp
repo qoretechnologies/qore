@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,15 +31,71 @@
 #include "qore_logger.h"
 #include "QoreLoggerAppenderQueue.h"
 #include "QC_LoggerAppender.h"
+#include "qore/intern/ql_misc.h"
 
-//! Adds appender event
-void QoreLoggerAppenderQueue::push(ExceptionSink* xsink, const QoreObject* appender, int64 type,
-        const QoreValue params) {
+//! Adds appender event with optional timeout for backpressure
+bool QoreLoggerAppenderQueue::push(ExceptionSink* xsink, const QoreObject* appender, int64 type,
+        const QoreValue params, int64 timeout_ms) {
+    // Calculate byte size of params for memory tracking
+    int64 param_size = q_get_value_byte_size(params, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    // Check memory limit if set
+    if (max_bytes > 0) {
+        AutoLocker al(byte_lock);
+
+        // Wait for space if blocking
+        // Note: Always allow an entry when queue is empty to prevent deadlock with oversized entries
+        if (timeout_ms >= 0) {
+            while (current_bytes.load() + param_size > max_bytes && current_bytes.load() > 0) {
+                if (timeout_ms == 0) {
+                    // Block indefinitely
+                    byte_cond.wait(byte_lock);
+                } else {
+                    // Wait with timeout
+                    int rc = byte_cond.wait(byte_lock, timeout_ms);
+                    if (rc == ETIMEDOUT) {
+                        xsink->raiseException("QUEUE-TIMEOUT", "timeout exceeded waiting for queue space");
+                        return false;
+                    }
+                }
+            }
+        } else {
+            // Negative timeout = drop immediately if full (but always allow if queue is empty)
+            if (current_bytes.load() + param_size > max_bytes && current_bytes.load() > 0) {
+                return false;
+            }
+        }
+
+        current_bytes += param_size;
+    }
+
+    // Create and push event hash
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), nullptr);
     h->setKeyValue("appender", appender->refSelf(), nullptr);
     h->setKeyValue("type", type, nullptr);
     h->setKeyValue("params", params.refSelf(), nullptr);
+    h->setKeyValue("_size", param_size, nullptr);  // Store size for byte tracking
     q.push(xsink, qobj, h.release());
+
+    // Roll back current_bytes if push failed
+    if (*xsink && max_bytes > 0) {
+        AutoLocker al(byte_lock);
+        current_bytes -= param_size;
+        byte_cond.broadcast();  // Wake any waiting producers
+    }
+
+    return !*xsink;
+}
+
+void QoreLoggerAppenderQueue::reduceBytes(int64 bytes) {
+    if (max_bytes > 0) {
+        AutoLocker al(byte_lock);
+        current_bytes -= bytes;
+        byte_cond.broadcast();  // Wake any waiting producers
+    }
 }
 
 void QoreLoggerAppenderQueue::process(int64 ms, ExceptionSink* xsink) {
@@ -48,6 +104,13 @@ void QoreLoggerAppenderQueue::process(int64 ms, ExceptionSink* xsink) {
         if (!rec) {
             break;
         }
+
+        // Reduce current bytes for memory tracking
+        QoreValue size_val = rec->getKeyValue("_size");
+        if (size_val.getType() == NT_INT) {
+            reduceBytes(size_val.getAsBigInt());
+        }
+
         QoreValue appender = rec->getKeyValue("appender", xsink);
         assert(!*xsink);
         assert(appender.getType() == NT_OBJECT);

@@ -3,7 +3,7 @@
 /*
   Qore AST Parser
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -127,4 +127,34 @@ int AstParser::getErrorCount() {
     }
 
     return lst.release();
+}
+
+//! Enable or disable conditional parsing.
+/**
+    When enabled, conditional directives are evaluated and inactive branches are skipped.
+ */
+AstParser::setConditionalParsing(bool enabled) {
+    aph->setConditionalParsing(enabled);
+}
+
+//! Clear predefined symbols used for conditional parsing.
+/**/
+AstParser::clearDefines() {
+    aph->clearDefines();
+}
+
+//! Add a predefined symbol used for conditional parsing.
+/**
+    @param name symbol name
+ */
+AstParser::addDefine(string name) {
+    aph->addDefine(name->getBuffer());
+}
+
+//! Set predefined symbols used for conditional parsing.
+/**
+    @param names list of symbol names
+ */
+AstParser::setDefines(list<auto> names) {
+    aph->setDefines(names);
 }

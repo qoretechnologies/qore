@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
+#include <qore/TypedHashDecl.h>
 
 #include <climits>
 #include <cstdlib>
@@ -262,34 +263,34 @@ bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, Exce
     return false;
 }
 
-QoreHashNode* QoreFilesystemSecurityManager::getConfiguration() const {
-    ReferenceHolder<QoreHashNode> config(new QoreHashNode(autoTypeInfo), nullptr);
+QoreHashNode* QoreFilesystemSecurityManager::getConfiguration(ExceptionSink* xsink) const {
+    ReferenceHolder<QoreHashNode> config(new QoreHashNode(hashdeclFilesystemSecurityConfigInfo, xsink), xsink);
 
     // Sandbox root
     if (!priv->sandbox_root.empty()) {
-        config->setKeyValue("sandbox_root", new QoreStringNode(priv->sandbox_root.c_str()), nullptr);
+        config->setKeyValue("sandbox_root", new QoreStringNode(priv->sandbox_root.c_str()), xsink);
     }
 
     // Default policy
     config->setKeyValue("default_policy",
-        new QoreStringNode(priv->default_allow ? "allow" : "deny"), nullptr);
+        new QoreStringNode(priv->default_allow ? "allow" : "deny"), xsink);
 
     // Allowed paths
-    ReferenceHolder<QoreListNode> allowed(new QoreListNode(autoTypeInfo), nullptr);
+    ReferenceHolder<QoreListNode> allowed(new QoreListNode(hashdeclFilesystemPathInfo->getTypeInfo()), xsink);
     for (const auto& rule : priv->allowed_paths) {
-        ReferenceHolder<QoreHashNode> entry(new QoreHashNode(autoTypeInfo), nullptr);
-        entry->setKeyValue("path", new QoreStringNode(rule.path.c_str()), nullptr);
-        entry->setKeyValue("mode", rule.mode, nullptr);
-        allowed->push(entry.release(), nullptr);
+        ReferenceHolder<QoreHashNode> entry(new QoreHashNode(hashdeclFilesystemPathInfo, xsink), xsink);
+        entry->setKeyValue("path", new QoreStringNode(rule.path.c_str()), xsink);
+        entry->setKeyValue("mode", rule.mode, xsink);
+        allowed->push(entry.release(), xsink);
     }
-    config->setKeyValue("allowed_paths", allowed.release(), nullptr);
+    config->setKeyValue("allowed_paths", allowed.release(), xsink);
 
     // Denied paths
-    ReferenceHolder<QoreListNode> denied(new QoreListNode(stringTypeInfo), nullptr);
+    ReferenceHolder<QoreListNode> denied(new QoreListNode(stringTypeInfo), xsink);
     for (const auto& path : priv->denied_paths) {
-        denied->push(new QoreStringNode(path.c_str()), nullptr);
+        denied->push(new QoreStringNode(path.c_str()), xsink);
     }
-    config->setKeyValue("denied_paths", denied.release(), nullptr);
+    config->setKeyValue("denied_paths", denied.release(), xsink);
 
     return config.release();
 }
@@ -681,34 +682,34 @@ bool QoreNetworkSecurityManager::checkHostname(const char* hostname, int port, i
     return priv->allowed_hosts.empty() ? priv->default_allow : false;
 }
 
-QoreHashNode* QoreNetworkSecurityManager::getConfiguration() const {
-    ReferenceHolder<QoreHashNode> config(new QoreHashNode(autoTypeInfo), nullptr);
+QoreHashNode* QoreNetworkSecurityManager::getConfiguration(ExceptionSink* xsink) const {
+    ReferenceHolder<QoreHashNode> config(new QoreHashNode(hashdeclNetworkSecurityConfigInfo, xsink), xsink);
 
     // Default policy
     config->setKeyValue("default_policy",
-        new QoreStringNode(priv->default_allow ? "allow" : "deny"), nullptr);
+        new QoreStringNode(priv->default_allow ? "allow" : "deny"), xsink);
 
     // Allowed hosts
-    ReferenceHolder<QoreListNode> hosts(new QoreListNode(stringTypeInfo), nullptr);
+    ReferenceHolder<QoreListNode> hosts(new QoreListNode(stringTypeInfo), xsink);
     for (const auto& host : priv->allowed_hosts) {
-        hosts->push(new QoreStringNode(host.c_str()), nullptr);
+        hosts->push(new QoreStringNode(host.c_str()), xsink);
     }
-    config->setKeyValue("allowed_hosts", hosts.release(), nullptr);
+    config->setKeyValue("allowed_hosts", hosts.release(), xsink);
 
     // Note: For security, we don't expose the full CIDR range details
-    config->setKeyValue("allowed_ranges_count", (int64)priv->allowed_ranges.size(), nullptr);
-    config->setKeyValue("denied_ranges_count", (int64)priv->denied_ranges.size(), nullptr);
+    config->setKeyValue("allowed_ranges_count", (int64)priv->allowed_ranges.size(), xsink);
+    config->setKeyValue("denied_ranges_count", (int64)priv->denied_ranges.size(), xsink);
 
     // Allowed ports
-    ReferenceHolder<QoreListNode> ports(new QoreListNode(autoTypeInfo), nullptr);
+    ReferenceHolder<QoreListNode> ports(new QoreListNode(hashdeclPortRangeInfo->getTypeInfo()), xsink);
     for (const auto& pr : priv->allowed_ports) {
-        ReferenceHolder<QoreHashNode> entry(new QoreHashNode(autoTypeInfo), nullptr);
-        entry->setKeyValue("low", pr.low, nullptr);
-        entry->setKeyValue("high", pr.high, nullptr);
-        entry->setKeyValue("proto", pr.proto, nullptr);
-        ports->push(entry.release(), nullptr);
+        ReferenceHolder<QoreHashNode> entry(new QoreHashNode(hashdeclPortRangeInfo, xsink), xsink);
+        entry->setKeyValue("low", pr.low, xsink);
+        entry->setKeyValue("high", pr.high, xsink);
+        entry->setKeyValue("proto", pr.proto, xsink);
+        ports->push(entry.release(), xsink);
     }
-    config->setKeyValue("allowed_ports", ports.release(), nullptr);
+    config->setKeyValue("allowed_ports", ports.release(), xsink);
 
     return config.release();
 }
@@ -861,18 +862,18 @@ bool QoreSandboxManager::checkIOInterrupt(ExceptionSink* xsink, const char* oper
     return false;
 }
 
-QoreHashNode* QoreSandboxManager::getConfiguration() const {
-    ReferenceHolder<QoreHashNode> config(new QoreHashNode(autoTypeInfo), nullptr);
+QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
+    ReferenceHolder<QoreHashNode> config(new QoreHashNode(hashdeclSandboxConfigInfo, xsink), xsink);
 
-    config->setKeyValue("filesystem", fs_mgr.getConfiguration(), nullptr);
-    config->setKeyValue("network", net_mgr.getConfiguration(), nullptr);
+    config->setKeyValue("filesystem", fs_mgr.getConfiguration(xsink), xsink);
+    config->setKeyValue("network", net_mgr.getConfiguration(xsink), xsink);
 
-    config->setKeyValue("memory_limit", (int64)memory_limit, nullptr);
-    config->setKeyValue("cpu_time_limit", cpu_time_limit, nullptr);
-    config->setKeyValue("wall_time_limit", wall_time_limit, nullptr);
-    config->setKeyValue("max_threads", max_threads, nullptr);
-    config->setKeyValue("max_recursion", max_recursion, nullptr);
-    config->setKeyValue("interrupt_requested", interrupt_requested.load(), nullptr);
+    config->setKeyValue("memory_limit", (int64)memory_limit, xsink);
+    config->setKeyValue("cpu_time_limit", cpu_time_limit, xsink);
+    config->setKeyValue("wall_time_limit", wall_time_limit, xsink);
+    config->setKeyValue("max_threads", max_threads, xsink);
+    config->setKeyValue("max_recursion", max_recursion, xsink);
+    config->setKeyValue("interrupt_requested", interrupt_requested.load(), xsink);
 
     return config.release();
 }

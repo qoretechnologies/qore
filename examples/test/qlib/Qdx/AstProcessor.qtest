@@ -47,6 +47,7 @@ public class AstProcessorTests inherits QUnit::Test {
         addTestCase("Conditional parsing ifdef/endif", \testConditionalIfdef());
         addTestCase("Conditional parsing if/elif/else/endif", \testConditionalIfElif());
         addTestCase("Nested conditionals", \testNestedConditionals());
+        addTestCase("Format parse diagnostics", \testFormatParseDiagnostics());
         set_return_value(main());
     }
 
@@ -66,7 +67,7 @@ public class AstProcessorTests inherits QUnit::Test {
         string output = proc.process();
 
         assertTrue(output =~ /namespace Test \{/, "namespace declaration");
-        assertTrue(output =~ /\};/, "namespace closing brace");
+        assertTrue(output =~ /\}\s*;?/, "namespace closing brace");
     }
 
     testClassBasic() {
@@ -286,5 +287,21 @@ class AfterNested { }
         assertTrue(output =~ /class OuterClass/, "class from outer ifdef");
         assertTrue(output =~ /class InnerClass/, "class from inner ifdef");
         assertTrue(output =~ /class AfterNested/, "class after nested endif");
+    }
+
+    testFormatParseDiagnostics() {
+        string code = "%modern\nmodule Test {\n    version = \"1.0\";\n    desc = \"missing semicolon\"\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertFalse(exists(tree), "parse fails");
+        assertTrue(parser.getErrorCount() > 0, "parse errors reported");
+
+        *list diagnostics = parser.getDiagnostics();
+        assertTrue(exists(diagnostics), "diagnostics available");
+
+        string output = Qdx::formatParseDiagnostics("test.qm", code, diagnostics);
+        assertTrue(output =~ /test\.qm:/, "path included");
+        assertTrue(output =~ /syntax error/, "error message included");
+        assertTrue(output =~ /\n  \}\n/, "line text included");
     }
 }

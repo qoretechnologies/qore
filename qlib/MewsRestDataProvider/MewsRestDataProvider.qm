@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MewsRestDataProvider module definition
 
-/*  MewsRestDataProvider.qm Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/*  MewsRestDataProvider.qm Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -554,9 +554,6 @@ module MewsRestDataProvider {
 
 #! Contains all public definitions in the MewsRestDataProvider module
 public namespace MewsRestDataProvider {
-}
-
-public namespace Priv {
 #! Mews logo: white
 public const MewsLogoWhite = File::readTextFile(get_script_dir() + "/mews-M-white.svg");
 }

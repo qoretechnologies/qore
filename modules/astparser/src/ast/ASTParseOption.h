@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -74,6 +74,7 @@ enum ASTParseOptionKind {
     APOK_LOCK_WARNINGS,
     APOK_LOOSE_ARGS,
     APOK_MODULE_CMD,
+    APOK_MODERN,
     APOK_NEW_STYLE,
     APOK_NO_CHILD_PO_RESTRICTIONS,
     APOK_NO_CLASS_DEFS,
@@ -134,6 +135,8 @@ enum ASTParseOptionKind {
     // TODO
     APOK_IFDEF,
     APOK_IFNDEF,
+    APOK_IF,
+    APOK_ELIF,
     APOK_ELSE,
     APOK_ENDIF,
 };

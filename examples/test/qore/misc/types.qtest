@@ -1665,6 +1665,79 @@ class TypeTest inherits QUnit::Test {
         }
 
         {
+            date<absolute> abs = 2017-07-10;
+            assertEq(2017-07-10, abs);
+
+            date<relative> rel = 1s;
+            assertEq(1s, rel);
+
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse("sub t() { date<absolute> i = 1s; }", "");
+                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");
+            }
+
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse("sub t() { date<relative> i = 2017-07-10; }", "");
+                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");
+            }
+
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse("sub t() { date<absolute> d0 = now(); date d1 = d0; return d1; }", "");
+                assertTrue(p.callFunction("t") instanceof date);
+            }
+
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse("sub t() { *date<absolute> i = NULL; }", "");
+                p.callFunction("t");
+            }
+
+            {
+                Program p(PO_NEW_STYLE);
+                assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("sub t() { date<foo> i; }", ""));
+            }
+
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse("sub t() { any x = 1s; date<absolute> i = x; }", "");
+                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");
+            }
+
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse("sub t() { any x = 2017-07-10; date<relative> i = x; }", "");
+                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");
+            }
+
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse("sub t(date<absolute> d) { return d; } sub r() { t(1s); }", "");
+                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "r");
+            }
+
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse("sub t(date<relative> d) { return d; } sub r() { t(2017-07-10); }", "");
+                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "r");
+            }
+
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse("date<absolute> sub t() { return 1s; }", "");
+                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");
+            }
+
+            {
+                Program p(PO_NEW_STYLE);
+                p.parse("date<relative> sub t() { return 2017-07-10; }", "");
+                assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");
+            }
+        }
+
+        {
             binary i = <ab>;
             assertEq(<ab>, i);
 

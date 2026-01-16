@@ -376,7 +376,32 @@ Content-Length: 16
     %Qore exceptions are returned with a 409 \c "Conflict" HTTP return code with the message body as an
     @ref Qore::ExceptionInfo "ExceptionInfo" hash.
 
+    @section resthandler_raw_response Raw Responses
+    Set \c "raw_response" in the response hash to bypass serialization and schema validation and return the body
+    as-is.  The response must include a \c "Content-Type" header.
+
+    Example:
+    @code{.q}
+    class MyRestClass inherits RestHandler::AbstractRestClass {
+        string name() {
+            return "files";
+        }
+
+        hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+            return {
+                "code": 200,
+                "body": cx.body,
+                "hdr": {"Content-Type": "application/octet-stream"},
+                "raw_response": True,
+            };
+        }
+    }
+    @endcode
+
     @section resthandler_relnotes RestHandler Release Notes
+
+    @subsection rh_1_6_5 RestHandler v1.6.5
+    - added \c raw_response to bypass serialization and schema validation for custom response bodies
 
     @subsection rh_1_6_4 RestHandler v1.6.4
     - fixed handling \c OPTIONS requests with an \c action parameter
@@ -523,6 +548,8 @@ public namespace RestHandler {
               immediately; a chunked reply is not made, and send() and sendImpl() are not called
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed when the handler returns
             - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
+            - \c "raw_response": (optional) set this key to @ref True to bypass serialization and schema validation;
+              the body is returned as-is and the \c "Content-Type" header must be set
 
             @note this method is called after the message body has been received
         */
@@ -616,6 +643,8 @@ public namespace RestHandler {
             - \c "body": the message body to return in the response; if this key is returned, then the reply is sent immediately; a chunked reply is not made, and send() and sendImpl() are not called
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed when the handler returns
             - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
+            - \c "raw_response": (optional) set this key to @ref True to bypass serialization and schema validation;
+              the body is returned as-is and the \c "Content-Type" header must be set
 
             @note this method is called after the message body has been received
         */
@@ -797,6 +826,20 @@ public namespace RestHandler {
                 args = cx.body - "action";
             }
             cx.socketobject = s;
+            # Only set HTTP/2 active stream if the socket has an HTTP/2 session
+            # (may not be the case for forwarded requests to remote services)
+            bool h2_stream_set;
+            if (cx."header-info".http2) {
+                try {
+                    cx.socketobject.setHttp2ActiveStream(cx."header-info".stream_id);
+                    h2_stream_set = True;
+                } catch (hash<ExceptionInfo> ex) {
+                    # Ignore - socket doesn't have HTTP/2 session (forwarded request)
+                }
+            }
+            on_exit if (h2_stream_set) {
+                cx.socketobject.setHttp2ActiveStream(-1);
+            }
             if (cl) {
                 string cname = shift cl;
                 cx += {
@@ -1244,6 +1287,8 @@ public namespace RestHandler {
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed
               when the handler returns
             - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
+            - \c "raw_response": (optional) set this key to @ref True to bypass serialization and schema validation;
+              the body is returned as-is and the \c "Content-Type" header must be set
          */
         hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
                 *data b) {
@@ -1408,44 +1453,58 @@ public namespace RestHandler {
             }
 
             if (!rv.reply_sent) {
-                # verify response with the REST schema
-                hash<HttpResponseInfo> res;
+                bool raw_response = exists rv.raw_response && rv.raw_response;
+                if (raw_response) {
+                    if (!rv.hdr) {
+                        rv.hdr = {};
+                    }
+                    if (!exists rv.hdr."Content-Type") {
+                        rv.hdr."Content-Type" = "application/octet-stream";
+                    }
+                } else {
+                    # verify response with the REST schema
+                    hash<HttpResponseInfo> res;
 
-                try {
-                    res = validator.processResponse(hdr.method, req.path, rv."code", rv.body, rv.hdr,
-                        aih."*/*" ? NOTHING : keys aih);
-                } catch (hash<ExceptionInfo> ex) {
-                    logDebug("REST DBG: %s", get_exception_string(ex));
-                    if (ex.err == "ACCEPT-ERROR") {
-                        responseSerializationError(cx, aih, rv);
-                        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header field is
-                        # present, and if the server cannot send a response which is acceptable according to the
-                        # combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.
-                        return AbstractHttpRequestHandler::makeResponse(406, ex.desc);
+                    try {
+                        res = validator.processResponse(hdr.method, req.path, rv."code", rv.body, rv.hdr,
+                            aih."*/*" ? NOTHING : keys aih);
+                    } catch (hash<ExceptionInfo> ex) {
+                        logDebug("REST DBG: %s", get_exception_string(ex));
+                        if (ex.err == "ACCEPT-ERROR") {
+                            responseSerializationError(cx, aih, rv);
+                            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header field is
+                            # present, and if the server cannot send a response which is acceptable according to the
+                            # combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.
+                            return AbstractHttpRequestHandler::makeResponse(406, ex.desc);
+                        }
+
+                        # add original resp to the exception (only if it was an error)
+                        if (rv."code" >= 400 && rv."code" < 600) {
+                            ex.desc += sprintf(" ... Original response: code: %d, body: %y, hdr: %y", rv."code",
+                                rv.body, rv.hdr);
+                        }
+
+                        rethrow ex.err, ex.desc;
                     }
 
-                    # add original resp to the exception (only if it was an error)
-                    if (rv."code" >= 400 && rv."code" < 600) {
-                        ex.desc += sprintf(" ... Original response: code: %d, body: %y, hdr: %y", rv."code", rv.body,
-                            rv.hdr);
-                    }
+                    logDebug("REST DBG raw body: %y -> serialized body (%s): %y", rv.body, res.hdr."Content-Type",
+                        res.body);
 
-                    rethrow ex.err, ex.desc;
+                    rv += {
+                        "body": res.body,
+                        "hdr": res.hdr,
+                    };
+
+                    logDebug("REST DBG: response serialization: %d %s (%d bytes)", rv."code",
+                        rv.hdr."Content-Type" ?? "n/a", rv.body.size());
                 }
-
-                logDebug("REST DBG raw body: %y -> serialized body (%s): %y", rv.body, res.hdr."Content-Type",
-                    res.body);
-
-                rv += {
-                    "body": res.body,
-                    "hdr": res.hdr,
-                };
-
-                logDebug("REST DBG: response serialization: %d %s (%d bytes)", rv."code",
-                    rv.hdr."Content-Type" ?? "n/a", rv.body.size());
             }
 
             #logDebug("REST DBG: rv: %N", rv);
+
+            if (exists rv.raw_response) {
+                delete rv."raw_response";
+            }
 
             return cast<hash<HttpResponseInfo>>(rv);
         }

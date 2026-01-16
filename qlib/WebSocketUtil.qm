@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file WebSocketUtil.qm WebSocket common client/server code
 
-/*  WebSocketUtil.qm Copyright 2013 - 2025 Qore Technologies, s.r.o.
+/*  WebSocketUtil.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -111,6 +111,8 @@ public namespace WebSocketUtil {
     public hashdecl WsMsgInfo {
         #! Frame opcode (one of @ref opcodes)
         int op;
+        #! User-defined info; can be used for debugging for example
+        *hash<auto> info;
         #! True if the frame was masked
         bool masked;
         #! Close code (one of @ref closecodes); only set if op is @ref WSOP_Close
@@ -326,6 +328,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         - \c rsv1: the RSV1 bit (used by extensions like permessage-deflate)
         - \c rsv2: the RSV2 bit (reserved for extensions)
         - \c rsv3: the RSV3 bit (reserved for extensions)
+        - \c info: user-defined info; may include debug-only metadata
 
         @since WebSocketUtil 1.5 added \c rsv1, \c rsv2, \c rsv3 fields
     */
@@ -381,6 +384,9 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             "rsv2": rsv2,
             "rsv3": rsv3,
         });
+        h.info = h.info ?? {};
+        h.info{"b0"} = b0;
+        h.info{"b1"} = b1;
         if (h.op == WSOP_Close) {
             if (data) {
                 # get an unsigned 2-byte integer in network byte order (MSB) for the close code
@@ -415,6 +421,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         - \c rsv1: the RSV1 bit (used by extensions like permessage-deflate)
         - \c rsv2: the RSV2 bit (reserved for extensions)
         - \c rsv3: the RSV3 bit (reserved for extensions)
+        - \c info: user-defined info; may include debug-only metadata
 
         @throw WEBSOCKET-ERROR if the buffer is too short to contain a valid frame
 
@@ -506,6 +513,11 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             "rsv2": rsv2,
             "rsv3": rsv3,
         });
+        @debug {
+            h.info = h.info ?? {};
+            h.info{"b0"} = b0;
+            h.info{"b1"} = b1;
+        }
         if (h.op == WSOP_Close) {
             if (data) {
                 # get an unsigned 2-byte integer in network byte order (MSB) for the close code

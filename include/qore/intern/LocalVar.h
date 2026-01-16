@@ -482,7 +482,8 @@ public:
         //printd(5, "LocalVar::getLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
         //  getName(), for_remove, closure_use, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));
         if (!closure_use) {
-            return get_var()->getLValue(lvh, for_remove, typeInfo, refTypeInfo);
+            // Use getTypeInfoForLValue() to include NoNarrow marker for hash<auto!>/list<auto!> variables
+            return get_var()->getLValue(lvh, for_remove, getTypeInfoForLValue(), refTypeInfo);
         }
 
         return thread_find_closure_var(name.c_str())->getLValue(lvh, for_remove);
@@ -559,6 +560,12 @@ public:
     DLLLOCAL void setNoNarrowing() {
         no_narrowing = true;
     }
+
+    //! Returns the typeInfo for use in LValueHelper, with NoNarrow marker if applicable
+    /** When no_narrowing is true, returns the NoNarrow version of the type so that
+        LValueHelper::assign() can properly strip the type at runtime.
+    */
+    DLLLOCAL const QoreTypeInfo* getTypeInfoForLValue() const;
 
     //! Sets the narrowed type for the variable (called during assignment parsing)
     /** Only sets if this is an auto-typed variable and the new type is more specific

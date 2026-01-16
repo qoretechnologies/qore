@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore CdsRestDataProvider module definition
 
-/*  CdsRestDataProvider.qm Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/*  CdsRestDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -355,12 +355,10 @@ public const DynamicsAppName = "Dynamics";
 
 #! Application name for Business Central
 public const BusinessCentralAppName = "BusinessCentral";
-}
 
-namespace Priv {
 # used in accordance with: https://learn.microsoft.com/en-us/dynamics365/get-started/icons#icon-updates
-const DynamicsLogo = File::readTextFile(get_script_dir() + "/dynamics-logo.svg");
+public const DynamicsLogo = File::readTextFile(get_script_dir() + "/dynamics-logo.svg");
 
 # Business Central logo - simplified building/chart icon based on Microsoft BC branding
-const BusinessCentralLogo = File::readTextFile(get_script_dir() + "/business-central-logo.svg");
+public const BusinessCentralLogo = File::readTextFile(get_script_dir() + "/business-central-logo.svg");
 }

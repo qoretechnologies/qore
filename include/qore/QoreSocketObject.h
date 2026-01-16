@@ -354,6 +354,9 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT int32_t getHttp2ActiveStream() const;
+    DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
+            bool end_stream, int timeout_ms, ExceptionSink* xsink);
+    DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
 
     DLLEXPORT long verifyPeerCertificate();
     DLLEXPORT int getSocket();

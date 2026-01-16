@@ -124,7 +124,7 @@ public hashdecl DataProviderDebugInfo {
 }
 
 #! Abstract base class for debug info collection
-/** Data providers call the @ref collect() method with debug info for each operation.
+/** Data providers call the @ref DataProvider::AbstractDebugInfoCollector::collect method with debug info for each operation.
     Implementations can store, log, or process this information as needed.
 
     @since DataProvider 3.5

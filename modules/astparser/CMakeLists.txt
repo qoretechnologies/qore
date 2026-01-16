@@ -1,3 +1,7 @@
+# Allow BISON_EXECUTABLE to be set from environment variable
+if(NOT BISON_EXECUTABLE AND DEFINED ENV{BISON_EXECUTABLE})
+    set(BISON_EXECUTABLE $ENV{BISON_EXECUTABLE} CACHE FILEPATH "Path to bison executable")
+endif()
 find_package(BISON REQUIRED)
 find_package(FLEX 2.5.35 REQUIRED)
 
@@ -56,7 +60,15 @@ set(QORE_DOX_ASTPARSER_TMPL_SRC
 )
 
 # prepare ast_scanner and ast_parser targets
-bison_target(ast_parser src/ast_parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/ast_parser.cpp)
+# The astparser grammar intentionally has conflicts due to parse_option handling.
+# See the comment in ast_parser.ypp for details. Warnings are suppressed with bison 3.0+.
+if(BISON_VERSION VERSION_GREATER_EQUAL "3.0")
+    set(ASTPARSER_BISON_FLAGS "-Wno-conflicts-sr -Wno-conflicts-rr -Wno-other")
+else()
+    set(ASTPARSER_BISON_FLAGS "")
+endif()
+bison_target(ast_parser src/ast_parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/ast_parser.cpp
+    COMPILE_FLAGS "${ASTPARSER_BISON_FLAGS}")
 flex_target(ast_scanner src/ast_scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/ast_scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(ast_scanner ast_parser)
 

@@ -6,6 +6,7 @@
 %require-types
 %strict-args
 
+%requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 
 %try-module astparser
@@ -227,6 +228,44 @@ class MyClass {
     constructor() {}
 }
 ";
+
+        # Test for doc comment with line comments inside the function body
+        const DocCommentBodyCommentCode = "
+#! Doc for function with body comment
+sub func_with_body_comment() {
+    # body comment that should not clear the doc comment
+    return 1;
+}
+";
+
+        # Test for doc comment with nested sub expression in body
+        const DocCommentNestedSubCode = "
+#! Doc for function with nested sub
+sub func_with_nested_sub() {
+    code inner = sub () {
+        return 1;
+    };
+    return inner();
+}
+";
+
+        const DateSubtypeCode = "
+%new-style
+public typedef AbsDate = date<absolute>;
+public typedef RelDate = date<relative>;
+
+class DateTypes {
+    public {
+        date<absolute> abs;
+        date<relative> rel;
+    }
+}
+
+public hashdecl DateInfo {
+    date<absolute> created;
+    date<relative> offset;
+}
+";
     }
 
     constructor() : Test("AstParserTest", "1.0") {
@@ -234,6 +273,41 @@ class MyClass {
         addTestCase("astparser module not available", \testNoModule());
 %else
         addTestCase("Basic parsing", \testBasicParsing());
+        addTestCase("Parse file", \testParseFile());
+        addTestCase("Diagnostics", \testDiagnostics());
+        addTestCase("Modern module parsing", \testModernModuleParsing());
+        addTestCase("Parse directives in blocks", \testParseDirectivesInBlocks());
+        addTestCase("Parse directives in member lists", \testParseDirectivesInMemberLists());
+        addTestCase("Parse directives in expressions", \testParseDirectivesInExpressions());
+        addTestCase("Parse directives in switch cases", \testParseDirectivesInSwitchCases());
+        addTestCase("Parse directives in list expressions", \testParseDirectivesInListExpressions());
+        addTestCase("Parse directives in hash literals", \testParseDirectivesInHashLiterals());
+        addTestCase("Parse directives in string concatenation", \testParseDirectivesInStringConcat());
+        addTestCase("Parse directives in module blocks", \testParseDirectivesInModuleBlocks());
+        addTestCase("Parse directives in module decls", \testParseDirectivesInModuleDecls());
+        addTestCase("Hash literal multiline string", \testHashLiteralMultilineString());
+        addTestCase("Hash literal long strings", \testHashLiteralLongStrings());
+        addTestCase("Hash literal expression keys", \testHashLiteralExpressionKeys());
+        addTestCase("Parenthesized regex expression", \testParenthesizedRegexMatch());
+        addTestCase("Parenthesized division access", \testParenthesizedDivisionAccess());
+        addTestCase("Parenthesized expression at EOF", \testParenthesizedExpressionAtEOF());
+        addTestCase("Parenthesized hash literals", \testParenthesizedHashLiterals());
+        addTestCase("Curly hash literals", \testCurlyHashLiterals());
+        addTestCase("Typed hash literals", \testTypedHashLiterals());
+        addTestCase("Typed hash nested", \testTypedHashNested());
+        addTestCase("Typed hash parse directives", \testTypedHashParseDirectives());
+        addTestCase("Typed hash mixed keys", \testTypedHashMixedKeys());
+        addTestCase("Hash literal expression values", \testHashLiteralExpressionValues());
+        addTestCase("Hash literal unary values", \testHashLiteralUnaryValues());
+        addTestCase("Hash literal ternary values", \testHashLiteralTernaryValues());
+        addTestCase("Hash literal access values", \testHashLiteralAccessValues());
+        addTestCase("Hash literal operator values", \testHashLiteralOperatorValues());
+        addTestCase("Block comments in hash lookahead", \testBlockCommentsInHashLookahead());
+        addTestCase("Consecutive parse options in hash", \testConsecutiveParseOptionsInHash());
+        addTestCase("Last index operator in hash", \testLastIndexOperatorInHash());
+        addTestCase("Escaped quote in string", \testEscapedQuoteInString());
+        addTestCase("Conditional parsing mode", \testConditionalParsingMode());
+        addTestCase("List assignment parsing", \testListAssignmentParsing());
         addTestCase("Class parsing", \testClassParsing());
         addTestCase("Typedef parsing", \testTypedefParsing());
         addTestCase("Namespace parsing", \testNamespaceParsing());
@@ -251,6 +325,7 @@ class MyClass {
         addTestCase("Doc comments comprehensive", \testDocCommentsComprehensive());
         addTestCase("Doc comments in getNodesInfo", \testDocCommentsGetNodesInfo());
         addTestCase("Doc comments edge cases", \testDocCommentsEdgeCases());
+        addTestCase("Date subtype parsing", \testDateSubtypeParsing());
 %endif
         set_return_value(main());
     }
@@ -263,6 +338,369 @@ class MyClass {
     testBasicParsing() {
         AstParser parser();
         *AstTree tree = parser.parseString(SimpleClassCode);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseFile() {
+        string tmpfile = tmp_location() + "/astparser_parse_file_" + getpid() + ".q";
+        {
+            File f();
+            f.open2(tmpfile, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(SimpleClassCode);
+        }
+        on_exit unlink(tmpfile);
+
+        AstParser parser();
+        *AstTree tree = parser.parseFile(tmpfile);
+        assertTrue(exists(tree), "parseFile returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+    }
+
+    testDiagnostics() {
+        string badCode = "%new-style\nsub broken() {\n    int x = ;\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(badCode);
+        assertTrue(!exists(tree) || parser.getErrorCount() > 0, "parse errors reported");
+
+        *list diags = parser.getDiagnostics();
+        assertTrue(exists(diags), "diagnostics returned");
+        assertTrue(diags.size() > 0, "diagnostic entries present");
+
+        hash diag = diags[0];
+        assertTrue(exists(diag.range), "diagnostic has range");
+        assertTrue(exists(diag.range.start), "diagnostic range has start");
+        assertTrue(exists(diag.range.end), "diagnostic range has end");
+        assertTrue(diag.range.start.line >= 0, "start line is 0-indexed");
+        assertTrue(diag.range.start.character >= 0, "start character is 0-indexed");
+        assertTrue(diag.range.end.line >= diag.range.start.line, "end line >= start line");
+        assertTrue(exists(diag.message), "diagnostic has message");
+    }
+
+    testModernModuleParsing() {
+        string code = "%modern\nmodule TestModule {\n    version = \"1.0\";\n    desc = \"test module\";\n    author = \"tester\";\n    url = \"http://example\";\n    license = \"MIT\";\n}\npublic namespace TestModule {\n    public int sub getValue() {\n        return 1;\n    }\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseDirectivesInBlocks() {
+        string code = "%modern\npublic class Foo {\n    int getValue() {\n%disable-warning deprecated\n        return 1;\n    }\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseDirectivesInMemberLists() {
+        string code = "%modern\nnamespace Test {\n%disable-warning deprecated\n    public class Bar {\n        public {\n%disable-warning deprecated\n            int x;\n        }\n    }\n%disable-warning deprecated\n    public hashdecl Info {\n%disable-warning deprecated\n        int id;\n    }\n%disable-warning deprecated\n    public enum Kind {\n        A,\n%disable-warning deprecated\n        B\n    }\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseDirectivesInExpressions() {
+        string code = "%modern\npublic hashdecl HttpServerOptionInfo {\n    int idle_threads =\n%ifndef NO_SYSCONF\n        2\n%else\n        10\n%endif\n        ;\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseDirectivesInSwitchCases() {
+        string code = "%modern\nsub parse_kind(string type) {\n    switch (type) {\n%ifndef NoYaml\n        case \"yaml\": return 1;\n%endif\n        case \"json\": return 2;\n        default: return 0;\n    }\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseDirectivesInListExpressions() {
+        string code = "%modern\npublic class ListTest {\n    public {\n        const RequiredKeys = (\n%ifdef PO_NO_PROCESS_CONTROL\n            \"sleep\",\n%endif\n%ifdef PO_NO_THREAD_CONTROL\n            \"start_thread\",\n%endif\n        );\n    }\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseDirectivesInHashLiterals() {
+        string code = "%modern\npublic class HashTest {\n    public {\n        const DataSerializationSupport = {\n%ifndef NoJson\n            \"json\": \\HashTest::serializeJson(),\n%endif\n            \"none\": \\HashTest::serializeDefault(),\n        };\n    }\n    static code serializeJson() {\n        return \\sprintf; # dummy\n    }\n    static code serializeDefault() {\n        return \\sprintf; # dummy\n    }\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseDirectivesInStringConcat() {
+        string code = "%new-style\npublic class StringTest {\n    public {\n        const Desc = \"data serialization:\\n\"\n%ifndef NoJson\n            \" - json\\n\"\n%endif\n%ifndef NoYaml\n            \" - yaml\\n\"\n%endif\n            \" - none\\n\";\n    }\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseDirectivesInModuleBlocks() {
+        string code = "%new-style\nmodule TestModule {\n%ifndef QORE_QDX_RUN\n    init = sub () {\n    };\n%endif\n}\n";
+        AstParser parser();
+        parser.setConditionalParsing(True);
+        parser.setDefines(("QORE_QDX_RUN",));
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParseDirectivesInModuleDecls() {
+        string code = "%new-style\nmodule TestModule {\n    version = \"1.0\";\n%ifdef QORE_QDX_RUN\n    desc = \"doc\";\n%else\n    desc = \"runtime\";\n%endif\n}\n";
+        AstParser parser();
+        parser.setConditionalParsing(True);
+        parser.setDefines(("QORE_QDX_RUN",));
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testHashLiteralMultilineString() {
+        string code = "sub test() {\n    hash h = {\n        \"short_desc\": \"The number of most recent messages from the thread when constructing the context for \"\n            \"the run\",\n    };\n}\n";
+        AstParser parser();
+        parser.setConditionalParsing(True);
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testHashLiteralLongStrings() {
+        string code = "public class OpenAiTrunctationStrategyDataType inherits HashDataType {\n    public {\n        const Fields = {\n            \"type\": {\n                \"display_name\": \"Type\",\n                \"short_desc\": \"The truncation strategy to use for the thread\",\n                \"desc\": \"The truncation strategy to use for the thread. The default is `auto`. If set to \"\n                    \"`last_messages`, the thread will be truncated to the `n` most recent messages in the thread. \"\n                    \"When set to `auto`, messages in the middle of the thread will be dropped to fit the context \"\n                    \"length of the model, `max_prompt_tokens`\",\n                \"type\": AbstractDataProviderTypeMap.\"string\",\n                \"allowed_values\": (\n                    <AllowedValueInfo>{\n                        \"display_name\": \"auto\",\n                        \"short_desc\": \"Messages in the middle of the thread will be dropped to fit the context \"\n                            \"length of the model\",\n                        \"desc\": \"Messages in the middle of the thread will be dropped to fit the context length of \"\n                            \"the model, `max_prompt_tokens`\",\n                        \"value\": \"auto\",\n                    },\n                    <AllowedValueInfo>{\n                        \"display_name\": \"last_messages\",\n                        \"short_desc\": \"The thread will be truncated to the 'n' most recent messages in the thread\",\n                        \"desc\": \"The thread will be truncated to the `n` most recent messages in the thread\",\n                        \"value\": \"last_messages\",\n                    },\n                ),\n                \"default_value\": \"auto\",\n            },\n            \"last_messages\": {\n                \"display_name\": \"Last Messages\",\n                \"short_desc\": \"The number of most recent messages from the thread when constructing the context for \"\n                    \"the run\",\n                \"desc\": \"The number of most recent messages from the thread when constructing the context for the \"\n                    \"run\",\n                \"type\": AbstractDataProviderTypeMap.\"*int\",\n            },\n        };\n    }\n}\n";
+        AstParser parser();
+        parser.setConditionalParsing(True);
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testHashLiteralExpressionKeys() {
+        string code = "%new-style\nsub make_hash() {\n    hash h = (\"a\": 1);\n    return (sprintf(\"%d\", 1): h{\"a\"});\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParenthesizedRegexMatch() {
+        string code = "%new-style\nsub check(string str) {\n    bool driver = (str =~ /^.+:/);\n    return driver;\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParenthesizedDivisionAccess() {
+        string code = "%new-style\nsub check(hash ah) {\n    if ((ah.\"code\" / 100) >= 4) {\n        return True;\n    }\n    return False;\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParenthesizedExpressionAtEOF() {
+        string code = "%new-style\nsub test() {\n    int x = (1 + 2);\n}";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testParenthesizedHashLiterals() {
+        string code = "%modern\npublic class HashTest {\n    public {\n        const runStateStrings = ('detach': DebugDetach, 'run': DebugRun);\n    }\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testCurlyHashLiterals() {
+        string code = "%modern\nsub make_hash() {\n    return {\n        \"type\": \"value\",\n        id: 1,\n    };\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testTypedHashLiterals() {
+        string code = "%modern\nsub make_typed_hash() {\n    return <TokenInfo>{\n        \"type\": TOK_EOF,\n        \"value\": \"\",\n    };\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testTypedHashNested() {
+        string code = "%modern\nsub make_nested_typed_hash() {\n    return <TokenInfo>{\n        \"type\": TOK_EOF,\n        \"value\": \"\",\n        \"meta\": <MetaInfo>{\n            \"path\": \"file.q\",\n            \"line\": 1,\n        },\n    };\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testTypedHashParseDirectives() {
+        string code = "%modern\nsub make_typed_hash_directives() {\n    return <TokenInfo>{\n%ifdef QORE_QDX_RUN\n        \"type\": TOK_EOF,\n%else\n        \"type\": TOK_INVALID,\n%endif\n        \"value\": \"\",\n    };\n}\n";
+        AstParser parser();
+        parser.setConditionalParsing(True);
+        parser.setDefines(("QORE_QDX_RUN",));
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testTypedHashMixedKeys() {
+        string code = "%modern\nsub make_typed_hash_mixed() {\n    return <TokenInfo>{\n        type: TOK_EOF,\n        \"value\": \"\",\n        id: 1,\n    };\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testHashLiteralExpressionValues() {
+        string code = "%modern\nsub make_hash_with_exprs() {\n    list<hash> l = ();\n    *string placeholder;\n    string path;\n    l += {\n        \"type\": ET_Placeholder,\n        \"val\": {\n            \"type\": remove placeholder,\n            \"path\": path,\n        },\n    };\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testHashLiteralUnaryValues() {
+        string code = "%modern\nsub make_hash_with_unary() {\n    string path;\n    return {\n        \"type\": -1,\n        \"path\": path,\n    };\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testHashLiteralTernaryValues() {
+        string code = "%modern\nsub make_hash_with_ternary() {\n    bool cond = True;\n    string val;\n    return {\n        \"type\": cond ? ET_RawString : ET_QuotedString,\n        \"val\": val,\n    };\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testHashLiteralAccessValues() {
+        string code = "%modern\nsub make_hash_with_access() {\n    hash h = {\n        \"any\": 1,\n    };\n    return {\n        \"type\": h.any,\n        \"type_code\": h.\"any\",\n    };\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testHashLiteralOperatorValues() {
+        string code = "%modern\nsub make_hash_with_ops() {\n    list l = (1, 2);\n    hash h = {\n        \"a\": 1,\n    };\n    string s = \"  value\\n\";\n    return {\n        \"keys\": keys h,\n        \"shift\": shift l,\n        \"pop\": pop l,\n        \"chomp\": chomp s,\n        \"trim\": trim s,\n    };\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        testAssertion("parseString returns tree", \exists(), (tree,));
+        testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testConditionalParsingMode() {
+        AstTreeSearcher searcher();
+
+        # Test 1: %ifdef with defined flag
+        {
+            string code = "%modern\n%define DOC_FLAG\n%ifdef DOC_FLAG\nconst DOC_CONST = 1;\n%else\nconst OTHER_CONST = 2;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (ifdef defined)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertEq(True, exists(syms), "symbols found (ifdef defined)");
+            assertTrue(hasConstant(syms, "DOC_CONST"), "DOC_CONST present (ifdef defined)");
+            assertFalse(hasConstant(syms, "OTHER_CONST"), "OTHER_CONST absent (ifdef defined)");
+        }
+
+        # Test 2: %ifdef with undefined flag (else branch)
+        {
+            string code = "%modern\n%ifdef DOC_FLAG\nconst DOC_CONST = 1;\n%else\nconst OTHER_CONST = 2;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (ifdef undefined)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "OTHER_CONST"), "OTHER_CONST present (ifdef undefined)");
+            assertFalse(hasConstant(syms, "DOC_CONST"), "DOC_CONST absent (ifdef undefined)");
+        }
+
+        # Test 3: %if defined() with defined flag
+        {
+            string code = "%modern\n%define FLAG\n%if defined(FLAG)\nconst IF_CONST = 1;\n%else\nconst IF_OTHER = 2;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (if defined)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "IF_CONST"), "IF_CONST present (if defined)");
+            assertFalse(hasConstant(syms, "IF_OTHER"), "IF_OTHER absent (if defined)");
+        }
+
+        # Test 4: %if defined() with undefined flag (else branch)
+        {
+            string code = "%modern\n%if defined(FLAG)\nconst IF_CONST = 1;\n%else\nconst IF_OTHER = 2;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (if undefined)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "IF_OTHER"), "IF_OTHER present (if undefined)");
+            assertFalse(hasConstant(syms, "IF_CONST"), "IF_CONST absent (if undefined)");
+        }
+
+        # Test 5: %if !defined() negation
+        {
+            string code = "%modern\n%if !defined(FLAG)\nconst NOT_DEFINED = 1;\n%else\nconst IS_DEFINED = 2;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (!defined)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "NOT_DEFINED"), "NOT_DEFINED present (!defined)");
+            assertFalse(hasConstant(syms, "IS_DEFINED"), "IS_DEFINED absent (!defined)");
+        }
+
+        # Test 6: %if defined() && defined() compound expression
+        {
+            string code = "%modern\n%define A\n%define B\n%if defined(A) && defined(B)\nconst BOTH = 1;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (A && B)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "BOTH"), "BOTH present (A && B)");
+        }
+
+        # Test 7: %if defined() || defined() compound expression
+        {
+            string code = "%modern\n%define A\n%if defined(A) || defined(B)\nconst EITHER = 1;\n%endif\n";
+            AstParser parser();
+            parser.setConditionalParsing(True);
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "no parse errors (A || B)");
+            *list syms = searcher.findSymbols(tree, "test.q");
+            assertTrue(hasConstant(syms, "EITHER"), "EITHER present (A || B)");
+        }
+    }
+
+    private static bool hasConstant(list syms, string name) {
+        foreach auto s in (syms) {
+            if (s.kind == ASYK_Constant && s.name == name) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    testListAssignmentParsing() {
+        string code = "%modern\nsub parse_value(string str) {\n    (*string num, *string suffix) = (str =~ x/^([0-9]+)\\s*([a-z]+)?$/i);\n    return (num, suffix);\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
         testAssertion("parseString returns tree", \exists(), (tree,));
         testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
     }
@@ -860,6 +1298,155 @@ namespace MyNamespace {
             assertTrue(docComments.hasKey("MyClass"), "no doc: class found");
             assertNothing(docComments{"MyClass"}, "no doc: class has no docComment");
         }
+
+        # Test 4: Doc comment with line comment inside function body
+        {
+            *AstTree tree = parser.parseString(DocCommentBodyCommentCode);
+            assertEq(0, parser.getErrorCount(), "body comment: no parse errors");
+
+            *list syms = searcher.findSymbols(tree, "test.q");
+            hash<string, *string> docComments;
+            foreach auto s in (syms) {
+                docComments{s.name} = s.docComment;
+            }
+
+            assertTrue(exists(docComments{"func_with_body_comment"}), "body comment: function has docComment");
+            assertTrue(docComments{"func_with_body_comment"} =~ /Doc for function with body comment/,
+                "body comment: docComment correct");
+        }
+
+        # Test 5: Doc comment with nested sub expression inside function body
+        {
+            *AstTree tree = parser.parseString(DocCommentNestedSubCode);
+            assertEq(0, parser.getErrorCount(), "nested sub: no parse errors");
+
+            *list syms = searcher.findSymbols(tree, "test.q");
+            hash<string, *string> docComments;
+            foreach auto s in (syms) {
+                docComments{s.name} = s.docComment;
+            }
+
+            assertTrue(exists(docComments{"func_with_nested_sub"}), "nested sub: function has docComment");
+            assertTrue(docComments{"func_with_nested_sub"} =~ /Doc for function with nested sub/,
+                "nested sub: docComment correct");
+        }
+    }
+
+    # Test for block comments in hash literal lookahead (fixed infinite loop bug)
+    testBlockCommentsInHashLookahead() {
+        # This pattern caused an infinite loop before the fix:
+        # The lookahead code didn't handle block comments, causing */ to be
+        # misinterpreted as a regex start
+        string code = '
+class Test {
+    /** @throw INVALID-REFERENCE invalid reference
+    */
+    test() {
+    }
+}
+';
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors for block comment before method");
+    }
+
+    # Test for consecutive parse options in hash literals with identifier keys
+    testConsecutiveParseOptionsInHash() {
+        # This pattern failed before the grammar fix:
+        # After %endif %ifndef, an identifier key like SomeConst: wasn't recognized
+        string code = '
+const h = {
+    "a": 1,
+%endif
+%ifndef X
+    SomeConst: 2,
+};
+';
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors for consecutive parse options with identifier key");
+
+        # Also test the exact Swagger.qm pattern
+        string code2 = '
+const MimeDataTypes = {
+    "yaml": 1,
+%endif
+%ifndef NoXml
+    MimeTypeXmlApp: {
+        "serialize": 1,
+    },
+%endif
+    "json": 2,
+};
+';
+        parser = new AstParser();
+        tree = parser.parseString(code2);
+        assertEq(True, exists(tree), "parseString returns tree for Swagger pattern");
+        assertEq(0, parser.getErrorCount(), "no parse errors for Swagger.qm pattern");
+    }
+
+    # Test that $# (last index operator) is not treated as a comment
+    testLastIndexOperatorInHash() {
+        # The $# operator should not be treated as starting a comment
+        string code = '
+sub test() {
+    list l = (1, 2, 3);
+    int last = l[$#];
+    int next = l[$# + 1];
+}
+';
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors for $# operator");
+    }
+
+    # Test for escaped quote in string causing unterminated string (NUL infinite loop fix)
+    testEscapedQuoteInString() {
+        # This pattern with backslash before closing quote (like Windows paths 'C:\')
+        # would cause an infinite loop because the lookahead kept reading NUL characters
+        # after EOF when scanning an unterminated string.
+        # Note: In Qore, 'C:\' is actually 'C:' followed by escaped quote, making
+        # the string continue until the next single quote.
+        string code = "%new-style
+list x = ('C:\\', 'test');
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors for escaped backslash pattern");
+
+        # Also test the pattern that originally caused issues in join_paths.qtest
+        # where 'C:\' has the backslash escaping the closing quote
+        code = "%new-style
+list results = (
+    ('C:\\', 'file.txt', 'C:\\file.txt'),
+);
+";
+        parser = new AstParser();
+        tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for Windows path pattern");
+        # Note: May have parse errors since the string isn't properly terminated,
+        # but it shouldn't infinite loop
+    }
+
+    testDateSubtypeParsing() {
+        AstParser parser();
+        *AstTree tree = parser.parseString(DateSubtypeCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        hash<string, bool> types;
+        foreach auto node in (nodes) {
+            if (exists(node.typeName) && exists(node.typeName.name)) {
+                types{node.typeName.name} = True;
+            }
+        }
+
+        assertTrue(exists(types{"date<absolute>"}), "date<absolute> typeName found");
+        assertTrue(exists(types{"date<relative>"}), "date<relative> typeName found");
     }
 %endif
 }

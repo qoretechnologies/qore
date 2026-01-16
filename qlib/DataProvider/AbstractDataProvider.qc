@@ -1878,7 +1878,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     #! Upserts the given record in the data provider from upsert action options
     /** @param options upsert action options
 
-        @return see @ref db_provider_upsert_results for possible values
+        @return see UpsertResultInserted and related constants for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
 
@@ -1892,7 +1892,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     /** @param rec a hash representing a single input record
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return see @ref db_provider_upsert_results for possible values
+        @return see UpsertResultInserted and related constants for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
     */
@@ -1904,7 +1904,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     #! Upserts the given records in the data provider from upsert action options
     /** @param options upsert action options
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
@@ -1920,7 +1920,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         lists of field values or a single value that applies to all records to be upserted
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
@@ -1939,7 +1939,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         values
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
@@ -1967,7 +1967,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     /** @param stream a record stream for upserting records
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
@@ -1992,7 +1992,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     /** @param i a record iterator for upserting records
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
@@ -2823,7 +2823,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the event action
+        @param options sample option data that can be used to determine the final type
 
         @return action options according to the available option data
 
@@ -2845,7 +2846,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an event action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the request action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an event action according to the available option data
 
@@ -2867,7 +2869,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a request action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the send message action
+        @param options sample option data that can be used to determine the final type
 
         @return request options for a request action according to the available option data
 
@@ -2889,7 +2892,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a send message action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the search action
+        @param options sample option data that can be used to determine the final type
 
         @return request options for a send message action according to the available option data
 
@@ -2911,7 +2915,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a search action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the create action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a search action according to the available option data
 
@@ -2933,7 +2938,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a create action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the upsert action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a create action according to the available option data
 
@@ -2955,7 +2961,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an upsert action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the update action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an upsert action according to the available option data
 
@@ -2977,7 +2984,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an update action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the delete action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an update action according to the available option data
 
@@ -2997,7 +3005,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a delete action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the event action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a delete action according to the available option data
 
@@ -3981,7 +3990,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an event action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the request action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an event action according to the available option data
 
@@ -4007,7 +4017,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a request action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the send message action
+        @param options sample option data that can be used to determine the final type
 
         @return request options for a request action according to the available option data
 
@@ -4033,7 +4044,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a send message action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the search action
+        @param options sample option data that can be used to determine the final type
 
         @return request options for a send message action according to the available option data
 
@@ -4059,7 +4071,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a search action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the create action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a search action according to the available option data
 
@@ -4076,7 +4089,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a create action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the upsert action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a create action according to the available option data
 
@@ -4090,7 +4104,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an upsert action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the update action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an upsert action according to the available option data
 
@@ -4104,7 +4119,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an update action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the delete action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an update action according to the available option data
 
@@ -4129,7 +4145,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a delete action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the delete action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a delete action according to the available option data
 
@@ -4146,7 +4163,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info to determine options
+        @param options sample option data that can be used to determine the final type
 
         @return action options according to the available option data
 
@@ -5405,7 +5423,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     /** @param rec a hash representing a single input record
         @param upsert_options the create options after processing by validateUpsertOptions()
 
-        @return see @ref db_provider_upsert_results for possible values
+        @return see UpsertResultInserted and related constants for possible values
     */
     private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
         throwUnimplementedException();
@@ -5416,7 +5434,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         lists of field values or a single value that applies to all records to be upserted
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
     */
     private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
@@ -5988,7 +6006,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     #! Sets the debug info collector for this data provider
     /** @param collector the debug collector to use, or @ref nothing to disable debug collection
 
-        When a debug collector is set, the data provider will call the collector's @ref collect() method
+        When a debug collector is set, the data provider will call the collector's
+        @ref AbstractDebugInfoCollector::collect method
         with technical debug information about operations (HTTP requests, WebSocket messages, etc.).
 
         @par Example:

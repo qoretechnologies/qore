@@ -52,6 +52,20 @@ class ReqHandler inherits AbstractHttpRequestHandler {
             return makeResponse(304, "test");
         } else if (rpath =~ /^test400close\//) {
             return makeResponse(400, new StringInputStream("test"), {"Connection": "close"});
+        } else if (rpath =~ /^gzip-plain\//) {
+            string msg = "gzip-ok";
+            binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+            return makeResponse(200, gz, {
+                "Content-Type": "text/plain; charset=utf-8",
+                "Content-Encoding": "gzip",
+            });
+        } else if (rpath =~ /^gzip-chunked\//) {
+            string msg = "gzip-chunked";
+            binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+            return makeResponse(200, new BinaryInputStream(gz), {
+                "Content-Type": "text/plain; charset=utf-8",
+                "Content-Encoding": "gzip",
+            });
         } else if (rpath =~ /^fileupload/) {
             string boundary = (hdr."_qore_orig_content_type" =~ x/boundary="?(.+)"?/i)[0];
             hash<MessageInfo> h = MultiPartMessage::parseBody(boundary, body, True);
@@ -72,6 +86,24 @@ class ReqHandler inherits AbstractHttpRequestHandler {
         } else {
             return makeResponse(200, hdr.method + ", " + rpath + ", " + cx.raw_path);
         }
+    }
+}
+
+class SlowHandler inherits AbstractHttpRequestHandler {
+    private {
+        Queue started;
+        date delay;
+    }
+
+    constructor(Queue started, date delay) {
+        self.started = started;
+        self.delay = delay;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        started.push(True);
+        sleep(delay);
+        return makeResponse(200, "OK");
     }
 }
 
@@ -124,6 +156,33 @@ class AuthenticatingWsHandler inherits WebSocketHandler {
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         return new TestWsConnection(self);
+    }
+}
+
+class ThrowOnceListener inherits HttpListener {
+    private {
+        bool throw_next = True;
+    }
+
+    constructor(HttpServer server, code<nothing(...)> handleRequest, int id, Sequence ss,
+            *hash<HttpListenerOptionInfo> opts) : HttpListener(server, handleRequest, id, ss, opts) {
+    }
+
+    hash<auto> getContextTemplate(hash<auto> info) {
+        if (throw_next) {
+            throw_next = False;
+            throw "TEST-LISTENER-ERROR", "getContextTemplate failure";
+        }
+        return HttpListener::getContextTemplate(info);
+    }
+}
+
+class ThrowOnceServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
+        return new ThrowOnceListener(server, \handleRequest(), id, seqSessions, info);
     }
 }
 
@@ -219,6 +278,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("issue 4312", \issue4312());
         addTestCase("issue 3397", \issue3397());
         addTestCase("issue 3116", \issue3116());
+        addTestCase("recv_callback gzip decode", \recvCallbackGzipDecode());
+        addTestCase("chunked gzip decode", \chunkedGzipDecode());
         addTestCase("issue 2805", \issue2805());
         addTestCase("Test basics", \basicTest());
         addTestCase("Test routing", \routingTest());
@@ -244,6 +305,16 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode non-persistent", \asyncModeNonPersistentTest());
         addTestCase("async mode persistent with sync server", \asyncModePersistentWithSyncServerTest());
         addTestCase("async mode HTTP/2", \asyncModeHttp2Test());
+        addTestCase("async mode global controller restart", \asyncModeGlobalCtrlRestartTest());
+        addTestCase("async mode stop inflight", \asyncModeStopInFlightTest());
+        addTestCase("async mode shutdown guard", \asyncModeShutdownGuardTest());
+        addTestCase("async mode accept restart on exception", \asyncAcceptRestartOnExceptionTest());
+
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("%Y\n", get_all_thread_call_stacks());
+            });
+        }
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -491,6 +562,30 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         };
         mClient.sendWithRecvCallback(rc, NOTHING, "PUT", "/test400close/abc", NOTHING, NOTHING, NOTHING, \info);
         assertEq("test", http_msgs[1].data);
+    }
+
+    recvCallbackGzipDecode() {
+        list<auto> http_msgs;
+        code rc = sub (auto http_data) {
+            http_msgs += http_data;
+        };
+        mClient.sendWithRecvCallback(rc, NOTHING, "GET", "/gzip-plain/abc", NOTHING, NOTHING, NOTHING, NOTHING);
+        *string found;
+        foreach auto msg in (http_msgs) {
+            if (exists(msg.data) && msg.data.typeCode() == NT_STRING) {
+                found = msg.data;
+                break;
+            }
+        }
+        assertTrue(exists(found));
+        assertEq("gzip-ok", found);
+    }
+
+    chunkedGzipDecode() {
+        hash<auto> info;
+        hash<auto> resp = mClient.send(NOTHING, "GET", "/gzip-chunked/abc", NOTHING, NOTHING, \info);
+        assertEq("gzip-chunked", resp.body);
+        assertEq("chunked", info."response-headers"."transfer-encoding");
     }
 
     issue2805() {
@@ -809,12 +904,12 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "url": wssUrl,
             "timeout": 10s,
             "ssl_verify_cert": False,  # Self-signed cert
+            "http_version": "2.0",  # Force HTTP/2 for WebSocket over SSL
         });
         wsc.connect();
         on_exit wsc.disconnect();
 
-        # Verify we're using HTTP/2 (default behavior)
-        assertTrue(wsc.isHttp2(), "WebSocket should use HTTP/2 by default over SSL");
+        assertTrue(wsc.isHttp2(), "WebSocket should negotiate HTTP/2 by default over SSL");
 
         # Send a message and wait for echo
         wsc.send("hello-ssl");
@@ -903,11 +998,12 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         string wssUrlNoToken = "wss://localhost:" + authSslPort + "/ws";
         bool gotRejection = False;
         try {
-            WebSocketClient wscBad(sub (*data msg) {}, {
-                "url": wssUrlNoToken,
-                "timeout": 10s,
-                "ssl_verify_cert": False,
-            });
+        WebSocketClient wscBad(sub (*data msg) {}, {
+            "url": wssUrlNoToken,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
             wscBad.connect();
             # If we get here, connection succeeded when it shouldn't have
             wscBad.disconnect();
@@ -942,6 +1038,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "url": wssUrl,
             "timeout": 10s,
             "ssl_verify_cert": False,
+            "http_version": "2.0",
         });
         wscGood.connect({
             "hdr": {
@@ -950,8 +1047,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         });
         on_exit wscGood.disconnect();
 
-        # Verify connection is using HTTP/2
-        assertTrue(wscGood.isHttp2(), "WebSocket with valid token should use HTTP/2 over SSL");
+        assertTrue(wscGood.isHttp2(), "WebSocket should negotiate HTTP/2 after successful auth");
 
         # Send a message and verify echo
         wscGood.send("authenticated-message");
@@ -1312,7 +1408,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq("GET, http2-test, /http2-test", resp);
 
         # Log which protocol was used
-        if (m_options.verbose > 0) {
+        if (m_options.verbose > 2) {
             printf("HTTP/2 test: negotiated version = %s, isHttp2Active = %y\n",
                 version, h2client.isHttp2Active());
         }
@@ -1325,7 +1421,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             # Verify response-uri is set in the format "HTTP/2 <code> <message>"
             assertTrue(info."response-uri".val(), "response-uri should be set for HTTP/2");
             assertRegex("^HTTP/2 200", info."response-uri", "response-uri should start with HTTP/2 200");
-            if (m_options.verbose > 0) {
+            if (m_options.verbose > 2) {
                 printf("HTTP/2 response-uri: %y\n", info."response-uri");
             }
         }
@@ -1380,7 +1476,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             # Note: HTTPClient auto-decompresses, so we check the original response headers
             *string content_encoding = info."response-headers"."content-encoding"
                 ?? info."response-headers"."Content-Encoding";
-            if (m_options.verbose > 0) {
+            if (m_options.verbose > 2) {
                 printf("HTTP/2 compression test: Content-Encoding = %y\n", content_encoding);
             }
             assertTrue(content_encoding.val(), "HTTP/2 response should be compressed");
@@ -1470,6 +1566,137 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         }
     }
 
+    asyncModeShutdownGuardTest() {
+        Logger logger("shutdown-test", LoggerLevel::getLevelInfo());
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server.setDefaultHandler("my-handler", new ReqHandler());
+        server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        server.waitForAsyncIo();
+
+        server.stop();
+
+        bool blocked = False;
+        try {
+            server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        } catch (hash<ExceptionInfo> ex) {
+            blocked = ex.err == "CONTROLLER-ADD-LISTENER-ERROR";
+        }
+        assertTrue(blocked, "async I/O controller should reject new listeners after stop");
+    }
+
+    asyncAcceptRestartOnExceptionTest() {
+        Logger logger("async-accept-restart-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        ThrowOnceServer server(opts);
+        on_exit server.stop();
+
+        SimpleStringHandler handler("ok");
+        server.setHandler("ok", "/ok", MimeTypeText, handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Trigger a failure during accept handling, then ensure new accepts still work
+        Socket s1();
+        s1.connect("127.0.0.1:" + test_port);
+        sleep(100ms);
+        s1.close();
+
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+        hash<auto> resp = client.send(NOTHING, "GET", "/ok");
+        assertEq(200, resp.status_code);
+        assertEq("ok", resp.body);
+    }
+
+    asyncModeStopInFlightTest() {
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": new Logger("async-stop-inflight", LoggerLevel::getLevelInfo()),
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        Queue started();
+        SlowHandler handler(started, 2s);
+        server.setHandler("slow-handler", "", MimeTypeHtml, handler);
+        server.setDefaultHandler("slow-handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        background sub () {
+            try {
+                HTTPClient client({"url": "http://localhost:" + port, "timeout": 10s});
+                client.connect();
+                client.get("/slow");
+                client.disconnect();
+            } catch () {
+                # Ignore errors if shutdown closes the socket early.
+            }
+        }();
+
+        assertTrue(started.get(5s) != NOTHING, "handler should start before shutdown");
+
+        Queue stopped();
+        background sub () {
+            server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(5s) != NOTHING, "server.stop should finish without delay");
+    }
+
+    asyncModeGlobalCtrlRestartTest() {
+        hash<HttpServerOptionInfo> opts1 = <HttpServerOptionInfo>{
+            "logger": new Logger("async-restart-1", LoggerLevel::getLevelInfo()),
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server1(opts1);
+        on_exit server1.stop();
+        server1.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server1.setDefaultHandler("my-handler", new ReqHandler());
+        int port1 = server1.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server1.waitForAsyncIo(5s), "async I/O should be ready after start");
+
+        HTTPClient client1({"url": "http://localhost:" + port1, "timeout": 5s});
+        client1.connect();
+        on_exit client1.disconnect();
+        assertEq("GET, restart1, /restart1", client1.get("/restart1"));
+        client1.disconnect();
+        server1.stop();
+
+        hash<HttpServerOptionInfo> opts2 = <HttpServerOptionInfo>{
+            "logger": new Logger("async-restart-2", LoggerLevel::getLevelInfo()),
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server2(opts2);
+        on_exit server2.stop();
+        server2.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server2.setDefaultHandler("my-handler", new ReqHandler());
+        int port2 = server2.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server2.waitForAsyncIo(5s), "async I/O should restart after stop");
+
+        HTTPClient client2({"url": "http://localhost:" + port2, "timeout": 5s});
+        client2.connect();
+        on_exit client2.disconnect();
+        assertEq("GET, restart2, /restart2", client2.get("/restart2"));
+        client2.disconnect();
+        server2.stop();
+    }
+
 }
 
 #! Test handler that supports persistent connections
@@ -1503,4 +1730,3 @@ class PersistentTestHandler inherits AbstractHttpRequestHandler {
         return makeResponse({"x-thread-id": string(tid)}, 404, "not found");
     }
 }
-

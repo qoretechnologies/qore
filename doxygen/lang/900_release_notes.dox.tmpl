@@ -28,15 +28,16 @@
 
     @par Parse-Time Type Narrowing
     @parblock
-    %Qore now performs parse-time type narrowing for variables declared with @ref auto_type "auto",
-    @ref hash_type "hash<auto>", and @ref list_type "list<auto>". After a variable is assigned a value of a
-    specific type, the compiler narrows the variable's type and will raise a \c PARSE-TYPE-ERROR if a subsequent
-    assignment uses an incompatible type.
+    %Qore now performs parse-time type narrowing for element/value types in variables declared with
+    @ref hash_type "hash<auto>" and @ref list_type "list<auto>". This does not affect plain
+    @ref auto_type "auto" variables. After an element/value type is inferred, the compiler narrows the
+    container's element/value type and raises a \c PARSE-TYPE-ERROR if a subsequent assignment uses an
+    incompatible type.
 
     For example, the following code that worked in previous versions will now fail at parse time:
     @code{.py}
-auto val = 1;        # val is narrowed to 'int'
-val = "string";      # PARSE-TYPE-ERROR: cannot assign 'string' to 'int'
+list<auto> vals = (1,);  # element type narrowed to 'int'
+vals[0] = "string";      # PARSE-TYPE-ERROR: cannot assign 'string' to 'int'
     @endcode
 
     <b>Workarounds:</b>
@@ -51,6 +52,19 @@ val = "string";      # OK
       parse-time type narrowing (moves type checking to runtime)
     - Use @ref Qore::PO_BROKEN_NARROWED_TYPES "PO_BROKEN_NARROWED_TYPES" when setting up a
       @ref Qore::Program "Program" object
+    @endparblock
+
+    @par LoggerAppenderQueue Default Memory Limit
+    @parblock
+    The @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue" no-argument constructor now enforces a
+    default 10 MiB memory limit for backpressure. Previously, the queue was unlimited by default, which could
+    cause out-of-memory conditions when log producers outpace consumers.
+
+    Code that relies on unlimited queue behavior may now experience blocking when the queue reaches 10 MiB.
+
+    <b>Workaround:</b>
+    - Use @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "LoggerAppenderQueue(-1)" to explicitly
+      create an unlimited queue (not recommended for production)
     @endparblock
 
     @par New typedef Keyword
@@ -130,6 +144,10 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         (requires @ref Qore::QDOM_PROCESS "QDOM_PROCESS" rights)
       - new @ref Qore::get_global_http2_mode() "get_global_http2_mode()" function to query the current global HTTP/2 mode
       - new @ref Qore::Option::HAVE_HTTP2 "Option::HAVE_HTTP2" constant (always \c True as nghttp2 is now required)
+    - <b>Parameterized date type restrictions</b>
+      - new @ref date_type "date<absolute>" and @ref date_type "date<relative>" types restrict date values to absolute
+        or relative date/time values
+      - @ref date_or_nothing_type "*date<absolute>" and @ref date_or_nothing_type "*date<relative>" allow @ref nothing
     - @ref AsyncApi "AsyncApi" module
       - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
       - supports WebSocket, MQTT, Kafka, AMQP and other protocols through protocol-specific bindings
@@ -168,6 +186,9 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
           @ref DataProvider::DataProvider::validateDpqlExpression() "validateDpqlExpression()"
         - DPQL syntax: \c @name \c == \c "John" \c && \c @age \c > \c 18
         - supports field refs (\c @field), comparison ops, logical ops, ranges, \c in, and regex
+        - the \c qdp CLI supports DPQL expressions for search criteria with auto-detection or the \c -q/--dpql option
+        - new \c qdp --dpql-help output with DPQL syntax and examples
+        - DPQL now supports ISO-8601 date literals, binary literals (\c <deadbeef>), list/hash literals, and unquoted string values
     - @ref OpenApi3 "OpenApi3" module
       - new module supporting OpenAPI 3.* schemas for REST API integration
       - new @ref OpenApi3::OpenApi3SchemaGenerator "OpenApi3SchemaGenerator" class for generating OpenAPI 3.0.3 schemas from Qore source code
@@ -203,6 +224,18 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design
       - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 mode control
+    - @ref Logger "Logger" module
+      - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
+        to prevent unbounded memory growth when log producers outpace consumers
+        - new @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "constructor(softint max_bytes)" with
+          configurable memory limit (default: 10 MiB, -1 for unlimited)
+        - updated @ref Qore::Logger::LoggerAppenderQueue::push() "push()" with optional timeout parameter for
+          backpressure control: block indefinitely (0), block with timeout (>0), or drop immediately (<0)
+        - new monitoring methods: @ref Qore::Logger::LoggerAppenderQueue::maxBytes() "maxBytes()",
+          @ref Qore::Logger::LoggerAppenderQueue::currentBytes() "currentBytes()",
+          @ref Qore::Logger::LoggerAppenderQueue::isFull() "isFull()"
+      - added \c max_bytes parameter to @ref Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool"
+        constructor for memory-limited thread pool logging
     - @ref SqlUtil "SqlUtil" module
       - implemented support for specifying the columns to use for upserts separately from the row data
         (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
@@ -248,6 +281,9 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
         @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
       - see @ref sandboxing "Sandboxing and Security" for full documentation
+    - <b>ReadOnlyFile short reads</b>
+      - new \c ReadOnlyFile::readShortBinary() method returns immediately with any available data without trying to
+        fill the requested size
     - new classes and methods in the @ref reflection "reflection" module:
       - @ref Qore::Reflection::Enum "Enum" class for enum reflection
       - @ref Qore::Reflection::EnumMember "EnumMember" class for enum member reflection
@@ -273,6 +309,8 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - @ref Qore::clock_getseconds() "clock_getseconds()"
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+      - @ref Qore::get_value_byte_size() "get_value_byte_size()": returns the approximate memory size in bytes of any Qore value;
+        recursively calculates sizes for hashes and lists, returns exact sizes for strings and binary data
       - @ref Qore::inflate_raw_to_binary() "inflate_raw_to_binary()": raw DEFLATE decompression to binary
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - @ref Qore::inflate_raw_to_string() "inflate_raw_to_string()": raw DEFLATE decompression to string
@@ -363,6 +401,17 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - bulk write operations support via bulk data provider
       - record-based interface for collections with search, create, update, upsert, and delete operations
       - connection support with \c mongodb:// URL scheme
+    - @ref LinearRestClient "LinearRestClient" module
+      - new module providing a REST client for Linear's GraphQL API
+      - supports API key and OAuth2 authentication
+      - provides LinearRestConnection for connection management with \c linear:// URL scheme
+    - @ref LinearDataProvider "LinearDataProvider" module
+      - new module providing a data provider API for Linear issue tracking services
+      - hierarchical data provider structure: issues, teams, projects, cycles, labels, comments
+      - full CRUD support for issues, projects, cycles, labels, and comments
+      - search capabilities with filtering for all entity types
+      - action catalog integration with sensible default actions
+      - connection support with \c linear:// URL scheme
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
@@ -420,12 +469,27 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - Using the @ref QoreRepl "QoreRepl" module with a custom frontend that provides line editing
 
     @subsection qore_2_3_0_bug_fixes Bug Fixes in Qore
+    - @ref HttpServer "HttpServer" module
+      - fixed HTTP/2 responses to strip hop-by-hop headers (Connection, Transfer-Encoding, etc.)
+      - fixed HTTP/2 WebSocket CONNECT responses to return Sec-WebSocket-Accept when a Sec-WebSocket-Key is provided
+      - fixed HTTP/2 async chunked streaming responses to buffer and send bodies correctly
+      - fixed HTTP/2 error responses to set Content-Length when a body is present
+      - fixed HTTP/2 WebSocket CONNECT handling to allow other HTTP/2 streams to proceed
+      - ensure HTTP/2 request and response header names are lowercased before submission
+      - fixed a deadlock in async socket cancellation when aborting I/O operations
+      - fixed async I/O shutdown to avoid deadlocks when canceling socket poll operations
+    - @ref WebSocketClient "WebSocketClient" module
+      - fixed HTTP/2 WebSocket CONNECT requests to send Sec-WebSocket-Version and correct :authority values
+      - fall back to HTTP/1.1 when HTTP/2 WebSocket CONNECT returns 501 (HTTP/2 WebSocket disabled)
+    - Core language
+      - fixed union type resolution order to honor the first matching type in the declaration
     - @ref RestClient "RestClient" module
       - fixed non-blocking polling with connections that use basic auth
         (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
     - @ref RestHandler "RestHandler" module
       - fixed handling \c OPTIONS requests with an \c action parameter
         (<a href="https://github.com/qoretechnologies/qore/issues/4988">issue 4988</a>)
+      - added \c raw_response to bypass serialization and schema validation for custom response bodies
     - @ref Util "Util" module
       - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
@@ -446,6 +510,8 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       for complex hash and list types (e.g. \c hash<string,X> or \c list<X>) at runtime, even though assignment
       to typed variables worked correctly
       (<a href="https://github.com/qoretechnologies/qore/issues/2647">issue 2647</a>)
+    - fixed parsing of namespaced typed hash literals like \c <Qore::StatInfo>{} and \c <::Qore::StatInfo>{}
+      (<a href="https://github.com/qoretechnologies/qore/issues/5147">issue 5147</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

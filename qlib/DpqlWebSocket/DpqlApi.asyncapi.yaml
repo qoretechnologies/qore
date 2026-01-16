@@ -1,0 +1,594 @@
+asyncapi: 3.0.0
+info:
+  title: DPQL WebSocket API
+  version: 1.0.0
+  description: |
+    WebSocket API for DPQL (Data Provider Query Language) language server services.
+    Provides tokenization, parsing, validation, and completion for DPQL with
+    data-provider-aware context.
+
+servers:
+  development:
+    host: localhost:8080
+    protocol: ws
+    description: Development server
+  production:
+    host: dpql.example.com
+    protocol: wss
+    description: Production server (TLS)
+
+channels:
+  dpql:
+    address: /ws/dpql
+    description: DPQL language server channel
+    messages:
+      contextRequest:
+        $ref: '#/components/messages/ContextRequest'
+      tokenizeRequest:
+        $ref: '#/components/messages/TokenizeRequest'
+      parseRequest:
+        $ref: '#/components/messages/ParseRequest'
+      validateRequest:
+        $ref: '#/components/messages/ValidateRequest'
+      completeRequest:
+        $ref: '#/components/messages/CompleteRequest'
+      serializeRequest:
+        $ref: '#/components/messages/SerializeRequest'
+      pingRequest:
+        $ref: '#/components/messages/PingRequest'
+      sessionResponse:
+        $ref: '#/components/messages/SessionResponse'
+      contextResponse:
+        $ref: '#/components/messages/ContextResponse'
+      tokensResponse:
+        $ref: '#/components/messages/TokensResponse'
+      parseResponse:
+        $ref: '#/components/messages/ParseResponse'
+      validateResponse:
+        $ref: '#/components/messages/ValidateResponse'
+      completionsResponse:
+        $ref: '#/components/messages/CompletionsResponse'
+      serializeResponse:
+        $ref: '#/components/messages/SerializeResponse'
+      pongResponse:
+        $ref: '#/components/messages/PongResponse'
+      errorResponse:
+        $ref: '#/components/messages/ErrorResponse'
+
+operations:
+  sendContext:
+    action: send
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Set data-provider context
+    messages:
+      - $ref: '#/channels/dpql/messages/contextRequest'
+
+  sendTokenize:
+    action: send
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Tokenize DPQL expression
+    messages:
+      - $ref: '#/channels/dpql/messages/tokenizeRequest'
+
+  sendParse:
+    action: send
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Parse DPQL expression
+    messages:
+      - $ref: '#/channels/dpql/messages/parseRequest'
+
+  sendValidate:
+    action: send
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Validate DPQL expression
+    messages:
+      - $ref: '#/channels/dpql/messages/validateRequest'
+
+  sendComplete:
+    action: send
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Request completions
+    messages:
+      - $ref: '#/channels/dpql/messages/completeRequest'
+
+  sendSerialize:
+    action: send
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Serialize DPQL expression
+    messages:
+      - $ref: '#/channels/dpql/messages/serializeRequest'
+
+  sendPing:
+    action: send
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Send ping
+    messages:
+      - $ref: '#/channels/dpql/messages/pingRequest'
+
+  receiveSession:
+    action: receive
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Receive session info
+    messages:
+      - $ref: '#/channels/dpql/messages/sessionResponse'
+
+  receiveContext:
+    action: receive
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Receive context info
+    messages:
+      - $ref: '#/channels/dpql/messages/contextResponse'
+
+  receiveTokens:
+    action: receive
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Receive tokens
+    messages:
+      - $ref: '#/channels/dpql/messages/tokensResponse'
+
+  receiveParse:
+    action: receive
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Receive parse result
+    messages:
+      - $ref: '#/channels/dpql/messages/parseResponse'
+
+  receiveValidate:
+    action: receive
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Receive validation result
+    messages:
+      - $ref: '#/channels/dpql/messages/validateResponse'
+
+  receiveCompletions:
+    action: receive
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Receive completions
+    messages:
+      - $ref: '#/channels/dpql/messages/completionsResponse'
+
+  receiveSerialize:
+    action: receive
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Receive serialization result
+    messages:
+      - $ref: '#/channels/dpql/messages/serializeResponse'
+
+  receivePong:
+    action: receive
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Receive pong
+    messages:
+      - $ref: '#/channels/dpql/messages/pongResponse'
+
+  receiveError:
+    action: receive
+    channel:
+      $ref: '#/channels/dpql'
+    summary: Receive error response
+    messages:
+      - $ref: '#/channels/dpql/messages/errorResponse'
+
+components:
+  schemas:
+    ContextPayload:
+      type: object
+      required:
+        - type
+        - provider
+      properties:
+        type:
+          type: string
+          const: context
+        id:
+          type: string
+        provider:
+          type: string
+          description: Provider spec string (same as qdp)
+        subtype:
+          type: string
+          description: Optional subtype for connection providers
+        options:
+          type: object
+          description: Action options for provider context
+        recordOptions:
+          type: object
+          description: Options for record type retrieval
+        recordType:
+          type: string
+          enum: [record, create, update]
+          default: record
+
+    TokenizePayload:
+      type: object
+      required:
+        - type
+        - text
+      properties:
+        type:
+          type: string
+          const: tokenize
+        id:
+          type: string
+        text:
+          type: string
+
+    ParsePayload:
+      type: object
+      required:
+        - type
+        - text
+      properties:
+        type:
+          type: string
+          const: parse
+        id:
+          type: string
+        text:
+          type: string
+
+    ValidatePayload:
+      type: object
+      required:
+        - type
+        - text
+      properties:
+        type:
+          type: string
+          const: validate
+        id:
+          type: string
+        text:
+          type: string
+
+    CompletePayload:
+      type: object
+      required:
+        - type
+        - text
+        - position
+      properties:
+        type:
+          type: string
+          const: complete
+        id:
+          type: string
+        text:
+          type: string
+        position:
+          type: integer
+          description: 0-based cursor position
+
+    SerializePayload:
+      type: object
+      required:
+        - type
+        - expression
+      properties:
+        type:
+          type: string
+          const: serialize
+        id:
+          type: string
+        expression:
+          type: object
+          description: DataProviderExpression hash
+
+    PingPayload:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: ping
+        id:
+          type: string
+
+    SessionResponsePayload:
+      type: object
+      required:
+        - type
+        - sessionId
+        - version
+      properties:
+        type:
+          type: string
+          const: session
+        sessionId:
+          type: string
+        version:
+          type: string
+        qoreVersion:
+          type: string
+
+    ContextResponsePayload:
+      type: object
+      required:
+        - type
+        - provider
+        - recordType
+      properties:
+        type:
+          type: string
+          const: context
+        id:
+          type: string
+        provider:
+          type: string
+        recordType:
+          type: string
+        recordRequiresSearchOptions:
+          type: boolean
+        fields:
+          type: array
+          items:
+            type: object
+        expressions:
+          type: object
+
+    TokensResponsePayload:
+      type: object
+      required:
+        - type
+        - tokens
+      properties:
+        type:
+          type: string
+          const: tokens
+        id:
+          type: string
+        tokens:
+          type: array
+          items:
+            $ref: '#/components/schemas/DpqlToken'
+
+    ParseResponsePayload:
+      type: object
+      required:
+        - type
+        - success
+      properties:
+        type:
+          type: string
+          const: parse
+        id:
+          type: string
+        success:
+          type: boolean
+        expression:
+          type: object
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/DpqlDiagnostic'
+        tokens:
+          type: array
+          items:
+            $ref: '#/components/schemas/DpqlToken'
+
+    ValidateResponsePayload:
+      type: object
+      required:
+        - type
+        - diagnostics
+      properties:
+        type:
+          type: string
+          const: validate
+        id:
+          type: string
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/DpqlDiagnostic'
+
+    CompletionsResponsePayload:
+      type: object
+      required:
+        - type
+        - items
+      properties:
+        type:
+          type: string
+          const: completions
+        id:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DpqlCompletionItem'
+
+    SerializeResponsePayload:
+      type: object
+      required:
+        - type
+        - dpql
+      properties:
+        type:
+          type: string
+          const: serialize
+        id:
+          type: string
+        dpql:
+          type: string
+
+    PongPayload:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: pong
+        id:
+          type: string
+
+    ErrorPayload:
+      type: object
+      required:
+        - type
+        - error
+        - description
+      properties:
+        type:
+          type: string
+          const: error
+        id:
+          type: string
+        error:
+          type: string
+        description:
+          type: string
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/DpqlDiagnostic'
+
+    DpqlToken:
+      type: object
+      required:
+        - type
+        - value
+        - line
+        - column
+        - end_line
+        - end_column
+      properties:
+        type:
+          type: integer
+        value:
+          type: string
+        line:
+          type: integer
+        column:
+          type: integer
+        end_line:
+          type: integer
+        end_column:
+          type: integer
+
+    DpqlDiagnostic:
+      type: object
+      required:
+        - severity
+        - message
+        - code
+        - line
+        - column
+        - end_line
+        - end_column
+      properties:
+        severity:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        line:
+          type: integer
+        column:
+          type: integer
+        end_line:
+          type: integer
+        end_column:
+          type: integer
+
+    DpqlCompletionItem:
+      type: object
+      required:
+        - label
+        - kind
+        - insert_text
+      properties:
+        label:
+          type: string
+        kind:
+          type: string
+        insert_text:
+          type: string
+        documentation:
+          type: string
+        sort_priority:
+          type: integer
+
+  messages:
+    ContextRequest:
+      name: ContextRequest
+      payload:
+        $ref: '#/components/schemas/ContextPayload'
+    TokenizeRequest:
+      name: TokenizeRequest
+      payload:
+        $ref: '#/components/schemas/TokenizePayload'
+    ParseRequest:
+      name: ParseRequest
+      payload:
+        $ref: '#/components/schemas/ParsePayload'
+    ValidateRequest:
+      name: ValidateRequest
+      payload:
+        $ref: '#/components/schemas/ValidatePayload'
+    CompleteRequest:
+      name: CompleteRequest
+      payload:
+        $ref: '#/components/schemas/CompletePayload'
+    SerializeRequest:
+      name: SerializeRequest
+      payload:
+        $ref: '#/components/schemas/SerializePayload'
+    PingRequest:
+      name: PingRequest
+      payload:
+        $ref: '#/components/schemas/PingPayload'
+    SessionResponse:
+      name: SessionResponse
+      payload:
+        $ref: '#/components/schemas/SessionResponsePayload'
+    ContextResponse:
+      name: ContextResponse
+      payload:
+        $ref: '#/components/schemas/ContextResponsePayload'
+    TokensResponse:
+      name: TokensResponse
+      payload:
+        $ref: '#/components/schemas/TokensResponsePayload'
+    ParseResponse:
+      name: ParseResponse
+      payload:
+        $ref: '#/components/schemas/ParseResponsePayload'
+    ValidateResponse:
+      name: ValidateResponse
+      payload:
+        $ref: '#/components/schemas/ValidateResponsePayload'
+    CompletionsResponse:
+      name: CompletionsResponse
+      payload:
+        $ref: '#/components/schemas/CompletionsResponsePayload'
+    SerializeResponse:
+      name: SerializeResponse
+      payload:
+        $ref: '#/components/schemas/SerializeResponsePayload'
+    PongResponse:
+      name: PongResponse
+      payload:
+        $ref: '#/components/schemas/PongPayload'
+    ErrorResponse:
+      name: ErrorResponse
+      payload:
+        $ref: '#/components/schemas/ErrorPayload'

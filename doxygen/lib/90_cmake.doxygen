@@ -132,6 +132,14 @@
     
     Macro calls \c find_package(Doxygen) in this case. If there is Doxygen
     tool found and if is the 
+    
+    Documentation builds use the \c QORE_DOC_DEFINES environment variable to
+    pass parse-time symbols to \c qdx. The build sets a base list (for example
+    \c QORE_QDX_RUN plus platform and debug symbols); you can append additional
+    symbols in the environment, for example:
+    @code
+    QORE_DOC_DEFINES="NoJson,NoYaml" make docs
+    @endcode
 
 
     @subsection QORE_DIST QORE_DIST

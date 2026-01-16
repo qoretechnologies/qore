@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file QoreRepl.qm Qore REPL (Read-Eval-Print Loop) module
 
-/*  QoreRepl.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  QoreRepl.qm Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -220,11 +220,3 @@ server.start();
 #! Main namespace for the QoreRepl module
 public namespace QoreRepl {
 }
-
-%include QoreRepl/QoreRepl.qc
-
-# WebSocket handler classes (only included if WebSocketHandler is available)
-%ifndef NoWebSocketHandler
-%include QoreRepl/QoreReplWebSocketConnection.qc
-%include QoreRepl/QoreReplWebSocketHandler.qc
-%endif

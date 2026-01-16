@@ -60,6 +60,18 @@ public class OpenApi3GeneratorTest inherits QUnit::Test {
 @since 1.0
 ";
 
+        #! Sample schema block with nested parameters
+        const NestedSchemaBlock = "
+@summary Create SLA
+@desc Creates a new SLA with optional service methods
+@params
+- name (string): SLA name
+- methods (*list<hash ServiceSlaInfo>): list of methods to attach
+  - service (string): user service name
+  - method (string): method name
+@return (hash<StatusResponse>): status response
+";
+
         #! Sample source content with @REST and @SCHEMA
         const SampleSourceContent = '
 /** @REST GET
@@ -111,11 +123,13 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
 
     constructor() : Test("OpenApi3GeneratorTest", "1.0") {
         addTestCase("Test OpenApi3SchemaTokenizer::parseSchemaBlock", \testParseSchemaBlock());
+        addTestCase("Test OpenApi3SchemaTokenizer::parseSchemaBlock - nested params", \testParseSchemaBlockNestedParams());
         addTestCase("Test OpenApi3SchemaTokenizer::parseSourceContent", \testParseSourceContent());
         addTestCase("Test OpenApi3TypeMapper::mapType - basic types", \testTypeMapperBasic());
         addTestCase("Test OpenApi3TypeMapper::mapType - complex types", \testTypeMapperComplex());
         addTestCase("Test OpenApi3TypeMapper::mapType - nullable types", \testTypeMapperNullable());
         addTestCase("Test OpenApi3SchemaGenerator - simple API", \testGeneratorSimple());
+        addTestCase("Test OpenApi3SchemaGenerator - nested body params", \testGeneratorNestedBodyParams());
         addTestCase("Test OpenApi3SchemaGenerator - full API", \testGeneratorFull());
         addTestCase("Test OpenApi3SchemaGenerator - YAML output", \testGeneratorYaml());
         addTestCase("Test OpenApi3SchemaGenerator - JSON output", \testGeneratorJson());
@@ -156,13 +170,14 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
 
     #! Helper to create ParamInfo
     private hash<OpenApi3::ParamInfo> makeParamInfo(string name, string type_str, string description,
-            bool required, string location) {
+            bool required, string location, int depth = 0) {
         return cast<hash<OpenApi3::ParamInfo>>({
             "name": name,
             "type_str": type_str,
             "description": description,
             "required": required,
             "location": location,
+            "depth": depth,
         });
     }
 
@@ -189,6 +204,7 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         assertEq("the user ID", param1.description);
         assertEq(True, param1.required);
         assertEq("body", param1.location);
+        assertEq(0, param1.depth);
 
         hash<OpenApi3::ParamInfo> param2 = result.params[1];
         assertEq("include_deleted", param2.name);
@@ -196,6 +212,7 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         assertEq("whether to include deleted users", param2.description);
         assertEq(False, param2.required);
         assertEq("query", param2.location);
+        assertEq(0, param2.depth);
 
         # Check return
         assertEq("hash<UserInfo>", result.return_info.type_str);
@@ -214,6 +231,30 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
 
         # Check since
         assertEq("1.0", result.since);
+    }
+
+    testParseSchemaBlockNestedParams() {
+        hash<OpenApi3::SchemaBlockInfo> result =
+            OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(NestedSchemaBlock);
+
+        assertEq("Create SLA", result.summary);
+        assertEq(4, result.params.size());
+
+        assertEq("name", result.params[0].name);
+        assertEq(0, result.params[0].depth);
+        assertEq(True, result.params[0].required);
+
+        assertEq("methods", result.params[1].name);
+        assertEq(0, result.params[1].depth);
+        assertEq(False, result.params[1].required);
+
+        assertEq("service", result.params[2].name);
+        assertEq(1, result.params[2].depth);
+        assertEq(True, result.params[2].required);
+
+        assertEq("method", result.params[3].name);
+        assertEq(1, result.params[3].depth);
+        assertEq(True, result.params[3].required);
     }
 
     testParseSourceContent() {
@@ -295,6 +336,9 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         result = OpenApi3::OpenApi3TypeMapper::mapType("hash<UserInfo>");
         assertEq("#/components/schemas/UserInfo", result."\$ref");
 
+        result = OpenApi3::OpenApi3TypeMapper::mapType("hash UserInfo");
+        assertEq("#/components/schemas/UserInfo", result."\$ref");
+
         # Test hash type with qualified name (Namespace::TypeName)
         result = OpenApi3::OpenApi3TypeMapper::mapType("hash<MyModule::UserInfo>");
         assertEq("#/components/schemas/UserInfo", result."\$ref", "Should use last component of qualified name");
@@ -354,6 +398,7 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         # Test getHashType helper
         assertEq("UserInfo", OpenApi3::OpenApi3TypeMapper::getHashType("hash<UserInfo>"));
         assertEq("UserInfo", OpenApi3::OpenApi3TypeMapper::getHashType("*hash<UserInfo>"));
+        assertEq("UserInfo", OpenApi3::OpenApi3TypeMapper::getHashType("hash UserInfo"));
         assertFalse(OpenApi3::OpenApi3TypeMapper::getHashType("hash").val());
     }
 
@@ -381,6 +426,32 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         assertTrue(spec.paths.hasKey("/users"));
         assertTrue(spec.paths{"/users"}.hasKey("get"));
         assertEq("List users", spec.paths{"/users"}.get.summary);
+    }
+
+    testGeneratorNestedBodyParams() {
+        OpenApi3::OpenApi3SchemaGenerator gen({
+            "title": "Nested Param Test",
+            "version": "1.0.0",
+        });
+
+        hash<OpenApi3::SchemaBlockInfo> schema_info =
+            OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(NestedSchemaBlock);
+        gen.addMethod("/slas", makeMethodInfo("POST", "/slas", schema_info));
+
+        hash<auto> spec = gen.generate();
+        hash<auto> body_schema =
+            spec.paths{"/slas"}.post.requestBody.content."application/json".schema;
+
+        assertEq("object", body_schema.type);
+        assertEq(("name",), body_schema.required);
+
+        hash<auto> methods_schema = body_schema.properties.methods;
+        assertEq("array", methods_schema.type);
+        assertTrue(methods_schema.items.hasKey("allOf"));
+        assertEq(2, methods_schema.items.allOf.size());
+        assertEq(("service", "method"), methods_schema.items.allOf[1].required);
+        assertTrue(methods_schema.items.allOf[1].properties.hasKey("service"));
+        assertTrue(methods_schema.items.allOf[1].properties.hasKey("method"));
     }
 
     testGeneratorFull() {

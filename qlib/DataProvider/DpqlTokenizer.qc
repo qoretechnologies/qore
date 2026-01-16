@@ -30,7 +30,7 @@ public namespace DataProvider {
 */
 #!@{
 
-#! Field reference (@field or @"quoted field")
+#! Field reference (\c \@field or <tt>\@\"quoted field\"</tt>)
 public const DPQL_TOK_FIELD = 1;
 #! String literal ("string" or 'string')
 public const DPQL_TOK_STRING = 2;
@@ -42,6 +42,14 @@ public const DPQL_TOK_BOOLEAN = 4;
 public const DPQL_TOK_NULL = 5;
 #! Identifier (function names, keywords like between, and, in)
 public const DPQL_TOK_IDENTIFIER = 6;
+#! Date literal (ISO-8601)
+public const DPQL_TOK_DATE = 7;
+#! Binary literal (<tt>&lt;hex&gt;</tt>)
+public const DPQL_TOK_BINARY = 8;
+#! List literal (parse_to_qore_value format)
+public const DPQL_TOK_LIST = 21;
+#! Hash literal (parse_to_qore_value format)
+public const DPQL_TOK_HASH = 22;
 #! Equals operator (==)
 public const DPQL_TOK_OP_EQ = 10;
 #! Not equals operator (!=)
@@ -89,6 +97,10 @@ public const DpqlTokenTypeNames = {
     DPQL_TOK_BOOLEAN: "boolean",
     DPQL_TOK_NULL: "null",
     DPQL_TOK_IDENTIFIER: "identifier",
+    DPQL_TOK_DATE: "date",
+    DPQL_TOK_BINARY: "binary",
+    DPQL_TOK_LIST: "list",
+    DPQL_TOK_HASH: "hash",
     DPQL_TOK_OP_EQ: "==",
     DPQL_TOK_OP_NE: "!=",
     DPQL_TOK_OP_LT: "<",
@@ -151,9 +163,13 @@ public hashdecl DpqlDiagnostic {
 
 #! Tokenizer for DPQL (Data Provider Query Language) expressions
 /** This class provides lexical analysis of DPQL query expressions, correctly handling:
-    - Field references (@field or @"field with spaces")
+    - Field references (\c \@field or <tt>\@\"field with spaces\"</tt>)
     - String literals (single and double quoted)
     - Numeric literals (integers, decimals, negative numbers)
+    - Date literals (ISO-8601)
+    - Binary literals (<tt>&lt;hex&gt;</tt>)
+    - List literals (parse_to_qore_value format)
+    - Hash literals (parse_to_qore_value format)
     - Boolean and null literals
     - Comparison operators (==, !=, <, <=, >, >=)
     - Logical operators (&&, ||, !)
@@ -221,6 +237,18 @@ public class DpqlTokenizer {
             return result;
         }
         return scanToken();
+    }
+
+    #! Returns the previous non-whitespace character, or "" if none
+    private string prevNonWhitespaceChar() {
+        for (int i = pos - 1; i >= 0; --i) {
+            string c = input[i];
+            if (c =~ /[ \t\r\n]/) {
+                continue;
+            }
+            return c;
+        }
+        return "";
     }
 
     #! Returns all tokens as a list (for syntax highlighting)
@@ -352,9 +380,19 @@ public class DpqlTokenizer {
             return scanString('"');
         }
 
+        # Hash literal
+        if (c == "{") {
+            return scanHashLiteral();
+        }
+
         # Regex pattern (after =~ operator context, or standalone)
         if (c == "/") {
             return scanRegex();
+        }
+
+        # Date literal (YYYY-MM-DD with optional time)
+        if (c =~ /[0-9]/ && looksLikeDateLiteral()) {
+            return scanDateLiteral();
         }
 
         # Number (including negative)
@@ -393,6 +431,9 @@ public class DpqlTokenizer {
             if (peekChar() == "=") {
                 advance(2);
                 return makeToken(DPQL_TOK_OP_LE, "<=", start_line, start_column);
+            }
+            if (looksLikeBinaryLiteral()) {
+                return scanBinaryLiteral();
             }
             advance();
             return makeToken(DPQL_TOK_OP_LT, "<", start_line, start_column);
@@ -433,6 +474,12 @@ public class DpqlTokenizer {
 
         # Punctuation
         if (c == "(") {
+            string prev = prevNonWhitespaceChar();
+            if (looksLikeListLiteral()
+                && (!prev || !(prev =~ /[a-zA-Z0-9_]/ || prev == "@" || prev == "."
+                    || prev == "'" || prev == '"' || prev == ")"))) {
+                return scanListLiteral();
+            }
             advance();
             return makeToken(DPQL_TOK_LPAREN, "(", start_line, start_column);
         }
@@ -459,7 +506,7 @@ public class DpqlTokenizer {
         return makeToken(DPQL_TOK_ERROR, c, start_line, start_column);
     }
 
-    #! Scans a field reference (@field or @"quoted")
+    #! Scans a field reference (\c \@field or <tt>\@\"quoted\"</tt>)
     private:internal hash<DpqlTokenInfo> scanFieldRef() {
         int start_line = line;
         int start_column = column;
@@ -684,6 +731,375 @@ public class DpqlTokenizer {
         addError("Unterminated regex pattern", "DPQL-E009",
             start_line, start_column, line, column);
         return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+    }
+
+    #! Returns True if the next token is a list literal
+    private bool looksLikeListLiteral() {
+        if (input[pos] != "(") {
+            return False;
+        }
+
+        int depth = 0;
+        int brace_depth = 0;
+        bool in_single = False;
+        bool in_double = False;
+        bool escape = False;
+        bool has_delim = False;
+
+        for (int i = pos; i < len; ++i) {
+            string c = input[i];
+            if (escape) {
+                escape = False;
+                continue;
+            }
+            if (in_single) {
+                if (c == "\\") {
+                    escape = True;
+                } else if (c == "'") {
+                    in_single = False;
+                }
+                continue;
+            }
+            if (in_double) {
+                if (c == "\\") {
+                    escape = True;
+                } else if (c == '"') {
+                    in_double = False;
+                }
+                continue;
+            }
+
+            if (c == "'") {
+                in_single = True;
+                continue;
+            }
+            if (c == '"') {
+                in_double = True;
+                continue;
+            }
+            if (c == "(") {
+                ++depth;
+                continue;
+            }
+            if (c == ")") {
+                --depth;
+                if (depth == 0) {
+                    return has_delim;
+                }
+                continue;
+            }
+            if (c == "{") {
+                ++brace_depth;
+                continue;
+            }
+            if (c == "}") {
+                if (brace_depth > 0) {
+                    --brace_depth;
+                }
+                continue;
+            }
+            if (depth == 1 && brace_depth == 0) {
+                if (c == ",") {
+                    has_delim = True;
+                } else if (c == "=") {
+                    if ((i + 1) < len && (input[i + 1] == "=" || input[i + 1] == "~")) {
+                        continue;
+                    }
+                    if (i > 0 && (input[i - 1] == "!" || input[i - 1] == "="
+                        || input[i - 1] == "<" || input[i - 1] == ">")) {
+                        continue;
+                    }
+                    has_delim = True;
+                }
+            }
+        }
+        return False;
+    }
+
+    #! Scans a list literal (parse_to_qore_value format)
+    private:internal hash<DpqlTokenInfo> scanListLiteral() {
+        int start_line = line;
+        int start_column = column;
+        string value = "";
+        int depth = 0;
+        int brace_depth = 0;
+        bool in_single = False;
+        bool in_double = False;
+        bool escape = False;
+
+        while (pos < len) {
+            string c = currentChar();
+            value += c;
+            advance();
+
+            if (escape) {
+                escape = False;
+                continue;
+            }
+            if (in_single) {
+                if (c == "\\") {
+                    escape = True;
+                } else if (c == "'") {
+                    in_single = False;
+                }
+                continue;
+            }
+            if (in_double) {
+                if (c == "\\") {
+                    escape = True;
+                } else if (c == '"') {
+                    in_double = False;
+                }
+                continue;
+            }
+
+            if (c == "'") {
+                in_single = True;
+                continue;
+            }
+            if (c == '"') {
+                in_double = True;
+                continue;
+            }
+            if (c == "(") {
+                ++depth;
+                continue;
+            }
+            if (c == ")") {
+                --depth;
+                if (depth == 0) {
+                    return makeToken(DPQL_TOK_LIST, value, start_line, start_column);
+                }
+                continue;
+            }
+            if (c == "{") {
+                ++brace_depth;
+                continue;
+            }
+            if (c == "}") {
+                if (brace_depth > 0) {
+                    --brace_depth;
+                }
+                continue;
+            }
+        }
+
+        addError("Unterminated list literal", "DPQL-E013", start_line, start_column, line, column);
+        return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+    }
+
+    #! Scans a hash literal (parse_to_qore_value format)
+    private:internal hash<DpqlTokenInfo> scanHashLiteral() {
+        int start_line = line;
+        int start_column = column;
+        string value = "";
+        int depth = 0;
+        int paren_depth = 0;
+        bool in_single = False;
+        bool in_double = False;
+        bool escape = False;
+
+        while (pos < len) {
+            string c = currentChar();
+            value += c;
+            advance();
+
+            if (escape) {
+                escape = False;
+                continue;
+            }
+            if (in_single) {
+                if (c == "\\") {
+                    escape = True;
+                } else if (c == "'") {
+                    in_single = False;
+                }
+                continue;
+            }
+            if (in_double) {
+                if (c == "\\") {
+                    escape = True;
+                } else if (c == '"') {
+                    in_double = False;
+                }
+                continue;
+            }
+
+            if (c == "'") {
+                in_single = True;
+                continue;
+            }
+            if (c == '"') {
+                in_double = True;
+                continue;
+            }
+            if (c == "{") {
+                ++depth;
+                continue;
+            }
+            if (c == "}") {
+                --depth;
+                if (depth == 0) {
+                    return makeToken(DPQL_TOK_HASH, value, start_line, start_column);
+                }
+                continue;
+            }
+            if (c == "(") {
+                ++paren_depth;
+                continue;
+            }
+            if (c == ")") {
+                if (paren_depth > 0) {
+                    --paren_depth;
+                }
+                continue;
+            }
+        }
+
+        addError("Unterminated hash literal", "DPQL-E013", start_line, start_column, line, column);
+        return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+    }
+
+    #! Returns True if the next token is a date literal
+    private bool looksLikeDateLiteral() {
+        if (pos + 9 >= len) {
+            return False;
+        }
+        if (input[pos] !~ /[0-9]/ || input[pos + 1] !~ /[0-9]/ || input[pos + 2] !~ /[0-9]/
+            || input[pos + 3] !~ /[0-9]/) {
+            return False;
+        }
+        if (input[pos + 4] != "-" || input[pos + 7] != "-") {
+            return False;
+        }
+        if (input[pos + 5] !~ /[0-9]/ || input[pos + 6] !~ /[0-9]/ || input[pos + 8] !~ /[0-9]/
+            || input[pos + 9] !~ /[0-9]/) {
+            return False;
+        }
+        return True;
+    }
+
+    #! Scans a date literal in ISO-8601 format
+    private:internal hash<DpqlTokenInfo> scanDateLiteral() {
+        int start_line = line;
+        int start_column = column;
+        string value = "";
+
+        if (!readDigits(4, \value) || !expectChar("-", \value) || !readDigits(2, \value) || !expectChar("-", \value)
+            || !readDigits(2, \value)) {
+            addError("Invalid date literal", "DPQL-E011", start_line, start_column, line, column);
+            return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+        }
+
+        if (pos < len && (currentChar() == "T" || currentChar() == "t"
+            || (currentChar() == " " && peekChar() =~ /[0-9]/))) {
+            value += currentChar();
+            advance();
+            if (!readDigits(2, \value) || !expectChar(":", \value) || !readDigits(2, \value)) {
+                addError("Invalid time literal in date", "DPQL-E011", start_line, start_column, line, column);
+                return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+            }
+            if (pos < len && currentChar() == ":") {
+                value += ":";
+                advance();
+                if (!readDigits(2, \value)) {
+                    addError("Invalid seconds in date literal", "DPQL-E011", start_line, start_column, line, column);
+                    return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+                }
+            }
+            if (pos < len && currentChar() == ".") {
+                value += ".";
+                advance();
+                if (!readDigits(1, \value, True)) {
+                    addError("Invalid fractional seconds in date literal", "DPQL-E011", start_line, start_column,
+                        line, column);
+                    return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+                }
+            }
+            if (pos < len && (currentChar() == "Z" || currentChar() == "z")) {
+                value += currentChar();
+                advance();
+            } else if (pos < len && (currentChar() == "+" || currentChar() == "-")) {
+                value += currentChar();
+                advance();
+                if (!readDigits(2, \value) || !expectChar(":", \value) || !readDigits(2, \value)) {
+                    addError("Invalid timezone in date literal", "DPQL-E011", start_line, start_column, line, column);
+                    return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+                }
+            }
+        }
+
+        return makeToken(DPQL_TOK_DATE, value, start_line, start_column);
+    }
+
+    #! Returns True if the next token is a binary literal
+    private bool looksLikeBinaryLiteral() {
+        if (pos + 2 >= len || input[pos] != "<") {
+            return False;
+        }
+        if (input[pos + 1] !~ /[0-9A-Fa-f]/) {
+            return False;
+        }
+        for (int i = pos + 1; i < len; ++i) {
+            if (input[i] == ">") {
+                return True;
+            }
+            if (input[i] !~ /[0-9A-Fa-f]/) {
+                return False;
+            }
+        }
+        return False;
+    }
+
+    #! Scans a binary literal (<tt>&lt;hex&gt;</tt>)
+    private:internal hash<DpqlTokenInfo> scanBinaryLiteral() {
+        int start_line = line;
+        int start_column = column;
+        string value = "<";
+        advance();
+
+        int hex_len = 0;
+        while (pos < len) {
+            string c = currentChar();
+            if (c == ">") {
+                value += c;
+                advance();
+                if (hex_len == 0 || (hex_len % 2) != 0) {
+                    addError("Invalid binary literal length", "DPQL-E012", start_line, start_column, line, column);
+                    return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+                }
+                return makeToken(DPQL_TOK_BINARY, value, start_line, start_column);
+            }
+            if (c !~ /[0-9A-Fa-f]/) {
+                addError("Invalid binary literal", "DPQL-E012", start_line, start_column, line, column);
+                return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+            }
+            value += c;
+            ++hex_len;
+            advance();
+        }
+
+        addError("Unterminated binary literal", "DPQL-E012", start_line, start_column, line, column);
+        return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+    }
+
+    private bool readDigits(int count, reference<string> out, *bool allow_more) {
+        int read = 0;
+        while (pos < len && currentChar() =~ /[0-9]/ && (read < count || allow_more)) {
+            out += currentChar();
+            advance();
+            ++read;
+        }
+        return read >= count;
+    }
+
+    private bool expectChar(string expected, reference<string> out) {
+        if (pos >= len || currentChar() != expected) {
+            return False;
+        }
+        out += expected;
+        advance();
+        return True;
     }
 }
 

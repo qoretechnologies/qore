@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -50,6 +50,18 @@ public:
 
     ASTTree* parseString(const char* str);
     ASTTree* parseString(std::string& str);
+
+    //! Enable or disable conditional parsing.
+    void setConditionalParsing(bool enabled);
+
+    //! Clear predefined symbols for conditional parsing.
+    void clearDefines();
+
+    //! Add a predefined symbol for conditional parsing.
+    void addDefine(const char* name);
+
+    //! Set predefined symbols for conditional parsing.
+    void setDefines(const QoreListNode* names);
 
     //! Get the count of reported errors.
     size_t getErrorCount() const;

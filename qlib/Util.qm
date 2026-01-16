@@ -426,7 +426,6 @@ public string sub ip_address_type(string address) {
 
     @see
     - @ref check_ip_address()
-    - @ref check_ip_address_ex()
     - @ref ip_address_type()
     - @ref is_ip_private()
 
@@ -2091,7 +2090,9 @@ public list<auto> sub uniq(softlist<auto> arg) {
 
 #! Returns a list of lists, where the i-th list contains the i-th element from each of the argument lists.
 /**
-    @param  ... lists to 'zip'
+    Accepts any number of list arguments via \c argv and returns a list of lists.
+    Each output list contains elements from the corresponding positions of the input lists.
+
     @return a list of lists
 
     @par Example:
@@ -2583,6 +2584,51 @@ public class TerminalColor {
     #! Format bold text
     string bold(string text) {
         return apply(Bold, text);
+    }
+
+    #! Strips ANSI escape codes from text
+    static string stripAnsi(string text) {
+        string out = "";
+        int i = 0;
+        while (i < text.size()) {
+            string c = text[i];
+            if (c == "\033" && (i + 1) < text.size() && text[i + 1] == "[") {
+                i += 2;
+                while (i < text.size() && text[i] != "m") {
+                    ++i;
+                }
+                if (i < text.size()) {
+                    ++i;
+                }
+                continue;
+            }
+            out += c;
+            ++i;
+        }
+        return out;
+    }
+
+    #! Returns the visible length of text without ANSI codes
+    static int visibleLength(string text) {
+        return stripAnsi(text).length();
+    }
+
+    #! Pads text on the right to a visible width
+    static string padRight(string text, int width, string pad_char = " ") {
+        int pad = width - visibleLength(text);
+        if (pad <= 0) {
+            return text;
+        }
+        return text + strmul(pad_char, pad);
+    }
+
+    #! Pads text on the left to a visible width
+    static string padLeft(string text, int width, string pad_char = " ") {
+        int pad = width - visibleLength(text);
+        if (pad <= 0) {
+            return text;
+        }
+        return strmul(pad_char, pad) + text;
     }
 
     #! Format a hash/record value with colors

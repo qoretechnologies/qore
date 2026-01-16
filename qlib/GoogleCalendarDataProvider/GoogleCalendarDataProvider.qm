@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore GoogleCalendarDataProvider module definition
 
-/*  GoogleCalendarDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  GoogleCalendarDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -293,9 +293,7 @@ public const CalendarAppName = "GoogleCalendar";
 
 #! Discovery API name
 public const GoogleDiscoveryCalendarApiName = "calendar";
-}
 
-namespace Priv {
 #! used in accordance with: https://about.google/brand-resource-center/brand-elements/
-const GoogleCalendarLogo = File::readTextFile(get_script_dir() + "/google-calendar-logo.svg");
+public const GoogleCalendarLogo = File::readTextFile(get_script_dir() + "/google-calendar-logo.svg");
 }

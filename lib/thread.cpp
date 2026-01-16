@@ -1826,7 +1826,8 @@ const char* set_module_context_name(const char* n) {
 }
 
 const char* get_module_context_name() {
-    return thread_data.get()->module_context_name;
+    ThreadData* td = thread_data.get();
+    return td ? td->module_context_name : nullptr;
 }
 
 const char* set_module_context_path(const char* p) {
@@ -1837,7 +1838,8 @@ const char* set_module_context_path(const char* p) {
 }
 
 const char* get_module_context_path() {
-    return thread_data.get()->module_context_path;
+    ThreadData* td = thread_data.get();
+    return td ? td->module_context_path : nullptr;
 }
 
 void ModuleContextNamespaceList::clear() {

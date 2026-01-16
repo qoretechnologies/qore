@@ -44,6 +44,8 @@
 
 // include files for default object classes
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/QC_EventLoop.h"
+#include "qore/intern/QC_EventNotifier.h"
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/QC_ProgramControl.h"
@@ -199,7 +201,12 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclFtpResponseInfo,
     * hashdeclSocketPollInfo,
     * hashdeclPipeInfo,
-    * hashdeclSseMessageInfo;
+    * hashdeclSseMessageInfo,
+    * hashdeclPortRangeInfo,
+    * hashdeclFilesystemPathInfo,
+    * hashdeclFilesystemSecurityConfigInfo,
+    * hashdeclNetworkSecurityConfigInfo,
+    * hashdeclSandboxConfigInfo;
 
 DLLLOCAL void init_context_functions(QoreNamespace& ns);
 DLLLOCAL void init_RangeIterator_functions(QoreNamespace& ns);
@@ -1142,6 +1149,11 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     preinitFileClass();
     hashdeclPipeInfo = init_hashdecl_PipeInfo(qns);
     hashdeclSseMessageInfo = init_hashdecl_SseMessageInfo(qns);
+    hashdeclPortRangeInfo = init_hashdecl_PortRangeInfo(qns);
+    hashdeclFilesystemPathInfo = init_hashdecl_FilesystemPathInfo(qns);
+    hashdeclFilesystemSecurityConfigInfo = init_hashdecl_FilesystemSecurityConfigInfo(qns);
+    hashdeclNetworkSecurityConfigInfo = init_hashdecl_NetworkSecurityConfigInfo(qns);
+    hashdeclSandboxConfigInfo = init_hashdecl_SandboxConfigInfo(qns);
 
     qore_ns_private::addNamespace(qns, get_thread_ns(qns));
 
@@ -1188,6 +1200,8 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initSSLCertificateClass(qns));
     qns.addSystemClass(initSSLPrivateKeyClass(qns));
     qns.addSystemClass(initSocketClass(qns));
+    qns.addSystemClass(initEventNotifierClass(qns));
+    qns.addSystemClass(initEventLoopClass(qns));
     qns.addSystemClass(initSandboxManagerClass(qns));  // must be before Program class
     preinitProgramClass();  // to resolve circular dependency Program/Expression class
     qns.addSystemClass(initExpressionClass(qns));

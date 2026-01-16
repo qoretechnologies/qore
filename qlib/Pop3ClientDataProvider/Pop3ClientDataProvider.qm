@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Pop3Client.qm POP3 client module definition
 
-/*  Pop3Client.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  Pop3Client.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -123,8 +123,6 @@ module Pop3ClientDataProvider {
 public namespace Pop3ClientDataProvider {
 #! Generic Pop3 server app name
 public const AppName = "Pop3";
-}
 
-namespace Priv {
-const Pop3LogoWhite = File::readTextFile(get_script_dir() + "/pop3-logo-white.svg");
+public const Pop3LogoWhite = File::readTextFile(get_script_dir() + "/pop3-logo-white.svg");
 }

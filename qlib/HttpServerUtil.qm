@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file HttpServerUtil.qm HTTP server base code
 
-/*  HttpServerUtil.qm Copyright (C) 2014 - 2025 Qore Technologies, s.r.o.
+/*  HttpServerUtil.qm Copyright (C) 2014 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -417,6 +417,10 @@ public hashdecl HttpHandlerResponseInfo {
     */
     *hash<auto> hdr;
 
+    #! set this key to @ref True to bypass response serialization and schema validation
+    /** When set, the response body is returned as-is and should include a \c Content-Type header. */
+    softbool raw_response = False;
+
     #! this key can be set to @ref True "True" if the reply has already been sent (by a chunked callback for example)
     bool reply_sent = False;
 
@@ -552,6 +556,18 @@ public hashdecl HttpListenerOptionInfo {
     /** @since HttpServer 1.5
     */
     bool no_start_main_thread = False;
+
+    #! If True (the default), addListener() will block until async I/O is ready to accept connections
+    /** Set to @ref False to add multiple listeners without blocking, then call
+        @ref HttpServer::HttpServer::waitForAsyncIo() "HttpServer::waitForAsyncIo()" manually once
+        after all listeners are added.
+
+        @note This option only affects servers running in async I/O mode (the default).
+        In sync mode, listeners are ready immediately.
+
+        @since HttpServer 1.7
+    */
+    bool sync = True;
 }
 
 #! hash providing HTTP handler configuration info
@@ -708,12 +724,33 @@ public hash<Util::UriQueryInfo> sub parse_uri_query(string path) {
 
 #! helper function for setting HTTP response headers
 public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
-    if (!rv.hdr.Connection) {
-        if (rv.close) { # RFC 2616 section 14.10 is "close" in all lower-case
-            rv.hdr.Connection = "close";
-        } else {
-            rv.hdr.Connection = "Keep-Alive";
+    bool is_http2 = cx."header-info".http2 ?? False;
+    if (!is_http2) {
+        if (!rv.hdr.Connection) {
+            if (rv.close) { # RFC 2616 section 14.10 is "close" in all lower-case
+                rv.hdr.Connection = "close";
+            } else {
+                rv.hdr.Connection = "Keep-Alive";
+            }
         }
+    } else {
+        # HTTP/2 forbids hop-by-hop headers
+        # Note: header removal here is case-sensitive; mixed-case variants may slip through
+        # until a case-insensitive hash for headers is implemented.
+        remove rv.hdr{
+            "Connection",
+            "connection",
+            "Keep-Alive",
+            "keep-alive",
+            "Proxy-Connection",
+            "proxy-connection",
+            "Transfer-Encoding",
+            "transfer-encoding",
+            "Upgrade",
+            "upgrade",
+            "TE",
+            "te",
+        };
     }
 
     if (!rv.hdr.Date) {
@@ -1402,10 +1439,11 @@ public class AbstractStreamRequest {
     */
     private hash<HttpHandlerResponseInfo> sendResponse() {
         hash<HttpHandlerResponseInfo> rv = getResponseHeaderMessage();
+        bool chunked = rv.hdr."Transfer-Encoding" == "chunked";
         http_set_reply_headers(s, cx, \rv);
 
         # issue #4109: do not start async I/O with a HEAD request
-        if (rv.hdr."Transfer-Encoding" != "chunked" || hdr.method == "HEAD") {
+        if (!chunked || hdr.method == "HEAD") {
             return rv;
         }
 
@@ -1783,7 +1821,13 @@ public class AbstractHttpRequestHandler {
         if (!stream) {
             auto rv = handleRequest(cx, hdr, body ?? getMessageBody(s, hdr, body));
             switch (rv.typeCode()) {
-                case NT_HASH: return cast<hash<HttpResponseInfo>>(rv);
+                case NT_HASH: {
+                    hash<auto!> hrv = rv;
+                    if (hrv.hasKey("raw_response")) {
+                        delete hrv."raw_response";
+                    }
+                    return cast<hash<HttpResponseInfo>>(hrv);
+                }
                 case NT_STRING:
                 case NT_BINARY: return cast<hash<HttpResponseInfo>>(("code": 200, "body": rv));
                 default:
@@ -1792,7 +1836,11 @@ public class AbstractHttpRequestHandler {
         }
 
         AbstractStreamRequest req = getStreamRequestImpl(listener, s, cx, hdr, body);
-        return cast<hash<HttpResponseInfo>>(req.handleRequest());
+        hash<auto!> hrv = req.handleRequest();
+        if (hrv.hasKey("raw_response")) {
+            delete hrv."raw_response";
+        }
+        return cast<hash<HttpResponseInfo>>(hrv);
     }
 
     #! returns the AbstractStreamRequest object for handling chunked requests
@@ -2148,6 +2196,19 @@ public class AbstractHttpSocketHandlerInterface {
             ++lh{lid};
         }
         on_error handlerStopped(lid);
+        bool h2_ws_debug_handler = False;
+        @debug {
+            if (cx."header-info".http2 && cx."header-info".is_websocket_connect
+                && getenv("QORE_HTTP2_WS_DEBUG_HANDLER")) {
+                h2_ws_debug_handler = True;
+            }
+        }
+        if (h2_ws_debug_handler) {
+            string handler_name = cx.handler_name ?? "<unknown>";
+            int stream_id = cx."header-info".stream_id;
+            cx.listener.log("HTTP/2 WS startImpl dispatch: cid %y stream_id %d handler %y", cx.id, stream_id,
+                handler_name);
+        }
         return startImpl(lid, cx, hdr, s);
     }
 

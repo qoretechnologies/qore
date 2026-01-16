@@ -152,6 +152,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Unconnected Socket tests", \unconnectedSocketTest());
         addTestCase("Random Port tests", \randomPortSocketTest());
         addTestCase("SSL read test", \sslReadTest());
+        addTestCase("SSL poll send partial test", \sslPollSendPartialTest());
         addTestCase("SSL write disconnect test", \sslWriteDisconnectTest());
         addTestCase("ALPN test", \alpnTest());
         set_return_value(main());
@@ -1089,6 +1090,72 @@ class SocketTest inherits QUnit::Test {
         s.setPrivateKey(TestCert);
         q.push(s.getSocketInfo().port);
         s.acceptSSL(15s);
+    }
+
+    # Reproduces an SSL async send edge case: partial writes that require polling.
+    sslPollSendPartialTest() {
+        binary bigmsg = get_random_bytes(32 * 1024 * 1024);
+        Queue q();
+
+        setenv("QORE_TEST_SSL_PARTIAL_WRITE", "1");
+        on_exit unsetenv("QORE_TEST_SSL_PARTIAL_WRITE");
+        setenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT", "4");
+        on_exit unsetenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
+
+        background sub () {
+            Socket server();
+            server.bind(0);
+            server.listen();
+            server.setCertificate(TestCert);
+            server.setPrivateKey(TestCert);
+            q.push(server.getSocketInfo().port);
+
+            Socket receiver = server.acceptSSL(15s);
+
+            SocketPollOperation spop_recv = receiver.startPollRecvData();
+            binary bmsg;
+            date start = now();
+            while (bmsg.size() < bigmsg.size()) {
+                if (now() - start > 20s) {
+                    throw "TEST-ERROR", "timeout waiting for SSL poll recv data";
+                }
+                *hash<SocketPollInfo> info = spop_recv.continuePoll();
+                if (info) {
+                    Socket::poll((info,), 1s);
+                    continue;
+                }
+                binary chunk = spop_recv.getOutput();
+                if (chunk.size()) {
+                    bmsg += chunk;
+                    if (bmsg.size() > bigmsg.size()) {
+                        break;
+                    }
+                    usleep(2ms);
+                }
+                if (bmsg.size() < bigmsg.size()) {
+                    spop_recv = receiver.startPollRecvData();
+                }
+            }
+            q.push(bmsg);
+        }();
+
+        int port = q.get();
+        Socket sender();
+        sender.connectSSL("127.0.0.1:" + port);
+
+        SocketPollOperation spop_send = sender.startPollSend(bigmsg);
+        date send_start = now();
+        while (*hash<SocketPollInfo> info = spop_send.continuePoll()) {
+            if (now() - send_start > 20s) {
+                throw "TEST-ERROR", "timeout waiting for SSL poll send data";
+            }
+            Socket::poll((info,), 1s);
+        }
+
+        binary bmsg = q.get();
+        sender.close();
+        assertEq(bigmsg.size(), bmsg.size());
+        assertEq(bigmsg.toSHA512(), bmsg.toSHA512());
     }
 
     alpnTest() {

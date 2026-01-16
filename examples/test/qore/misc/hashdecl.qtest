@@ -87,6 +87,7 @@ class HashDeclTest inherits QUnit::Test {
         addTestCase("serialize imported", \serializeImportedTest());
         addTestCase("issue 3167", \issue3167());
         addTestCase("Test HashDecl", \testHashDecl());
+        addTestCase("namespaced typed hash literal", \namespacedTypedHashLiteral());
         addTestCase("hashdecl inheritance", \testHashDeclInheritance());
         set_return_value(main());
     }
@@ -315,6 +316,30 @@ class HashDeclTest inherits QUnit::Test {
         {
             Program p(PO_NEW_STYLE|PO_NO_INHERIT_SYSTEM_HASHDECLS);
             assertThrows("PARSE-EXCEPTION", \p.parse(), ("sub t() {hash<ExceptionInfo> c; delete c;}", ""));
+        }
+    }
+
+    namespacedTypedHashLiteral() {
+        hash<Test::Container3> c = <Test::Container3>{};
+        assertEq(True, c instanceof hash<Test::Container3>);
+        assertEq(3, c.i);
+
+        hash<Test::Container3> c2 = <::Test::Container3>{};
+        assertEq(True, c2 instanceof hash<Test::Container3>);
+        assertEq(3, c2.i);
+
+        hash<Test::Container3> c3 = hash<Test::Container3>{};
+        assertEq(True, c3 instanceof hash<Test::Container3>);
+        assertEq(3, c3.i);
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("sub t() {auto h = <Test::>{};}", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("sub t() {auto h = <::>{};}", ""));
         }
     }
 
@@ -653,6 +678,26 @@ class HashDeclTest inherits QUnit::Test {
             assertTrue(result[1]);   # C inherits from A (grandparent)
             assertTrue(result[2]);   # C inherits from B
             assertFalse(result[3]);  # A does NOT inherit from B
+        }
+
+        # Test 29: System hashdecl inheritance - DirStatInfo inherits StatInfo
+        {
+            Program p(PO_NEW_STYLE);
+            p.loadModule("reflection");
+            p.parse("
+                list sub test() {
+                    TypedHash dir = TypedHash::forName('DirStatInfo');
+                    TypedHash stat = TypedHash::forName('StatInfo');
+                    *TypedHash parent = dir.getParentTypedHash();
+                    return (
+                        parent ? parent.getName() : NOTHING,
+                        dir.inheritsFrom(stat),
+                    );
+                }
+            ", "");
+            list result = p.callFunction("test");
+            assertEq("StatInfo", result[0]);
+            assertTrue(result[1]);
         }
     }
 }

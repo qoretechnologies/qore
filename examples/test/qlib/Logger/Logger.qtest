@@ -25,6 +25,7 @@ class Test inherits QUnit::Test {
         addTestCase("LoggerFilter", \testLoggerFilter());
         addTestCase("LoggerAppender", \testLoggerAppender());
         addTestCase("LoggerAppenderQueue", \testLoggerAppenderQueue());
+        addTestCase("LoggerAppenderQueueBackpressure", \testLoggerAppenderQueueBackpressure());
         addTestCase("LoggerAppenderMultiThread", \testLoggerAppenderMultiThread());
         addTestCase("LoggerAppenderMultiThreadUnassigned", \testLoggerAppenderMultiThreadUnassigned());
         addTestCase("LoggerAppenderFile", \testLoggerAppenderFile());
@@ -489,6 +490,138 @@ class Test inherits QUnit::Test {
         la.setQueue(NOTHING);
         assertEq(NOTHING, la.getQueue());
         assertThrows("LOGGER-ERROR", "Cannot reopen stream", \la.open());
+    }
+
+    testLoggerAppenderQueueBackpressure() {
+        # Test constructor with memory limit
+        {
+            LoggerAppenderQueue laq(1024);  # 1KB limit
+            assertEq(1024, laq.maxBytes(), "maxBytes returns correct limit");
+            assertEq(0, laq.currentBytes(), "currentBytes starts at 0");
+            assertFalse(laq.isFull(), "isFull is false initially");
+        }
+
+        # Test constructor with default limit (0 = 10MB)
+        {
+            LoggerAppenderQueue laq(0);
+            assertEq(10 * 1024 * 1024, laq.maxBytes(), "default limit is 10MB");
+        }
+
+        # Test constructor with unlimited (-1)
+        {
+            LoggerAppenderQueue laq(-1);
+            assertEq(-1, laq.maxBytes(), "unlimited returns -1");
+            assertFalse(laq.isFull(), "unlimited queue is never full");
+        }
+
+        # Test invalid constructor argument
+        assertThrows("LOGGERAPPENDERQUEUE-ERROR", sub() { new LoggerAppenderQueue(-2); });
+
+        # Test byte tracking with push
+        {
+            StringOutputStream sos();
+            StreamWriter sw(sos);
+            LoggerAppenderStream la("TEST", new LoggerLayoutPattern("%m"), sw);
+            LoggerAppenderQueue laq(10000);  # 10KB limit
+            la.setQueue(laq);
+            la.open();
+
+            # Push a small event
+            LoggerEvent lle1 = new LoggerEvent('Logger', 'test', LoggerLevel::getLevelInfo(), 'short');
+            assertTrue(la.post(lle1), "small event posted successfully");
+            assertTrue(laq.currentBytes() > 0, "currentBytes increased after push");
+
+            # Push a larger event with a bigger message
+            string large_msg = strmul("x", 1000);
+            LoggerEvent lle2 = new LoggerEvent('Logger', 'test', LoggerLevel::getLevelInfo(), large_msg);
+            assertTrue(la.post(lle2), "larger event posted successfully");
+            int bytes_after_large = laq.currentBytes();
+            assertTrue(bytes_after_large > 1000, "currentBytes reflects large message size");
+
+            # Process events and verify bytes decrease
+            laq.process();
+            assertTrue(laq.currentBytes() < bytes_after_large, "currentBytes decreased after processing");
+
+            la.close();
+            laq.process();  # Process close event
+        }
+
+        # Test drop behavior with negative timeout
+        {
+            StringOutputStream sos();
+            StreamWriter sw(sos);
+            LoggerAppenderStream la("TEST", new LoggerLayoutPattern("%m"), sw);
+            LoggerAppenderQueue laq(100);  # Very small 100 byte limit
+            la.setQueue(laq);
+            la.open();
+
+            # First event should succeed (queue is empty)
+            string msg = strmul("y", 200);  # 200 byte message
+            LoggerEvent lle = new LoggerEvent('Logger', 'test', LoggerLevel::getLevelInfo(), msg);
+            assertTrue(la.post(lle), "first large event succeeds on empty queue");
+
+            # Second event should be dropped with timeout=-1
+            assertFalse(laq.push(la, LoggerAppender::EVENT_LOG, msg, -1ms),
+                "event dropped with negative timeout when full");
+
+            laq.process();
+            la.close();
+            laq.process();
+        }
+
+        # Test timeout behavior
+        {
+            StringOutputStream sos();
+            StreamWriter sw(sos);
+            LoggerAppenderStream la("TEST", new LoggerLayoutPattern("%m"), sw);
+            LoggerAppenderQueue laq(100);  # Very small limit
+            la.setQueue(laq);
+            la.open();
+
+            # Fill the queue
+            string msg = strmul("z", 200);
+            LoggerEvent lle = new LoggerEvent('Logger', 'test', LoggerLevel::getLevelInfo(), msg);
+            la.post(lle);
+
+            # Should timeout waiting for space
+            assertThrows("QUEUE-TIMEOUT", sub() {
+                laq.push(la, LoggerAppender::EVENT_LOG, msg, 50ms);
+            });
+
+            laq.process();
+            la.close();
+            laq.process();
+        }
+
+        # Test oversized entry (larger than max_bytes) when queue is empty
+        {
+            StringOutputStream sos();
+            StreamWriter sw(sos);
+            LoggerAppenderStream la("TEST", new LoggerLayoutPattern("%m"), sw);
+            LoggerAppenderQueue laq(100);  # Very small 100 byte limit
+            la.setQueue(laq);
+            la.open();
+
+            # Create a message much larger than the queue limit
+            string large_msg = strmul("X", 500);  # 500 bytes, 5x the limit
+            assertEq(500, large_msg.size());
+
+            # Queue is empty, so oversized entry should be allowed to prevent deadlock
+            assertTrue(laq.push(la, LoggerAppender::EVENT_LOG, large_msg, 0ms),
+                "oversized entry allowed when queue is empty");
+            assertTrue(laq.currentBytes() >= 500, "currentBytes reflects oversized entry");
+            assertTrue(laq.isFull(), "queue is full after oversized entry");
+
+            # Process the oversized entry
+            laq.process();
+            assertEq(0, laq.currentBytes(), "currentBytes back to 0 after processing");
+
+            # Verify the message was written correctly
+            assertEq(large_msg, sos.getData(), "oversized message processed correctly");
+
+            la.close();
+            laq.process();
+        }
     }
 
     startPostThread(LoggerAppender la) {

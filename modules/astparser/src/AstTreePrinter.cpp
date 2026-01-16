@@ -828,7 +828,14 @@ void AstTreePrinter::printParseOptionString(std::ostream& os, ASTParseOption* po
         case APOK_LOCK_OPTIONS: os << "LOCK_OPTIONS"; break;
         case APOK_LOCK_WARNINGS: os << "LOCK_WARNINGS"; break;
         case APOK_MODULE_CMD: os << "MODULE_CMD"; break;
+        case APOK_MODERN: os << "MODERN"; break;
         case APOK_NEW_STYLE: os << "NEW_STYLE"; break;
+        case APOK_IFDEF: os << "IFDEF"; break;
+        case APOK_IFNDEF: os << "IFNDEF"; break;
+        case APOK_IF: os << "IF"; break;
+        case APOK_ELIF: os << "ELIF"; break;
+        case APOK_ELSE: os << "ELSE"; break;
+        case APOK_ENDIF: os << "ENDIF"; break;
         case APOK_NO_CHILD_PO_RESTRICTIONS: os << "NO_CHILD_PO_RESTRICTIONS"; break;
         case APOK_NO_CLASS_DEFS: os << "NO_CLASS_DEFS"; break;
         case APOK_NO_CONSTANT_DEFS: os << "NO_CONSTANT_DEFS"; break;

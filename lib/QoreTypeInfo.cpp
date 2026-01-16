@@ -77,6 +77,10 @@ const QoreObjectOrNothingTypeInfo staticObjectOrNothingTypeInfo;
 
 const QoreDateTypeInfo staticDateTypeInfo;
 const QoreDateOrNothingTypeInfo staticDateOrNothingTypeInfo;
+const QoreAbsoluteDateTypeInfo staticAbsoluteDateTypeInfo;
+const QoreAbsoluteDateOrNothingTypeInfo staticAbsoluteDateOrNothingTypeInfo;
+const QoreRelativeDateTypeInfo staticRelativeDateTypeInfo;
+const QoreRelativeDateOrNothingTypeInfo staticRelativeDateOrNothingTypeInfo;
 
 const QoreHashTypeInfo staticHashTypeInfo;
 const QoreHashOrNothingTypeInfo staticHashOrNothingTypeInfo;
@@ -167,6 +171,8 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *stringTypeInfo = &staticStringTypeInfo,
    *binaryTypeInfo = &staticBinaryTypeInfo,
    *dateTypeInfo = &staticDateTypeInfo,
+   *dateAbsoluteTypeInfo = &staticAbsoluteDateTypeInfo,
+   *dateRelativeTypeInfo = &staticRelativeDateTypeInfo,
    *objectTypeInfo = &staticObjectTypeInfo,
    *hashTypeInfo = &staticHashTypeInfo,
    *emptyHashTypeInfo = &staticEmptyHashTypeInfo,
@@ -209,6 +215,8 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *binaryOrNothingTypeInfo = &staticBinaryOrNothingTypeInfo,
    *objectOrNothingTypeInfo = &staticObjectOrNothingTypeInfo,
    *dateOrNothingTypeInfo = &staticDateOrNothingTypeInfo,
+   *dateAbsoluteOrNothingTypeInfo = &staticAbsoluteDateOrNothingTypeInfo,
+   *dateRelativeOrNothingTypeInfo = &staticRelativeDateOrNothingTypeInfo,
    *hashOrNothingTypeInfo = &staticHashOrNothingTypeInfo,
    *autoHashOrNothingTypeInfo = &staticAutoHashOrNothingTypeInfo,
    *autoNoNarrowHashOrNothingTypeInfo = &staticAutoNoNarrowHashOrNothingTypeInfo,
@@ -700,7 +708,7 @@ const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInf
 }
 
 // Helper function to create a normalized key for union type caching
-// Preserves source order while removing duplicates
+// Preserve declaration order so union resolution honors the first matching type.
 static type_vec_t normalize_union_key(const type_vec_t& member_types) {
     type_vec_t key;
     key.reserve(member_types.size());
@@ -2509,6 +2517,19 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         }
         return or_nothing ? referenceOrNothingTypeInfo : referenceTypeInfo;
     }
+    if (!strcmp(cscope->ostr, "date")) {
+        if (subtypes.size() != 1) {
+            return nullptr;
+        }
+
+        if (!strcmp(subtypes[0]->cscope->ostr, "absolute")) {
+            return or_nothing ? dateAbsoluteOrNothingTypeInfo : dateAbsoluteTypeInfo;
+        }
+        if (!strcmp(subtypes[0]->cscope->ostr, "relative")) {
+            return or_nothing ? dateRelativeOrNothingTypeInfo : dateRelativeTypeInfo;
+        }
+        return nullptr;
+    }
 
     if (!strcmp(cscope->ostr, "object")) {
         if (subtypes.size() != 1) {
@@ -2788,6 +2809,26 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
             err = -1;
         }
         return or_nothing ? referenceOrNothingTypeInfo : referenceTypeInfo;
+    }
+    if (!strcmp(cscope->ostr, "date")) {
+        if (subtypes.size() != 1) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; base type 'date' takes a single subtype " \
+                "argument of 'absolute' or 'relative'", getName());
+            err = -1;
+            return or_nothing ? dateOrNothingTypeInfo : dateTypeInfo;
+        }
+
+        if (!strcmp(subtypes[0]->cscope->ostr, "absolute")) {
+            return or_nothing ? dateAbsoluteOrNothingTypeInfo : dateAbsoluteTypeInfo;
+        }
+        if (!strcmp(subtypes[0]->cscope->ostr, "relative")) {
+            return or_nothing ? dateRelativeOrNothingTypeInfo : dateRelativeTypeInfo;
+        }
+
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; base type 'date' subtype must be " \
+            "'absolute' or 'relative'", getName());
+        err = -1;
+        return or_nothing ? dateOrNothingTypeInfo : dateTypeInfo;
     }
     if (!strcmp(cscope->ostr, "object")) {
         if (subtypes.size() != 1) {

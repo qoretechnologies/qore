@@ -1037,10 +1037,41 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
                             return -1;
                     }
                 } else {
-                    // Multi-key hash: newline then indented content
-                    str.concat('\n');
-                    if (v.getAsString(str, foff - 2, xsink))
-                        return -1;
+                    // Multi-key hash: first key inline, rest indented on new lines
+                    str.concat(' ');
+                    ConstHashIterator hhi(h);
+                    hhi.next();  // Move to first key
+                    str.sprintf("%s:", hhi.getKey());
+                    QoreValue hv = hhi.get();
+                    qore_type_t hvtype = hv.getType();
+                    if (hvtype == NT_HASH || hvtype == NT_LIST) {
+                        // First value is complex: newline and indent
+                        str.concat('\n');
+                        if (hv.getAsString(str, foff - 4, xsink))
+                            return -1;
+                    } else {
+                        // First value is simple: space and inline
+                        str.concat(' ');
+                        if (hv.getAsString(str, FMT_YAML_SHORT, xsink))
+                            return -1;
+                    }
+                    // Output remaining key-value pairs
+                    while (hhi.next()) {
+                        str.concat('\n');
+                        str.addch(' ', indent + 2);
+                        str.sprintf("%s:", hhi.getKey());
+                        hv = hhi.get();
+                        hvtype = hv.getType();
+                        if (hvtype == NT_HASH || hvtype == NT_LIST) {
+                            str.concat('\n');
+                            if (hv.getAsString(str, foff - 4, xsink))
+                                return -1;
+                        } else {
+                            str.concat(' ');
+                            if (hv.getAsString(str, FMT_YAML_SHORT, xsink))
+                                return -1;
+                        }
+                    }
                 }
             } else {
                 // Simple value: space then value in YAML short format

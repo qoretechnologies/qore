@@ -305,7 +305,7 @@ public class AbstractDataField inherits Qore::Serializable {
     }
 
     #! returns information about the field as an input field
-    /** the \c default_value and \example_value keys are not returned, and the \c type key returns only input
+    /** the \c default_value and \c example_value keys are not returned, and the \c type key returns only input
         information
     */
     hash<DataFieldInfo> getInputInfo() {

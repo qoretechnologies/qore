@@ -57,6 +57,7 @@
 #include <climits>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 #include <cstdlib>
 #include <cstring>
 #include <sys/stat.h>
@@ -84,6 +85,46 @@ static thread_local int assert_paren_depth = 0;
 
 // Brace depth for @debug block skip state
 static thread_local int debug_brace_depth = 0;
+
+#ifdef AST_SCANNER
+static int brace_depth = 0;
+static std::vector<int> typed_hash_depths;
+
+static bool is_identifier_string(const QoreStringNode& str) {
+   const char* buf = str.c_str();
+   if (!buf || !buf[0]) {
+      return false;
+   }
+   unsigned char c0 = static_cast<unsigned char>(buf[0]);
+   if (!isalpha(c0) && c0 != '_') {
+      return false;
+   }
+   for (const char* p = buf + 1; *p; ++p) {
+      unsigned char c = static_cast<unsigned char>(*p);
+      if (!isalnum(c) && c != '_') {
+         return false;
+      }
+   }
+   return true;
+}
+
+#define AST_PEEK_NEXT_NONSPACE(scanner, out_c) \
+   do { \
+      std::vector<int> buf; \
+      int c = 0; \
+      do { \
+         c = yyinput(scanner); \
+         if (c == EOF) { \
+            break; \
+         } \
+         buf.push_back(c); \
+      } while (c == ' ' || c == '\\t' || c == '\\r' || c == '\\n'); \
+      for (int i = static_cast<int>(buf.size()) - 1; i >= 0; --i) { \
+         unput(buf[i]); \
+      } \
+      out_c = c; \
+   } while (false)
+#endif
 
 static int ascii_to_octal(char c) {
    assert(isoctaldigit(c));
@@ -1658,7 +1699,22 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                         }
 \"                                      yylval->String = new QoreStringNode; yylloc->saveFirst(); BEGIN(str_state);
 <str_state>{
-      \"                                yylloc->restoreFirst(); BEGIN(INITIAL); return QUOTED_WORD;
+      \"                                {
+                                           yylloc->restoreFirst();
+                                           BEGIN(INITIAL);
+#ifdef AST_SCANNER
+                                           if (!typed_hash_depths.empty()) {
+                                              int c = 0;
+                                              AST_PEEK_NEXT_NONSPACE(yyscanner, c);
+                                              if (c == ':' && is_identifier_string(*yylval->String)) {
+                                                 yylval->string = strdup(yylval->String->c_str());
+                                                 yylval->String->deref();
+                                                 return IDENTIFIER;
+                                              }
+                                           }
+#endif
+                                           return QUOTED_WORD;
+                                        }
       \n                                yylval->String->concat('\n');
       {OCTAL_CONST}                     {
                                            int token_length = strlen(yytext);
@@ -2143,14 +2199,58 @@ class{WS}+{WORD}                        { yylval->string = trim(yytext + 6); par
 namespace{WS}+{WORD}                    { const char* ns = trim_inplace(yytext + 10); parse_push_ns_name(ns); return TOK_NAMESPACE; }
 module{WS}+{WORD}                       { const char* mod = trim_inplace(yytext + 7); parse_set_module_def_context_name(mod); return TOK_MODULE; }
 {WORD}                                  yylval->string = strdup(yytext); return IDENTIFIER;
+\<({WORD}::)+{WORD}\>\{                 {
+                                            yylval->string = strdup(yytext + 1);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+\<(::{WORD})+\>\{                       {
+                                            yylval->string = strdup(yytext + 1);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+hash\<({WORD}::)+{WORD}\>\{             {
+                                            yylval->string = strdup(yytext + 5);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+hash\<(::{WORD})+\>\{                   {
+                                            yylval->string = strdup(yytext + 5);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
 \<{WORD}\>\{                            {
                                             yylval->string = strdup(yytext + 1);
                                             yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
 hash\<{WORD}\>\{                        {
                                             yylval->string = strdup(yytext + 5);
                                             yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
 {WORD}<[a-zA-Z\*<:_0-9 \t,!().]+>       {
@@ -2314,6 +2414,24 @@ hash\<{WORD}\>\{                        {
 }
 =\~                                     BEGIN(regex_googleplex); return REGEX_MATCH;
 \!\~                                    BEGIN(regex_negative_universe); return REGEX_NMATCH;
+\{                                      {
+#ifdef AST_SCANNER
+                                           brace_depth++;
+#endif
+                                           return yytext[0];
+                                        }
+\}                                      {
+#ifdef AST_SCANNER
+                                           if (brace_depth > 0) {
+                                              brace_depth--;
+                                           }
+                                           if (!typed_hash_depths.empty()
+                                              && brace_depth < typed_hash_depths.back()) {
+                                              typed_hash_depths.pop_back();
+                                           }
+#endif
+                                           return yytext[0];
+                                        }
 {WSNL}+                                 /* ignore whitespace */
 .                                       return yytext[0];
 %%

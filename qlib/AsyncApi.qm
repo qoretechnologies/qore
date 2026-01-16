@@ -2873,6 +2873,10 @@ public class AsyncApiSchemaGenerator {
         hash<string, hash<auto>> schemas;
         #! Server definitions
         hash<string, hash<auto>> servers;
+        #! Additional EventData properties
+        *hash<auto> event_data_fields;
+        #! Additional required EventData fields
+        list<string> event_data_required;
     }
 
     #! Create a generator with API metadata
@@ -2887,6 +2891,14 @@ public class AsyncApiSchemaGenerator {
         channels = {};
         schemas = {};
         servers = {};
+        if (api_info.event_data_fields) {
+            event_data_fields = api_info.event_data_fields;
+        }
+        if (api_info.event_data_required) {
+            foreach string req in (api_info.event_data_required) {
+                event_data_required += req;
+            }
+        }
     }
 
     #! Add an event definition
@@ -3016,6 +3028,39 @@ public class AsyncApiSchemaGenerator {
 
     #! Generate schema component definitions
     private hash<auto> generateSchemaComponents() {
+        hash<auto> event_data_properties = {
+            "id": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Unique event sequence ID",
+            },
+            "time": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Event timestamp",
+            },
+            "event": {
+                "type": "string",
+                "description": "Event name",
+            },
+            "severity": {
+                "type": "string",
+                "enum": ("INFO", "WARNING", "MINOR", "MAJOR", "FATAL"),
+                "description": "Event severity",
+            },
+            "info": {
+                "type": "object",
+                "description": "Event-specific payload",
+            },
+        };
+        if (event_data_fields) {
+            event_data_properties += event_data_fields;
+        }
+        list<string> event_data_required_fields = ("id", "time", "event");
+        if (event_data_required) {
+            event_data_required_fields += event_data_required;
+        }
+
         hash<auto> component_schemas = schemas + {
             "SubscribePayload": {
                 "type": "object",
@@ -3061,32 +3106,8 @@ public class AsyncApiSchemaGenerator {
             },
             "EventData": {
                 "type": "object",
-                "required": ("id", "time", "event"),
-                "properties": {
-                    "id": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Unique event sequence ID",
-                    },
-                    "time": {
-                        "type": "string",
-                        "format": "date-time",
-                        "description": "Event timestamp",
-                    },
-                    "event": {
-                        "type": "string",
-                        "description": "Event name",
-                    },
-                    "severity": {
-                        "type": "string",
-                        "enum": ("INFO", "WARNING", "MINOR", "MAJOR", "FATAL"),
-                        "description": "Event severity",
-                    },
-                    "info": {
-                        "type": "object",
-                        "description": "Event-specific payload",
-                    },
-                },
+                "required": event_data_required_fields,
+                "properties": event_data_properties,
             },
         };
 

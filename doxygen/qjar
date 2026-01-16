@@ -87,7 +87,7 @@ class QJar {
 %ifndef NO_JNI
     private processModule() {
         Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-        on_error printf("%N\n", get_module_hash().DataProvider);
+        on_error stderr.printf("%Y\n", get_module_hash().DataProvider);
         p.loadModule(opts."module");
         p.loadModule("jni");
         p.loadModule("reflection");

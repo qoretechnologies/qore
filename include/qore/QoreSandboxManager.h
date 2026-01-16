@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -204,7 +204,7 @@ public:
         - \c "allowed_paths": List of hashes with "path" and "mode" keys
         - \c "denied_paths": List of denied path strings
     */
-    DLLEXPORT QoreHashNode* getConfiguration() const;
+    DLLEXPORT QoreHashNode* getConfiguration(ExceptionSink* xsink) const;
 
     //! Creates a copy with the same restrictions (for child programs)
     /** @return A new QoreFilesystemSecurityManager with the same configuration
@@ -385,7 +385,7 @@ public:
     DLLEXPORT bool checkHostname(const char* hostname, int port, int proto) const;
 
     //! Returns the current configuration as a hash
-    DLLEXPORT QoreHashNode* getConfiguration() const;
+    DLLEXPORT QoreHashNode* getConfiguration(ExceptionSink* xsink) const;
 
     //! Creates a copy with the same restrictions
     DLLEXPORT QoreNetworkSecurityManager* copy() const;
@@ -573,7 +573,7 @@ public:
     /** @return A hash containing all sandbox configuration including
         filesystem, network, and resource limit settings
     */
-    DLLEXPORT QoreHashNode* getConfiguration() const;
+    DLLEXPORT QoreHashNode* getConfiguration(ExceptionSink* xsink) const;
 
     //! Checks if filesystem access is allowed
     /** @param path The path to check

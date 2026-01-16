@@ -42,6 +42,7 @@ DOX_SRC_MODULES = qlib/Mime.qm \
 
 DOX_SRC_SPLIT_MODULES = \
     qlib/ConnectionProvider \
+    qlib/DpqlWebSocket \
     qlib/DataProvider \
     qlib/DbDataProvider \
     qlib/ElasticSearchDataProvider \
@@ -62,6 +63,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/CdsRestClient.qm \
 	qlib/DiscordRestClient.qm \
 	qlib/DiscordWebSocketClient.qm \
+	qlib/LinearRestClient.qm \
 	qlib/GoogleRestClient.qm \
 	qlib/HueRestClient.qm \
 	qlib/MewsRestClient.qm \
@@ -81,7 +83,6 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/Pop3Client.qm \
 	qlib/Qdx.qm \
 	qlib/Qorize.qm \
-	qlib/QoreRepl.qm \
 	qlib/QUnit.qm \
 	qlib/MysqlSqlUtil.qm \
 	qlib/RestHandler.qm \
@@ -111,6 +112,7 @@ DOX_SPLIT_MODULES = \
 	qlib/CsvUtil \
     qlib/CdsRestDataProvider \
     qlib/DiscordDataProvider \
+    qlib/LinearDataProvider \
     qlib/FileDataProvider \
 	qlib/FixedLengthUtil \
     qlib/FtpClientDataProvider \
@@ -129,7 +131,9 @@ DOX_SPLIT_MODULES = \
     qlib/SwaggerDataProvider \
     qlib/AsyncApiDataProvider \
     qlib/HttpServerAsyncIo \
-    qlib/MongoDbDataProvider
+    qlib/MongoDbDataProvider \
+    qlib/DpqlWebSocket \
+    qlib/QoreRepl
 
 AsyncApiDataProvider_modverdir = $(modverdir)/AsyncApiDataProvider
 AsyncSocketIo_modverdir = $(modverdir)/AsyncSocketIo
@@ -141,6 +145,7 @@ CsvUtil_modverdir = $(modverdir)/CsvUtil
 DataProvider_modverdir = $(modverdir)/DataProvider
 DbDataProvider_modverdir = $(modverdir)/DbDataProvider
 DiscordDataProvider_modverdir = $(modverdir)/DiscordDataProvider
+LinearDataProvider_modverdir = $(modverdir)/LinearDataProvider
 ElasticSearchDataProvider_modverdir = $(modverdir)/ElasticSearchDataProvider
 EmpathicBuildingDataProvider_modverdir = $(modverdir)/EmpathicBuildingDataProvider
 FileLocationHandler_modverdir = $(modverdir)/FileLocationHandler
@@ -162,6 +167,7 @@ ProviderIndex_modverdir = $(modverdir)/ProviderIndex
 RedisDataProvider_modverdir = $(modverdir)/RedisDataProvider
 ProviderIndexUtil_modverdir = $(modverdir)/ProviderIndexUtil
 QoreRepl_modverdir = $(modverdir)/QoreRepl
+DpqlWebSocket_modverdir = $(modverdir)/DpqlWebSocket
 RestClientDataProvider_modverdir = $(modverdir)/RestClientDataProvider
 RestSchemaDataProvider_modverdir = $(modverdir)/RestSchemaDataProvider
 SalesforceRestDataProvider_modverdir = $(modverdir)/SalesforceRestDataProvider
@@ -180,6 +186,7 @@ dist_CsvUtil_modver_DATA = $(wildcard qlib/CsvUtil/*.q[cm])
 dist_DataProvider_modver_DATA = $(wildcard qlib/DataProvider/*.q[cm])
 dist_DbDataProvider_modver_DATA = $(wildcard qlib/DbDataProvider/*.q[cm])
 dist_DiscordDataProvider_modver_DATA = $(wildcard qlib/DiscordDataProvider/*.q[cm])
+dist_LinearDataProvider_modver_DATA = $(wildcard qlib/LinearDataProvider/*.q[cm])
 dist_ElasticSearchDataProvider_modver_DATA = $(wildcard qlib/ElasticSearchDataProvider/*.q[cm])
 dist_EmpathicBuildingDataProvider_modver_DATA = $(wildcard qlib/EmpathicBuildingDataProvider/*.q[cm])
 dist_FileDataProvider_modver_DATA = $(wildcard qlib/FileDataProvider/*.q[cm])
@@ -200,6 +207,7 @@ dist_Pop3ClientDataProvider_modver_DATA = $(wildcard qlib/Pop3ClientDataProvider
 dist_ProviderIndex_modver_DATA = $(wildcard qlib/ProviderIndex/*.q[cm])
 dist_ProviderIndexUtil_modver_DATA = $(wildcard qlib/ProviderIndexUtil/*.q[cm])
 dist_QoreRepl_modver_DATA = $(wildcard qlib/QoreRepl/*.q[cm])
+dist_DpqlWebSocket_modver_DATA = $(wildcard qlib/DpqlWebSocket/*)
 dist_RedisDataProvider_modver_DATA = $(wildcard qlib/RedisDataProvider/*.q[cm])
 dist_RestClientDataProvider_modver_DATA = $(wildcard qlib/RestClientDataProvider/*.q[cm])
 dist_RestSchemaDataProvider_modver_DATA = $(wildcard qlib/RestSchemaDataProvider/*.q[cm])
@@ -1137,6 +1145,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/CdsRestDataProvider/business-central-logo.svg \
 	qlib/DbDataProvider/db-logo.svg \
 	qlib/DiscordDataProvider/discord-logo.svg \
+	qlib/LinearDataProvider/linear-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \
 	qlib/EmpathicBuildingDataProvider/Haltian-EmpathicBuilding.svg \
 	qlib/FileDataProvider/file-logo-white.svg \

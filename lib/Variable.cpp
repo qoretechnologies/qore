@@ -4,7 +4,7 @@
 
     Qore programming language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1085,6 +1085,43 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
             != lvid_set->end())) {
         saveTempRef(n);
         return doRecursiveException();
+    }
+
+    // Strip narrowed type from hash/list when assigning to hash<auto!>/list<auto!> variables
+    // For hash<auto!>/list<auto!> (NoNarrow): always set to autoHashTypeInfo/autoListTypeInfo
+    // Note: Setting to autoHashTypeInfo/autoListTypeInfo preserves nested hashdecl types
+    // Setting to nullptr would make the hash untyped, which causes copy_strip_complex_types to be
+    // called on nested values, losing hashdecl type info
+    // hash<auto>/list<auto> variables don't need any modification - they preserve the source type
+    if (typeInfo == autoNoNarrowHashTypeInfo || typeInfo == autoNoNarrowHashOrNothingTypeInfo) {
+        // hash<auto!> / *hash<auto!> - always strip to autoHashTypeInfo
+        if (n.getType() == NT_HASH) {
+            QoreHashNode* h = n.get<QoreHashNode>();
+            qore_hash_private* hp = qore_hash_private::get(*h);
+            if (!hp->getHashDecl()) {
+                if (!h->is_unique()) {
+                    QoreHashNode* copy = h->copy();
+                    qore_hash_private::get(*copy)->complexTypeInfo = autoHashTypeInfo;
+                    n = copy;
+                    saveTemp(h);
+                } else {
+                    hp->complexTypeInfo = autoHashTypeInfo;
+                }
+            }
+        }
+    } else if (typeInfo == autoNoNarrowListTypeInfo || typeInfo == autoNoNarrowListOrNothingTypeInfo) {
+        // list<auto!> / *list<auto!> - always strip to autoListTypeInfo
+        if (n.getType() == NT_LIST) {
+            QoreListNode* l = n.get<QoreListNode>();
+            if (!l->is_unique()) {
+                QoreListNode* copy = l->copy();
+                qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
+                n = copy;
+                saveTemp(l);
+            } else {
+                qore_list_private::get(*l)->complexTypeInfo = autoListTypeInfo;
+            }
+        }
     }
 
     // process weak assignment
@@ -2546,6 +2583,29 @@ bool LocalVar::isNoNarrowMarkerType(const QoreTypeInfo* ti, const QoreTypeInfo*&
     }
     base_ti = ti;
     return false;
+}
+
+const QoreTypeInfo* LocalVar::getTypeInfoForLValue() const {
+    if (!no_narrowing) {
+        return typeInfo;
+    }
+    // Return the NoNarrow version of the type so LValueHelper::assign() can properly strip types
+    if (typeInfo == autoHashTypeInfo) {
+        return autoNoNarrowHashTypeInfo;
+    }
+    if (typeInfo == autoHashOrNothingTypeInfo) {
+        return autoNoNarrowHashOrNothingTypeInfo;
+    }
+    if (typeInfo == autoListTypeInfo) {
+        return autoNoNarrowListTypeInfo;
+    }
+    if (typeInfo == autoListOrNothingTypeInfo) {
+        return autoNoNarrowListOrNothingTypeInfo;
+    }
+    if (typeInfo == autoTypeInfo) {
+        return autoNoNarrowTypeInfo;
+    }
+    return typeInfo;
 }
 
 void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc) {

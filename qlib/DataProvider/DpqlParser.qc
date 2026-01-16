@@ -51,7 +51,7 @@ public hashdecl DpqlParseResult {
     - Collection operators: in (val1, val2, ...)
     - Regex matching: =~ /pattern/flags
     - Function calls: func(arg1, arg2, ...)
-    - Field references: @field, @"field with spaces"
+    - Field references: \c \@field, <tt>\@\"field with spaces\"</tt>
     - Literals: strings, numbers, booleans, null
 
     @par Example:
@@ -457,11 +457,21 @@ public class DpqlParser {
                 if (kw == "in") {
                     nextToken();  # consume 'in'
                     skipWhitespace();
-                    expect(DPQL_TOK_LPAREN, "'('");
-                    skipWhitespace();
-                    list<auto> values = parseValueList();
-                    skipWhitespace();
-                    expect(DPQL_TOK_RPAREN, "')'");
+                    list<auto> values = ();
+                    if (!atEnd() && peek().type == DPQL_TOK_LIST) {
+                        auto parsed = parseStructuredLiteral();
+                        if (parsed.typeCode() != NT_LIST) {
+                            addError("Expected list literal after 'in'", "DPQL-E013", line, column, line, column);
+                            throw "DPQL-PARSE-ERROR", "Expected list literal";
+                        }
+                        values = parsed;
+                    } else {
+                        expect(DPQL_TOK_LPAREN, "'('");
+                        skipWhitespace();
+                        values = parseValueList();
+                        skipWhitespace();
+                        expect(DPQL_TOK_RPAREN, "')'");
+                    }
                     return <DataProviderExpression>{
                         "exp": DP_SEARCH_OP_IN,
                         "args": (left,) + values,
@@ -563,6 +573,16 @@ public class DpqlParser {
             case DPQL_TOK_NUMBER:
                 return parseNumberLiteral();
 
+            case DPQL_TOK_DATE:
+                return parseDateLiteral();
+
+            case DPQL_TOK_BINARY:
+                return parseBinaryLiteral();
+
+            case DPQL_TOK_LIST:
+            case DPQL_TOK_HASH:
+                return parseStructuredLiteral();
+
             case DPQL_TOK_BOOLEAN:
                 nextToken();
                 return tok.value.lwr() == "true";
@@ -598,10 +618,8 @@ public class DpqlParser {
                 if (lwr == "null") {
                     return NOTHING;
                 }
-                # Unknown identifier as value
-                addError(sprintf("Unexpected identifier '%s' in value position", id_tok.value),
-                    "DPQL-E001", id_tok);
-                throw "DPQL-PARSE-ERROR", "Unexpected identifier";
+                # Treat unquoted identifiers as strings
+                return id_tok.value;
             }
 
             case DPQL_TOK_ERROR:
@@ -706,6 +724,34 @@ public class DpqlParser {
             return value.toFloat();
         }
         return value.toInt();
+    }
+
+    #! Parses a date literal
+    private date parseDateLiteral() {
+        hash<DpqlTokenInfo> tok = nextToken();
+        return date(tok.value);
+    }
+
+    #! Parses a binary literal
+    private binary parseBinaryLiteral() {
+        hash<DpqlTokenInfo> tok = nextToken();
+        string value = tok.value;
+        if (value.size() < 3 || value[0] != "<" || value[value.size() - 1] != ">") {
+            throw "DPQL-PARSE-ERROR", "Invalid binary literal";
+        }
+        string hex = substr(value, 1, value.size() - 2);
+        return parse_hex_string(hex);
+    }
+
+    #! Parses a list or hash literal
+    private auto parseStructuredLiteral() {
+        hash<DpqlTokenInfo> tok = nextToken();
+        try {
+            return parse_to_qore_value(tok.value);
+        } catch (hash<ExceptionInfo> ex) {
+            addError(ex.desc ?? "Invalid list/hash literal", "DPQL-E013", tok);
+            throw "DPQL-PARSE-ERROR", "Invalid list/hash literal";
+        }
     }
 
     #! Parses a function call

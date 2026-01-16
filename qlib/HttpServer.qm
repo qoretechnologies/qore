@@ -146,27 +146,8 @@ log("started listener on %s", lh.desc);
       - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
       - requires Qore built with Brotli and/or Zstd support
 
-    @subsection http1_5_1 HttpServer 1.5.1
-    - updated to use \c Socket::startPollSendHttpResponse() for non-chunked async HTTP responses
-      - fixes bug where duplicate \c Content-Length headers could be sent
-      - uses native Qore method for proper HTTP header handling
-
     @subsection http1_5 HttpServer 1.5
-    - implemented async I/O mode for high-concurrency connection handling, enabled by default
-      (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
-      - single I/O thread handles accept, SSL handshake, and HTTP header reading using non-blocking I/O
-      - request processing is dispatched to ThreadPool for concurrent handler execution
-      - HTTP responses are sent asynchronously using \c Socket::startPollSendHttpResponse()
-      - enables handling many more concurrent connections with fewer threads
-      - sub-millisecond response latency for simple requests
-      - new \c HttpServer::isAsyncMode() method to check if async mode is enabled
-      - new \c HttpServer::queueAsyncResponse() method for async response sending
-      - set \c async_mode to \c False in \c HttpServerOptionInfo to disable
-    - added persistent handler support in async I/O mode
-      - handlers calling \c setPersistent(True) now automatically switch to synchronous/dedicated thread mode
-      - ensures thread affinity for thread-local resources (e.g. database transactions, DatasourcePool handles)
-      - connection returns to async I/O when handler releases persistence via \c setPersistent(False)
-      - new private \c HttpListener::handlePersistentConnectionSync() method for synchronous request handling
+    - introduced async I/O mode for HttpServer (unreleased feature)
 
     @subsection http1_4 HttpServer 1.4
     - allow the listener class to be overridden and added \c "listener-name" to the context hash
@@ -457,6 +438,20 @@ public hashdecl HttpServerOptionInfo {
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
+/**
+    ## Lifecycle
+
+    HttpServer instances are NOT designed to be restartable. Once stop() is called,
+    the server enters a stopped state and cannot be restarted. To create a new server,
+    instantiate a new HttpServer object.
+
+    The design is intentionally non-restartable because:
+    - Internal I/O controllers set shutdown flags that prevent restart
+    - Thread pools and counters are not reset after stop()
+    - Listeners are not designed to be restarted after being stopped
+
+    @see HttpServerIoController for async I/O coordinator lifecycle
+*/
 public class HttpServer inherits HttpServer::AbstractLogger {
     public {
         #! version of the HttpServer's implementation
@@ -549,6 +544,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         bool stopped = False;
 
+        #! Stop guard
+        Mutex stop_m();
+
+        #! True while stop() is in progress
+        bool stopping = False;
+
         # permanent handlers; these handlers are never removed
         HttpHandlerList handlers();
 
@@ -610,18 +611,30 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! Epoch second when cache was last updated
         static int cached_date_epoch = 0;
+
     }
     #! @endcond
 
     private {
         #! Global async socket I/O controller for all async operations
-        AsyncSocketIo::AsyncSocketIoController globalAsyncCtrl(False);
+        #! Static: shared across all HttpServer instances in async mode
+        #! Use globalAsyncCtrlRefCount to track active users
+        static AsyncSocketIo::AsyncSocketIoController globalAsyncCtrl(False);
+
+        #! Reference count for globalAsyncCtrl - tracks how many HttpServer instances are using it
+        #! Static: shared across all instances; only stop globalAsyncCtrl when this reaches zero
+        static Counter globalAsyncCtrlRefCount();
     }
 
     #! @cond nodoc
     #! Returns the global async socket I/O controller (internal use only)
     AsyncSocketIo::AsyncSocketIoController getGlobalAsyncCtrl() {
         return globalAsyncCtrl;
+    }
+
+    #! Returns the owner ID for this server (used to tag async I/O operations)
+    string getOwnerId() {
+        return self.uniqueHash();
     }
     #! @endcond
 
@@ -756,26 +769,35 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
 
+        @note By default (\c sync: \c True), this method blocks until async I/O is ready to accept connections.
+        Set \c sync: \c False in \a info to add multiple listeners without blocking, then call
+        @ref waitForAsyncIo() manually.
+
         @since HttpServer 0.3.13.1
     */
     list<hash<auto>> addListeners(string bind, hash<HttpListenerOptionInfo> info,
             *reference<hash<string, string>> errmap) {
+        list<hash<auto>> rv;
         if (bind !~ /:\w+/) {
             if (bind =~ /^\//) {
                 info.node = bind;
                 remove info.service;
-                return list(addListenerIntern(info).getInfo());
+                rv = list(addListenerIntern(info).getInfo());
+            } else {
+                # assume service only
+                remove info.node;
+                info.service = bind;
+                rv = addINETListenersIntern(info, \errmap);
             }
-
-            # assume service only
-            remove info.node;
-            info.service = bind;
-            return addINETListenersIntern(info, \errmap);
+        } else {
+            # add node and service
+            (info.node, info.service) = (bind =~ x/(.+):(\w+)/);
+            rv = addINETListenersIntern(info, \errmap);
         }
-
-        # add node and service
-        (info.node, info.service) = (bind =~ x/(.+):(\w+)/);
-        return addINETListenersIntern(info, \errmap);
+        if (info.sync) {
+            waitForAsyncIo();
+        }
+        return rv;
     }
 
     #! adds one or more dedicated listeners to the server with the given bind address
@@ -790,14 +812,24 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
 
+        @note By default (\c sync: \c True), this method blocks until async I/O is ready to accept connections.
+        Set \c sync: \c False in \a info to add multiple listeners without blocking, then call
+        @ref waitForAsyncIo() manually.
+
         @since HttpServer 0.3.13.1
     */
     list<hash<auto>> addListeners(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
+        list<hash<auto>> rv;
         if (exists info.node && !exists info.service) {
             # try to bind without a service, can be a UNIX domain socket
-            return list(addListenerIntern(info).getInfo());
+            rv = list(addListenerIntern(info).getInfo());
+        } else {
+            rv = addINETListenersIntern(info, \errmap);
         }
-        return addINETListenersIntern(info, \errmap);
+        if (info.sync) {
+            waitForAsyncIo();
+        }
+        return rv;
     }
 
     #! adds a single global listener to the server
@@ -807,11 +839,17 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         description of the hash returned by this method
 
         @throw HTTPSERVER-ADDLISTENER-ERROR invalid options; duplicate bind address
+
+        @note This method blocks until async I/O is ready to accept connections.
+        Use @ref addListener(hash<HttpListenerOptionInfo>) with \c sync: \c False to add listeners without blocking.
      */
     hash<auto> addListener(int port) {
-        return addListenerIntern(<HttpListenerOptionInfo>{
+        hash<auto> rv = addListenerIntern(<HttpListenerOptionInfo>{
             "service": port,
         }).getInfo();
+        # sync defaults to True, so wait for async I/O to be ready
+        waitForAsyncIo();
+        return rv;
     }
 
     #! adds a single global listener to the server
@@ -824,9 +862,17 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         @note if \a sock begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key is ignored
+
+        @note By default (\c sync: \c True), this method blocks until async I/O is ready to accept connections.
+        Set \c sync: \c False in \a opts to add multiple listeners without blocking, then call
+        @ref waitForAsyncIo() manually.
      */
     hash<auto> addListener(hash<HttpListenerOptionInfo> opts) {
-        return addListenerIntern(opts).getInfo();
+        hash<auto> rv = addListenerIntern(opts).getInfo();
+        if (opts.sync) {
+            waitForAsyncIo();
+        }
+        return rv;
     }
 
     #! throws an exception; these objects do not support copying
@@ -1004,12 +1050,59 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     /** do not call stop() after calling stopNoWait(); it can cause a deadlock
      */
     stop() {
-        # Stop async I/O controller first if running
+        {
+            AutoLock al(stop_m);
+            if (stopped || stopping) {
+                return;
+            }
+            stopping = True;
+        }
+        # CRITICAL: Cancel this server's async I/O operations FIRST
+        #
+        # The shutdown order matters to prevent deadlocks:
+        # 1. Cancel this server's operations in globalAsyncCtrl (other servers' ops continue)
+        # 2. asyncIo.stop() - stops the coordinator thread that dispatches results
+        # 3. listeners - stop accepting new connections
+        # 4. threadPool - stop worker threads
+        #
+        # Why we cancel operations first:
+        # - ThreadPool tasks may be blocked on globalAsyncCtrl.exec() waiting for I/O
+        # - The asyncIo coordinator may be waiting for globalAsyncCtrl to complete operations
+        # - If we don't cancel the I/O operations first, these never complete and we deadlock
+        #
+        # Reference counting for multiple HttpServer instances:
+        # - All HttpServer instances in the same process share one globalAsyncCtrl
+        # - We increment the ref count in init() and decrement in stop()
+        # - Each server cancels only its own operations (tagged with owner ID)
+        # - Only the last server to stop actually stops the globalAsyncCtrl I/O thread
+        @debug(log("stop: asyncMode=%y refcount=%d", asyncMode, globalAsyncCtrlRefCount.getCount()));
+        if (asyncMode) {
+            if (asyncIo) {
+                asyncIo.beginShutdown();
+            }
+            # Cancel only this server's operations - other servers can continue using globalAsyncCtrl
+            string ownerId = self.uniqueHash();
+            @debug(log("stop: calling globalAsyncCtrl.cancelByOwner(%s)", ownerId));
+            int canceled = globalAsyncCtrl.cancelByOwner(ownerId);
+            @debug(log("stop: globalAsyncCtrl.cancelByOwner() canceled %d operations", canceled));
+
+            int newCount = globalAsyncCtrlRefCount.dec();
+            @debug(log("stop: refcount after dec=%d", newCount));
+            if (newCount == 0) {
+                # Last server using globalAsyncCtrl - stop the I/O thread
+                @debug(log("stop: calling globalAsyncCtrl.stop()"));
+                globalAsyncCtrl.stop();
+                @debug(log("stop: globalAsyncCtrl.stop() returned"));
+            }
+        }
+
+        # Stop the async I/O coordinator thread AFTER globalAsyncCtrl
+        # The coordinator can now cleanly exit since all pending I/O operations have been canceled
         if (asyncIo) {
             asyncIo.stop();
         }
 
-        # shutdown all listeners
+        # Shutdown all listeners - stop accepting new connections
         lm.enter();
         on_exit lm.exit();
 
@@ -1018,9 +1111,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         threadPool.stop();
 
-        # Stop the global async controller (must be after all other shutdown to allow
-        # async operations to complete)
-        globalAsyncCtrl.stop();
+        {
+            AutoLock al(stop_m);
+            stopped = True;
+            stopping = False;
+        }
     }
 
     #! stops a single listener based on its name or bind address; does not return until all connections on the listener have closed
@@ -1389,6 +1484,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             return;
         }
 
+        bool is_http2 = cx."header-info".http2 ?? False;
         data response_msg;
         if (msg || !chunked_msg) {
             # issue #3116: do not send a reply body if the response code does not allow it
@@ -1413,7 +1509,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 # ignore any encoding passed in case of a string input stream response body, and use its encoding
                 encoding = cast<StringInputStream>(chunked_msg).getEncoding();
             }
-            extra_hdrs."Transfer-Encoding" = "chunked";
+            if (is_http2) {
+                response_msg = readAllStream(chunked_msg);
+                remove chunked_msg;
+            } else {
+                extra_hdrs."Transfer-Encoding" = "chunked";
+            }
         }
 
         # restore encoding on exit
@@ -1435,19 +1536,38 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             extra_hdrs."Content-Type" += ";charset=" + encoding;
         }
 
-        hdr.Connection = cx.close ? "close" : "Keep-Alive";
+        if (!is_http2) {
+            hdr.Connection = cx.close ? "close" : "Keep-Alive";
+        }
 
         if (extra_hdrs) {
             hdr += extra_hdrs;
         }
 
         hdr.Date = getDateHeader();
+        if (is_http2) {
+            remove hdr.Connection;
+            remove hdr.connection;
+            remove hdr."Keep-Alive";
+            remove hdr."keep-alive";
+            remove hdr."Proxy-Connection";
+            remove hdr."proxy-connection";
+            remove hdr."Transfer-Encoding";
+            remove hdr."transfer-encoding";
+            remove hdr.Upgrade;
+            remove hdr.upgrade;
+            remove hdr.TE;
+            remove hdr.te;
+        }
 
         # log exceptions if not "SOCKET-SEND-ERROR" (probably broken pipe)
         try {
             # Check if this is an HTTP/2 connection
-            if (cx."header-info".http2) {
+            if (is_http2) {
                 int stream_id = cx."header-info".stream_id;
+                if (response_msg && !hdr."Content-Length") {
+                    hdr."Content-Length" = string(response_msg.size());
+                }
                 # Send HTTP/2 response using global async I/O controller
                 AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, status_code, hdr,
                     response_msg ?? chunked_msg);
@@ -1457,6 +1577,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     response_msg ?? chunked_msg);
             }
             listener.logResponse(cx, status_code, response_msg ?? chunked_msg, hdr);
+            if (status_code >= 200) {
+                cx."response-sent" = True;
+            }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "SOCKET-SEND-ERROR") {
                 string estr = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
@@ -1656,10 +1779,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # but we use ?? True to ensure async mode is enabled even if opts is
         # passed as a hash<auto> instead of hash<HttpServerOptionInfo>
         asyncMode = opts.async_mode ?? True;
-        @debug(log("HttpServer init: async_mode option=%y, asyncMode=%y", opts.async_mode, asyncMode));
+        @debug(log("init: asyncMode=%y", asyncMode));
         if (asyncMode) {
+            # Increment reference count for the shared globalAsyncCtrl
+            # This is decremented in stop() - only the last server to stop will stop globalAsyncCtrl
+            globalAsyncCtrlRefCount.inc();
+            @debug(log("init: globalAsyncCtrlRefCount=%d", globalAsyncCtrlRefCount.getCount()));
             # Set logger on globalAsyncCtrl for async I/O logging
             globalAsyncCtrl.setLogger(logger);
+            if (!globalAsyncCtrl.running()) {
+                globalAsyncCtrl.start();
+            }
             asyncIo = new Priv::HttpServerIoController(self, logger);
             asyncIo.start();
         }
@@ -1703,7 +1833,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     #! Creates a new HttpListener object; reimplement in subclasses to override the listener class
     private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
-        return new HttpListener(server, id, seqSessions, info);
+        return new HttpListener(server, \handleRequest(), id, seqSessions, info);
     }
 
     #! @cond nodoc
@@ -1756,14 +1886,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         on_error c.dec();
 
         HttpListener l = getListener(self, id, info);
+
+        # Register listener in maps BEFORE adding to async I/O controller
+        # This prevents a race where an accept could arrive before registration is complete
         listeners{id} = l;
         smap{sock} = id;
         nmap{info.name} = id;
-
-        # In async mode, add the listener to the async I/O controller
-        if (asyncMode) {
-            asyncIo.addListener(l);
-        }
 
         # rename listener if a wildcard service was provided
         if (info.service == "0") {
@@ -1771,6 +1899,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             string nsock = sprintf("%s:%s", info.node ?? "*", port);
             smap{nsock} = remove smap{sock};
         }
+
+        # In async mode, add the listener to the async I/O controller
+        # Must be done AFTER registration to avoid race condition
+        if (asyncMode) {
+            asyncIo.addListener(l);
+        }
+
         return l;
     }
 
@@ -1846,13 +1981,21 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         });
     }
 
+    #! @cond nodoc
     #! Handles incoming requests
-    /** this method is called by the listeners when a request is received
+    /** This method is called by listeners when a request is received.
+
         If async_response_out is provided, captures response info instead of sending
     */
-    handleRequest(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr, bool head = False,
-            HttpPersistentHandlerInfo phi, hash<auto> info, reference<bool> dedicated,
-            reference<bool> dedicated_external, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+    private handleRequest(RequestHelper request_helper, HttpListener listener, Socket s,
+            reference<hash<auto>> cx, hash<auto> hdr, bool head = False, HttpPersistentHandlerInfo phi,
+            hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        remove cx."response-sent";
+        bool is_http2 = cx."header-info".http2 ?? False;
+        if (is_http2) {
+            s.setHttp2ActiveStream(cx."header-info".stream_id);
+            on_exit s.setHttp2ActiveStream(-1);
+        }
         if (!http_methods{hdr.method}) {
             string err = sprintf("unknown / unsupported HTTP method %n", hdr.method);
             string str = sprintf("%s: received from %s via %s", err, info.address_desc,
@@ -1952,7 +2095,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 if (hdr.expect == "100-continue") {
                     hash<HttpResponseInfo> resp = handler.handleExpectHeader(cx, hdr);
                     # Note: 100-continue is always sent synchronously since we need to wait for body
-                    sendReply(listener, s, handler, resp, \cx, hdr, head, \dedicated, \dedicated_external);
+                    sendReply(request_helper, listener, s, handler, resp, \cx, hdr, head);
                 } else {
                     string etxt = sprintf("unrecognized 'Expect' header: %y", hdr.expect);
                     string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
@@ -2083,7 +2226,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         body = AbstractHttpRequestHandler::decodeBody(hdr."content-encoding", body,
                             handler.decompress_to_string ? s.getEncoding() : NOTHING);
 
-                    rv = cast<hash<HttpResponseInfo>>(handler.handleRequest(listener, s, cx, hdr, body));
+                    hash<auto!> hrv = handler.handleRequest(listener, s, cx, hdr, body);
+                    if (hrv.hasKey("raw_response")) {
+                        delete hrv."raw_response";
+                    }
+                    rv = cast<hash<HttpResponseInfo>>(hrv);
 
                     # manage persistent handler info, if applicable
                     if (!phi.handler) {
@@ -2102,11 +2249,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
 
             if (rv.reply_sent) {
+                bool is_http2 = cx."header-info".http2 ?? False;
+                if (!is_http2 && rv."code" >= 200) {
+                    cx."response-sent" = True;
+                }
                 return;
             }
 
-            sendReply(listener, s, handler, rv, \cx, hdr, head, \dedicated, \dedicated_external,
-                \async_response_out);
+            sendReply(request_helper, listener, s, handler, rv, \cx, hdr, head, \async_response_out);
         } catch (hash<ExceptionInfo> ex) {
             string desc = !debug
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
@@ -2130,12 +2280,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             logError("%s", str);
         }
     }
+    #! @endcond
 
     # sends a reply to a request
     # If async_response_out is provided, capture response info instead of sending
-    sendReply(HttpListener listener, Socket s, *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv,
-            reference<hash> cx, hash<auto> hdr, bool head, reference<bool> dedicated,
-            reference<bool> dedicated_external, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+    private sendReply(RequestHelper request_helper, HttpListener listener, Socket s,
+            *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv, reference<hash> cx, hash<auto> hdr,
+            bool head, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         listener.log("sendReply: code=%d async_response_out=%y is_http2=%y",
             rv."code", exists async_response_out, cx."header-info".http2);
         if (exists rv.close)
@@ -2190,6 +2341,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
             sendHttpError(listener, cx, s, rv."code", rv.body, rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
                 rv.hdr, cx."response-encoding", head);
+            cx."response-sent" = True;
+            if (async_response_out) {
+                delete async_response_out;
+            }
             remove cx.persistent;
         } else {
             #printf("**** RESPONSE: %d ct: %s (te: %y) encoding: %y: %N\n", rv."code", rv.hdr."Content-Type",
@@ -2226,7 +2381,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
 
             # For HTTP/2 WebSocket streaming, don't send response here - it's handled in the dedicated socket section
-            if (!rv.streaming || !cx."header-info".is_websocket_connect) {
+            bool is_h2_ws_connect = cx."header-info".is_websocket_connect
+                || (cx."header-info".http2 && hdr.method == "CONNECT" && hdr.":protocol" == "websocket");
+            if (!rv.streaming || !is_h2_ws_connect) {
                 doResponse(listener, s, cx, rv, \async_response_out);
             }
         }
@@ -2242,47 +2399,89 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         # Check for dedicated socket handlers: HTTP/1.1 WebSocket (101), SSE, or HTTP/2 WebSocket (200 + streaming)
-        bool is_http2_websocket = rv.streaming && cx."header-info".is_websocket_connect;
-        if ((rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse || is_http2_websocket)) {
-            if (rv.close)
+        bool is_http2_websocket = rv.streaming && (cx."header-info".is_websocket_connect
+            || (cx."header-info".http2 && hdr.method == "CONNECT" && hdr.":protocol" == "websocket"));
+        if (is_http2_websocket) {
+            string ws_id = sprintf("%y:%d", cx.id, cx."header-info".stream_id);
+            if (rv.close) {
+                listener.logError("cid %d: HTTP/2 WebSocket returned from handler %y, but the close flag is set",
+                    cx.id, cx.handler_name);
+            } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
+                listener.logError("cid %d: HTTP/2 WebSocket returned from handler %y, but the handler does "
+                    "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, cx.handler_name,
+                    handler.className());
+                self.sendHttpError(listener, cx, s, 501,
+                    "WebSocket handler must inherit AbstractHttpSocketHandlerInterface",
+                    NOTHING, NOTHING, cx."response-encoding", False);
+                return;
+            } else {
+                AbstractHttpSocketHandlerInterface sockhandler
+                    = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
+                if (listener.registerDedicatedSocket(request_helper, ws_id, sockhandler)) {
+                    try {
+                        int stream_id = cx."header-info".stream_id;
+                        hash<auto> ws_hdr = rv.hdr ?? {};
+                        AbstractPollOperation op = s.startPollSendHttp2ConnectResponse(stream_id,
+                            rv."code" ?? 200, ws_hdr);
+                        execHttp2PollOperation(s, op);
+
+                        # Keep the HTTP/2 connection in async I/O for other streams and WS data
+                        if (asyncMode) {
+                            try {
+                                returnConnectionToAsyncIo(s, cx, listener, NOTHING);
+                            } catch (hash<ExceptionInfo> ex) {
+                                @debug {
+                                    listener.log("cid %d: HTTP/2 WebSocket returnConnectionToAsyncIo skipped: %s: %s",
+                                        cx.id, ex.err, ex.desc);
+                                }
+                            }
+                        }
+
+                        hash<auto> ws_cx = cx + {"listener": listener, "id": ws_id};
+                        if (sockhandler.start(listener.getID(), ws_cx, hdr, s)) {
+                            request_helper.setDedicatedExternal();
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "SOCKET-NOT-OPEN") {
+                            listener.logError("cid %d: HTTP/2 WebSocket handler %y: socket closed by remote", cx.id,
+                                cx.handler_name);
+                        } else {
+                            string desc = !debug
+                                ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
+                                : get_exception_string(ex);
+                            listener.logError("cid %d: error in HTTP/2 WebSocket handler %y: %s", cx.id,
+                                cx.handler_name, desc);
+                        }
+                    }
+                    if (request_helper.isDedicatedExternal()) {
+                        listener.log("cid %d: HTTP/2 WebSocket handler %y managed externally", cx.id, cx.handler_name);
+                    } else {
+                        listener.removeDedicatedSocket(ws_id);
+                        listener.log("cid %d: stopped HTTP/2 WebSocket handler: %y", cx.id, cx.handler_name);
+                    }
+                } else {
+                    listener.logError("cid %d: cannot start HTTP/2 WebSocket handler %y because the listener is "
+                        "shutting down", cx.id, cx.handler_name);
+                }
+            }
+            return;
+        }
+        if ((rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse)) {
+            if (rv.close) {
                 listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the connection "
                     "close flag is set", cx.id, cx.handler_name);
-            else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
+            } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
                 listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the handler does "
                     "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, cx.handler_name,
                     handler.className());
             } else {
-                if (listener.registerDedicatedSocket(cx.id, handler, \dedicated)) {
+                if (listener.registerDedicatedSocket(request_helper, cx.id, handler)) {
                     on_exit cx.close = True;
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
-                    # Handle response sending based on protocol
-                    if (is_http2_websocket) {
-                        # RFC 8441: HTTP/2 WebSocket - send 200 OK via HTTP/2 and set active stream
-                        int stream_id = cx."header-info".stream_id;
-                        listener.log("cid %d: HTTP/2 WebSocket - sending 200 OK on stream %d", cx.id, stream_id);
-
-                        try {
-                            # Send 200 OK using HTTP/2 CONNECT response via global async I/O controller
-                            AbstractPollOperation op = s.startPollSendHttp2ConnectResponse(stream_id, 200, rv.hdr);
-                            execHttp2PollOperation(s, op);
-                            listener.log("cid %d: HTTP/2 CONNECT response sent", cx.id);
-
-                            # Set the active stream so socket read/write use HTTP/2 DATA frames
-                            s.setHttp2ActiveStream(stream_id);
-                            listener.log("cid %d: HTTP/2 active stream set to %d", cx.id, stream_id);
-                        } catch (hash<ExceptionInfo> ex) {
-                            listener.logError("cid %d: HTTP/2 WebSocket setup error: %s: %s", cx.id, ex.err, ex.desc);
-                            rethrow;
-                        }
-
-                        # Clear the async response so caller knows it was sent
-                        if (async_response_out) {
-                            delete async_response_out;
-                        }
-                    } else if (async_response_out) {
-                        # For async mode: the 101 response was captured but not sent.
-                        # We must send it BEFORE calling start() so the client knows to switch protocols.
+                    # For async mode: the 101 response was captured but not sent.
+                    # We must send it BEFORE calling start() so the client knows to switch protocols.
+                    if (async_response_out) {
                         s.sendHTTPResponse(async_response_out."code",
                             HttpServer::HttpCodes{async_response_out."code"}, "1.1",
                             async_response_out.hdr ?? {}, async_response_out.body);
@@ -2290,7 +2489,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         delete async_response_out;
                     }
                     try {
-                        dedicated_external = sockhandler.start(listener.getID(), cx + {"listener": listener}, hdr, s);
+                        if (sockhandler.start(listener.getID(), cx + {"listener": listener}, hdr, s)) {
+                            request_helper.setDedicatedExternal();
+                        }
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "SOCKET-NOT-OPEN") {
                             listener.logError("cid %d: dedicated socket handler %y: socket closed by remote", cx.id,
@@ -2303,7 +2504,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                                 cx.handler_name, desc);
                         }
                     }
-                    if (dedicated_external) {
+                    if (request_helper.isDedicatedExternal()) {
                         listener.log("cid %d: dedicated socket handler %y managed externally", cx.id, cx.handler_name);
                     } else {
                         listener.removeDedicatedSocket(cx.id);
@@ -2335,6 +2536,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             "sock": s,
             "spop": op,
             "to": 30s,
+            "owner": self.uniqueHash(),
         });
         if (result.ex) {
             throw result.ex.err, result.ex.desc, result.ex.arg;
@@ -2343,6 +2545,34 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     # rv is "hash" to strip types
     # If async_response_out is provided, capture response info instead of sending
+    # Assumes stream yields homogeneous chunk types (string or binary) per read loop.
+    private:internal data readAllStream(InputStream is, *int chunk_size) {
+        int size = chunk_size ?? 8192;
+        *string sout;
+        *binary bout;
+        while (True) {
+            *data chunk = is.read(size);
+            if (!chunk || !chunk.size()) {
+                break;
+            }
+            if (chunk.typeCode() == NT_STRING) {
+                if (sout) {
+                    sout += chunk;
+                } else {
+                    sout = chunk;
+                }
+            } else {
+                binary b = binary(chunk);
+                if (bout) {
+                    bout += b;
+                } else {
+                    bout = b;
+                }
+            }
+        }
+        return sout ? sout : (bout ? bout : "");
+    }
+
     private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv,
             *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         bool chunked = rv.chunked_body || (rv.body && (rv.hdr."Transfer-Encoding" || rv.body instanceof InputStream));
@@ -2365,9 +2595,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         listener.log("doResponse: async_response_out=%y code=%d is_http2=%y",
             exists async_response_out, rv."code", cx."header-info".http2);
         if (async_response_out) {
-            # For async sending, we need to read streams into memory
+            # For async sending, we need to read streams into memory.
+            # NOTE: async capture of InputStream bodies buffers the full payload in memory.
+            # For large payloads, prefer synchronous responses or pre-materialized bodies.
             if (body instanceof InputStream) {
-                body = body.read(-1);
+                body = readAllStream(body);
             }
             listener.log("doResponse: capturing async response code=%d body_size=%d",
                 rv."code", body ? body.size() : 0);
@@ -2391,7 +2623,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 # HTTP/2: read stream data into memory if needed
                 auto send_body = body;
                 if (chunked && body instanceof InputStream) {
-                    send_body = body.read(-1);
+                    send_body = readAllStream(body);
                 }
                 # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
                 hash<auto> hdr = rv.hdr ?? {};
@@ -2420,6 +2652,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             rethrow;
         }
         listener.logResponse(cx, rv);
+        if (rv."code" >= 200) {
+            cx."response-sent" = True;
+        }
     }
     #! @endcond
 }
@@ -2468,6 +2703,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     private {
         HttpServer serv;
+        #! private request-handling method from the server
+        code<nothing(...)> handleRequest;
         Sequence ss;
 
         *hash<HttpListenerOptionInfo> opts;
@@ -2546,15 +2783,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     #! Creates the object with the given parameters
     /**
         @param server the HTTP server
+        @param handleRequest the server's request handling code reference
         @param id the listener ID
         @param ss the listener connection sequence
         @param opts listener options
     */
-    constructor(HttpServer server, int id, Sequence ss, *hash<HttpListenerOptionInfo> opts) {
+    constructor(HttpServer server, code<nothing(...)> handleRequest,int id, Sequence ss,
+            *hash<HttpListenerOptionInfo> opts) {
         if (!opts.name.val()) {
             throw "HTTPLISTENER-CONSTRUCTOR-ERROR", "Missing required listener option: name";
         }
         self.name = opts.name;
+        self.handleRequest = handleRequest;
         if (opts.cert_loc && !opts.cert) {
             opts += http_get_ssl_objects(opts.cert_loc, opts.key_loc, opts.key_password);
         }
@@ -2788,8 +3028,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     doLogRecvBody(*data body, hash<auto> cx, hash<auto> hdr, hash<auto> info) {
         if (body) {
-            string lstr = sprintf("cid %d src %y: %s %s HTTP/%s body (%db): ", cx.id, cx."peer-info".address_desc,
-                hdr.method, cx.masked_path, hdr.http_version, body.size());
+            string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
+            string lstr = sprintf("cid %d src %y: %s %s %s body (%db): ", cx.id, cx."peer-info".address_desc,
+                hdr.method, cx.masked_path, http_ver, body.size());
             if (body.typeCode() == NT_STRING) {
                 try {
                     string bstr = body.size() > BodyLogLimit ? body.substr(0, BodyLogLimit) + "..." : body;
@@ -2979,7 +3220,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         background stop();
     }
 
-    stop() {
+    stop(*bool silent) {
         {
             m.lock();
             on_exit m.unlock();
@@ -3010,7 +3251,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 try {
                     handler.stop(id);
                 } catch (hash<ExceptionInfo> ex) {
-                    logError("error stopping handler on listener %d: %s: %s", id, ex.err, ex.desc);
+                    if (!silent) {
+                        logError("error stopping handler on listener %d: %s: %s", id, ex.err, ex.desc);
+                    }
                 }
             }
         }
@@ -3019,11 +3262,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         dThreads.waitForZero();
 
         stopped = True;
-        log("stopped listener");
+        if (!silent) {
+            log("stopped listener");
+        }
 
-        serv.listenerStopped(self);
-        if (stopc) {
-            serv.callListenerStopCallback(stopc, name, socket_info);
+        if (serv) {
+            serv.listenerStopped(self);
+            if (stopc) {
+                serv.callListenerStopCallback(stopc, name, socket_info);
+            }
         }
     }
 
@@ -3100,36 +3347,60 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     log(string fmt, ...) {
         softlist<auto> args = fmt;
-        if (argv)
+        if (argv) {
             args += argv;
+        }
         args[0] = sprintf("%y (%s): %s", name, socket_info.desc, args[0]);
         if (logger) {
             args[0] = "HTTP" + (ssl ? "S" : "") + " " + args[0];
             try {
                 logger.logArgs(LoggerLevel::INFO, args[0], args[1..]);
             } catch (hash<ExceptionInfo> ex) {
-                args[0] = sprintf("cannot write to listener log: %s: %s: msg: %s", ex.err, ex.desc, args[0]);
-                serv.logErrorArgs(args);
+                if (serv) {
+                    args[0] = sprintf("cannot write to listener log: %s: %s: msg: %s", ex.err, ex.desc, args[0]);
+                    try {
+                        serv.logErrorArgs(args);
+                    } catch () {
+                        # ignore if server was deleted
+                    }
+                }
             }
-        } else
-            serv.logArgs(args);
+        } else if (serv) {
+            try {
+                serv.logArgs(args);
+            } catch () {
+                # ignore if server was deleted
+            }
+        }
     }
 
     logError(string fmt, ...) {
         softlist<auto> args = fmt;
-        if (argv)
+        if (argv) {
             args += argv;
+        }
         args[0] = sprintf("%y (%s): %s", name, socket_info.desc, args[0]);
         if (logger) {
             args[0] = "HTTP " + args[0];
             try {
                 logger.logArgs(LoggerLevel::ERROR, args[0], args[1..]);
             } catch (hash<ExceptionInfo> ex) {
-                args[0] = sprintf("cannot write to listener log: %s: %s: msg: %s", ex.err, ex.desc, args[0]);
-                serv.logErrorArgs(args);
+                if (serv) {
+                    args[0] = sprintf("cannot write to listener log: %s: %s: msg: %s", ex.err, ex.desc, args[0]);
+                    try {
+                        serv.logErrorArgs(args);
+                    } catch () {
+                        # ignore if server was deleted
+                    }
+                }
             }
-        } else
-            serv.logErrorArgs(args);
+        } else if (serv) {
+            try {
+                serv.logErrorArgs(args);
+            } catch () {
+                # ignore if server was deleted
+            }
+        }
     }
 
     private mainThread() {
@@ -3185,15 +3456,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     # thread for handling communication per connection
     private connectionThread(Socket s) {
-        bool dedicated;
-        bool dedicated_external;
-        on_exit {
-            if (!dedicated) {
-                cThreads.dec();
-            } else {
-                dThreads.dec();
-            }
-        }
+        RequestHelper request_helper(cThreads, dThreads, s);
 
         if (ssl) {
             try {
@@ -3352,14 +3615,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
                 {
                     # attempt to mask sensitive data in the URI path
-                    string lstr = sprintf("cid %d src %y: %s %s HTTP/%s (agent: %y", cx.id,
-                        cx."peer-info".address_desc, hdr.method, cx.masked_path, hdr.http_version, hdr."user-agent");
-                    if (hdr."transfer-encoding" == "chunked")
+                    string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
+                    string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
+                        cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
+                    if (hdr."transfer-encoding" == "chunked") {
                         lstr += " body: chunked";
-                    if (hdr."_qore_orig_content_type")
+                    }
+                    if (hdr."_qore_orig_content_type") {
                         lstr += sprintf(" Content-Type: %y", hdr."_qore_orig_content_type");
-                    if (ssl)
+                    }
+                    if (ssl) {
                         lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
+                    }
                     lstr += ")";
                     log("%s", lstr);
                 }
@@ -3372,8 +3639,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     cx."client-cert" = s.getRemoteCertificate();
                 }
 
-                serv.handleRequest(self, s, \cx, hdr, hdr.method == "HEAD", phi, info, \dedicated,
-                    \dedicated_external);
+                handleRequest(request_helper, self, s, \cx, hdr, hdr.method == "HEAD", phi, info);
 
                 #log("DBG cid %d: cx.close: %y", cx.id, cx.close);
 
@@ -3397,16 +3663,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             cx.close = True;
             serv.sendHttpError(self, cx, s, 500, etxt, NOTHING, NOTHING, cx."response-encoding", False);
         }
-
-        #log("cid %d: closing connection (status: %s)", cx.id, s.isOpen() ? "open" : "closed");
-        if (!dedicated_external) {
-            s.shutdown();
-            s.close();
-        }
     }
 
-    bool registerDedicatedSocket(softstring id, HttpServer::AbstractHttpSocketHandlerInterface h,
-            reference<bool> dedicated) {
+    bool registerDedicatedSocket(RequestHelper request_helper, softstring id,
+            HttpServer::AbstractHttpSocketHandlerInterface h) {
         m.lock();
         on_exit m.unlock();
 
@@ -3415,9 +3675,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # handover counter value and set dedicated flag
-        dThreads.inc();
-        cThreads.dec();
-        dedicated = True;
+        request_helper.setDedicated();
 
         # save handler
         shh{id} = h;
@@ -3441,6 +3699,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @return context hash for new connection
     */
     hash<auto> getContextTemplate(hash<auto> info) {
+        bool async_mode = serv.isAsyncMode();
         return {
             "socket": socket,
             "socket-info": socket_info,
@@ -3449,6 +3708,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             "ssl": ssl,
             "listener-id": id,
             "listener-name": name,
+            "async_mode": async_mode,
+            "async_ctrl": async_mode ? serv.getGlobalAsyncCtrl() : NOTHING,
         };
     }
 
@@ -3469,21 +3730,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     */
     handleAsyncRequest(Socket s, hash<auto> cx, hash<auto> hdr, hash<auto> header_info,
             *HttpPersistentHandlerInfo phi) {
-        # Initialize dedicated flags
-        bool dedicated;
-        bool dedicated_external;
-
         # Increment connection thread counter - this mirrors the sync mode behavior
         # where cThreads.inc() is called before starting the connection thread
         cThreads.inc();
-        on_exit {
-            # Decrement appropriate counter based on dedicated status
-            if (!dedicated) {
-                cThreads.dec();
-            } else {
-                dThreads.dec();
-            }
-        }
+        RequestHelper request_helper(cThreads, dThreads);
 
         # Create default phi if not provided
         if (!phi) {
@@ -3539,8 +3789,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Log the request
         {
-            string lstr = sprintf("cid %d src %y: %s %s HTTP/%s (agent: %y", cx.id,
-                cx."peer-info".address_desc, hdr.method, cx.masked_path, hdr.http_version, hdr."user-agent");
+            string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
+            string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
+                cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
             if (hdr."transfer-encoding" == "chunked") {
                 lstr += " body: chunked";
             }
@@ -3567,12 +3818,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         hash<HttpAsyncResponseInfo> async_response = <HttpAsyncResponseInfo>{};
 
         # Call handleRequest with the correct signature
-        serv.handleRequest(self, s, \cx, hdr, hdr.method == "HEAD", phi, info, \dedicated,
-            \dedicated_external, \async_response);
+        handleRequest(request_helper, self, s, \cx, hdr, hdr.method == "HEAD", phi, info, \async_response);
 
         # Check if handler opted into persistence - if so, we need thread affinity
         # and must switch to synchronous mode for this connection
-        if (!dedicated && !dedicated_external && phi.handler && phi.handler.isPersistent()) {
+        # Note: isDedicatedExternal() implies isDedicated(), so we only check isDedicated()
+        if (!request_helper.isDedicated() && phi.handler && phi.handler.isPersistent()) {
             @debug {
                 log("DEBUG: cid %d: handler opted into persistence, switching to sync mode", cx.id);
             }
@@ -3582,21 +3833,45 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 sendResponseSync(s, async_response);
             }
             # Continue handling requests on this thread until persistence ends
-            handlePersistentConnectionSync(s, \cx, phi, info);
+            handlePersistentConnectionSync(request_helper, s, \cx, phi, info);
             return;
         }
 
         # Handle response: either queue for async sending or connection was handled (dedicated/error)
         log("handleAsyncRequest: after handleRequest, async_response.code=%y dedicated=%y dedicated_external=%y",
-            async_response.code, dedicated, dedicated_external);
+            async_response.code, request_helper.isDedicated(), request_helper.isDedicatedExternal());
         if (async_response.code) {
             # Update response with phi for keep-alive
             async_response.phi = phi;
             log("handleAsyncRequest: calling queueAsyncResponse for code=%d", async_response.code);
             # Queue response for async sending - I/O controller will handle keep-alive
             serv.queueAsyncResponse(s, async_response);
-        } else if (!dedicated && !dedicated_external) {
+        } else if (!request_helper.isDedicated()) {
+            bool response_sent = cx."response-sent" ?? False;
+            if (!response_sent) {
+                bool is_http2 = cx."header-info".http2 ?? False;
+                string err = sprintf("handler %y returned without sending a response", cx.handler_name);
+                logError("%s", err);
+                if (!is_http2) {
+                    cx.close = True;
+                }
+                serv.sendHttpError(self, cx, s, 500, err, NOTHING, NOTHING, cx."response-encoding", False);
+                if (s.isOpen()) {
+                    if (is_http2) {
+                        serv.returnConnectionToAsyncIo(s, cx, self, phi);
+                    } else {
+                        try {
+                            s.shutdown();
+                            s.close();
+                        } catch () {
+                            # Ignore close errors
+                        }
+                    }
+                }
+                return;
+            }
             # Response was already sent (reply_sent or error)
+            # Note: isDedicatedExternal() implies isDedicated(), so checking isDedicated() covers both
             bool is_http2 = cx."header-info".http2 ?? False;
             if (!cx.close && s.isOpen()) {
                 # Keep-alive: return to idle for next request
@@ -3665,8 +3940,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @param phi the persistent handler info
         @param info peer info for logging
     */
-    private handlePersistentConnectionSync(Socket s, reference<hash<auto>> cx, HttpPersistentHandlerInfo phi,
-            hash<auto> info) {
+    private handlePersistentConnectionSync(RequestHelper request_helper, Socket s, reference<hash<auto>> cx,
+            HttpPersistentHandlerInfo phi, hash<auto> info) {
         @assert(phi.handler, "phi.handler must be set when entering persistent sync mode");
         @assert(phi.handler.isPersistent(), "handler must be persistent when entering persistent sync mode");
         log("cid %d: switching to synchronous mode for persistent handler", cx.id);
@@ -3675,7 +3950,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         hash<auto> cx_listener = getContextTemplate(info);
 
         try {
-            while (s.isOpen()) {
+            while (!exit && s.isOpen()) {
                 # Check if persistence has ended - if so, return to async I/O
                 if (!phi.handler || !phi.handler.isPersistent()) {
                     @debug {
@@ -3697,7 +3972,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
 
                 date start = now_us();
-                while (s.isOpen() && !s.isDataAvailable(poll_interval)) {
+                while (!exit && s.isOpen() && !s.isDataAvailable(poll_interval)) {
                     # Check for idle timeout only if persistence has been released
                     # (persistent connections have no idle timeout while active)
                     if (!phi.handler || !phi.handler.isPersistent()) {
@@ -3706,6 +3981,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                             return;
                         }
                     }
+                }
+                # Check if we exited due to shutdown
+                if (exit) {
+                    return;
                 }
 
                 # Reset context for new request
@@ -3769,9 +4048,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
                 # Log the request
                 {
-                    string lstr = sprintf("cid %d src %y: %s %s HTTP/%s (agent: %y", cx.id,
-                        cx."peer-info".address_desc, hdr.method, cx.masked_path, hdr.http_version,
-                        hdr."user-agent");
+                    string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
+                    string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
+                        cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
                     if (hdr."transfer-encoding" == "chunked") {
                         lstr += " body: chunked";
                     }
@@ -3794,15 +4073,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
 
                 # Process request
-                bool dedicated;
-                bool dedicated_external;
                 *hash<HttpAsyncResponseInfo> async_response;
-
-                serv.handleRequest(self, s, \cx, hdr, hdr.method == "HEAD", phi, info, \dedicated,
-                    \dedicated_external, \async_response);
+                handleRequest(request_helper, self, s, \cx, hdr, hdr.method == "HEAD", phi, info,
+                    \async_response);
 
                 # If handler took over the socket (dedicated), we're done
-                if (dedicated || dedicated_external) {
+                # Note: isDedicatedExternal() implies isDedicated(), so checking isDedicated() covers both
+                if (request_helper.isDedicated()) {
                     return;
                 }
 
@@ -4329,6 +4606,9 @@ class HttpServerIoController {
 
         #! Exit flag
         bool exit_flag = False;
+
+        #! Shutdown flag to prevent new operations during stop
+        bool shutting_down = False;
     }
 
     private:internal {
@@ -4363,27 +4643,95 @@ class HttpServerIoController {
     }
 
     #! Starts the I/O thread
-    /** @throw CONTROLLER-START-ERROR if the I/O thread is already running
+    /**
+        @throw CONTROLLER-START-ERROR if the I/O thread is already running or if
+        the controller was previously stopped
+
+        @note This controller is NOT designed to be restartable. Once stop() is called,
+        the controller cannot be started again because the shutting_down flag is never reset.
+        This is intentional - create a new HttpServerIoController instance if you need a
+        fresh controller.
     */
     start() {
         AutoLock al(m);
         if (tid) {
             throw "CONTROLLER-START-ERROR", sprintf("I/O thread is already running in TID %d", tid);
         }
+        if (shutting_down) {
+            throw "CONTROLLER-START-ERROR", "I/O controller is shutting down";
+        }
         startIntern();
     }
 
-    #! Stops the I/O thread
+    #! Stops the coordinator thread and waits for it to exit
+    /**
+        ## Shutdown Sequence
+
+        1. Acquire lock and set shutdown flags (shutting_down, exit_flag)
+        2. Push "quit" signal to resultQueue to wake up the coordinator thread
+        3. Release lock (important: must release BEFORE waiting)
+        4. Wait for mcnt to reach zero (coordinator thread decrements mcnt on exit)
+        5. Clean up listeners and connections hashes
+
+        ## Deadlock Prevention
+
+        The lock `m` is released BEFORE calling mcnt.waitForZero(). This is critical because:
+        - The coordinator thread's on_exit block acquires `m` to clear tid and signal ready_cond
+        - If stop() held `m` while waiting, coordinator couldn't acquire it to exit
+        - This would cause a deadlock: stop() waiting for mcnt, coordinator waiting for m
+
+        ## Thread Safety
+
+        - shutting_down flag prevents multiple concurrent stop() calls from pushing multiple quit signals
+        - exit_flag is checked by coordinator thread's while loop condition
+        - The quit signal in resultQueue ensures coordinator wakes up even if blocked on get()
+
+        @note This method blocks until the coordinator thread has fully exited.
+              Call from HttpServer::stop() before stopping globalAsyncCtrl.
+    */
     stop() {
+        @debug(log(LoggerLevel::INFO, "stop: ENTER mcnt=%d tid=%y shutting_down=%y",
+            mcnt.getCount(), tid, shutting_down));
+        bool need_quit = False;
         {
             AutoLock al(m);
-            if (tid) {
+            if (!shutting_down) {
+                shutting_down = True;
+            }
+            if (!exit_flag) {
                 exit_flag = True;
-                # Push quit signal to result queue to wake up coordinator thread
-                resultQueue.push({"quit": True});
+                if (tid) {
+                    need_quit = True;
+                }
             }
         }
+        if (need_quit) {
+            # Push quit signal to result queue to wake up coordinator thread
+            # The coordinator checks for {"quit": True} and breaks out of its loop
+            @debug(log(LoggerLevel::INFO, "stop: pushing quit signal to resultQueue, tid=%d", tid));
+            resultQueue.push({"quit": True});
+        } else {
+            @debug(log(LoggerLevel::INFO, "stop: no quit signal needed (tid=%y exit_flag=%y)",
+                tid, exit_flag));
+        }
+        # IMPORTANT: Lock must be released before waiting, otherwise deadlock occurs
+        # because coordinator's on_exit needs to acquire the lock
+        @debug(log(LoggerLevel::INFO, "stop: waiting for mcnt to reach zero, mcnt=%d", mcnt.getCount()));
         mcnt.waitForZero();
+        @debug(log(LoggerLevel::INFO, "stop: mcnt reached zero"));
+        {
+            AutoLock al(m);
+            remove listeners;
+            remove connections;
+        }
+    }
+
+    #! Marks the controller as shutting down to prevent new operations
+    beginShutdown() {
+        AutoLock al(m);
+        if (!shutting_down) {
+            shutting_down = True;
+        }
     }
 
     #! Returns True if the I/O thread is running
@@ -4409,6 +4757,9 @@ class HttpServerIoController {
     */
     bool waitReady(*timeout timeout) {
         AutoLock al(m);
+        if (shutting_down) {
+            return False;
+        }
         if (ready_flag) {
             return True;
         }
@@ -4430,6 +4781,9 @@ class HttpServerIoController {
     addListener(HttpListener listener) {
         @assert(listener, "listener cannot be null");
         AutoLock al(m);
+        if (shutting_down) {
+            throw "CONTROLLER-ADD-LISTENER-ERROR", "I/O controller is shutting down";
+        }
         int id = listener.getId();
         string key = id.toString();
         @debug(log(LoggerLevel::DEBUG, "addListener(): adding listener %d", id));
@@ -4461,18 +4815,25 @@ class HttpServerIoController {
     /** @param listener_id the listener ID to remove
     */
     removeListener(int listener_id) {
-        AutoLock al(m);
-        string key = listener_id.toString();
+        Socket listener;
+        {
+            AutoLock al(m);
+            string key = listener_id.toString();
 
-        if (!listeners{key}) {
-            throw "CONTROLLER-REMOVE-LISTENER-ERROR", sprintf("Listener ID %d is not registered", listener_id);
-        }
+            if (!listeners{key}) {
+                throw "CONTROLLER-REMOVE-LISTENER-ERROR", sprintf("Listener ID %d is not registered", listener_id);
+            }
 
-        # Cancel any pending accept operation
-        if (listeners{key}.accept_op) {
-            server.getGlobalAsyncCtrl().cancel(listeners{key}.listener);
+            # Get listener socket for cancel if there's a pending accept operation
+            if (listeners{key}.accept_op) {
+                listener = listeners{key}.listener;
+            }
+            remove listeners{key};
         }
-        remove listeners{key};
+        # Cancel outside the lock to avoid deadlock - cancel() blocks waiting for I/O thread
+        if (listener) {
+            server.getGlobalAsyncCtrl().cancel(listener);
+        }
         log(LoggerLevel::INFO, "Removed listener %d from async I/O controller", listener_id);
     }
 
@@ -4487,6 +4848,9 @@ class HttpServerIoController {
         @assert(sock.isOpen(), "socket must be open");
         @assert(listener, "listener cannot be null");
         AutoLock al(m);
+        if (shutting_down) {
+            throw "CONTROLLER-RETURN-ERROR", "I/O controller is shutting down";
+        }
         string key = sock.uniqueHash();
         @debug(log(LoggerLevel::DEBUG, "returnConnection(): returning connection %y", key));
 
@@ -4547,6 +4911,9 @@ class HttpServerIoController {
         @assert(response.listener, "response must have listener");
         @assert(response.code >= 100 && response.code < 600, "response code must be valid HTTP status");
         AutoLock al(m);
+        if (shutting_down) {
+            throw "CONTROLLER-QUEUE-ERROR", "I/O controller is shutting down";
+        }
         string key = sock.uniqueHash();
 
         # Check if this is an HTTP/2 response - preserve the HTTP/2 flag from response context
@@ -4593,26 +4960,101 @@ class HttpServerIoController {
         };
     }
 
-    #! Starts the coordinator thread (called locked)
+    #! Starts the coordinator thread (called while holding lock m)
+    /**
+        ## Counter Management
+
+        mcnt is incremented BEFORE starting the background thread to ensure:
+        - stop() will see mcnt > 0 and wait for the thread
+        - Even if stop() is called immediately after start(), it will wait properly
+
+        The on_error handler ensures mcnt is decremented if the background call fails,
+        preventing stop() from waiting forever for a thread that never started.
+
+        ## Thread Lifecycle
+
+        The `background` operator returns immediately with the new thread's TID.
+        The actual thread execution begins asynchronously. This means:
+        - tid is set before the coordinator thread starts running
+        - stop() can safely check tid to know if the thread was started
+
+        @note Called while holding lock m (from start() or restart())
+    */
     private startIntern() {
         exit_flag = False;
+        # Increment counter BEFORE starting thread so stop() knows to wait
         mcnt.inc();
+        @debug(log(LoggerLevel::INFO, "startIntern: mcnt.inc() called, mcnt=%d, starting coordinator thread",
+            mcnt.getCount()));
+        # If background fails, decrement counter so stop() doesn't wait forever
         on_error mcnt.dec();
+        # background returns immediately; tid is set before thread actually runs
         tid = background coordinatorThread();
+        @debug(log(LoggerLevel::INFO, "startIntern: coordinator thread started with tid=%d", tid));
     }
 
-    #! Coordinator thread - processes results from globalAsyncCtrl
+    #! Coordinator thread - main event loop for async I/O operations
+    /**
+        ## Purpose
+
+        The coordinator thread is the central event processor for async HTTP connections.
+        It receives results from globalAsyncCtrl (the AsyncSocketIoController) and dispatches
+        them appropriately:
+        - Accept results: Create new connections and dispatch to thread pool
+        - Connection results: Continue HTTP request processing or handle completion
+
+        ## Lifecycle
+
+        1. **Startup**: Called via `background` from startIntern(), mcnt is incremented before start
+        2. **Initialization**: Submit initial accept operations for all registered listeners
+        3. **Ready signal**: Set ready_flag and broadcast to waiters (waitForAsyncIo callers)
+        4. **Main loop**: Process results from resultQueue until exit_flag or quit signal
+        5. **Shutdown**: Cancel pending operations, close connections, decrement mcnt
+
+        ## Shutdown Handling
+
+        The coordinator exits when:
+        - exit_flag is True (set by stop()) AND loop iteration completes, OR
+        - A {"quit": True} message is received from resultQueue
+
+        On receiving quit signal:
+        1. Cancel all pending listener accept operations via globalAsyncCtrl.cancel()
+        2. Cancel all pending connection operations
+        3. Close all connections via closeConnectionIntern()
+        4. Break out of the loop
+
+        ## Counter Management (mcnt)
+
+        - mcnt is incremented in startIntern() BEFORE this thread starts
+        - mcnt is decremented in on_exit AFTER all cleanup is complete
+        - stop() waits on mcnt.waitForZero() to ensure clean shutdown
+
+        ## Important: on_exit Lock Acquisition
+
+        The on_exit block acquires lock `m` to clear tid and signal ready_cond.
+        This is why stop() must release `m` before calling mcnt.waitForZero() -
+        otherwise deadlock would occur.
+
+        @see stop() for shutdown sequence details
+        @see startIntern() for startup sequence
+    */
     private coordinatorThread() {
-        @debug(log(LoggerLevel::INFO, "HttpServer coordinator thread started (using globalAsyncCtrl)"));
+        @debug(log(LoggerLevel::INFO, "coordinatorThread: ENTER tid=%d mcnt=%d", gettid(), mcnt.getCount()));
+        # on_exit ensures cleanup happens regardless of how the thread exits (normal, exception, quit signal)
         on_exit {
+            @debug(log(LoggerLevel::INFO, "coordinatorThread: on_exit START, acquiring lock m"));
             {
+                # Must acquire lock to safely modify tid and signal waiters
+                # stop() releases lock before waitForZero() to prevent deadlock here
                 AutoLock al(m);
                 ready_flag = False;
                 remove tid;
                 ready_cond.broadcast();
             }
-            @debug(log(LoggerLevel::INFO, "HttpServer coordinator thread exiting"));
+            # Decrement counter to signal stop() that we've exited
+            @debug(log(LoggerLevel::INFO, "coordinatorThread: on_exit calling mcnt.dec(), mcnt=%d", mcnt.getCount()));
             mcnt.dec();
+            @debug(log(LoggerLevel::INFO, "coordinatorThread: on_exit DONE, mcnt=%d", mcnt.getCount()));
         }
 
         # Submit initial accept operations for all listeners
@@ -4630,11 +5072,17 @@ class HttpServerIoController {
             ready_cond.broadcast();
         }
 
+        # Main event loop - process results until shutdown
+        # exit_flag is checked at loop start; if stop() set it before we enter, we skip the loop entirely
+        # This handles the race where stop() is called before coordinator fully starts
+        @debug(log(LoggerLevel::INFO, "coordinatorThread: entering main loop, exit_flag=%y", exit_flag));
         while (!exit_flag) {
             try {
-                # Wait for results from globalAsyncCtrl (blocking - timeouts handled by globalAsyncCtrl)
-                @debug(log(LoggerLevel::INFO, "coordinatorThread: waiting on resultQueue (queue_size=%d)",
-                    resultQueue.size()));
+                # Blocking wait for results from globalAsyncCtrl
+                # Results come from: accept completions, read/write completions, timeouts, errors
+                # The quit signal from stop() also comes through this queue
+                @debug(log(LoggerLevel::INFO, "coordinatorThread: waiting on resultQueue (queue_size=%d exit_flag=%y)",
+                    resultQueue.size(), exit_flag));
                 hash<auto> result = resultQueue.get();
 
                 @debug(log(LoggerLevel::INFO, "coordinatorThread: got result from queue: %y ex=%y canceled=%y",
@@ -4642,31 +5090,49 @@ class HttpServerIoController {
                     result.ex ? result.ex.err : NOTHING, result.canceled));
 
                 # Check for quit signal (pushed by stop())
+                # This is the primary shutdown mechanism - stop() pushes {"quit": True} to wake us up
                 if (result.hasKey("quit")) {
-                    # Cancel all pending operations and close connections
+                    @debug(log(LoggerLevel::INFO, "coordinatorThread: received quit signal, canceling operations"));
+                    # Cancel all pending async I/O operations before exiting
+                    # This ensures globalAsyncCtrl doesn't have dangling references to our sockets
                     AutoLock al(m);
-                    # Cancel listener accept operations
+                    @debug(log(LoggerLevel::INFO, "coordinatorThread: canceling %d listener accept ops, %d connection ops",
+                        listeners.size(), connections.size()));
+                    # Cancel listener accept operations - these are long-running polls waiting for connections
+                    # globalAsyncCtrl.cancel() will signal the I/O thread to stop polling these sockets
                     map server.getGlobalAsyncCtrl().cancel(listeners{$1}.listener), keys listeners,
                         listeners{$1}.accept_op;
-                    # Cancel connection operations and close connections
+                    @debug(log(LoggerLevel::INFO, "coordinatorThread: listener cancels done"));
+                    # Cancel any in-progress connection operations (reads, writes, etc.)
                     map server.getGlobalAsyncCtrl().cancel(connections{$1}.sock), keys connections;
+                    @debug(log(LoggerLevel::INFO, "coordinatorThread: connection cancels done"));
+                    # Close all active connections - this cleans up resources
                     map closeConnectionIntern($1), keys connections;
+                    @debug(log(LoggerLevel::INFO, "coordinatorThread: breaking out of loop"));
                     break;
                 }
 
+                # Normal result processing - dispatch to appropriate handler
                 processResult(result);
 
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "Error in coordinator thread: %s", get_exception_string(ex));
             }
         }
+        @debug(log(LoggerLevel::INFO, "coordinatorThread: exited main loop, exit_flag=%y", exit_flag));
     }
 
     #! Starts an accept operation for a listener
     private startAcceptOperation(string key, hash<HttpListenerPollInfo> linfo) {
         try {
+            if (shutting_down) {
+                return;
+            }
+            # Get the current HTTP version from the listener - this checks get_global_http2_mode()
+            # at runtime to respect dynamic changes to the global HTTP/2 mode
+            string http_version = linfo.listener.getHttpVersion();
             @debug(log(LoggerLevel::INFO, "startAcceptOperation: creating accept op for listener %s ssl=%y http_version=%y",
-                key, linfo.ssl, linfo.http_version));
+                key, linfo.ssl, http_version));
             AbstractPollOperation accept_op = new HttpServerAsyncIo::HttpAcceptPollOperation(
                 linfo.listener,
                 linfo.ssl,
@@ -4674,7 +5140,7 @@ class HttpServerIoController {
                 linfo.listener.getSslPrivateKeyObject(),
                 linfo.listener.getSslVerifyFlags(),
                 linfo.listener.getSslAcceptAllCerts(),
-                linfo.http_version,
+                http_version,
             );
             listeners{key}.accept_op = accept_op;
             @debug(log(LoggerLevel::INFO, "startAcceptOperation: submitting to globalAsyncCtrl for listener %s", key));
@@ -4682,8 +5148,9 @@ class HttpServerIoController {
             server.getGlobalAsyncCtrl().submit(<SocketPollOperationInfo>{
                 "sock": linfo.listener,
                 "spop": accept_op,
-                "to": 0s,  # No timeout - listeners wait indefinitely for connections
+                "to": -1s,  # No timeout - listeners wait indefinitely for connections
                 "resultQueue": resultQueue,
+                "owner": server.getOwnerId(),
                 "other": {"goal": "listener:" + key},
             });
             @debug(log(LoggerLevel::INFO, "startAcceptOperation: submitted accept op for listener %s (running: %y)",
@@ -4702,8 +5169,12 @@ class HttpServerIoController {
         hash<HttpConnectionPollInfo> cinfo = connections{key};
 
         try {
+            if (shutting_down) {
+                return;
+            }
             AbstractPollOperation spop;
             date timeout = cinfo.timeout_date;
+            date now = now_us();
 
             switch (cinfo.state) {
                 case "idle":
@@ -4716,6 +5187,15 @@ class HttpServerIoController {
                     break;
 
                 case "read_header":
+                    @debug {
+                        if (getenv("QORE_HTTP_HEADER_DEBUG")) {
+                            log(LoggerLevel::INFO,
+                                "startPollReadHttpHeader: key=%y sock=%s timeout=%y listener_id=%y http2=%y",
+                                key,
+                                sprintf("%s %s", cinfo.sock.className(), cinfo.sock.uniqueHash()[0..8]),
+                                timeout, cinfo.listener_id, cinfo.is_http2);
+                        }
+                    }
                     spop = cinfo.sock.startPollReadHttpHeader();
                     break;
 
@@ -4770,12 +5250,23 @@ class HttpServerIoController {
 
             connections{key}.spop = spop;
 
+            date to = timeout ? (timeout - now) : -1s;
+            if (timeout && to <= 0s) {
+                # Timeout already expired; force immediate timeout handling
+                to = 0s;
+            }
             server.getGlobalAsyncCtrl().submit(<SocketPollOperationInfo>{
                 "sock": cinfo.sock,
                 "spop": spop,
-                "to": timeout - now_us(),
+                "to": to,
                 "resultQueue": resultQueue,
-                "other": {"goal": "connection:" + key},
+                "owner": server.getOwnerId(),
+                "other": {
+                    "goal": "connection:" + key,
+                    "state": cinfo.state,
+                    "listener_id": cinfo.listener_id,
+                    "http2": cinfo.is_http2,
+                },
             });
             @debug(log(LoggerLevel::DEBUG, "startConnectionOperation: submitted op for connection %s state=%y",
                 key, cinfo.state));
@@ -4834,7 +5325,12 @@ class HttpServerIoController {
 
         # Accept completed successfully
         log(LoggerLevel::DEBUG, "processListenerResult: calling handleAcceptComplete for listener %s", key);
-        handleAcceptComplete(key, listeners{key});
+        try {
+            handleAcceptComplete(key, listeners{key});
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error handling accept for listener %s: %s: %s",
+                key, ex.err, ex.desc);
+        }
 
         # Reset accept operation and start next accept immediately
         remove listeners{key}.accept_op;
@@ -4857,6 +5353,12 @@ class HttpServerIoController {
 
         if (result.ex) {
             log(LoggerLevel::DEBUG, "Connection %s error: %s: %s", key, result.ex.err, result.ex.desc);
+            @debug {
+                log(LoggerLevel::INFO,
+                    "processConnectionResult: connection %s error=%y state=%y listener_id=%y http2=%y goal=%y",
+                    key, result.ex.err, connections{key}.state, connections{key}.listener_id,
+                    connections{key}.is_http2, result.other.goal);
+            }
             closeConnectionIntern(key);
             return;
         }
@@ -4998,6 +5500,10 @@ class HttpServerIoController {
                     connections{key}.hdr = hdr;
                     # RFC 8441: HTTP/2 WebSocket uses CONNECT with :protocol=websocket
                     bool is_ws_connect = (hdr.method == "CONNECT" && hdr.":protocol" == "websocket");
+                    if (is_ws_connect && getenv("QORE_HTTP2_WS_DEBUG_HEADERS")) {
+                        server.log("HTTP/2 WS CONNECT header keys: %y", keys hdr);
+                        server.log("HTTP/2 WS sec-websocket-key present: %y", hdr."sec-websocket-key" ? True : False);
+                    }
                     # Parse accept-encoding header for compression support
                     *list<string> accept_encoding;
                     if (hdr."accept-encoding") {
@@ -5011,12 +5517,13 @@ class HttpServerIoController {
                         "is_websocket_connect": is_ws_connect,
                         "body": request.body,  # HTTP/2 body is already read by poll operation
                         "accept-encoding": accept_encoding,
+                        "close": False,
                     };
 
                     # Dispatch to ThreadPool for handling
                     dispatchToThreadPool(key);
                 } else {
-                    log(LoggerLevel::ERROR, "Unexpected HTTP/2 result type for %y: %y", key, h2_output.type());
+                    @debug(log(LoggerLevel::DEBUG, "HTTP/2 connection %y closed before request complete", key));
                     closeConnectionIntern(key);
                 }
                 break;
@@ -5177,6 +5684,173 @@ class HttpServerIoController {
         if (logger) {
             logger.log(level, vsprintf(fmt, argv));
         }
+    }
+}
+}
+
+namespace Priv {
+#! Helper class for managing HTTP request lifecycle and thread counter tracking
+/**
+    This class manages the lifecycle of HTTP connections and ensures proper counter
+    management for graceful server shutdown. It tracks two types of connections:
+
+    1. **Normal connections (cThreads)**: Regular HTTP request/response connections
+       that are handled by the thread pool and released after the response is sent.
+
+    2. **Dedicated connections (dThreads)**: Long-lived connections like WebSocket
+       or SSE that take over the socket for bidirectional communication.
+
+    ## Counter Management
+
+    The server uses counters to track active connections so that shutdown can wait
+    for all connections to complete. The flow is:
+
+    1. When a request starts: `cThreads.inc()` is called (before RequestHelper is created)
+    2. RequestHelper stores a reference to cThreads in `c`
+    3. If the connection becomes dedicated (WebSocket/SSE):
+       - `setDedicated()` is called: increments dThreads, decrements cThreads, switches `c` to dThreads
+    4. When RequestHelper is destroyed: `c.dec()` decrements the appropriate counter
+
+    ## Dedicated External Mode
+
+    When a handler takes full control of the socket (e.g., WebSocket handler returns True
+    from start()), `setDedicatedExternal()` is called. This:
+    - Sets `dedicated_external = True` so the destructor won't close the socket
+    - The handler is responsible for socket cleanup
+    - The counter is still decremented in the destructor
+
+    ## Important: Counter Balance
+
+    The counter increment happens BEFORE RequestHelper is created (in handleAsyncRequest
+    or similar). The decrement happens in the destructor. This ensures:
+    - Every increment has a matching decrement
+    - Server shutdown can wait for all counters to reach zero
+
+    @see HttpListener::cThreads
+    @see HttpListener::dThreads
+*/
+class RequestHelper {
+    private {
+        #! Counter for normal connection threads (decremented if we stay in normal mode)
+        Counter cThreads;
+        #! Counter for dedicated connection threads (decremented if we switch to dedicated mode)
+        Counter dThreads;
+        #! Reference to the active counter (either cThreads or dThreads) - decremented in destructor
+        Counter c;
+        #! Socket to manage (may be null for async connections where socket is managed elsewhere)
+        Socket s;
+        #! If True, socket is managed externally (e.g., by WebSocket handler) and won't be closed in destructor
+        bool dedicated_external = False;
+    }
+
+    /**
+        @param cThreads the counter for normal connection threads
+        @param dThreads the counter for dedicated connection threads (WebSocket, SSE)
+        @param s optional socket to manage (not passed for async connections where socket lifecycle
+               is managed by the async I/O controller)
+
+        @note The caller must have already called cThreads.inc() before creating this object.
+              The destructor will call c.dec() to balance this.
+    */
+    constructor(Counter cThreads, Counter dThreads, *Socket s) {
+        @assert(cThreads.getCount() > 0, "cThreads must be incremented before creating RequestHelper");
+        self.cThreads = cThreads;
+        self.dThreads = dThreads;
+        c = cThreads;
+        if (s) {
+            self.s = s;
+        }
+    }
+
+    #! Destructor ensures counter is decremented and socket is cleaned up if needed
+    /**
+        - If not dedicated_external and socket exists and is open: shutdown and close the socket
+        - Always decrements the active counter (c) to signal this connection is complete
+
+        This allows HttpListener::stop() to wait for all connections to finish via
+        cThreads.waitForZero() and dThreads.waitForZero().
+
+        @note We check isOpen() to avoid double-close if the socket was already closed
+        (e.g., by handlePersistentConnectionSync())
+    */
+    destructor() {
+        if (s && !dedicated_external && s.isOpen()) {
+            try {
+                s.shutdown();
+                s.close();
+            } catch () {
+                # Ignore close errors - socket may already be in error state
+            }
+        }
+        c.dec();
+    }
+
+    #! Switches from normal connection mode to dedicated connection mode
+    /**
+        Called when a connection is upgraded to a dedicated socket handler (WebSocket, SSE).
+        This transfers the counter tracking from cThreads to dThreads so that:
+        - Normal requests can complete (cThreads reaches zero)
+        - Dedicated connections are tracked separately (dThreads)
+        - Server shutdown waits for dedicated connections after normal connections
+
+        @note Must only be called once, when c === cThreads (asserted)
+    */
+    setDedicated() {
+        @assert(c === cThreads);
+        dThreads.inc();
+        cThreads.dec();
+        c = dThreads;
+    }
+
+    #! Marks this connection as dedicated and externally managed
+    /**
+        Called when a dedicated socket handler (e.g., WebSocket) takes full control
+        of the connection and will manage the socket lifecycle itself.
+
+        This method:
+        1. Switches to dedicated mode if not already (handles race where setDedicated()
+           may have been called first in registerDedicatedSocket)
+        2. Sets dedicated_external = True so destructor won't close the socket
+
+        The handler that called this is responsible for:
+        - Closing the socket when done
+        - The connection counter is still decremented in destructor
+
+        @note This fixes a bug where calling setDedicatedExternal() after setDedicated()
+              would double-increment dThreads. The check `c === cThreads` prevents this.
+    */
+    setDedicatedExternal() {
+        # Only adjust counters if not already in dedicated mode
+        # (setDedicated() may have been called first in registerDedicatedSocket)
+        if (c === cThreads) {
+            dThreads.inc();
+            cThreads.dec();
+            c = dThreads;
+        }
+        dedicated_external = True;
+    }
+
+    #! Returns True if this connection is in dedicated mode (WebSocket, SSE)
+    /**
+        @return True if setDedicated() or setDedicatedExternal() was called
+
+        @note This returns True for BOTH internally and externally managed dedicated connections.
+              To check specifically for external management, use isDedicatedExternal().
+              When checking shutdown behavior, isDedicatedExternal() is usually what you want.
+    */
+    bool isDedicated() {
+        return c === dThreads;
+    }
+
+    #! Returns True if the socket is managed externally by the dedicated handler
+    /**
+        @return True if setDedicatedExternal() was called
+
+        @note If this returns True, isDedicated() also returns True.
+              This method specifically indicates the socket won't be closed by the destructor.
+    */
+    bool isDedicatedExternal() {
+        return dedicated_external;
     }
 }
 }

@@ -56,7 +56,7 @@
 class QdpCmd {
     public {
         #! Version string
-        const Version = "1.2.0";
+        const Version = "1.4.0";
 
         static HttpServer http;
 
@@ -107,6 +107,8 @@ class QdpCmd {
             "verbose": "v,verbose:i+",
             "version": "V,version",
             "exp": "x,expressions",
+            "dpql": "q,dpql",
+            "dpqlhelp": "Q,dpql-help",
             "yaml": "Y,yaml",
             "help": "h,help",
         };
@@ -217,8 +219,14 @@ class QdpCmd {
         if (opts.help) {
             usage();
         }
+        if (opts.dpqlhelp) {
+            showDpqlHelp();
+        }
         if (opts.version) {
             showVersion();
+        }
+        if (opts.dpql && opts.exp) {
+            error("options --dpql and --expressions are mutually exclusive");
         }
 
         # Set up signal handlers for graceful shutdown
@@ -614,10 +622,8 @@ class QdpCmd {
         }
 
         # User-friendly formatted output
-        printf("\n%s\n", color.bold("═══ Data Provider Info ═══"));
-
         # Basic info section
-        printf("\n%s\n", color.bold("Provider"));
+        printf("%s\n", color.bold("Provider"));
         printf("  %s: %s\n", color.key("Name"), info.name);
         if (info.display_name && info.display_name != info.name) {
             printf("  %s: %s\n", color.key("Display Name"), info.display_name);
@@ -628,7 +634,7 @@ class QdpCmd {
         }
 
         # Capabilities section
-        printf("\n%s\n", color.bold("Capabilities"));
+        printf("%s\n", color.bold("Capabilities"));
         list<string> caps = ();
         if (info.supports_read) push caps, "read";
         if (info.supports_create) push caps, "create";
@@ -651,7 +657,7 @@ class QdpCmd {
 
         # Record operations
         if (info.has_record) {
-            printf("\n%s\n", color.bold("Record Operations"));
+            printf("%s\n", color.bold("Record Operations"));
             printf("  %s: %s\n", color.key("Has Record Type"), color.success("Yes"));
             if (info.record_requires_search_options) {
                 printf("  %s: %s\n", color.key("Requires Search Options"), "Yes");
@@ -659,11 +665,21 @@ class QdpCmd {
             if (info.supports_search_expressions) {
                 printf("  %s: %s\n", color.key("Supports Search Expressions"), "Yes");
             }
+            if (info.expressions) {
+                printf("  %s:\n", color.key("Search Expressions"));
+                foreach hash<auto> exp in (info.expressions.pairIterator()) {
+                    string label = exp.value.symbol && exp.value.symbol != exp.key
+                        ? sprintf("%s (%s)", exp.key, exp.value.symbol)
+                        : exp.key;
+                string desc = exp.value.short_desc ?? AbstractDataField::getShortDescription(exp.value.desc);
+                printf("    - %s%s\n", color.type(label), desc ? ": " + desc : "");
+            }
+        }
         }
 
         # Request/Response API
         if (info.supports_request) {
-            printf("\n%s\n", color.bold("Request/Response API"));
+            printf("%s\n", color.bold("Request/Response API"));
             printf("  %s: %s\n", color.key("Supported"), color.success("Yes"));
             *AbstractDataProviderType req_type = provider.getRequestType();
             *AbstractDataProviderType resp_type = provider.getResponseType();
@@ -676,9 +692,12 @@ class QdpCmd {
         }
 
         # Messages
-        *hash<string, hash<DataProviderMessageInfo>> messages = provider.getMessageTypes();
+        *hash<string, hash<DataProviderMessageInfo>> messages;
+        if (info.supports_messages.val() && info.supports_messages != "NONE") {
+            messages = provider.getMessageTypes();
+        }
         if (messages) {
-            printf("\n%s\n", color.bold("Messages"));
+            printf("%s\n", color.bold("Messages"));
             foreach hash<auto> msg in (messages.pairIterator()) {
                 string type_info = msg.value.type ? msg.value.type.getName() : "auto";
                 printf("  %s %s: %s\n", color.dim("→"), color.key(msg.key), color.type(type_info));
@@ -686,9 +705,12 @@ class QdpCmd {
         }
 
         # Events
-        *hash<string, hash<DataProviderMessageInfo>> events = provider.getEventTypes();
+        *hash<string, hash<DataProviderMessageInfo>> events;
+        if (info.supports_observable) {
+            events = provider.getEventTypes();
+        }
         if (events) {
-            printf("\n%s\n", color.bold("Events"));
+            printf("%s\n", color.bold("Events"));
             foreach hash<auto> evt in (events.pairIterator()) {
                 string type_info = evt.value.type ? evt.value.type.getName() : "auto";
                 printf("  %s %s: %s\n", color.dim("←"), color.key(evt.key), color.type(type_info));
@@ -698,7 +720,7 @@ class QdpCmd {
         # Children
         *list<string> child_names = info.children ?? provider.getChildProviderNames();
         if (child_names) {
-            printf("\n%s\n", color.bold("Children"));
+            printf("%s\n", color.bold("Children"));
             if (child_names.size() <= 10) {
                 map printf("  • %s\n", color.key($1)), child_names;
             } else {
@@ -709,11 +731,11 @@ class QdpCmd {
 
         # Provider-specific info (only if verbose)
         if (opts.verbose && info.info) {
-            printf("\n%s\n", color.bold("Additional Info"));
+            printf("%s\n", color.bold("Additional Info"));
             outputRecord(info.info);
         }
 
-        printf("\n");
+        # no trailing blank line
     }
 
     static listChildren(AbstractDataProvider provider) {
@@ -1073,7 +1095,7 @@ class QdpCmd {
     }
 
     static search(AbstractDataProvider provider) {
-        *hash<auto> where_cond = QdpCmd::getSearchExpression("search");
+        *hash<auto> where_cond = QdpCmd::getSearchExpression("search", NOTHING, provider);
         *hash<auto> search_options = QdpCmd::getHash("search options");
 
         # Add limit/offset to search options if specified
@@ -1247,7 +1269,7 @@ class QdpCmd {
 
     static update(AbstractDataProvider provider) {
         hash<auto> set = QdpCmd::getHash("update 'set'", True);
-        *hash<auto> where_cond = QdpCmd::getSearchExpression("update 'where'", True);
+        *hash<auto> where_cond = QdpCmd::getSearchExpression("update 'where'", True, provider);
 
         if (opts.dryrun) {
             printf("%s Would update records matching:\n", color.warning("[DRY-RUN]"));
@@ -1303,7 +1325,7 @@ class QdpCmd {
     }
 
     static del(AbstractDataProvider provider) {
-        *hash<auto> where_cond = QdpCmd::getSearchExpression("delete");
+        *hash<auto> where_cond = QdpCmd::getSearchExpression("delete", NOTHING, provider);
 
         if (opts.dryrun) {
             printf("%s Would delete records matching:\n", color.warning("[DRY-RUN]"));
@@ -1339,7 +1361,7 @@ class QdpCmd {
 
     static doRequestSearch(AbstractDataProvider provider) {
         hash<auto> req = QdpCmd::getHash("request", True);
-        hash<auto> where_cond = QdpCmd::getSearchExpression("request-search", True);
+        hash<auto> where_cond = QdpCmd::getSearchExpression("request-search", True, provider);
         *hash<auto> options = QdpCmd::getHash("request-options");
 
         # Add limit/offset to options if specified
@@ -1518,12 +1540,93 @@ class QdpCmd {
         }
     }
 
-    static *hash<auto> getSearchExpression(string action, *bool required) {
-        *hash<auto> rv = QdpCmd::getHash(action, required);
-        if (opts.exp && rv.size() == 2 && rv.exp.typeCode() == NT_STRING && rv.hasKey("args")) {
-            return QdpCmd::getExpression(rv.exp, rv.args);
+    static *hash<auto> getSearchExpression(string action, *bool required, *AbstractDataProvider provider) {
+        auto arg = shift ARGV;
+        if (opts.dpql) {
+            if (!exists arg) {
+                if (required) {
+                    QdpCmd::error("Missing required %s argument; expecting type \"string\"", action);
+                }
+                return;
+            }
+            return QdpCmd::parseDpqlExpression(arg, provider, DataProviderDataContextHelper::getHash());
         }
-        return rv;
+
+        *hash<auto> rv;
+        if (opts.exp) {
+            rv = QdpCmd::getHashIntern(arg, action, required);
+            if (rv && rv.size() == 2 && rv.exp.typeCode() == NT_STRING && rv.hasKey("args")) {
+                return QdpCmd::getExpression(rv.exp, rv.args);
+            }
+            return rv;
+        }
+
+        if (!exists arg) {
+            if (required) {
+                QdpCmd::error("Missing required %s argument; expecting type \"hash\"", action);
+            }
+            return;
+        }
+
+        if (QdpCmd::isDpqlCandidate(arg)) {
+            return QdpCmd::parseDpqlExpression(arg, provider, DataProviderDataContextHelper::getHash());
+        }
+
+        return QdpCmd::getHashIntern(arg, action, required);
+    }
+
+    static bool isDpqlCandidate(string text) {
+        return (text =~ /@/)
+            || (text =~ /==|!=|=~|&&|\\|\\|/)
+            || (text =~ /\\bbetween\\b|\\bin\\b/);
+    }
+
+    static hash<DataProviderExpression> parseDpqlExpression(string dpql, *AbstractDataProvider provider,
+            *hash<auto> action_opts) {
+        *hash<string, hash<DataProviderExpressionInfo>> expressions;
+        if (provider) {
+            expressions = provider.getExpressionsWithOptions(action_opts);
+        }
+        hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(dpql, expressions);
+        list<hash<DpqlDiagnostic>> diagnostics = result.diagnostics ?? ();
+        if (provider) {
+            *hash<string, AbstractDataField> fields = provider.getRecordTypeWithOptions(action_opts, NOTHING);
+            if (fields) {
+                diagnostics += DataProvider::validateDpqlExpression(dpql, fields, expressions);
+            }
+        }
+        list<hash<DpqlDiagnostic>> errors = QdpCmd::getDpqlErrors(diagnostics);
+        if (!result.success || errors) {
+            QdpCmd::error(QdpCmd::formatDpqlErrors(errors, diagnostics));
+        }
+        return result.expression;
+    }
+
+    static list<hash<DpqlDiagnostic>> getDpqlErrors(list<hash<DpqlDiagnostic>> diagnostics) {
+        if (!diagnostics) {
+            return ();
+        }
+        return select diagnostics, $1.severity == "error";
+    }
+
+    static string formatDpqlErrors(list<hash<DpqlDiagnostic>> errors, list<hash<DpqlDiagnostic>> diagnostics) {
+        if (!errors && diagnostics) {
+            errors = diagnostics;
+        }
+        if (!errors) {
+            return "DPQL parse error";
+        }
+        string msg = sprintf("DPQL parse error: %s", errors[0].message);
+        if (errors.size() > 1) {
+            list<string> details = ();
+            foreach hash<DpqlDiagnostic> diag in (errors) {
+                details += sprintf("  - %s (line %d, column %d)", diag.message, diag.line, diag.column);
+            }
+            msg += "\n" + details.join("\n");
+        } else if (errors[0].line) {
+            msg += sprintf(" (line %d, column %d)", errors[0].line, errors[0].column);
+        }
+        return msg;
     }
 
     static hash<DataProviderExpression> getExpression(string exp, auto args) {
@@ -1840,8 +1943,13 @@ class QdpCmd {
         exit(0);
     }
 
+    private static printHelpLine(string colored, string desc, int width) {
+        printf("  %s %s\n", TerminalColor::padRight(colored, width), desc);
+    }
+
     static usage() {
         string script = get_script_name();
+        int key_width = 24;
 
         printf("%s - Qore Data Provider CLI Tool\n\n", color.bold(script));
 
@@ -1849,118 +1957,157 @@ class QdpCmd {
         printf("  %s [options] <provider> [command] [args...]\n\n", script);
 
         printf("%s\n", color.bold("PROVIDER FORMATS"));
-        printf("  %s                   Use a named connection\n", color.key("<connection>"));
-        printf("  %s    Use a factory with options\n", color.key("<factory>{options}"));
-        printf("  %s             Use an app action\n", color.key("@<app>/<action>"));
-        printf("  %s       Navigate to child providers\n", color.key("<provider>/child/..."));
+        printHelpLine(color.key("<connection>"), "Use a named connection", key_width);
+        printHelpLine(color.key("<factory>{options}"), "Use a factory with options", key_width);
+        printHelpLine(color.key("@<app>/<action>"), "Use an app action", key_width);
+        printHelpLine(color.key("<provider>/child/..."), "Navigate to child providers", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("DISCOVERY COMMANDS"));
-        printf("  %s, %s                  List child providers (default)\n",
-            color.key("list"), color.key("l"));
-        printf("  %s, %s           List children with details\n",
-            color.key("list-details"), color.key("ldetails"));
-        printf("  %s                         Show provider information\n", color.key("info"));
-        printf("  %s, %s              Show record type schema\n",
-            color.key("record"), color.key("rec"));
-        printf("  %s                      Show request type (API providers)\n", color.key("request"));
-        printf("  %s, %s            Show response type (API providers)\n",
-            color.key("response"), color.key("reply"));
-        printf("  %s [code]                List error response types\n", color.key("errors"));
-        printf("  %s, %s         Show data provider tree\n",
-            color.key("show-providers"), color.key("sp"));
+        printHelpLine(color.key("list") + ", " + color.key("l"),
+            "List child providers (default)", key_width);
+        printHelpLine(color.key("list-details") + ", " + color.key("ldetails"),
+            "List children with details", key_width);
+        printHelpLine(color.key("info"), "Show provider information", key_width);
+        printHelpLine(color.key("record") + ", " + color.key("rec"),
+            "Show record type schema", key_width);
+        printHelpLine(color.key("request"), "Show request type (API providers)", key_width);
+        printHelpLine(color.key("response") + ", " + color.key("reply"),
+            "Show response type (API providers)", key_width);
+        printHelpLine(color.key("errors [code]"), "List error response types", key_width);
+        printHelpLine(color.key("show-providers") + ", " + color.key("sp"),
+            "Show data provider tree", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("RECORD OPERATIONS"));
-        printf("  %s <criteria>            Search for records\n", color.key("search"));
-        printf("  %s <record>              Create new record(s)\n", color.key("create"));
-        printf("  %s <set> <where>         Update matching records\n", color.key("update"));
-        printf("  %s <record>              Create or update record\n", color.key("upsert"));
-        printf("  %s <criteria>            Delete matching records\n", color.key("delete"));
+        printHelpLine(color.key("search <criteria>"), "Search for records", key_width);
+        printHelpLine(color.key("create <record>"), "Create new record(s)", key_width);
+        printHelpLine(color.key("update <set> <where>"), "Update matching records", key_width);
+        printHelpLine(color.key("upsert <record>"), "Create or update record", key_width);
+        printHelpLine(color.key("delete <criteria>"), "Delete matching records", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("API OPERATIONS"));
-        printf("  %s <request>        Execute API request\n", color.key("dorequest"));
-        printf("  %s <req> <search>       Request then search results\n", color.key("rsearch"));
-        printf("  %s, %s <info>  Show app action details\n",
-            color.key("action-info"), color.key("ai"));
+        printHelpLine(color.key("dorequest <request>"), "Execute API request", key_width);
+        printHelpLine(color.key("rsearch <req> <search>"), "Request then search results", key_width);
+        printHelpLine(color.key("action-info") + ", " + color.key("ai") + " <info>",
+            "Show app action details", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("EVENT/MESSAGE OPERATIONS"));
-        printf("  %s                       Listen to events (read-only)\n", color.key("listen"));
-        printf("  %s, %s        Interactive mode (send/receive)\n",
-            color.key("interactive"), color.key("ix"));
-        printf("  %s, %s       List event types\n",
-            color.key("list-events"), color.key("levents"));
-        printf("  %s, %s     List message types\n",
-            color.key("list-messages"), color.key("lmsgs"));
-        printf("  %s <name>                  Show event type details\n", color.key("event"));
-        printf("  %s <name>                Show message type details\n", color.key("message"));
-        printf("  %s <id> [data]    Send a message\n", color.key("send-message"));
+        printHelpLine(color.key("listen"), "Listen to events (read-only)", key_width);
+        printHelpLine(color.key("interactive") + ", " + color.key("ix"),
+            "Interactive mode (send/receive)", key_width);
+        printHelpLine(color.key("list-events") + ", " + color.key("levents"),
+            "List event types", key_width);
+        printHelpLine(color.key("list-messages") + ", " + color.key("lmsgs"),
+            "List message types", key_width);
+        printHelpLine(color.key("event <name>"), "Show event type details", key_width);
+        printHelpLine(color.key("message <name>"), "Show message type details", key_width);
+        printHelpLine(color.key("send-message <id> [data]"), "Send a message", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("EXAMPLES"));
-        printf("  %s                 Show example request data\n", color.key("example-request"));
-        printf("  %s                Show example response data\n", color.key("example-response"));
-        printf("  %s                  Show example record data\n", color.key("example-record"));
-        printf("  %s [name]               Show example event data\n", color.key("example-event"));
-        printf("  %s [code]               Show example error response\n", color.key("example-error"));
+        printHelpLine(color.key("example-request"), "Show example request data", key_width);
+        printHelpLine(color.key("example-response"), "Show example response data", key_width);
+        printHelpLine(color.key("example-record"), "Show example record data", key_width);
+        printHelpLine(color.key("example-event [name]"), "Show example event data", key_width);
+        printHelpLine(color.key("example-error [code]"), "Show example error response", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("SCHEMA MANAGEMENT"));
-        printf("  %s <name> <desc>       Add a field to the schema\n", color.key("field-add"));
-        printf("  %s <name>            Delete a field from schema\n", color.key("field-delete"));
-        printf("  %s <old> <new>    Rename/update a field\n", color.key("field-update"));
-        printf("  %s <name> <desc>    Create child provider\n", color.key("provider-create"));
-        printf("  %s <name>          Delete child provider\n", color.key("provider-delete"));
+        printHelpLine(color.key("field-add <name> <desc>"), "Add a field to the schema", key_width);
+        printHelpLine(color.key("field-delete <name>"), "Delete a field from schema", key_width);
+        printHelpLine(color.key("field-update <old> <new>"), "Rename/update a field", key_width);
+        printHelpLine(color.key("provider-create <name> <desc>"), "Create child provider", key_width);
+        printHelpLine(color.key("provider-delete <name>"), "Delete child provider", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("OUTPUT OPTIONS"));
-        printf("  %s                  Output in JSON format\n", color.key("-J, --json"));
-        printf("  %s                  Output in YAML format\n", color.key("-Y, --yaml"));
-        printf("  %s              Disable colored output\n", color.key("-C, --no-color"));
-        printf("  %s           Increase verbosity (can repeat)\n", color.key("-v, --verbose"));
+        printHelpLine(color.key("-J, --json"), "Output in JSON format", key_width);
+        printHelpLine(color.key("-Y, --yaml"), "Output in YAML format", key_width);
+        printHelpLine(color.key("-C, --no-color"), "Disable colored output", key_width);
+        printHelpLine(color.key("-v, --verbose"), "Increase verbosity (can repeat)", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("SEARCH OPTIONS"));
-        printf("  %s          Use search expressions\n", color.key("-x, --expressions"));
-        printf("  %s             Limit number of results\n", color.key("-l, --limit=N"));
-        printf("  %s            Skip first N results\n", color.key("-O, --offset=N"));
-        printf("  %s           Use bulk API for searches\n", color.key("-b, --bulk"));
-        printf("  %s           Timeout in seconds\n", color.key("-T, --timeout=N"));
+        printHelpLine(color.key("-q, --dpql"), "Use DPQL search expressions", key_width);
+        printHelpLine(color.key("-x, --expressions"), "Use legacy search expressions", key_width);
+        printHelpLine(color.key("-Q, --dpql-help"), "Show DPQL syntax help and examples", key_width);
+        printHelpLine(color.key("-l, --limit=N"), "Limit number of results", key_width);
+        printHelpLine(color.key("-O, --offset=N"), "Skip first N results", key_width);
+        printHelpLine(color.key("-b, --bulk"), "Use bulk API for searches", key_width);
+        printHelpLine(color.key("-T, --timeout=N"), "Timeout in seconds", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("OTHER OPTIONS"));
-        printf("  %s              Preview changes without executing\n", color.key("-d, --dry-run"));
-        printf("  %s      Set data provider options (Qore hash format)\n", color.key("-o, --options=X"));
-        printf("  %s     Use subtype when creating from connection\n", color.key("-s, --subtype=X"));
-        printf("  %s           Hostname for webhooks\n", color.key("-H, --host=X"));
-        printf("  %s      Load additional module(s)\n", color.key("-m, --module=X"));
-        printf("  %s          Enable background servers\n", color.key("-S, --servers"));
-        printf("  %s      Show only required fields\n", color.key("-R, --show-required"));
+        printHelpLine(color.key("-d, --dry-run"), "Preview changes without executing", key_width);
+        printHelpLine(color.key("-o, --options=X"), "Set data provider options (Qore hash format)", key_width);
+        printHelpLine(color.key("-s, --subtype=X"), "Use subtype when creating from connection", key_width);
+        printHelpLine(color.key("-H, --host=X"), "Hostname for webhooks", key_width);
+        printHelpLine(color.key("-m, --module=X"), "Load additional module(s)", key_width);
+        printHelpLine(color.key("-S, --servers"), "Enable background servers", key_width);
+        printHelpLine(color.key("-R, --show-required"), "Show only required fields", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("INFORMATIONAL"));
-        printf("  %s      List known connections\n", color.key("-c, --list-connections"));
-        printf("  %s        List known factories\n", color.key("-f, --list-factories"));
-        printf("  %s           List known types\n", color.key("-t, --list-types"));
-        printf("  %s            List applications\n", color.key("-a, --list-apps"));
-        printf("  %s       Create provider indices\n", color.key("-I, --create-index"));
-        printf("  %s             Show version info\n", color.key("-V, --version"));
-        printf("  %s                Show this help\n", color.key("-h, --help"));
+        printHelpLine(color.key("-c, --list-connections"), "List known connections", key_width);
+        printHelpLine(color.key("-f, --list-factories"), "List known factories", key_width);
+        printHelpLine(color.key("-t, --list-types"), "List known types", key_width);
+        printHelpLine(color.key("-a, --list-apps"), "List applications", key_width);
+        printHelpLine(color.key("-I, --create-index"), "Create provider indices", key_width);
+        printHelpLine(color.key("-V, --version"), "Show version info", key_width);
+        printHelpLine(color.key("-h, --help"), "Show this help", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("EXAMPLES"));
         printf("  %s mydb info                        %s\n",
             script, color.dim("# Show database provider info"));
-        printf("  %s mydb/users search name=John      %s\n",
-            script, color.dim("# Search users table"));
-        printf("  %s -J mydb/users search -l 10       %s\n",
+        printf("  %s mydb/tables/users search '@name == \"John\"'  %s\n",
+            script, color.dim("# Search users table with DPQL"));
+        printf("  %s -J mydb/tables/users search -l 10       %s\n",
             script, color.dim("# JSON output, limit 10"));
         printf("  %s rest'{url=http://api.example.com}' list\n", script);
-        printf("  %s @salesforce/search-records '{query=\"SELECT Id FROM Account\"}'\n", script);
+        printf("  %s @salesforce/search-records search '@query == \"SELECT Id FROM Account\"'\n", script);
+        printf("  %s mydb/tables/users search '@name == \"John\"'\n", script);
+        printf("  %s mydb/tables/users search -q '@name == \"John\"'\n", script);
 
         exit(1);
+    }
+
+    static showDpqlHelp() {
+        printf("%s\n", color.bold("DPQL (Data Provider Query Language)"));
+        printf("  %s\n", color.info("DPQL is a user-friendly server-independent syntax for fast native server-side record-based data provider searches, updates, and delete operations."));
+        printf("\n%s\n", color.bold("SYNTAX"));
+        printf("  %s %s %s\n", color.key("@field"), color.type("<op>"), color.key("value"));
+        printf("  %s\n", color.key("(@field <op> value) && (@field2 <op> value2)"));
+        printf("\n%s\n", color.bold("FIELD REFERENCES"));
+        printf("  %s\n", color.key("@name"));
+        printf("  %s\n", color.key("@\"field with spaces\""));
+        printf("\n%s\n", color.bold("OPERATORS"));
+        printf("  %s\n", color.type("== != < <= > >= =~ between in"));
+        printf("  %s\n", color.dim("Note: available operators depend on the data provider and server capabilities."));
+        printf("  %s\n", color.dim("Use \"qdp <provider> info\" to see supported search expressions."));
+        printf("\n%s\n", color.bold("LOGICAL"));
+        printf("  %s\n", color.type("&& || !"));
+        printf("\n%s\n", color.bold("LITERALS"));
+        printf("  %s\n", color.key("strings, numbers, true/false, null"));
+        printf("  %s\n", color.key("dates: 2026-01-02 or 2026-01-02T15:20:11.123+01:00"));
+        printf("  %s\n", color.key("binary: <deadbeef>"));
+        printf("  %s\n", color.key("lists: (one, two, 3)"));
+        printf("  %s\n", color.key("hashes: {a=1, b=two}"));
+        printf("  %s\n", color.key("unquoted identifiers are strings (ex: @domain == omq)"));
+        printf("\n%s\n", color.bold("EXAMPLES"));
+        printf("  %s\n", color.key("qdp mydb/tables/users search '@name == \"John\"'"));
+        printf("  %s\n", color.key("qdp mydb/tables/users search '@age between 18 and 65'"));
+        printf("  %s\n", color.key("qdp mydb/tables/users search '@role in (\"admin\", \"editor\")'"));
+        printf("  %s\n", color.key("qdp mydb/tables/users search '(@active == true) && (@age >= 21)'"));
+        printf("  %s\n", color.key("qdp mydb/tables/users search '@email =~ /example.com$/i'"));
+        printf("  %s\n", color.key("qdp mydb/tables/users search '@created < 2026-12-01'"));
+        printf("  %s\n", color.key("qdp mydb/tables/users search '@blob == <deadbeef>'"));
+        printf("  %s\n", color.key("qdp mydb/tables/users search '@tags == (one, two, three)'"));
+        printf("  %s\n", color.key("qdp mydb/tables/users search '@meta == {a=1, b=two}'"));
+        exit(0);
     }
 
     static error(string fmt) {
@@ -2546,7 +2693,7 @@ class WebhookHandler inherits RestHandler {
 
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data b) {
-        #logDebug("Webhook headers: %N", hdr);
+        #logDebug("Webhook headers: %Y", hdr);
 
         # handle OPTIONS requests
         if (hdr.method == "OPTIONS" && (*hash<auto> cors_hdrs = getCorsResponseHeaders(cx))) {

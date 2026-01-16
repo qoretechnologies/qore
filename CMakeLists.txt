@@ -75,6 +75,49 @@ endif()
 # simulate QoreConfig
 set(QORE_QDX_EXECUTABLE "${CMAKE_SOURCE_DIR}/doxygen/qdx")
 set(QORE_QJAR_EXECUTABLE "${CMAKE_SOURCE_DIR}/doxygen/qjar")
+set(QORE_INTERPRETER "$<TARGET_FILE:qore>")
+set(QORE_BINARY_MODULE_DIRS "")
+file(GLOB QORE_BINARY_MODULE_SOURCE_DIRS LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/modules/*")
+foreach(mod_dir ${QORE_BINARY_MODULE_SOURCE_DIRS})
+    if (IS_DIRECTORY ${mod_dir})
+        get_filename_component(mod_name ${mod_dir} NAME)
+        list(APPEND QORE_BINARY_MODULE_DIRS "${CMAKE_BINARY_DIR}/modules/${mod_name}")
+    endif ()
+endforeach ()
+if (WIN32 OR MSYS OR MINGW)
+    set(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib")
+    list(APPEND QORE_MODULE_DIR_FOR_DOCS ${QORE_BINARY_MODULE_DIRS})
+    string(REPLACE ";" "\\;" QORE_MODULE_DIR_FOR_DOCS "${QORE_MODULE_DIR_FOR_DOCS}")
+else (WIN32 OR MSYS OR MINGW)
+    set(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib")
+    list(APPEND QORE_MODULE_DIR_FOR_DOCS ${QORE_BINARY_MODULE_DIRS})
+    string(REPLACE ";" ":" QORE_MODULE_DIR_FOR_DOCS "${QORE_MODULE_DIR_FOR_DOCS}")
+endif (WIN32 OR MSYS OR MINGW)
+set(QORE_DOC_DEFINES_LIST QORE_QDX_RUN)
+if (WIN32 OR MSYS OR MINGW)
+    list(APPEND QORE_DOC_DEFINES_LIST Windows)
+else (WIN32 OR MSYS OR MINGW)
+    list(APPEND QORE_DOC_DEFINES_LIST Unix)
+endif (WIN32 OR MSYS OR MINGW)
+if (${QORE_BUILD_TYPE_LWR} MATCHES "debug")
+    list(APPEND QORE_DOC_DEFINES_LIST QoreDebug)
+endif ()
+if (DEFINED HAVE_TERMIOS_H AND HAVE_TERMIOS_H)
+    list(APPEND QORE_DOC_DEFINES_LIST HAVE_TERMIOS)
+endif ()
+string(REPLACE ";" "," QORE_DOC_DEFINES "${QORE_DOC_DEFINES_LIST}")
+if (DEFINED ENV{QORE_DOC_DEFINES})
+    set(_QORE_DOC_DEFINES_ENV "$ENV{QORE_DOC_DEFINES}")
+    string(REGEX REPLACE "[ \t\r\n]+" "," _QORE_DOC_DEFINES_ENV "${_QORE_DOC_DEFINES_ENV}")
+    if (QORE_DOC_DEFINES AND _QORE_DOC_DEFINES_ENV)
+        set(QORE_DOC_DEFINES "${QORE_DOC_DEFINES},${_QORE_DOC_DEFINES_ENV}")
+    elseif (_QORE_DOC_DEFINES_ENV)
+        set(QORE_DOC_DEFINES "${_QORE_DOC_DEFINES_ENV}")
+    endif ()
+endif ()
+set(QORE_DOCS_ENV QORE_MODULE_DIR=${QORE_MODULE_DIR_FOR_DOCS} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
+set(QORE_QDX_COMMAND ${QORE_INTERPRETER} ${QORE_QDX_EXECUTABLE})
+set(QORE_QJAR_COMMAND ${QORE_INTERPRETER} ${QORE_QJAR_EXECUTABLE})
 # simulate QoreConfig
 
 include("${CMAKE_SOURCE_DIR}/cmake/QoreMacros.cmake")
@@ -206,6 +249,8 @@ set(LIBQORE_QPP_SRC
     lib/QC_SocketPollOperationBase.qpp
     lib/QC_SocketPollOperation.qpp
     lib/QC_FilePollOperation.qpp
+    lib/QC_EventLoop.qpp
+    lib/QC_EventNotifier.qpp
     lib/ql_misc.qpp
     lib/ql_compression.qpp
     lib/ql_thread.qpp
@@ -311,6 +356,10 @@ set(QORE_CPP_SRC command-line.cpp qore-main.cpp)
 # find needed libraries
 qore_find_pthreads()
 find_package(ICONV REQUIRED)
+# Allow BISON_EXECUTABLE to be set from environment variable
+if(NOT BISON_EXECUTABLE AND DEFINED ENV{BISON_EXECUTABLE})
+    set(BISON_EXECUTABLE $ENV{BISON_EXECUTABLE} CACHE FILEPATH "Path to bison executable")
+endif()
 find_package(BISON REQUIRED)
 find_package(FLEX 2.5.35 REQUIRED)
 find_package(OpenSSL REQUIRED)
@@ -620,6 +669,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreFile.cpp
     lib/QoreDir.cpp
     lib/QoreSocket.cpp
+    lib/QoreEventLoop.cpp
+    lib/QoreEventNotifier.cpp
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
@@ -892,6 +943,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFile.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreDir.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEventNotifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"
@@ -1158,6 +1211,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
 
 #include \"${CMAKE_SOURCE_DIR}/lib/QorePseudoMethods.cpp\"
 
@@ -1211,7 +1266,8 @@ set_target_properties(libqore PROPERTIES OUTPUT_NAME qore)
 if (APPLE)
     set_target_properties(libqore PROPERTIES VERSION 20)
     set_target_properties(libqore PROPERTIES SOVERSION 20)
-    set_target_properties(libqore PROPERTIES INSTALL_NAME_DIR ${CMAKE_INSTALL_FULL_LIBDIR})
+    # Keep libqore's install name consistent between build and install to avoid dyld loading duplicates.
+    set_target_properties(libqore PROPERTIES INSTALL_NAME_DIR "@rpath")
 else (APPLE)
     set_target_properties(libqore PROPERTIES VERSION 20.0.0)
     set_target_properties(libqore PROPERTIES SOVERSION 20)
@@ -1228,8 +1284,9 @@ target_link_libraries(qore libqore)
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)
 
-#set_target_properties(qore qr PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
-set_target_properties(qore PROPERTIES INSTALL_RPATH_USE_LINK_PATH ${CMAKE_INSTALL_FULL_LIBDIR})
+# Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
+set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
+set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
 if (DEFINED LIBJSIG AND APPLE)
     add_custom_command(TARGET qore
@@ -1326,11 +1383,12 @@ if (DOXYGEN_FOUND)
     add_custom_target(docs-lib
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/library/html
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lib
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/library/html/*.html
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/library/html/search/*.html
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/*.html
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/search/*.html
         COMMENT "Generating API documentation with Doxygen for: lib"
         VERBATIM
     )
+    add_dependencies(docs-lib qore)
     add_dependencies(docs docs-lib)
 
     # lang - two-pass build:
@@ -1342,12 +1400,13 @@ if (DOXYGEN_FOUND)
     add_custom_target(docs-lang
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/lang/html
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
         DEPENDS QORE_DOX_FILES QPP_GENERATED_FILES
         COMMENT "Generating API documentation with Doxygen for: lang (initial pass)"
         VERBATIM
     )
+    add_dependencies(docs-lang qore)
     # docs will depend on docs-lang-final, not docs-lang (added after modules are defined)
 endif (DOXYGEN_FOUND)
 
@@ -1403,7 +1462,7 @@ qore_user_module("qlib/DebugUtil.qm" "")
 qore_user_module("qlib/FsUtil.qm" "")
 qore_user_module("qlib/Qdx.qm" "")
 qore_user_module("qlib/Qorize.qm" "")
-qore_user_module("qlib/QoreRepl.qm" "")
+qore_user_module("qlib/QoreRepl" "")
 qore_user_module("qlib/Util.qm" "")
 qore_user_module("qlib/WebSocketUtil.qm" "")
 qore_user_module("qlib/MapperUtil.qm" "")
@@ -1419,6 +1478,7 @@ qore_user_module("qlib/TextWrap.qm" "Util")
 
 # base 3 modules
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg")
+qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
 qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
 qore_user_module("qlib/MailMessage.qm" "Mime")
@@ -1492,6 +1552,7 @@ qore_user_module("qlib/BillwerkRestClient.qm" "ConnectionProvider;RestClient")
 qore_user_module("qlib/Sap4HanaRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/CdsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/DiscordRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/LinearRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/GoogleRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/HueRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/MewsRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -1517,6 +1578,7 @@ qore_user_module("qlib/SalesforceRestDataProvider" "RestClient;SalesforceRestCli
 qore_user_module("qlib/AwsRestClientDataProvider" "RestClient;DataProvider;RestClientDataProvider")
 qore_user_module("qlib/GoogleDataProvider" "GoogleRestClient;RestClient;DataProvider")
 qore_user_module("qlib/DiscordDataProvider" "DiscordRestClient;RestClient;DataProvider" "discord-logo.svg")
+qore_user_module("qlib/LinearDataProvider" "LinearRestClient;RestClient;DataProvider" "linear-logo.svg")
 qore_user_module("qlib/MewsRestDataProvider" "MewsRestClient;RestClient;DataProvider;SwaggerDataProvider" "mews-logo-white.svg")
 qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient" "openai-logo.svg")
 
@@ -1540,21 +1602,23 @@ if (DOXYGEN_FOUND)
     # This enables @ref links from lang docs to module symbols
     add_custom_target(docs-lang-final
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
         COMMENT "Generating API documentation with Doxygen for: lang (final pass with module cross-references)"
         VERBATIM
     )
+    add_dependencies(docs-lang-final qore)
 
     # docs-lang-final-fast: same as docs-lang-final but without module dependencies
     # Use this for quick testing when module docs are already built manually
     add_custom_target(docs-lang-final-fast
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
         COMMENT "Generating API documentation with Doxygen for: lang (final pass, no module deps)"
         VERBATIM
     )
+    add_dependencies(docs-lang-final-fast qore)
 
     # docs-lang-final depends on all module docs (so their tagfiles exist)
     foreach(mod ${QORE_USER_MODULE_NAMES})

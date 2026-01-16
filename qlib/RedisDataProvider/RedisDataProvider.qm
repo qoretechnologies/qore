@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore RedisDataProvider module definition
 
-/*  RedisDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  RedisDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -211,8 +211,6 @@ module RedisDataProvider {
 public namespace RedisDataProvider {
 #! Redis app name
 public const AppName = "Redis";
-}
 
-namespace Priv {
-const RedisLogo = File::readTextFile(get_script_dir() + "/redis-logo.svg");
+public const RedisLogo = File::readTextFile(get_script_dir() + "/redis-logo.svg");
 }

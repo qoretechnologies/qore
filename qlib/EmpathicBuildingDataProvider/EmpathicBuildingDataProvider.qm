@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore EmpathicBuildingDataProvider module definition
 
-/*  EmpathicBuildingDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  EmpathicBuildingDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -186,8 +186,5 @@ module EmpathicBuildingDataProvider {
 
 #! Contains all public definitions in the EmpathicBuildingDataProvider module
 public namespace EmpathicBuildingDataProvider {
-}
-
-namespace Priv {
-const EmpathicBuildingLogo = File::readTextFile(get_script_dir() + "/Haltian-EmpathicBuilding.svg");
+public const EmpathicBuildingLogo = File::readTextFile(get_script_dir() + "/Haltian-EmpathicBuilding.svg");
 }

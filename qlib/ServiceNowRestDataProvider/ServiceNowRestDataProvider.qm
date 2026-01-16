@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ServiceNowRestDataProvider module definition
 
-/*  ServiceNowRestDataProvider.qm Copyright 2020 - 2024 Qore Technologies, s.r.o.
+/*  ServiceNowRestDataProvider.qm Copyright 2020 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -267,12 +267,9 @@ module ServiceNowRestDataProvider {
 
 #! contains all public definitions in the ServiceNowRestDataProvider module
 public namespace ServiceNowRestDataProvider {
-}
-
-namespace Priv {
 # SVG with a white "SN" in the middle
-const ServiceNowWhiteLogo = File::readTextFile(get_script_dir() + "/servicenow-logo-white.svg");
+public const ServiceNowWhiteLogo = File::readTextFile(get_script_dir() + "/servicenow-logo-white.svg");
 
 # SVG with a black "SN" in the middle
-const ServiceNowBlackLogo = File::readTextFile(get_script_dir() + "/servicenow-logo-black.svg");
+public const ServiceNowBlackLogo = File::readTextFile(get_script_dir() + "/servicenow-logo-black.svg");
 }

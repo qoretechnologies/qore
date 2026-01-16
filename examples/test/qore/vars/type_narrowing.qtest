@@ -59,6 +59,13 @@ public class TypeNarrowingTest inherits QUnit::Test {
         addTestCase("auto! in class members", \autoNoNarrowClassMemberTest());
         addTestCase("auto! in global variables", \autoNoNarrowGlobalVarTest());
         addTestCase("softlist<auto!> syntax", \softlistAutoNoNarrowTest());
+        addTestCase("hash<auto!> runtime type stripping", \hashAutoNoNarrowRuntimeTest());
+        addTestCase("list<auto!> runtime type stripping", \listAutoNoNarrowRuntimeTest());
+        addTestCase("hash<auto!> from reference", \hashAutoNoNarrowFromRefTest());
+        addTestCase("list<auto!> from reference", \listAutoNoNarrowFromRefTest());
+        addTestCase("hash<auto> runtime type stripping", \hashAutoRuntimeTest());
+        addTestCase("list<auto> runtime type stripping", \listAutoRuntimeTest());
+        addTestCase("hashdecl type preservation", \hashdeclPreservationTest());
 
         set_return_value(main());
     }
@@ -1501,5 +1508,164 @@ sub test() {
             p.parse(code_param, "softlist_auto_no_narrow_param");
         }
         assertTrue(True);
+    }
+
+    # Runtime tests for hash<auto!> - ensures type stripping works at runtime
+    hashAutoNoNarrowRuntimeTest() {
+        # Test that hash<auto!> variable can hold different types at runtime
+        hash<auto!> h = {"name": 1};
+        assertEq("hash<auto>", h.fullType(), "hash<auto!> should have auto hash type");
+
+        # Can add string key without error
+        h.value = "string";
+        assertEq("hash<auto>", h.fullType(), "hash should remain auto hash after adding string key");
+        assertEq(1, h.name);
+        assertEq("string", h.value);
+
+        # Can reassign with different structure
+        h = {"x": True, "y": 3.14};
+        assertEq("hash<auto>", h.fullType());
+
+        # Test *hash<auto!> variant
+        *hash<auto!> nh = {"a": 1};
+        assertEq("hash<auto>", nh.fullType());
+        nh.b = "test";
+        assertEq("hash<auto>", nh.fullType());
+    }
+
+    # Runtime tests for list<auto!> - ensures type stripping works at runtime
+    listAutoNoNarrowRuntimeTest() {
+        # Test that list<auto!> variable can hold different types at runtime
+        list<auto!> l = (1, 2, 3);
+        assertEq("list<auto>", l.fullType(), "list<auto!> should have auto list type");
+
+        # Can append string without error
+        l += "string";
+        assertEq("list<auto>", l.fullType(), "list should remain auto list after appending string");
+        assertEq(4, l.size());
+        assertEq("string", l[3]);
+
+        # Can reassign with different element types
+        l = ("a", "b", "c");
+        assertEq("list<auto>", l.fullType());
+
+        # Test *list<auto!> variant
+        *list<auto!> nl = (1, 2, 3);
+        assertEq("list<auto>", nl.fullType());
+        nl += "test";
+        assertEq("list<auto>", nl.fullType());
+    }
+
+    # Test that hash<auto!> properly strips type when assigned from a reference
+    # This verifies that reference evaluation happens before type stripping
+    hashAutoNoNarrowFromRefTest() {
+        # Create a narrowed hash
+        hash<string, int> source = {"a": 1, "b": 2};
+
+        # Create a reference to it
+        reference<hash<string, int>> ref = \source;
+
+        # Assign the dereferenced value to hash<auto!>
+        hash<auto!> h = ref;
+
+        # The hash should have auto type, not the narrowed type
+        assertEq("hash<auto>", h.fullType(), "hash<auto!> from reference should have auto type");
+
+        # Verify we can add different types
+        h.c = "string";
+        assertEq("string", h.c);
+        assertEq("hash<auto>", h.fullType());
+    }
+
+    # Test that list<auto!> properly strips type when assigned from a reference
+    listAutoNoNarrowFromRefTest() {
+        # Create a narrowed list
+        list<int> source = (1, 2, 3);
+
+        # Create a reference to it
+        reference<list<int>> ref = \source;
+
+        # Assign the dereferenced value to list<auto!>
+        list<auto!> l = ref;
+
+        # The list should have auto type, not the narrowed type
+        assertEq("list<auto>", l.fullType(), "list<auto!> from reference should have auto type");
+
+        # Verify we can add different types
+        l += "string";
+        assertEq("string", l[3]);
+        assertEq("list<auto>", l.fullType());
+    }
+
+    # Runtime tests for hash<auto> - narrowed type should be preserved
+    hashAutoRuntimeTest() {
+        # Test that hash<auto> variable preserves its narrowed type
+        hash<auto> h = {"name": 1};
+        assertEq("hash<string, int>", h.fullType(), "hash<auto> should preserve narrowed type");
+
+        # Test *hash<auto> variant also preserves narrowed type
+        *hash<auto> nh = {"a": 1};
+        assertEq("hash<string, int>", nh.fullType());
+    }
+
+    # Runtime tests for list<auto> - narrowed type should be preserved
+    listAutoRuntimeTest() {
+        # Test that list<auto> variable preserves its narrowed type
+        list<auto> l = (1, 2, 3);
+        assertEq("list<int>", l.fullType(), "list<auto> should preserve narrowed type");
+
+        # Test *list<auto> variant also preserves narrowed type
+        *list<auto> nl = (1, 2, 3);
+        assertEq("list<int>", nl.fullType());
+    }
+
+    # Test that hashdecls preserve their type when assigned to hash<auto> variables
+    # This is important for DataProviderExpression and similar typed hashdecls
+    hashdeclPreservationTest() {
+        # Define a simple hashdecl for testing
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%modern
+hashdecl TestHashDecl {
+    string name;
+    int value;
+}
+
+hash<auto> sub getHashDeclInHashAuto() {
+    hash<auto> h = <TestHashDecl>{
+        'name': 'test',
+        'value': 42,
+    };
+    return h;
+}
+
+string sub getHashDeclType() {
+    hash<auto> h = <TestHashDecl>{
+        'name': 'test',
+        'value': 42,
+    };
+    return h.fullType();
+}
+
+# Test that hashdecl in list<auto> also preserves type
+list<auto> sub getHashDeclInListAuto() {
+    list<auto> l = (<TestHashDecl>{'name': 'a', 'value': 1},);
+    return l;
+}
+        ", "hashdecl_test");
+
+        # Hashdecl should preserve its type when assigned to hash<auto>
+        hash<auto> h = p.callFunction("getHashDeclInHashAuto");
+        assertEq("test", h.name, "hashdecl name field accessible");
+        assertEq(42, h.value, "hashdecl value field accessible");
+
+        # The type should be the hashdecl type, not stripped
+        string type = p.callFunction("getHashDeclType");
+        assertEq("hash<TestHashDecl>", type, "hashdecl type should be preserved in hash<auto>");
+
+        # Hashdecl in list should also preserve type
+        list<auto> l = p.callFunction("getHashDeclInListAuto");
+        assertEq(1, l.size());
+        assertEq("hash", l[0].fullType().substr(0, 4), "hashdecl element type should start with hash");
     }
 }

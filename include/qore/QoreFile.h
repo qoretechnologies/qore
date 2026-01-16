@@ -488,6 +488,19 @@ public:
     */
     DLLEXPORT BinaryNode* readBinary(qore_offset_t size, int timeout_ms, ExceptionSink* xsink);
 
+    //! reads binary data from the file and returns immediately with any available data
+    /** A Qore-language exception can be thrown if the file is not opened
+        @param size the maximum number of bytes to read from the file; must be non-zero
+        @param timeout_ms the maximum time to wait for any data; -1 = never timeout, 0 timeout immediately if no data is available
+        @param xsink if an error occurs, the Qore-language exception info will be added here
+        @return the binary data read (caller owns the reference count returned) or 0 if no data is available or EOF
+
+        @note this method performs a single read and may return fewer bytes than requested
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT BinaryNode* readShortBinary(qore_offset_t size, int timeout_ms, ExceptionSink* xsink);
+
     //! reads data from the file
     /** A Qore-language exception can be thrown if the file is not opened
         @param ptr the destination buffer

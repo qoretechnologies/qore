@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2017 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -48,6 +48,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
+#include <unordered_set>
 
 #include "AstParseErrorLog.h"
 #include "ast/AST.h"
@@ -61,12 +62,52 @@
 
 #define YY_USER_ACTION { yylloc->update(yylineno, yyleng, yytext); }
 
+#define AST_SCANNER 1
+
 // issue #3166: use q_strtod() from Qore and avoid warnings
 DLLEXPORT double q_strtod(const char* str);
 
 static int ascii_to_octal(char c) {
     return c - '0';
 }
+
+#ifdef AST_SCANNER
+static int brace_depth = 0;
+static std::vector<int> typed_hash_depths;
+
+static bool is_identifier_string(const std::string& s) {
+    if (s.empty()) {
+        return false;
+    }
+    if (!isalpha(static_cast<unsigned char>(s[0])) && s[0] != '_') {
+        return false;
+    }
+    for (size_t i = 1; i < s.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (!isalnum(c) && c != '_') {
+            return false;
+        }
+    }
+    return true;
+}
+
+#define AST_PEEK_NEXT_NONSPACE(scanner, out_c) \
+    do { \
+        std::vector<int> buf; \
+        int c = 0; \
+        do { \
+            c = yyinput(scanner); \
+            if (c == EOF) { \
+                break; \
+            } \
+            buf.push_back(c); \
+        } while (c == ' ' || c == '\\t' || c == '\\r' || c == '\\n'); \
+        for (int i = static_cast<int>(buf.size()) - 1; i >= 0; --i) { \
+            unput(buf[i]); \
+        } \
+        out_c = c; \
+    } while (false)
+#endif
 
 static char* make_scoped_vref(const char* str) {
     size_t len = strlen(str);
@@ -221,6 +262,8 @@ static std::string* pendingClassDocComment = nullptr;
 static std::string* pendingHashdeclDocComment = nullptr;
 // Claimed doc comment for namespace declarations - stored separately so namespace body members don't steal it
 static std::string* pendingNamespaceDocComment = nullptr;
+// Claimed doc comment for sub declarations - stored separately so body comments don't steal it
+static std::string* pendingSubDocComment = nullptr;
 
 // Conditional parsing stack entry
 struct ConditionalEntry {
@@ -232,6 +275,9 @@ struct ConditionalEntry {
 
 // Stack of conditional parsing levels
 static std::vector<ConditionalEntry> conditionalStack;
+static size_t cond_skip_depth = 0;
+static bool ast_conditional_eval = false;
+static std::unordered_set<std::string> ast_defines;
 
 // Push a new conditional level
 static void cond_push() {
@@ -273,6 +319,284 @@ static size_t cond_depth() {
     return conditionalStack.size();
 }
 
+static void cond_set_skip_depth() {
+    cond_skip_depth = cond_depth();
+}
+
+static bool cond_is_skip_top_level() {
+    return cond_depth() == cond_skip_depth;
+}
+
+extern "C" void ast_scanner_set_conditional_eval(bool enabled) {
+    ast_conditional_eval = enabled;
+}
+
+extern "C" void ast_scanner_clear_defines() {
+    ast_defines.clear();
+}
+
+extern "C" void ast_scanner_add_define(const char* name) {
+    if (name && *name) {
+        ast_defines.insert(name);
+    }
+}
+
+extern "C" void ast_scanner_reset_conditionals() {
+    conditionalStack.clear();
+    cond_skip_depth = 0;
+}
+
+static void ast_define_from_line(const char* pstr) {
+    if (!pstr) {
+        return;
+    }
+    char* trimmed = trim_inplace(pstr);
+    if (!trimmed) {
+        return;
+    }
+    char* space = strchr(trimmed, ' ');
+    if (space) {
+        *space = '\0';
+    }
+    if (*trimmed) {
+        ast_defines.insert(trimmed);
+    }
+}
+
+static bool ast_is_defined(const char* pstr) {
+    if (!pstr) {
+        return false;
+    }
+    char* trimmed = trim_inplace(pstr);
+    if (!trimmed || !*trimmed) {
+        return false;
+    }
+    return ast_defines.find(trimmed) != ast_defines.end();
+}
+
+// Expression parser for %if directive with boolean logic support
+// Grammar:
+//   expr     := or_expr
+//   or_expr  := and_expr ('||' and_expr)*
+//   and_expr := unary_expr ('&&' unary_expr)*
+//   unary_expr := '!' unary_expr | primary
+//   primary  := 'defined' '(' IDENT ')' | '(' expr ')'
+class AstConditionParser {
+private:
+    const char* pos;
+    const char* end;
+    bool error;
+
+    void skip_whitespace() {
+        while (pos < end && (*pos == ' ' || *pos == '\t')) {
+            ++pos;
+        }
+    }
+
+    bool match(const char* str) {
+        skip_whitespace();
+        size_t len = strlen(str);
+        if (pos + len <= end && !strncmp(pos, str, len)) {
+            // For "defined", make sure next char isn't alphanumeric or underscore
+            if (strcmp(str, "defined") == 0 && pos + len < end
+                && (isalnum(static_cast<unsigned char>(pos[len])) || pos[len] == '_')) {
+                return false;
+            }
+            pos += len;
+            return true;
+        }
+        return false;
+    }
+
+    bool peek(const char* str) {
+        skip_whitespace();
+        size_t len = strlen(str);
+        return pos + len <= end && !strncmp(pos, str, len);
+    }
+
+    bool parse_identifier(std::string& ident) {
+        skip_whitespace();
+        if (pos >= end || (!isalpha(*pos) && *pos != '_')) {
+            return false;
+        }
+        const char* start = pos++;
+        while (pos < end && (isalnum(*pos) || *pos == '_')) {
+            ++pos;
+        }
+        ident.assign(start, pos - start);
+        return true;
+    }
+
+    bool parse_primary() {
+        skip_whitespace();
+
+        if (match("defined")) {
+            skip_whitespace();
+            if (!match("(")) {
+                error = true;
+                return false;
+            }
+            std::string ident;
+            if (!parse_identifier(ident)) {
+                error = true;
+                return false;
+            }
+            skip_whitespace();
+            if (!match(")")) {
+                error = true;
+                return false;
+            }
+            return ast_defines.find(ident) != ast_defines.end();
+        }
+
+        if (match("(")) {
+            bool result = parse_or_expr();
+            skip_whitespace();
+            if (!match(")")) {
+                error = true;
+                return false;
+            }
+            return result;
+        }
+
+        error = true;
+        return false;
+    }
+
+    bool parse_unary_expr() {
+        skip_whitespace();
+        if (match("!")) {
+            return !parse_unary_expr();
+        }
+        return parse_primary();
+    }
+
+    bool parse_and_expr() {
+        bool result = parse_unary_expr();
+        if (error) {
+            return false;
+        }
+        while (peek("&&")) {
+            match("&&");
+            bool rhs = parse_unary_expr();
+            if (error) {
+                return false;
+            }
+            result = result && rhs;
+        }
+        return result;
+    }
+
+    bool parse_or_expr() {
+        bool result = parse_and_expr();
+        if (error) {
+            return false;
+        }
+        while (peek("||")) {
+            match("||");
+            bool rhs = parse_and_expr();
+            if (error) {
+                return false;
+            }
+            result = result || rhs;
+        }
+        return result;
+    }
+
+public:
+    AstConditionParser(const char* expr, size_t len)
+        : pos(expr), end(expr + len), error(false) {}
+
+    bool parse(bool& result) {
+        skip_whitespace();
+        if (pos >= end) {
+            return false;
+        }
+        result = parse_or_expr();
+        if (error) {
+            return false;
+        }
+        skip_whitespace();
+        return pos >= end;
+    }
+};
+
+static bool ast_parse_simple_defined_expr(const char* expr, bool& result) {
+    const char* p = expr;
+    auto skip_ws = [&p]() {
+        while (*p == ' ' || *p == '\t') {
+            ++p;
+        }
+    };
+    auto parse_ident = [&p](std::string& ident) -> bool {
+        if (!*p || (!isalpha(static_cast<unsigned char>(*p)) && *p != '_')) {
+            return false;
+        }
+        const char* start = p++;
+        while (*p && (isalnum(static_cast<unsigned char>(*p)) || *p == '_')) {
+            ++p;
+        }
+        ident.assign(start, p - start);
+        return true;
+    };
+
+    skip_ws();
+    bool negate = false;
+    while (*p == '!') {
+        negate = !negate;
+        ++p;
+        skip_ws();
+    }
+    if (strncmp(p, "defined", 7) != 0) {
+        return false;
+    }
+    if (isalnum(static_cast<unsigned char>(p[7])) || p[7] == '_') {
+        return false;
+    }
+    p += 7;
+    skip_ws();
+    std::string ident;
+    if (*p == '(') {
+        ++p;
+        skip_ws();
+        if (!parse_ident(ident)) {
+            return false;
+        }
+        skip_ws();
+        if (*p != ')') {
+            return false;
+        }
+        ++p;
+    } else {
+        if (!parse_ident(ident)) {
+            return false;
+        }
+    }
+    skip_ws();
+    if (*p) {
+        return false;
+    }
+    bool val = ast_defines.find(ident) != ast_defines.end();
+    result = negate ? !val : val;
+    return true;
+}
+
+static bool ast_evaluate_condition(const char* expr, bool& result) {
+    if (!expr) {
+        return false;
+    }
+    char* trimmed = trim_inplace(expr);
+    if (!trimmed || !*trimmed) {
+        return false;
+    }
+    AstConditionParser parser(trimmed, strlen(trimmed));
+    if (parser.parse(result)) {
+        return true;
+    }
+    // Fallback to simple parser for backwards compatibility
+    return ast_parse_simple_defined_expr(trimmed, result);
+}
+
 // Clears the pending doc comment
 static void clearPendingDocComment() {
     delete pendingDocComment;
@@ -303,6 +627,18 @@ static void claimHashdeclDocComment() {
 static void claimNamespaceDocComment() {
     delete pendingNamespaceDocComment;
     pendingNamespaceDocComment = pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
+// Claims the pending doc comment for a sub declaration
+// This should be called when the scanner sees the 'sub' keyword, before the body is parsed
+static void claimSubDocComment() {
+    if (!pendingDocComment) {
+        return;
+    }
+    delete pendingSubDocComment;
+    pendingSubDocComment = pendingDocComment;
     pendingDocComment = nullptr;
     inDocCommentBlock = false;
 }
@@ -365,6 +701,14 @@ std::string* takeNamespaceDocComment() {
     pendingNamespaceDocComment = nullptr;
     return result;
 }
+
+// Takes ownership of the claimed sub doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takeSubDocComment() {
+    std::string* result = pendingSubDocComment;
+    pendingSubDocComment = nullptr;
+    return result;
+}
 %}
 
 %option noyywrap nomain noyy_top_state warn
@@ -374,7 +718,7 @@ std::string* takeNamespaceDocComment() {
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_elif case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment doc_line_comment block_comment1 block_comment2 doc_block_comment exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module try_reexport_module angle_state
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_elif p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment doc_line_comment block_comment1 block_comment2 doc_block_comment exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module try_reexport_module angle_state
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -435,6 +779,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%assume-global{WS}*$                   { yylval->parseopt = new ASTParseOption(APOK_ASSUME_GLOBAL); return PARSE_OPTION_FULL; }
 ^%new-style{WS}*$                       { yylval->parseopt = new ASTParseOption(APOK_NEW_STYLE); return PARSE_OPTION_FULL; }
 ^%old-style{WS}*$                       { yylval->parseopt = new ASTParseOption(APOK_OLD_STYLE); return PARSE_OPTION_FULL; }
+^%modern{WS}*$                          { yylval->parseopt = new ASTParseOption(APOK_MODERN); return PARSE_OPTION_FULL; }
 ^%perl-bool-eval{WS}*$                  { yylval->parseopt = new ASTParseOption(APOK_PERL_BOOLEAN_EVAL); return PARSE_OPTION_FULL; }
 ^%strict-bool-eval{WS}*$                { yylval->parseopt = new ASTParseOption(APOK_STRICT_BOOLEAN_EVAL); return PARSE_OPTION_FULL; }
 ^%strong-encapsulation{WS}*$            { yylval->parseopt = new ASTParseOption(APOK_STRONG_ENCAPSULATION); return PARSE_OPTION_FULL; }
@@ -572,41 +917,83 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%define{WS}+                           { BEGIN(p_def); return PARSE_OPTION_BEGIN; }
 <p_def>{WS}*                            /* ignore white space */
 <p_def>[^\n\r]+                         {
+                                            if (ast_conditional_eval) {
+                                                ast_define_from_line(yytext);
+                                            }
                                             yylval->parseopt = new ASTStringParseOption(APOK_DEFINE, yytext);
                                             BEGIN(INITIAL);
                                             return PARSE_OPTION_END;
                                         }
 <p_def><<EOF>>                          { AST_FLEX_DO_EOF }
 ^%ifdef{WS}*$                           { /* %ifdef with no argument - ignore */ }
-^%ifdef{WS}+                            BEGIN(p_ifdef);
+^%ifdef{WS}+                            { BEGIN(p_ifdef); return PARSE_OPTION_BEGIN; }
 <p_ifdef>{
     [^\n\r]+$                           {
-                                            // Push conditional level and continue parsing
-                                            // For AST parsing, we include all code from all branches
+                                            const char* trimmed = trim_inplace(yytext);
+                                            if (trimmed)
+                                                yylval->parseopt = new ASTStringParseOption(APOK_IFDEF, trimmed);
                                             cond_push();
-                                            BEGIN(INITIAL);
+                                            if (ast_conditional_eval && trimmed) {
+                                                if (ast_is_defined(trimmed)) {
+                                                    BEGIN(INITIAL);
+                                                } else {
+                                                    cond_set_skip_depth();
+                                                    BEGIN(p_skip_to_endif_or_else);
+                                                }
+                                            } else {
+                                                BEGIN(INITIAL);
+                                            }
+                                            return PARSE_OPTION_END;
                                         }
     <<EOF>>                             { AST_FLEX_DO_EOF }
 }
 ^%ifndef{WS}*$                          { /* %ifndef with no argument - ignore */ }
-^%ifndef{WS}+                           BEGIN(p_ifndef);
+^%ifndef{WS}+                           { BEGIN(p_ifndef); return PARSE_OPTION_BEGIN; }
 <p_ifndef>{
     [^\n\r]+$                           {
-                                            // Push conditional level and continue parsing
-                                            // For AST parsing, we include all code from all branches
+                                            const char* trimmed = trim_inplace(yytext);
+                                            if (trimmed)
+                                                yylval->parseopt = new ASTStringParseOption(APOK_IFNDEF, trimmed);
                                             cond_push();
-                                            BEGIN(INITIAL);
+                                            if (ast_conditional_eval && trimmed) {
+                                                if (!ast_is_defined(trimmed)) {
+                                                    BEGIN(INITIAL);
+                                                } else {
+                                                    cond_set_skip_depth();
+                                                    BEGIN(p_skip_to_endif_or_else);
+                                                }
+                                            } else {
+                                                BEGIN(INITIAL);
+                                            }
+                                            return PARSE_OPTION_END;
                                         }
     <<EOF>>                             { AST_FLEX_DO_EOF }
 }
 ^%if{WS}*$                              { /* %if with no expression - ignore */ }
-^%if{WS}+                               BEGIN(p_if);
+^%if{WS}+                               { BEGIN(p_if); return PARSE_OPTION_BEGIN; }
 <p_if>{
     [^\n\r]+$                           {
-                                            // Push conditional level and continue parsing
-                                            // For AST parsing, we don't evaluate the expression
+                                            const char* trimmed = trim_inplace(yytext);
+                                            if (trimmed)
+                                                yylval->parseopt = new ASTStringParseOption(APOK_IF, trimmed);
                                             cond_push();
-                                            BEGIN(INITIAL);
+                                            if (ast_conditional_eval && trimmed) {
+                                                bool result = false;
+                                                if (ast_evaluate_condition(trimmed, result)) {
+                                                    if (result) {
+                                                        BEGIN(INITIAL);
+                                                    } else {
+                                                        cond_set_skip_depth();
+                                                        BEGIN(p_skip_to_endif_or_else);
+                                                    }
+                                                } else {
+                                                    cond_set_skip_depth();
+                                                    BEGIN(p_skip_to_endif);
+                                                }
+                                            } else {
+                                                BEGIN(INITIAL);
+                                            }
+                                            return PARSE_OPTION_END;
                                         }
     <<EOF>>                             { AST_FLEX_DO_EOF }
 }
@@ -617,14 +1004,24 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             } else if (cond_has_else()) {
                                                 // %elif after %else - ignore (would be error in real parser)
                                             }
-                                            // Continue parsing - we include all branches
+                                            if (ast_conditional_eval && cond_in_block()) {
+                                                cond_set_skip_depth();
+                                                BEGIN(p_skip_to_endif);
+                                            }
                                         }
-^%elif{WS}+                             BEGIN(p_elif);
+^%elif{WS}+                             { BEGIN(p_elif); return PARSE_OPTION_BEGIN; }
 <p_elif>{
     [^\n\r]+$                           {
-                                            // %elif with expression - just continue parsing
-                                            // For AST parsing, we don't evaluate and include all branches
-                                            BEGIN(INITIAL);
+                                            const char* trimmed = trim_inplace(yytext);
+                                            if (trimmed)
+                                                yylval->parseopt = new ASTStringParseOption(APOK_ELIF, trimmed);
+                                            if (ast_conditional_eval && cond_in_block()) {
+                                                cond_set_skip_depth();
+                                                BEGIN(p_skip_to_endif);
+                                            } else {
+                                                BEGIN(INITIAL);
+                                            }
+                                            return PARSE_OPTION_END;
                                         }
     <<EOF>>                             { AST_FLEX_DO_EOF }
 }
@@ -637,14 +1034,95 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 // Mark that we've seen %else at this level
                                                 cond_mark_else();
                                             }
-                                            // Continue parsing - we include all branches
+                                            if (ast_conditional_eval && cond_in_block()) {
+                                                cond_set_skip_depth();
+                                                BEGIN(p_skip_to_endif);
+                                            }
+                                            yylval->parseopt = new ASTParseOption(APOK_ELSE);
+                                            return PARSE_OPTION_FULL;
                                         }
 ^%endif{WS}*$                           {
                                             // Pop the conditional level
                                             if (!cond_pop()) {
                                                 // %endif without matching %if/%ifdef/%ifndef - ignore for AST parsing
                                             }
+                                            yylval->parseopt = new ASTParseOption(APOK_ENDIF);
+                                            return PARSE_OPTION_FULL;
                                         }
+<p_skip_to_endif>{
+    ^%endif{WS}*$                       {
+                                            if (cond_pop() && cond_depth() < cond_skip_depth) {
+                                                cond_skip_depth = 0;
+                                                BEGIN(INITIAL);
+                                            }
+                                        }
+    ^%else{WS}*$                        {
+                                            if (cond_is_skip_top_level() && cond_has_else()) {
+                                                // ignore
+                                            }
+                                        }
+    ^%elif{WS}+[^\n\r]+$                {
+                                            if (cond_is_skip_top_level() && cond_has_else()) {
+                                                // ignore
+                                            }
+                                        }
+    ^.*                                 {
+                                            if (!strncmp("%ifdef", yytext, 6) || !strncmp("%ifndef", yytext, 7)) {
+                                                cond_push();
+                                            } else if (!strncmp("%if", yytext, 3)
+                                                && (yytext[3] == ' ' || yytext[3] == '\t')) {
+                                                cond_push();
+                                            }
+                                        }
+    \n                                  // ignore
+    <<EOF>>                             { AST_FLEX_DO_EOF }
+}
+<p_skip_to_endif_or_else>{
+    ^%elif{WS}+[^\n\r]+$                {
+                                            if (cond_is_skip_top_level()) {
+                                                if (!cond_has_else()) {
+                                                    const char* expr = yytext + 5;
+                                                    while (*expr == ' ' || *expr == '\t') {
+                                                        ++expr;
+                                                    }
+                                                    bool result = false;
+                                                    if (ast_evaluate_condition(expr, result) && result) {
+                                                        cond_skip_depth = 0;
+                                                        BEGIN(INITIAL);
+                                                    }
+                                                } else {
+                                                    BEGIN(p_skip_to_endif);
+                                                }
+                                            }
+                                        }
+    ^%else{WS}*$                        {
+                                            if (cond_is_skip_top_level()) {
+                                                if (!cond_has_else()) {
+                                                    cond_mark_else();
+                                                    cond_skip_depth = 0;
+                                                    BEGIN(INITIAL);
+                                                } else {
+                                                    BEGIN(p_skip_to_endif);
+                                                }
+                                            }
+                                        }
+    ^%endif{WS}*$                       {
+                                            if (cond_pop() && cond_depth() < cond_skip_depth) {
+                                                cond_skip_depth = 0;
+                                                BEGIN(INITIAL);
+                                            }
+                                        }
+    ^.*                                 {
+                                            if (!strncmp("%ifdef", yytext, 6) || !strncmp("%ifndef", yytext, 7)) {
+                                                cond_push();
+                                            } else if (!strncmp("%if", yytext, 3)
+                                                && (yytext[3] == ' ' || yytext[3] == '\t')) {
+                                                cond_push();
+                                            }
+                                        }
+    \n                                  // ignore
+    <<EOF>>                             { AST_FLEX_DO_EOF }
+}
 ^%include{WS}*$                         { yylval->parseopt = new ASTStringParseOption(APOK_INCLUDE); return PARSE_OPTION_FULL; }
 ^%include{WS}+                          { BEGIN(incl); return PARSE_OPTION_BEGIN; }
 <incl>{WS}*                             /* ignore white space */
@@ -657,7 +1135,25 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 <INITIAL><<EOF>>                        { AST_FLEX_DO_EOF }
 \"                                      { yylval->String = new std::string; yylloc->saveFirst(); BEGIN(str_state); }
 <str_state>{
-    \"                                  yylloc->restoreFirst(); BEGIN(INITIAL); return QUOTED_WORD;
+    \"                                  {
+                                            yylloc->restoreFirst();
+                                            BEGIN(INITIAL);
+#ifdef AST_SCANNER
+                                            if (!typed_hash_depths.empty()) {
+                                                // In typed hash literals, quoted identifier keys can be treated as
+                                                // identifiers to match Qore's typed-hash key parsing behavior.
+                                                int c = 0;
+                                                AST_PEEK_NEXT_NONSPACE(yyscanner, c);
+                                                if (c == ':' && is_identifier_string(*yylval->String)) {
+                                                    yylval->string = strdup(yylval->String->c_str());
+                                                    delete yylval->String;
+                                                    yylval->String = nullptr;
+                                                    return IDENTIFIER;
+                                                }
+                                            }
+#endif
+                                            return QUOTED_WORD;
+                                        }
     \n                                  yylval->String->push_back('\n');
     {OCTAL_CONST}                       {
                                             int token_length = strlen(yytext);
@@ -881,7 +1377,7 @@ foreach                                 return TOK_FOREACH;
 in                                      return TOK_IN;
 elements                                return TOK_ELEMENTS;
 keys                                    return TOK_KEYS;
-sub                                     return TOK_SUB;
+sub                                     { claimSubDocComment(); return TOK_SUB; }
 const                                   return TOK_CONST;
 return                                  return TOK_RETURN;
 returns                                 return TOK_RETURNS;
@@ -1121,14 +1617,58 @@ class{WS}+{WORD}                        { claimClassDocComment(); yylval->string
 namespace{WS}+{WORD}                    { claimNamespaceDocComment(); yylval->string = trim(yytext + 10); return NAMESPACE; }
 module{WS}+{WORD}                       { /* TODO const char* mod = trim_inplace(yytext + 7); */ return TOK_MODULE; }
 {WORD}                                  { yylval->string = strdup(yytext); return IDENTIFIER; }
+\<({WORD}::)+{WORD}\>\{                 {
+                                            yylval->string = strdup(yytext + 1);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+\<(::{WORD})+\>\{                       {
+                                            yylval->string = strdup(yytext + 1);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+hash\<({WORD}::)+{WORD}\>\{             {
+                                            yylval->string = strdup(yytext + 5);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+hash\<(::{WORD})+\>\{                   {
+                                            yylval->string = strdup(yytext + 5);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
 \<{WORD}\>\{                            {
                                             yylval->string = strdup(yytext + 1);
                                             yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
 hash\<{WORD}\>\{                        {
                                             yylval->string = strdup(yytext + 5);
                                             yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
 {WORD}<[a-zA-Z\*<:_0-9 \t,!().]+>       {
@@ -1283,6 +1823,230 @@ hash\<{WORD}\>\{                        {
 }
 =\~                                     { BEGIN(regex_googleplex); return REGEX_MATCH; }
 \!\~                                    { BEGIN(regex_negative_universe); return REGEX_NMATCH; }
+\(                                      {
+                                            endDocCommentBlock();
+#ifdef AST_SCANNER
+                                            bool is_hash_literal = false;
+                                            {
+                                                bool saw_top_qmark = false;
+                                                bool saw_colon = false;
+                                                bool saw_comma = false;
+                                                int paren_depth = 0;
+                                                int brace_depth = 0;
+                                                int bracket_depth = 0;
+                                                int c = 0;
+                                                int prev_nonspace = 0;
+                                                // Avoid yyinput() for string-backed buffers; it can crash on refills.
+                                                bool use_input = YY_CURRENT_BUFFER_LVALUE->yy_input_file != nullptr;
+                                                bool saw_regex_op = false;
+                                                std::vector<int> buf;
+                                                const char* scan_p = yyg->yy_c_buf_p;
+                                                int scan_idx = 0;
+                                                auto read_char = [&]() -> int {
+                                                    if (use_input) {
+                                                        int ch = yyinput(yyscanner);
+                                                        if (ch != EOF) {
+                                                            buf.push_back(ch);
+                                                        }
+                                                        return ch;
+                                                    }
+                                                    int ch = (scan_idx == 0)
+                                                        ? yyg->yy_hold_char
+                                                        : static_cast<unsigned char>(scan_p[scan_idx]);
+                                                    if (ch == YY_END_OF_BUFFER_CHAR) {
+                                                        return EOF;
+                                                    }
+                                                    ++scan_idx;
+                                                    return ch;
+                                                };
+                                                auto unread_buf = [&]() {
+                                                    if (!use_input) {
+                                                        return;
+                                                    }
+                                                    for (int i = static_cast<int>(buf.size()) - 1; i >= 0; --i) {
+                                                        unput(buf[i]);
+                                                    }
+                                                };
+
+                                                do {
+                                                    c = read_char();
+                                                } while (c == ' ' || c == '\t' || c == '\r' || c == '\n');
+
+                                                while (c != EOF && c != 0) {
+                                                    if (c == '=' || c == '!') {
+                                                        int nextc = read_char();
+                                                        if (nextc == '~') {
+                                                            saw_regex_op = true;
+                                                            prev_nonspace = '~';
+                                                            c = read_char();
+                                                            continue;
+                                                        }
+                                                        prev_nonspace = c;
+                                                        c = nextc;
+                                                        continue;
+                                                    }
+                                                    if (c == '"' || c == '\'') {
+                                                        int quote = c;
+                                                        bool escaped = false;
+                                                        while (true) {
+                                                            c = read_char();
+                                                            if (c == EOF || c == 0) {
+                                                                break;
+                                                            }
+                                                            if (escaped) {
+                                                                escaped = false;
+                                                                continue;
+                                                            }
+                                                            if (c == '\\') {
+                                                                escaped = true;
+                                                                continue;
+                                                            }
+                                                            if (c == quote) {
+                                                                break;
+                                                            }
+                                                        }
+                                                        prev_nonspace = 'S';
+                                                    } else if (c == '/') {
+                                                        // First check for block comment /*...*/
+                                                        int nextc = read_char();
+                                                        if (nextc == '*') {
+                                                            // Block comment - skip until */
+                                                            bool saw_star = false;
+                                                            while (true) {
+                                                                c = read_char();
+                                                                if (c == EOF || c == 0) {
+                                                                    break;
+                                                                }
+                                                                if (saw_star && c == '/') {
+                                                                    // End of block comment
+                                                                    break;
+                                                                }
+                                                                saw_star = (c == '*');
+                                                            }
+                                                            c = read_char();
+                                                            continue;
+                                                        }
+                                                        // Not a block comment - check for regex or division
+                                                        // Treat only regex contexts as regex literals to avoid
+                                                        // swallowing division operators when scanning for hash keys.
+                                                        bool regex_candidate = saw_regex_op
+                                                            || prev_nonspace == 0
+                                                            || strchr("([,{=:+-*!?&|^~", prev_nonspace) != nullptr;
+                                                        if (!regex_candidate) {
+                                                            prev_nonspace = c;
+                                                            c = nextc;
+                                                            continue;
+                                                        }
+                                                        // Regex - read the content we already peeked
+                                                        c = nextc;
+                                                        bool escaped = false;
+                                                        while (c != EOF && c != 0) {
+                                                            if (escaped) {
+                                                                escaped = false;
+                                                            } else if (c == '\\') {
+                                                                escaped = true;
+                                                            } else if (c == '/') {
+                                                                break;
+                                                            }
+                                                            c = read_char();
+                                                        }
+                                                        while (true) {
+                                                            c = read_char();
+                                                            if (c == EOF || c == 0) {
+                                                                break;
+                                                            }
+                                                            if (!isalpha(static_cast<unsigned char>(c))) {
+                                                                break;
+                                                            }
+                                                        }
+                                                        prev_nonspace = 'R';
+                                                        saw_regex_op = false;
+                                                        continue;
+                                                    } else if (c == '#' && prev_nonspace != '$') {
+                                                        // Line comment - skip until newline
+                                                        // Note: $# is the "last index" operator, not a comment
+                                                        while (true) {
+                                                            c = read_char();
+                                                            if (c == EOF || c == 0 || c == '\n' || c == '\r') {
+                                                                break;
+                                                            }
+                                                        }
+                                                        if (c != EOF && c != 0) {
+                                                            c = read_char();
+                                                        }
+                                                        continue;
+                                                    } else if (c == '(') {
+                                                        paren_depth++;
+                                                    } else if (c == ')') {
+                                                        if (paren_depth == 0) {
+                                                            break;
+                                                        }
+                                                        paren_depth--;
+                                                    } else if (c == '{') {
+                                                        brace_depth++;
+                                                    } else if (c == '}') {
+                                                        if (brace_depth > 0) {
+                                                            brace_depth--;
+                                                        }
+                                                    } else if (c == '[') {
+                                                        bracket_depth++;
+                                                    } else if (c == ']') {
+                                                        if (bracket_depth > 0) {
+                                                            bracket_depth--;
+                                                        }
+                                                    } else if (paren_depth == 0 && brace_depth == 0 && bracket_depth == 0) {
+                                                        if (c == '?') {
+                                                            saw_top_qmark = true;
+                                                        } else if (c == ',') {
+                                                            saw_comma = true;
+                                                            break;
+                                                        } else if (c == ':') {
+                                                            int nextc = read_char();
+                                                            if (nextc != ':' && !saw_top_qmark) {
+                                                                saw_colon = true;
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                    if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+                                                        prev_nonspace = c;
+                                                    }
+                                                    c = read_char();
+                                                }
+
+                                                if (saw_colon && !saw_comma) {
+                                                    is_hash_literal = true;
+                                                }
+
+                                                unread_buf();
+                                            }
+                                            if (is_hash_literal) {
+                                                return HASH_PAREN_OPEN;
+                                            }
+#endif
+                                            return yytext[0];
+                                        }
+\{                                      {
+                                            endDocCommentBlock();
+#ifdef AST_SCANNER
+                                            brace_depth++;
+#endif
+                                            return yytext[0];
+                                        }
+\}                                      {
+                                            endDocCommentBlock();
+#ifdef AST_SCANNER
+                                            if (brace_depth > 0) {
+                                                brace_depth--;
+                                            }
+                                            if (!typed_hash_depths.empty()
+                                                && brace_depth < typed_hash_depths.back()) {
+                                                // Close the current typed hash depth when leaving its braces.
+                                                typed_hash_depths.pop_back();
+                                            }
+#endif
+                                            return yytext[0];
+                                        }
 {WSNL}+                                 /* ignore whitespace */
 .                                       { endDocCommentBlock(); return yytext[0]; }
 %%

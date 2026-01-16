@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -61,12 +61,17 @@ public:
     }
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) {
+        // Clear poll_state to release any buffers held by the poll state
+        // This prevents memory accumulation if the operation object remains referenced after timeout
+        poll_state.reset();
         if (set_non_block) {
             set_non_block = false;
             AutoLocker al(sock->priv->m);
             sock->priv->clearNonBlock();
             if (abortNeedsClose()) {
-                sock->close();
+                // avoid re-locking priv->m via QoreSocketObject::close()
+                // QoreSocketObject cleanup is handled by the owning code path.
+                sock->priv->socket->close();
             }
             state = SPS_NONE;
         }
@@ -192,6 +197,12 @@ public:
         }
     }
 
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Clear data buffer to prevent memory accumulation on timeout
+        data.discard();
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
     DLLLOCAL virtual bool goalReached() const {
         return received;
     }
@@ -255,6 +266,12 @@ public:
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
 
     DLLLOCAL virtual QoreValue getOutput() const;
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Clear output buffer to prevent memory accumulation on timeout
+        out = nullptr;
+        SocketRecvPollOperationBase::abort(xsink);
+    }
 
 private:
     mutable ReferenceHolder<QoreHashNode> out;
@@ -371,6 +388,14 @@ public:
         }
     }
 
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Clear poll_state and accepted_socket to prevent memory accumulation on timeout
+        poll_state.reset();
+        accepted_socket_obj = nullptr;
+        accepted_socket.discard();
+        SocketAcceptPollSocketOperationBase::abort(xsink);
+    }
+
     DLLLOCAL virtual bool goalReached() const {
         return state == SPS_ACCEPTED;
     }
@@ -381,6 +406,8 @@ public:
 
 protected:
     mutable SimpleRefHolder<QoreSocketObject> accepted_socket;
+    //! Cached QoreObject wrapper for the accepted socket during SSL handshake
+    mutable ReferenceHolder<QoreObject> accepted_socket_obj;
 
     //! Called in the constructor
     DLLLOCAL virtual int preVerify(ExceptionSink* xsink) {
@@ -392,6 +419,29 @@ protected:
 
     //! Called to switch to the connect-ssl state
     DLLLOCAL int startSslAccept(ExceptionSink* xsink);
+
+    //! Returns the correct socket for poll info based on current state
+    /** During SSL handshake, returns the accepted client socket instead of the listener socket.
+        The accepted_socket_obj cache is used to avoid creating a new QoreObject wrapper on each call.
+        Cache lifecycle: cleared in abort() and ownership transferred in getOutput().
+    */
+    DLLLOCAL QoreHashNode* getSocketPollInfoHash(ExceptionSink* xsink, int events) const {
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+        info->setKeyValue("events", events, xsink);
+        if (state == SPS_ACCEPTING_SSL && accepted_socket) {
+            // During SSL handshake, poll the accepted client socket, not the listener
+            // Cache the QoreObject wrapper to avoid creating a new one each time
+            if (!accepted_socket_obj) {
+                accepted_socket->ref();
+                accepted_socket_obj = new QoreObject(QC_SOCKET, getProgram(), *accepted_socket);
+            }
+            accepted_socket_obj->ref();
+            info->setKeyValue("socket", *accepted_socket_obj, xsink);
+        } else {
+            info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+        }
+        return info.release();
+    }
 
 private:
     std::unique_ptr<AbstractPollState> poll_state;
@@ -478,16 +528,23 @@ public:
         }
     }
 
-    //! Returns the Http2Session (caller takes ownership)
+    //! Returns nullptr - session is managed by socket
     DLLLOCAL Http2Session* takeSession();
 
     //! Returns the stream ID of the completed request
     DLLLOCAL int32_t getStreamId() const { return stream_id; }
 
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Clear output buffer to prevent memory accumulation on timeout
+        out = nullptr;
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
 private:
-    std::unique_ptr<Http2Session> h2_session;
+    Http2Session* h2_session = nullptr;
     int h2_state = H2S_NONE;
     int32_t stream_id = 0;
+    bool peer_closed = false;
     mutable ReferenceHolder<QoreHashNode> out;
 
     DLLLOCAL virtual bool abortNeedsClose() const { return true; }

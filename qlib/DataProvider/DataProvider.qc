@@ -99,6 +99,8 @@ public class DataProvider {
             # provided by the jni module
             "kafka": "KafkaDataProvider",
 
+            "linear": "LinearDataProvider",
+
             # provided by the json module
             "mcpclient": "McpClientDataProvider",
 
@@ -223,7 +225,7 @@ public class DataProvider {
     }
 
     #! Adds the given global data provider options
-    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+    /** @param options a bitfield of global data provider options (DPO_*)
 
         @throw INVALID-OPTIONS Invalid options provided
 
@@ -235,7 +237,7 @@ public class DataProvider {
     }
 
     #! Removes the given global data provider options
-    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+    /** @param options a bitfield of global data provider options (DPO_*)
 
         @throw INVALID-OPTIONS Invalid options provided
 
@@ -256,7 +258,7 @@ public class DataProvider {
     }
 
     #! Replaces data provider global options with the value provided
-    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+    /** @param options a bitfield of global data provider options (DPO_*)
 
         @throw INVALID-OPTIONS Invalid options provided
 
@@ -268,7 +270,7 @@ public class DataProvider {
     }
 
     #! Checks for valid global data provider options
-    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+    /** @param options a bitfield of global data provider options (DPO_*)
 
         @since DataProvider 3.0
     */

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore SalesforceRestDataProvider module definition
 
-/*  SalesforceRestDataProvider.qm Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/*  SalesforceRestDataProvider.qm Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -231,9 +231,7 @@ module SalesforceRestDataProvider {
 public namespace SalesforceRestDataProvider {
 #! Application name
 public const AppName = "Salesforce";
-}
 
-namespace Priv {
 # Salesforce(R) logo used under terms: https://www.salesforce.com/company/legal/intellectual/tmcusageguidelines/
-const SalesforceLogo = File::readTextFile(get_script_dir() + "/salesforce-logo.svg");
+public const SalesforceLogo = File::readTextFile(get_script_dir() + "/salesforce-logo.svg");
 }

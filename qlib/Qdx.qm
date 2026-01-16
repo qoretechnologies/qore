@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Qdx.qm Qore user module for documentation generation with doxygen
 
-/*  Qdx.qm Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  Qdx.qm Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,7 +31,7 @@
 %requires Util
 
 module Qdx {
-    version = "1.1.1";
+    version = "1.1.3";
     desc    = "module providing support for documentation generation with doxygen";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -56,7 +56,16 @@ module Qdx {
     - @ref Qdx::QorePostProcessingInputStreamLineIterator "QorePostProcessingInputStreamLineIterator"
     - @ref Qdx::QorePostProcessingTexInputStreamLineIterator "QorePostProcessingTexInputStreamLineIterator"
 
+    Functions:
+    - @ref Qdx::formatParseDiagnostics() "formatParseDiagnostics()"
+
     @section qdxrelnotes Release Notes
+
+    @subsection qdx_1_1_3 Qdx v1.1.3
+    - respect conditional parse directives during documentation builds using QORE_DOC_DEFINES
+
+    @subsection qdx_1_1_2 Qdx v1.1.2
+    - added formatted astparser diagnostics for tooling that consumes Qore source
 
     @subsection qdx_1_1_1 Qdx v1.1.1
     - fixed stripping the final \c "\" character in multi-line entries in tables
@@ -1344,6 +1353,72 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
     public const ADK_VarList = 11;
     public const ADK_Typedef = 12;
 
+    #! Formats astparser diagnostics for output
+    /** @param path source path used in formatted output
+        @param code source contents
+        @param diagnostics list of diagnostics from @ref AstParser::getDiagnostics()
+        @param max_entries optional max number of diagnostics to format
+        @return formatted diagnostics string for logging
+        @par Example:
+        @code{.py}
+AstParser parser();
+parser.parseString(code);
+*list diagnostics = parser.getDiagnostics();
+if (exists(diagnostics)) {
+    string message = Qdx::formatParseDiagnostics("example.qm", code, diagnostics);
+    printf("%s", message);
+}
+        @endcode
+    */
+    public string sub formatParseDiagnostics(string path, string code, list<auto> diagnostics, *int max_entries) {
+        list<string> lines = code.split("\n");
+        int limit = max_entries ?? diagnostics.size();
+        if (limit < 0) {
+            limit = 0;
+        }
+
+        string output = "";
+        int count = 0;
+        foreach hash<auto> diag in (diagnostics) {
+            if (count >= limit) {
+                break;
+            }
+
+            hash<auto> range = diag.range;
+            hash<auto> start = range.start;
+            int line_index = start.line;
+            int col_index = start.character;
+            if (line_index < 0) {
+                line_index = 0;
+            }
+            if (col_index < 0) {
+                col_index = 0;
+            }
+
+            int line_no = line_index + 1;
+            int col_no = col_index + 1;
+            string message = diag.message;
+            string line_text = "";
+            if (line_index < lines.size()) {
+                line_text = lines[line_index];
+            }
+
+            output += sprintf("%s:%d:%d: %s\n", path, line_no, col_no, message);
+            if (line_text != "") {
+                output += sprintf("  %s\n", line_text);
+                output += "  " + Priv::buildDiagnosticCaret(col_index) + "\n";
+            }
+            count++;
+        }
+
+        int remaining = diagnostics.size() - limit;
+        if (remaining > 0) {
+            output += sprintf("... %d more diagnostics omitted\n", remaining);
+        }
+
+        return output;
+    }
+
     #! Processes Qore AST to generate doxygen-compatible C++ output
     /** This class uses astparser AST nodes to transform Qore code
         into C++-like syntax that doxygen can process.
@@ -1457,7 +1532,7 @@ string doxygen_output = proc.process();
             }
 
             indent--;
-            writeLine("};");
+            writeLine("}");
             writeLine("");
         }
 
@@ -1598,6 +1673,8 @@ string doxygen_output = proc.process();
             # Return type
             if (method.returnType && method.returnType.name) {
                 sig += formatType(method.returnType.name.name) + " ";
+            } else {
+                sig += "void ";
             }
 
             # Method name
@@ -1636,6 +1713,8 @@ string doxygen_output = proc.process();
             # Return type
             if (func.returnType && func.returnType.name) {
                 sig += formatType(func.returnType.name.name) + " ";
+            } else {
+                sig += "void ";
             }
 
             # Function name (remove 'sub' prefix if present in name)
@@ -1741,16 +1820,41 @@ string doxygen_output = proc.process();
                 return "";
             }
 
-            # params is typically a list expression
-            if (params.elements) {
-                list<string> paramStrs;
-                foreach auto param in (params.elements) {
-                    paramStrs += formatParam(param);
-                }
-                return paramStrs.join(", ");
-            }
+            list<string> paramStrs = ();
 
-            return "";
+            list<hash<auto>> stack = ();
+            push stack, params;
+            while (stack) {
+                hash<auto> node = shift stack;
+                if (!node) {
+                    continue;
+                }
+
+                if (node.declaration || node.typeName || node.name) {
+                    string val = formatParam(node);
+                    if (val != "") {
+                        paramStrs += val;
+                    }
+                    continue;
+                }
+
+                if (node.left) {
+                    push stack, node.left;
+                }
+
+                if (node.right && node.right.elements) {
+                    foreach auto inner in (node.right.elements) {
+                        push stack, inner;
+                    }
+                }
+
+                if (node.elements) {
+                    foreach auto inner in (node.elements) {
+                        push stack, inner;
+                    }
+                }
+            }
+            return paramStrs.join(", ");
         }
 
         #! Formats a single parameter
@@ -1758,6 +1862,9 @@ string doxygen_output = proc.process();
             # param could be a declaration expression or variable declaration
             if (param.declaration) {
                 return formatParam(param.declaration);
+            }
+            if (param.left && param.left.declaration) {
+                return formatParam(param.left);
             }
 
             string result = "";
@@ -1784,12 +1891,29 @@ string doxygen_output = proc.process();
             }
 
             # Process each line
-            list<string> lines = comment.split("\n");
-            foreach string line in (\lines) {
+            list<string> lines;
+            foreach string line in (comment.split("\n")) {
                 # Convert #! to //! (line doc comments)
                 line =~ s/^(\s*)#!/$1\/\/!/;
+                # Normalize @ref function references by stripping trailing ()
+                line =~ s/@ref\s+([A-Za-z0-9_:]+)\(\)/@ref $1/g;
                 # Process tables in doc comments
                 line = dth.process(line);
+
+                if (line =~ /\/\/!\s*@file\s+\S+/) {
+                    int file_pos = line.find("@file");
+                    string prefix = file_pos >= 0 ? line.substr(0, file_pos) : "";
+                    string rest = trim(line.substr(file_pos + 5));
+                    int space_pos = rest.find(" ");
+                    string desc = space_pos >= 0 ? trim(rest.substr(space_pos + 1)) : "";
+                    lines += prefix + "@file";
+                    if (desc.length()) {
+                        lines += prefix + "@brief " + desc;
+                    }
+                    continue;
+                }
+
+                lines += line;
             }
 
             # Write each line with proper indentation
@@ -1803,5 +1927,18 @@ string doxygen_output = proc.process();
             string indentStr = strmul("    ", indent);
             output += indentStr + line + "\n";
         }
+    }
+}
+
+# private, non-exported namespace
+namespace Priv {
+    string sub buildDiagnosticCaret(int col_index) {
+        @assert(col_index >= 0);
+        string caret = "";
+        for (int i = 0; i < col_index; i++) {
+            caret += " ";
+        }
+        caret += "^";
+        return caret;
     }
 }

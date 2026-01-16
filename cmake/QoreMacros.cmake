@@ -7,6 +7,47 @@ include(CMakeParseArguments)
 # Global list to collect user module names for documentation cross-referencing
 set(QORE_USER_MODULE_NAMES "" CACHE INTERNAL "List of user module names for doc cross-referencing")
 
+if (NOT DEFINED QORE_QDX_COMMAND)
+    set(QORE_QDX_COMMAND ${QORE_QDX_EXECUTABLE})
+endif ()
+if (NOT DEFINED QORE_QJAR_COMMAND)
+    set(QORE_QJAR_COMMAND ${QORE_QJAR_EXECUTABLE})
+endif ()
+if (NOT DEFINED QORE_DOC_DEFINES)
+    set(_QORE_DOC_DEFINES_LIST QORE_QDX_RUN)
+    if (WIN32 OR MSYS OR MINGW)
+        list(APPEND _QORE_DOC_DEFINES_LIST Windows)
+    else (WIN32 OR MSYS OR MINGW)
+        list(APPEND _QORE_DOC_DEFINES_LIST Unix)
+    endif (WIN32 OR MSYS OR MINGW)
+    string(TOLOWER "${CMAKE_BUILD_TYPE}" _QORE_DOC_BUILD_TYPE_LWR)
+    if (_QORE_DOC_BUILD_TYPE_LWR MATCHES "debug")
+        list(APPEND _QORE_DOC_DEFINES_LIST QoreDebug)
+    endif ()
+    if (DEFINED HAVE_TERMIOS_H AND HAVE_TERMIOS_H)
+        list(APPEND _QORE_DOC_DEFINES_LIST HAVE_TERMIOS)
+    endif ()
+    string(REPLACE ";" "," QORE_DOC_DEFINES "${_QORE_DOC_DEFINES_LIST}")
+    if (DEFINED ENV{QORE_DOC_DEFINES})
+        set(_QORE_DOC_DEFINES_ENV "$ENV{QORE_DOC_DEFINES}")
+        string(REGEX REPLACE "[ \t\r\n]+" "," _QORE_DOC_DEFINES_ENV "${_QORE_DOC_DEFINES_ENV}")
+        if (QORE_DOC_DEFINES AND _QORE_DOC_DEFINES_ENV)
+            set(QORE_DOC_DEFINES "${QORE_DOC_DEFINES},${_QORE_DOC_DEFINES_ENV}")
+        elseif (_QORE_DOC_DEFINES_ENV)
+            set(QORE_DOC_DEFINES "${_QORE_DOC_DEFINES_ENV}")
+        endif ()
+    endif ()
+endif ()
+if (NOT DEFINED QORE_DOCS_ENV)
+    if (DEFINED QORE_MODULE_DIR_FOR_DOCS)
+        set(QORE_DOCS_ENV QORE_MODULE_DIR=${QORE_MODULE_DIR_FOR_DOCS} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
+    elseif (DEFINED ENV{QORE_MODULE_DIR})
+        set(QORE_DOCS_ENV QORE_MODULE_DIR=$ENV{QORE_MODULE_DIR} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
+    else ()
+        set(QORE_DOCS_ENV QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
+    endif ()
+endif ()
+
 #
 # Create C++ code using the new value API from the QPP files
 #
@@ -237,8 +278,8 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
             add_custom_target(${_docs_targ}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_dox_output}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_working_dir}/Doxyfile
-                COMMAND ${QORE_QDX_EXECUTABLE} --post ${_dox_output}/html ${_dox_output}/html/search
-                COMMAND QORE_MODULE_DIR=${_working_dir} ${QORE_QJAR_EXECUTABLE} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${_dox_output}/html ${_dox_output}/html/search
+                COMMAND QORE_MODULE_DIR=${_working_dir} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name}
                 BYPRODUCTS ${CMAKE_BINARY_DIR}/java
                 WORKING_DIRECTORY ${_working_dir}
                 COMMENT "Generating API documentation with Doxygen"
@@ -328,55 +369,59 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         if (WIN32 AND (NOT MINGW) AND (NOT MSYS))
             add_custom_target(docs-${f}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND set QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} ${QDX_DOXYFILE_ARGS}
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} ${QDX_QMDOXH_ARGS}
+                COMMAND set ${QORE_DOCS_ENV}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QJAR_EXECUTABLE} -i ${CMAKE_BINARY_DIR}/java -m ${f}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
                 BYPRODUCTS ${CMAKE_BINARY_DIR}/java
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )
+            add_dependencies(docs-${f} qore)
             add_custom_target(docs-fast-${f}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND set QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} ${QDX_DOXYFILE_ARGS}
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} ${QDX_QMDOXH_ARGS}
+                COMMAND set ${QORE_DOCS_ENV}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QJAR_EXECUTABLE} -i ${CMAKE_BINARY_DIR}/java -m ${f}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
                 BYPRODUCTS ${CMAKE_BINARY_DIR}/java
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )
+            add_dependencies(docs-fast-${f} qore)
         else (WIN32 AND (NOT MINGW) AND (NOT MSYS))
             add_custom_target(docs-${f}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} ${QDX_DOXYFILE_ARGS}
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} ${QDX_QMDOXH_ARGS}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QJAR_EXECUTABLE} -i ${CMAKE_BINARY_DIR}/java -m ${f}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
                 BYPRODUCTS ${CMAKE_BINARY_DIR}/java
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )
+            add_dependencies(docs-${f} qore)
             add_custom_target(docs-fast-${f}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} ${QDX_DOXYFILE_ARGS}
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} ${QDX_QMDOXH_ARGS}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
-                COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QJAR_EXECUTABLE} -i ${CMAKE_BINARY_DIR}/java -m ${f}
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
                 BYPRODUCTS ${CMAKE_BINARY_DIR}/java
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )
+            add_dependencies(docs-fast-${f} qore)
         endif (WIN32 AND (NOT MINGW) AND (NOT MSYS))
 
         # make 'docs' target dependent on this module documentation
@@ -462,15 +507,18 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
 
         file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/docs/${f}/${qm_install_subdir}/)
         add_custom_target(docs-${f}
-            #COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} ${QDX_DOXYFILE_ARGS}
-            COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} ${QDX_QMDOXH_ARGS}
+            #COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
+            COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
             COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
-            COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/*.html
-            COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/search/*.html
+            COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/*.html
+            COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/search/*.html
 
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
             COMMENT "Generating API documentation with Doxygen for: ${f}" VERBATIM
         )
+        if (TARGET qore)
+            add_dependencies(docs-${f} qore)
+        endif ()
 
         # make 'docs' target dependent on this module documentation
         add_dependencies(docs docs-${f})
@@ -531,11 +579,14 @@ MACRO (QORE_USER_MODULES _inputs)
             file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/docs/${file}/${qm_install_subdir}/)
             add_custom_target(docs-${file}
                 ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${file}
-                COMMAND ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/html/*.html
-                COMMAND ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/html/search/*.html
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/html/*.html
+                COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/html/search/*.html
                 WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                 COMMENT "Generating API documentation with Doxygen for: ${file}" VERBATIM
             )
+            if (TARGET qore)
+                add_dependencies(docs-${file} qore)
+            endif ()
             add_dependencies(docs docs-${file})
         endif (xDOXYGEN_FOUND)
         # install qm files

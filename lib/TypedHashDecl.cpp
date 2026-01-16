@@ -344,7 +344,9 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
 
 int typed_hash_decl_private::parseCheckComplexHashAssignment(const QoreProgramLocation* loc,
         const QoreTypeInfo* vti) const {
-    assert(QoreTypeInfo::hasType(vti));
+    if (!QoreTypeInfo::hasType(vti)) {
+        return 0;
+    }
     int err = 0;
     for (auto& i : members.member_list) {
         if (!QoreTypeInfo::parseAccepts(vti, i.second->getTypeInfo())) {

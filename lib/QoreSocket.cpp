@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,6 +33,8 @@
 
 // FIXME: change int to size_t where applicable! (ex: int rc = recv())
 
+#include <cctype>
+#include <map>
 #include <qore/Qore.h>
 #include <qore/QoreSocket.h>
 #include <qore/QoreSocketObject.h>
@@ -1317,6 +1319,13 @@ SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_
     const char* sni_target_host = sock->client_target.empty() ? "" : sock->client_target.c_str();
     if (sock->ssl->setClient(xsink, "connectSsl", sni_target_host, sock->sock, cert, pkey)) {
         sshh.error();
+        return;
+    }
+
+    // Set ALPN protocols if configured (for HTTP/2 support)
+    // This must match the synchronous path in upgradeClientToSSLIntern()
+    if (!sock->alpn_protocols.empty()) {
+        sock->ssl->setAlpnProtocols(sock->alpn_protocols);
     }
 }
 
@@ -1359,10 +1368,13 @@ int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
                 assert(!real_io);
                 return -1;
             }
-            if (!rc && real_io) {
+            if (real_io) {
                 sent += real_io;
                 if (sent == size) {
                     break;
+                }
+                if (rc) {
+                    return rc;
                 }
                 // do not allow more than max_nonblock_ops loops at a time
                 if (++loop >= max_nonblock_ops) {
@@ -1794,6 +1806,23 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                 assert(!sock->bufoffset);
                 sock->buflen = real_io;
             }
+            if (rc == SOCK_POLLIN && !real_io) {
+                if (++loop >= max_nonblock_ops) {
+                    return SOCK_POLLIN;
+                }
+                struct pollfd pfd;
+                pfd.fd = sock->sock;
+                pfd.events = POLLIN | POLLERR | POLLHUP;
+                pfd.revents = 0;
+                int prc = ::poll(&pfd, 1, 0);
+                if (prc <= 0 || !(pfd.revents & (POLLIN | POLLERR | POLLHUP))) {
+                    return SOCK_POLLIN;
+                }
+                if (pfd.revents & (POLLERR | POLLHUP)) {
+                    return 0;
+                }
+                continue;
+            }
             assert(!rc || rc == 1 || rc == 2 || rc == 3 || rc == -1);
             return rc;
         } else {
@@ -1974,7 +2003,7 @@ void qore_socket_private::captureRemoteCert(X509_STORE_CTX* x509_ctx) {
 }
 
 QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeout_ms, ExceptionSink* xsink) {
-#ifndef HAVE_POLL
+#if !defined(HAVE_POLL) && !defined(DARWIN)
     xsink->raiseException("MISSING-FEATURE-ERROR", "no support for async I/O polling on this platform");
     return nullptr;
 #else
@@ -1986,7 +2015,13 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
 
     PrivateDataListHolder<QoreSocketObject> pdlh(xsink);
 
-    std::vector<pollfd> fds;
+    // Structure to track fd -> poll_list index mapping and requested events
+    struct FdInfo {
+        int fd;
+        int64 events;  // SOCK_POLLIN, SOCK_POLLOUT
+        size_t index;  // index in poll_list
+    };
+    std::vector<FdInfo> fd_info;
 
     ConstListIterator li(poll_list);
     while (li.next()) {
@@ -2030,25 +2065,147 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                 "pollable object that is not open", li.index() + 1, poll_list->size());
             return nullptr;
         }
-        //printd(5, "qore_socket_private::poll() %s fd: %d\n", obj->getClassName(), fd);
 
-        short arg = 0;
-        if (events & SOCK_POLLIN) {
-            arg |= POLLIN;
-        }
-        if (events & SOCK_POLLOUT) {
-            arg |= POLLOUT;
-        }
-
-        if (!arg) {
+        if (!(events & (SOCK_POLLIN | SOCK_POLLOUT))) {
             xsink->raiseException("SOCKET-POLL-ERROR", "element %zu/%zu (starting from 1) has an invalid " \
                 "'events' value; neither SOCK_POLLIN nor SOCK_POLLOUT is set", li.index() + 1, poll_list->size());
             return nullptr;
         }
 
+        fd_info.push_back({fd, events, li.index()});
+    }
+
+#ifdef DARWIN
+    // Use kqueue on macOS - it properly handles listener sockets unlike poll()
+    int kq = kqueue();
+    if (kq == -1) {
+        qore_socket_error(xsink, "SOCKET-POLL-ERROR", "kqueue() failed");
+        return nullptr;
+    }
+
+    // RAII cleanup for kqueue fd
+    struct KqueueGuard {
+        int kq;
+        KqueueGuard(int k) : kq(k) {}
+        ~KqueueGuard() { if (kq != -1) ::close(kq); }
+    } guard(kq);
+
+    // Build kevent change list - need up to 2 events per fd (read + write)
+    std::vector<struct kevent> changes;
+    changes.reserve(fd_info.size() * 2);
+
+    for (const auto& info : fd_info) {
+        if (info.events & SOCK_POLLIN) {
+            struct kevent ev;
+            EV_SET(&ev, info.fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0,
+                reinterpret_cast<void*>(info.index));
+            changes.push_back(ev);
+        }
+        if (info.events & SOCK_POLLOUT) {
+            struct kevent ev;
+            EV_SET(&ev, info.fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0,
+                reinterpret_cast<void*>(info.index));
+            changes.push_back(ev);
+        }
+    }
+
+    // Convert timeout to timespec (like nginx: NULL for infinite timeout)
+    struct timespec ts;
+    struct timespec* pts = nullptr;
+    if (timeout_ms >= 0) {
+        ts.tv_sec = timeout_ms / 1000;
+        ts.tv_nsec = (timeout_ms % 1000) * 1000000;
+        pts = &ts;
+    }
+
+    // Allocate space for returned events
+    std::vector<struct kevent> events(changes.size());
+
+    int rc;
+    // First do a zero-timeout kevent to register events and check for already-ready fds
+    // This handles the case where events occurred before we registered the filters
+    struct timespec ts_zero = {0, 0};
+
+    while (true) {
+        rc = kevent(kq, changes.data(), changes.size(), events.data(), events.size(), &ts_zero);
+        if (rc >= 0 || errno != EINTR) {
+            break;
+        }
+    }
+
+    if (rc < 0) {
+        qore_socket_error(xsink, "SOCKET-POLL-ERROR", "kevent() returned an error");
+    } else if (rc == 0 && (timeout_ms < 0 || timeout_ms > 0)) {
+        // No events ready yet, wait with actual timeout (events already registered)
+        while (true) {
+            rc = kevent(kq, nullptr, 0, events.data(), events.size(), pts);
+            if (rc >= 0 || errno != EINTR) {
+                break;
+            }
+        }
+        if (rc < 0) {
+            qore_socket_error(xsink, "SOCKET-POLL-ERROR", "kevent() returned an error");
+        }
+    }
+
+    // Process events if we have any
+    if (rc > 0) {
+        // Track which poll_list indices have events and what events they have
+        // Use std::map to preserve order (sorted by index) for consistent output order
+        std::map<size_t, int> result_events;
+
+        for (int i = 0; i < rc; ++i) {
+            size_t idx = reinterpret_cast<size_t>(events[i].udata);
+            if (events[i].flags & EV_ERROR) {
+                result_events[idx] = SOCK_POLLERR;
+                continue;
+            }
+
+            int evt = result_events[idx];
+            if (events[i].filter == EVFILT_READ) {
+                if (events[i].flags & EV_EOF) {
+                    // EOF on read - connection closed by peer
+                    evt |= SOCK_POLLERR;
+                } else {
+                    evt |= SOCK_POLLIN;
+                }
+            } else if (events[i].filter == EVFILT_WRITE) {
+                if (events[i].flags & EV_EOF) {
+                    // EOF on write - error condition
+                    evt |= SOCK_POLLERR;
+                } else {
+                    evt |= SOCK_POLLOUT;
+                }
+            }
+            result_events[idx] = evt;
+        }
+
+        // Build result list
+        for (const auto& [idx, evt] : result_events) {
+            if (evt) {
+                const QoreHashNode* orig = poll_list->retrieveEntry(idx).get<const QoreHashNode>();
+                ReferenceHolder<QoreHashNode> entry(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+                assert(!*xsink);
+                entry->setKeyValue("events", evt, xsink);
+                entry->setKeyValue("socket", orig->getKeyValue("socket").refSelf(), xsink);
+                rv->push(entry.release(), xsink);
+                assert(!*xsink);
+            }
+        }
+    }
+
+#else  // HAVE_POLL
+    std::vector<pollfd> fds;
+    for (const auto& info : fd_info) {
         pollfd pfd;
-        pfd.fd = fd;
-        pfd.events = arg;
+        pfd.fd = info.fd;
+        pfd.events = 0;
+        if (info.events & SOCK_POLLIN) {
+            pfd.events |= POLLIN;
+        }
+        if (info.events & SOCK_POLLOUT) {
+            pfd.events |= POLLOUT;
+        }
         pfd.revents = 0;
         fds.push_back(pfd);
     }
@@ -2098,9 +2255,10 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             break;
         }
     }
+#endif  // DARWIN
 
     return rv.release();
-#endif
+#endif  // !HAVE_POLL && !DARWIN
 }
 
 static void write_sse_key_value(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f, QoreValue v,
@@ -2405,6 +2563,29 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
         }
 
         if (rc > 0) {
+#ifdef DEBUG
+            // Test-only hook to simulate SSL partial writes that require repeated polling.
+            static int force_count = 0;
+            static int force_max = 0;
+            const char* env = getenv("QORE_TEST_SSL_PARTIAL_WRITE");
+            if (!env || !*env || *env == '0') {
+                force_count = 0;
+                force_max = 0;
+            } else if (action == WRITE && real_io) {
+                if (!force_max) {
+                    const char* lim = getenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
+                    force_max = lim ? atoi(lim) : 4;
+                    if (force_max < 1) {
+                        force_max = 1;
+                    }
+                }
+                if (force_count < force_max) {
+                    ++force_count;
+                    rc = SOCK_POLLOUT;
+                    break;
+                }
+            }
+#endif
             // SSL accepted the data, but check if it still has pending encrypted data to write
             // This happens when SSL_write encrypts data but the socket would block
             if (action == WRITE && SSL_want_write(ssl)) {
@@ -2930,6 +3111,10 @@ int QoreSocket::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* x
     return 0;
 }
 
+void QoreSocket::clearAlpnProtocols() {
+    priv->alpn_protocols.clear();
+}
+
 QoreStringNode* QoreSocket::getAlpnProtocol() const {
     if (!priv->ssl) {
         return nullptr;
@@ -2971,16 +3156,47 @@ int32_t QoreSocket::submitHttp2PushPromise(int32_t stream_id, const char* path,
     return priv->h2_session->submitPushPromise(stream_id, path, h2_headers, xsink);
 }
 
+int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
+        bool end_stream, int timeout_ms, ExceptionSink* xsink) {
+    (void)timeout_ms;
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    const void* ptr = data ? data->getPtr() : nullptr;
+    size_t len = data ? data->size() : 0;
+
+    if (priv->h2_session->sendStreamData(stream_id, ptr, len, end_stream, xsink) < 0) {
+        return -1;
+    }
+
+    int rv = priv->h2_session->sendPendingData(0, xsink);
+    if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
+        return 0;
+    }
+    return rv < 0 ? -1 : 0;
+}
+
+BinaryNode* QoreSocket::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return nullptr;
+    }
+
+    return priv->h2_session->takeStreamData(stream_id, max_bytes, xsink);
+}
+
 void QoreSocket::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
     if (!priv->h2_session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return;
     }
-    priv->h2_active_stream_id = stream_id;
+    priv->setH2ActiveStreamId(stream_id);
 }
 
 int32_t QoreSocket::getHttp2ActiveStream() const {
-    return priv->h2_active_stream_id;
+    return priv->getH2ActiveStreamId();
 }
 
 long QoreSocket::verifyPeerCertificate() const {
@@ -4094,6 +4310,10 @@ QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, SocketSource* source, Qo
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
+    // Copy ALPN protocols to the new socket for HTTP/2 support
+    if (!priv->alpn_protocols.empty()) {
+        s->priv->alpn_protocols = priv->alpn_protocols;
+    }
     if (s->priv->upgradeServerToSSLIntern(xsink, "acceptSSL", -1, cert, pkey)) {
         assert(*xsink);
         delete s;
@@ -4134,6 +4354,10 @@ QoreSocket* QoreSocket::accept(int timeout_ms, ExceptionSink* xsink) {
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
+    // Copy ALPN protocols to the new socket for HTTP/2 support
+    if (!priv->alpn_protocols.empty()) {
+        s->priv->alpn_protocols = priv->alpn_protocols;
+    }
 
     return s;
 }
@@ -4148,6 +4372,10 @@ QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, int timeout_ms, QoreSSLC
     s->priv->acceptAllCertificates(priv->ssl_accept_all_certs);
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
+    }
+    // Copy ALPN protocols to the new socket for HTTP/2 support
+    if (!priv->alpn_protocols.empty()) {
+        s->priv->alpn_protocols = priv->alpn_protocols;
     }
     if (s->priv->upgradeServerToSSLIntern(xsink, "acceptSSL", timeout_ms, cert, pkey)) {
         assert(*xsink);
@@ -4554,7 +4782,7 @@ int SocketConnectPollOperation::checkContinuePoll(ExceptionSink* xsink) {
 }
 
 SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
-        : SocketAcceptPollSocketOperationBase(sock) {
+        : SocketAcceptPollSocketOperationBase(sock), accepted_socket_obj(xsink) {
     sgoal = sock->priv->cert && sock->priv->pk ? SPS_ACCEPTING_SSL : SPS_ACCEPTING;
 
     AutoLocker al(sock->priv->m);
@@ -4711,6 +4939,12 @@ int SocketAcceptPollOperation::checkContinuePoll(ExceptionSink* xsink) {
 
 QoreValue SocketAcceptPollOperation::getOutput() const {
     AutoLocker al(sock->priv->m);
+    // If we have a cached QoreObject wrapper (from SSL handshake polling), return that
+    if (accepted_socket_obj) {
+        // Release the cached object and clear accepted_socket to avoid double-free
+        accepted_socket.discard();
+        return accepted_socket_obj.release();
+    }
     if (accepted_socket) {
         return new QoreObject(QC_SOCKET, getProgram(), accepted_socket.release());
     }
@@ -5098,12 +5332,11 @@ SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xs
     // Check if there's already an HTTP/2 session stored in the socket (from a previous request)
     bool reused_session = false;
     if (sock->priv->socket->priv->h2_session) {
-        // Reuse existing session
-        h2_session.reset(sock->priv->socket->priv->h2_session);
-        sock->priv->socket->priv->h2_session = nullptr;
+        // Reuse existing session (socket owns it)
+        h2_session = sock->priv->socket->priv->h2_session;
         reused_session = true;
     } else {
-        // Initialize new HTTP/2 session
+        // Initialize new HTTP/2 session and store it on the socket
         if (initSession(xsink)) {
             sock->priv->clearNonBlock();
             set_non_block = false;
@@ -5126,10 +5359,12 @@ SocketHttp2ServerPollOperation::~SocketHttp2ServerPollOperation() {
 
 int SocketHttp2ServerPollOperation::initSession(ExceptionSink* xsink) {
     // Create server-side HTTP/2 session using the underlying QoreSocket's priv
-    h2_session.reset(Http2Session::createServer(sock->priv->socket->priv, xsink));
+    h2_session = Http2Session::createServer(sock->priv->socket->priv, xsink);
     if (!h2_session) {
         return -1;
     }
+    // Store session on socket for shared access
+    sock->priv->socket->priv->h2_session = h2_session;
     return 0;
 }
 
@@ -5154,6 +5389,15 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
 
             case H2S_RECV_PREFACE:
             case H2S_READING: {
+                // If another thread already completed a stream, return it immediately
+                if (h2_session->hasCompletedStreams()) {
+                    h2_state = H2S_REQUEST_READY;
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
+                }
                 // Try to receive data
                 int rv = h2_session->receiveData(0, xsink);
                 if (*xsink) {
@@ -5166,8 +5410,12 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 if (rv == 1) {
                     // Connection closed by peer - check if we have a completed request first
                     if (!h2_session->hasCompletedStreams()) {
-                        xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection closed by peer before "
-                            "request was complete");
+                        peer_closed = true;
+                        h2_state = H2S_REQUEST_READY;
+                        if (set_non_block) {
+                            set_non_block = false;
+                            sock->priv->clearNonBlock();
+                        }
                         return nullptr;
                     }
                     // Fall through to handle the completed request
@@ -5229,6 +5477,9 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     if (h2_state != H2S_REQUEST_READY || !h2_session) {
         return QoreValue();
     }
+    if (peer_closed) {
+        return QoreValue();
+    }
 
     // Get the completed stream
     auto stream_info = h2_session->takeCompletedStream();
@@ -5237,14 +5488,6 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     }
 
     const_cast<SocketHttp2ServerPollOperation*>(this)->stream_id = stream_info->stream_id;
-
-    // Store session in socket for use by subsequent send operations
-    // The session is transferred to the socket and will be cleaned up on socket close
-    SocketHttp2ServerPollOperation* mthis = const_cast<SocketHttp2ServerPollOperation*>(this);
-    if (sock->priv->socket->priv->h2_session) {
-        delete sock->priv->socket->priv->h2_session;
-    }
-    sock->priv->socket->priv->h2_session = mthis->h2_session.release();
 
     // Build output hash
     out = new QoreHashNode(autoTypeInfo);
@@ -5255,7 +5498,12 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     // Build headers hash
     QoreHashNode* headers = new QoreHashNode(autoTypeInfo);
     for (const auto& h : stream_info->headers) {
-        headers->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), nullptr);
+        std::string lowered_name;
+        lowered_name.reserve(h.first.size());
+        for (unsigned char ch : h.first) {
+            lowered_name.push_back(std::tolower(ch));
+        }
+        headers->setKeyValue(lowered_name.c_str(), new QoreStringNode(h.second), nullptr);
     }
     out->setKeyValue("headers", headers, nullptr);
 
@@ -5282,7 +5530,7 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
 }
 
 Http2Session* SocketHttp2ServerPollOperation::takeSession() {
-    return h2_session.release();
+    return nullptr;
 }
 
 SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(ExceptionSink* xsink,
@@ -5327,6 +5575,11 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
     int rv;
     if (is_connect) {
         // RFC 8441: CONNECT response (WebSocket over HTTP/2) - no body, no END_STREAM
+        if (getenv("QORE_HTTP2_DEBUG")) {
+            fprintf(stderr, "HTTP2 DEBUG: send CONNECT response stream=%d status=%d\n",
+                stream_id, status_code);
+            fflush(stderr);
+        }
         rv = session->submitConnectResponse(stream_id, status_code, hdr_map, xsink);
     } else {
         // Regular HTTP/2 response with body and END_STREAM

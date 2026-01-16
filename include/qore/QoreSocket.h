@@ -1855,6 +1855,13 @@ public:
     */
     DLLEXPORT int setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink);
 
+    //! Clears ALPN protocol settings
+    /** This should be called when HTTP/2 mode is disabled to ensure proper protocol negotiation
+
+        @since Qore 2.1
+    */
+    DLLEXPORT void clearAlpnProtocols();
+
     //! Returns the negotiated ALPN protocol after TLS handshake
     /** @return the selected protocol string, or nullptr if ALPN was not negotiated
 
@@ -1880,7 +1887,10 @@ public:
         @since Qore 2.2
     */
     DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
-        const QoreHashNode* headers, ExceptionSink* xsink);
+            const QoreHashNode* headers, ExceptionSink* xsink);
+    DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
+            bool end_stream, int timeout_ms, ExceptionSink* xsink);
+    DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
 
     //! Sets the active HTTP/2 stream ID for transparent send/recv operations
     /** @param stream_id the stream ID to use for subsequent send/recv operations
