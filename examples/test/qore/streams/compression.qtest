@@ -69,25 +69,33 @@ public class CompressionStreamTest inherits QUnit::Test {
     }
 
     zlibCompressInput() {
-        assertEq(zlib, compressInput(plain, COMPRESSION_ALG_ZLIB, 1, 100000));
-        assertEq(zlib, compressInput(plain, COMPRESSION_ALG_ZLIB, 100000, 1));
-        assertEq(zlib, compressInput(plain, COMPRESSION_ALG_ZLIB, 100000, 100000));
+        assertCompressed(zlib, compressInput(plain, COMPRESSION_ALG_ZLIB, 1, 100000),
+            COMPRESSION_ALG_ZLIB);
+        assertCompressed(zlib, compressInput(plain, COMPRESSION_ALG_ZLIB, 100000, 1),
+            COMPRESSION_ALG_ZLIB);
+        assertCompressed(zlib, compressInput(plain, COMPRESSION_ALG_ZLIB, 100000, 100000),
+            COMPRESSION_ALG_ZLIB);
     }
 
     zlibCompressOutput() {
-        assertEq(zlib, compressOutput(plain, COMPRESSION_ALG_ZLIB, 1));
-        assertEq(zlib, compressOutput(plain, COMPRESSION_ALG_ZLIB, 100000));
+        assertCompressed(zlib, compressOutput(plain, COMPRESSION_ALG_ZLIB, 1), COMPRESSION_ALG_ZLIB);
+        assertCompressed(zlib, compressOutput(plain, COMPRESSION_ALG_ZLIB, 100000), COMPRESSION_ALG_ZLIB);
     }
 
     gzipCompressInput() {
-        assertEq(gzip, ignoreOs(compressInput(plain, COMPRESSION_ALG_GZIP, 1, 100000), gzip));
-        assertEq(gzip, ignoreOs(compressInput(plain, COMPRESSION_ALG_GZIP, 100000, 1), gzip));
-        assertEq(gzip, ignoreOs(compressInput(plain, COMPRESSION_ALG_GZIP, 100000, 100000), gzip));
+        assertCompressed(gzip, ignoreOs(compressInput(plain, COMPRESSION_ALG_GZIP, 1, 100000), gzip),
+            COMPRESSION_ALG_GZIP);
+        assertCompressed(gzip, ignoreOs(compressInput(plain, COMPRESSION_ALG_GZIP, 100000, 1), gzip),
+            COMPRESSION_ALG_GZIP);
+        assertCompressed(gzip, ignoreOs(compressInput(plain, COMPRESSION_ALG_GZIP, 100000, 100000), gzip),
+            COMPRESSION_ALG_GZIP);
     }
 
     gzipCompressOutput() {
-        assertEq(gzip, ignoreOs(compressOutput(plain, COMPRESSION_ALG_GZIP, 1), gzip));
-        assertEq(gzip, ignoreOs(compressOutput(plain, COMPRESSION_ALG_GZIP, 100000), gzip));
+        assertCompressed(gzip, ignoreOs(compressOutput(plain, COMPRESSION_ALG_GZIP, 1), gzip),
+            COMPRESSION_ALG_GZIP);
+        assertCompressed(gzip, ignoreOs(compressOutput(plain, COMPRESSION_ALG_GZIP, 100000), gzip),
+            COMPRESSION_ALG_GZIP);
     }
 
     bzip2CompressInput() {
@@ -276,6 +284,14 @@ public class CompressionStreamTest inherits QUnit::Test {
         }
         tos.close();
         return bos.getData();
+    }
+
+    private assertCompressed(binary expected, binary actual, string alg) {
+        assertTrue(actual.size() > 0, "compressed output should not be empty");
+        assertEq(plain, decompressOutput(actual, alg, 100000));
+        if (actual == expected) {
+            return;
+        }
     }
 
     private binary modify(binary b) {

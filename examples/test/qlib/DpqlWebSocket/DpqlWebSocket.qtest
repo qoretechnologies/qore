@@ -32,6 +32,16 @@
 %define NoJson
 %endtry
 
+%ifdef NoJson
+sub parse_json(string data) {
+    throw "MODULE-ERROR", "json module not available";
+}
+
+sub make_json(any value) {
+    throw "MODULE-ERROR", "json module not available";
+}
+%endif
+
 %try-module HttpServerUtil
 %define NoHttpServerUtil
 %endtry

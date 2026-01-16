@@ -10,6 +10,12 @@
 %define NoYaml
 %endtry
 
+%ifdef NoYaml
+sub parse_yaml(string data) {
+    throw "MODULE-ERROR", "yaml module not available";
+}
+%endif
+
 %exec-class QdpDpqlTest
 
 public class QdpDpqlTest inherits QUnit::Test {
