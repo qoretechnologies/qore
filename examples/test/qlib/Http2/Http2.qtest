@@ -3,6 +3,10 @@
 
 %modern
 
+%try-module json
+%define NoJson
+%endtry
+
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Mime.qm
@@ -130,6 +134,17 @@ class EchoWebSocketHandler inherits WebSocketHandler::WebSocketHandler {
 }
 
 public class Http2Test inherits QUnit::Test {
+    private {
+        # Regex for Go module resolution failures that should skip the test.
+        const GO_HTTP2_WS_SKIP_RE
+            = "no required module provides package|module lookup disabled|unrecognized import path|GOPROXY"
+                + "|missing go.sum entry|certificate verify failed|proxyconnect|lookup .*: no such host";
+
+        # Regex for nghttp2/OpenSSL compile failures that should skip the test.
+        const NGHTTP2_WS_COMPILE_SKIP_RE
+            = "fatal error:.*nghttp2|fatal error:.*openssl|library not found|cannot find -lnghttp2"
+                + "|cannot find -lssl|cannot find -lcrypto|command not found";
+    }
     public {
         # Command-line options
         const MyOpts = Opts + {
@@ -162,6 +177,9 @@ public class Http2Test inherits QUnit::Test {
         addTestCase("HTTP/2 mode constants test", \testHttp2ModeConstants());
         addTestCase("HTTP/2 WebSocket client-server test", \testHttp2WebSocketClientServer());
         addTestCase("HTTP/2 WebSocket external client verification", \testHttp2WebSocketExternalClients());
+        addTestCase("HTTP/2 WebSocket external client abrupt close", \testHttp2WebSocketExternalClientAbort());
+        addTestCase("HTTP/2 WebSocket external nghttp client", \testHttp2WebSocketExternalNghttpClient());
+        addTestCase("HTTP/2 WebSocket external Go client", \testHttp2WebSocketExternalGoClient());
         addTestCase("HTTP/2 global mode test", \testGlobalHttp2Mode());
         addTestCase("HTTP/2 poll client operations test", \testHttp2PollClientOperations());
         addTestCase("HTTP/2 ALPN in poll SSL test", \testHttp2AlpnInPollSSL());
@@ -1802,6 +1820,32 @@ public class Http2Test inherits QUnit::Test {
         return {"ok": True};
     }
 
+    private hash<auto> runNodeHttp2WebSocketAbortClient(string node_bin, int port, string path) {
+        string script = get_script_dir() + DirSep + "http2-ws-client-abort.js";
+        if (!is_file(script)) {
+            return {"ok": False, "error": "node abort client script missing"};
+        }
+
+        string log_path = tmp_location() + DirSep + "http2-ws-client-abort-" + getpid() + ".log";
+        string cmd = sprintf("%s %s localhost %d %s > %s 2>&1", node_bin, script, port, path, log_path);
+        int rc = system(cmd);
+        if (rc != 0) {
+            *string err;
+            if (log_path && is_file(log_path)) {
+                err = ReadOnlyFile::readTextFile(log_path);
+                unlink(log_path);
+            } else {
+                err = sprintf("node abort client failed with rc %d", rc);
+            }
+            return {"ok": False, "error": err};
+        }
+
+        if (log_path && is_file(log_path)) {
+            unlink(log_path);
+        }
+        return {"ok": True};
+    }
+
     private hash<auto> runCurlHttp2WebSocketConnect(int port, string path, string key) {
         string log_path = tmp_location() + DirSep + "http2-ws-curl-" + getpid() + ".log";
         string url = sprintf("https://localhost:%d%s", port, path);
@@ -1819,6 +1863,102 @@ public class Http2Test inherits QUnit::Test {
         };
     }
 
+    private hash<auto> runGoHttp2WebSocketClient(string go_bin, int port, string path) {
+        string src_dir = get_script_dir() + DirSep + "go-http2-ws-client";
+        if (!is_dir(src_dir)) {
+            return {"ok": False, "skip": True, "error": "go client source directory missing"};
+        }
+
+        string bin_path = tmp_location() + DirSep + "go-http2-ws-client-" + getpid();
+        string log_path = tmp_location() + DirSep + "go-http2-ws-client-" + getpid() + ".log";
+        string build_cmd = sprintf("cd %s && %s build -o %s . > %s 2>&1",
+            src_dir, go_bin, bin_path, log_path);
+        int build_rc = system(build_cmd);
+        if (build_rc != 0) {
+            *string err = is_file(log_path) ? ReadOnlyFile::readTextFile(log_path) : "go build failed";
+            if (log_path && is_file(log_path)) {
+                unlink(log_path);
+            }
+            # Skip if dependencies cannot be resolved in this environment
+            if ((new Regex(GO_HTTP2_WS_SKIP_RE)).match(err)) {
+                return {"ok": False, "skip": True, "error": err};
+            }
+            return {"ok": False, "error": err};
+        }
+
+        string run_cmd = sprintf("%s -host localhost -port %d -path %s > %s 2>&1",
+            bin_path, port, path, log_path);
+        int rc = system(run_cmd);
+        *string err;
+        if (rc != 0 && log_path && is_file(log_path)) {
+            err = ReadOnlyFile::readTextFile(log_path);
+        }
+        if (bin_path && is_file(bin_path)) {
+            unlink(bin_path);
+        }
+        if (log_path && is_file(log_path)) {
+            unlink(log_path);
+        }
+        if (rc != 0) {
+            return {"ok": False, "error": err ?? sprintf("go client failed with rc %d", rc)};
+        }
+        return {"ok": True};
+    }
+
+    private hash<auto> runNghttp2Http2WebSocketClient(string cxx_bin, string pkg_config_bin, int port, string path) {
+        string src_dir = get_script_dir() + DirSep + "nghttp2-ws-client";
+        string src_path = src_dir + DirSep + "nghttp2-ws-client.cpp";
+        if (!is_file(src_path)) {
+            return {"ok": False, "skip": True, "error": "nghttp2 client source missing"};
+        }
+
+        string bin_path = tmp_location() + DirSep + "nghttp2-ws-client-" + getpid();
+        string log_path = tmp_location() + DirSep + "nghttp2-ws-client-" + getpid() + ".log";
+        string pkg_path = tmp_location() + DirSep + "nghttp2-ws-client-" + getpid() + ".pkg";
+        string pkg_cmd = sprintf("%s --cflags --libs libnghttp2 > %s 2>/dev/null",
+            pkg_config_bin, pkg_path);
+        int pkg_rc = system(pkg_cmd);
+        string pkg_flags = (pkg_rc == 0 && is_file(pkg_path)) ? trim(ReadOnlyFile::readTextFile(pkg_path)) : "";
+        if (pkg_path && is_file(pkg_path)) {
+            unlink(pkg_path);
+        }
+        if (pkg_rc != 0 || !pkg_flags) {
+            return {"ok": False, "skip": True, "error": "libnghttp2 pkg-config not available"};
+        }
+
+        string build_cmd = sprintf("%s -std=c++17 -O2 -Wall -Wextra -o %s %s %s -lssl -lcrypto > %s 2>&1",
+            cxx_bin, bin_path, src_path, pkg_flags, log_path);
+        int build_rc = system(build_cmd);
+        if (build_rc != 0) {
+            *string err = is_file(log_path) ? ReadOnlyFile::readTextFile(log_path) : "compile failed";
+            if (log_path && is_file(log_path)) {
+                unlink(log_path);
+            }
+            if ((new Regex(NGHTTP2_WS_COMPILE_SKIP_RE, RE_Caseless)).match(err)) {
+                return {"ok": False, "skip": True, "error": err};
+            }
+            return {"ok": False, "error": err};
+        }
+
+        string run_cmd = sprintf("%s -host localhost -port %d -path %s > %s 2>&1",
+            bin_path, port, path, log_path);
+        int rc = system(run_cmd);
+        *string err;
+        if (rc != 0 && log_path && is_file(log_path)) {
+            err = ReadOnlyFile::readTextFile(log_path);
+        }
+        if (bin_path && is_file(bin_path)) {
+            unlink(bin_path);
+        }
+        if (log_path && is_file(log_path)) {
+            unlink(log_path);
+        }
+        if (rc != 0) {
+            return {"ok": False, "error": err ?? sprintf("nghttp2 client failed with rc %d", rc)};
+        }
+        return {"ok": True};
+    }
+
     testHttp2WebSocketClientServer() {
         # Skip complex WebSocket/HTTP2 tests on Alpine - they can hang
         if (skip_complex_tests) {
@@ -1829,9 +1969,7 @@ public class Http2Test inherits QUnit::Test {
         # Test WebSocketClient connecting to HttpServer over HTTP/2
         # This tests the RFC 8441 WebSocket handshake over HTTP/2
         #
-        # NOTE: Full bidirectional messaging over HTTP/2 requires WebSocketHandler
-        # to be HTTP/2-aware (reading from HTTP/2 DATA frames instead of raw socket).
-        # This test verifies the handshake and initial server-to-client message works.
+        # This test verifies the HTTP/2 WebSocket handshake and message exchange.
 
         # Create a simple WebSocket handler that sends a welcome message
         Counter cnt(1);
@@ -1846,7 +1984,6 @@ public class Http2Test inherits QUnit::Test {
             "debug": True,
         };
         HttpServer server(http_opts);
-        bool skip_ws = False;
         try {
             server.setHandler("websocket", "/ws", MimeTypeText, ws_handler);
             server.setDefaultHandler("websocket", ws_handler);
@@ -1863,6 +2000,7 @@ public class Http2Test inherits QUnit::Test {
                 "http_version": "2.0",  # Enable HTTP/2
             });
             int port = linfo.port;
+            server.waitForAsyncIo();
 
             # Create WebSocket client and connect over HTTP/2
             # Use ssl_verify_cert: False to accept self-signed certificate
@@ -1920,18 +2058,10 @@ public class Http2Test inherits QUnit::Test {
             cnt.waitForZero(5s);
 
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "HTTP2-CONNECT-ERROR" && ex.desc.find("status 501") >= 0) {
-                skip_ws = True;
-            } else {
-                server_error = sprintf("%s: %s", ex.err, ex.desc);
-            }
+            server_error = sprintf("%s: %s", ex.err, ex.desc);
         }
         server.stop();
 
-        if (skip_ws) {
-            testSkip("HTTP/2 WebSocket not supported by server");
-            return;
-        }
         assertNothing(server_error, sprintf("server error: %s", server_error ?? "none"));
     }
 
@@ -1952,8 +2082,6 @@ public class Http2Test inherits QUnit::Test {
 
         Counter cnt(1);
         *string server_error;
-        bool skip_ws = False;
-
         EchoWebSocketHandler ws_handler(cnt);
         Logger logger("test", LoggerLevel::getLevelDebug());
         hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
@@ -1977,45 +2105,270 @@ public class Http2Test inherits QUnit::Test {
             });
             int port = linfo.port;
             string path = "/ws";
+            server.waitForAsyncIo();
 
             if (have_node) {
                 hash<auto> node_res = runNodeHttp2WebSocketClient(node_bin, port, path);
                 if (!node_res.ok) {
-                    *string node_err = node_res.error;
-                    if (node_err && node_err.find("status 501") >= 0) {
-                        skip_ws = True;
-                    } else {
-                        assertTrue(False, sprintf("node HTTP/2 WebSocket client failed: %s",
-                            node_err ?? "unknown"));
-                    }
+                    server_error = sprintf("node HTTP/2 WebSocket client failed: %s",
+                        node_res.error ?? "unknown");
                 }
             }
 
-            if (!skip_ws && have_curl) {
-                string ws_key = get_random_string(16).toBase64();
-                hash<auto> curl_info = runCurlHttp2WebSocketConnect(port, path, ws_key);
-                if (curl_info.rc != 0) {
-                    assertTrue(False, sprintf("curl HTTP/2 WebSocket CONNECT failed (rc=%d)", curl_info.rc));
-                }
-                string headers = curl_info.headers ?? "";
-                if (headers.find("HTTP/2 501") >= 0) {
-                    skip_ws = True;
-                } else {
-                    assertTrue(headers.find("HTTP/2 200") >= 0,
-                        sprintf("curl HTTP/2 CONNECT did not return 200: %s", headers));
-                    *string accept = getHeaderValue(headers, "sec-websocket-accept");
-                    assertEq(ws_get_response_key(ws_key), accept,
-                        "curl HTTP/2 CONNECT should return Sec-WebSocket-Accept");
-                }
-            }
+            # NOTE: curl test disabled - curl's -H flag cannot properly set the :protocol
+            # pseudo-header required for RFC 8441 extended CONNECT. The Node client test
+            # above provides proper verification of HTTP/2 WebSocket functionality.
+            # if (!server_error && have_curl) {
+            #     string ws_key = get_random_string(16).toBase64();
+            #     hash<auto> curl_info = runCurlHttp2WebSocketConnect(port, path, ws_key);
+            #     if (curl_info.rc != 0) {
+            #         server_error = sprintf("curl HTTP/2 WebSocket CONNECT failed (rc=%d)", curl_info.rc);
+            #     } else {
+            #         string headers = curl_info.headers ?? "";
+            #         if (headers.find("HTTP/2 200") < 0) {
+            #             server_error = sprintf("curl HTTP/2 CONNECT did not return 200: %s", headers);
+            #         } else {
+            #             *string accept = getHeaderValue(headers, "sec-websocket-accept");
+            #             if (ws_get_response_key(ws_key) != accept) {
+            #                 server_error = "curl HTTP/2 CONNECT should return Sec-WebSocket-Accept";
+            #             }
+            #         }
+            #     }
+            # }
 
         } catch (hash<ExceptionInfo> ex) {
             server_error = sprintf("%s: %s", ex.err, ex.desc);
         }
         server.stop();
 
-        if (skip_ws) {
-            testSkip("HTTP/2 WebSocket not supported by server");
+        assertNothing(server_error, sprintf("server error: %s", server_error ?? "none"));
+    }
+
+    testHttp2WebSocketExternalClientAbort() {
+        # Skip complex WebSocket/HTTP2 tests on Alpine - they can hang
+        if (skip_complex_tests) {
+            testSkip("Skipping complex WebSocket/HTTP2 test on Alpine");
+            return;
+        }
+
+        *string node_bin = getNodeBin();
+        if (!node_bin) {
+            testSkip("No HTTP/2-capable external client available (node)");
+            return;
+        }
+
+        Counter cnt(1);
+        *string server_error;
+        EchoWebSocketHandler ws_handler(cnt);
+        string log_path = tmp_location() + DirSep + "http2-ws-server-" + getpid() + ".log";
+        Logger logger("test", LoggerLevel::getLevelDebug());
+        LoggerAppenderFile la("http2-ws", new LoggerLayoutPattern("%m"), log_path);
+        logger.addAppender(la);
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer server(http_opts);
+        try {
+            server.setHandler("websocket", "/ws", MimeTypeText, ws_handler);
+            server.setDefaultHandler("websocket", ws_handler);
+
+            SSLCertificate cert(CertPem);
+            SSLPrivateKey key(KeyPem);
+
+            hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+                "cert": cert,
+                "key": key,
+                "http_version": "2.0",
+            });
+            int port = linfo.port;
+            string path = "/ws";
+            server.waitForAsyncIo();
+
+            hash<auto> node_res = runNodeHttp2WebSocketAbortClient(node_bin, port, path);
+            if (!node_res.ok) {
+                server_error = sprintf("node HTTP/2 WebSocket abort client failed: %s",
+                    node_res.error ?? "unknown");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            server_error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        server.stop();
+
+        if (!server_error && log_path && is_file(log_path)) {
+            string log_data = ReadOnlyFile::readTextFile(log_path);
+            if (log_data.find("HTTP2-ERROR: no HTTP/2 session active") >= 0) {
+                server_error = "HTTP/2 session inactive error logged during abort close";
+            } else if (log_data.find("error in HTTP/2 WebSocket handler") >= 0) {
+                server_error = "HTTP/2 WebSocket handler error logged during abort close";
+            }
+        }
+        if (log_path && is_file(log_path)) {
+            unlink(log_path);
+        }
+
+        assertNothing(server_error, sprintf("server error: %s", server_error ?? "none"));
+    }
+
+    testHttp2WebSocketExternalNghttpClient() {
+        # Skip complex WebSocket/HTTP2 tests on Alpine - they can hang
+        if (skip_complex_tests) {
+            testSkip("Skipping complex WebSocket/HTTP2 test on Alpine");
+            return;
+        }
+
+        bool skipped = False;
+        *string skip_reason;
+        string cxx_bin = "";
+        {
+            string log_path = tmp_location() + DirSep + "nghttp2-cxx-" + getpid() + ".log";
+            int rc = system(sprintf("command -v c++ > %s 2>/dev/null", log_path));
+            if (rc == 0 && log_path && is_file(log_path)) {
+                cxx_bin = trim(ReadOnlyFile::readTextFile(log_path));
+                unlink(log_path);
+            } else if (log_path && is_file(log_path)) {
+                unlink(log_path);
+            }
+        }
+        if (!cxx_bin) {
+            testSkip("C++ compiler not available for nghttp2 client");
+            return;
+        }
+
+        string pkg_config_bin = "";
+        {
+            string log_path = tmp_location() + DirSep + "nghttp2-pkg-" + getpid() + ".log";
+            int rc = system(sprintf("command -v pkg-config > %s 2>/dev/null", log_path));
+            if (rc == 0 && log_path && is_file(log_path)) {
+                pkg_config_bin = trim(ReadOnlyFile::readTextFile(log_path));
+                unlink(log_path);
+            } else if (log_path && is_file(log_path)) {
+                unlink(log_path);
+            }
+        }
+        if (!pkg_config_bin) {
+            testSkip("pkg-config not available for nghttp2 client");
+            return;
+        }
+
+        Counter cnt(1);
+        *string server_error;
+        EchoWebSocketHandler ws_handler(cnt);
+        Logger logger("test", LoggerLevel::getLevelDebug());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer server(http_opts);
+        try {
+            server.setHandler("websocket", "/ws", MimeTypeText, ws_handler);
+            server.setDefaultHandler("websocket", ws_handler);
+
+            SSLCertificate cert(CertPem);
+            SSLPrivateKey key(KeyPem);
+
+            hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+                "cert": cert,
+                "key": key,
+                "http_version": "2.0",
+            });
+            int port = linfo.port;
+            string path = "/ws";
+            server.waitForAsyncIo();
+
+            hash<auto> res = runNghttp2Http2WebSocketClient(cxx_bin, pkg_config_bin, port, path);
+            if (res.skip) {
+                skipped = True;
+                skip_reason = res.error ?? "unknown";
+            }
+            if (!res.ok) {
+                server_error = sprintf("nghttp HTTP/2 WebSocket client failed: %s",
+                    res.error ?? "unknown");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            server_error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        server.stop();
+
+        if (skipped) {
+            testSkip("nghttp client unavailable: " + skip_reason);
+            return;
+        }
+        assertNothing(server_error, sprintf("server error: %s", server_error ?? "none"));
+    }
+
+    testHttp2WebSocketExternalGoClient() {
+        # Skip complex WebSocket/HTTP2 tests on Alpine - they can hang
+        if (skip_complex_tests) {
+            testSkip("Skipping complex WebSocket/HTTP2 test on Alpine");
+            return;
+        }
+
+        string go_bin = "";
+        {
+            string log_path = tmp_location() + DirSep + "go-bin-" + getpid() + ".log";
+            int rc = system(sprintf("command -v go > %s 2>/dev/null", log_path));
+            if (rc == 0 && log_path && is_file(log_path)) {
+                go_bin = trim(ReadOnlyFile::readTextFile(log_path));
+                unlink(log_path);
+            } else if (log_path && is_file(log_path)) {
+                unlink(log_path);
+            }
+        }
+        if (!go_bin) {
+            testSkip("go not available");
+            return;
+        }
+
+        Counter cnt(1);
+        *string server_error;
+        bool skipped = False;
+        *string skip_reason;
+        EchoWebSocketHandler ws_handler(cnt);
+        Logger logger("test", LoggerLevel::getLevelDebug());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer server(http_opts);
+        try {
+            server.setHandler("websocket", "/ws", MimeTypeText, ws_handler);
+            server.setDefaultHandler("websocket", ws_handler);
+
+            SSLCertificate cert(CertPem);
+            SSLPrivateKey key(KeyPem);
+
+            hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+                "cert": cert,
+                "key": key,
+                "http_version": "2.0",
+            });
+            int port = linfo.port;
+            string path = "/ws";
+            server.waitForAsyncIo();
+
+            hash<auto> go_res = runGoHttp2WebSocketClient(go_bin, port, path);
+            if (go_res.skip) {
+                skipped = True;
+                skip_reason = go_res.error ?? "unknown";
+            }
+            if (!go_res.ok) {
+                server_error = sprintf("go HTTP/2 WebSocket client failed: %s",
+                    go_res.error ?? "unknown");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            server_error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        server.stop();
+
+        if (skipped) {
+            testSkip("go client unavailable: " + skip_reason);
             return;
         }
         assertNothing(server_error, sprintf("server error: %s", server_error ?? "none"));

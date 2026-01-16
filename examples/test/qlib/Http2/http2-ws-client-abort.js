@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// http2-ws-client.js
+// http2-ws-client-abort.js
 // Copyright 2026 Qore Technologies, s.r.o.
-// Minimal RFC 8441 WebSocket-over-HTTP/2 client for server verification.
+// RFC 8441 WebSocket-over-HTTP/2 client that closes the session aggressively.
 
 'use strict';
 
@@ -11,7 +11,7 @@ const crypto = require('crypto');
 const MAGIC = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 function usage() {
-  console.error('Usage: http2-ws-client.js <host> <port> <path>');
+  console.error('Usage: http2-ws-client-abort.js <host> <port> <path>');
   process.exit(2);
 }
 
@@ -148,7 +148,7 @@ let buffer = Buffer.alloc(0);
 let sentMessage = false;
 let sentClose = false;
 
-const payload = Buffer.from('node-test', 'utf8');
+const payload = Buffer.from('node-abort', 'utf8');
 
 req.on('response', (headers, flags) => {
   const status = headers[':status'];
@@ -181,7 +181,7 @@ req.on('data', (chunk) => {
         if (!gotWelcome) {
           gotWelcome = text === 'welcome';
         } else if (!gotEcho) {
-          gotEcho = text === 'node-test';
+          gotEcho = text === 'node-abort';
         }
       }
     });
@@ -189,20 +189,12 @@ req.on('data', (chunk) => {
     fail(4, `Frame parse error: ${err.message}`);
   }
 
-  // Check if we've received all expected messages
   if (responseOk && gotWelcome && gotEcho && !sentClose) {
     sentClose = true;
-    // If stream is already ended (race with server close), just exit successfully
-    if (req.writableEnded) {
-      session.close();
-      process.exit(0);
-    }
-    // Send WebSocket close frame and close the HTTP/2 stream
     const closeFrame = encodeClientFrame(0x8, Buffer.alloc(0));
     req.write(closeFrame, () => {
-      // For HTTP/2 CONNECT streams, explicitly close with RST_STREAM
       req.close(http2.constants.NGHTTP2_NO_ERROR, () => {
-        session.close();
+        session.destroy();
         process.exit(0);
       });
     });
@@ -211,17 +203,6 @@ req.on('data', (chunk) => {
 
 req.on('error', (err) => {
   fail(1, `Stream error: ${err.message}`);
-});
-
-req.on('close', () => {
-  if (!responseOk) {
-    fail(2, 'CONNECT failed before response');
-  }
-  if (!gotWelcome || !gotEcho) {
-    fail(5, 'Did not receive expected welcome/echo messages');
-  }
-  session.close();
-  process.exit(0);
 });
 
 setTimeout(() => {

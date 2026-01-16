@@ -39,7 +39,18 @@
 #include <algorithm>
 #include <cctype>
 #include <cinttypes>
+#include <cstdlib>
 #include <cstring>
+#include <mutex>
+
+static bool http2DebugEnabled() {
+    static std::once_flag flag;
+    static int enabled = 0;
+    std::call_once(flag, []() {
+        enabled = getenv("QORE_HTTP2_DEBUG") ? 1 : 0;
+    });
+    return enabled == 1;
+}
 
 // nghttp2 1.60.0 introduced nghttp2_session_mem_send2 with nghttp2_ssize
 // Use the new API when available for better cross-platform compatibility
@@ -106,6 +117,7 @@ int Http2Session::init(ExceptionSink* xsink) {
     }
     // We buffer DATA frames; manage WINDOW_UPDATE manually.
     nghttp2_option_set_no_auto_window_update(opts, 1);
+    // RFC 8441: enable extended CONNECT support in nghttp2.
 
     if (is_server) {
         rv = nghttp2_session_server_new2(&session, callbacks, this, opts);
@@ -164,6 +176,11 @@ int Http2Session::sendConnectionPreface(ExceptionSink* xsink) {
 int Http2Session::submitSettings(const Http2Settings& settings, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     local_settings = settings;
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: send SETTINGS enable_connect_protocol=%u\n",
+            settings.enable_connect_protocol);
+        fflush(stderr);
+    }
 
     // Note: SETTINGS_ENABLE_PUSH MUST NOT be sent by servers with value 1
     std::vector<nghttp2_settings_entry> iv;
@@ -923,16 +940,22 @@ void Http2Session::markStreamComplete(int32_t stream_id) {
         }
         it->second->marked_complete = true;
 
+        bool is_connect = it->second->is_connect;
         // For CONNECT streams on the server, we need to keep the stream in the map so we can respond
         // For client-side sessions, we also keep the stream in the map so the caller can access it
         // Create a copy for completed_streams instead of moving
-        if (it->second->is_connect || !is_server) {
+        if (is_connect || !is_server) {
             auto copy = std::make_unique<Http2StreamInfo>(*it->second);
             completed_streams.push(std::move(copy));
             // Keep the original in streams for the caller to find
         } else {
             completed_streams.push(std::move(it->second));
             streams.erase(it);
+        }
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: markStreamComplete stream=%d is_connect=%d completed=%zu\n",
+                stream_id, is_connect ? 1 : 0, completed_streams.size());
+            fflush(stderr);
         }
     }
 }
@@ -944,6 +967,11 @@ std::unique_ptr<Http2StreamInfo> Http2Session::takeCompletedStream() {
     }
     auto stream = std::move(completed_streams.front());
     completed_streams.pop();
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: takeCompletedStream stream=%d remaining=%zu\n",
+            stream ? stream->stream_id : -1, completed_streams.size());
+        fflush(stderr);
+    }
     return stream;
 }
 
@@ -977,9 +1005,34 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
     if (frame->hd.type == NGHTTP2_GOAWAY) {
         printd(5, "onFrameSendCallback GOAWAY: last_stream_id=%d error_code=%u\n",
             frame->goaway.last_stream_id, frame->goaway.error_code);
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: send GOAWAY last_stream_id=%d error_code=%u\n",
+                frame->goaway.last_stream_id, frame->goaway.error_code);
+            fflush(stderr);
+        }
     } else if (frame->hd.type == NGHTTP2_RST_STREAM) {
         printd(5, "onFrameSendCallback RST_STREAM: stream_id=%d error_code=%u\n",
             frame->hd.stream_id, frame->rst_stream.error_code);
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: send RST_STREAM stream=%d error_code=%u\n",
+                frame->hd.stream_id, frame->rst_stream.error_code);
+            fflush(stderr);
+        }
+    } else if (frame->hd.type == NGHTTP2_HEADERS) {
+        bool end_stream = (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) != 0;
+        bool end_headers = (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS) != 0;
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: send HEADERS stream=%d END_STREAM=%d END_HEADERS=%d\n",
+                frame->hd.stream_id, end_stream ? 1 : 0, end_headers ? 1 : 0);
+            fflush(stderr);
+        }
+    } else if (frame->hd.type == NGHTTP2_DATA) {
+        bool end_stream = (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) != 0;
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: send DATA stream=%d len=%d END_STREAM=%d\n",
+                frame->hd.stream_id, (int)frame->hd.length, end_stream ? 1 : 0);
+            fflush(stderr);
+        }
     }
     return 0;
 }
@@ -1003,9 +1056,19 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
     if (frame->hd.type == NGHTTP2_GOAWAY) {
         printd(5, "onFrameRecvCallback GOAWAY: last_stream_id=%d error_code=%u\n",
             frame->goaway.last_stream_id, frame->goaway.error_code);
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: recv GOAWAY last_stream_id=%d error_code=%u\n",
+                frame->goaway.last_stream_id, frame->goaway.error_code);
+            fflush(stderr);
+        }
     } else if (frame->hd.type == NGHTTP2_RST_STREAM) {
         printd(5, "onFrameRecvCallback RST_STREAM: stream_id=%d error_code=%u\n",
             frame->hd.stream_id, frame->rst_stream.error_code);
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: recv RST_STREAM stream=%d error_code=%u\n",
+                frame->hd.stream_id, frame->rst_stream.error_code);
+            fflush(stderr);
+        }
     }
 
     switch (frame->hd.type) {
@@ -1019,12 +1082,24 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                         stream->body_complete = true;
                         // Mark as complete so the handler is called
                         // For CONNECT streams, markStreamComplete() keeps the stream in the map
+                        if (http2DebugEnabled()) {
+                            fprintf(stderr,
+                                "HTTP2 DEBUG: headers complete stream=%d END_STREAM=1 is_connect=%d\n",
+                                frame->hd.stream_id, stream->is_connect ? 1 : 0);
+                            fflush(stderr);
+                        }
                         h2->markStreamComplete(frame->hd.stream_id);
                     } else if (h2->is_server && stream->is_connect) {
                         // RFC 8441: Extended CONNECT requests have no body, so they're complete
                         // once headers are received. The client doesn't send END_STREAM because
                         // it needs to send data on the stream after the handshake completes.
                         printd(5, "onFrameRecvCallback: CONNECT request complete (no END_STREAM expected)\n");
+                        if (http2DebugEnabled()) {
+                            fprintf(stderr,
+                                "HTTP2 DEBUG: headers complete stream=%d END_STREAM=0 is_connect=1\n",
+                                frame->hd.stream_id);
+                            fflush(stderr);
+                        }
                         stream->body_complete = true;
                         h2->markStreamComplete(frame->hd.stream_id);
                     }
@@ -1056,6 +1131,10 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                 // Our settings have been acknowledged
             } else {
                 // Received remote settings
+                if (http2DebugEnabled()) {
+                    fprintf(stderr, "HTTP2 DEBUG: received SETTINGS niv=%zu\n", frame->settings.niv);
+                    fflush(stderr);
+                }
                 for (size_t i = 0; i < frame->settings.niv; ++i) {
                     const nghttp2_settings_entry& e = frame->settings.iv[i];
                     switch (e.settings_id) {
@@ -1080,6 +1159,10 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                         case NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL:
                             // RFC 8441: Server advertises support for extended CONNECT
                             h2->remote_settings.enable_connect_protocol = e.value;
+                            if (http2DebugEnabled()) {
+                                fprintf(stderr,
+                                    "HTTP2 DEBUG: received SETTINGS_ENABLE_CONNECT_PROTOCOL=%u\n", e.value);
+                            }
                             break;
                     }
                 }
@@ -1138,6 +1221,11 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
 int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream_id,
         uint32_t error_code, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    if (h2 && http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: stream close stream=%d error_code=%u\n",
+            stream_id, error_code);
+        fflush(stderr);
+    }
     Http2StreamInfo* stream = h2->getStream(stream_id);
     if (stream) {
         stream->state = Http2StreamState::Closed;
@@ -1230,6 +1318,11 @@ int Http2Session::onHeaderCallback(nghttp2_session* session, const nghttp2_frame
         if (header_value == "CONNECT") {
             stream->is_connect = true;
         }
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: received :method=%s (is_connect=%d)\n",
+                header_value.c_str(), stream->is_connect ? 1 : 0);
+            fflush(stderr);
+        }
     } else if (header_name == ":path") {
         stream->path = header_value;
     } else if (header_name == ":authority") {
@@ -1241,6 +1334,12 @@ int Http2Session::onHeaderCallback(nghttp2_session* session, const nghttp2_frame
         stream->connect_protocol = header_value;
         if (header_value == "websocket") {
             stream->stream_type = Http2StreamType::WebSocket;
+        }
+        if (http2DebugEnabled()) {
+            fprintf(stderr,
+                "HTTP2 DEBUG: received :protocol=%s (enable_connect_protocol=%u)\n",
+                header_value.c_str(), h2->remote_settings.enable_connect_protocol);
+            fflush(stderr);
         }
     } else {
         stream->headers[header_name] = header_value;
@@ -1257,6 +1356,11 @@ int Http2Session::onBeginHeadersCallback(nghttp2_session* session,
     // For client: Stream already exists for our request
     if (h2->is_server && frame->hd.type == NGHTTP2_HEADERS) {
         h2->getOrCreateStream(frame->hd.stream_id);
+    }
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: begin headers stream=%d type=%d flags=0x%x\n",
+            frame->hd.stream_id, frame->hd.type, frame->hd.flags);
+        fflush(stderr);
     }
 
     return 0;
@@ -1279,6 +1383,11 @@ int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
     // Log invalid headers for debugging but don't fail
     std::string hdr_name(reinterpret_cast<const char*>(name), namelen);
     std::string hdr_val(reinterpret_cast<const char*>(value), valuelen);
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: invalid header stream=%d %s=%s\n",
+            frame->hd.stream_id, hdr_name.c_str(), hdr_val.c_str());
+        fflush(stderr);
+    }
     printd(3, "Http2Session::onInvalidHeaderCallback() stream_id: %d header: %s=%s\n",
         frame->hd.stream_id, hdr_name.c_str(), hdr_val.c_str());
     return 0;
@@ -1287,6 +1396,11 @@ int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
 int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: sendStreamData stream=%d len=%zu end_stream=%d\n",
+            stream_id, len, end_stream);
+        fflush(stderr);
+    }
     printd(5, "sendStreamData() stream_id=%d len=%zu end_stream=%d isServer=%d\n", stream_id, len, end_stream, is_server);
     Http2StreamInfo* stream = getStream(stream_id);
     if (!stream) {
@@ -1359,6 +1473,11 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         xsink->raiseException("HTTP2-ERROR", "cannot submit CONNECT response on client session");
         return -1;
     }
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: submitConnectResponse stream=%d status=%d\n",
+            stream_id, status_code);
+        fflush(stderr);
+    }
 
     Http2StreamInfo* stream = getStream(stream_id);
     if (!stream) {
@@ -1425,6 +1544,10 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         xsink->raiseException("HTTP2-ERROR", "failed to submit CONNECT response: %s",
             nghttp2_strerror(rv));
         return -1;
+    }
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: submitConnectResponse ok stream=%d\n", stream_id);
+        fflush(stderr);
     }
     pending_data_providers.emplace(stream_id, std::move(provider_ctx));
 

@@ -164,7 +164,7 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         wsc.connect();
         assertTrue(wsc.isOpen(), "Connection should be open");
 
-        hash<auto> session = parse_json(msgs.get(5s));
+        hash<auto> session = parseJson(msgs.get(5s));
         assertEq("session", session.type, "First message should be session");
         assertEq("1.0", session.version, "Protocol version should be 1.0");
 
@@ -188,7 +188,7 @@ public class DpqlWebSocketTest inherits QUnit::Test {
             if (!raw) {
                 continue;
             }
-            hash<auto> msg = parse_json(raw);
+            hash<auto> msg = parseJson(raw);
             if (msg.type == type) {
                 return msg;
             }
@@ -197,7 +197,7 @@ public class DpqlWebSocketTest inherits QUnit::Test {
     }
 
     private hash<auto> setContext(WebSocketClient client, Queue msgs) {
-        client.send(make_json({
+        client.send(makeJson({
             "type": "context",
             "id": "ctx1",
             "provider": getProviderSpec(),
@@ -205,6 +205,24 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         hash<auto> response = waitMessage(msgs, "context");
         assertEq("ctx1", response.id, "Context response should echo ID");
         return response;
+    }
+
+    private hash<auto> parseJson(string data) {
+%ifdef NoJson
+        throw "MODULE-ERROR", "json module not available";
+        return {};
+%else
+        return parse_json(data);
+%endif
+    }
+
+    private string makeJson(any value) {
+%ifdef NoJson
+        throw "MODULE-ERROR", "json module not available";
+        return "";
+%else
+        return make_json(value);
+%endif
     }
 
     testHandlerOptions() {

@@ -80,9 +80,18 @@ public class QdpDpqlTest inherits QUnit::Test {
         };
     }
 
+    private list<auto> parseYaml(string data) {
+%ifdef NoYaml
+        throw "MODULE-ERROR", "yaml module not available";
+        return ();
+%else
+        return cast<list<auto>>(parse_yaml(data));
+%endif
+    }
+
     private list<auto> parseYamlOutput(hash<auto> result) {
         assertEq(0, result.rc);
-        return cast<list<auto>>(parse_yaml(result.out));
+        return parseYaml(result.out);
     }
 
     private dpqlSearchMatch() {

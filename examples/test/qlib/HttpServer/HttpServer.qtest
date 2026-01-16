@@ -904,13 +904,12 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "url": wssUrl,
             "timeout": 10s,
             "ssl_verify_cert": False,  # Self-signed cert
+            "http_version": "2.0",  # Force HTTP/2 for WebSocket over SSL
         });
         wsc.connect();
         on_exit wsc.disconnect();
 
-        # NOTE: HTTP/2 WebSocket is temporarily disabled due to unresolved issues with
-        # HTTP/2 session management. WebSocket now defaults to HTTP/1.1.
-        assertFalse(wsc.isHttp2(), "WebSocket should use HTTP/1.1 by default (HTTP/2 WebSocket disabled)");
+        assertTrue(wsc.isHttp2(), "WebSocket should negotiate HTTP/2 by default over SSL");
 
         # Send a message and wait for echo
         wsc.send("hello-ssl");
@@ -999,11 +998,12 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         string wssUrlNoToken = "wss://localhost:" + authSslPort + "/ws";
         bool gotRejection = False;
         try {
-            WebSocketClient wscBad(sub (*data msg) {}, {
-                "url": wssUrlNoToken,
-                "timeout": 10s,
-                "ssl_verify_cert": False,
-            });
+        WebSocketClient wscBad(sub (*data msg) {}, {
+            "url": wssUrlNoToken,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
             wscBad.connect();
             # If we get here, connection succeeded when it shouldn't have
             wscBad.disconnect();
@@ -1038,6 +1038,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "url": wssUrl,
             "timeout": 10s,
             "ssl_verify_cert": False,
+            "http_version": "2.0",
         });
         wscGood.connect({
             "hdr": {
@@ -1046,9 +1047,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         });
         on_exit wscGood.disconnect();
 
-        # NOTE: HTTP/2 WebSocket is temporarily disabled due to unresolved issues with
-        # HTTP/2 session management. WebSocket now defaults to HTTP/1.1.
-        assertFalse(wscGood.isHttp2(), "WebSocket should use HTTP/1.1 (HTTP/2 WebSocket disabled)");
+        assertTrue(wscGood.isHttp2(), "WebSocket should negotiate HTTP/2 after successful auth");
 
         # Send a message and verify echo
         wscGood.send("authenticated-message");
