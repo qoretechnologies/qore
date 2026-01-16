@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -92,7 +92,7 @@ int AbstractStatement::exec(QoreValue& return_value, ExceptionSink *xsink) {
 int AbstractStatement::exec(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     //QORE_TRACE("AbstractStatement::exec()");
     printd(1, "AbstractStatement::exec() this: %p file: %s:%d\n", this, loc->getFile(), loc->start_line);
-    RuntimeConfigLocationHelper loc_helper(rc, loc, this, pwo.parse_options, xsink);
+    RuntimeConfigLocationHelper loc_helper(rc, loc, this, true, pwo.parse_options, xsink);
     //pthread_testcancel();
     if (*xsink) {
         return 0;

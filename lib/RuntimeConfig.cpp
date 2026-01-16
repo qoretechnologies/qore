@@ -109,16 +109,17 @@ RuntimeConfigHelper::~RuntimeConfigHelper() {
 RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
         const QoreProgramLocation* new_loc,
         const AbstractStatement* new_stmt,
+        bool has_po,
         int64_t new_po,
         ExceptionSink* xsink)
     : rc(rc), old_loc(rc.loc), old_stmt(rc.stmt), old_po(rc.po),
       tls_old_loc(rc.loc), tls_old_stmt(rc.stmt), tls_old_po(rc.po),
-      restore_po(new_po >= 0), used_swap(false) {
+      restore_po(has_po), used_swap(false) {
     rc.loc = new_loc;
     if (new_stmt) {
         rc.stmt = new_stmt;
     }
-    if (new_po >= 0) {
+    if (has_po) {
         rc.po = new_po;
     }
     // Sync to TLS so code that falls back to TLS (like rc_get_current() from contexts

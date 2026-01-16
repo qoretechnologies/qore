@@ -192,7 +192,8 @@ public:
     DLLLOCAL RuntimeConfigLocationHelper(RuntimeConfig& rc,
         const QoreProgramLocation* new_loc,
         const AbstractStatement* new_stmt = nullptr,
-        int64_t new_po = -1,
+        bool has_po = false,
+        int64_t new_po = 0,
         ExceptionSink* xsink = nullptr);
     DLLLOCAL ~RuntimeConfigLocationHelper();
 
