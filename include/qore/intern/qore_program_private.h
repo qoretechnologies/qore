@@ -2660,6 +2660,9 @@ public:
         return l.release();
     }
 
+    // Release any remaining program instances at shutdown.
+    DLLLOCAL static void cleanupAllPrograms(ExceptionSink* xsink);
+
 private:
     mutable QoreCounter debug_program_counter;  // number of thread calls to debug program instance.
     DLLLOCAL void init(QoreProgram* n_pgm, int64 n_parse_options,

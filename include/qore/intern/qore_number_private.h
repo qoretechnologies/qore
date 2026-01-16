@@ -624,6 +624,12 @@ public:
     DLLLOCAL static QoreNumberNode* getPi() {
         qore_number_private* p = new qore_number_private(0ll);
         mpfr_const_pi(p->num, QORE_MPFR_RND);
+#ifdef HAVE_MPFR_BUILDOPT_TLS_T
+        // avoid leaving MPFR cache allocations behind after one-time PI initialization
+        mpfr_free_cache2(static_cast<mpfr_free_cache_t>(MPFR_FREE_LOCAL_CACHE | MPFR_FREE_GLOBAL_CACHE));
+        mpfr_free_pool();
+        mpfr_mp_memory_cleanup();
+#endif
         return new QoreNumberNode(p);
     }
 
