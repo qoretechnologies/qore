@@ -483,6 +483,11 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - fall back to HTTP/1.1 when HTTP/2 WebSocket CONNECT returns 501 (HTTP/2 WebSocket disabled)
     - Core language
       - fixed union type resolution order to honor the first matching type in the declaration
+      - improved @ref Qore::system() "system()" on Linux to use \c posix_spawn(), restore an unblocked signal mask
+        in child processes, and terminate the entire process group on sandbox interrupts
+      - improved @ref Qore::backquote() "backquote()" and the @ref backquote_operator "backquote operator" on Linux
+        to use \c posix_spawn(), restore an unblocked signal mask in child processes, and terminate the entire process
+        group on sandbox interrupts
     - @ref RestClient "RestClient" module
       - fixed non-blocking polling with connections that use basic auth
         (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)

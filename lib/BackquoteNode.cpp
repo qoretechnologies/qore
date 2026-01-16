@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,6 +32,16 @@
 #include <qore/QoreSandboxManager.h>
 
 #include <cerrno>
+#include <csignal>
+#include <unistd.h>
+#ifdef __linux__
+#include <poll.h>
+#include <spawn.h>
+#endif
+
+#ifdef __linux__
+extern char **environ;
+#endif
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -79,6 +89,115 @@ QoreValue BackquoteNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const
 
 QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
     rc = 0;
+#if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
+    {
+        int pipefd[2];
+        if (pipe(pipefd)) {
+            xsink->raiseException("BACKQUOTE-ERROR", q_strerror(errno));
+            return nullptr;
+        }
+
+        pid_t pid = -1;
+        posix_spawn_file_actions_t actions;
+        posix_spawnattr_t attr;
+        bool actions_inited = false;
+        bool attr_inited = false;
+        int spawn_rc = posix_spawn_file_actions_init(&actions);
+        if (spawn_rc == 0) {
+            actions_inited = true;
+            spawn_rc = posix_spawnattr_init(&attr);
+            if (spawn_rc == 0) {
+                attr_inited = true;
+            }
+        }
+        if (spawn_rc == 0) {
+            short flags = POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP;
+            posix_spawnattr_setflags(&attr, flags);
+
+            sigset_t empty;
+            sigemptyset(&empty);
+            posix_spawnattr_setsigmask(&attr, &empty);
+            posix_spawnattr_setpgroup(&attr, 0);
+
+            posix_spawn_file_actions_adddup2(&actions, pipefd[1], STDOUT_FILENO);
+            posix_spawn_file_actions_addclose(&actions, pipefd[0]);
+            posix_spawn_file_actions_addclose(&actions, pipefd[1]);
+
+            const char* argv[] = {"sh", "-c", cmd, nullptr};
+            spawn_rc = posix_spawn(&pid, "/bin/sh", &actions, &attr, const_cast<char* const*>(argv), environ);
+        }
+
+        if (spawn_rc != 0) {
+            close(pipefd[0]);
+            close(pipefd[1]);
+            if (spawn_rc == -1) {
+                xsink->raiseException("BACKQUOTE-ERROR", q_strerror(errno));
+            } else {
+                xsink->raiseException("BACKQUOTE-ERROR", q_strerror(spawn_rc));
+            }
+            if (actions_inited) {
+                posix_spawn_file_actions_destroy(&actions);
+            }
+            if (attr_inited) {
+                posix_spawnattr_destroy(&attr);
+            }
+            return nullptr;
+        }
+
+        posix_spawn_file_actions_destroy(&actions);
+        posix_spawnattr_destroy(&attr);
+        close(pipefd[1]);
+
+        QoreStringNodeHolder s(new QoreStringNode);
+        char buf[READ_BLOCK];
+        while (true) {
+            if (qore_check_io_interrupt(xsink, "backquote read")) {
+                kill(-pid, SIGKILL);
+                waitpid(pid, &rc, 0);
+                close(pipefd[0]);
+                rc = -1;
+                return nullptr;
+            }
+
+            struct pollfd pfd;
+            pfd.fd = pipefd[0];
+            pfd.events = POLLIN;
+            pfd.revents = 0;
+            int prc = poll(&pfd, 1, QORE_IO_POLL_INTERVAL_MS);
+            if (prc == 0) {
+                continue;
+            }
+            if (prc < 0) {
+#ifdef EINTR
+                if (errno == EINTR) {
+                    continue;
+                }
+#endif
+                break;
+            }
+
+            int size = read(pipefd[0], buf, READ_BLOCK);
+            if (size <= 0) {
+                break;
+            }
+
+            s->concat(buf, size);
+            if (size != READ_BLOCK) {
+                break;
+            }
+        }
+
+        close(pipefd[0]);
+        int status;
+        if (waitpid(pid, &status, 0) != pid) {
+            rc = -1;
+            return s.release();
+        }
+        rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        return s.release();
+    }
+#endif
+
     // execute command in a new process and read stdout in parent
     FILE* p = popen(cmd, "r");
     if (!p) {

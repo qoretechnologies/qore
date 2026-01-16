@@ -11,6 +11,11 @@
 class SystemCallTest inherits QUnit::Test {
     constructor() : Test("SystemCallTest", "1.0") {
         addTestCase("system() test", \testMethod());
+        addTestCase("system() exit code", \testExitCode());
+        addTestCase("system() command not found", \testCommandNotFound());
+        addTestCase("system() SIGINT handling", \testSignalHandling());
+        addTestCase("system() interrupt kills process group", \testInterruptKillsProcessGroup());
+        addTestCase("system() restricted access", \testRestrictedAccess());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
@@ -26,5 +31,119 @@ class SystemCallTest inherits QUnit::Test {
         on_exit unlink(file);
 
         assertEq("OUTPUT", chomp(ReadOnlyFile::readTextFile(file)));
+    }
+
+    testExitCode() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        int rc = system("exit 7");
+        assertEq(7, rc, "system() should return the command exit code");
+    }
+
+    testCommandNotFound() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        int rc = system("command_should_not_exist_12345");
+        assertEq(127, rc, "system() should return 127 for command not found");
+    }
+
+    testSignalHandling() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        int rc = system("trap 'exit 42' INT; kill -s INT $$; sleep 1; exit 0");
+        assertEq(42, rc, "system() child should handle SIGINT");
+    }
+
+    testInterruptKillsProcessGroup() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        string pid_file = tmp_location() + "/system_pid_" + string(getpid());
+        on_exit {
+            if (is_file(pid_file)) {
+                unlink(pid_file);
+            }
+        }
+
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+
+int sub run_system(string cmd) {
+    return system(cmd);
+}
+        ", "system_interrupt_test");
+
+        Counter done(1);
+        bool caught = False;
+        string ex_err;
+        int rc = -999;
+
+        string cmd = "echo $$ > " + pid_file + "; sleep 30 & wait";
+        background sub() {
+            try {
+                rc = p.callFunction("run_system", cmd);
+            } catch (hash<ExceptionInfo> ex) {
+                caught = True;
+                ex_err = ex.err;
+                rc = -1;
+            }
+            done.dec();
+        }();
+
+        int wait_attempts = 200;
+        while (!is_file(pid_file) && wait_attempts-- > 0) {
+            usleep(10000);
+        }
+        assertTrue(is_file(pid_file), "pid file created");
+
+        string pid_str = chomp(ReadOnlyFile::readTextFile(pid_file));
+        int pgid = pid_str.toInt();
+        assertTrue(pgid > 0, "process group id captured");
+
+        sm.requestInterrupt();
+        done.waitForZero(5s);
+
+        assertEq(-1, rc, "system() should return -1 on interrupt");
+        assertEq(True, caught, "system() call interrupted");
+        assertEq("PROGRAM-INTERRUPTED", ex_err, "system() raised PROGRAM-INTERRUPTED");
+
+        int krc = 0;
+        int kill_attempts = 50;
+        while (kill_attempts-- > 0) {
+            krc = kill(-pgid, 0);
+            if (krc == -1) {
+                break;
+            }
+            usleep(10000);
+        }
+        assertEq(-1, krc, "process group should be gone");
+    }
+
+    testRestrictedAccess() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_NO_EXTERNAL_PROCESS);
+        bool parse_caught = False;
+        try {
+            p.parse("
+%modern
+
+int sub run_system() {
+    return system(\":\");
+}
+            ", "system_restricted");
+        } catch (hash<ExceptionInfo> ex) {
+            parse_caught = True;
+            assertEq("PARSE-EXCEPTION", ex.err, "system() blocked by PO_NO_EXTERNAL_PROCESS");
+        }
+        assertTrue(parse_caught, "system() should be blocked by PO_NO_EXTERNAL_PROCESS");
     }
 }
