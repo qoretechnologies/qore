@@ -11,8 +11,9 @@
 %endtry
 
 %ifdef NoYaml
-sub parse_yaml(string data) {
+list<auto> parse_yaml(string data) {
     throw "MODULE-ERROR", "yaml module not available";
+    return ();
 }
 %endif
 

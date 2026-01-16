@@ -33,12 +33,14 @@
 %endtry
 
 %ifdef NoJson
-sub parse_json(string data) {
+hash<auto> parse_json(string data) {
     throw "MODULE-ERROR", "json module not available";
+    return {};
 }
 
-sub make_json(any value) {
+string make_json(any value) {
     throw "MODULE-ERROR", "json module not available";
+    return "";
 }
 %endif
 
