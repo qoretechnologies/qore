@@ -114,6 +114,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         #! I/O thread command: wake
         const IO_WAKE = "wake";
+
+        #! Force continuePoll on all operations after a wake (needed for HTTP/2 pending writes)
+        bool force_poll = False;
     }
 
     private:internal {
@@ -606,6 +609,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 # This ensures poll_timeout is calculated relative to the same timestamp used for
                 # timeout checks, avoiding race conditions where poll_deadline becomes negative
                 date now;
+                bool force_poll_cycle = False;
                 {
                     AutoLock al(m);
                     @debug {
@@ -613,6 +617,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             log(LoggerLevel::INFO, "poll cycle start: cache_size=%d loop_size=%d",
                                 cache.size(), loop.size());
                         }
+                    }
+                    if (force_poll) {
+                        force_poll_cycle = True;
+                        force_poll = False;
                     }
                     # Note: notifier is already registered in EventLoop from constructor
                     # scan for timed out operations
@@ -646,6 +654,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                     "period (%y)", cinfo.to);
                             }
                             if (cinfo.poll_info
+                                && !force_poll_cycle
                                 && !(ready_sockets{sock_key} ?? False)) {
                                 # Skip continuePoll for sockets that weren't marked ready by the kernel
                                 # Note: On macOS, kqueue is used instead of poll() which properly detects
@@ -1006,7 +1015,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     }
 
                     case IO_WAKE:
-                        # no-op; waking the I/O thread is enough
+                        {
+                            AutoLock al(m);
+                            force_poll = True;
+                        }
                         break;
                 }
                 }  # end of inner command processing loop

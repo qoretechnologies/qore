@@ -5575,6 +5575,11 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
     int rv;
     if (is_connect) {
         // RFC 8441: CONNECT response (WebSocket over HTTP/2) - no body, no END_STREAM
+        if (getenv("QORE_HTTP2_DEBUG")) {
+            fprintf(stderr, "HTTP2 DEBUG: send CONNECT response stream=%d status=%d\n",
+                stream_id, status_code);
+            fflush(stderr);
+        }
         rv = session->submitConnectResponse(stream_id, status_code, hdr_map, xsink);
     } else {
         // Regular HTTP/2 response with body and END_STREAM

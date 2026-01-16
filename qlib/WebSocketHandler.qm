@@ -218,6 +218,7 @@ public class WebSocketConnection {
 
         bool async_mode = False;
         *AsyncSocketIo::AsyncSocketIoController async_ctrl;
+        *AsyncSocketIo::Http2StreamContext h2_ctx;
 
         #! Listener ID this connection belongs to
         string lid;
@@ -245,6 +246,14 @@ public class WebSocketConnection {
     setAsyncIo(bool async_mode, *AsyncSocketIo::AsyncSocketIoController async_ctrl) {
         self.async_mode = async_mode;
         self.async_ctrl = async_ctrl;
+    }
+
+    setHttp2StreamContext(*AsyncSocketIo::Http2StreamContext ctx) {
+        self.h2_ctx = ctx;
+    }
+
+    *AsyncSocketIo::Http2StreamContext getHttp2StreamContext() {
+        return h2_ctx;
     }
 
     bool isAsyncMode() {
@@ -868,8 +877,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         #logDebug("websocket request: hdr: %N", hdr);
 
         # RFC 8441: HTTP/2 WebSocket uses CONNECT with :protocol=websocket
-        # Check if this is an HTTP/2 WebSocket CONNECT request
-        if (cx."header-info".is_websocket_connect) {
+        bool is_http2_ws = cx."header-info".http2
+            && (cx."header-info".is_websocket_connect
+                || (hdr.method == "CONNECT" && hdr.":protocol" == "websocket"));
+        if (is_http2_ws) {
             logDebug("HTTP/2 WebSocket CONNECT request received");
 
             # Negotiate extensions if supported
@@ -949,7 +960,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     */
     bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
         softstring cid = cx.id;
-        bool is_http2_ws = cx."header-info".http2 && cx."header-info".is_websocket_connect;
+        bool is_http2_ws = cx."header-info".http2
+            && (cx."header-info".is_websocket_connect
+                || (hdr.method == "CONNECT" && hdr.":protocol" == "websocket"));
         int h2_stream_id = is_http2_ws ? cx."header-info".stream_id : -1;
         softstring exit_reason = "unknown";
         @debug(bool h2_ws_debug_handler = is_http2_ws && getenv("QORE_HTTP2_WS_DEBUG_HANDLER"));
@@ -969,28 +982,16 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         if (async_mode) {
             async_ctrl = cx."async_ctrl";
         }
-        # Only set HTTP/2 active stream if the socket has an HTTP/2 session
-        # (may not be the case for forwarded requests to remote services)
-        bool h2_stream_set;
-        if (is_http2_ws) {
-            try {
-                sock.setHttp2ActiveStream(h2_stream_id);
-                h2_stream_set = True;
-            } catch (hash<ExceptionInfo> ex) {
-                # Socket doesn't have HTTP/2 session (forwarded request) - treat as non-HTTP/2
-                is_http2_ws = False;
-            }
-        }
-        on_exit if (h2_stream_set) {
-            sock.setHttp2ActiveStream(-1);
-        }
-
         # get new connection object
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
         sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
         wsc.setListenerId(lid);
         wsc.setAsyncIo(async_mode, async_ctrl);
+        if (is_http2_ws) {
+            @assert(h2_stream_id > 0, "missing HTTP/2 stream id for WebSocket");
+            wsc.setHttp2StreamContext(new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id));
+        }
 
         # Set negotiated extensions on the connection
         if (hdr."_ws_negotiated_extensions") {
@@ -1042,11 +1043,6 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 break;
             }
 
-            if (is_http2_ws) {
-                # Re-assert stream mapping in case the thread has been reassigned
-                sock.setHttp2ActiveStream(h2_stream_id);
-            }
-
             try {
                 bool update = False;
                 # send any and all messages on the queue
@@ -1072,7 +1068,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 hash<WsMsgInfo> h;
                 bool have_frame = False;
                 if (is_http2_ws && async_mode) {
-                    *binary incoming = sock.readHttp2StreamData(h2_stream_id);
+                    *AsyncSocketIo::Http2StreamContext h2_ctx = wsc.getHttp2StreamContext();
+                    *binary incoming = h2_ctx ? h2_ctx.readData() : sock.readHttp2StreamData(h2_stream_id);
                     if (incoming) {
                         http2_buf = http2_buf ? http2_buf + incoming : incoming;
                     }
@@ -1521,6 +1518,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             txtmsg = convert_encoding(txtmsg, "utf8");
         else
             txtmsg = WSCCMap{code};
+        @debug {
+            if (getenv("QORE_HTTP2_DEBUG")) {
+                log(LoggerLevel::INFO, "HTTP/2 WS sendClose: code=%d reason=%y", code, txtmsg);
+            }
+        }
         msg += txtmsg;
         binary frame = ws_encode_message(msg, WSOP_Close);
         @debug {
@@ -1579,12 +1581,28 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     }
 
     private sendFrame(WebSocketConnection wsc, Socket sock, binary frame) {
-        if (wsc.isAsyncMode() && sock.isHttp2()) {
-            int stream_id = sock.getHttp2ActiveStream();
-            if (stream_id > 0) {
-                sock.sendHttp2StreamData(stream_id, frame, False, 0);
-                return;
+        *AsyncSocketIo::Http2StreamContext h2_ctx = wsc.getHttp2StreamContext();
+        if (h2_ctx) {
+            try {
+                h2_ctx.sendData(frame, False);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP2-ERROR" && ex.desc =~ /no HTTP\/2 session active/) {
+                    @debug {
+                        logDebug("HTTP/2 WS sendFrame: stream session inactive; stopping connection");
+                    }
+                    wsc.stop();
+                    return;
+                }
+                if (ex.err == "SOCKET-NOT-OPEN") {
+                    wsc.stop();
+                    return;
+                }
+                throw ex.err, ex.desc, ex.arg;
             }
+            if (wsc.isAsyncMode() && wsc.getAsyncCtrl()) {
+                wsc.getAsyncCtrl().wake();
+            }
+            return;
         }
         if (wsc.isAsyncMode()) {
             @assert(wsc.getAsyncCtrl(), "missing async controller for async mode WebSocket send");
