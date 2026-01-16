@@ -35,6 +35,8 @@
 
 #include "qore/intern/AbstractStatement.h"
 
+struct RuntimeConfig;
+
 class ExpressionStatement : public AbstractStatement {
 public:
     DLLLOCAL ExpressionStatement(const QoreProgramLocation* loc, QoreValue v);
@@ -55,6 +57,7 @@ private:
     bool is_parse_declaration;
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };

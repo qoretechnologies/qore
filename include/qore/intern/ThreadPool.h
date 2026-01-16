@@ -63,6 +63,14 @@ public:
     }
 
     DLLLOCAL QoreValue run(ExceptionSink* xsink) {
+        // Get the program from the call reference and set up program context
+        // This ensures tlpd is set up for thread pool threads
+        QoreProgram* pgm = code->getProgram();
+        assert(pgm);
+        QoreExternalProgramContextHelper pch(xsink, pgm);
+        if (*xsink) {
+            return QoreValue();
+        }
         return code->execValue(0, xsink);
     }
 

@@ -72,8 +72,27 @@ QR=""
 LIBQORE=""
 QORE_LIB_PATH="./lib/.libs:./qlib:$LD_LIBRARY_PATH"
 
+# Allow callers to override binaries (ex: debug build output).
+if [ -n "$QORE_BINARY" ]; then
+    QORE="$QORE_BINARY"
+    QORE_DIR=`dirname "$QORE"`
+    if [ -f "$QORE_DIR/libqore.so" ]; then
+        LIBQORE="$QORE_DIR/libqore.so"
+    elif [ -f "$QORE_DIR/libqore.dylib" ]; then
+        LIBQORE="$QORE_DIR/libqore.dylib"
+    fi
+    if [ -f "$QORE_DIR/qr" ]; then
+        QR="$QORE_DIR/qr"
+    fi
+fi
+
+# Allow explicit override for libqore if needed.
+if [ -n "$LIBQORE_BINARY" ]; then
+    LIBQORE="$LIBQORE_BINARY"
+fi
+
 # Test that qore is built.
-if [ -s "./.libs/qore" ] && [ -f "./qore" ] && [ -f "./lib/.libs/libqore.so" -o "./lib/.libs/libqore.dylib" ]; then
+if [ -z "$QORE" ] && [ -s "./.libs/qore" ] && [ -f "./qore" ] && [ -f "./lib/.libs/libqore.so" -o "./lib/.libs/libqore.dylib" ]; then
     if [ -f "./lib/.libs/libqore.so" ]; then
         LIBQORE="./lib/.libs/libqore.so"
     elif [ -f "./lib/.libs/libqore.dylib" ]; then
@@ -82,19 +101,21 @@ if [ -s "./.libs/qore" ] && [ -f "./qore" ] && [ -f "./lib/.libs/libqore.so" -o 
     QORE="./.libs/qore"
     QR="./.libs/qr"
 else
-    for D in `ls -d */`; do
-        d=`echo ${D%%/}`
-        if [ -f "$d/CMakeCache.txt" ] && [ -f "$d/qore" ] && [ -f "$d/libqore.so" -o "$d/libqore.dylib" ]; then
-            if [ -f "$d/libqore.so" ]; then
-                LIBQORE="$d/libqore.so"
-            elif [ -f "$d/libqore.dylib" ]; then
-                LIBQORE="$d/libqore.dylib"
+    if [ -z "$QORE" ]; then
+        for D in `ls -d */`; do
+            d=`echo ${D%%/}`
+            if [ -f "$d/CMakeCache.txt" ] && [ -f "$d/qore" ] && [ -f "$d/libqore.so" -o "$d/libqore.dylib" ]; then
+                if [ -f "$d/libqore.so" ]; then
+                    LIBQORE="$d/libqore.so"
+                elif [ -f "$d/libqore.dylib" ]; then
+                    LIBQORE="$d/libqore.dylib"
+                fi
+                QORE="$d/qore"
+                QR="$d/qr"
+                break
             fi
-            QORE="$d/qore"
-            QR="$d/qr"
-            break
-        fi
-    done
+        done
+    fi
 fi
 
 if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then

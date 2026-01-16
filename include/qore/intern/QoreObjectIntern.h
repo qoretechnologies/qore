@@ -384,6 +384,7 @@ public:
     DLLLOCAL void cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm) {
         if (privateData) {
             printd(5, "qore_object_private::cleanup() this: %p privateData: %p\n", this, privateData);
+            privateData->derefAll(xsink);
             delete privateData;
 #ifdef DEBUG
             privateData = nullptr;
@@ -445,9 +446,6 @@ public:
 
             //printd(5, "Object lock %p unlocked (safe)\n", &rml);
             sl.unlock();
-
-            if (privateData)
-                privateData->derefAll(xsink);
 
             cleanup(xsink, td, cdm);
         }

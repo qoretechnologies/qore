@@ -36,12 +36,15 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 
+struct RuntimeConfig;
+
 class QoreRangeOperatorNode : public QoreIntBinaryOperatorNode, public FunctionalOperator {
 OP_COMMON
 protected:
     const QoreTypeInfo* typeInfo;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
@@ -50,6 +53,8 @@ protected:
     }
 
     DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
+            ExceptionSink* xsink) const;
+    DLLLOCAL FunctionalOperatorInterface* getFunctionalIteratorImpl(RuntimeConfig& rc, FunctionalValueType& value_type,
             ExceptionSink* xsink) const;
 
 public:

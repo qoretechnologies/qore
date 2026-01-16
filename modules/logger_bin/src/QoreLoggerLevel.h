@@ -80,7 +80,7 @@ public:
     static QoreObject* LevelOff;
 
     DLLLOCAL QoreLoggerLevel(int64 code, const QoreStringNode* level) : levelCode(code),
-            levelStr(level->stringRefSelf()) {
+            levelStr(const_cast<QoreStringNode*>(level)) {
     }
 
     //! Returns itself after referencing

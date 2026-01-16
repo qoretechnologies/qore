@@ -32,6 +32,8 @@
 #ifndef _QORE_QOREVALUECOALESCINGOPERATORNODE_H
 #define _QORE_QOREVALUECOALESCINGOPERATORNODE_H
 
+struct RuntimeConfig;
+
 class QoreValueCoalescingOperatorNode : public QoreBinaryOperatorNode<QoreOperatorNode> {
 public:
     DLLLOCAL QoreValueCoalescingOperatorNode(const QoreProgramLocation* loc, QoreValue e0, QoreValue e1)
@@ -63,6 +65,7 @@ protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 #endif

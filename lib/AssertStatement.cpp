@@ -119,6 +119,56 @@ int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     return 0;
 }
 
+int AssertStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    // Evaluate the condition
+    ValueEvalRefHolder cond_val(rc, condition, xsink);
+    if (*xsink) {
+        return 0;
+    }
+
+    // Check if condition is true
+    if (!cond_val->getAsBool()) {
+        // Assertion failed - get the message if provided
+        QoreStringNode* msg_str = nullptr;
+        if (message) {
+            ValueEvalRefHolder msg_val(rc, message, xsink);
+            if (*xsink) {
+                return 0;
+            }
+            if (msg_val->getType() == NT_LIST) {
+                // Variadic case: use sprintf with the list (format, args...)
+                const QoreListNode* args = msg_val->get<const QoreListNode>();
+                msg_str = q_sprintf(args, 0, 0, xsink);
+                if (*xsink) {
+                    return 0;
+                }
+            } else if (msg_val->getType() == NT_STRING) {
+                msg_str = msg_val.takeReferencedValue().get<QoreStringNode>();
+            } else {
+                bool del;
+                QoreString* tmp = msg_val->getAsString(del, 0, xsink);
+                if (*xsink) {
+                    return 0;
+                }
+                if (tmp) {
+                    msg_str = new QoreStringNode(*tmp);
+                    if (del) {
+                        delete tmp;
+                    }
+                } else {
+                    msg_str = new QoreStringNode("assertion failed");
+                }
+            }
+        } else {
+            msg_str = new QoreStringNode("assertion failed");
+        }
+
+        xsink->raiseException("ASSERTION-ERROR", msg_str);
+    }
+
+    return 0;
+}
+
 int AssertStatement::parseInitImpl(QoreParseContext& parse_context) {
     // Turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);

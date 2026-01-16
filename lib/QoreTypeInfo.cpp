@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreRWLock.h>
+#include <unordered_set>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/qore_number_private.h"
@@ -711,8 +712,9 @@ const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInf
 static type_vec_t normalize_union_key(const type_vec_t& member_types) {
     type_vec_t key;
     key.reserve(member_types.size());
+    std::unordered_set<const QoreTypeInfo*> seen;
     for (const QoreTypeInfo* ti : member_types) {
-        if (std::find(key.begin(), key.end(), ti) == key.end()) {
+        if (seen.insert(ti).second) {
             key.push_back(ti);
         }
     }

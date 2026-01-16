@@ -139,6 +139,37 @@ int ContextStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     return rc;
 }
 
+int ContextStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    int rc_state = 0;
+    QoreValue sort = sort_ascending ? sort_ascending : sort_descending;
+    int sort_type = sort_ascending ? CM_SORT_ASCENDING : (sort_descending ? CM_SORT_DESCENDING : -1);
+
+    // instantiate local variables
+    LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
+
+    // create the context
+    ReferenceHolder<Context> context(new Context(name, xsink, exp, where_exp, sort_type, sort), xsink);
+    if (*xsink || !code)
+        return rc_state;
+
+    // execute the statements
+    for (context->pos = 0; context->pos < context->max_pos && !xsink->isEvent(); ++context->pos) {
+        printd(4, "ContextStatement::exec() iteration %d/%d\n", context->pos, context->max_pos);
+        if (((rc_state = code->execImpl(rc, return_value, xsink)) == RC_BREAK) || *xsink) {
+            rc_state = 0;
+            break;
+        }
+        else if (rc_state == RC_RETURN) {
+            break;
+        }
+        else if (rc_state == RC_CONTINUE) {
+            rc_state = 0;
+        }
+    }
+
+    return rc_state;
+}
+
 int ContextStatement::parseInitImpl(QoreParseContext& parse_context) {
     QORE_TRACE("ContextStatement::parseInitImpl()");
 

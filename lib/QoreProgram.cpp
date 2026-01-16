@@ -36,6 +36,7 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/ConstantList.h"
@@ -49,6 +50,8 @@
 #include <set>
 #include <typeinfo>
 #include <vector>
+
+extern bool threads_initialized;
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -746,6 +749,22 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         exp_set.clear();
 
         del(xsink);
+
+        // release parse caches now that the program is cleared
+        str_set.clear();
+        loc_set.clear();
+        str_vec.clear();
+        str_vec.shrink_to_fit();
+        pgmloc.clear();
+        pgmloc.shrink_to_fit();
+        statementIds.clear();
+        statementIds.shrink_to_fit();
+        reverseStatementIds.clear();
+
+        for (auto var : local_var_list) {
+            delete var;
+        }
+        local_var_list.clear();
 
         // clear program location
         //update_runtime_location(&loc_builtin);
@@ -2372,11 +2391,41 @@ QoreObject* QoreProgram::findQoreObject() const {
 }
 
 QoreObject* QoreProgram::getQoreObject(QoreProgram* pgm) {
-   return qore_program_private::getQoreObject(pgm);
+    return qore_program_private::getQoreObject(pgm);
+}
+
+void qore_program_private::cleanupAllPrograms(ExceptionSink* xsink) {
+    if (!qore_shutdown.load(std::memory_order_relaxed) || threads_initialized) {
+        return;
+    }
+
+    std::vector<std::pair<QoreProgram*, QoreObject*>> programs;
+    {
+        QoreAutoRWWriteLocker al(&lck_programMap);
+        programs.reserve(qore_program_to_object_map.size());
+        for (auto& i : qore_program_to_object_map) {
+            programs.push_back(std::make_pair(i.first, i.second));
+        }
+    }
+
+    for (auto& entry : programs) {
+        if (entry.second) {
+            int oref = entry.second->reference_count();
+            if (oref > 0) {
+                entry.second->deref(xsink);
+            }
+        }
+        if (entry.first) {
+            int pref = entry.first->reference_count();
+            if (pref > 0) {
+                entry.first->waitForTerminationAndDeref(xsink);
+            }
+        }
+    }
 }
 
 QoreListNode* QoreProgram::getAllQoreObjects(ExceptionSink* xsink) {
-   return qore_program_private::getAllQoreObjects(xsink);
+    return qore_program_private::getAllQoreObjects(xsink);
 }
 
 bool QoreProgram::checkAllowDebugging(ExceptionSink* xsink) {

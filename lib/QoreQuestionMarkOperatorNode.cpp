@@ -78,13 +78,18 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
 }
 
 QoreValue QoreQuestionMarkOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder b(e[0], xsink);
+    RuntimeConfig rc = rc_get_current();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue QoreQuestionMarkOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalRefHolder b(rc, e[0], xsink);
     if (*xsink)
         return QoreValue();
 
     QoreValue exp = b->getAsBool() ? e[1] : e[2];
 
-    ValueEvalOptimizedRefHolder rv(exp, xsink);
+    ValueEvalRefHolder rv(rc, exp, xsink);
     if (*xsink)
         return QoreValue();
 

@@ -35,6 +35,8 @@
 
 #include "qore/intern/AbstractStatement.h"
 
+struct RuntimeConfig;
+
 class AssertStatement : public AbstractStatement {
 public:
     //! Creates an assert statement with an expression
@@ -51,6 +53,7 @@ private:
     QoreValue message{};    //!< Optional message/format args on failure (can be list for sprintf)
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };

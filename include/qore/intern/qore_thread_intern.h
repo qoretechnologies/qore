@@ -34,6 +34,8 @@
 #ifndef _QORE_QORE_THREAD_INTERN_H
 #define _QORE_QORE_THREAD_INTERN_H
 
+struct RuntimeConfig;
+
 #include <vector>
 #include <set>
 #include <map>
@@ -217,6 +219,7 @@ protected:
 };
 
 DLLLOCAL QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink);
+DLLLOCAL QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink);
 
 // updates the active exception count
 DLLLOCAL void inc_active_exceptions(int diff);

@@ -31,6 +31,8 @@
 
 #include <qore/Qore.h>
 
+#include "qore/intern/RuntimeConfig.h"
+
 #include <cassert>
 #include <cerrno>
 #include <cstdio>
@@ -313,11 +315,27 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool 
     }
 }
 
+LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove)
+        : vl(xsink) {
+    RuntimeReferenceHelper rh(ref, xsink);
+    if (!*xsink) {
+        doLValue(lvalue_ref::get(&ref)->vexp, rc, for_remove);
+    }
+}
+
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove) : vl(xsink) {
     // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
     //printd(5, "LValueHelper::LValueHelper() exp: %p (%s %d)\n", exp, get_type_name(exp), get_node_type(exp));
     if (!exp.isNothing() && exp.hasNode()) {
         doLValue(exp, for_remove);
+    }
+}
+
+LValueHelper::LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove)
+        : vl(xsink) {
+    // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
+    if (!exp.isNothing() && exp.hasNode()) {
+        doLValue(exp, rc, for_remove);
     }
 }
 
@@ -524,6 +542,84 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     return qore_list_private::get(*l)->getLValue((size_t)ind, *this, for_remove, vl.xsink);
 }
 
+int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
+    // first get index
+    ValueEvalOptimizedRefHolder rh(op->getRight(), vl.xsink);
+    if (*vl.xsink) {
+        return -1;
+    }
+
+    if (rh->getType() == NT_LIST) {
+        vl.xsink->raiseException("ILLEGAL-SLICE", "slices are not supported in internal lvalue expressions");
+        return -1;
+    }
+
+    int64 ind = rh->getAsBigInt();
+    if (ind < 0) {
+        vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
+            "non-negative integer)", ind);
+        return -1;
+    }
+
+    // now get left hand side
+    if (doLValue(op->getLeft(), rc, for_remove)) {
+        return -1;
+    }
+
+    QoreListNode* l = nullptr;
+    if (getType() == NT_LIST) {
+        ensureUnique();
+        l = getValue().get<QoreListNode>();
+    } else if (getType() == NT_WEAKREF_LIST) {
+        ensureUnique();
+        l = getValue().get<WeakListReferenceNode>()->get();
+    } else {
+        if (for_remove)
+            return -1;
+
+        // if the lvalue is not already a list, then make it one
+        // but first make sure the lvalue can be converted to a list
+        if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_LIST)) {
+            var_type_err(typeInfo, "list", vl.xsink);
+            clearPtr();
+            return -1;
+        }
+
+        // create a hash of the required type if the lvalue has a complex hash type and currently has no value
+        if (!getValue()) {
+            // issue #2652: assign the current runtime type based on the declared complex list type
+            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
+                // issue #3429 assign an untyped list if required
+                assignNodeIntern((l = new QoreListNode));
+            } else {
+                const QoreTypeInfo* sti = typeInfo == autoTypeInfo
+                    ? autoTypeInfo
+                    : QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
+                if (sti) {
+                    assignNodeIntern((l = new QoreListNode(sti)));
+                }
+            }
+        }
+
+        // create an untyped list
+        if (!l) {
+            // save the old value for dereferencing outside any locks that may have been acquired
+            saveTemp(getValue().getInternalNode());
+            const QoreTypeInfo* valueTypeInfo;
+            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
+                valueTypeInfo = nullptr;
+            } else {
+                valueTypeInfo = autoTypeInfo;
+            }
+            assignNodeIntern((l = new QoreListNode(valueTypeInfo)));
+        }
+    }
+
+    ocvec.push_back(ObjCountRec(l));
+
+    return qore_list_private::get(*l)->getLValue((size_t)ind, *this, for_remove, vl.xsink);
+}
+
 int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) {
     QoreHashNode* h;
     if (t == NT_HASH) {
@@ -605,6 +701,10 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
 }
 
 int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove) {
+    return doObjLValue(o, mem, for_remove, runtime_get_class());
+}
+
+int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx) {
     //printd(5, "LValueHelper::doObjLValue() o: %p v: %p ('%s', refs: %d)\n", o, getTypeName(),
     //    getValue() ? getValue()->reference_count() : 0);
     //printd(5, "LValueHelper::doObjLValue() obj: %p member: '%s'\n", o, mem->c_str());
@@ -613,13 +713,12 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove) {
     ocvec.clear();
     clearPtr();
 
-    // get the current class context for possible internal data
-    const qore_class_private* class_ctx = runtime_get_class();
-    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
-        class_ctx = nullptr;
+    const qore_class_private* ctx = class_ctx;
+    if (ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), ctx)) {
+        ctx = nullptr;
     }
-    if (!qore_object_private::getLValue(*o, mem, *this, class_ctx, for_remove, vl.xsink)) {
-        if (!class_ctx) {
+    if (!qore_object_private::getLValue(*o, mem, *this, ctx, for_remove, vl.xsink)) {
+        if (!ctx) {
             vl.addMemberNotification(o, mem); // add member notification for external updates
         }
     }
@@ -659,6 +758,36 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     return doObjLValue(o, mem->c_str(), for_remove);
 }
 
+int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
+    ValueEvalOptimizedRefHolder rh(op->getRight(), vl.xsink);
+    if (*vl.xsink) {
+        return -1;
+    }
+
+    // convert to default character encoding
+    QoreStringValueHelper mem(*rh, QCS_DEFAULT, vl.xsink);
+    if (*vl.xsink) {
+        return -1;
+    }
+
+    if (doLValue(op->getLeft(), rc, for_remove)) {
+        return -1;
+    }
+
+    qore_type_t t = getType();
+    QoreObject* o;
+    if (t == NT_WEAKREF) {
+        o = getValue().get<const WeakReferenceNode>()->get();
+    } else if (t == NT_OBJECT) {
+        o = getValue().get<QoreObject>();
+    } else {
+        return doHashLValue(t, mem->c_str(), for_remove);
+    }
+
+    const qore_class_private* class_ctx = rc.cls ? rc.cls : runtime_get_class();
+    return doObjLValue(o, mem->c_str(), for_remove, class_ctx);
+}
+
 void LValueHelper::setObjectContext(qore_object_private* obj) {
     robj = obj;
     ocvec.push_back(ObjCountRec(obj->obj));
@@ -676,6 +805,18 @@ int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
     //printd(5, "LValueHelper::doLValue() this: %p ReferenceNode: %p r->vexp: %s ti: %s\n", this, ref,
     //    r->vexp.getFullTypeName(), QoreTypeInfo::getName(r->typeInfo));
     return doLValue(r->vexp, for_remove);
+}
+
+int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove) {
+    const lvalue_ref* r = lvalue_ref::get(ref);
+    if (!lvid_set) {
+        lvid_set = new lvid_set_t;
+    }
+    // issue 1617: the lvalue_id might already be present in the set in case there is
+    // a reference to a reference, however it's safe to insert it multiple times;
+    // the reference count for the lvalue_id object is handled elsewhere
+    lvid_set->insert(r->lvalue_id);
+    return doLValue(r->vexp, rc, for_remove);
 }
 
 int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
@@ -780,6 +921,102 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
             typeInfo = nullptr;
         }
         return doLValue(ref, for_remove);
+    }
+
+    return 0;
+}
+
+int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remove) {
+    // if we are already locked, then save the value and unlock before processing
+    if (vl) {
+        saveTemp(n.refSelf());
+        vl.del();
+    }
+    qore_type_t ntype = n.getType();
+    if (ntype == NT_VARREF) {
+        const VarRefNode* v = n.get<const VarRefNode>();
+        if (v->getLValue(*this, for_remove)) {
+            // issue #2891 if the lvalue retrieval fails in a complex reference, make sure to clear the object
+            clearPtr();
+            return -1;
+        }
+    } else if (ntype == NT_SELF_VARREF) {
+        const SelfVarrefNode* v = n.get<const SelfVarrefNode>();
+        // note that getStackObject() is guaranteed to return a value here (self varref is only valid in a method)
+        QoreObject* obj = rc.obj ? rc.obj : runtime_get_stack_object();
+        assert(obj);
+
+        // clear ocvec when we get to an object
+        ocvec.clear();
+        clearPtr();
+
+        const qore_class_private* class_ctx = rc.cls ? rc.cls : runtime_get_class();
+        if (qore_object_private::getLValue(*obj, v->str, *this, class_ctx, for_remove, vl.xsink)) {
+            // here the object has already been cleared above
+            return -1;
+        }
+
+        robj = qore_object_private::get(*obj);
+        ocvec.push_back(ObjCountRec(obj));
+    } else if (ntype == NT_CLASS_VARREF) {
+        if (n.get<const StaticClassVarRefNode>()->getLValue(*this)) {
+            assert(*vl.xsink);
+            clearPtr();
+            return -1;
+        }
+    } else if (ntype == NT_REFERENCE) {
+        if (doLValue(n.get<const ReferenceNode>(), rc, for_remove)) {
+            // issue #2891 if the lvalue retrieval fails in a complex reference, make sure to clear the object
+            clearPtr();
+            return -1;
+        }
+    } else {
+        assert(ntype == NT_OPERATOR);
+        const QoreSquareBracketsOperatorNode* op =
+            dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
+        if (op) {
+            if (doListLValue(op, rc, for_remove)) {
+                // issue #2891 if the lvalue retrieval fails in a complex reference, make sure to clear the object
+                clearPtr();
+                return -1;
+            }
+        } else {
+            const QoreCastOperatorNode* cast_op = dynamic_cast<const QoreCastOperatorNode*>(n.getInternalNode());
+            if (cast_op) {
+                if (doLValue(cast_op->getExp(), rc, for_remove)) {
+                    clearPtr();
+                    return -1;
+                }
+                if (cast_op->checkValue(vl.xsink, val ? val->getValue() : *qv, true)) {
+                    clearPtr();
+                    return -1;
+                }
+            } else {
+                assert(dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode()));
+                const QoreHashObjectDereferenceOperatorNode* hop =
+                    n.get<const QoreHashObjectDereferenceOperatorNode>();
+                if (doHashObjLValue(hop, rc, for_remove)) {
+                    // issue #2891 if the lvalue retrieval fails in a complex reference, make sure to clear the object
+                    clearPtr();
+                    return -1;
+                }
+            }
+        }
+    }
+
+    assert(!*vl.xsink);
+
+    const ReferenceNode* ref = getReference();
+    if (ref) {
+        if (val) {
+            val = nullptr;
+        } else if (qv) {
+            qv = nullptr;
+        }
+        if (typeInfo) {
+            typeInfo = nullptr;
+        }
+        return doLValue(ref, rc, for_remove);
     }
 
     return 0;

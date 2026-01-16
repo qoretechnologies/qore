@@ -56,6 +56,17 @@ int DebugStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     return *xsink ? -1 : 0;
 }
 
+int DebugStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    if (code) {
+        // Execute the statement block
+        return code->execImpl(rc, return_value, xsink);
+    }
+    // Simply evaluate the expression for its side effects (e.g., logging)
+    ValueEvalRefHolder val(rc, expression, xsink);
+    // The result is discarded; we just want the side effects
+    return *xsink ? -1 : 0;
+}
+
 int DebugStatement::parseInitImpl(QoreParseContext& parse_context) {
     // Turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);

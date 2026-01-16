@@ -122,6 +122,44 @@ int SwitchStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     return rc;
 }
 
+int SwitchStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    int rc_state = 0;
+
+    // instantiate local variables
+    LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
+
+    ValueEvalRefHolder se(rc, sexp, xsink);
+
+    if (!*xsink) {
+        // find match
+        CaseNode* w = head;
+        while (w) {
+            if (w->matches(*se, xsink)) {
+                break;
+            }
+            w = w->next;
+        }
+        if (!w && deflt) {
+            w = deflt;
+        }
+
+        while (w && !rc_state && !*xsink) {
+            if (w->code) {
+                rc_state = w->code->execImpl(rc, return_value, xsink);
+            }
+
+            w = w->next;
+        }
+
+        if (rc_state == RC_BREAK
+            || ((getProgram()->getParseOptions64() & PO_BROKEN_LOOP_STATEMENT) != 0 && rc_state == RC_CONTINUE)) {
+            rc_state = 0;
+        }
+    }
+
+    return rc_state;
+}
+
 int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
     // turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);

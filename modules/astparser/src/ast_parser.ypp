@@ -522,6 +522,11 @@ extern std::string* takeSubDocComment();
 %destructor { free($$); $$ = nullptr; } ANGLE_IDENTIFIER BACKQUOTE BASE_CLASS_CALL BINARY CLASS_SCOPED_REF CLASS_STRING COMPLEX_CONTEXT_REF CONTEXT_REF DATETIME HASHDECL_IDENTIFIER_OPENCURLY IDENTIFIER KW_IDENTIFIER_OPENPAREN NAMESPACE NUMBER QORE_CAST SCOPED_REF SCOPED_VREF SELF_REF VAR_REF ident_openparen
 %destructor { if ($$) { for (int i = 0, count = $$->size(); i < count; i++) {delete (*$$)[i];} delete $$; } $$ = nullptr; } base_constructors class_attributes context_mods enum_members hashdecl_attributes inheritance_list member_list member_list2 namespace_decls superclass_list
 
+%code top {
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
+}
 %%
 top_level_commands:
         top_level_command {
