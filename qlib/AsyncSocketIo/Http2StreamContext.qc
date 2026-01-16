@@ -58,10 +58,31 @@ public class Http2StreamContext {
         return sock.isOpen();
     }
 
+    #! Send DATA frames on the associated HTTP/2 stream.
+    /** Sends binary DATA frames for this HTTP/2 stream using the underlying socket.
+
+        @param data
+        the binary payload to send on the stream
+
+        @param end_stream
+        if True, the END_STREAM flag is set on the DATA frame, signaling no more data will be sent on this stream
+
+        @throw
+        any exception thrown by Socket::sendHttp2StreamData()
+    */
     sendData(binary data, bool end_stream = False) {
         sock.sendHttp2StreamData(stream_id, data, end_stream, 0);
     }
 
+    #! Read data from this HTTP/2 stream.
+    /** Reads data for this stream from the underlying HTTP/2 socket.
+
+        @param max_bytes
+        the maximum number of bytes to read; if 0, the socket decides how much data to return
+
+        @return
+        the binary data returned by Socket::readHttp2StreamData()
+    */
     *binary readData(int max_bytes = 0) {
         return sock.readHttp2StreamData(stream_id, max_bytes);
     }

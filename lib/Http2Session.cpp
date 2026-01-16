@@ -41,12 +41,14 @@
 #include <cinttypes>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 
 static bool http2DebugEnabled() {
-    static int enabled = -1;
-    if (enabled < 0) {
+    static std::once_flag flag;
+    static int enabled = 0;
+    std::call_once(flag, []() {
         enabled = getenv("QORE_HTTP2_DEBUG") ? 1 : 0;
-    }
+    });
     return enabled == 1;
 }
 

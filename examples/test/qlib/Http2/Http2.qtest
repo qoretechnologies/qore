@@ -134,6 +134,17 @@ class EchoWebSocketHandler inherits WebSocketHandler::WebSocketHandler {
 }
 
 public class Http2Test inherits QUnit::Test {
+    private {
+        # Regex for Go module resolution failures that should skip the test.
+        const GO_HTTP2_WS_SKIP_RE
+            = "no required module provides package|module lookup disabled|unrecognized import path|GOPROXY"
+                + "|missing go.sum entry|certificate verify failed|proxyconnect|lookup .*: no such host";
+
+        # Regex for nghttp2/OpenSSL compile failures that should skip the test.
+        const NGHTTP2_WS_COMPILE_SKIP_RE
+            = "fatal error:.*nghttp2|fatal error:.*openssl|library not found|cannot find -lnghttp2"
+                + "|cannot find -lssl|cannot find -lcrypto|command not found";
+    }
     public {
         # Command-line options
         const MyOpts = Opts + {
@@ -1869,7 +1880,7 @@ public class Http2Test inherits QUnit::Test {
                 unlink(log_path);
             }
             # Skip if dependencies cannot be resolved in this environment
-            if (err =~ /(no required module provides package|module lookup disabled|unrecognized import path|GOPROXY|missing go.sum entry|certificate verify failed|proxyconnect|lookup .*: no such host)/) {
+            if ((new Regex(GO_HTTP2_WS_SKIP_RE)).match(err)) {
                 return {"ok": False, "skip": True, "error": err};
             }
             return {"ok": False, "error": err};
@@ -1923,7 +1934,7 @@ public class Http2Test inherits QUnit::Test {
             if (log_path && is_file(log_path)) {
                 unlink(log_path);
             }
-            if (err =~ /(fatal error:.*nghttp2|fatal error:.*openssl|library not found|cannot find -lnghttp2|cannot find -lssl|cannot find -lcrypto|command not found)/i) {
+            if ((new Regex(NGHTTP2_WS_COMPILE_SKIP_RE, RE_Caseless)).match(err)) {
                 return {"ok": False, "skip": True, "error": err};
             }
             return {"ok": False, "error": err};
