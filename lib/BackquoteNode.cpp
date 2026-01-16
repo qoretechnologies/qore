@@ -113,7 +113,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             }
         }
         if (spawn_rc == 0) {
-            short flags = POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF;
+            short flags = static_cast<short>(POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF);
             spawn_rc = posix_spawnattr_setflags(&attr, flags);
 
             if (spawn_rc == 0) {
@@ -167,6 +167,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         char buf[READ_BLOCK];
         while (true) {
             if (qore_check_io_interrupt(xsink, "backquote read")) {
+                // Use SIGKILL to enforce immediate termination on interrupt.
                 kill(-pid, SIGKILL);
                 waitpid(pid, &rc, 0);
                 close(pipefd[0]);
@@ -256,6 +257,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         char buf[READ_BLOCK];
         while (true) {
             if (qore_check_io_interrupt(xsink, "backquote read")) {
+                // Use SIGKILL to enforce immediate termination on interrupt.
                 kill(-pid, SIGKILL);
                 waitpid(pid, &rc, 0);
                 close(pipefd[0]);

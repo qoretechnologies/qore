@@ -292,20 +292,28 @@ int rc = system("ls -l");
     - @ref backquote_operator "the backquote operator"
  */
 int system(string command) [dom=EXTERNAL_PROCESS] {
-    auto wait_for_process = [&](pid_t pid) -> int {
+#ifdef __linux__
+    auto pidfd_open = [](pid_t target_pid) -> int {
+#ifdef SYS_pidfd_open
+        return syscall(SYS_pidfd_open, target_pid, 0);
+#else
+        return -1;
+#endif
+    };
+#endif
+
+    auto wait_for_process = [&xsink
+#ifdef __linux__
+        , &pidfd_open
+#endif
+    ](pid_t pid) -> int {
         int status = 0;
 #ifdef __linux__
-        auto pidfd_open = [](pid_t target_pid) -> int {
-#ifdef SYS_pidfd_open
-            return syscall(SYS_pidfd_open, target_pid, 0);
-#else
-            return -1;
-#endif
-        };
         int pidfd = pidfd_open(pid);
         if (pidfd >= 0) {
             while (true) {
                 if (qore_check_io_interrupt(xsink, "process wait")) {
+                    // Use SIGKILL to enforce immediate termination on interrupt.
                     kill(-pid, SIGKILL);
                     waitpid(pid, &status, 0);
                     close(pidfd);
@@ -343,7 +351,7 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
         while (true) {
             // check for sandbox interrupt
             if (qore_check_io_interrupt(xsink, "process wait")) {
-                // kill the child process group on interrupt
+                // Use SIGKILL to enforce immediate termination on interrupt.
                 kill(-pid, SIGKILL);
                 waitpid(pid, &status, 0);
                 return -1;
@@ -379,7 +387,7 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
     posix_spawnattr_t attr;
     spawn_rc = posix_spawnattr_init(&attr);
     if (spawn_rc == 0) {
-        short flags = POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF;
+        short flags = static_cast<short>(POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF);
         spawn_rc = posix_spawnattr_setflags(&attr, flags);
 
         if (spawn_rc == 0) {
@@ -430,7 +438,13 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
     if (pid == -1) {
         return -1;
     }
-    setpgid(pid, pid);
+    if (setpgid(pid, pid) == -1) {
+#ifdef EACCES
+        if (errno != EACCES) {
+            // Ignore unexpected errors to preserve existing behavior.
+        }
+#endif
+    }
 
     // wait for child to exit with interrupt checking
     return wait_for_process(pid);
