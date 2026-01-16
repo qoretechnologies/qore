@@ -34,8 +34,10 @@
 #include <cerrno>
 #include <csignal>
 #include <unistd.h>
-#ifdef __linux__
+#ifdef HAVE_POLL_H
 #include <poll.h>
+#endif
+#ifdef __linux__
 #include <spawn.h>
 #endif
 
@@ -89,7 +91,7 @@ QoreValue BackquoteNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const
 
 QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
     rc = 0;
-#if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
+#if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING) && defined(HAVE_POLL)
     {
         int pipefd[2];
         if (pipe(pipefd)) {
@@ -111,20 +113,33 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             }
         }
         if (spawn_rc == 0) {
-            short flags = POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP;
-            posix_spawnattr_setflags(&attr, flags);
+            short flags = POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF;
+            spawn_rc = posix_spawnattr_setflags(&attr, flags);
 
-            sigset_t empty;
-            sigemptyset(&empty);
-            posix_spawnattr_setsigmask(&attr, &empty);
-            posix_spawnattr_setpgroup(&attr, 0);
+            if (spawn_rc == 0) {
+                sigset_t empty;
+                sigemptyset(&empty);
+                spawn_rc = posix_spawnattr_setsigmask(&attr, &empty);
+            }
+            if (spawn_rc == 0) {
+                sigset_t def;
+                sigemptyset(&def);
+                sigaddset(&def, SIGINT);
+                sigaddset(&def, SIGQUIT);
+                spawn_rc = posix_spawnattr_setsigdefault(&attr, &def);
+            }
+            if (spawn_rc == 0) {
+                spawn_rc = posix_spawnattr_setpgroup(&attr, 0);
+            }
 
-            posix_spawn_file_actions_adddup2(&actions, pipefd[1], STDOUT_FILENO);
-            posix_spawn_file_actions_addclose(&actions, pipefd[0]);
-            posix_spawn_file_actions_addclose(&actions, pipefd[1]);
+            if (spawn_rc == 0) {
+                posix_spawn_file_actions_adddup2(&actions, pipefd[1], STDOUT_FILENO);
+                posix_spawn_file_actions_addclose(&actions, pipefd[0]);
+                posix_spawn_file_actions_addclose(&actions, pipefd[1]);
 
-            const char* argv[] = {"sh", "-c", cmd, nullptr};
-            spawn_rc = posix_spawn(&pid, "/bin/sh", &actions, &attr, const_cast<char* const*>(argv), environ);
+                const char* argv[] = {"sh", "-c", cmd, nullptr};
+                spawn_rc = posix_spawn(&pid, "/bin/sh", &actions, &attr, const_cast<char* const*>(argv), environ);
+            }
         }
 
         if (spawn_rc != 0) {
@@ -177,14 +192,108 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             }
 
             int size = read(pipefd[0], buf, READ_BLOCK);
-            if (size <= 0) {
+            if (size == 0) {
+                break;
+            }
+            if (size < 0) {
+#ifdef EINTR
+                if (errno == EINTR) {
+                    continue;
+                }
+#endif
                 break;
             }
 
             s->concat(buf, size);
-            if (size != READ_BLOCK) {
+        }
+
+        close(pipefd[0]);
+        int status;
+        if (waitpid(pid, &status, 0) != pid) {
+            rc = -1;
+            return s.release();
+        }
+        rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        return s.release();
+    }
+#endif
+#if !defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING) && defined(HAVE_POLL)
+    {
+        int pipefd[2];
+        if (pipe(pipefd)) {
+            xsink->raiseException("BACKQUOTE-ERROR", q_strerror(errno));
+            return nullptr;
+        }
+
+        pid_t pid = fork();
+        if (!pid) {
+            setpgid(0, 0);
+
+            sigset_t empty;
+            sigemptyset(&empty);
+            sigprocmask(SIG_SETMASK, &empty, nullptr);
+            signal(SIGINT, SIG_DFL);
+            signal(SIGQUIT, SIG_DFL);
+
+            dup2(pipefd[1], STDOUT_FILENO);
+            close(pipefd[0]);
+            close(pipefd[1]);
+
+            execl("/bin/sh", "sh", "-c", cmd, NULL);
+            fprintf(stderr, "execl() failed in child process for target '/bin/sh' with error code %d: %s\n", errno,
+                strerror(errno));
+            _Exit(-1);
+        }
+        if (pid == -1) {
+            close(pipefd[0]);
+            close(pipefd[1]);
+            xsink->raiseException("BACKQUOTE-ERROR", q_strerror(errno));
+            return nullptr;
+        }
+        close(pipefd[1]);
+
+        QoreStringNodeHolder s(new QoreStringNode);
+        char buf[READ_BLOCK];
+        while (true) {
+            if (qore_check_io_interrupt(xsink, "backquote read")) {
+                kill(-pid, SIGKILL);
+                waitpid(pid, &rc, 0);
+                close(pipefd[0]);
+                rc = -1;
+                return nullptr;
+            }
+
+            struct pollfd pfd;
+            pfd.fd = pipefd[0];
+            pfd.events = POLLIN;
+            pfd.revents = 0;
+            int prc = poll(&pfd, 1, QORE_IO_POLL_INTERVAL_MS);
+            if (prc == 0) {
+                continue;
+            }
+            if (prc < 0) {
+#ifdef EINTR
+                if (errno == EINTR) {
+                    continue;
+                }
+#endif
                 break;
             }
+
+            int size = read(pipefd[0], buf, READ_BLOCK);
+            if (size == 0) {
+                break;
+            }
+            if (size < 0) {
+#ifdef EINTR
+                if (errno == EINTR) {
+                    continue;
+                }
+#endif
+                break;
+            }
+
+            s->concat(buf, size);
         }
 
         close(pipefd[0]);

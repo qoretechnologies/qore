@@ -379,16 +379,29 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
     posix_spawnattr_t attr;
     spawn_rc = posix_spawnattr_init(&attr);
     if (spawn_rc == 0) {
-        short flags = POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP;
-        posix_spawnattr_setflags(&attr, flags);
+        short flags = POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF;
+        spawn_rc = posix_spawnattr_setflags(&attr, flags);
 
-        sigset_t empty;
-        sigemptyset(&empty);
-        posix_spawnattr_setsigmask(&attr, &empty);
-        posix_spawnattr_setpgroup(&attr, 0);
+        if (spawn_rc == 0) {
+            sigset_t empty;
+            sigemptyset(&empty);
+            spawn_rc = posix_spawnattr_setsigmask(&attr, &empty);
+        }
+        if (spawn_rc == 0) {
+            sigset_t def;
+            sigemptyset(&def);
+            sigaddset(&def, SIGINT);
+            sigaddset(&def, SIGQUIT);
+            spawn_rc = posix_spawnattr_setsigdefault(&attr, &def);
+        }
+        if (spawn_rc == 0) {
+            spawn_rc = posix_spawnattr_setpgroup(&attr, 0);
+        }
 
-        const char* argv[] = {"sh", "-c", command->c_str(), nullptr};
-        spawn_rc = posix_spawn(&spawn_pid, "/bin/sh", nullptr, &attr, const_cast<char* const*>(argv), environ);
+        if (spawn_rc == 0) {
+            const char* argv[] = {"sh", "-c", command->c_str(), nullptr};
+            spawn_rc = posix_spawn(&spawn_pid, "/bin/sh", nullptr, &attr, const_cast<char* const*>(argv), environ);
+        }
         posix_spawnattr_destroy(&attr);
     }
     if (spawn_rc == 0) {
@@ -404,6 +417,8 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
         sigset_t empty;
         sigemptyset(&empty);
         sigprocmask(SIG_SETMASK, &empty, nullptr);
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
 
         // exec pgm like system(): sh -c "command"
         execl("/bin/sh", "sh", "-c", command->c_str(), NULL);
