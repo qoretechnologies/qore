@@ -240,32 +240,25 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
     }
 
     private hash<auto> parseEventData(hash<SseMessageInfo> evt) {
-        if (!evt.data) {
+        if (!evt."data") {
             return {"event": evt.event, "id": evt.id};
         }
 %ifdef NoJson
         return {
             "event": evt.event,
             "id": evt.id,
-            "raw_data": evt.data,
+            "raw_data": evt."data",
         };
-%endif
-        try {
-            hash<auto> data = parse_json(evt.data);
-            if (evt.event) {
-                data.event = evt.event;
-            }
-            if (evt.id) {
-                data.id = evt.id;
-            }
-            return data;
-        } catch (hash<ExceptionInfo> ex) {
-            return {
-                "event": evt.event,
-                "id": evt.id,
-                "raw_data": evt.data,
-            };
+%else
+        hash<auto> payload = parse_json(evt."data");
+        if (evt.event) {
+            payload.event = evt.event;
         }
+        if (evt.id) {
+            payload.id = evt.id;
+        }
+        return payload;
+%endif
     }
 
     private handleContextSave(hash<auto> payload, hash<auto> ctx_info, *OpenAiConversationContextStore ctx_store,
