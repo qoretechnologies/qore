@@ -101,7 +101,7 @@ static bool is_identifier_string(const std::string& s) {
                 break; \
             } \
             buf.push_back(c); \
-        } while (c == ' ' || c == '\\t' || c == '\\r' || c == '\\n'); \
+        } while (c == ' ' || c == '\t' || c == '\r' || c == '\n'); \
         for (int i = static_cast<int>(buf.size()) - 1; i >= 0; --i) { \
             unput(buf[i]); \
         } \
@@ -159,6 +159,41 @@ static char* trim_inplace(const char* str) {
 static char* remove_quotes(char* str) {
     str[strlen(str) - 1] = '\0';
     return str + 1;
+}
+
+// Strip trailing line comment (# ...) or block comment (/* ... */) from a string.
+// Modifies the string in place.
+// Note: This naive approach is safe because %if/%elif expressions only support
+// defined(identifier), boolean operators (!, &&, ||), and parentheses - no string
+// literals where # or /* could appear as valid content.
+static void strip_trailing_comment(char* str) {
+    if (!str) return;
+    // Find first # that starts a line comment
+    char* hash = strchr(str, '#');
+    if (hash) {
+        *hash = '\0';
+        // Trim trailing whitespace
+        while (hash > str && (*(hash-1) == ' ' || *(hash-1) == '\t')) {
+            *(--hash) = '\0';
+        }
+    }
+    // Find block comment /* ... */ and remove it
+    char* block_start = strstr(str, "/*");
+    if (block_start) {
+        char* block_end = strstr(block_start + 2, "*/");
+        if (block_end) {
+            // Remove the block comment by shifting remaining text
+            memmove(block_start, block_end + 2, strlen(block_end + 2) + 1);
+        } else {
+            // Unterminated block comment - just truncate
+            *block_start = '\0';
+        }
+        // Trim trailing whitespace
+        size_t len = strlen(str);
+        while (len > 0 && (str[len-1] == ' ' || str[len-1] == '\t')) {
+            str[--len] = '\0';
+        }
+    }
 }
 
 static int64_t parse_get_integer(const char* str, bool& err) {
@@ -369,6 +404,10 @@ static bool ast_is_defined(const char* pstr) {
     }
     char* trimmed = trim_inplace(pstr);
     if (!trimmed || !*trimmed) {
+        return false;
+    }
+    strip_trailing_comment(trimmed);
+    if (!*trimmed) {
         return false;
     }
     return ast_defines.find(trimmed) != ast_defines.end();
@@ -589,6 +628,10 @@ static bool ast_evaluate_condition(const char* expr, bool& result) {
     if (!trimmed || !*trimmed) {
         return false;
     }
+    strip_trailing_comment(trimmed);
+    if (!*trimmed) {
+        return false;
+    }
     AstConditionParser parser(trimmed, strlen(trimmed));
     if (parser.parse(result)) {
         return true;
@@ -656,13 +699,6 @@ static void startDocComment(const char* text) {
         pendingDocComment = new std::string(text);
     }
     inDocCommentBlock = true;
-}
-
-// Appends text to the current doc comment
-static void appendDocComment(const char* text) {
-    if (pendingDocComment) {
-        pendingDocComment->append(text);
-    }
 }
 
 // Called when we see any non-doc-comment, non-whitespace token
@@ -1025,7 +1061,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                         }
     <<EOF>>                             { AST_FLEX_DO_EOF }
 }
-^%else{WS}*$                            {
+^%else{WS}*(#.*|\/\*.*)?$                       {
                                             if (!cond_in_block()) {
                                                 // %else without %if - just ignore for AST parsing
                                             } else if (cond_has_else()) {
@@ -1041,7 +1077,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             yylval->parseopt = new ASTParseOption(APOK_ELSE);
                                             return PARSE_OPTION_FULL;
                                         }
-^%endif{WS}*$                           {
+^%endif{WS}*(#.*|\/\*.*)?$                      {
                                             // Pop the conditional level
                                             if (!cond_pop()) {
                                                 // %endif without matching %if/%ifdef/%ifndef - ignore for AST parsing
@@ -1050,13 +1086,13 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             return PARSE_OPTION_FULL;
                                         }
 <p_skip_to_endif>{
-    ^%endif{WS}*$                       {
+    ^%endif{WS}*(#.*|\/\*.*)?$                  {
                                             if (cond_pop() && cond_depth() < cond_skip_depth) {
                                                 cond_skip_depth = 0;
                                                 BEGIN(INITIAL);
                                             }
                                         }
-    ^%else{WS}*$                        {
+    ^%else{WS}*(#.*|\/\*.*)?$                   {
                                             if (cond_is_skip_top_level() && cond_has_else()) {
                                                 // ignore
                                             }
@@ -1095,7 +1131,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 }
                                             }
                                         }
-    ^%else{WS}*$                        {
+    ^%else{WS}*(#.*|\/\*.*)?$                   {
                                             if (cond_is_skip_top_level()) {
                                                 if (!cond_has_else()) {
                                                     cond_mark_else();
@@ -1106,7 +1142,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 }
                                             }
                                         }
-    ^%endif{WS}*$                       {
+    ^%endif{WS}*(#.*|\/\*.*)?$                  {
                                             if (cond_pop() && cond_depth() < cond_skip_depth) {
                                                 cond_skip_depth = 0;
                                                 BEGIN(INITIAL);
