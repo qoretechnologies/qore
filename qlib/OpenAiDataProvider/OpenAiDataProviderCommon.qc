@@ -28,11 +28,43 @@ public namespace OpenAiDataProvider {
 public class OpenAiConversationContextStore {
     #! Loads conversation context for the given key (override in subclasses as needed)
     *hash<auto> loadContext(string key) {
-        return;
+        throw "OPENAI-CONTEXT-STORE-NOT-IMPLEMENTED",
+            "OpenAiConversationContextStore::loadContext() must be implemented in a subclass";
     }
 
     #! Saves conversation context for the given key (override in subclasses as needed)
     auto saveContext(string key, hash<auto> ctxt) {
+        throw "OPENAI-CONTEXT-STORE-NOT-IMPLEMENTED",
+            "OpenAiConversationContextStore::saveContext() must be implemented in a subclass";
+    }
+}
+
+#! Conversation context store with callbacks
+public class OpenAiConversationContextStoreCallbacks inherits OpenAiConversationContextStore {
+    private {
+        *code load_cb;
+        *code save_cb;
+    }
+
+    #! Creates the callback store
+    constructor(hash<auto> options) {
+        load_cb = options.load;
+        save_cb = options.save;
+    }
+
+    #! Loads conversation context for the given key
+    *hash<auto> loadContext(string key) {
+        if (load_cb) {
+            return load_cb(key);
+        }
+        return;
+    }
+
+    #! Saves conversation context for the given key
+    auto saveContext(string key, hash<auto> ctxt) {
+        if (save_cb) {
+            return save_cb(key, ctxt);
+        }
     }
 }
 

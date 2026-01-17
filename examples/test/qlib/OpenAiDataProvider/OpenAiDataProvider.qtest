@@ -163,6 +163,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         addTestCase("response input validation", \responseInputValidationTest());
         addTestCase("response input edge cases", \responseInputEdgeCasesTest());
         addTestCase("response conversation context save", \responseConversationContextSaveTest());
+        addTestCase("response conversation callback store", \responseConversationCallbackStoreTest());
         addTestCase("response stream events", \responseStreamEventsTest());
         addTestCase("response stream error", \responseStreamErrorTest());
 
@@ -702,6 +703,47 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertEq("resp_test", resp.conversation_context.previous_response_id);
         assertEq("user-ctx-1", store.last_save_key);
         assertEq("resp_test", store.last_saved.previous_response_id);
+%endif
+    }
+
+    responseConversationCallbackStoreTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOpenAiRestClient rest;
+        OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
+        hash<auto> saved;
+        string saved_key;
+        OpenAiConversationContextStoreCallbacks store({
+            "load": *hash<auto> sub (string key) {
+                return saved{key};
+            },
+            "save": auto sub (string key, hash<auto> ctxt) {
+                saved_key = key;
+                saved{key} = ctxt;
+            },
+        });
+        prov.setConversationContextStore(store);
+
+        hash<auto!> req = {
+            "conversation_key": "cb-1",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("cb-1", saved_key);
+        assertEq("resp_test", saved{"cb-1"}.previous_response_id);
+        assertEq("resp_test", resp.conversation_context.previous_response_id);
 %endif
     }
 

@@ -448,6 +448,19 @@ hash<auto> result = resp.doRequest({
 });
     @endcode
 
+    @subsection openaidataprovider_context_callbacks Conversation Context Store Callbacks
+
+    @code{.py}
+OpenAiConversationContextStoreCallbacks store({
+    "load": sub (string key) { return get_from_store(key); },
+    "save": sub (string key, hash<auto> ctxt) { save_to_store(key, ctxt); },
+});
+
+OpenAiRestConnection rc = get_connection("openai");
+OpenAiDataProvider::OpenAiDataProvider prov(rc.get());
+prov.setConversationContextStore(store);
+    @endcode
+
     @subsection openaidataprovider_stream_example Streaming Responses
 
     @code{.py}
