@@ -44,9 +44,8 @@ public:
     using Ptr = std::unique_ptr<ASTDeclaration>;
 
     //! Documentation comment attached to this declaration (if any).
-    /** This holds the text of #! line comments or /** block comments
-        that immediately precede the declaration.
-    */
+    //! This holds the text of Qore doc comments (#! line comments or
+    //! Doxygen-style / ** ... * / block comments) that immediately precede the declaration.
     std::string* docComment = nullptr;
 
 public:

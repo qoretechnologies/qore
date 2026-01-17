@@ -326,6 +326,7 @@ public hashdecl DateInfo {
         addTestCase("Doc comments in getNodesInfo", \testDocCommentsGetNodesInfo());
         addTestCase("Doc comments edge cases", \testDocCommentsEdgeCases());
         addTestCase("Date subtype parsing", \testDateSubtypeParsing());
+        addTestCase("Conditional directives with comments", \testConditionalDirectivesWithComments());
 %endif
         set_return_value(main());
     }
@@ -1447,6 +1448,96 @@ list results = (
 
         assertTrue(exists(types{"date<absolute>"}), "date<absolute> typeName found");
         assertTrue(exists(types{"date<relative>"}), "date<relative> typeName found");
+    }
+
+    # Test conditional directives with trailing line and block comments
+    testConditionalDirectivesWithComments() {
+        # Test %ifdef with trailing comment
+        string code = "%modern
+%ifdef Test # line comment after ifdef
+class TestClass {}
+%endif # line comment after endif
+";
+        AstParser parser();
+        parser.setConditionalParsing(True);
+        parser.setDefines(("Test",));
+        *AstTree tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for ifdef with comment");
+        assertEq(0, parser.getErrorCount(), "no parse errors for ifdef with comment");
+
+        # Test %ifndef with trailing comment
+        code = "%modern
+%ifndef NotDefined # check if not defined
+class TestClass {}
+%endif # end ifndef block
+";
+        parser = new AstParser();
+        parser.setConditionalParsing(True);
+        tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for ifndef with comment");
+        assertEq(0, parser.getErrorCount(), "no parse errors for ifndef with comment");
+
+        # Test %if with trailing comment
+        code = "%modern
+%if defined(Feature) # check feature flag
+class TestClass {}
+%endif # end if block
+";
+        parser = new AstParser();
+        parser.setConditionalParsing(True);
+        parser.setDefines(("Feature",));
+        tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for %if with comment");
+        assertEq(0, parser.getErrorCount(), "no parse errors for %if with comment");
+
+        # Test %elif with trailing comment
+        code = "%modern
+%if defined(Option1) # first option
+class Option1Class {}
+%elif defined(Option2) # second option
+class Option2Class {}
+%else # fallback
+class FallbackClass {}
+%endif # end chain
+";
+        parser = new AstParser();
+        parser.setConditionalParsing(True);
+        parser.setDefines(("Option2",));
+        tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for elif with comment");
+        assertEq(0, parser.getErrorCount(), "no parse errors for elif with comment");
+
+        # Test block comments after directives
+        code = "%modern
+%ifdef Feature /* block comment */
+%if defined(Feature) && !defined(Other) /* combined condition */
+class TestClass {}
+%endif /* end if */
+%endif /* end ifdef */
+";
+        parser = new AstParser();
+        parser.setConditionalParsing(True);
+        parser.setDefines(("Feature",));
+        tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for block comments");
+        assertEq(0, parser.getErrorCount(), "no parse errors for block comments");
+
+        # Test mixed line and block comments
+        code = "%modern
+%ifdef Level1 # outer level
+%ifndef Level2 /* should skip */
+class Skipped {}
+%else # Level2 is not defined, use this
+class Used {}
+%endif # inner
+%endif /* outer */
+";
+        parser = new AstParser();
+        parser.setConditionalParsing(True);
+        parser.setDefines(("Level1",));
+        tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for mixed comments");
+        assertEq(0, parser.getErrorCount(), "no parse errors for mixed comments");
     }
 %endif
 }

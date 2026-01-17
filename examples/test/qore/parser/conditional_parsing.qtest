@@ -1,0 +1,703 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# This test verifies conditional parsing directives (%ifdef, %ifndef, %if, %else, %endif)
+# with comments and various edge cases
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class ConditionalParsingTest
+
+class ConditionalParsingTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Conditional Parsing Test", "1.0") {
+        addTestCase("ifdef with trailing comment", \testIfdefWithComment());
+        addTestCase("ifndef with trailing comment", \testIfndefWithComment());
+        addTestCase("if with trailing comment", \testIfWithComment());
+        addTestCase("elif with trailing comment", \testElifWithComment());
+        addTestCase("endif with trailing comment", \testEndifWithComment());
+        addTestCase("endif with trailing whitespace only", \testEndifWithWhitespaceOnly());
+        addTestCase("else with trailing comment", \testElseWithComment());
+        addTestCase("else with trailing whitespace only", \testElseWithWhitespaceOnly());
+        addTestCase("nested conditionals with endif comments", \testNestedConditionalsWithEndifComments());
+        addTestCase("whitespace variations in endif", \testWhitespaceVariationsInEndif());
+        addTestCase("block comments after directives", \testBlockCommentsAfterDirectives());
+        addTestCase("unclosed conditional error", \testUnclosedConditionalError());
+        addTestCase("mismatched else error", \testMismatchedElseError());
+        addTestCase("mismatched endif error", \testMismatchedEndifError());
+        addTestCase("invalid trailing text error", \testInvalidTrailingTextError());
+        addTestCase("conditional with class definition", \testConditionalWithClass());
+        addTestCase("else branch taken", \testElseBranchTaken());
+        addTestCase("else branch skipped", \testElseBranchSkipped());
+        addTestCase("combined if condition", \testCombinedIfCondition());
+        addTestCase("all directives with comments", \testAllDirectivesWithComments());
+        set_return_value(main());
+    }
+
+    # Test %ifdef with trailing comment
+    testIfdefWithComment() {
+        Program p(PO_NEW_STYLE);
+        p.define("TestDefine", True);
+        p.parse("
+%new-style
+%ifdef TestDefine # check if TestDefine is set
+int sub getValue() { return 1; }
+%endif
+", "ifdef-comment-test");
+        assertEq(1, p.callFunction("getValue"));
+
+        # With longer comment
+        Program p2(PO_NEW_STYLE);
+        p2.define("Feature", True);
+        p2.parse("
+%new-style
+%ifdef Feature # this feature enables advanced functionality
+int sub getValue() { return 2; }
+%endif
+", "ifdef-long-comment-test");
+        assertEq(2, p2.callFunction("getValue"));
+    }
+
+    # Test %ifndef with trailing comment
+    testIfndefWithComment() {
+        Program p(PO_NEW_STYLE);
+        # TestDefine is NOT defined
+        p.parse("
+%new-style
+%ifndef TestDefine # use fallback if not defined
+int sub getValue() { return 3; }
+%endif
+", "ifndef-comment-test");
+        assertEq(3, p.callFunction("getValue"));
+
+        # With longer comment
+        Program p2(PO_NEW_STYLE);
+        p2.parse("
+%new-style
+%ifndef ProductionMode # development mode only code
+int sub getValue() { return 4; }
+%endif
+", "ifndef-long-comment-test");
+        assertEq(4, p2.callFunction("getValue"));
+    }
+
+    # Test %if with trailing comment
+    testIfWithComment() {
+        Program p(PO_NEW_STYLE);
+        p.define("Feature", True);
+        p.parse("
+%new-style
+%if defined(Feature) # check for Feature flag
+int sub getValue() { return 5; }
+%endif
+", "if-comment-test");
+        assertEq(5, p.callFunction("getValue"));
+
+        # Combined condition with comment
+        Program p2(PO_NEW_STYLE);
+        p2.define("FeatureA", True);
+        p2.parse("
+%new-style
+%if defined(FeatureA) && !defined(FeatureB) # both conditions must be true
+int sub getValue() { return 6; }
+%endif
+", "if-combined-comment-test");
+        assertEq(6, p2.callFunction("getValue"));
+
+        # OR condition with comment
+        Program p3(PO_NEW_STYLE);
+        p3.define("Option1", True);
+        p3.parse("
+%new-style
+%if defined(Option1) || defined(Option2) # either option
+int sub getValue() { return 7; }
+%endif
+", "if-or-comment-test");
+        assertEq(7, p3.callFunction("getValue"));
+    }
+
+    # Test %elif with trailing comment
+    testElifWithComment() {
+        # First elif branch taken
+        Program p(PO_NEW_STYLE);
+        p.define("Option2", True);
+        p.parse("
+%new-style
+%if defined(Option1) # first option
+int sub getValue() { return 8; }
+%elif defined(Option2) # second option
+int sub getValue() { return 9; }
+%else # fallback
+int sub getValue() { return 10; }
+%endif
+", "elif-comment-test");
+        assertEq(9, p.callFunction("getValue"));
+
+        # Second elif branch taken
+        Program p2(PO_NEW_STYLE);
+        p2.define("Option3", True);
+        p2.parse("
+%new-style
+%if defined(Option1) # check option 1
+int sub getValue() { return 11; }
+%elif defined(Option2) # check option 2
+int sub getValue() { return 12; }
+%elif defined(Option3) # check option 3
+int sub getValue() { return 13; }
+%else # none matched
+int sub getValue() { return 14; }
+%endif
+", "elif-multiple-comment-test");
+        assertEq(13, p2.callFunction("getValue"));
+    }
+
+    # Test %endif with trailing comment (the original bug)
+    testEndifWithComment() {
+        # Test with define set (ifdef branch taken)
+        Program p(PO_NEW_STYLE);
+        p.define("TestDefine", True);
+        p.parse("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 1; }
+%endif # TestDefine
+", "endif-comment-test");
+        assertEq(1, p.callFunction("getValue"));
+
+        # Test with longer comment after endif
+        Program p2(PO_NEW_STYLE);
+        p2.define("TestDefine", True);
+        p2.parse("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 2; }
+%endif # end of TestDefine block - this is a longer comment
+", "endif-long-comment-test");
+        assertEq(2, p2.callFunction("getValue"));
+    }
+
+    # Test %endif with trailing whitespace only (should work as before)
+    testEndifWithWhitespaceOnly() {
+        Program p(PO_NEW_STYLE);
+        p.define("TestDefine", True);
+        p.parse("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 3; }
+%endif
+", "endif-whitespace-test");
+        assertEq(3, p.callFunction("getValue"));
+
+        # With trailing spaces
+        Program p2(PO_NEW_STYLE);
+        p2.define("TestDefine", True);
+        p2.parse("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 4; }
+%endif
+", "endif-trailing-spaces-test");
+        assertEq(4, p2.callFunction("getValue"));
+    }
+
+    # Test %else with trailing comment
+    testElseWithComment() {
+        # Test else branch taken (define not set)
+        Program p(PO_NEW_STYLE);
+        # TestDefine is NOT defined
+        p.parse("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 5; }
+%else # TestDefine not defined, use fallback
+int sub getValue() { return 6; }
+%endif
+", "else-comment-taken-test");
+        assertEq(6, p.callFunction("getValue"));
+
+        # Test else with longer comment
+        Program p2(PO_NEW_STYLE);
+        p2.parse("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 7; }
+%else # fallback implementation - TestDefine is not available in this environment
+int sub getValue() { return 8; }
+%endif
+", "else-long-comment-test");
+        assertEq(8, p2.callFunction("getValue"));
+    }
+
+    # Test %else with trailing whitespace only
+    testElseWithWhitespaceOnly() {
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 9; }
+%else
+int sub getValue() { return 10; }
+%endif
+", "else-whitespace-test");
+        assertEq(10, p.callFunction("getValue"));
+    }
+
+    # Test nested conditionals with comments on endif lines
+    testNestedConditionalsWithEndifComments() {
+        Program p(PO_NEW_STYLE);
+        p.define("Outer", True);
+        p.define("Inner", True);
+
+        p.parse("
+%new-style
+%ifdef Outer
+%ifdef Inner
+int sub getValue() { return 11; }
+%endif # Inner
+%endif # Outer
+", "nested-comments-test");
+        assertEq(11, p.callFunction("getValue"));
+
+        # Deeper nesting with detailed comments
+        Program p2(PO_NEW_STYLE);
+        p2.define("L1", True);
+        p2.define("L2", True);
+        p2.define("L3", True);
+
+        p2.parse("
+%new-style
+%ifdef L1
+%ifdef L2
+%ifdef L3
+int sub getValue() { return 12; }
+%endif # L3 - innermost conditional ends here
+%endif # L2 - middle layer done
+%endif # L1 - outermost conditional complete
+", "deep-nested-comments-test");
+        assertEq(12, p2.callFunction("getValue"));
+    }
+
+    # Test various whitespace patterns before comment
+    testWhitespaceVariationsInEndif() {
+        # Multiple spaces before comment
+        Program p(PO_NEW_STYLE);
+        p.define("Test", True);
+        p.parse("
+%new-style
+%ifdef Test
+int sub getValue() { return 13; }
+%endif    # lots of spaces before comment
+", "whitespace-spaces-test");
+        assertEq(13, p.callFunction("getValue"));
+
+        # Tab before comment
+        Program p2(PO_NEW_STYLE);
+        p2.define("Test", True);
+        p2.parse("
+%new-style
+%ifdef Test
+int sub getValue() { return 14; }
+%endif\t# tab before comment
+", "whitespace-tab-test");
+        assertEq(14, p2.callFunction("getValue"));
+
+        # Mixed whitespace
+        Program p3(PO_NEW_STYLE);
+        p3.define("Test", True);
+        p3.parse("
+%new-style
+%ifdef Test
+int sub getValue() { return 15; }
+%endif \t  \t# mixed whitespace before comment
+", "whitespace-mixed-test");
+        assertEq(15, p3.callFunction("getValue"));
+    }
+
+    # Test block comments after all conditional directives
+    testBlockCommentsAfterDirectives() {
+        # Block comment after %ifdef
+        Program p1(PO_NEW_STYLE);
+        p1.define("Test", True);
+        p1.parse("
+%new-style
+%ifdef Test /* block comment */
+int sub getValue() { return 100; }
+%endif
+", "block-ifdef-test");
+        assertEq(100, p1.callFunction("getValue"));
+
+        # Block comment after %ifndef
+        Program p2(PO_NEW_STYLE);
+        p2.parse("
+%new-style
+%ifndef Test /* block comment */
+int sub getValue() { return 101; }
+%endif
+", "block-ifndef-test");
+        assertEq(101, p2.callFunction("getValue"));
+
+        # Block comment after %if
+        Program p3(PO_NEW_STYLE);
+        p3.define("Feature", True);
+        p3.parse("
+%new-style
+%if defined(Feature) /* block comment */
+int sub getValue() { return 102; }
+%endif
+", "block-if-test");
+        assertEq(102, p3.callFunction("getValue"));
+
+        # Block comment after %elif
+        Program p4(PO_NEW_STYLE);
+        p4.define("Option2", True);
+        p4.parse("
+%new-style
+%if defined(Option1) /* first */
+int sub getValue() { return 103; }
+%elif defined(Option2) /* second */
+int sub getValue() { return 104; }
+%endif
+", "block-elif-test");
+        assertEq(104, p4.callFunction("getValue"));
+
+        # Block comment after %else
+        Program p5(PO_NEW_STYLE);
+        p5.parse("
+%new-style
+%ifdef NotDefined
+int sub getValue() { return 105; }
+%else /* fallback */
+int sub getValue() { return 106; }
+%endif
+", "block-else-test");
+        assertEq(106, p5.callFunction("getValue"));
+
+        # Block comment after %endif
+        Program p6(PO_NEW_STYLE);
+        p6.define("Test", True);
+        p6.parse("
+%new-style
+%ifdef Test
+int sub getValue() { return 107; }
+%endif /* end of Test block */
+", "block-endif-test");
+        assertEq(107, p6.callFunction("getValue"));
+    }
+
+    # Test that unclosed conditionals produce proper error
+    testUnclosedConditionalError() {
+        Program p(PO_NEW_STYLE);
+        # Missing endif
+        assertThrows("PARSE-EXCEPTION", "conditional block left open", \p.parse(), ("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 1; }
+", "unclosed-test"));
+
+        # Nested unclosed
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "conditional block left open", \p2.parse(), ("
+%new-style
+%ifdef Outer
+%ifdef Inner
+int sub getValue() { return 1; }
+%endif # Inner
+", "nested-unclosed-test"));
+    }
+
+    # Test that mismatched else produces error
+    testMismatchedElseError() {
+        Program p(PO_NEW_STYLE);
+
+        # else without ifdef
+        assertThrows("PARSE-EXCEPTION", "without %if", \p.parse(), ("
+%new-style
+%else # no corresponding ifdef
+int sub getValue() { return 1; }
+%endif
+", "mismatched-else-test"));
+    }
+
+    # Test that mismatched endif produces error
+    testMismatchedEndifError() {
+        Program p(PO_NEW_STYLE);
+
+        # endif without ifdef
+        assertThrows("PARSE-EXCEPTION", "unmatched", \p.parse(), ("
+%new-style
+%endif # no corresponding ifdef
+", "mismatched-endif-test"));
+    }
+
+    # Test that invalid trailing text (not a comment) produces error
+    testInvalidTrailingTextError() {
+        # %else with invalid trailing text (not a comment)
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", NOTHING, \p.parse(), ("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 1; }
+%else junk
+int sub getValue() { return 2; }
+%endif
+", "else-invalid-text-test"));
+        }
+
+        # %endif with invalid trailing text (not a comment)
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("TestDefine", True);
+            assertThrows("PARSE-EXCEPTION", NOTHING, \p.parse(), ("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 1; }
+%endif junk
+", "endif-invalid-text-test"));
+        }
+
+        # %else with text that looks like identifier
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", NOTHING, \p.parse(), ("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 1; }
+%else invalid_text
+int sub getValue() { return 2; }
+%endif
+", "else-identifier-text-test"));
+        }
+
+        # %endif with text that looks like identifier
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("TestDefine", True);
+            assertThrows("PARSE-EXCEPTION", NOTHING, \p.parse(), ("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 1; }
+%endif TestDefine_no_comment_marker
+", "endif-identifier-text-test"));
+        }
+
+        # Ensure valid comments still work (sanity check)
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("TestDefine", True);
+            p.parse("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 100; }
+%else # valid comment
+int sub getValue() { return 101; }
+%endif # valid comment
+", "valid-comments-sanity-test");
+            assertEq(100, p.callFunction("getValue"));
+        }
+    }
+
+    # Test conditionals containing class definitions
+    testConditionalWithClass() {
+        Program p(PO_NEW_STYLE);
+        p.define("WithClass", True);
+
+        p.parse("
+%new-style
+%ifdef WithClass
+class TestClass {
+    int getValue() {
+        return 17;
+    }
+}
+%endif # WithClass
+
+int sub getResult() { return (new TestClass()).getValue(); }
+", "conditional-class-test");
+        assertEq(17, p.callFunction("getResult"));
+
+        # Class in skipped block should not exist
+        Program p2(PO_NEW_STYLE);
+        # WithClass is NOT defined
+        p2.parse("
+%new-style
+%ifdef WithClass
+class SkippedClass {
+    int getValue() {
+        return 18;
+    }
+}
+%endif # WithClass
+int sub getResult() { return 19; }
+", "conditional-skipped-class-test");
+        assertEq(19, p2.callFunction("getResult"));
+    }
+
+    # Test else branch is taken when condition is false
+    testElseBranchTaken() {
+        # Test with ifdef - define not set
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%new-style
+%ifdef NotDefined
+int sub getValue() { return 20; }
+%else
+int sub getValue() { return 21; }
+%endif # NotDefined
+", "else-taken-ifdef-test");
+        assertEq(21, p.callFunction("getValue"));
+
+        # Test with ifndef - define IS set
+        Program p2(PO_NEW_STYLE);
+        p2.define("IsDefined", True);
+        p2.parse("
+%new-style
+%ifndef IsDefined
+int sub getValue() { return 22; }
+%else # IsDefined IS defined, use this branch
+int sub getValue() { return 23; }
+%endif # IsDefined
+", "else-taken-ifndef-test");
+        assertEq(23, p2.callFunction("getValue"));
+    }
+
+    # Test else branch is skipped when condition is true
+    testElseBranchSkipped() {
+        # Test with ifdef - define IS set
+        Program p(PO_NEW_STYLE);
+        p.define("TestDefine", True);
+        p.parse("
+%new-style
+%ifdef TestDefine
+int sub getValue() { return 24; }
+%else # this branch should be skipped
+int sub getValue() { return 25; }
+%endif # TestDefine
+", "else-skipped-ifdef-test");
+        assertEq(24, p.callFunction("getValue"));
+
+        # Test with ifndef - define NOT set
+        Program p2(PO_NEW_STYLE);
+        p2.parse("
+%new-style
+%ifndef NotDefined
+int sub getValue() { return 26; }
+%else # NotDefined is not defined, skip this
+int sub getValue() { return 27; }
+%endif # NotDefined
+", "else-skipped-ifndef-test");
+        assertEq(26, p2.callFunction("getValue"));
+    }
+
+    # Test combined %if conditions (without trailing comments on the %if line itself)
+    testCombinedIfCondition() {
+        # Both conditions true: defined(A) && !defined(B)
+        Program p(PO_NEW_STYLE);
+        p.define("FeatureA", True);
+        # FeatureB is NOT defined
+        p.parse("
+%new-style
+%if defined(FeatureA) && !defined(FeatureB)
+int sub getValue() { return 28; }
+%endif # combined condition
+", "combined-true-test");
+        assertEq(28, p.callFunction("getValue"));
+
+        # First condition false
+        Program p2(PO_NEW_STYLE);
+        # FeatureA is NOT defined
+        p2.parse("
+%new-style
+%if defined(FeatureA) && !defined(FeatureB)
+int sub getValue() { return 29; }
+%else # fallback
+int sub getValue() { return 30; }
+%endif # combined condition
+", "combined-false-first-test");
+        assertEq(30, p2.callFunction("getValue"));
+
+        # Second condition false (FeatureB IS defined)
+        Program p3(PO_NEW_STYLE);
+        p3.define("FeatureA", True);
+        p3.define("FeatureB", True);
+        p3.parse("
+%new-style
+%if defined(FeatureA) && !defined(FeatureB)
+int sub getValue() { return 31; }
+%else # FeatureB is defined, fall back
+int sub getValue() { return 32; }
+%endif # combined condition
+", "combined-false-second-test");
+        assertEq(32, p3.callFunction("getValue"));
+
+        # OR condition
+        Program p4(PO_NEW_STYLE);
+        p4.define("FeatureX", True);
+        p4.parse("
+%new-style
+%if defined(FeatureX) || defined(FeatureY)
+int sub getValue() { return 33; }
+%endif # either one defined
+", "or-condition-test");
+        assertEq(33, p4.callFunction("getValue"));
+    }
+
+    # Comprehensive test: all directives with comments in one program
+    testAllDirectivesWithComments() {
+        # Test program using all conditional directives with comments
+        Program p(PO_NEW_STYLE);
+        p.define("Level1", True);
+        p.define("Level2", True);
+        p.define("Option2", True);
+        p.parse("
+%new-style
+%ifdef Level1 # outer ifdef with comment
+%ifdef Level2 # inner ifdef with comment
+%if defined(Option1) # first option check
+int sub getValue() { return 200; }
+%elif defined(Option2) # second option check
+int sub getValue() { return 201; }
+%elif defined(Option3) # third option check
+int sub getValue() { return 202; }
+%else # fallback option
+int sub getValue() { return 203; }
+%endif # end of if/elif/else chain
+%endif # Level2
+%endif # Level1
+", "all-directives-comments-test");
+        assertEq(201, p.callFunction("getValue"));
+
+        # Test with block comments throughout
+        Program p2(PO_NEW_STYLE);
+        p2.define("A", True);
+        p2.define("B", True);
+        p2.parse("
+%new-style
+%ifdef A /* check A */
+%ifndef C /* C should not be defined */
+%if defined(B) /* check B */
+int sub getValue() { return 204; }
+%endif /* end B check */
+%endif /* end C check */
+%endif /* end A check */
+", "all-block-comments-test");
+        assertEq(204, p2.callFunction("getValue"));
+
+        # Mix of line and block comments
+        Program p3(PO_NEW_STYLE);
+        p3.define("Feature", True);
+        p3.parse("
+%new-style
+%ifdef Feature # line comment
+%if defined(Feature) /* block comment */
+int sub getValue() { return 205; }
+%endif # line comment on endif
+%endif /* block comment on outer endif */
+", "mixed-comments-test");
+        assertEq(205, p3.callFunction("getValue"));
+    }
+}

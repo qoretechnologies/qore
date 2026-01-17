@@ -708,9 +708,37 @@ static void qore_parse_define(YYLTYPE* yylloc, const char* pstr) {
     qore_program_private::parseDefine(getProgram(), get_loc(yylloc), str.c_str(), v);
 }
 
+// Strip trailing line comment (# ...) or block comment (/* ... */) from a string.
+// Note: This naive approach is safe because %if/%elif expressions only support
+// defined(identifier), boolean operators (!, &&, ||), and parentheses - no string
+// literals where # or /* could appear as valid content.
+static void strip_trailing_comment(QoreString& str) {
+    // Find first # that starts a line comment
+    qore_offset_t hash_pos = str.find('#');
+    if (hash_pos >= 0) {
+        str.terminate(hash_pos);
+        str.trim();
+    }
+    // Find block comment /* ... */ and remove it
+    qore_offset_t block_start = str.find("/*");
+    if (block_start >= 0) {
+        qore_offset_t block_end = str.find("*/", block_start + 2);
+        if (block_end >= 0) {
+            // Remove the block comment
+            str.replace(block_start, block_end - block_start + 2, "");
+            str.trim();
+        } else {
+            // Unterminated block comment - just truncate at /*
+            str.terminate(block_start);
+            str.trim();
+        }
+    }
+}
+
 static bool parse_is_defined(YYLTYPE* yylloc, const char* pstr, bool def = true) {
     QoreString str(pstr);
     str.trim();
+    strip_trailing_comment(str);
     if (str.empty()) {
         parse_error(*get_loc(yylloc), "missing argument to %%if%sdef", def ? "" : "n");
         return false;
@@ -905,6 +933,7 @@ public:
 static bool parse_evaluate_condition(YYLTYPE* yylloc, const char* expr, bool& result) {
     QoreString str(expr);
     str.trim();
+    strip_trailing_comment(str);
     if (str.empty()) {
         parse_error(*get_loc(yylloc), "missing expression in %%if directive");
         return false;
@@ -1437,7 +1466,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 BEGIN(p_skip_to_endif);
                                             }
                                         }
-^%else{WS}*$                            {
+^%else{WS}*(#.*|\/\*.*)?$                            {
                                             if (!parse_cond_can_else(get_loc(yylloc))) {
                                                 if (!parse_cond_else()) {
                                                     parse_error(*get_loc(yylloc), "%%else found without %%if");
@@ -1450,7 +1479,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             }
                                         }
 <p_skip_to_endif>{
-   ^%endif{WS}*$                        {
+   ^%endif{WS}*(#.*|\/\*.*)?$                        {
                                             if (parse_cond_pop(get_loc(yylloc))) {
                                                 printd(5, "p_skip_to_endif: found %%endif (%s) (final)\n", yytext);
                                                 BEGIN(INITIAL);
@@ -1460,7 +1489,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             //printd(5, "p_skip_to_endif: found %%endif (%s) (not final)\n", yytext);
 #endif
                                         }
-   ^%else{WS}*$                         {
+   ^%else{WS}*(#.*|\/\*.*)?$                         {
                                             // Check for duplicate %else at the current level
                                             if (parse_cond_test(get_loc(yylloc))) {
                                                 if (parse_cond_has_else()) {
@@ -1526,7 +1555,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             }
                                             // If not at top level, just continue skipping (stay in current state)
                                         }
-   ^%else{WS}*$                         {
+   ^%else{WS}*(#.*|\/\*.*)?$                         {
                                             //printd(5, "p_skip_to_endif_or_else: found %else\n");
                                             if (parse_cond_test(get_loc(yylloc))) {
                                                 // Check for duplicate %else
@@ -1539,7 +1568,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 }
                                             }
                                         }
-   ^%endif{WS}*$                        {
+   ^%endif{WS}*(#.*|\/\*.*)?$                   {
                                             if (parse_cond_pop(get_loc(yylloc))) {
                                                 //printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (final)\n", yytext);
                                                 BEGIN(INITIAL);
@@ -1621,7 +1650,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
-^%endif{WS}*$                           parse_cond_pop(get_loc(yylloc));
+^%endif{WS}*(#.*|\/\*.*)?$                           parse_cond_pop(get_loc(yylloc));
 ^%include{WS}*$                         { parse_error(*get_loc(yylloc), "missing argument to %%include"); }
 ^%include{WS}+                          BEGIN(incl);
 <exec_class_state>{
