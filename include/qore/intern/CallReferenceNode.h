@@ -36,6 +36,7 @@
 #include <string>
 
 class LocalFunctionCallReferenceNode;
+struct RuntimeConfig;
 
 struct CallReferenceNodeLocation {
     const QoreProgramLocation* loc;
@@ -115,6 +116,7 @@ protected:
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool &needs_deref, ExceptionSink* xsink) const;
 };
 
 class StaticMethodCallReferenceNode : public LocalStaticMethodCallReferenceNode {
@@ -139,6 +141,7 @@ public:
 class LocalMethodCallReferenceNode : public LocalStaticMethodCallReferenceNode {
 protected:
     DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool &needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL LocalMethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method, bool n_needs_eval) : LocalStaticMethodCallReferenceNode(loc, n_method, n_needs_eval) {
         //printd(5, "LocalMethodCallReferenceNode::LocalStaticMethodCallReferenceNode() this: %p %s::%s() pgm: %p\n", this, method->getClass()->getName(), method->getName(), pgm);
@@ -198,6 +201,7 @@ protected:
             bool n_needs_eval);
 
     DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool &needs_deref, ExceptionSink* xsink) const;
 };
 
 //! a call reference to a user function

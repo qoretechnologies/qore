@@ -689,6 +689,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreClassList.cpp
     lib/HashDeclList.cpp
     lib/EnumList.cpp
+    lib/RuntimeConfig.cpp
     lib/thread.cpp
     lib/AbstractThreadResource.cpp
     lib/ThreadResourceList.cpp
@@ -961,6 +962,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreClassList.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/HashDeclList.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/EnumList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/RuntimeConfig.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/thread.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AbstractThreadResource.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ThreadResourceList.cpp\"

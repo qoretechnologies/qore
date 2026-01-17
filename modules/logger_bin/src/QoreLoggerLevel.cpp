@@ -294,16 +294,59 @@ void QoreLoggerLevel::init() {
     limap.insert(limap_t::value_type(QLL_ERROR, LevelError));
     limap.insert(limap_t::value_type(QLL_FATAL, LevelFatal));
     limap.insert(limap_t::value_type(QLL_OFF, LevelOff));
+
 }
 
 void QoreLoggerLevel::del() {
-    llsmap.clear();
-    llimap.clear();
+    if (LevelAll) {
+        LevelAll->deref(nullptr);
+        LevelAll = nullptr;
+    }
+    if (LevelTrace) {
+        LevelTrace->deref(nullptr);
+        LevelTrace = nullptr;
+    }
+    if (LevelDebug) {
+        LevelDebug->deref(nullptr);
+        LevelDebug = nullptr;
+    }
+    if (LevelDetail) {
+        LevelDetail->deref(nullptr);
+        LevelDetail = nullptr;
+    }
+    if (LevelInfo) {
+        LevelInfo->deref(nullptr);
+        LevelInfo = nullptr;
+    }
+    if (LevelWarn) {
+        LevelWarn->deref(nullptr);
+        LevelWarn = nullptr;
+    }
+    if (LevelError) {
+        LevelError->deref(nullptr);
+        LevelError = nullptr;
+    }
+    if (LevelFatal) {
+        LevelFatal->deref(nullptr);
+        LevelFatal = nullptr;
+    }
+    if (LevelOff) {
+        LevelOff->deref(nullptr);
+        LevelOff = nullptr;
+    }
 
     lsmap.clear();
     limap.clear();
+    llsmap.clear();
+    llimap.clear();
 
-    for (auto& i : lsmap) {
-        i.second->deref(nullptr);
-    }
+    LoggerLevelAll = nullptr;
+    LoggerLevelTrace = nullptr;
+    LoggerLevelDebug = nullptr;
+    LoggerLevelDetail = nullptr;
+    LoggerLevelInfo = nullptr;
+    LoggerLevelWarn = nullptr;
+    LoggerLevelError = nullptr;
+    LoggerLevelFatal = nullptr;
+    LoggerLevelOff = nullptr;
 }

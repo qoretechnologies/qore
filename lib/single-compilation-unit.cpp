@@ -26,7 +26,14 @@
     information.
 */
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
 #include "parser.cpp"
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #include "scanner.cpp"
 #undef ECHO
 #include "BarewordNode.cpp"
@@ -125,6 +132,7 @@
 #include "ConstantList.cpp"
 #include "QoreClassList.cpp"
 #include "HashDeclList.cpp"
+#include "RuntimeConfig.cpp"
 #include "thread.cpp"
 #include "AbstractThreadResource.cpp"
 #include "ThreadResourceList.cpp"

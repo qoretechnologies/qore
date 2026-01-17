@@ -35,6 +35,7 @@
 #include "qore/intern/ParseNode.h"
 
 class IntermediateParseReferenceNode;
+struct RuntimeConfig;
 
 class ParseReferenceNode : public ParseNode {
 public:
@@ -85,9 +86,11 @@ public:
 
     // returns an intermediate reference for use with the background operator
     DLLLOCAL IntermediateParseReferenceNode* evalToIntermediate(ExceptionSink* xsink) const;
+    DLLLOCAL IntermediateParseReferenceNode* evalToIntermediate(RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     // returns a runtime reference
     DLLLOCAL virtual ReferenceNode* evalToRef(ExceptionSink* xsink) const;
+    DLLLOCAL virtual ReferenceNode* evalToRef(RuntimeConfig& rc, ExceptionSink* xsink) const;
 
 protected:
     //! lvalue expression for reference
@@ -104,8 +107,13 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
         return evalToRef(xsink);
     }
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+        return evalToRef(rc, xsink);
+    }
 
     DLLLOCAL QoreValue doPartialEval(QoreValue n, QoreObject*& self, const void*& lvalue_id,
+            const qore_class_private*& qc, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue doPartialEval(QoreValue n, RuntimeConfig& rc, QoreObject*& self, const void*& lvalue_id,
             const qore_class_private*& qc, ExceptionSink* xsink) const;
 
     //! initializes during parsing
@@ -131,6 +139,9 @@ public:
     // returns a runtime reference
     DLLLOCAL virtual ReferenceNode* evalToRef(ExceptionSink* xsink) const {
         return new ReferenceNode(lvexp.refSelf(), typeInfo, self, lvalue_id, cls);
+    }
+    DLLLOCAL virtual ReferenceNode* evalToRef(RuntimeConfig& rc, ExceptionSink* xsink) const {
+        return evalToRef(xsink);
     }
 };
 

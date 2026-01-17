@@ -35,6 +35,9 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("MongoDbDataProviderTest", "1.0") {
         url = ENV.MONGODB_URL;
+        int verbose = m_options.verbose ?? 0;
+        setenv("QORE_MONGODB_VERBOSE", sprintf("%d", verbose));
+        setenv("MONGOC_LOG_LEVEL", verbose > 2 ? "debug" : "warning");
 %ifndef NoMongoDB
         addTestCase("connection test", \connectionTest());
         addTestCase("factory test", \factoryTest());

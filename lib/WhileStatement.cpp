@@ -84,6 +84,47 @@ int WhileStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     return rc;
 }
 
+int WhileStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    // instantiate local variables
+    LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
+
+    int rc_state = 0;
+
+    while (true) {
+        // Check for sandbox interrupt
+        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        if (sm && sm->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+            break;
+        }
+
+        ValueEvalRefHolder val(rc, cond, xsink);
+        if (*xsink) {
+            break;
+        }
+
+        if (!val->getAsBool()) {
+            break;
+        }
+
+        if (code) {
+            rc_state = code->execImpl(rc, return_value, xsink);
+            if (*xsink || rc_state == RC_BREAK) {
+                rc_state = 0;
+                break;
+            }
+            if (rc_state == RC_RETURN) {
+                break;
+            }
+            if (rc_state == RC_CONTINUE) {
+                rc_state = 0;
+            }
+        }
+    }
+
+    return rc_state;
+}
+
 int WhileStatement::parseInitImpl(QoreParseContext& parse_context) {
     // turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);

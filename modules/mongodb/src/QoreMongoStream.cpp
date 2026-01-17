@@ -29,9 +29,35 @@
 
 #include <cerrno>
 #include <cstring>
+#include <cstdlib>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+
+static bool qore_mongoc_verbose_enabled() {
+    const char* env = getenv("QORE_MONGODB_VERBOSE");
+    if (!env || !*env) {
+        return false;
+    }
+    char* end = nullptr;
+    long level = strtol(env, &end, 10);
+    if (end == env) {
+        return false;
+    }
+    return level > 2;
+}
+
+static void qore_mongoc_log_handler(mongoc_log_level_t level, const char* domain, const char* message,
+        void* user_data) {
+    if ((level == MONGOC_LOG_LEVEL_DEBUG || level == MONGOC_LOG_LEVEL_TRACE) && !qore_mongoc_verbose_enabled()) {
+        return;
+    }
+    mongoc_log_default_handler(level, domain, message, user_data);
+}
+
+void qore_mongo_set_log_handler() {
+    mongoc_log_set_handler(qore_mongoc_log_handler, nullptr);
+}
 
 //! Interruptible stream structure
 /** This structure wraps the default MongoDB socket stream and adds
@@ -401,5 +427,6 @@ mongoc_stream_t* qore_mongo_stream_initiator(
 }
 
 void qore_mongo_setup_interruptible_streams(mongoc_client_t* client) {
+    qore_mongo_set_log_handler();
     mongoc_client_set_stream_initiator(client, qore_mongo_stream_initiator, nullptr);
 }

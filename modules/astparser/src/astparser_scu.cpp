@@ -1,6 +1,13 @@
 // astparser module single compilation unit
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
 #include "ast_parser.cpp"
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #include "ast_scanner.cpp"
 
 #include "AstParser.cpp"

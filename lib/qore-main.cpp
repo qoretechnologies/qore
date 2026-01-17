@@ -36,6 +36,7 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/EncryptionTransforms.h"
+#include "qore/intern/qore_program_private.h"
 
 #include <atomic>
 #include <cerrno>
@@ -343,6 +344,13 @@ void qore_cleanup() {
     // delete all loadable modules
     QMM.cleanup();
 
+#ifdef HAVE_MPFR_BUILDOPT_TLS_T
+    // ensure MPFR caches are released for the main thread
+    mpfr_free_cache2(static_cast<mpfr_free_cache_t>(MPFR_FREE_LOCAL_CACHE | MPFR_FREE_GLOBAL_CACHE));
+    mpfr_free_pool();
+    mpfr_mp_memory_cleanup();
+#endif
+
     // issue #3045: clear module options
     qore_delete_module_options();
 
@@ -366,6 +374,12 @@ void qore_cleanup() {
 
     // delete threading infrastructure
     delete_qore_threads();
+
+    // release any remaining Program objects (only safe after thread subsystem teardown)
+    {
+        ExceptionSink xsink;
+        qore_program_private::cleanupAllPrograms(&xsink);
+    }
 
     // destroy thread-local storage
     qore_thread_local_storage_destroy();

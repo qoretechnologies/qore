@@ -181,6 +181,17 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         int ext_pid = 0;
     }
 
+    private bool waitForConnectionState(WebSocketClientDelayedDataProvider prov, bool expected, date timeout = 5s) {
+        date start = now_us();
+        while (prov.isConnected() != expected) {
+            if (now_us() - start > timeout) {
+                return False;
+            }
+            sleep(100ms);
+        }
+        return True;
+    }
+
     constructor() : Test("WebSocketClientTest", "1.0") {
         addTestCase("reconnect test", \reconnectTest());
         addTestCase("data provider test", \dataProviderTest());
@@ -230,9 +241,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 try {
                     string content = ReadOnlyFile::readTextFile(log_path);
                     if (content.find(expected) >= 0) {
-                        @debug {
-                            date now = now_us();
-                            printf("external ws: ready at %y\n", now);
+                        if (m_options.verbose > 2) {
+                            @debug {
+                                date now = now_us();
+                                printf("external ws: ready at %y\n", now);
+                            }
                         }
                         return True;
                     }
@@ -269,9 +282,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         string cmd = sprintf("%s %s %d %s %s > %s 2>&1 & echo $! > %s",
             node_bin, script, port, ext_cert.getPath(), ext_key.getPath(), ext_log, ext_pidfile);
-        @debug {
-            date now = now_us();
-            printf("external ws: spawn at %y\n", now);
+        if (m_options.verbose > 2) {
+            @debug {
+                date now = now_us();
+                printf("external ws: spawn at %y\n", now);
+            }
         }
         if (system(cmd) != 0) {
             stopExternalHttp2WsServer();
@@ -361,7 +376,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # check reconnecting status
         assertNothing(prov.sendMessage(MESSAGE_WS_PING),
             "sending a ping while disconnected should not throw or return data");
-        assertFalse(prov.isConnected());
+        assertTrue(waitForConnectionState(prov, False),
+            "expected WebSocket client to report disconnected state");
 
         cinfo = prov.getConnectionInfo();
         assertFalse(cinfo.connected);
@@ -757,9 +773,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Test 1: Basic HTTP/2 WebSocket connection and echo
         {
-            @debug {
-                date now = now_us();
-                printf("external ws: connect start %y\n", now);
+            if (m_options.verbose > 2) {
+                @debug {
+                    date now = now_us();
+                    printf("external ws: connect start %y\n", now);
+                }
             }
             list<auto> l = ();
             Counter c(1);
@@ -779,24 +797,30 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             };
             WebSocketClient wsc(cb, opts);
             wsc.connect();
-            @debug {
-                date now = now_us();
-                printf("external ws: connect done %y\n", now);
+            if (m_options.verbose > 2) {
+                @debug {
+                    date now = now_us();
+                    printf("external ws: connect done %y\n", now);
+                }
             }
             assertTrue(wsc.isHttp2(), "External HTTP/2 WebSocket should negotiate HTTP/2");
 
             wsc.send("echo-test");
             c.waitForZero(5s);
-            @debug {
-                date now = now_us();
-                printf("external ws: echo received %y\n", now);
+            if (m_options.verbose > 2) {
+                @debug {
+                    date now = now_us();
+                    printf("external ws: echo received %y\n", now);
+                }
             }
             assertEq(list("echo-test"), l, "External HTTP/2 WebSocket should echo messages");
 
             wsc.disconnect();
-            @debug {
-                date now = now_us();
-                printf("external ws: disconnect done %y\n", now);
+            if (m_options.verbose > 2) {
+                @debug {
+                    date now = now_us();
+                    printf("external ws: disconnect done %y\n", now);
+                }
             }
             delete wsc;
         }

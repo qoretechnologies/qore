@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -46,6 +46,11 @@
 #include <sys/param.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <poll.h>
+#include <spawn.h>
+#include <sys/syscall.h>
+#endif
 
 #ifdef HAVE_GRP_H
 #include <grp.h>
@@ -83,6 +88,9 @@
 #define MAX_GIDS 100
 
 extern bool threads_initialized;
+#ifdef __linux__
+extern char **environ;
+#endif
 
 AbstractQoreNode* missing_function_error(const char* func, ExceptionSink* xsink) {
    QoreString have(func);
@@ -284,10 +292,142 @@ int rc = system("ls -l");
     - @ref backquote_operator "the backquote operator"
  */
 int system(string command) [dom=EXTERNAL_PROCESS] {
+#ifdef __linux__
+    auto pidfd_open = [](pid_t target_pid) -> int {
+#ifdef SYS_pidfd_open
+        return syscall(SYS_pidfd_open, target_pid, 0);
+#else
+        return -1;
+#endif
+    };
+#endif
+
+    auto wait_for_process = [&xsink
+#ifdef __linux__
+        , &pidfd_open
+#endif
+    ](pid_t pid) -> int {
+        int status = 0;
+#ifdef __linux__
+        int pidfd = pidfd_open(pid);
+        if (pidfd >= 0) {
+            while (true) {
+                if (qore_check_io_interrupt(xsink, "process wait")) {
+                    // Use SIGKILL to enforce immediate termination on interrupt.
+                    kill(-pid, SIGKILL);
+                    waitpid(pid, &status, 0);
+                    close(pidfd);
+                    return -1;
+                }
+
+                struct pollfd pfd;
+                pfd.fd = pidfd;
+                pfd.events = POLLIN;
+                pfd.revents = 0;
+                // Use a shorter interval here to reduce system() latency without changing global defaults.
+                const int system_poll_ms = 50;
+                int rc = poll(&pfd, 1, system_poll_ms);
+                if (rc > 0) {
+                    break;
+                }
+                if (rc == 0) {
+                    continue;
+                }
+#ifdef EINTR
+                if (errno == EINTR) {
+                    continue;
+                }
+#endif
+                break;
+            }
+            close(pidfd);
+            if (waitpid(pid, &status, 0) != pid) {
+                return -1;
+            }
+            return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        }
+#endif
+
+        while (true) {
+            // check for sandbox interrupt
+            if (qore_check_io_interrupt(xsink, "process wait")) {
+                // Use SIGKILL to enforce immediate termination on interrupt.
+                kill(-pid, SIGKILL);
+                waitpid(pid, &status, 0);
+                return -1;
+            }
+
+            // use WNOHANG for non-blocking check
+            int rc = waitpid(pid, &status, WNOHANG);
+            if (rc == pid) {
+                // child has exited
+                break;
+            }
+            if (rc == 0) {
+                // child still running, sleep briefly and retry
+                // Use a shorter interval here to reduce system() latency without changing global defaults.
+                const int system_poll_ms = 50;
+                usleep(system_poll_ms * 1000);
+                continue;
+            }
+#ifdef EINTR
+            if (rc == -1 && errno == EINTR) {
+                continue;
+            }
+#endif
+            // error
+            return -1;
+        }
+        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    };
+
+#if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
+    pid_t spawn_pid = -1;
+    int spawn_rc = 0;
+    posix_spawnattr_t attr;
+    spawn_rc = posix_spawnattr_init(&attr);
+    if (spawn_rc == 0) {
+        short flags = static_cast<short>(POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF);
+        spawn_rc = posix_spawnattr_setflags(&attr, flags);
+
+        if (spawn_rc == 0) {
+            sigset_t empty;
+            sigemptyset(&empty);
+            spawn_rc = posix_spawnattr_setsigmask(&attr, &empty);
+        }
+        if (spawn_rc == 0) {
+            sigset_t def;
+            sigemptyset(&def);
+            sigaddset(&def, SIGINT);
+            sigaddset(&def, SIGQUIT);
+            spawn_rc = posix_spawnattr_setsigdefault(&attr, &def);
+        }
+        if (spawn_rc == 0) {
+            spawn_rc = posix_spawnattr_setpgroup(&attr, 0);
+        }
+
+        if (spawn_rc == 0) {
+            const char* argv[] = {"sh", "-c", command->c_str(), nullptr};
+            spawn_rc = posix_spawn(&spawn_pid, "/bin/sh", nullptr, &attr, const_cast<char* const*>(argv), environ);
+        }
+        posix_spawnattr_destroy(&attr);
+    }
+    if (spawn_rc == 0) {
+        return wait_for_process(spawn_pid);
+    }
+#endif
 #if defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
     // on platforms with fork(2) and signal handling, we need to fork, enable all signals, then execl()
     pid_t pid;
     if (!(pid = fork())) {
+        setpgid(0, 0);
+
+        sigset_t empty;
+        sigemptyset(&empty);
+        sigprocmask(SIG_SETMASK, &empty, nullptr);
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
+
         // exec pgm like system(): sh -c "command"
         execl("/bin/sh", "sh", "-c", command->c_str(), NULL);
         fprintf(stderr, "execl() failed in child process for target '/bin/sh' with error code %d: %s\n", errno,
@@ -298,38 +438,16 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
     if (pid == -1) {
         return -1;
     }
-
-    // wait for child to exit with interrupt checking
-    int status;
-    while (true) {
-        // check for sandbox interrupt
-        if (qore_check_io_interrupt(xsink, "process wait")) {
-            // kill the child process on interrupt
-            kill(pid, SIGKILL);
-            waitpid(pid, &status, 0);
-            return -1;
-        }
-
-        // use WNOHANG for non-blocking check
-        int rc = waitpid(pid, &status, WNOHANG);
-        if (rc == pid) {
-            // child has exited
-            break;
-        }
-        if (rc == 0) {
-            // child still running, sleep briefly and retry
-            usleep(QORE_IO_POLL_INTERVAL_MS * 1000);
-            continue;
-        }
-#ifdef EINTR
-        if (rc == -1 && errno == EINTR) {
-            continue;
+    if (setpgid(pid, pid) == -1) {
+#ifdef EACCES
+        if (errno != EACCES) {
+            // Ignore unexpected errors to preserve existing behavior.
         }
 #endif
-        // error
-        break;
     }
-    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+
+    // wait for child to exit with interrupt checking
+    return wait_for_process(pid);
 #elif defined(HAVE_SYSTEM)
     return system(command->c_str());
 #else

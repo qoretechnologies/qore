@@ -55,6 +55,7 @@
 class LVList;
 class StatementBlock;
 class QoreBreakpoint;
+struct RuntimeConfig;
 
 // forward declaration
 class qore_program_private_base;
@@ -71,6 +72,7 @@ public:
     DLLLOCAL virtual ~AbstractStatement();
 
     DLLLOCAL int exec(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL int exec(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int parseInit(QoreParseContext& parse_context);
 
     DLLLOCAL void finalizeBlock(int sline, int eline);
@@ -107,6 +109,7 @@ protected:
     volatile bool breakpointFlag = false;  // fast access to check if breakpoints are non-empty
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink) = 0;
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
     //! Returns -1 = parse error raised, 0 = OK
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context) = 0;

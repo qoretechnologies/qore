@@ -2147,6 +2147,12 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER hashdecl_attrs list list_n
 %destructor { if ($$) $$->deref(nullptr); } immediate_typed_hash
 %destructor { QoreValue($$).discard(nullptr); } scalar exp exp_n exp_c myexp
+
+%code top {
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
+}
 %%
 top_level_commands:
     top_level_command

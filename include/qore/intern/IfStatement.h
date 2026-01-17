@@ -35,6 +35,8 @@
 
 #include "qore/intern/AbstractStatement.h"
 
+struct RuntimeConfig;
+
 class IfStatement : public AbstractStatement {
 public:
     DLLLOCAL IfStatement(int start_line, int end_line, QoreValue c, StatementBlock* i, StatementBlock* e = nullptr);
@@ -52,6 +54,7 @@ private:
     LVList* lvars = nullptr;
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };
 

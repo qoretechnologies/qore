@@ -41,12 +41,16 @@
 #include <cstdio>
 #include <pthread.h>
 
+#include <cstdint>
 #include <functional>
 
 class QoreProgram;
 class AbstractQoreZoneInfo;
 class ThreadCleanupNode;
 class AbstractThreadResource;
+struct QoreProgramLocation;
+class AbstractStatement;
+class QoreStackLocation;
 
 //! pointer to a qore thread destructor function
 typedef void (*qtdest_t)(void *);
@@ -56,6 +60,26 @@ typedef void (*qtrdest_t)(void *, ExceptionSink *);
 
 //! pointer to a function that can be started with q_start_thread()
 typedef void (*q_thread_t)(ExceptionSink* xsink, void* arg);
+
+//! snapshot of the current runtime context (TLS-backed)
+/** This structure provides a stable, read-only view of runtime context for
+    binary modules. The values are populated from thread-local storage.
+
+    @note Fields may be nullptr during initialization or parsing.
+ */
+struct QoreRuntimeContext {
+    QoreProgram* pgm;
+    const QoreProgramLocation* loc;
+    const AbstractStatement* stmt;
+    int64_t po;
+    const QoreStackLocation* stack_loc;
+    int element;
+};
+
+//! fills a QoreRuntimeContext snapshot from thread-local storage
+/** @param rc output pointer for the runtime context snapshot
+ */
+DLLEXPORT void qore_get_runtime_context(QoreRuntimeContext* rc);
 
 //! returns true if the current thread is a valid qore thread; it is not safe to call most Qore functions unless the thread is registered with Qore
 /**

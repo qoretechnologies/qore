@@ -74,6 +74,7 @@ class QoreString;
 class ExceptionSink;
 class QoreTypeInfo;
 class QoreValue;
+struct RuntimeConfig;
 
 // ============================================================================
 // QoreSimpleValue - Trivially copyable value type for unions and varargs
@@ -722,6 +723,9 @@ public:
     //! Evaluates the value and returns the result with deref flag
     DLLEXPORT QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const;
 
+    //! Evaluates the value with RuntimeConfig and returns the result with deref flag
+    DLLLOCAL QoreValue eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
     // ========================================================================
     // Type information
     // ========================================================================
@@ -984,27 +988,39 @@ public:
 //! evaluates an AbstractQoreNode and dereferences the stored value in the destructor
 class ValueEvalRefHolder : public ValueOptionalRefHolder {
 public:
-    //! evaluates the exp argument
-    DLLEXPORT ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs);
-
-    //! evaluates the exp argument
-    DLLEXPORT ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs);
-
     //! creates the object with with no evaluation
     DLLEXPORT ValueEvalRefHolder(ExceptionSink* xs);
 
-    //! evaluates the argument, returns -1 for error, 0 = OK
+    //! evaluates the exp argument (gets RuntimeConfig from TLS)
+    DLLEXPORT ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs);
+
+    //! evaluates the exp argument (gets RuntimeConfig from TLS)
+    DLLEXPORT ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs);
+
+    //! evaluates the exp argument with RuntimeConfig
+    DLLLOCAL ValueEvalRefHolder(RuntimeConfig& rc, const AbstractQoreNode* exp, ExceptionSink* xs);
+
+    //! evaluates the exp argument with RuntimeConfig
+    DLLLOCAL ValueEvalRefHolder(RuntimeConfig& rc, const QoreValue exp, ExceptionSink* xs);
+
+    //! evaluates the argument (gets RuntimeConfig from TLS), returns -1 for error, 0 = OK
     DLLEXPORT int eval(const AbstractQoreNode* exp);
 
-    //! evaluates the argument, returns -1 for error, 0 = OK
+    //! evaluates the argument (gets RuntimeConfig from TLS), returns -1 for error, 0 = OK
     DLLEXPORT int eval(const QoreValue exp);
 
-protected:
-    //! evaluates the argument, returns -1 for error, 0 = OK
-    DLLLOCAL int evalIntern(const AbstractQoreNode* exp);
+    //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
+    DLLLOCAL int eval(RuntimeConfig& rc, const AbstractQoreNode* exp);
 
-    //! evaluates the argument, returns -1 for error, 0 = OK
-    DLLLOCAL int evalIntern(const QoreValue& exp);
+    //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
+    DLLLOCAL int eval(RuntimeConfig& rc, const QoreValue exp);
+
+protected:
+    //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
+    DLLLOCAL int evalIntern(RuntimeConfig& rc, const AbstractQoreNode* exp);
+
+    //! evaluates the argument with RuntimeConfig, returns -1 for error, 0 = OK
+    DLLLOCAL int evalIntern(RuntimeConfig& rc, const QoreValue& exp);
 };
 
 //! evaluates an AbstractQoreNode and dereferences the stored value in the destructor

@@ -40,6 +40,7 @@
 #include "qore/intern/QoreQueueIntern.h"
 #include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
+#include "qore/intern/qore_program_private.h"
 
 qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc, QoreProgram* p, QoreHashNode* n_data) :
         RObject(n_obj->references, true),

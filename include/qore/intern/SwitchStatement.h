@@ -36,6 +36,8 @@
 #include "qore/intern/AbstractStatement.h"
 #include "qore/intern/StatementBlock.h"
 
+struct RuntimeConfig;
+
 class CaseNode {
 private:
     DLLLOCAL virtual bool isCaseNodeImpl() const;
@@ -85,6 +87,7 @@ private:
 
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context0);
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 };
 
 #endif

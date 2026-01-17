@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -60,7 +60,8 @@ static void LoggerLevel_deserializer(QoreObject& self, const QoreHashNode* sdata
             return;
         }
 
-        self.setPrivate(CID_LOGGERLEVEL, new QoreLoggerLevel(code, val.get<const QoreStringNode>()));
+        self.setPrivate(CID_LOGGERLEVEL,
+            new QoreLoggerLevel(code, val.get<const QoreStringNode>()->stringRefSelf()));
         return;
     }
 
@@ -77,7 +78,7 @@ qclass LoggerLevel [ns=Qore::Logger; arg=QoreLoggerLevel* level; vparent=Seriali
     @param level string log level value
 */
 LoggerLevel::constructor(int code, string level) {
-    self->setPrivate(CID_LOGGERLEVEL, new QoreLoggerLevel(code, level));
+    self->setPrivate(CID_LOGGERLEVEL, new QoreLoggerLevel(code, level->stringRefSelf()));
 }
 
 //! Gets the level code value

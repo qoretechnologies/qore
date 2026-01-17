@@ -32,6 +32,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <vector>
 
@@ -269,24 +270,29 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 }
 
 QoreValue SelfFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreObject* self = runtime_get_stack_object();
+    RuntimeConfig rc = rc_get_current();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    QoreObject* self = rc.obj ? rc.obj : runtime_get_stack_object();
     assert(self);
 
-    //printd(5, "SelfFunctionCallNode::evalImpl() this: %p self: %p method: %p (%s) v: %d\n", this, self, method,
-    //    ns.ostr, self->isValid());
+    const qore_class_private* runtime_cls = rc.cls ? rc.cls : runtime_get_class();
+
     if (is_copy) {
         return self->getClass()->execCopy(self, xsink);
     }
 
     if (ns.size() == 1) {
         // must have a class context here
-        assert(class_ctx || runtime_get_class());
-        return exec(self, ns.ostr, class_ctx ? class_ctx : runtime_get_class(), xsink);
+        assert(class_ctx || runtime_cls);
+        return exec(self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
     }
 
     if (is_abstract) {
         return qore_class_private::get(*self->getClass())->evalMethod(self, ns.ostr, args,
-            class_ctx ? class_ctx : runtime_get_class(), xsink);
+            class_ctx ? class_ctx : runtime_cls, xsink);
     }
 
     assert(method);
@@ -409,8 +415,14 @@ SetSelfFunctionCallNode::SetSelfFunctionCallNode(const SelfFunctionCallNode& old
 }
 
 QoreValue SetSelfFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig rc = rc_get_current();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue SetSelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfigObjectHelper rc_obj_helper(rc, self, cls);
     ObjectSubstitutionHelper osh(self, cls);
-    QoreValue rv = SelfFunctionCallNode::evalImpl(needs_deref, xsink);
+    QoreValue rv = SelfFunctionCallNode::evalImpl(rc, needs_deref, xsink);
     self->deref(xsink);
     deref_self = false;
     return rv;
@@ -436,12 +448,21 @@ QoreString* FunctionCallNode::getAsString(bool& del, int foff, ExceptionSink* xs
 
 // eval(): return value requires a deref(xsink)
 QoreValue FunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig rc = rc_get_current();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     QoreFunction* func = fe->getFunction();
-    printd(5, "FunctionCallNode::evalImpl() this: %p '%s' tmp_args: %d args: %p '%s' (%zd)\n", this,
+    QoreProgram* call_pgm = pgm ? pgm : rc.pgm;
+    if (!call_pgm) {
+        call_pgm = getProgram();
+    }
+    printd(5, "FunctionCallNode::evalImpl(rc) this: %p '%s' tmp_args: %d args: %p '%s' (%zd)\n", this,
         func->getName(), tmp_args, args, args ? get_full_type_name(args) : "n/a", args ? args->size() : 0);
     return tmp_args
-        ? func->evalFunctionTmpArgs(variant, args, pgm, xsink)
-        : func->evalFunction(variant, args, pgm, xsink);
+        ? func->evalFunctionTmpArgs(variant, args, call_pgm, xsink)
+        : func->evalFunction(variant, args, call_pgm, xsink);
 }
 
 int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -629,6 +650,11 @@ NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args)
 }
 
 QoreValue NewObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig rc = rc_get_current();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue NewObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     return qore_class_private::execConstructor(*qc, variant, args, xsink);
 }
 
@@ -704,6 +730,11 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 }
 
 QoreValue ScopedObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig rc = rc_get_current();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     return qore_class_private::execConstructor(*oc, variant, args, xsink);
 }
 
@@ -864,6 +895,11 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 }
 
 QoreValue StaticMethodCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig rc = rc_get_current();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     return tmp_args
         ? qore_method_private::evalTmpArgs(*method, xsink, nullptr, args)
         : qore_method_private::eval(*method, xsink, nullptr, args);

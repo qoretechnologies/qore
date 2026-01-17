@@ -1466,6 +1466,11 @@ ws.setEventQueue();
             }
         }
 
+        if (hc.isOpen()) {
+            hc.shutdown();
+            hc.close();
+        }
+
         # call the callback with NOTHING to signal that the connection has been closed
         try {
             # issue #3225 catch and log any exeptions in the closing callback
@@ -1479,10 +1484,6 @@ ws.setEventQueue();
                 }
                 rethrow;
             }
-        }
-        if (hc.isOpen()) {
-            hc.shutdown();
-            hc.close();
         }
 
         if (!self) {

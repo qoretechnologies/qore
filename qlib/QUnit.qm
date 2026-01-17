@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file QUnit.qm Qore user module for automatic testing
 
-/*  QUnit.qm Copyright (C) 2013 - 2024 Qore Technologies, s.r.o.
+/*  QUnit.qm Copyright (C) 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,6 +25,7 @@
 
 %requires qore >= 0.9
 %modern
+%disable-warning module-only
 
 %try-module xml >= 1.3
 %define NO_XML

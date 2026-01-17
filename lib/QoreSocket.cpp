@@ -687,7 +687,7 @@ int SSLSocketHelper::startAccept(ExceptionSink* xsink) {
                 return sysCallError(xsink, rc, "startAccept", "SSL_accept");
             }
             default:
-                printd(0, "SSLSocketHelper::startAccept() err: %d\n", err);
+                printd(3, "SSLSocketHelper::startAccept() err: %d\n", err);
                 break;
         }
         if (sslError(xsink, "startAccept", "SSL_accept", true)) {

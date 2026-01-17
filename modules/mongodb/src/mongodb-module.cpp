@@ -4,7 +4,7 @@
 
     Qore mongodb module
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -61,6 +61,7 @@ QoreStringNode* mongodb_module_init() {
     // Initialize libmongoc
     mongoc_init();
     mongoc_initialized = true;
+    qore_mongo_set_log_handler();
 
     // Pre-initialize all classes first (creates class objects without methods)
     // This is needed because classes reference each other's type info
