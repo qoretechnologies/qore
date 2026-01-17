@@ -1,7 +1,7 @@
 module qore-http2-ws-client
 
-go 1.20
+go 1.23.0
 
-require golang.org/x/net v0.24.0
+require golang.org/x/net v0.38.0
 
-require golang.org/x/text v0.14.0 // indirect
+require golang.org/x/text v0.23.0 // indirect
