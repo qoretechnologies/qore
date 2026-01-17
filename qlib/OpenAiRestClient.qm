@@ -303,14 +303,11 @@ public class OpenAiResponseSseStream {
         }
 %ifdef NoJson
         throw "SSE-ERROR", "json module is required to serialize SSE request body";
-%endif
+%else
         if (!headers."Content-Type") {
             headers."Content-Type" = "application/json";
         }
-%ifndef NoJson
         return call_function_args("to_json", (body,));
-%else
-        throw "SSE-ERROR", "json module is required to serialize SSE request body";
 %endif
     }
 
