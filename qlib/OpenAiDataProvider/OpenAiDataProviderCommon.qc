@@ -25,11 +25,49 @@
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
 #! Conversation context store for persisting response context
+/** Implementations must return and accept a hash compatible with:
+        - \c previous_response_id (string, required)
+        - \c conversation_id (string, optional)
+        - \c metadata (hash, optional)
+    The returned hash is used to set \c previous_response_id and to persist state for follow-up requests.
+
+    @par Example: subclass implementation
+    @code{.py}
+class MyContextStore inherits OpenAiConversationContextStore {
+    *hash<auto> loadContext(string key) {
+        return get_from_store(key);
+    }
+
+    auto saveContext(string key, hash<auto> ctxt) {
+        save_to_store(key, ctxt);
+    }
+}
+    @endcode
+
+    @par Example: callback-based store
+    @code{.py}
+OpenAiConversationContextStoreCallbacks store({
+    "load": *hash<auto> sub (string key) { return get_from_store(key); },
+    "save": auto sub (string key, hash<auto> ctxt) { save_to_store(key, ctxt); },
+});
+    @endcode
+*/
 public class OpenAiConversationContextStore {
     #! Loads conversation context for the given key
+    /** @param key an opaque identifier for the conversation (for example user id, session id, or workflow id)
+
+        @return a context hash or @ref nothing if no context is available
+
+        @note the returned hash should include at least \c previous_response_id
+    */
     abstract *hash<auto> loadContext(string key);
 
     #! Saves conversation context for the given key
+    /** @param key an opaque identifier for the conversation
+        @param ctxt the context hash to persist (see class description for supported keys)
+
+        @return a value ignored by callers (implementations may return \c nothing)
+    */
     abstract auto saveContext(string key, hash<auto> ctxt);
 }
 
