@@ -26,12 +26,12 @@
 public namespace OpenAiDataProvider {
 #! Conversation context store for persisting response context
 public class OpenAiConversationContextStore {
-    #! Loads conversation context for the given key
+    #! Loads conversation context for the given key (override in subclasses as needed)
     *hash<auto> loadContext(string key) {
         return;
     }
 
-    #! Saves conversation context for the given key
+    #! Saves conversation context for the given key (override in subclasses as needed)
     auto saveContext(string key, hash<auto> ctxt) {
     }
 }

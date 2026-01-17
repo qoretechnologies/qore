@@ -112,12 +112,12 @@ while (hash<SseMessageInfo> evt = stream.readEvent(5s)) {
 stream.close();
     @endcode
 
-    @section OpenAirestclientrelnotes Release Notes
+    @section OpenAiRestClientRelnotes Release Notes
 
-    @subsection OpenAirestclientv1_1 OpenAiRestClient v1.1
+    @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
     - added SSE helper for streaming responses
 
-    @subsection OpenAirestclientv1_0 OpenAiRestClient v1.0
+    @subsection OpenAiRestClientv1_0 OpenAiRestClient v1.0
     - the initial version of the %OpenAiRestClient module
 */
 
@@ -272,9 +272,7 @@ public class OpenAiResponseSseStream {
     private string buildPath(string path) {
         string rv = path;
         rv =~ s/^\/+//;
-        if (rv !~ /^\//) {
-            rv = "/" + rv;
-        }
+        rv = "/" + rv;
         *string base = rest.getConnectionPath();
         if (base.val() && base != "/") {
             base =~ s/\/+$//;

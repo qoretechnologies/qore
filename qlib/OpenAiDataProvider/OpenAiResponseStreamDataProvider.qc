@@ -285,11 +285,14 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
             return;
         }
         hash<auto> ctx = ctx_info.ctx ?? {};
+        *hash<auto> effective_metadata = ctx.metadata ?? metadata;
         hash<auto> ctx_data = {
             "previous_response_id": payload.response.id,
             "conversation_id": payload.response.conversation_id ?? ctx.conversation_id,
-            "metadata": ctx.metadata ?? metadata,
         };
+        if (effective_metadata) {
+            ctx_data.metadata = effective_metadata;
+        }
         ctx_store.saveContext(ctx_info.ctx_key, ctx_data);
     }
 }
