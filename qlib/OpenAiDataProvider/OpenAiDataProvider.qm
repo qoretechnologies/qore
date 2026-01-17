@@ -338,7 +338,7 @@ OpenAiDataProvider::OpenAiDataProvider prov(rc.get());
 
 AbstractDataProvider resp = prov.getChildProvider("responses").getChildProvider("create");
 hash<auto> result = resp.doRequest({
-    "model": "gpt-4.1-mini",
+    "model": "gpt-4o-mini",
     "input": (
         {
             "input_item": {
@@ -397,7 +397,7 @@ if (result.tool_calls) {
     };
     # Tool results can be sent as additional input items (role=tool)
     hash<auto> follow_up = resp.doRequest({
-        "model": "gpt-4.1-mini",
+        "model": "gpt-4o-mini",
         "previous_response_id": result.id,
         "input": (
             {
@@ -430,7 +430,7 @@ prov.setConversationContextStore(new MyContextStore());
 
 AbstractDataProvider resp = prov.getChildProvider("responses").getChildProvider("create");
 hash<auto> result = resp.doRequest({
-    "model": "gpt-4.1-mini",
+    "model": "gpt-4o-mini",
     "input": (
         {
             "input_item": {
@@ -460,7 +460,7 @@ AbstractDataProvider stream = prov.getChildProvider("responses").getChildProvide
 stream.registerObserver(myObserver);
 stream.observersReady();
 stream.doRequest({
-    "model": "gpt-4.1-mini",
+    "model": "gpt-4o-mini",
     "input": (
         {
             "input_item": {

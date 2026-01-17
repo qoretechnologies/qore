@@ -214,16 +214,14 @@ public class OpenAiModelCreateResponseDataProvider inherits OpenAiDataProviderCo
                     return rv;
                 }
                 case "input_audio": {
-                    hash<auto> rv = {
-                        "type": "input_audio",
-                        "format": content.format,
-                    };
-                    if (content.audio) {
-                        rv.audio = content.audio;
-                    }
                     if (!content.audio || !content.audio.val() || !content.format || !content.format.val()) {
                         throw "INVALID-REQUEST", "input_audio content requires audio data and format";
                     }
+                    hash<auto> rv = {
+                        "type": "input_audio",
+                        "format": content.format,
+                        "audio": content.audio,
+                    };
                     return rv;
                 }
                 case "input_file": {

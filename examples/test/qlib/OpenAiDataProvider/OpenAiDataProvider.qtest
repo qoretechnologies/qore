@@ -349,7 +349,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             "type": "input_bad",
         };
         hash<auto!> invalid_type_req = {
-            "model": "gpt-4.1-mini",
+            "model": "gpt-4o-mini",
             "input": (
                 {
                     "input_item": {
@@ -367,7 +367,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             "image_url": "https://example.com/image.png",
         };
         hash<auto!> invalid_detail_req = {
-            "model": "gpt-4.1-mini",
+            "model": "gpt-4o-mini",
             "input": (
                 {
                     "input_item": {
@@ -383,7 +383,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             "type": "input_image",
         };
         hash<auto!> missing_image_req = {
-            "model": "gpt-4.1-mini",
+            "model": "gpt-4o-mini",
             "input": (
                 {
                     "input_item": {
@@ -400,7 +400,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             "audio": "AA==",
         };
         hash<auto!> missing_audio_format_req = {
-            "model": "gpt-4.1-mini",
+            "model": "gpt-4o-mini",
             "input": (
                 {
                     "input_item": {
@@ -417,7 +417,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             "format": "wav",
         };
         hash<auto!> missing_audio_data_req = {
-            "model": "gpt-4.1-mini",
+            "model": "gpt-4o-mini",
             "input": (
                 {
                     "input_item": {
@@ -433,7 +433,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             "type": "input_file",
         };
         hash<auto!> missing_file_data_req = {
-            "model": "gpt-4.1-mini",
+            "model": "gpt-4o-mini",
             "input": (
                 {
                     "input_item": {
@@ -446,7 +446,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_file_data_req,));
 
         hash<auto!> missing_schema_req = {
-            "model": "gpt-4.1-mini",
+            "model": "gpt-4o-mini",
             "text": {
                 "format": {
                     "type": "json_schema",

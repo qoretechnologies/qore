@@ -185,11 +185,7 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
         started = True;
         cnt.inc();
         on_error cnt.dec();
-%ifdef PO_NO_THREAD_CONTROL
         background eventLoop();
-%else
-        background eventLoop();
-%endif
     }
 
     #! Stops the SSE thread

@@ -87,7 +87,7 @@ printf("%N\n", ans.body);
     @code{.py}
 OpenAiRestClient rest = get_connection("my-openai-connection");
 OpenAiResponseSseStream stream = rest.openResponsesStream({
-    "model": "gpt-4.1-mini",
+    "model": "gpt-4o-mini",
     "stream": True,
     "input": (
         {
@@ -432,7 +432,7 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
     */
     constructor(string name, string description, string url = DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, DefaultUrl, attributes, options) {
+            : RestConnection(name, description, url, attributes, options) {
     }
 
     #! creates the OpenAiRestConnection object
@@ -453,7 +453,8 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
-    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config + {"url": DefaultUrl}, attr) {
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
     }
 
     #! returns \c "openai"
