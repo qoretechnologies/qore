@@ -60,6 +60,9 @@ DLLLOCAL mongoc_stream_t* qore_mongo_stream_initiator(
     void* user_data,
     bson_error_t* error);
 
+//! Configure libmongoc logging for the Qore MongoDB module
+DLLLOCAL void qore_mongo_set_log_handler();
+
 //! Set up interruptible streams for a MongoDB client
 /** This function configures the given MongoDB client to use interruptible
     streams for all I/O operations.

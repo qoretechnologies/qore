@@ -123,8 +123,26 @@ if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
     exit 1
 fi
 
+QORE_DIR=`dirname "$QORE"`
+BUILD_MODULE_DIRS=""
+if [ -d "$QORE_DIR/modules" ]; then
+    for moddir in "$QORE_DIR/modules"/*; do
+        if [ -d "$moddir" ]; then
+            if [ -z "$BUILD_MODULE_DIRS" ]; then
+                BUILD_MODULE_DIRS="$moddir"
+            else
+                BUILD_MODULE_DIRS="$BUILD_MODULE_DIRS:$moddir"
+            fi
+        fi
+    done
+fi
+
 export LD_LIBRARY_PATH=$QORE_LIB_PATH
-export QORE_MODULE_DIR=./qlib:$QORE_MODULE_DIR
+if [ -n "$BUILD_MODULE_DIRS" ]; then
+    export QORE_MODULE_DIR=$BUILD_MODULE_DIRS:./qlib:$QORE_MODULE_DIR
+else
+    export QORE_MODULE_DIR=./qlib:$QORE_MODULE_DIR
+fi
 
 if [ $MEASURE_TIME -eq 1 ]; then
     # Test time commands.

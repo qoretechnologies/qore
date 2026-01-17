@@ -61,7 +61,7 @@ static void LoggerLevel_deserializer(QoreObject& self, const QoreHashNode* sdata
         }
 
         self.setPrivate(CID_LOGGERLEVEL,
-            new QoreLoggerLevel(code, new QoreStringNode(*val.get<const QoreStringNode>())));
+            new QoreLoggerLevel(code, val.get<const QoreStringNode>()->stringRefSelf()));
         return;
     }
 
@@ -78,7 +78,7 @@ qclass LoggerLevel [ns=Qore::Logger; arg=QoreLoggerLevel* level; vparent=Seriali
     @param level string log level value
 */
 LoggerLevel::constructor(int code, string level) {
-    self->setPrivate(CID_LOGGERLEVEL, new QoreLoggerLevel(code, new QoreStringNode(*level)));
+    self->setPrivate(CID_LOGGERLEVEL, new QoreLoggerLevel(code, level->stringRefSelf()));
 }
 
 //! Gets the level code value
