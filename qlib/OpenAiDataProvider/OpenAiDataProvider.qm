@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/*  OpenAiDataProvider.qm Copyright 2024 - 2025 Qore Technologies, s.r.o.
+/*  OpenAiDataProvider.qm Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,7 +35,7 @@
 %requires FileLocationHandler
 
 module OpenAiDataProvider {
-    version = "1.4";
+    version = "1.6";
     desc = "user module providing a data provider API for OpenAI services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -272,6 +272,33 @@ module OpenAiDataProvider {
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpenAiDataProvider::AppName,
+            "path": "/models/{model}/create-response/stream",
+            "action": "stream-response",
+            "display_name": "Stream Response",
+            "short_desc": "Stream a response from a model",
+            "desc": "Stream a response from a model with Server-Sent Events",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_OPENAI_RESPONSE_STREAM,
+            "path_vars": {
+                "model": <DataProviderPathVarInfo>{
+                    "display_name": "Model",
+                    "short_desc": "The OpenAI model to use",
+                    "desc": "The OpenAI model to use",
+                    "example_value": "gpt-4o",
+                },
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiModelCreateResponseRequestDataType::Fields{"input",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiModelCreateResponseRequestDataType::Fields - "input"
+            ),
+            "output_type": OpenAiResponseStreamEventDataType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
             "path": "/create-image",
             "action": "create-image",
             "display_name": "Generate an Image",
@@ -299,7 +326,192 @@ module OpenAiDataProvider {
 
     The %OpenAiDataProvider module provides a @ref dataproviderintro "data provider" API for OpenAI services.
 
+    @section openaidataprovider_examples Examples
+
+    @subsection openaidataprovider_response_tools Responses with Tool Calls and Structured Output
+
+    @code{.py}
+%requires OpenAiDataProvider
+
+OpenAiRestConnection rc = get_connection("openai");
+OpenAiDataProvider::OpenAiDataProvider prov(rc.get());
+
+AbstractDataProvider resp = prov.getChildProvider("responses").getChildProvider("create");
+hash<auto> result = resp.doRequest({
+    "model": "gpt-4o-mini",
+    "input": (
+        {
+            "input_item": {
+                "role": "user",
+                "content": (
+                    {
+                        "type": "input_text",
+                        "text": "Return the sum of 2 and 3",
+                    },
+                ),
+            },
+        },
+    ),
+    "tools": (
+        {
+            "function": {
+                "name": "sum",
+                "description": "Returns a+b",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "a": {"type": "integer"},
+                        "b": {"type": "integer"},
+                    },
+                    "required": ("a", "b"),
+                },
+            },
+        },
+    ),
+    "text": {
+        "format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "SumAnswer",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "answer": {"type": "integer"},
+                    },
+                    "required": ("answer",),
+                },
+                "strict": True,
+            },
+        },
+    },
+});
+
+# Tool call handling and tool result submission:
+if (result.tool_calls) {
+    hash<auto> call = result.tool_calls[0];
+    # ...call your tool with call.name and call.arguments...
+    hash<auto> tool_result = {
+        "type": "tool_result",
+        "tool_call_id": call.call_id,
+        "output": "{\"answer\":5}",
+    };
+    # Tool results can be sent as additional input items (role=tool)
+    hash<auto> follow_up = resp.doRequest({
+        "model": "gpt-4o-mini",
+        "previous_response_id": result.id,
+        "input": (
+            {
+                "input_item": {
+                    "role": "tool",
+                    "content": (tool_result,),
+                },
+            },
+        ),
+    });
+}
+
+# Convenience helpers for downstream use:
+list<hash<auto>> tool_calls = result.tool_calls;
+list<hash<auto>> tool_results = result.tool_results;
+string text = result.output_text;
+    @endcode
+
+    @subsection openaidataprovider_context_store Conversation Context Store
+
+    @code{.py}
+class MyContextStore inherits OpenAiConversationContextStore {
+    *hash<auto> loadContext(string key) { return get_from_store(key); }
+    auto saveContext(string key, hash<auto> ctxt) { save_to_store(key, ctxt); }
+}
+
+OpenAiRestConnection rc = get_connection("openai");
+OpenAiDataProvider::OpenAiDataProvider prov(rc.get());
+prov.setConversationContextStore(new MyContextStore());
+
+AbstractDataProvider resp = prov.getChildProvider("responses").getChildProvider("create");
+hash<auto> result = resp.doRequest({
+    "model": "gpt-4o-mini",
+    "input": (
+        {
+            "input_item": {
+                "role": "user",
+                "content": (
+                    {
+                        "type": "input_text",
+                        "text": "Continue our previous conversation",
+                    },
+                ),
+            },
+        },
+    ),
+    "conversation_key": "user-42",
+});
+    @endcode
+
+    @subsection openaidataprovider_context_callbacks Conversation Context Store Callbacks
+
+    @code{.py}
+OpenAiConversationContextStoreCallbacks store({
+    "load": sub (string key) { return get_from_store(key); },
+    "save": sub (string key, hash<auto> ctxt) { save_to_store(key, ctxt); },
+});
+
+OpenAiRestConnection rc = get_connection("openai");
+OpenAiDataProvider::OpenAiDataProvider prov(rc.get());
+prov.setConversationContextStore(store);
+    @endcode
+
+    @subsection openaidataprovider_stream_example Streaming Responses
+
+    @code{.py}
+%requires OpenAiDataProvider
+
+OpenAiRestConnection rc = get_connection("openai");
+OpenAiDataProvider::OpenAiDataProvider prov(rc.get());
+
+AbstractDataProvider stream = prov.getChildProvider("responses").getChildProvider("stream");
+stream.registerObserver(myObserver);
+stream.observersReady();
+stream.doRequest({
+    "model": "gpt-4o-mini",
+    "input": (
+        {
+            "input_item": {
+                "role": "user",
+                "content": (
+                    {
+                        "type": "input_text",
+                        "text": "Stream a response",
+                    },
+                ),
+            },
+        },
+    ),
+});
+@endcode
+
+    @subsection openaidataprovider_stream_events Stream Event Payloads
+
+    The stream provider emits SSE events with a `type` field matching the Responses API event types. A few common
+    examples:
+    - `response.output_text.delta`
+    - `response.tool_call.delta`
+    - `response.completed`
+
+    The emitted event hash also includes `event` and `id` when provided by the server. The `responses/stream`
+    provider will persist conversation context on `response.completed` when a `conversation_key` is used.
+
     @section openaidataprovider_relnotes Release Notes
+
+    @subsection openaidataprovider_v1_6 OpenAiDataProvider v1.6
+    - added typed response output items for tool calls, tool results, and output content parts
+    - added response stream data provider for Server-Sent Events streaming
+    - added conversation context store hooks for response continuity
+    - added action catalog entry for streaming responses
+
+    @subsection openaidataprovider_v1_5 OpenAiDataProvider v1.5
+    - added responses API input content support for text, image, audio, and file parts
+    - added conversation context helpers for response continuity
 
     @subsection openaidataprovider_v1_4 OpenAiDataProvider v1.4
     - missing APIs and actions to handle image analysis
@@ -308,6 +520,15 @@ module OpenAiDataProvider {
 
     @subsection openaidataprovider_v1_0 OpenAiDataProvider v1.0
     - initial release of the module
+
+    @section openaidataprovider_migration Migration Notes
+
+    - Response output items are now typed; downstream code should prefer `output_text`, `tool_calls`, and
+      `tool_results` instead of parsing raw hashes.
+    - Response streaming is exposed as the `responses/stream` data provider and emits SSE events with a `type`
+      field matching the Responses API event types.
+    - Conversation persistence can be configured by supplying a `conversation_context_store` and using
+      `conversation_key` in requests.
 */
 
 #! contains all public definitions in the OpenAiDataProvider module

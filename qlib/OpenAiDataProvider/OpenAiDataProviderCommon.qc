@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiDataProviderCommon.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiDataProviderCommon.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,6 +24,82 @@
 
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
+#! Conversation context store for persisting response context
+/** Implementations must return and accept a hash compatible with:
+        - \c previous_response_id (string, required)
+        - \c conversation_id (string, optional)
+        - \c metadata (hash, optional)
+    The returned hash is used to set \c previous_response_id and to persist state for follow-up requests.
+
+    @par Example: subclass implementation
+    @code{.py}
+class MyContextStore inherits OpenAiConversationContextStore {
+    *hash<auto> loadContext(string key) {
+        return get_from_store(key);
+    }
+
+    auto saveContext(string key, hash<auto> ctxt) {
+        save_to_store(key, ctxt);
+    }
+}
+    @endcode
+
+    @par Example: callback-based store
+    @code{.py}
+OpenAiConversationContextStoreCallbacks store({
+    "load": *hash<auto> sub (string key) { return get_from_store(key); },
+    "save": auto sub (string key, hash<auto> ctxt) { save_to_store(key, ctxt); },
+});
+    @endcode
+*/
+public class OpenAiConversationContextStore {
+    #! Loads conversation context for the given key
+    /** @param key an opaque identifier for the conversation (for example user id, session id, or workflow id)
+
+        @return a context hash or @ref nothing if no context is available
+
+        @note the returned hash should include at least \c previous_response_id
+    */
+    abstract *hash<auto> loadContext(string key);
+
+    #! Saves conversation context for the given key
+    /** @param key an opaque identifier for the conversation
+        @param ctxt the context hash to persist (see class description for supported keys)
+
+        @return a value ignored by callers (implementations may return \c nothing)
+    */
+    abstract auto saveContext(string key, hash<auto> ctxt);
+}
+
+#! Conversation context store with callbacks
+public class OpenAiConversationContextStoreCallbacks inherits OpenAiConversationContextStore {
+    private {
+        *code load_cb;
+        *code save_cb;
+    }
+
+    #! Creates the callback store
+    constructor(hash<auto> options) {
+        load_cb = options.load;
+        save_cb = options.save;
+    }
+
+    #! Loads conversation context for the given key
+    *hash<auto> loadContext(string key) {
+        if (load_cb) {
+            return load_cb(key);
+        }
+        return;
+    }
+
+    #! Saves conversation context for the given key
+    auto saveContext(string key, hash<auto> ctxt) {
+        if (save_cb) {
+            return save_cb(key, ctxt);
+        }
+    }
+}
+
 #! The OpenAi data provider common base class
 public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvider {
     public {
@@ -65,6 +141,14 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
                 "desc": "The API version to use",
                 "default_value": DefaultOpenAiApiVersion,
             },
+            "conversation_context_store": <DataProviderOptionInfo>{
+                "display_name": "Conversation Context Store",
+                "short_desc": "Optional store for persisting response conversation context",
+                "type": AbstractDataProviderType::get(new Type("OpenAiConversationContextStore"), NOTHING, {
+                    DTT_ClientOnly: True,
+                }),
+                "desc": "Optional conversation context store used to load and save conversation state",
+            },
         };
 
         #! IO errors for REST retries
@@ -86,6 +170,9 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
         #! The REST client object for API calls
         *RestClient::RestClient rest;
 
+        #! Optional conversation context store
+        *OpenAiConversationContextStore conversation_context_store;
+
         #! first time initialization
         static bool init;
 
@@ -104,6 +191,9 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
         if (copts.restclient) {
             rest = copts.restclient;
         }
+        if (copts.conversation_context_store) {
+            conversation_context_store = copts.conversation_context_store;
+        }
 
         if (!rest) {
             if (!copts.api_key) {
@@ -116,6 +206,21 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
             };
             rest = new OpenAiRestClient(opts);
         }
+    }
+
+    #! Sets the conversation context store
+    setConversationContextStore(*OpenAiConversationContextStore store) {
+        conversation_context_store = store;
+    }
+
+    #! Returns the conversation context store
+    *OpenAiConversationContextStore getConversationContextStore() {
+        return conversation_context_store;
+    }
+
+    #! Returns the REST client object
+    *RestClient::RestClient getRestClient() {
+        return rest;
     }
 
     #! Accepts a LoggerInterface object for logging (or clears it)

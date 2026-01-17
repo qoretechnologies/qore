@@ -18,6 +18,67 @@
 
 %exec-class Main
 
+class FakeOpenAiStreamRest inherits OpenAiRestClient::OpenAiRestClient {
+    public {
+        string content_type;
+        *string content_encoding;
+        *string transfer_encoding;
+        list<binary> chunks;
+        int chunk_idx;
+        string last_parse_data;
+    }
+
+    constructor(string content_type, *string content_encoding, *string transfer_encoding, *list<binary> chunks)
+            : OpenAiRestClient::OpenAiRestClient({"token": "x"}, True) {
+        self.content_type = content_type;
+        self.content_encoding = content_encoding;
+        self.transfer_encoding = transfer_encoding;
+        self.chunks = chunks ?? ();
+    }
+
+    hash<auto> send(data payload, string method, string path, hash<auto> headers, bool decode_errors,
+            *reference<hash<auto>> info) {
+        if (info) {
+            info = {};
+        }
+        return {
+            "status_code": 200,
+            "status_message": "OK",
+            "content-type": content_type,
+            "content-encoding": content_encoding,
+            "transfer-encoding": transfer_encoding,
+        };
+    }
+
+    hash<auto> readHTTPChunk(timeout to) {
+        if (chunk_idx >= chunks.lsize()) {
+            return {
+                "body": NOTHING,
+            };
+        }
+        return {
+            "body": chunks[chunk_idx++],
+        };
+    }
+
+    hash<SseMessageInfo> parseServerSentEvent(string str) {
+        last_parse_data = str;
+        return <SseMessageInfo>{
+            "data": "ok",
+        };
+    }
+
+    hash<SseMessageInfo> readServerSentEvent(*string encoding, timeout to) {
+        last_parse_data = "direct";
+        return <SseMessageInfo>{
+            "data": "ok",
+        };
+    }
+
+    disconnect() {
+    }
+}
+
 public class Main inherits QUnit::Test {
     private {
         OpenAiRestConnection rc;
@@ -34,6 +95,7 @@ public class Main inherits QUnit::Test {
     constructor() : Test("OpenAiRestClientTest", "1.0", \ARGV, MyOpts) {
         addTestCase("connection tests", \connectionTest());
         addTestCase("poll tests", \pollTest());
+        addTestCase("sse stream tests", \sseStreamTest());
 
         try {
             setupConnection();
@@ -102,6 +164,21 @@ public class Main inherits QUnit::Test {
             }
             assertEq("OK", info.result);
         }
+    }
+
+    sseStreamTest() {
+        FakeOpenAiStreamRest rest("text/event-stream; charset=utf-8", NOTHING, "chunked",
+            (binary("data: hi\n\n"),));
+        OpenAiRestClient::OpenAiResponseSseStream stream(rest, "responses", "{}", NOTHING, 1s);
+        hash<SseMessageInfo> event = stream.readEvent();
+        assertEq("ok", event.data);
+        assertTrue(rest.last_parse_data =~ /data: hi/);
+
+        FakeOpenAiStreamRest bad_rest("application/json", NOTHING, "chunked",
+            (binary("data: hi\n\n"),));
+        assertThrows("SSE-ERROR", sub () {
+            new OpenAiRestClient::OpenAiResponseSseStream(bad_rest, "responses", "{}", NOTHING, 1s);
+        });
     }
 
     private usageIntern() {

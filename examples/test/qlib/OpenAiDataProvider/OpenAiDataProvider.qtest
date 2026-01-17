@@ -16,6 +16,130 @@
 
 %exec-class OpenAiDataProviderTest
 
+class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClient {
+    public {
+        hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+        hash<auto> last_stream_request;
+        list<hash<SseMessageInfo>> stream_events;
+    }
+
+    constructor() : OpenAiRestClient::OpenAiRestClient({"token": "x"}, True) {
+    }
+
+    hash<auto> doRequest(string method, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        if (info) {
+            info = {};
+        }
+        if (!response_body) {
+            response_body = {
+                "id": "resp_test",
+                "status": "completed",
+                "output": (
+                    {
+                        "content": (
+                            {
+                                "text": "ok",
+                            },
+                        ),
+                    },
+                ),
+            };
+        }
+        return {
+            "body": response_body,
+        };
+    }
+
+    auto openResponsesStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        last_stream_request = req;
+        return new FakeOpenAiSseStream(stream_events);
+    }
+}
+
+class FailingOpenAiRestClient inherits FakeOpenAiRestClient {
+    auto openResponsesStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        throw "SSE-ERROR", "stream failed";
+    }
+}
+
+class TestConversationStore inherits OpenAiConversationContextStore {
+    public {
+        hash<auto> stored;
+        string last_load_key;
+        string last_save_key;
+        hash<auto> last_saved;
+    }
+
+    *hash<auto> loadContext(string key) {
+        last_load_key = key;
+        return stored{key};
+    }
+
+    auto saveContext(string key, hash<auto> ctxt) {
+        last_save_key = key;
+        last_saved = ctxt;
+        stored{key} = ctxt;
+    }
+}
+
+class FakeOpenAiSseStream {
+    public {
+        list<hash<SseMessageInfo>> events;
+        int idx;
+    }
+
+    constructor(*list<hash<SseMessageInfo>> events) {
+        self.events = events ?? ();
+    }
+
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (idx >= events.lsize()) {
+            return;
+        }
+        return events[idx++];
+    }
+
+    close() {
+    }
+}
+
+class StreamObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    private {
+        Mutex m();
+        Condition cond();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events += data_;
+        m.lock();
+        on_exit m.unlock();
+        cond.broadcast();
+    }
+
+    wait(int count) {
+        date start = now_us();
+        m.lock();
+        on_exit m.unlock();
+        while (events.lsize() < count) {
+            cond.wait(m, 1s);
+            if ((now_us() - start) > 5s) {
+                throw "ERROR", "no stream events in timeout";
+            }
+        }
+    }
+}
+
 public class OpenAiDataProviderTest inherits QUnit::Test {
     public {
 %ifndef NoJson
@@ -33,7 +157,15 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("OpenAiDataProvider Test", "1.0", \ARGV, MyOpts) {
         addTestCase("sanity test", \sanityTest());
+        addTestCase("action catalog", \actionCatalogTest());
         addTestCase("test", \test());
+        addTestCase("response input mapping", \responseInputMappingTest());
+        addTestCase("response input validation", \responseInputValidationTest());
+        addTestCase("response input edge cases", \responseInputEdgeCasesTest());
+        addTestCase("response conversation context save", \responseConversationContextSaveTest());
+        addTestCase("response conversation callback store", \responseConversationCallbackStoreTest());
+        addTestCase("response stream events", \responseStreamEventsTest());
+        addTestCase("response stream error", \responseStreamErrorTest());
 
         try {
             setupConnection();
@@ -67,6 +199,16 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
 %endif
     }
 
+    actionCatalogTest() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            OpenAiDataProvider::AppName, "stream-response"
+        );
+        assertEq("/models/{model}/create-response/stream", action.path);
+        assertEq(DPAT_EVENT, action.action_code);
+        assertEq(OpenAiDataProvider::EVENT_OPENAI_RESPONSE_STREAM, action.action_val);
+        assertEq(OpenAiResponseStreamEventDataType, action.output_type);
+    }
+
     test() {
         checkModule();
 %ifndef NoJson
@@ -77,6 +219,613 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         AbstractDataProvider prov = new OpenAiDataProvider(rc.get());
         prov = prov.getChildProvider("models");
         assertGt(0, prov.getChildProviderNames().size());
+%endif
+    }
+
+    private *OpenAiModelCreateResponseDataProvider makeResponseProvider(reference<FakeOpenAiRestClient> rest) {
+        rest = new FakeOpenAiRestClient();
+        return new OpenAiModelCreateResponseDataProvider(rest);
+    }
+
+    responseInputMappingTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOpenAiRestClient rest;
+        OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
+
+        hash<auto!> req = {
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("POST", rest.last_method);
+        assertEq("responses", rest.last_path);
+        assertEq("input_text", rest.last_request.input[0].content[0].type);
+        assertEq("hello", rest.last_request.input[0].content[0].text);
+        assertEq("ok", resp.output_text);
+
+        req.input = (
+            {
+                "input_item": {
+                    "role": "user",
+                    "content": (
+                        {
+                            "type": "input_image",
+                            "image_url": "https://example.com/a.png",
+                        },
+                    ),
+                },
+            },
+        );
+        resp = prov.doRequest(req);
+        assertEq("input_image", rest.last_request.input[0].content[0].type);
+        assertEq("https://example.com/a.png", rest.last_request.input[0].content[0].image_url);
+        assertEq("auto", rest.last_request.input[0].content[0].detail);
+
+        req.input = (
+            {
+                "input_item": {
+                    "role": "user",
+                    "content": (
+                        {
+                            "type": "input_audio",
+                            "audio": "AA==",
+                            "format": "wav",
+                        },
+                    ),
+                },
+            },
+        );
+        resp = prov.doRequest(req);
+        assertEq("input_audio", rest.last_request.input[0].content[0].type);
+        assertEq("AA==", rest.last_request.input[0].content[0].audio);
+        assertEq("wav", rest.last_request.input[0].content[0].format);
+
+        string data = "abc";
+        req.input = (
+            {
+                "input_item": {
+                    "role": "user",
+                    "content": (
+                        {
+                            "file": {
+                                "name": "doc.pdf",
+                                "content": data,
+                            },
+                        },
+                    ),
+                },
+            },
+        );
+        resp = prov.doRequest(req);
+        assertEq("input_file", rest.last_request.input[0].content[0].type);
+        assertEq("doc.pdf", rest.last_request.input[0].content[0].filename);
+        assertEq("data:application/pdf;base64," + data, rest.last_request.input[0].content[0].file_data);
+
+        req.conversation_context = {
+            "previous_response_id": "resp_0",
+        };
+        resp = prov.doRequest(req);
+        assertEq("resp_0", rest.last_request.previous_response_id);
+        assertEq("resp_test", resp.conversation_context.previous_response_id);
+
+        req.text = {
+            "format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "TestSchema",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "answer": {
+                                "type": "string",
+                            },
+                        },
+                        "required": ("answer",),
+                    },
+                    "strict": True,
+                },
+            },
+        };
+        resp = prov.doRequest(req);
+        assertEq("json_schema", rest.last_request.text.format.type);
+        assertEq("TestSchema", rest.last_request.text.format.json_schema.name);
+%endif
+    }
+
+    responseInputValidationTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOpenAiRestClient rest;
+        OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
+
+        # Validation happens in request type checks, so invalid content types raise RUNTIME-TYPE-ERROR.
+        hash<auto> invalid_type = {
+            "type": "input_bad",
+        };
+        hash<auto!> invalid_type_req = {
+            "model": "gpt-4o-mini",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (invalid_type,),
+                    },
+                },
+            ),
+        };
+        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (invalid_type_req,));
+
+        hash<auto> invalid_detail = {
+            "type": "input_image",
+            "detail": "invalid",
+            "image_url": "https://example.com/image.png",
+        };
+        hash<auto!> invalid_detail_req = {
+            "model": "gpt-4o-mini",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (invalid_detail,),
+                    },
+                },
+            ),
+        };
+        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (invalid_detail_req,));
+
+        hash<auto> missing_image_ref = {
+            "type": "input_image",
+        };
+        hash<auto!> missing_image_req = {
+            "model": "gpt-4o-mini",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (missing_image_ref,),
+                    },
+                },
+            ),
+        };
+        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_image_req,));
+
+        hash<auto> missing_audio_format = {
+            "type": "input_audio",
+            "audio": "AA==",
+        };
+        hash<auto!> missing_audio_format_req = {
+            "model": "gpt-4o-mini",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (missing_audio_format,),
+                    },
+                },
+            ),
+        };
+        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_audio_format_req,));
+
+        hash<auto> missing_audio_data = {
+            "type": "input_audio",
+            "format": "wav",
+        };
+        hash<auto!> missing_audio_data_req = {
+            "model": "gpt-4o-mini",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (missing_audio_data,),
+                    },
+                },
+            ),
+        };
+        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_audio_data_req,));
+
+        hash<auto> missing_file_data = {
+            "type": "input_file",
+        };
+        hash<auto!> missing_file_data_req = {
+            "model": "gpt-4o-mini",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (missing_file_data,),
+                    },
+                },
+            ),
+        };
+        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_file_data_req,));
+
+        hash<auto!> missing_schema_req = {
+            "model": "gpt-4o-mini",
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "schema": {
+                            "type": "object",
+                        },
+                    },
+                },
+            },
+        };
+        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_schema_req,));
+%endif
+    }
+
+    responseInputEdgeCasesTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOpenAiRestClient rest;
+        OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
+
+        hash<auto!> req = {
+            "input": (
+                {
+                    "text": "hi",
+                },
+            ),
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("hi", rest.last_request.input);
+        assertEq("ok", resp.output_text);
+
+        req.input = (
+            {
+                "input_item": {
+                    "role": "user",
+                    "content": (
+                        {
+                            "type": "input_text",
+                            "text": "hello",
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": "https://example.com/img.png",
+                        },
+                    ),
+                },
+            },
+        );
+        resp = prov.doRequest(req);
+        assertEq(2, rest.last_request.input[0].content.lsize());
+        assertEq("input_text", rest.last_request.input[0].content[0].type);
+        assertEq("input_image", rest.last_request.input[0].content[1].type);
+
+        req.input = (
+            {
+                "input_item": {
+                    "role": "user",
+                    "content": (
+                        {
+                            "type": "input_file",
+                            "file_id": "file_123",
+                        },
+                    ),
+                },
+            },
+            {
+                "input_item": {
+                    "role": "system",
+                    "content": (
+                        {
+                            "type": "input_file",
+                            "file_data": "data:text/plain;base64,QQ==",
+                            "filename": "note.txt",
+                        },
+                    ),
+                },
+            },
+        );
+        resp = prov.doRequest(req);
+        assertEq(2, rest.last_request.input.lsize());
+        assertEq("file_123", rest.last_request.input[0].content[0].file_id);
+        assertEq("data:text/plain;base64,QQ==", rest.last_request.input[1].content[0].file_data);
+        assertEq("note.txt", rest.last_request.input[1].content[0].filename);
+
+        rest.response_body = {
+            "id": "resp_multi",
+            "status": "completed",
+            "output": (
+                {
+                    "content": (
+                        {
+                            "text": "first",
+                        },
+                    ),
+                },
+                {
+                    "content": (
+                        {
+                            "text": "second",
+                        },
+                    ),
+                },
+            ),
+        };
+        resp = prov.doRequest(req);
+        assertEq("first\n\nsecond", resp.output_text);
+
+        rest.response_body = {
+            "id": "resp_ctx",
+            "status": "completed",
+            "conversation_id": "conv_resp",
+            "output": (
+                {
+                    "content": (
+                        {
+                            "text": "ok",
+                        },
+                    ),
+                },
+            ),
+        };
+        req.conversation_context = {
+            "previous_response_id": "resp_prev",
+            "conversation_id": "conv_req",
+            "metadata": {
+                "source": "test",
+            },
+        };
+        req.metadata = {
+            "fallback": "meta",
+        };
+        resp = prov.doRequest(req);
+        assertEq("resp_prev", rest.last_request.previous_response_id);
+        assertEq("resp_ctx", resp.conversation_context.previous_response_id);
+        assertEq("conv_resp", resp.conversation_context.conversation_id);
+        assertEq("test", resp.conversation_context.metadata.source);
+
+        req.previous_response_id = "resp_override";
+        resp = prov.doRequest(req);
+        assertEq("resp_override", rest.last_request.previous_response_id);
+
+        TestConversationStore store();
+        store.saveContext("conv_1", {
+            "previous_response_id": "resp_stored",
+        });
+        prov.setConversationContextStore(store);
+        rest.response_body = {
+            "id": "resp_saved",
+            "status": "completed",
+            "conversation_id": "conv_saved",
+            "output": (
+                {
+                    "content": (
+                        {
+                            "text": "ok",
+                        },
+                    ),
+                },
+            ),
+        };
+        req = {
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+            "conversation_key": "conv_1",
+        };
+        resp = prov.doRequest(req);
+        assertEq("resp_stored", rest.last_request.previous_response_id);
+        assertEq("conv_1", store.last_load_key);
+        assertEq("conv_1", store.last_save_key);
+        assertEq("resp_saved", store.last_saved.previous_response_id);
+
+        rest.response_body = {
+            "id": "resp_tools",
+            "status": "completed",
+            "output": (
+                {
+                    "type": "tool_call",
+                    "name": "sum",
+                    "arguments": "{\"a\":1,\"b\":2}",
+                    "call_id": "call_1",
+                },
+                {
+                    "type": "tool_result",
+                    "call_id": "call_1",
+                    "output": "3",
+                },
+            ),
+        };
+        resp = prov.doRequest(req);
+        assertEq(1, resp.tool_calls.lsize());
+        assertEq("sum", resp.tool_calls[0].name);
+        assertEq("call_1", resp.tool_calls[0].call_id);
+        assertEq(1, resp.tool_results.lsize());
+        assertEq("call_1", resp.tool_results[0].call_id);
+
+        rest.response_body = {
+            "id": "resp_text_only",
+            "status": "completed",
+            "output": (
+                {
+                    "type": "output_text",
+                    "text": "standalone",
+                },
+            ),
+        };
+        resp = prov.doRequest(req);
+        assertEq("standalone", resp.output_text);
+%endif
+    }
+
+    responseConversationContextSaveTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOpenAiRestClient rest;
+        OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
+        TestConversationStore store();
+        prov.setConversationContextStore(store);
+
+        hash<auto!> req = {
+            "conversation_key": "user-ctx-1",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("resp_test", resp.conversation_context.previous_response_id);
+        assertEq("user-ctx-1", store.last_save_key);
+        assertEq("resp_test", store.last_saved.previous_response_id);
+%endif
+    }
+
+    responseConversationCallbackStoreTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOpenAiRestClient rest;
+        OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
+        hash<auto> saved;
+        string saved_key;
+        OpenAiConversationContextStoreCallbacks store({
+            "load": *hash<auto> sub (string key) {
+                return saved{key};
+            },
+            "save": auto sub (string key, hash<auto> ctxt) {
+                saved_key = key;
+                saved{key} = ctxt;
+            },
+        });
+        prov.setConversationContextStore(store);
+
+        hash<auto!> req = {
+            "conversation_key": "cb-1",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("cb-1", saved_key);
+        assertEq("resp_test", saved{"cb-1"}.previous_response_id);
+        assertEq("resp_test", resp.conversation_context.previous_response_id);
+%endif
+    }
+
+    responseStreamEventsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOpenAiRestClient rest();
+        OpenAiResponseStreamDataProvider prov(rest);
+        TestConversationStore store();
+        prov.setConversationContextStore(store);
+        store.saveContext("conv_stream", {
+            "previous_response_id": "resp_prev",
+        });
+
+        rest.stream_events = (
+            <SseMessageInfo>{
+                "data": "{\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}",
+            },
+            <SseMessageInfo>{
+                "data": "{\"type\":\"response.completed\",\"response\":{\"id\":\"resp_stream\",\"conversation_id\":\"conv_2\"}}",
+            },
+            <SseMessageInfo>{
+                "data": "[DONE]",
+            },
+        );
+
+        StreamObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+        prov.doRequest({
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+            "conversation_key": "conv_stream",
+        });
+
+        observer.wait(3);
+        assertEq("response.output_text.delta", observer.events[0].type);
+        assertEq("response.completed", observer.events[1].type);
+        assertEq("done", observer.events[2].type);
+        assertEq(True, rest.last_stream_request.stream);
+        assertEq("resp_stream", store.last_saved.previous_response_id);
+%endif
+    }
+
+    responseStreamErrorTest() {
+        checkModule();
+%ifndef NoJson
+        FailingOpenAiRestClient rest();
+        OpenAiResponseStreamDataProvider prov(rest);
+        StreamObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+        prov.doRequest({
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+        });
+
+        observer.wait(1);
+        assertEq("error", observer.events[0].type);
+        assertEq("SSE-ERROR", observer.events[0].error.err);
 %endif
     }
 
