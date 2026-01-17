@@ -36,7 +36,7 @@
 #include "qore/intern/AbstractStatement.h"
 #include "qore/intern/StatementBlock.h"
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class CaseNode {
 private:

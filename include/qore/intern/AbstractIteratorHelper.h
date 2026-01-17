@@ -34,6 +34,7 @@
 #define _QORE_ABSTRACTITERATORHELPER_H
 
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/RuntimeConfig.h"
 
 class AbstractIteratorHelper {
 public:
@@ -84,14 +85,16 @@ public:
     DLLLOCAL bool next(ExceptionSink* xsink) {
         assert(nextMethod);
         assert(nextVariant);
-        ValueHolder rv(qore_method_private::evalNormalVariant(*nextMethod, xsink, obj, nextVariant, 0), xsink);
+        RuntimeConfig& rc = rc_get_current_ref();
+        ValueHolder rv(qore_method_private::evalNormalVariant(*nextMethod, xsink, rc, obj, nextVariant, 0), xsink);
         return rv->getAsBool();
     }
 
     DLLLOCAL QoreValue getValue(ExceptionSink* xsink) {
         assert(getValueMethod);
         assert(getValueVariant);
-        return qore_method_private::evalNormalVariant(*getValueMethod, xsink, obj, getValueVariant, 0);
+        RuntimeConfig& rc = rc_get_current_ref();
+        return qore_method_private::evalNormalVariant(*getValueMethod, xsink, rc, obj, getValueVariant, 0);
     }
 
     // finds a method with no arguments

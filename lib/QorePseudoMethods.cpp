@@ -59,7 +59,7 @@ static QoreValue PSEUDONULL_typeCode(QoreObject *ignored, AbstractQoreNode *node
 }
 
 // create pseudo-class for type
-static QoreClass* do_type_code(const char* name, q_method_n_t f) {
+static QoreClass* do_type_code(const char* name, q_method_t f) {
     QoreStringMaker path("::Qore::%s", name);
     QoreClass* qc = new QoreClass(name, path.c_str());
     qc->addBuiltinVirtualBaseClass(QC_PSEUDOVALUE);
@@ -74,7 +74,7 @@ void pseudo_classes_init() {
 
     // initialize list of pseudo-classes for basic types
     po_list[NT_NOTHING] = initPseudoNothingClass(); //do_type_code("<nothing>", (q_method_int64_t)PSEUDONOTHING_typeCode);
-    po_list[NT_NULL] = do_type_code("<null>", (q_method_n_t)PSEUDONULL_typeCode);
+    po_list[NT_NULL] = do_type_code("<null>", (q_method_t)PSEUDONULL_typeCode);
 
     po_list[NT_INT] = initPseudoIntClass();
     po_list[NT_FLOAT] = initPseudoFloatClass();
@@ -157,18 +157,19 @@ const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
 }
 
 QoreValue pseudo_classes_eval(const QoreValue n, const char *name, const QoreListNode *args, ExceptionSink *xsink) {
+    RuntimeConfig& rc = rc_get_current_ref();
     switch (n.getType()) {
         case NT_WEAKREF:
             return qore_class_private::evalPseudoMethod(po_list[NT_OBJECT],
-                QoreValue(n.get<WeakReferenceNode>()->get()), name, args, xsink);
+                QoreValue(n.get<WeakReferenceNode>()->get()), name, args, rc, xsink);
 
         case NT_WEAKREF_HASH:
             return qore_class_private::evalPseudoMethod(po_list[NT_HASH],
-                QoreValue(n.get<WeakHashReferenceNode>()->get()), name, args, xsink);
+                QoreValue(n.get<WeakHashReferenceNode>()->get()), name, args, rc, xsink);
 
         case NT_WEAKREF_LIST:
             return qore_class_private::evalPseudoMethod(po_list[NT_LIST],
-                QoreValue(n.get<WeakListReferenceNode>()->get()), name, args, xsink);
+                QoreValue(n.get<WeakListReferenceNode>()->get()), name, args, rc, xsink);
 
         case NT_REFERENCE: {
             const ReferenceNode* r = n.get<const ReferenceNode>();
@@ -185,7 +186,7 @@ QoreValue pseudo_classes_eval(const QoreValue n, const char *name, const QoreLis
             break;
     }
 
-    return qore_class_private::evalPseudoMethod(pseudo_get_class(n.getType()), n, name, args, xsink);
+    return qore_class_private::evalPseudoMethod(pseudo_get_class(n.getType()), n, name, args, rc, xsink);
 }
 
 const QoreMethod* pseudo_classes_find_method(qore_type_t t, const char *mname, QoreClass* &qc) {

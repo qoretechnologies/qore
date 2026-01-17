@@ -189,7 +189,7 @@
 
     @code{.cpp}
 // *string chomp(reference<string> str) {}
-static QoreValue f_chomp(const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue f_chomp(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     const ReferenceNode* str = HARD_QORE_VALUE_REF(args, 0);
     QoreTypeSafeReferenceHelper ref(str, xsink);
     if (*xsink) {

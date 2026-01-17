@@ -39,7 +39,7 @@ class LocalVar;
 class LocalVarValue;
 class Var;
 struct ClosureVarValue;
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class VarRefNode : public ParseNode {
 public:

@@ -39,7 +39,7 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class ForEachStatement : public AbstractStatement {
 public:

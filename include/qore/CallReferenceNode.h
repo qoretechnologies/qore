@@ -33,7 +33,7 @@
 
 #define _QORE_FUNCTIONREFERENCENODE_H
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 //! base class for call references, reference-counted, dynamically allocated only
 /** cannot be a ParseNode or SimpleQoreNode because we require deref(xsink)

@@ -73,7 +73,7 @@ int QoreRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
 }
 
 QoreValue QoreRangeOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 
@@ -101,7 +101,7 @@ QoreValue QoreRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, 
 
 FunctionalOperatorInterface* QoreRangeOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
         ExceptionSink* xsink) const {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return getFunctionalIteratorImpl(rc, value_type, xsink);
 }
 
@@ -118,7 +118,7 @@ FunctionalOperatorInterface* QoreRangeOperatorNode::getFunctionalIteratorImpl(Ru
     int64 stop = rh->getAsBigInt();
 
     value_type = list;
-    int64 po = rc.po ? rc.po : runtime_get_parse_options();
+    int64 po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
     if (!(po & PO_BROKEN_RANGE)) {
         if (start <= stop) {
             ++stop;

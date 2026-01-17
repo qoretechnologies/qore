@@ -34,7 +34,7 @@ qore_classid_t CID_MONGOCLIENT;
 QoreClass* QC_MONGOCLIENT;
 
 // MongoClient::constructor(string uri) {}
-static void MongoClient_constructor_Vs(QoreObject* self, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static void MongoClient_constructor_Vs(QoreObject* self, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreStringNode* uri = HARD_QORE_VALUE_STRING(args, 0);
 # 75 "QC_MongoClient.qpp"
 SimpleRefHolder<QoreMongoClient> holder(new QoreMongoClient(uri->c_str(), xsink));
@@ -45,7 +45,7 @@ SimpleRefHolder<QoreMongoClient> holder(new QoreMongoClient(uri->c_str(), xsink)
 }
 
 // MongoDatabase MongoClient::getDatabase(string name){}
-static QoreValue MongoClient_getDatabase_Vs(QoreObject* self, QoreMongoClient* client, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoClient_getDatabase_Vs(QoreObject* self, QoreMongoClient* client, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreStringNode* name = HARD_QORE_VALUE_STRING(args, 0);
 # 125 "QC_MongoClient.qpp"
     mongoc_database_t* db = client->getDatabase(name->c_str());
@@ -57,19 +57,19 @@ static QoreValue MongoClient_getDatabase_Vs(QoreObject* self, QoreMongoClient* c
 }
 
 // *string MongoClient::getUri(){}
-static QoreValue MongoClient_getUri(QoreObject* self, QoreMongoClient* client, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoClient_getUri(QoreObject* self, QoreMongoClient* client, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 142 "QC_MongoClient.qpp"
     return client->getUri();
 }
 
 // list<string> MongoClient::listDatabaseNames(){}
-static QoreValue MongoClient_listDatabaseNames(QoreObject* self, QoreMongoClient* client, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoClient_listDatabaseNames(QoreObject* self, QoreMongoClient* client, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 112 "QC_MongoClient.qpp"
     return client->listDatabaseNames(xsink);
 }
 
 // bool MongoClient::ping(){}
-static QoreValue MongoClient_ping(QoreObject* self, QoreMongoClient* client, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoClient_ping(QoreObject* self, QoreMongoClient* client, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 95 "QC_MongoClient.qpp"
     return client->ping(xsink);
 }
@@ -90,16 +90,16 @@ DLLLOCAL QoreClass* initMongoClientClass(QoreNamespace& ns) {
     QC_MONGOCLIENT->addConstructor(MongoClient_constructor_Vs, Public, QCF_NO_FLAGS, QDOM_DEFAULT, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "uri");
 
     // MongoDatabase MongoClient::getDatabase(string name){}
-    QC_MONGOCLIENT->addMethod("getDatabase", (q_method_n_t)MongoClient_getDatabase_Vs, Public, QCF_NO_FLAGS, QDOM_DEFAULT, QC_MONGODATABASE->getTypeInfo(), 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
+    QC_MONGOCLIENT->addMethod("getDatabase", (q_method_t)MongoClient_getDatabase_Vs, Public, QCF_NO_FLAGS, QDOM_DEFAULT, QC_MONGODATABASE->getTypeInfo(), 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
 
     // *string MongoClient::getUri(){}
-    QC_MONGOCLIENT->addMethod("getUri", (q_method_n_t)MongoClient_getUri, Public, QCF_CONSTANT, QDOM_DEFAULT, stringOrNothingTypeInfo);
+    QC_MONGOCLIENT->addMethod("getUri", (q_method_t)MongoClient_getUri, Public, QCF_CONSTANT, QDOM_DEFAULT, stringOrNothingTypeInfo);
 
     // list<string> MongoClient::listDatabaseNames(){}
-    QC_MONGOCLIENT->addMethod("listDatabaseNames", (q_method_n_t)MongoClient_listDatabaseNames, Public, QCF_NO_FLAGS, QDOM_DEFAULT, qore_get_complex_list_type(stringTypeInfo));
+    QC_MONGOCLIENT->addMethod("listDatabaseNames", (q_method_t)MongoClient_listDatabaseNames, Public, QCF_NO_FLAGS, QDOM_DEFAULT, qore_get_complex_list_type(stringTypeInfo));
 
     // bool MongoClient::ping(){}
-    QC_MONGOCLIENT->addMethod("ping", (q_method_n_t)MongoClient_ping, Public, QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo);
+    QC_MONGOCLIENT->addMethod("ping", (q_method_t)MongoClient_ping, Public, QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo);
 
     return QC_MONGOCLIENT;
 }

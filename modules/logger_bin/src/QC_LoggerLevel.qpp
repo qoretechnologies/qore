@@ -33,7 +33,8 @@
 #include "QC_LoggerLevel.h"
 
 static QoreHashNode* LoggerLevel_serializer(const QoreObject& self, const QoreLoggerLevel& level,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
 
     rv->setKeyValue("code", level.getValue(), xsink);
@@ -43,7 +44,8 @@ static QoreHashNode* LoggerLevel_serializer(const QoreObject& self, const QoreLo
 }
 
 static void LoggerLevel_deserializer(QoreObject& self, const QoreHashNode* sdata,
-        QoreDeserializationContext& context, ExceptionSink* xsink) {
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("code");
         if (val.getType() != NT_INT) {

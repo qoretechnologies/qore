@@ -36,7 +36,7 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class QoreRangeOperatorNode : public QoreIntBinaryOperatorNode, public FunctionalOperator {
 OP_COMMON

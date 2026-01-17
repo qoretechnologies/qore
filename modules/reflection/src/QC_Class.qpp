@@ -51,14 +51,16 @@
 #include <QC_Namespace.h>
 
 static QoreHashNode* QoreReflectionClass_serializer(const QoreObject& self, const QoreReflectionClass& cls,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("cls", new QoreStringNode(cls.cls->getPath()), xsink);
     return rv.release();
 }
 
 static void QoreReflectionClass_deserializer(QoreObject& self, const QoreHashNode* sdata,
-        QoreDeserializationContext& context, ExceptionSink* xsink) {
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("cls");
         if (val) {

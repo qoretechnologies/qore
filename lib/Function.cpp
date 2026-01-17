@@ -36,6 +36,7 @@
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <cassert>
 #include <cctype>
@@ -173,11 +174,11 @@ static void add_args(QoreStringNode &desc, const QoreListNode* args) {
     }
 }
 
-CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, const QoreFunction* func,
+CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx)
-    : ct(n_ct), name(n_name), xsink(n_xsink), qc(n_qc),
+    : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(get_runtime_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1) {
     if (self && !self->isValid()) {
@@ -196,11 +197,11 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, const QoreFun
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
-CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, const QoreFunction* func,
+CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx)
-    : ct(n_ct), name(n_name), xsink(n_xsink), qc(n_qc),
+    : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(get_runtime_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1) {
     if (self && !self->isValid()) {
@@ -226,6 +227,9 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
         } else {
             update_runtime_stack_location(stack_loc);
         }
+    }
+    if (restore_rtflags) {
+        rc.setRuntimeFlags(old_rtflags);
     }
     if (returnTypeInfo != (const QoreTypeInfo*)-1) {
         saveReturnTypeInfo(returnTypeInfo);
@@ -284,7 +288,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             return;
         }
     } else {
-        if (findVariant(func, variant, cctx)) {
+    if (findVariant(func, variant, cctx)) {
             return;
         }
         // get default argument list of variant
@@ -300,6 +304,9 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 
     setCallType(variant->getCallType());
     setReturnTypeInfo(variant->getReturnTypeInfo());
+    old_rtflags = rc.getRuntimeFlags();
+    rc.setRuntimeFlags(static_cast<q_rt_flags_t>(variant->getFlags()));
+    restore_rtflags = true;
 
     // add call to call stack; push builtin location on the stack if executing builtin c++ code
     if (ct == CT_BUILTIN) {
@@ -868,7 +875,8 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
         } else {
             // get actual value and include in warning
             ExceptionSink xsink;
-            CodeEvaluationHelper ceh(&xsink, func, variant, "noop-dummy");
+            RuntimeConfig& rc = rc_get_current_ref();
+            CodeEvaluationHelper ceh(&xsink, rc, func, variant, "noop-dummy");
             ValueHolder v(variant->evalFunction(nullptr, ceh), nullptr);
             //ReferenceHolder<AbstractQoreNode> v(variant->evalFunction(func->getName(), ceh, 0), 0);
             if (v->isNothing())
@@ -1888,7 +1896,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
 // identified at run time
 QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
-        QoreProgram *pgm, ExceptionSink* xsink) const {
+        QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink) const {
     const char* fname = getName();
 
     // issue #3027: catch recursive references during parse initialization
@@ -1909,7 +1917,7 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
         return QoreValue();
     }
 
-    CodeEvaluationHelper ceh(xsink, this, variant, fname, args);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args);
     if (*xsink) {
         return QoreValue();
     }
@@ -1921,9 +1929,9 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
 // identified at run time
 QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
-        QoreProgram *pgm, ExceptionSink* xsink) const {
+        QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink) const {
     const char* fname = getName();
-    CodeEvaluationHelper ceh(xsink, this, variant, fname, args);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args);
     if (*xsink) {
         return QoreValue();
     }
@@ -1934,10 +1942,10 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
 
 // finds a variant and checks variant capabilities against current
 // program parse options
-QoreValue QoreFunction::evalDynamic(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue QoreFunction::evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const {
     const char* fname = getName();
     const AbstractQoreFunctionVariant* variant = 0;
-    CodeEvaluationHelper ceh(xsink, this, variant, fname, args);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args);
     if (*xsink) {
         return QoreValue();
     }
@@ -2453,6 +2461,7 @@ int QoreFunction::parseInit(qore_ns_private* ns) {
 }
 
 QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
     // closures cannot be overloaded
     assert(vlist.singular());
 
@@ -2462,7 +2471,7 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     // issue #1303: do not check for object validity here in the call, we already have a weak reference to the object,
     // so it will stay valid, if the closure code itself refers to the object, it will fail then if the object is invalid
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
-    CodeEvaluationHelper ceh(xsink, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
         false, nullptr, pgm);
     if (*xsink) {
         return QoreValue();

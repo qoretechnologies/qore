@@ -148,8 +148,10 @@ StatementBlock::StatementBlock(int sline, int eline, AbstractStatement* s) : Abs
 QoreValue StatementBlock::exec(ExceptionSink* xsink) {
     //QORE_TRACE("StatementBlock::exec()");
     QoreValue return_value{};
-    RuntimeConfig rc = rc_get_current();
-    ThreadLocalProgramData* tlpd = rc.tlpd ? rc.tlpd : get_thread_local_program_data();
+    RuntimeConfig& rc = rc_get_current_ref();
+    ThreadLocalProgramData* tlpd = rc.getThreadLocalProgramData()
+        ? rc.getThreadLocalProgramData()
+        : get_thread_local_program_data();
     if (tlpd && tlpd->runtimeCheck()) {
         tlpd->dbgFunctionEnter(this, xsink);
     }
@@ -185,7 +187,7 @@ void StatementBlock::del() {
 }
 
 int StatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return execImpl(rc, return_value, xsink);
 }
 
@@ -198,7 +200,7 @@ int StatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excepti
 }
 
 int StatementBlock::execIntern(QoreValue& return_value, ExceptionSink* xsink) {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return execIntern(rc, return_value, xsink);
 }
 
@@ -216,7 +218,9 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
         pushBlock(on_block_exit_list.end());
     }
 
-    ThreadLocalProgramData* tlpd = rc.tlpd ? rc.tlpd : get_thread_local_program_data();
+    ThreadLocalProgramData* tlpd = rc.getThreadLocalProgramData()
+        ? rc.getThreadLocalProgramData()
+        : get_thread_local_program_data();
     // to execute even when block is empty, e.g. while(true);
     if (tlpd->runtimeCheck()) {
         stmt_rc = tlpd->dbgStep(this, nullptr, xsink);
@@ -662,7 +666,7 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
 }
 
 int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return execImpl(rc, return_value, xsink);
 }
 
@@ -672,7 +676,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // Get the parse options from the current program at runtime
     // NOTE: We can't use pwo.parse_options here because the TopLevelStatementBlock is constructed
     // before the program's pwo is initialized (due to C++ member initialization order)
-    QoreProgram* pgm = rc.pgm ? rc.pgm : getProgram();
+    QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
     int64 runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
 
     // In REPARSE mode (PO_ALLOW_REPARSE), only execute statements that haven't been executed yet
@@ -693,7 +697,9 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             return 0;
         }
 
-        ThreadLocalProgramData* tlpd = rc.tlpd ? rc.tlpd : get_thread_local_program_data();
+        ThreadLocalProgramData* tlpd = rc.getThreadLocalProgramData()
+            ? rc.getThreadLocalProgramData()
+            : get_thread_local_program_data();
         // Execute only new statements
         for (statement_list_t::iterator i = start; i != statement_list.end(); ++i) {
             if (tlpd->runtimeCheck()) {

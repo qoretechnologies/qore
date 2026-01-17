@@ -181,7 +181,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
     s->sprintf("don't know how to print type %d: '%s' :-(", ntype, n.getTypeName());
 }
 
-QoreValue f_dbg_node_info(const QoreListNode* params, q_rt_flags_t flags, ExceptionSink *xsink) {
+QoreValue f_dbg_node_info(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink *xsink) {
     assert(xsink);
     bool shallow = get_param_value(params, 1).getAsBool();
     QoreStringNodeHolder s(new QoreStringNode);
@@ -194,11 +194,11 @@ QoreValue f_dbg_node_info(const QoreListNode* params, q_rt_flags_t flags, Except
 }
 
 // returns a hash of all namespace information
-static QoreValue f_dbg_get_ns_info(const QoreListNode* params, q_rt_flags_t flags, ExceptionSink* xsink) {
+static QoreValue f_dbg_get_ns_info(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return getRootNS()->getInfo();
 }
 
-static QoreValue f_dbg_global_vars(const QoreListNode* params, q_rt_flags_t flags, ExceptionSink* xsink) {
+static QoreValue f_dbg_global_vars(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return getProgram()->getVarList();
 }
 

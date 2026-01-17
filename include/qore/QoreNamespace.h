@@ -250,7 +250,7 @@ public:
     DLLEXPORT void deleteData(ExceptionSink* xsink);
 
     //! adds a function variant
-    DLLEXPORT void addBuiltinVariant(const char* name, q_func_n_t f, int64 code_flags = QCF_NO_FLAGS, int64 functional_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
+    DLLEXPORT void addBuiltinVariant(const char* name, q_func_t f, int64 code_flags = QCF_NO_FLAGS, int64 functional_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
 
     //! adds a function variant
     /** @since %Qore 0.9.5

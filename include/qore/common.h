@@ -59,6 +59,7 @@
 
 //! Qore's base type info class
 class QoreTypeInfo;
+class RuntimeConfig;
 
 //! cross-platform define for AF_UNSPEC
 #define Q_AF_UNSPEC -1
@@ -347,35 +348,37 @@ private:
 
 //! the type used for builtin function signatures
 /** @param args the list of arguments to the function (could be 0), use inline functions in params.h to access
-    @param flags runtime flags
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the return value of the function; the caller owns any reference returned in the return value
  */
-typedef QoreValue (*q_func_n_t)(const QoreListNode* args, q_rt_flags_t flags, ExceptionSink* xsink);
+typedef QoreValue (*q_func_t)(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink);
 
 //! the type used for builtin function signatures for external functions
 /** @param ptr  a pointer to user-defined data set when the variant is added to the function
     @param args the list of arguments to the function (could be 0), use inline functions in params.h to access
-    @param flags runtime flags
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the return value of the function; the caller owns any reference returned in the return value
 
     @since %Qore 0.9.5
  */
-typedef QoreValue (*q_external_func_t)(const void* ptr, const QoreListNode* args, q_rt_flags_t flags, ExceptionSink* xsink);
+typedef QoreValue (*q_external_func_t)(const void* ptr, const QoreListNode* args, RuntimeConfig& rc,
+    ExceptionSink* xsink);
 
 //! the type used for builtin QoreClass method signatures
 /** @param self the QoreObject that the function is being executed on
     @param private_data the object's private data representing the state of the object
     @param args the list of arguments to the function (could be 0), use inline functions in params.h to access
-    @param flags runtime flags
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the return value of the function (can be 0); the caller owns any reference returned in the return value
  */
-typedef QoreValue (*q_method_n_t)(QoreObject* self, AbstractPrivateData* private_data, const QoreListNode* args, q_rt_flags_t flags, ExceptionSink* xsink);
+typedef QoreValue (*q_method_t)(QoreObject* self, AbstractPrivateData* private_data, const QoreListNode* args,
+    RuntimeConfig& rc, ExceptionSink* xsink);
 
 //! the type used for builtin QoreClass method signatures
 /** @param method a constant reference to the QoreMethod being called
@@ -383,47 +386,51 @@ typedef QoreValue (*q_method_n_t)(QoreObject* self, AbstractPrivateData* private
     @param self the QoreObject that the function is being executed on
     @param private_data the object's private data representing the state of the object
     @param args the list of arguments to the function (could be 0), use inline functions in params.h to access
-    @param flags runtime flags
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the return value of the function (can be 0); the caller owns any reference returned in the return value
 
     @since %Qore 0.8.13
  */
-typedef QoreValue (*q_external_method_t)(const QoreMethod& method, const void* ptr, QoreObject* self, AbstractPrivateData* private_data, const QoreListNode* args, q_rt_flags_t flags, ExceptionSink* xsink);
+typedef QoreValue (*q_external_method_t)(const QoreMethod& method, const void* ptr, QoreObject* self,
+    AbstractPrivateData* private_data, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink);
 
 //! the type used for external static methods
 /** @param method a constant reference to the QoreMethod being called
     @param ptr a pointer to user-defined data set when the variant is added to the method
     @param args the list of arguments to the function (could be 0), use inline functions in params.h to access
-    @param flags runtime flags
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the return value of the function; the caller owns any reference returned in the return value
 
     @since %Qore 0.8.13
  */
-typedef QoreValue (*q_external_static_method_t)(const QoreMethod& method, const void* ptr, const QoreListNode* args, q_rt_flags_t flags, ExceptionSink* xsink);
+typedef QoreValue (*q_external_static_method_t)(const QoreMethod& method, const void* ptr, const QoreListNode* args,
+    RuntimeConfig& rc, ExceptionSink* xsink);
 
 //! the type used for builtin QoreClass constructor method signatures
 /** @param self the QoreObject that the function is being executed on
     @param args the list of arguments to the function (could be 0), use inline functions in params.h to access
-    @param flags runtime flags
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
  */
-typedef void (*q_constructor_n_t)(QoreObject* self, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink);
+typedef void (*q_constructor_t)(QoreObject* self, const QoreListNode* args, RuntimeConfig& rc,
+    ExceptionSink* xsink);
 
 //! the type used for builtin QoreClass constructor method signatures
 /** @param method a constant reference to the QoreMethod being called for the constructor (in a heirarchy, the class of this method could be different than the QoreClass returned from QoreObject::getClass() if the constructor for a base class is being executed)
     @param ptr a pointer to user-defined data set when the variant is added to the method
     @param self the QoreObject that the function is being executed on
     @param args the list of arguments to the function (could be 0), use inline functions in params.h to access
-    @param rtflags runtime flags
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @since %Qore 0.8.13
  */
-typedef void (*q_external_constructor_t)(const QoreMethod& method, const void* ptr, QoreObject* self, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink);
+typedef void (*q_external_constructor_t)(const QoreMethod& method, const void* ptr, QoreObject* self,
+    const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink);
 
 //! the type used for builtin QoreClass system constructor method signatures
 /** System constructors are called for objects that are created automatically by the library, normally to be assigned to constants.
@@ -441,9 +448,11 @@ typedef void (*q_system_constructor_t)(QoreObject* self, int code, va_list args)
 /** destructors are optional, but, if present, must call AbstractPrivateData::deref() on any private data (if present)
     @param self the QoreObject that the function is being executed on
     @param private_data the object's private data representing the state of the object for the current builtin class
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
  */
-typedef void (*q_destructor_t)(QoreObject* self, AbstractPrivateData* private_data, ExceptionSink* xsink);
+typedef void (*q_destructor_t)(QoreObject* self, AbstractPrivateData* private_data, RuntimeConfig& rc,
+    ExceptionSink* xsink);
 
 //! the type used for builtin QoreClass destructor signatures with the new generic calling convention and user-defined data
 /** destructors are optional, but, if present, must call AbstractPrivateData::deref() on any private data (if present)
@@ -451,18 +460,22 @@ typedef void (*q_destructor_t)(QoreObject* self, AbstractPrivateData* private_da
     @param ptr a pointer to user-defined data set when the variant is added to the method
     @param self the QoreObject that the function is being executed on
     @param private_data the object's private data representing the state of the object for the current builtin class
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
  */
-typedef void (*q_external_destructor_t)(const QoreClass& thisclass, const void* ptr, QoreObject* self, AbstractPrivateData* private_data, ExceptionSink* xsink);
+typedef void (*q_external_destructor_t)(const QoreClass& thisclass, const void* ptr, QoreObject* self,
+    AbstractPrivateData* private_data, RuntimeConfig& rc, ExceptionSink* xsink);
 
 //! the type used for builtin QoreClass copy signatures
 /** this function must set any private data against the new object by calling QoreObject::setPrivate() on \c self
     @param self the QoreObject that the function is being executed on (the new copy of the object)
     @param old the object being copied
     @param private_data the object's private data representing the state of the object for the current builtin class
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
  */
-typedef void (*q_copy_t)(QoreObject* self, QoreObject* old, AbstractPrivateData* private_data, ExceptionSink* xsink);
+typedef void (*q_copy_t)(QoreObject* self, QoreObject* old, AbstractPrivateData* private_data, RuntimeConfig& rc,
+    ExceptionSink* xsink);
 
 //! the type used for builtin QoreClass copy signatures with the new generic calling convention
 /** this function must set any private data against the new object by calling QoreObject::setPrivate() on \c self
@@ -471,31 +484,37 @@ typedef void (*q_copy_t)(QoreObject* self, QoreObject* old, AbstractPrivateData*
     @param self the QoreObject that the function is being executed on (the new copy of the object)
     @param old the object being copied
     @param private_data the object's private data representing the state of the object for the current builtin class
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
  */
-typedef void (*q_external_copy_t)(const QoreClass& thisclass, const void* ptr, QoreObject* self, QoreObject* old, AbstractPrivateData* private_data, ExceptionSink* xsink);
+typedef void (*q_external_copy_t)(const QoreClass& thisclass, const void* ptr, QoreObject* self, QoreObject* old,
+    AbstractPrivateData* private_data, RuntimeConfig& rc, ExceptionSink* xsink);
 
 //! the type used for builtin QoreClass serializer method signatures
 /** @param self the QoreObject that the function is being executed on
     @param data the private data for the builtin class
     @param context the serialization context object
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the serialized private data hash for the object to be deserialized to object state and/or members in the deserialization method (may be nullptr)
  */
-typedef QoreHashNode* (*q_serializer_t)(const QoreObject& self, const AbstractPrivateData& data, QoreSerializationContext& context, ExceptionSink* xsink);
+typedef QoreHashNode* (*q_serializer_t)(const QoreObject& self, const AbstractPrivateData& data,
+    QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink);
 
 //! the type used for builtin QoreClass deserializer method signatures
 /** @param self the QoreObject that the function is being executed on
     @param sdata the data that was returned by the serializer containing the object state and/or any members
     @param context the deserialization context object
+    @param rc runtime configuration for the call
     @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
 
     @return the hash to be written to the class as members (may be nullptr)
 
     This method must also set any private data against the object
  */
-typedef void (*q_deserializer_t)(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context, ExceptionSink* xsink);
+typedef void (*q_deserializer_t)(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
+    RuntimeConfig& rc, ExceptionSink* xsink);
 
 //! type for thread resource IDs (unique within a single running qore library process)
 /** @see qore_get_trid()

@@ -35,7 +35,7 @@
 
 #include <string>
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class AbstractParseObjectMethodReferenceNode : public ParseNode {
 protected:

@@ -33,13 +33,15 @@
 #include "QC_LoggerInterface.h"
 
 static QoreHashNode* LoggerInterface_serializer(const QoreObject& self, const QoreLoggerInterface& level,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     return rv.release();
 }
 
 static void LoggerInterface_deserializer(QoreObject& self, const QoreHashNode* sdata,
-        QoreDeserializationContext& context, ExceptionSink* xsink) {
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
 }
 
 //! This is the base class for logger levels

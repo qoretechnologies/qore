@@ -36,7 +36,8 @@
 #include <openssl/ssl.h>
 #include <openssl/pem.h>
 
-static QoreHashNode* SSLPrivateKey_serializer(const QoreObject& self, const QoreSSLPrivateKey& pk, QoreSerializationContext& context, ExceptionSink* xsink) {
+static QoreHashNode* SSLPrivateKey_serializer(const QoreObject& self, const QoreSSLPrivateKey& pk, QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     // we serialize with DER format as it's approx 2/3 the size of a PEM string
     SimpleRefHolder<BinaryNode> der(pk.getDER(xsink));
@@ -48,7 +49,9 @@ static QoreHashNode* SSLPrivateKey_serializer(const QoreObject& self, const Qore
     return *xsink ? nullptr : rv.release();
 }
 
-static void SSLPrivateKey_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context, ExceptionSink* xsink) {
+static void SSLPrivateKey_deserializer(QoreObject& self, const QoreHashNode* sdata,
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         // we serialize with DER format as it's approx 2/3 the size of a PEM string
         QoreValue val = sdata->getKeyValue("der");

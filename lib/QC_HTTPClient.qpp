@@ -67,12 +67,14 @@ const URL_NORMAL = URL_NORMAL;
 extern QoreClass* QC_SOCKET;
 
 static QoreHashNode* HTTPClient_serializer(const QoreObject& self, const QoreHttpClientObject& z,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     return z.getConfig();
 }
 
 static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
-        ExceptionSink* xsink) {
+        RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (!sdata) {
         xsink->raiseException("DESERIALIZATION-ERROR", "missing serialization data for the HTTPClient class");
         return;

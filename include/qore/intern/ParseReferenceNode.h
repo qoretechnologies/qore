@@ -35,7 +35,7 @@
 #include "qore/intern/ParseNode.h"
 
 class IntermediateParseReferenceNode;
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class ParseReferenceNode : public ParseNode {
 public:

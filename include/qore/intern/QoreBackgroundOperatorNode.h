@@ -33,7 +33,7 @@
 
 #define _QORE_QOREBACKGROUNDOPERATORNODE_H
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class QoreBackgroundOperatorNode : public QoreSingleExpressionOperatorNode<> {
 protected:

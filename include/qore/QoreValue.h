@@ -74,7 +74,7 @@ class QoreString;
 class ExceptionSink;
 class QoreTypeInfo;
 class QoreValue;
-struct RuntimeConfig;
+class RuntimeConfig;
 
 // ============================================================================
 // QoreSimpleValue - Trivially copyable value type for unions and varargs

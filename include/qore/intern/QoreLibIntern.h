@@ -33,7 +33,7 @@
 
 #define _QORE_QORELIBINTERN_H
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 //#define _QORE_CYCLE_CHECK 1
 #ifdef _QORE_CYCLE_CHECK

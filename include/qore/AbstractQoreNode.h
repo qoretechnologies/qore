@@ -51,7 +51,7 @@ class LocalVar;
 
 // forward declarations
 struct QoreParseContext;
-struct RuntimeConfig;
+class RuntimeConfig;
 
 //! The base class for all value and parse types in Qore expression trees
 /**

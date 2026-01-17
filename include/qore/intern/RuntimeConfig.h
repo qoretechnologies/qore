@@ -32,24 +32,12 @@
 #ifndef _QORE_INTERN_RUNTIMECONFIG_H
 #define _QORE_INTERN_RUNTIMECONFIG_H
 
-#include <qore/common.h>
-#include <cstdint>
-
-class QoreProgram;
-class QoreObject;
-class AbstractStatement;
-class QoreProgramLocation;
-class ExceptionSink;
-struct ThreadLocalProgramData;
-class QoreClosureBase;
-class qore_class_private;
-class QoreTypeInfo;
-class QoreStackLocation;
+#include <qore/RuntimeConfig.h>
 
 /**
  * @brief Runtime configuration passed through the evaluation call chain.
  *
- * This structure holds pointers to runtime context that would otherwise
+ * This class holds pointers to runtime context that would otherwise
  * be looked up from thread-local storage (TLS) on each access. By passing
  * this explicitly through evalImpl() calls, we can:
  * 1. Reduce TLS lookups (important for performance)
@@ -59,7 +47,10 @@ class QoreStackLocation;
  * thread-local program data is set up). Code using RuntimeConfig must handle
  * nullptr gracefully or fall back to TLS-based lookups when needed.
  */
-struct RuntimeConfig {
+class ExceptionSink;
+
+class RuntimeConfig::Impl {
+public:
     //! Current program being executed
     QoreProgram* pgm = nullptr;
 
@@ -86,6 +77,9 @@ struct RuntimeConfig {
 
     //! Current return type info
     const QoreTypeInfo* return_type_info = nullptr;
+
+    //! Current runtime flags
+    q_rt_flags_t rtflags = 0;
 
     //! Current implicit element offset ($#)
     int element = 0;
@@ -264,7 +258,7 @@ private:
  * and TLS (for cross-thread stack access via get_all_thread_call_stacks()).
  *
  * Benefits:
- * - Exception reporting can use rc.stack_loc directly (avoids TLS read)
+ * - Exception reporting can use rc.getStackLocation() directly (avoids TLS read)
  * - Future JIT can keep stack_loc in register
  * - Cross-thread stack access still works via TLS sync
  */

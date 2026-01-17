@@ -35,7 +35,7 @@
 
 #include "qore/intern/QoreParseListNode.h"
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class CallReferenceCallNode : public ParseNode {
 private:

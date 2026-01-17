@@ -3662,7 +3662,15 @@ struct qore_socket_private {
         size_t size, const ResolvedCallReferenceNode* send_callback, InputStream* input_stream,
         size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, int source, int timeout_ms = -1,
         QoreThreadLock* l = nullptr, bool* aborted = nullptr, bool addsize = true) {
-        assert(xsink);
+        ExceptionSink local_xsink;
+        ExceptionSink* use_xsink = xsink ? xsink : &local_xsink;
+        auto return_status = [&](int rc) {
+            if (!xsink) {
+                local_xsink.clear();
+            }
+            return rc;
+        };
+
         assert(!(data && send_callback));
         assert(!(data && input_stream));
         assert(!(send_callback && input_stream));
@@ -3671,9 +3679,9 @@ struct qore_socket_private {
             int32_t h2_active_stream_id = getH2ActiveStreamId();
             printd(1, "HTTP2 WARN: sendHttpMessageCommon on HTTP/2 socket fd=%d stream_id=%d hdr='%s'\n",
                 sock, h2_active_stream_id, hdr.c_str());
-            xsink->raiseException("HTTP2-ERROR", "HTTP/1 message attempted on HTTP/2 connection (%s::%s)",
+            use_xsink->raiseException("HTTP2-ERROR", "HTTP/1 message attempted on HTTP/2 connection (%s::%s)",
                 cname, mname);
-            return -1;
+            return return_status(-1);
         }
 
         // send event
@@ -3688,12 +3696,12 @@ struct qore_socket_private {
 
         // send URI and headers
         int rc;
-        if ((rc = send(xsink, cname, mname, hdr.c_str(), hdr.size(), timeout_ms, -1)))
-            return rc;
+        if ((rc = send(use_xsink, cname, mname, hdr.c_str(), hdr.size(), timeout_ms, -1)))
+            return return_status(rc);
 
         // header message sent above with do_sent_http_message_event()
         if (size && data) {
-            int rc = send(xsink, cname, mname, (char*)data, size, timeout_ms, -1);
+            int rc = send(use_xsink, cname, mname, (char*)data, size, timeout_ms, -1);
             if (!rc) {
                 if (body) {
                     do_data_event(QORE_EVENT_SOCKET_DATA_SENT, source, *body);
@@ -3701,18 +3709,20 @@ struct qore_socket_private {
                     do_data_event(QORE_EVENT_SOCKET_DATA_SENT, source, data, size);
                 }
             }
-            return rc;
+            return return_status(rc);
         } else if (send_callback) {
             assert(l);
             assert(!aborted || !(*aborted));
-            return sendHttpChunkedWithCallback(xsink, cname, mname, *send_callback, *l, source, timeout_ms, aborted);
+            return return_status(sendHttpChunkedWithCallback(use_xsink, cname, mname, *send_callback, *l, source,
+                timeout_ms, aborted));
         } else if (input_stream) {
             assert(l);
-            sendHttpChunkedBodyFromInputStream(input_stream, max_chunk_size, timeout_ms, xsink, l, trailer_callback);
-            return *xsink ? -1 : 0;
+            sendHttpChunkedBodyFromInputStream(input_stream, max_chunk_size, timeout_ms, use_xsink, l,
+                trailer_callback);
+            return return_status(*use_xsink ? -1 : 0);
         }
 
-        return 0;
+        return return_status(0);
     }
 
     DLLLOCAL QoreHashNode* readHttpChunkedBodyBinary(int timeout, ExceptionSink* xsink, const char* cname, int source,

@@ -32,7 +32,7 @@
 #ifndef _QORE_QORENULLCOALESCINGOPERATORNODE_H
 #define _QORE_QORENULLCOALESCINGOPERATORNODE_H
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class QoreNullCoalescingOperatorNode : public QoreBinaryOperatorNode<QoreOperatorNode> {
 protected:

@@ -65,7 +65,8 @@
     Here is an example of the Mutex' class copy method:
 
     @code{.cpp}
-    static void MUTEX_copy(QoreObject *self, QoreObject *old, SmartMutex *m, ExceptionSink *xsink)
+    static void MUTEX_copy(QoreObject *self, QoreObject *old, SmartMutex *m, RuntimeConfig& rc,
+        ExceptionSink *xsink)
     {
        // the "old" and "m" parameters representing the old object are ignored
        self->setPrivate(CID_MUTEX, new SmartMutex());
@@ -90,7 +91,7 @@
     The Mutex class can throw an exception when deleted (for example, if a thread is still holding the lock when the object should be deleted), here is the code:
 
     @code{.cpp}
-    static void MUTEX_destructor(QoreObject *self, SmartMutex *m, ExceptionSink *xsink)
+    static void MUTEX_destructor(QoreObject *self, SmartMutex *m, RuntimeConfig& rc, ExceptionSink *xsink)
     {
        // run the actual destructor code implemented in SmartMutex
        m->destructor(xsink);

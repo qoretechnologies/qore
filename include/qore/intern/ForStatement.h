@@ -37,7 +37,7 @@
 
 class StatementBlock;
 class LVList;
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class ForStatement : public AbstractStatement {
 public:

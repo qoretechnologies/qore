@@ -128,7 +128,7 @@ void VarRefNode::resolve(const QoreTypeInfo* typeInfo) {
 }
 
 QoreValue VarRefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 
@@ -496,7 +496,7 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
 }
 
 QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 
@@ -507,7 +507,7 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
         case VRN_OBJECT: {
             assert(QoreTypeInfo::getUniqueReturnClass(typeInfo));
             value = qore_class_private::execConstructor(
-                *QoreTypeInfo::getUniqueReturnClass(typeInfo), variant, args, xsink
+                *QoreTypeInfo::getUniqueReturnClass(typeInfo), rc, variant, args, xsink
             );
             break;
         }

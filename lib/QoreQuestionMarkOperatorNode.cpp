@@ -78,7 +78,7 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
 }
 
 QoreValue QoreQuestionMarkOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 

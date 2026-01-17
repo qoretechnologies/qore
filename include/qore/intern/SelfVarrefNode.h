@@ -33,7 +33,7 @@
 
 #define _QORE_SELFVARREFNODE_H
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class SelfVarrefNode : public ParseNode  {
 public:

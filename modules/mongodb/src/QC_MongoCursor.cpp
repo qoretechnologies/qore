@@ -33,26 +33,26 @@ qore_classid_t CID_MONGOCURSOR;
 QoreClass* QC_MONGOCURSOR;
 
 // nothing MongoCursor::close(){}
-static QoreValue MongoCursor_close(QoreObject* self, QoreMongoCursor* cursor, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoCursor_close(QoreObject* self, QoreMongoCursor* cursor, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 117 "QC_MongoCursor.qpp"
     cursor->close();
     return QoreValue();
 }
 
 // bool MongoCursor::more(){}
-static QoreValue MongoCursor_more(QoreObject* self, QoreMongoCursor* cursor, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoCursor_more(QoreObject* self, QoreMongoCursor* cursor, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 83 "QC_MongoCursor.qpp"
     return cursor->more(xsink);
 }
 
 // *hash<auto> MongoCursor::next(){}
-static QoreValue MongoCursor_next(QoreObject* self, QoreMongoCursor* cursor, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoCursor_next(QoreObject* self, QoreMongoCursor* cursor, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 65 "QC_MongoCursor.qpp"
     return cursor->next(xsink);
 }
 
 // list<hash<auto>> MongoCursor::toList(){}
-static QoreValue MongoCursor_toList(QoreObject* self, QoreMongoCursor* cursor, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoCursor_toList(QoreObject* self, QoreMongoCursor* cursor, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 103 "QC_MongoCursor.qpp"
     return cursor->toList(xsink);
 }
@@ -70,16 +70,16 @@ DLLLOCAL QoreClass* initMongoCursorClass(QoreNamespace& ns) {
     QC_MONGOCURSOR->setFinal();
 
     // nothing MongoCursor::close(){}
-    QC_MONGOCURSOR->addMethod("close", (q_method_n_t)MongoCursor_close, Public, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
+    QC_MONGOCURSOR->addMethod("close", (q_method_t)MongoCursor_close, Public, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
 
     // bool MongoCursor::more(){}
-    QC_MONGOCURSOR->addMethod("more", (q_method_n_t)MongoCursor_more, Public, QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo);
+    QC_MONGOCURSOR->addMethod("more", (q_method_t)MongoCursor_more, Public, QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo);
 
     // *hash<auto> MongoCursor::next(){}
-    QC_MONGOCURSOR->addMethod("next", (q_method_n_t)MongoCursor_next, Public, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashOrNothingTypeInfo);
+    QC_MONGOCURSOR->addMethod("next", (q_method_t)MongoCursor_next, Public, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashOrNothingTypeInfo);
 
     // list<hash<auto>> MongoCursor::toList(){}
-    QC_MONGOCURSOR->addMethod("toList", (q_method_n_t)MongoCursor_toList, Public, QCF_NO_FLAGS, QDOM_DEFAULT, qore_get_complex_list_type(autoHashTypeInfo));
+    QC_MONGOCURSOR->addMethod("toList", (q_method_t)MongoCursor_toList, Public, QCF_NO_FLAGS, QDOM_DEFAULT, qore_get_complex_list_type(autoHashTypeInfo));
 
     return QC_MONGOCURSOR;
 }

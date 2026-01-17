@@ -34,7 +34,7 @@
 
 #include <cstdarg>
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink);

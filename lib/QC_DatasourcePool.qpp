@@ -138,7 +138,8 @@ static void dsp_constructor_hash(const QoreHashNode* opts, QoreObject* self, Que
       ds->destructor(xsink);
 }
 
-static QoreHashNode* DatasourcePool_serializer(const QoreObject& self, const DatasourcePool& dsp, QoreSerializationContext& context, ExceptionSink* xsink) {
+static QoreHashNode* DatasourcePool_serializer(const QoreObject& self, const DatasourcePool& dsp, QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     SimpleRefHolder<QoreStringNode> str(const_cast<DatasourcePool&>(dsp).getConfigString(xsink));
     if (*xsink) {
         return nullptr;
@@ -149,7 +150,9 @@ static QoreHashNode* DatasourcePool_serializer(const QoreObject& self, const Dat
     return rv.release();
 }
 
-static void DatasourcePool_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context, ExceptionSink* xsink) {
+static void DatasourcePool_deserializer(QoreObject& self, const QoreHashNode* sdata,
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("conf");
         if (val) {

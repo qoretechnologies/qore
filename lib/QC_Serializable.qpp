@@ -37,12 +37,14 @@
 #include "qore/intern/QC_TimeZone.h"
 
 static QoreHashNode* Serializable_serializer(const QoreObject& self, const TimeZoneData& z,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     return nullptr;
 }
 
 static void Serializable_deserializer(QoreObject& self, const QoreHashNode* sdata,
-        QoreDeserializationContext& context, ExceptionSink* xsink) {
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         xsink->raiseException("DESERIALIZATION-ERROR", "Deserialization data provided for the 'Serializable' class "
             "where none was expected");

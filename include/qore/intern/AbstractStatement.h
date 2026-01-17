@@ -55,7 +55,7 @@
 class LVList;
 class StatementBlock;
 class QoreBreakpoint;
-struct RuntimeConfig;
+class RuntimeConfig;
 
 // forward declaration
 class qore_program_private_base;

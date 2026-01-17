@@ -795,7 +795,7 @@ auto call_builtin_function(string name, ...) {
         vargs = args->copyListFrom(1);
     }
 
-    return f->evalDynamic(*vargs, xsink);
+    return f->evalDynamic(*vargs, runtime_cfg, xsink);
 }
 
 //! Calls a function and returns the return value, using the optional second argument as a list of arguments for the function
@@ -822,7 +822,7 @@ auto call_builtin_function_args(string name, *softlist<auto> vargs) {
     if (!f)
         return QoreValue();
 
-    return f->evalDynamic(vargs, xsink);
+    return f->evalDynamic(vargs, runtime_cfg, xsink);
 }
 
 //! A function performing the same role as the @ref exists "exists operator"

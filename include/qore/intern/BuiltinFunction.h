@@ -112,10 +112,10 @@ public:
 
 class BuiltinFunctionValueVariant : public AbstractQoreFunctionVariant, public BuiltinFunctionVariantBase {
 protected:
-    q_func_n_t func;
+    q_func_t func;
 
 public:
-    DLLLOCAL BuiltinFunctionValueVariant(q_func_n_t m, int64 n_flags, int64 n_functionality,
+    DLLLOCAL BuiltinFunctionValueVariant(q_func_t m, int64 n_flags, int64 n_functionality,
             const QoreTypeInfo* n_returnTypeInfo = 0, const type_vec_t& n_typeList = type_vec_t(),
             const arg_vec_t& n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t()) :
             AbstractQoreFunctionVariant(n_flags), BuiltinFunctionVariantBase(n_flags, n_functionality,
@@ -127,7 +127,7 @@ public:
 
     DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
         CodeContextHelper cch(xsink, CT_BUILTIN, ceh.getName());
-        return func(ceh.getArgs(), ceh.getRuntimeFlags(), xsink);
+        return func(ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
     }
 };
 
@@ -152,7 +152,7 @@ public:
 
     DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
         CodeContextHelper cch(xsink, CT_BUILTIN, ceh.getName());
-        return func(ptr, ceh.getArgs(), ceh.getRuntimeFlags(), xsink);
+        return func(ptr, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
     }
 };
 

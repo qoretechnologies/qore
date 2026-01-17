@@ -35,7 +35,7 @@
 
 #include <qore/AbstractQoreNode.h>
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 //! parse type: reference to a lvalue expression
 /** This type could be passed to a builtin function.  To get and set the value of the reference,

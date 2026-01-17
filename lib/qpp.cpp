@@ -2750,7 +2750,7 @@ protected:
     }
 
     const char* getFunctionType() const {
-        return "q_func_n_t";
+        return "q_func_t";
     }
 
     int appendMangledParamCodes() {
@@ -2911,7 +2911,8 @@ public:
 
         serializeQorePrototypeComment(fp);
 
-        fprintf(fp, "static %s f_%s(const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {\n", getReturnType(), vname.c_str());
+        fprintf(fp, "static %s f_%s(const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {\n",
+            getReturnType(), vname.c_str());
         serializeArgs(fp);
         fprintf(fp, "# %d \"%s\"\n", line, fileName.c_str());
         output_file(fp, code);
@@ -4293,7 +4294,9 @@ protected:
 
     void serializeCppConstructor(FILE* fp, const char* cname) const {
         serializeQoreConstructorPrototypeComment(fp, cname);
-        fprintf(fp, "static void %s_%s(QoreObject* self, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {\n", cname, vname.c_str());
+        fprintf(fp,
+            "static void %s_%s(QoreObject* self, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {\n",
+            cname, vname.c_str());
         serializeArgs(fp, cname, false);
         fprintf(fp, "# %d \"%s\"\n", line, fileName.c_str());
         output_file(fp, code);
@@ -4302,7 +4305,9 @@ protected:
 
     void serializeCppDestructor(FILE* fp, const char* cname, const char* arg) const {
         serializeQoreDestructorCopyPrototypeComment(fp, cname);
-        fprintf(fp, "static void %s_destructor(QoreObject* self, %s, ExceptionSink* xsink) {\n", cname, arg);
+        fprintf(fp,
+            "static void %s_destructor(QoreObject* self, %s, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {\n",
+            cname, arg);
         fprintf(fp, "# %d \"%s\"\n", line, fileName.c_str());
         output_file(fp, code);
         fputs("\n}\n\n", fp);
@@ -4310,7 +4315,9 @@ protected:
 
     void serializeCppCopy(FILE* fp, const char* cname, const char* arg) const {
         serializeQoreDestructorCopyPrototypeComment(fp, cname);
-        fprintf(fp, "static void %s_copy(QoreObject* self, QoreObject* old, %s, ExceptionSink* xsink) {\n", cname, arg);
+        fprintf(fp,
+            "static void %s_copy(QoreObject* self, QoreObject* old, %s, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {\n",
+            cname, arg);
         fprintf(fp, "# %d \"%s\"\n", line, fileName.c_str());
         output_file(fp, code);
         fputs("\n}\n\n", fp);
@@ -4372,7 +4379,7 @@ protected:
     }
 
     const char* getMethodType() const {
-        return "q_method_n_t";
+        return "q_method_t";
     }
 
     std::string getJavaAttrs() const {
@@ -4535,7 +4542,7 @@ public:
 
         serializeQorePrototypeComment(fp, cname);
 
-        fprintf(fp, "static %s %s_%s(QoreObject* self, %s, const QoreListNode* args, q_rt_flags_t rtflags, " \
+        fprintf(fp, "static %s %s_%s(QoreObject* self, %s, const QoreListNode* args, RuntimeConfig& runtime_cfg, " \
             "ExceptionSink* xsink) {\n", getReturnType(), cname, vname.c_str(), arg);
 
         serializeArgs(fp, cname);
@@ -4629,7 +4636,7 @@ public:
 
         serializeQorePrototypeComment(fp, cname);
 
-        fprintf(fp, "static %s static_%s_%s(const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) " \
+        fprintf(fp, "static %s static_%s_%s(const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) " \
             "{\n", getReturnType(), cname, vname.c_str());
         serializeArgs(fp, cname);
         fprintf(fp, "# %d \"%s\"\n", line, fileName.c_str());

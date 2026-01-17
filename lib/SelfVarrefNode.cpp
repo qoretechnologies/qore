@@ -55,12 +55,12 @@ const char* SelfVarrefNode::getTypeName() const {
 }
 
 QoreValue SelfVarrefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 
 QoreValue SelfVarrefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    QoreObject* obj = rc.obj ? rc.obj : runtime_get_stack_object();
+    QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
     assert(obj);
     assert(needs_deref);
     // issue 3523: evaluate in case the value is a reference

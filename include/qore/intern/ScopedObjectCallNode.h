@@ -36,7 +36,7 @@
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/QoreParseListNode.h"
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class ScopedObjectCallNode : public AbstractFunctionCallNode {
 public:

@@ -37,7 +37,7 @@
 
 #include <qore/safe_dslist>
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 // forward references
 class StatementBlock;

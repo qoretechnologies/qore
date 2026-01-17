@@ -32,7 +32,7 @@
 #ifndef _QORE_QOREQUESTIONMARKOPERATORNODE_H
 #define _QORE_QOREQUESTIONMARKOPERATORNODE_H
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class QoreQuestionMarkOperatorNode : public QoreNOperatorNodeBase<3> {
 protected:

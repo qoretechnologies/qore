@@ -557,7 +557,7 @@ public:
     DLLLOCAL AbstractPrivateData* tryGetReferencedPrivateData(qore_classid_t key, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue evalBuiltinMethodWithPrivateData(const QoreMethod& method,
-            const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, q_rt_flags_t rtflags,
+            const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc,
             ExceptionSink* xsink);
 
     // no locking necessary; if class_ctx is non-null, an internal member is being initialized
@@ -630,9 +630,9 @@ public:
     }
 
     DLLLOCAL static QoreValue evalBuiltinMethodWithPrivateData(QoreObject& obj, const QoreMethod& method,
-            const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, q_rt_flags_t rtflags,
+            const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc,
                 ExceptionSink* xsink) {
-        return obj.priv->evalBuiltinMethodWithPrivateData(method, meth, args, rtflags, xsink);
+        return obj.priv->evalBuiltinMethodWithPrivateData(method, meth, args, rc, xsink);
     }
 
     DLLLOCAL static qore_object_private* get(QoreObject& obj) {

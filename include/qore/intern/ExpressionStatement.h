@@ -35,7 +35,7 @@
 
 #include "qore/intern/AbstractStatement.h"
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class ExpressionStatement : public AbstractStatement {
 public:

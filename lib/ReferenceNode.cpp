@@ -117,9 +117,9 @@ QoreValue ParseReferenceNode::doPartialEval(QoreValue n, RuntimeConfig& rc, Qore
 
     if (ntype == NT_SELF_VARREF) {
         assert(!self);
-        if (rc.obj) {
-            self = rc.obj;
-            qc = rc.cls ? rc.cls : runtime_get_class();
+        if (rc.getObject()) {
+            self = rc.getObject();
+            qc = rc.getClass() ? rc.getClass() : runtime_get_class();
         } else {
             runtime_get_object_and_class(self, qc);
         }
@@ -138,9 +138,9 @@ QoreValue ParseReferenceNode::doPartialEval(QoreValue n, RuntimeConfig& rc, Qore
         if (v->getType() == VT_LOCAL_TS) {
             const char* name = v->ref.id->getName();
             if (v->ref.id->isSelf()) {
-                if (rc.obj) {
-                    self = rc.obj;
-                    qc = rc.cls ? rc.cls : runtime_get_class();
+                if (rc.getObject()) {
+                    self = rc.getObject();
+                    qc = rc.getClass() ? rc.getClass() : runtime_get_class();
                 } else {
                     runtime_get_object_and_class(self, qc);
                 }
@@ -357,7 +357,7 @@ bool ReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue ReferenceNode::doEval(ExceptionSink* xsink) const {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return doEval(rc, xsink);
 }
 
@@ -373,7 +373,7 @@ QoreValue ReferenceNode::doEval(RuntimeConfig& rc, ExceptionSink* xsink) const {
 }
 
 QoreValue ReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 

@@ -326,11 +326,11 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
                 pfd.revents = 0;
                 // Use a shorter interval here to reduce system() latency without changing global defaults.
                 const int system_poll_ms = 50;
-                int rc = poll(&pfd, 1, system_poll_ms);
-                if (rc > 0) {
+                int rc_local = poll(&pfd, 1, system_poll_ms);
+                if (rc_local > 0) {
                     break;
                 }
-                if (rc == 0) {
+                if (rc_local == 0) {
                     continue;
                 }
 #ifdef EINTR
@@ -358,12 +358,12 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
             }
 
             // use WNOHANG for non-blocking check
-            int rc = waitpid(pid, &status, WNOHANG);
-            if (rc == pid) {
+            int rc_local = waitpid(pid, &status, WNOHANG);
+            if (rc_local == pid) {
                 // child has exited
                 break;
             }
-            if (rc == 0) {
+            if (rc_local == 0) {
                 // child still running, sleep briefly and retry
                 // Use a shorter interval here to reduce system() latency without changing global defaults.
                 const int system_poll_ms = 50;
@@ -371,7 +371,7 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
                 continue;
             }
 #ifdef EINTR
-            if (rc == -1 && errno == EINTR) {
+            if (rc_local == -1 && errno == EINTR) {
                 continue;
             }
 #endif
@@ -639,9 +639,9 @@ int sleep(softint seconds) [dom=PROCESS] {
          }
 
          int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-         int rc = qore_usleep(sleep_time);
-         if (rc != 0)
-            return rc;
+         int rc_local = qore_usleep(sleep_time);
+         if (rc_local != 0)
+            return rc_local;
          remaining_usecs -= sleep_time;
       }
       return 0;
@@ -691,9 +691,9 @@ int usleep(softint usecs) [dom=PROCESS] {
          }
 
          int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-         int rc = qore_usleep(sleep_time);
-         if (rc != 0)
-            return rc;
+         int rc_local = qore_usleep(sleep_time);
+         if (rc_local != 0)
+            return rc_local;
          remaining_usecs -= sleep_time;
       }
       return 0;
@@ -738,9 +738,9 @@ int usleep(date d) [dom=PROCESS] {
          }
 
          int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-         int rc = qore_usleep(sleep_time);
-         if (rc != 0)
-            return rc;
+         int rc_local = qore_usleep(sleep_time);
+         if (rc_local != 0)
+            return rc_local;
          remaining_usecs -= sleep_time;
       }
       return 0;
@@ -1557,8 +1557,8 @@ int qore_add_module_to_blacklist_ex(string name, string msg = "by an API call") 
     if (*xsink) {
         return QoreValue();
     }
-    int rc = QMM.addModuleToBlacklist(n->c_str(), m->c_str());
-    if (rc == -1) {
+    int rc_local = QMM.addModuleToBlacklist(n->c_str(), m->c_str());
+    if (rc_local == -1) {
         xsink->raiseException("BLACKLIST-ERROR", "Cannot blacklist module \"%s\", as it is already loaded",
             n->c_str());
     }

@@ -85,7 +85,7 @@ void AbstractStatement::finalizeBlock(int sline, int eline) {
 }
 
 int AbstractStatement::exec(QoreValue& return_value, ExceptionSink *xsink) {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return exec(rc, return_value, xsink);
 }
 

@@ -34,7 +34,7 @@ qore_classid_t CID_MONGODATABASE;
 QoreClass* QC_MONGODATABASE;
 
 // MongoCollection MongoDatabase::createCollection(string name){}
-static QoreValue MongoDatabase_createCollection_Vs(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoDatabase_createCollection_Vs(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreStringNode* name = HARD_QORE_VALUE_STRING(args, 0);
 # 115 "QC_MongoDatabase.qpp"
     mongoc_collection_t* coll = database->createCollection(name->c_str(), xsink);
@@ -47,13 +47,13 @@ static QoreValue MongoDatabase_createCollection_Vs(QoreObject* self, QoreMongoDa
 }
 
 // bool MongoDatabase::drop(){}
-static QoreValue MongoDatabase_drop(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoDatabase_drop(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 136 "QC_MongoDatabase.qpp"
     return database->drop(xsink);
 }
 
 // MongoCollection MongoDatabase::getCollection(string name){}
-static QoreValue MongoDatabase_getCollection_Vs(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoDatabase_getCollection_Vs(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreStringNode* name = HARD_QORE_VALUE_STRING(args, 0);
 # 94 "QC_MongoDatabase.qpp"
     mongoc_collection_t* coll = database->getCollection(name->c_str());
@@ -67,19 +67,19 @@ static QoreValue MongoDatabase_getCollection_Vs(QoreObject* self, QoreMongoDatab
 }
 
 // *string MongoDatabase::getName(){}
-static QoreValue MongoDatabase_getName(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoDatabase_getName(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 64 "QC_MongoDatabase.qpp"
     return database->getName();
 }
 
 // list<string> MongoDatabase::listCollectionNames(){}
-static QoreValue MongoDatabase_listCollectionNames(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoDatabase_listCollectionNames(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 81 "QC_MongoDatabase.qpp"
     return database->listCollectionNames(xsink);
 }
 
 // hash<auto> MongoDatabase::runCommand(hash<auto> command){}
-static QoreValue MongoDatabase_runCommand_C10hash_auto_(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue MongoDatabase_runCommand_C10hash_auto_(QoreObject* self, QoreMongoDatabase* database, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreHashNode* command = HARD_QORE_VALUE_HASH(args, 0);
 # 152 "QC_MongoDatabase.qpp"
     return database->runCommand(command, xsink);
@@ -98,22 +98,22 @@ DLLLOCAL QoreClass* initMongoDatabaseClass(QoreNamespace& ns) {
     QC_MONGODATABASE->setFinal();
 
     // MongoCollection MongoDatabase::createCollection(string name){}
-    QC_MONGODATABASE->addMethod("createCollection", (q_method_n_t)MongoDatabase_createCollection_Vs, Public, QCF_NO_FLAGS, QDOM_DEFAULT, QC_MONGOCOLLECTION->getTypeInfo(), 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
+    QC_MONGODATABASE->addMethod("createCollection", (q_method_t)MongoDatabase_createCollection_Vs, Public, QCF_NO_FLAGS, QDOM_DEFAULT, QC_MONGOCOLLECTION->getTypeInfo(), 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
 
     // bool MongoDatabase::drop(){}
-    QC_MONGODATABASE->addMethod("drop", (q_method_n_t)MongoDatabase_drop, Public, QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo);
+    QC_MONGODATABASE->addMethod("drop", (q_method_t)MongoDatabase_drop, Public, QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo);
 
     // MongoCollection MongoDatabase::getCollection(string name){}
-    QC_MONGODATABASE->addMethod("getCollection", (q_method_n_t)MongoDatabase_getCollection_Vs, Public, QCF_NO_FLAGS, QDOM_DEFAULT, QC_MONGOCOLLECTION->getTypeInfo(), 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
+    QC_MONGODATABASE->addMethod("getCollection", (q_method_t)MongoDatabase_getCollection_Vs, Public, QCF_NO_FLAGS, QDOM_DEFAULT, QC_MONGOCOLLECTION->getTypeInfo(), 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
 
     // *string MongoDatabase::getName(){}
-    QC_MONGODATABASE->addMethod("getName", (q_method_n_t)MongoDatabase_getName, Public, QCF_CONSTANT, QDOM_DEFAULT, stringOrNothingTypeInfo);
+    QC_MONGODATABASE->addMethod("getName", (q_method_t)MongoDatabase_getName, Public, QCF_CONSTANT, QDOM_DEFAULT, stringOrNothingTypeInfo);
 
     // list<string> MongoDatabase::listCollectionNames(){}
-    QC_MONGODATABASE->addMethod("listCollectionNames", (q_method_n_t)MongoDatabase_listCollectionNames, Public, QCF_NO_FLAGS, QDOM_DEFAULT, qore_get_complex_list_type(stringTypeInfo));
+    QC_MONGODATABASE->addMethod("listCollectionNames", (q_method_t)MongoDatabase_listCollectionNames, Public, QCF_NO_FLAGS, QDOM_DEFAULT, qore_get_complex_list_type(stringTypeInfo));
 
     // hash<auto> MongoDatabase::runCommand(hash<auto> command){}
-    QC_MONGODATABASE->addMethod("runCommand", (q_method_n_t)MongoDatabase_runCommand_C10hash_auto_, Public, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo, 1, autoHashTypeInfo, QORE_PARAM_NO_ARG, "command");
+    QC_MONGODATABASE->addMethod("runCommand", (q_method_t)MongoDatabase_runCommand_C10hash_auto_, Public, QCF_NO_FLAGS, QDOM_DEFAULT, autoHashTypeInfo, 1, autoHashTypeInfo, QORE_PARAM_NO_ARG, "command");
 
     return QC_MONGODATABASE;
 }

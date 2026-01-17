@@ -607,14 +607,16 @@ public:
         @param method a constant reference to the QoreMethod object
         @param meth the name of the method to evalute
         @param args the arguments for the method
+        @param rc runtime configuration for the call
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLLOCAL QoreValue evalBuiltinMethodWithPrivateData(const QoreMethod& method,
-            const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, ExceptionSink* xsink);
+            const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc,
+            ExceptionSink* xsink);
 
     //! called on the old object (this) to acquire private data, copy method called with pointer to "self" (new copy)
     DLLLOCAL void evalCopyMethodWithPrivateData(const QoreClass &thisclass, const BuiltinCopyVariantBase* meth,
-            QoreObject* self, ExceptionSink* xsink);
+            QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink);
 
     //! concatenates info about private data to a string
     /**

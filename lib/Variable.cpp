@@ -784,7 +784,7 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
         return doHashLValue(t, mem->c_str(), for_remove);
     }
 
-    const qore_class_private* class_ctx = rc.cls ? rc.cls : runtime_get_class();
+    const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
     return doObjLValue(o, mem->c_str(), for_remove, class_ctx);
 }
 
@@ -943,14 +943,14 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
     } else if (ntype == NT_SELF_VARREF) {
         const SelfVarrefNode* v = n.get<const SelfVarrefNode>();
         // note that getStackObject() is guaranteed to return a value here (self varref is only valid in a method)
-        QoreObject* obj = rc.obj ? rc.obj : runtime_get_stack_object();
+        QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
         assert(obj);
 
         // clear ocvec when we get to an object
         ocvec.clear();
         clearPtr();
 
-        const qore_class_private* class_ctx = rc.cls ? rc.cls : runtime_get_class();
+        const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
         if (qore_object_private::getLValue(*obj, v->str, *this, class_ctx, for_remove, vl.xsink)) {
             // here the object has already been cleared above
             return -1;

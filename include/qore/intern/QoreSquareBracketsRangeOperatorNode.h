@@ -36,7 +36,7 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class QoreSquareBracketsRangeOperatorNode : public QoreNOperatorNodeBase<3>, public FunctionalOperator {
 public:

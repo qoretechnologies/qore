@@ -33,7 +33,7 @@ qore_classid_t CID_OBJECTID;
 QoreClass* QC_OBJECTID;
 
 // int ObjectId::compare(ObjectId other){}
-static QoreValue ObjectId_compare_C8ObjectId(QoreObject* self, QoreObjectId* oid, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue ObjectId_compare_C8ObjectId(QoreObject* self, QoreObjectId* oid, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     HARD_QORE_VALUE_OBJ_DATA(other, QoreObjectId, args, 0, CID_OBJECTID, "ObjectId::compare()", "ObjectId", xsink);
     if (*xsink)
         return 0;
@@ -43,13 +43,13 @@ static QoreValue ObjectId_compare_C8ObjectId(QoreObject* self, QoreObjectId* oid
 }
 
 // ObjectId::constructor() {}
-static void ObjectId_constructor(QoreObject* self, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static void ObjectId_constructor(QoreObject* self, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 62 "QC_ObjectId.qpp"
 self->setPrivate(CID_OBJECTID, new QoreObjectId());
 }
 
 // ObjectId::constructor(string hex_string) {}
-static void ObjectId_constructor_Vs(QoreObject* self, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static void ObjectId_constructor_Vs(QoreObject* self, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreStringNode* hex_string = HARD_QORE_VALUE_STRING(args, 0);
 # 76 "QC_ObjectId.qpp"
 SimpleRefHolder<QoreObjectId> holder(new QoreObjectId(hex_string->c_str(), xsink));
@@ -66,7 +66,7 @@ self->setPrivate(CID_OBJECTID, new QoreObjectId(*oid->getOid()));
 }
 
 // bool ObjectId::equals(ObjectId other){}
-static QoreValue ObjectId_equals_C8ObjectId(QoreObject* self, QoreObjectId* oid, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue ObjectId_equals_C8ObjectId(QoreObject* self, QoreObjectId* oid, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     HARD_QORE_VALUE_OBJ_DATA(other, QoreObjectId, args, 0, CID_OBJECTID, "ObjectId::equals()", "ObjectId", xsink);
     if (*xsink)
         return 0;
@@ -76,19 +76,19 @@ static QoreValue ObjectId_equals_C8ObjectId(QoreObject* self, QoreObjectId* oid,
 }
 
 // date ObjectId::getTimestamp(){}
-static QoreValue ObjectId_getTimestamp(QoreObject* self, QoreObjectId* oid, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue ObjectId_getTimestamp(QoreObject* self, QoreObjectId* oid, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 114 "QC_ObjectId.qpp"
     return DateTimeNode::makeAbsolute(currentTZ(), oid->getTimestamp(), 0);
 }
 
 // int ObjectId::hashCode(){}
-static QoreValue ObjectId_hashCode(QoreObject* self, QoreObjectId* oid, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue ObjectId_hashCode(QoreObject* self, QoreObjectId* oid, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 156 "QC_ObjectId.qpp"
     return oid->hashCode();
 }
 
 // string ObjectId::toString(){}
-static QoreValue ObjectId_toString(QoreObject* self, QoreObjectId* oid, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue ObjectId_toString(QoreObject* self, QoreObjectId* oid, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 102 "QC_ObjectId.qpp"
     return oid->toString();
 }
@@ -106,7 +106,7 @@ DLLLOCAL QoreClass* initObjectIdClass(QoreNamespace& ns) {
     QC_OBJECTID->setFinal();
 
     // int ObjectId::compare(ObjectId other){}
-    QC_OBJECTID->addMethod("compare", (q_method_n_t)ObjectId_compare_C8ObjectId, Public, QCF_CONSTANT, QDOM_DEFAULT, bigIntTypeInfo, 1, QC_OBJECTID->getTypeInfo(), QORE_PARAM_NO_ARG, "other");
+    QC_OBJECTID->addMethod("compare", (q_method_t)ObjectId_compare_C8ObjectId, Public, QCF_CONSTANT, QDOM_DEFAULT, bigIntTypeInfo, 1, QC_OBJECTID->getTypeInfo(), QORE_PARAM_NO_ARG, "other");
 
     // ObjectId::constructor() {}
     QC_OBJECTID->addConstructor(ObjectId_constructor, Public, QCF_NO_FLAGS, QDOM_DEFAULT);
@@ -118,16 +118,16 @@ DLLLOCAL QoreClass* initObjectIdClass(QoreNamespace& ns) {
     QC_OBJECTID->setCopy((q_copy_t)ObjectId_copy);
 
     // bool ObjectId::equals(ObjectId other){}
-    QC_OBJECTID->addMethod("equals", (q_method_n_t)ObjectId_equals_C8ObjectId, Public, QCF_CONSTANT, QDOM_DEFAULT, boolTypeInfo, 1, QC_OBJECTID->getTypeInfo(), QORE_PARAM_NO_ARG, "other");
+    QC_OBJECTID->addMethod("equals", (q_method_t)ObjectId_equals_C8ObjectId, Public, QCF_CONSTANT, QDOM_DEFAULT, boolTypeInfo, 1, QC_OBJECTID->getTypeInfo(), QORE_PARAM_NO_ARG, "other");
 
     // date ObjectId::getTimestamp(){}
-    QC_OBJECTID->addMethod("getTimestamp", (q_method_n_t)ObjectId_getTimestamp, Public, QCF_CONSTANT, QDOM_DEFAULT, dateTypeInfo);
+    QC_OBJECTID->addMethod("getTimestamp", (q_method_t)ObjectId_getTimestamp, Public, QCF_CONSTANT, QDOM_DEFAULT, dateTypeInfo);
 
     // int ObjectId::hashCode(){}
-    QC_OBJECTID->addMethod("hashCode", (q_method_n_t)ObjectId_hashCode, Public, QCF_CONSTANT, QDOM_DEFAULT, bigIntTypeInfo);
+    QC_OBJECTID->addMethod("hashCode", (q_method_t)ObjectId_hashCode, Public, QCF_CONSTANT, QDOM_DEFAULT, bigIntTypeInfo);
 
     // string ObjectId::toString(){}
-    QC_OBJECTID->addMethod("toString", (q_method_n_t)ObjectId_toString, Public, QCF_CONSTANT, QDOM_DEFAULT, stringTypeInfo);
+    QC_OBJECTID->addMethod("toString", (q_method_t)ObjectId_toString, Public, QCF_CONSTANT, QDOM_DEFAULT, stringTypeInfo);
 
     return QC_OBJECTID;
 }

@@ -36,7 +36,7 @@
 #include <string>
 
 class LocalFunctionCallReferenceNode;
-struct RuntimeConfig;
+class RuntimeConfig;
 
 struct CallReferenceNodeLocation {
     const QoreProgramLocation* loc;

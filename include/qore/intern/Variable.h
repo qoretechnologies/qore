@@ -60,7 +60,7 @@ class ScopedObjectCallNode;
 class QoreSquareBracketsOperatorNode;
 class QoreSquareBracketsRangeOperatorNode;
 class QoreHashObjectDereferenceOperatorNode;
-struct RuntimeConfig;
+class RuntimeConfig;
 
 union qore_gvar_ref_u {
     bool b;

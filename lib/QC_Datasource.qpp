@@ -144,7 +144,8 @@ static void create_datasource_from_conf(const QoreString& conf, QoreObject& self
 }
 
 static QoreHashNode* Datasource_serializer(const QoreObject& self, const ManagedDatasource& ds,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     SimpleRefHolder<QoreStringNode> str(const_cast<ManagedDatasource&>(ds).getConfigString(xsink));
     if (*xsink) {
         return nullptr;
@@ -156,7 +157,8 @@ static QoreHashNode* Datasource_serializer(const QoreObject& self, const Managed
 }
 
 static void Datasource_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
-        ExceptionSink* xsink) {
+        RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("conf");
         if (val) {

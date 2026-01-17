@@ -39,13 +39,16 @@ QoreObject* get_type_object(const QoreTypeInfo* t) {
     return new QoreObject(QC_TYPE, getProgram(), new QoreType(t));
 }
 
-static QoreHashNode* Type_serializer(const QoreObject& self, const QoreType& t, QoreSerializationContext& context, ExceptionSink* xsink) {
+static QoreHashNode* Type_serializer(const QoreObject& self, const QoreType& t, QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("type", new QoreStringNode(qore_type_get_name(t.typeInfo)), xsink);
     return rv.release();
 }
 
-static void Type_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context, ExceptionSink* xsink) {
+static void Type_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
+        RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("type");
         if (val.getType() != NT_STRING) {

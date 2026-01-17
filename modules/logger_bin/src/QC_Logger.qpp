@@ -33,7 +33,8 @@
 #include "QC_Logger.h"
 
 static QoreHashNode* Logger_serializer(const QoreObject& self, const QoreLogger& l,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("additivity", l.additivity, xsink);
     ValueHolder val(const_cast<QoreObject&>(self).getReferencedMemberNoMethod("currentLevel", xsink), xsink);
@@ -51,7 +52,8 @@ static QoreHashNode* Logger_serializer(const QoreObject& self, const QoreLogger&
 }
 
 static void Logger_deserializer(QoreObject& self, const QoreHashNode* sdata,
-        QoreDeserializationContext& context, ExceptionSink* xsink) {
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("additivity");
         if (val.getType() != NT_BOOLEAN) {

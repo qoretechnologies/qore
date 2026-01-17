@@ -35,7 +35,7 @@
 
 #include "qore/intern/AbstractStatement.h"
 
-struct RuntimeConfig;
+class RuntimeConfig;
 
 class RethrowStatement : public AbstractStatement {
 public:

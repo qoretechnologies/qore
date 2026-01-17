@@ -31,7 +31,7 @@
 # 33 "ql_mongodb.qpp"
 # 38 "ql_mongodb.qpp"
 // string mongodb_get_driver_version() {}
-static QoreValue f_mongodb_get_driver_version(const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {
+static QoreValue f_mongodb_get_driver_version(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
 # 47 "ql_mongodb.qpp"
     return new QoreStringNode(mongoc_get_version());
 }
@@ -39,6 +39,6 @@ static QoreValue f_mongodb_get_driver_version(const QoreListNode* args, q_rt_fla
 
 DLLLOCAL void init_mongodb_functions(QoreNamespace& ns) {
     // string mongodb_get_driver_version() {}
-    ns.addBuiltinVariant("mongodb_get_driver_version", (q_func_n_t)f_mongodb_get_driver_version, QCF_CONSTANT, QDOM_DEFAULT, stringTypeInfo);
+    ns.addBuiltinVariant("mongodb_get_driver_version", (q_func_t)f_mongodb_get_driver_version, QCF_CONSTANT, QDOM_DEFAULT, stringTypeInfo);
 
 }

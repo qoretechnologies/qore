@@ -38,6 +38,7 @@
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/StatementBlock.h"
@@ -1749,14 +1750,14 @@ void clear_argv_ref() {
 
 int get_implicit_element() {
     // Read from tl_runtime_config - the authoritative source for element
-    return rc_get_tls_ref().element;
+    return rc_get_tls_ref().getElement();
 }
 
 int save_implicit_element(int n_element) {
     // Update tl_runtime_config - the authoritative source for element
     RuntimeConfig& rc = rc_get_tls_ref();
-    int old = rc.element;
-    rc.element = n_element;
+    int old = rc.getElement();
+    rc.setElement(n_element);
     return old;
 }
 
@@ -1912,12 +1913,23 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     old_class = td->current_class;
     td->current_obj = obj;
     td->current_class = c;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_rc_obj = rc.getObject();
+    old_rc_class = rc.getClass();
+    rc.setObject(obj);
+    rc.setClass(c);
+    do_rc_update = true;
 }
 
 ObjectSubstitutionHelper::~ObjectSubstitutionHelper() {
     ThreadData* td  = thread_data.get();
     td->current_obj = old_obj;
     td->current_class = old_class;
+    if (do_rc_update) {
+        RuntimeConfig& rc = rc_get_tls_ref();
+        rc.setObject(old_rc_obj);
+        rc.setClass(old_rc_class);
+    }
 }
 
 class qore_object_context_helper : public ObjectSubstitutionHelper {
@@ -1939,11 +1951,18 @@ ClassOnlySubstitutionHelper::ClassOnlySubstitutionHelper(const qore_class_privat
     ThreadData* td = thread_data.get();
     old_class = td->current_class;
     td->current_class = qc;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_rc_class = rc.getClass();
+    rc.setClass(qc);
+    do_rc_update = true;
 }
 
 ClassOnlySubstitutionHelper::~ClassOnlySubstitutionHelper() {
     ThreadData* td = thread_data.get();
     td->current_class = old_class;
+    if (do_rc_update) {
+        rc_get_tls_ref().setClass(old_rc_class);
+    }
 }
 
 OptionalClassOnlySubstitutionHelper::OptionalClassOnlySubstitutionHelper(const qore_class_private* qc)
@@ -1952,6 +1971,9 @@ OptionalClassOnlySubstitutionHelper::OptionalClassOnlySubstitutionHelper(const q
         ThreadData* td = thread_data.get();
         old_class = td->current_class;
         td->current_class = qc;
+        RuntimeConfig& rc = rc_get_tls_ref();
+        old_rc_class = rc.getClass();
+        rc.setClass(qc);
     }
 }
 
@@ -1959,6 +1981,7 @@ OptionalClassOnlySubstitutionHelper::~OptionalClassOnlySubstitutionHelper() {
     if (subst) {
         ThreadData* td = thread_data.get();
         td->current_class = old_class;
+        rc_get_tls_ref().setClass(old_rc_class);
     }
 }
 
@@ -1970,6 +1993,11 @@ OptionalClassObjSubstitutionHelper::OptionalClassObjSubstitutionHelper(const qor
         old_class = td->current_class;
         td->current_obj = nullptr;
         td->current_class = qc;
+        RuntimeConfig& rc = rc_get_tls_ref();
+        old_rc_obj = rc.getObject();
+        old_rc_class = rc.getClass();
+        rc.setObject(nullptr);
+        rc.setClass(qc);
     }
 }
 
@@ -1978,10 +2006,14 @@ OptionalClassObjSubstitutionHelper::~OptionalClassObjSubstitutionHelper() {
         ThreadData* td = thread_data.get();
         td->current_obj = old_obj;
         td->current_class = old_class;
+        RuntimeConfig& rc = rc_get_tls_ref();
+        rc.setObject(old_rc_obj);
+        rc.setClass(old_rc_class);
     }
 }
 
 OptionalObjectOnlySubstitutionHelper::OptionalObjectOnlySubstitutionHelper(QoreObject* obj) {
+    do_rc_update = false;
     if (obj) {
 #ifdef DEBUG
         old_obj = nullptr;
@@ -1993,6 +2025,9 @@ OptionalObjectOnlySubstitutionHelper::OptionalObjectOnlySubstitutionHelper(QoreO
 OptionalObjectOnlySubstitutionHelper::~OptionalObjectOnlySubstitutionHelper() {
     if (subst) {
         thread_data.get()->current_obj = old_obj;
+        if (do_rc_update) {
+            rc_get_tls_ref().setObject(old_rc_obj);
+        }
     }
 }
 
@@ -2003,6 +2038,10 @@ void OptionalObjectOnlySubstitutionHelper::set(QoreObject* obj) {
     old_obj = td->current_obj;
     td->current_obj = obj;
     subst = true;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_rc_obj = rc.getObject();
+    rc.setObject(obj);
+    do_rc_update = true;
 }
 
 CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
@@ -2016,6 +2055,12 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
 
     old_class = td->current_class;
     td->current_class = c;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_rc_obj = rc.getObject();
+    old_rc_class = rc.getClass();
+    rc.setObject(obj);
+    rc.setClass(c);
+    do_rc_update = true;
 
     if (obj && ref_obj && obj != old_obj && !qore_object_private::get(*obj)->startCall(code, xsink)) {
         do_ref = true;
@@ -2056,6 +2101,11 @@ CodeContextHelperBase::~CodeContextHelperBase() {
     td->current_code = old_code;
     td->current_obj = old_obj;
     td->current_class = old_class;
+    if (do_rc_update) {
+        RuntimeConfig& rc = rc_get_tls_ref();
+        rc.setObject(old_rc_obj);
+        rc.setClass(old_rc_class);
+    }
 }
 
 ArgvContextHelper::ArgvContextHelper(QoreListNode* argv, ExceptionSink* n_xsink) : xsink(n_xsink) {
@@ -2878,7 +2928,7 @@ namespace {
 }
 
 QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink) {
-    RuntimeConfig rc = rc_get_current();
+    RuntimeConfig& rc = rc_get_current_ref();
     return do_op_background(rc, left, xsink);
 }
 
