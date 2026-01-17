@@ -60,6 +60,12 @@ public class OpenAiResponseStreamEventDataType inherits HashDataType {
                 "desc": "Raw event data when JSON parsing is not possible",
                 "type": AbstractDataProviderTypeMap."*string",
             },
+            "error": {
+                "display_name": "Error",
+                "short_desc": "Error payload for stream failures",
+                "desc": "Exception info when a stream error occurs",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
         };
     }
 
