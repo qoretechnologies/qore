@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiDataProviderCommon.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiDataProviderCommon.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,6 +24,18 @@
 
 #! contains all public definitions in the OpenAiDataProvider module
 public namespace OpenAiDataProvider {
+#! Conversation context store for persisting response context
+public class OpenAiConversationContextStore {
+    #! Loads conversation context for the given key
+    *hash<auto> loadContext(string key) {
+        return;
+    }
+
+    #! Saves conversation context for the given key
+    auto saveContext(string key, hash<auto> ctxt) {
+    }
+}
+
 #! The OpenAi data provider common base class
 public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvider {
     public {
@@ -65,6 +77,14 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
                 "desc": "The API version to use",
                 "default_value": DefaultOpenAiApiVersion,
             },
+            "conversation_context_store": <DataProviderOptionInfo>{
+                "display_name": "Conversation Context Store",
+                "short_desc": "Optional store for persisting response conversation context",
+                "type": AbstractDataProviderType::get(new Type("OpenAiConversationContextStore"), NOTHING, {
+                    DTT_ClientOnly: True,
+                }),
+                "desc": "Optional conversation context store used to load and save conversation state",
+            },
         };
 
         #! IO errors for REST retries
@@ -86,6 +106,9 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
         #! The REST client object for API calls
         *RestClient::RestClient rest;
 
+        #! Optional conversation context store
+        *OpenAiConversationContextStore conversation_context_store;
+
         #! first time initialization
         static bool init;
 
@@ -104,6 +127,9 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
         if (copts.restclient) {
             rest = copts.restclient;
         }
+        if (copts.conversation_context_store) {
+            conversation_context_store = copts.conversation_context_store;
+        }
 
         if (!rest) {
             if (!copts.api_key) {
@@ -116,6 +142,21 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
             };
             rest = new OpenAiRestClient(opts);
         }
+    }
+
+    #! Sets the conversation context store
+    setConversationContextStore(*OpenAiConversationContextStore store) {
+        conversation_context_store = store;
+    }
+
+    #! Returns the conversation context store
+    *OpenAiConversationContextStore getConversationContextStore() {
+        return conversation_context_store;
+    }
+
+    #! Returns the REST client object
+    *RestClient::RestClient getRestClient() {
+        return rest;
     }
 
     #! Accepts a LoggerInterface object for logging (or clears it)

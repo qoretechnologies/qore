@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore OpenAiDataProvider module definition
 
-/** OpenAiModelCreateResponseDataProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** OpenAiModelCreateResponseDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -73,22 +73,32 @@ public class OpenAiModelCreateResponseDataProvider inherits OpenAiDataProviderCo
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        # process request input to the OpenAI type
-        if (req.input) {
-            req.input = map getInput($1), req.input;
-            if (req.input.lsize() == 1 && (req.input[0].typeCode() == NT_STRING)) {
-                req.input = req.input[0];
-            }
-        }
-        if (req.tools) {
-            req.tools = map getTool($1), req.tools;
-        }
-        if (model) {
-            req.model = model.id;
-        }
+        hash<auto> ctx_info = {};
+        *OpenAiConversationContextStore ctx_store = getConversationContextStore();
+        req = prepareRequest(req, model, ctx_store, \ctx_info);
+        *hash<auto> ctx = ctx_info.ctx;
+        *string ctx_key = ctx_info.ctx_key;
         hash<auto> rv = doRestCommand("POST", "responses", req).body;
         if (rv.output) {
             rv.output_text = getOutputText(rv.output);
+            rv.tool_calls = getToolCalls(rv.output);
+            rv.tool_results = getToolResults(rv.output);
+        }
+        if (rv.id) {
+            hash<auto> new_ctx();
+            new_ctx.previous_response_id = rv.id;
+            *string conv_id = rv.conversation_id ?? (ctx ? ctx.conversation_id : NOTHING);
+            if (conv_id) {
+                new_ctx.conversation_id = conv_id;
+            }
+            *hash<auto> metadata = ctx ? (ctx.metadata ?? req.metadata) : req.metadata;
+            if (metadata) {
+                new_ctx.metadata = metadata;
+            }
+            rv.conversation_context = new_ctx;
+            if (ctx_key && ctx_store) {
+                ctx_store.saveContext(ctx_key, new_ctx);
+            }
         }
         return rv;
     }
@@ -105,13 +115,166 @@ public class OpenAiModelCreateResponseDataProvider inherits OpenAiDataProviderCo
         return rv;
     }
 
+    #! Prepares a response request for submission
+    static hash<auto> prepareRequest(auto req, *hash<auto> model, *OpenAiConversationContextStore ctx_store,
+            *reference<hash<auto>> ctx_info) {
+        hash<auto> rv = req;
+        *hash<auto> ctx = rv.conversation_context;
+        *string ctx_key = rv.conversation_key;
+        if (!ctx && ctx_key && ctx_store) {
+            ctx = ctx_store.loadContext(ctx_key);
+            if (ctx) {
+                rv.conversation_context = ctx;
+            }
+        }
+        if (rv.input) {
+            validateInput(rv.input);
+            rv.input = map getInput($1), rv.input;
+            if (rv.input.lsize() == 1 && (rv.input[0].typeCode() == NT_STRING)) {
+                rv.input = rv.input[0];
+            }
+        }
+        if (rv.tools) {
+            rv.tools = map getTool($1), rv.tools;
+        }
+        if (model) {
+            rv.model = model.id;
+        }
+        if (ctx) {
+            if (!rv.previous_response_id && ctx.previous_response_id) {
+                rv.previous_response_id = ctx.previous_response_id;
+            }
+            remove rv.conversation_context;
+        }
+        if (ctx_key) {
+            remove rv.conversation_key;
+        }
+        if (exists ctx_info) {
+            ctx_info = {
+                "ctx": ctx,
+                "ctx_key": ctx_key,
+            };
+        }
+        return rv;
+    }
+
+    #! Validates input content before normalization
+    static validateInput(auto input) {
+        if (input.typeCode() != NT_LIST) {
+            return;
+        }
+        foreach auto item in (input) {
+            if (item.typeCode() != NT_HASH) {
+                continue;
+            }
+            auto iv = item.firstValue();
+            if (!iv.content || iv.content.typeCode() != NT_LIST) {
+                continue;
+            }
+            foreach auto content in (iv.content) {
+                if (content.typeCode() != NT_HASH) {
+                    continue;
+                }
+                OpenAiModelInputItemContentDataType::validateContent(content);
+            }
+        }
+    }
+
     #! Processes content in a request
     private static auto getContent(hash<auto> content) {
-        if (content.file) {
+        if (content.file && (!content.type || content.type == "input_text")) {
+            string mime_type = content.file.mime_type ?? MimeTypePdf;
             return {
                 "type": "input_file",
-                "file_data": "data:application/pdf;base64," + content.file.content,
+                "file_data": "data:" + mime_type + ";base64," + content.file.content,
                 "filename": content.file.name,
+            };
+        }
+        if (content.type) {
+            switch (content.type) {
+                case "input_text":
+                    return {
+                        "type": "input_text",
+                        "text": content.text,
+                    };
+                case "input_image": {
+                    hash<auto> rv = {
+                        "type": "input_image",
+                        "detail": content.detail ?? "auto",
+                    };
+                    if (content.image_url) {
+                        rv.image_url = content.image_url;
+                    }
+                    if (content.file_id) {
+                        rv.file_id = content.file_id;
+                    }
+                    if (!rv.image_url && !rv.file_id) {
+                        throw "INVALID-REQUEST", "input_image content requires image_url or file_id";
+                    }
+                    return rv;
+                }
+                case "input_audio": {
+                    hash<auto> rv = {
+                        "type": "input_audio",
+                        "format": content.format,
+                    };
+                    if (content.audio) {
+                        rv.audio = content.audio;
+                    }
+                    if (!content.audio || !content.audio.val() || !content.format || !content.format.val()) {
+                        throw "INVALID-REQUEST", "input_audio content requires audio data and format";
+                    }
+                    return rv;
+                }
+                case "input_file": {
+                    hash<auto> rv = {
+                        "type": "input_file",
+                    };
+                    if (content.file_id) {
+                        rv.file_id = content.file_id;
+                    }
+                    if (content.file_data) {
+                        rv.file_data = content.file_data;
+                    }
+                    if (content.filename) {
+                        rv.filename = content.filename;
+                    }
+                    if (!rv.file_id && !rv.file_data) {
+                        throw "INVALID-REQUEST", "input_file content requires file_id or file_data";
+                    }
+                    return rv;
+                }
+                default:
+                    throw "INVALID-REQUEST", sprintf("unsupported input content type: %y", content.type);
+            }
+        }
+        if (content.text) {
+            return {
+                "type": "input_text",
+                "text": content.text,
+            };
+        }
+        if (content.image_url || content.file_id) {
+            hash<auto> rv = {
+                "type": "input_image",
+                "detail": content.detail ?? "auto",
+            };
+            if (content.image_url) {
+                rv.image_url = content.image_url;
+            }
+            if (content.file_id) {
+                rv.file_id = content.file_id;
+            }
+            return rv;
+        }
+        if (content.audio) {
+            if (!content.format || !content.format.val()) {
+                throw "INVALID-REQUEST", "input_audio content requires audio format";
+            }
+            return {
+                "type": "input_audio",
+                "audio": content.audio,
+                "format": content.format,
             };
         }
         return content.firstValue();
@@ -157,6 +320,13 @@ public class OpenAiModelCreateResponseDataProvider inherits OpenAiDataProviderCo
     *string getOutputText(list<auto> output) {
         string rv;
         foreach hash<auto> h0 in (output) {
+            if (h0.text) {
+                if (rv.val()) {
+                    rv += "\n\n";
+                }
+                rv += h0.text;
+                continue;
+            }
             foreach hash<auto> h1 in (h0.content) {
                 if (h1.text) {
                     if (rv.val()) {
@@ -168,38 +338,191 @@ public class OpenAiModelCreateResponseDataProvider inherits OpenAiDataProviderCo
         }
         return rv;
     }
+
+    #! Returns tool call output items
+    *list<hash<auto>> getToolCalls(list<auto> output) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> h0 in (output) {
+            if (h0.type == "tool_call") {
+                rv += h0;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns tool result output items
+    *list<hash<auto>> getToolResults(list<auto> output) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> h0 in (output) {
+            if (h0.type == "tool_result") {
+                rv += h0;
+            }
+        }
+        return rv;
+    }
 }
 
 public class OpenAiModelInputItemContentDataType inherits HashDataType {
     public {
         const Fields = {
-            "file": {
-                "display_name": "File Input",
-                "short_desc": "File input to the model, used to generate a response",
-                "desc": "File input to the model, used to generate a response",
-                "type": new FileOrNothingDataType({"accept": MimeTypePdf}),
-                "attr": {
-                    "exclusive_with": ("text",),
-                },
+            "type": {
+                "display_name": "Content Type",
+                "short_desc": "The content type for the input item",
+                "desc": "The content type for the input item",
+                "type": AbstractDataProviderTypeMap."string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Text",
+                        "value": "input_text",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Image",
+                        "value": "input_image",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Audio",
+                        "value": "input_audio",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "File",
+                        "value": "input_file",
+                    },
+                ),
+                "default_value": "input_text",
             },
             "text": {
                 "display_name": "Text",
                 "short_desc": "The text content of the input item",
                 "desc": "The text content of the input item",
                 "type": AbstractDataProviderTypeMap."*string",
-                "attr": {
-                    "exclusive_with": ("file",),
-                },
             },
-            /*
-            "image": {
-                "display_name": "Image Reference",
-                "short_desc": "The image content of the input item",
-                "desc": "The image content of the input item",
-                "type": OpenAiModelInputImageReferenceDataType,
+            "image_url": {
+                "display_name": "Image URL",
+                "short_desc": "URL or data URL for the image input",
+                "desc": "URL or data URL for the image input (supported types: jpeg, jpg, png, gif, webp)",
+                "type": AbstractDataProviderTypeMap."*string",
             },
-            */
+            "file_id": {
+                "display_name": "File ID",
+                "short_desc": "File ID for the image or file input",
+                "desc": "File ID for the image or file input",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "detail": {
+                "display_name": "Image Detail",
+                "short_desc": "Detail level for image input",
+                "desc": "Detail level for image input",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Auto",
+                        "value": "auto",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Low",
+                        "value": "low",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "High",
+                        "value": "high",
+                    },
+                ),
+                "default_value": "auto",
+            },
+            "audio": {
+                "display_name": "Audio Data",
+                "short_desc": "Base64-encoded audio data",
+                "desc": "Base64-encoded audio data",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "format": {
+                "display_name": "Audio Format",
+                "short_desc": "Audio format for input audio",
+                "desc": "Audio format for input audio",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "WAV",
+                        "value": "wav",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "MP3",
+                        "value": "mp3",
+                    },
+                ),
+                "allowed_values_creatable": True,
+            },
+            "file_data": {
+                "display_name": "File Data",
+                "short_desc": "Data URL or base64 content for file input",
+                "desc": "Data URL or base64 content for file input",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "filename": {
+                "display_name": "Filename",
+                "short_desc": "Filename for file input",
+                "desc": "Filename for file input",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "file": {
+                "display_name": "File Input",
+                "short_desc": "File input to the model, used to generate a response",
+                "desc": "File input to the model, used to generate a response",
+                "type": new FileOrNothingDataType({"accept": MimeTypePdf}),
+            },
         };
+    }
+
+    #! Validates a single content item
+    static validateContent(hash<auto> content) {
+        if (!content.type) {
+            return;
+        }
+        hash<string, bool> valid_types = {
+            "input_text": True,
+            "input_image": True,
+            "input_audio": True,
+            "input_file": True,
+        };
+        if (!exists valid_types{content.type}) {
+            throw "INVALID-REQUEST", sprintf("unsupported input content type: %y", content.type);
+        }
+        switch (content.type) {
+            case "input_image":
+                if (!content.image_url && !content.file_id) {
+                    throw "INVALID-REQUEST", "input_image content requires image_url or file_id";
+                }
+                if (content.detail) {
+                    hash<string, bool> valid_details = {
+                        "auto": True,
+                        "low": True,
+                        "high": True,
+                    };
+                    if (!exists valid_details{content.detail}) {
+                        throw "INVALID-REQUEST", sprintf("unsupported image detail value: %y", content.detail);
+                    }
+                }
+                break;
+            case "input_audio":
+                if (!content.audio || !content.audio.val() || !content.format || !content.format.val()) {
+                    throw "INVALID-REQUEST", "input_audio content requires audio data and format";
+                }
+                break;
+            case "input_file":
+                if (!content.file_id && !content.file_data) {
+                    throw "INVALID-REQUEST", "input_file content requires file_id or file_data";
+                }
+                break;
+        }
+    }
+
+    #! Returns the value if the value can be assigned to the type
+    auto acceptsValue(auto value) {
+        value = HashDataType::acceptsValue(value);
+        if (value) {
+            validateContent(value);
+        }
+        return value;
     }
 
     #! Creates the object from the arguments
@@ -308,6 +631,34 @@ public class OpenAiModelInputDataType inherits HashDataType {
 
 public const OpenAiModelInputDataType = new OpenAiModelInputDataType();
 
+public class OpenAiConversationContextDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "previous_response_id": {
+                "display_name": "Previous Response ID",
+                "short_desc": "The previous response ID used to continue a conversation",
+                "desc": "The previous response ID used to continue a conversation",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "conversation_id": {
+                "display_name": "Conversation ID",
+                "short_desc": "Optional conversation identifier",
+                "desc": "Optional conversation identifier",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "metadata": OpenAiRunDataType::Fields.metadata,
+        };
+    }
+
+    #! Creates the object from the arguments
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+public const OpenAiConversationContextDataType = new OpenAiConversationContextDataType();
+public const OpenAiConversationContextOrNothingDataType = OpenAiConversationContextDataType.getOrNothingType();
+
 public class ReasoningDataType inherits HashDataType{
     public {
         const Fields = {
@@ -397,6 +748,31 @@ public class OpenAiModelRepsonseTextFormatDataType inherits HashDataType {
                     },
                 ),
                 "default_value": "text",
+            },
+            "json_schema": {
+                "display_name": "JSON Schema",
+                "short_desc": "JSON schema constraints for structured output",
+                "desc": "JSON schema constraints for structured output when type is `json_schema`",
+                "type": new HashDataType("ResponseJsonSchema", (
+                    map {$1.key: new QoreDataField({"name": $1.key} + $1.value)}, {
+                        "name": {
+                            "display_name": "Schema Name",
+                            "type": AbstractDataProviderTypeMap."string",
+                            "desc": "A descriptive name for the JSON schema",
+                        },
+                        "schema": {
+                            "display_name": "Schema",
+                            "type": AbstractDataProviderTypeMap."hash",
+                            "desc": "The JSON schema definition for the structured output",
+                        },
+                        "strict": {
+                            "display_name": "Strict?",
+                            "type": AbstractDataProviderTypeMap."bool",
+                            "desc": "Whether to enforce strict schema adherence",
+                            "default_value": True,
+                        },
+                    }.pairIterator()
+                )),
             },
         };
     }
@@ -1280,9 +1656,23 @@ public class OpenAiModelCreateResponseRequestDataType inherits HashDataType {
         const Fields = {
             "input": {
                 "display_name": "Input",
-                "short_desc": "Text, image, or file inputs to the model, used to generate a response",
-                "desc": "Text, image, or file inputs to the model, used to generate a response",
+                "short_desc": "Text, image, audio, or file inputs to the model, used to generate a response",
+                "desc": "Text, image, audio, or file inputs to the model, used to generate a response",
                 "type": new SoftListDataType("ModelInputList", OpenAiModelInputDataType),
+            },
+            "conversation_context": {
+                "display_name": "Conversation Context",
+                "short_desc": "Optional context used to continue a conversation",
+                "desc": "Optional context used to continue a conversation. This field is not sent to the OpenAI "
+                    "API; it is used to populate `previous_response_id`",
+                "type": OpenAiConversationContextOrNothingDataType,
+            },
+            "conversation_key": {
+                "display_name": "Conversation Key",
+                "short_desc": "Key used for loading and saving conversation context",
+                "desc": "Key used for loading and saving conversation context via a configured conversation context "
+                    "store. This field is not sent to the OpenAI API",
+                "type": AbstractDataProviderTypeMap."*string",
             },
             "instructions": {
                 "display_name": "Instructions",
@@ -1617,9 +2007,195 @@ public class OpenAiModelUsageDataType inherits HashDataType {
 
 public const OpenAiModelUsageDataType = new OpenAiModelUsageDataType();
 
+public class OpenAiResponseOutputContentDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "type": {
+                "display_name": "Content Type",
+                "short_desc": "The output content type",
+                "desc": "The output content type",
+                "type": AbstractDataProviderTypeMap."string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Output Text",
+                        "value": "output_text",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Output Image",
+                        "value": "output_image",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Output Audio",
+                        "value": "output_audio",
+                    },
+                ),
+                "allowed_values_creatable": True,
+            },
+            "text": {
+                "display_name": "Text",
+                "short_desc": "Text output from the model",
+                "desc": "Text output from the model",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "image_url": {
+                "display_name": "Image URL",
+                "short_desc": "URL to the generated image output",
+                "desc": "URL to the generated image output",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "audio": {
+                "display_name": "Audio Data",
+                "short_desc": "Base64-encoded audio output",
+                "desc": "Base64-encoded audio output",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "format": {
+                "display_name": "Audio Format",
+                "short_desc": "Audio format for output audio",
+                "desc": "Audio format for output audio",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "file_id": {
+                "display_name": "File ID",
+                "short_desc": "File ID for output content",
+                "desc": "File ID for output content",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "annotations": {
+                "display_name": "Annotations",
+                "short_desc": "Annotations for output text",
+                "desc": "Annotations for output text",
+                "type": new ListDataType("*OutputAnnotations", AbstractDataProviderTypeMap."hash", True),
+            },
+        };
+    }
+
+    #! Creates the object from the arguments
+    constructor() {
+        addQoreFields(Fields);
+        setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
+    }
+}
+
+public const OpenAiResponseOutputContentDataType = new OpenAiResponseOutputContentDataType();
+
+public class OpenAiResponseOutputItemDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "type": {
+                "display_name": "Output Type",
+                "short_desc": "The type of output item",
+                "desc": "The type of output item",
+                "type": AbstractDataProviderTypeMap."string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Message",
+                        "value": "message",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Tool Call",
+                        "value": "tool_call",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Tool Result",
+                        "value": "tool_result",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Output Text",
+                        "value": "output_text",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Output Image",
+                        "value": "output_image",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Output Audio",
+                        "value": "output_audio",
+                    },
+                ),
+                "allowed_values_creatable": True,
+            },
+            "id": {
+                "display_name": "ID",
+                "short_desc": "Output item ID",
+                "desc": "Output item ID",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "status": {
+                "display_name": "Status",
+                "short_desc": "Output item status",
+                "desc": "Output item status",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "role": {
+                "display_name": "Role",
+                "short_desc": "Role for message outputs",
+                "desc": "Role for message outputs",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "content": {
+                "display_name": "Content",
+                "short_desc": "Output content parts",
+                "desc": "Output content parts",
+                "type": new ListDataType("*ResponseOutputContent", OpenAiResponseOutputContentDataType, True),
+            },
+            "name": {
+                "display_name": "Tool Name",
+                "short_desc": "Tool name for tool call outputs",
+                "desc": "Tool name for tool call outputs",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "arguments": {
+                "display_name": "Tool Arguments",
+                "short_desc": "Tool call arguments",
+                "desc": "Tool call arguments",
+                "type": AbstractDataProviderTypeMap."any",
+            },
+            "call_id": {
+                "display_name": "Call ID",
+                "short_desc": "Tool call ID",
+                "desc": "Tool call ID",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "tool_call_id": {
+                "display_name": "Tool Call ID",
+                "short_desc": "Tool call ID",
+                "desc": "Tool call ID",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "output": {
+                "display_name": "Tool Output",
+                "short_desc": "Output from a tool call",
+                "desc": "Output from a tool call",
+                "type": AbstractDataProviderTypeMap."any",
+            },
+            "error": {
+                "display_name": "Error",
+                "short_desc": "Error output details",
+                "desc": "Error output details",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
+        };
+    }
+
+    #! Creates the object from the arguments
+    constructor() {
+        addQoreFields(Fields);
+        setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
+    }
+}
+
+public const OpenAiResponseOutputItemDataType = new OpenAiResponseOutputItemDataType();
+
 public class OpenAiModelCreateResponseResponseDataType inherits HashDataType {
     public {
         const Fields = {
+            "conversation_context": {
+                "display_name": "Conversation Context",
+                "short_desc": "Conversation context for persisting state across requests",
+                "desc": "Conversation context for persisting state across requests",
+                "type": OpenAiConversationContextOrNothingDataType,
+            },
             "created_at": {
                 "display_name": "Created At",
                 "short_desc": "The date and time the model response was created",
@@ -1675,7 +2251,7 @@ public class OpenAiModelCreateResponseResponseDataType inherits HashDataType {
                 "display_name": "Output",
                 "short_desc": "An array of content items generated by the model",
                 "desc": "An array of content items generated by the model",
-                "type": new ListDataType("*ModelOutputList", AbstractDataProviderTypeMap."hash", True),
+                "type": new ListDataType("*ModelOutputList", OpenAiResponseOutputItemDataType, True),
             },
             "output_text": {
                 "display_name": "Output Text",
@@ -1683,6 +2259,18 @@ public class OpenAiModelCreateResponseResponseDataType inherits HashDataType {
                 "desc": "SDK-only convenience property that contains the aggregated text output from all "
                     "`output_text` items in the output array, if any",
                 "type": AbstractDataProviderTypeMap."*string",
+            },
+            "tool_calls": {
+                "display_name": "Tool Calls",
+                "short_desc": "Tool call output items",
+                "desc": "SDK-only convenience property with output items of type `tool_call`",
+                "type": new ListDataType("*ModelOutputToolCalls", OpenAiResponseOutputItemDataType, True),
+            },
+            "tool_results": {
+                "display_name": "Tool Results",
+                "short_desc": "Tool result output items",
+                "desc": "SDK-only convenience property with output items of type `tool_result`",
+                "type": new ListDataType("*ModelOutputToolResults", OpenAiResponseOutputItemDataType, True),
             },
             "parallel_tool_calls": {
                 "display_name": "Parallel Tool Calls?",
