@@ -63,6 +63,12 @@ class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClient {
     }
 }
 
+class FailingOpenAiRestClient inherits FakeOpenAiRestClient {
+    auto openResponsesStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        throw "SSE-ERROR", "stream failed";
+    }
+}
+
 class TestConversationStore inherits OpenAiConversationContextStore {
     public {
         hash<auto> stored;
@@ -116,11 +122,9 @@ class StreamObserver inherits Observer {
 
     update(string event_id, hash<auto> data_) {
         events += data_;
-        if (events.lsize() >= 3) {
-            m.lock();
-            on_exit m.unlock();
-            cond.broadcast();
-        }
+        m.lock();
+        on_exit m.unlock();
+        cond.broadcast();
     }
 
     wait(int count) {
@@ -160,6 +164,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         addTestCase("response input edge cases", \responseInputEdgeCasesTest());
         addTestCase("response conversation context save", \responseConversationContextSaveTest());
         addTestCase("response stream events", \responseStreamEventsTest());
+        addTestCase("response stream error", \responseStreamErrorTest());
 
         try {
             setupConnection();
@@ -749,6 +754,36 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertEq("done", observer.events[2].type);
         assertEq(True, rest.last_stream_request.stream);
         assertEq("resp_stream", store.last_saved.previous_response_id);
+%endif
+    }
+
+    responseStreamErrorTest() {
+        checkModule();
+%ifndef NoJson
+        FailingOpenAiRestClient rest();
+        OpenAiResponseStreamDataProvider prov(rest);
+        StreamObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+        prov.doRequest({
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+        });
+
+        observer.wait(1);
+        assertEq("error", observer.events[0].type);
+        assertEq("SSE-ERROR", observer.events[0].error.err);
 %endif
     }
 

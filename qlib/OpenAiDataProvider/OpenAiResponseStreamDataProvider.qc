@@ -207,30 +207,40 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
         on_exit {
             cnt.dec();
         }
-        hash<auto> ctx_info = {};
-        *OpenAiConversationContextStore ctx_store = getConversationContextStore();
-        *hash<auto> req = OpenAiModelCreateResponseDataProvider::prepareRequest(stream_req, NOTHING,
-            ctx_store, \ctx_info);
-        req.stream = True;
-        *OpenAiRestClient::OpenAiRestClient rest = getRestClient();
-        if (!(rest instanceof OpenAiRestClient::OpenAiRestClient)) {
-            throw "SSE-ERROR", "response streaming requires OpenAiRestClient";
-        }
-        stream = rest.openResponsesStream(req);
+        try {
+            hash<auto> ctx_info = {};
+            *OpenAiConversationContextStore ctx_store = getConversationContextStore();
+            *hash<auto> req = OpenAiModelCreateResponseDataProvider::prepareRequest(stream_req, NOTHING,
+                ctx_store, \ctx_info);
+            req.stream = True;
+            *OpenAiRestClient::OpenAiRestClient rest = getRestClient();
+            if (!(rest instanceof OpenAiRestClient::OpenAiRestClient)) {
+                throw "SSE-ERROR", "response streaming requires OpenAiRestClient";
+            }
+            stream = rest.openResponsesStream(req);
 
-        while (!stop_flag) {
-            *hash<SseMessageInfo> evt = stream.readEvent(1s);
-            if (!evt) {
-                break;
+            while (!stop_flag) {
+                *hash<SseMessageInfo> evt = stream.readEvent(1s);
+                if (!evt) {
+                    break;
+                }
+                if (evt."data" == "[DONE]") {
+                    notifyObservers(EVENT_OPENAI_RESPONSE_STREAM, {"type": "done"});
+                    break;
+                }
+                hash<auto> payload = parseEventData(evt);
+                if (payload) {
+                    notifyObservers(EVENT_OPENAI_RESPONSE_STREAM, payload);
+                    handleContextSave(payload, ctx_info, ctx_store, req.metadata);
+                }
             }
-            if (evt.data == "[DONE]") {
-                notifyObservers(EVENT_OPENAI_RESPONSE_STREAM, {"type": "done"});
-                break;
-            }
-            hash<auto> payload = parseEventData(evt);
-            if (payload) {
-                notifyObservers(EVENT_OPENAI_RESPONSE_STREAM, payload);
-                handleContextSave(payload, ctx_info, ctx_store, req.metadata);
+        } catch (hash<ExceptionInfo> ex) {
+            try {
+                notifyObservers(EVENT_OPENAI_RESPONSE_STREAM, {
+                    "type": "error",
+                    "error": ex,
+                });
+            } catch (hash<ExceptionInfo> ex2) {
             }
         }
     }
