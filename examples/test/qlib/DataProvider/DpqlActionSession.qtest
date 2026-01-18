@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  DpqlActionSession.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires DataProvider
+
+%exec-class DpqlActionSessionTest
+
+class DpqlActionSessionTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DpqlActionSession", "1.0") {
+        ensureNullFactory();
+        addTestCase("dpql-set-context", \testSetContext());
+        addTestCase("dpql-parse with fields", \testParseWithFields());
+        addTestCase("dpql-parse unknown field", \testParseUnknownField());
+        addTestCase("dpql-get-completions without context", \testCompletionsNoContext());
+        addTestCase("dpql-get-completions", \testCompletions());
+        addTestCase("dpql-validate with override", \testValidateOverride());
+        addTestCase("dpql-completions with override", \testCompletionsOverride());
+        addTestCase("dpql-get-tokens", \testTokenize());
+        addTestCase("dpql-format invalid", \testFormatInvalid());
+        addTestCase("dpql-serialize", \testSerialize());
+
+        set_return_value(main());
+    }
+
+    private ensureNullFactory() {
+        try {
+            DataProvider::registerFactory(new DataProvider::NullDataProviderFactory());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PROVIDER-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    private DataProvider::DpqlActionSession newSession() {
+        return new DataProvider::DpqlActionSession();
+    }
+
+    private hash<string, hash<auto>> getFieldInfo() {
+        return {
+            "name": {"type": "string", "desc": "Name"},
+            "age": {"type": "int", "desc": "Age"},
+        };
+    }
+
+    testSetContext() {
+        DataProvider::DpqlActionSession session = newSession();
+        hash<auto> result = session.handleAction("dpql-set-context", {
+            "provider": "null{}",
+        });
+        assertEq("null{}", result.provider, "Provider should match request");
+        assertEq("record", result.recordType, "Record type should be default");
+        assertTrue(result.hasKey("fields"), "Context should include fields");
+        assertTrue(result.hasKey("expressions"), "Context should include expressions");
+    }
+
+    testParseWithFields() {
+        DataProvider::DpqlActionSession session = newSession();
+        hash<auto> result = session.handleAction("dpql-parse", {
+            "text": "@name == 'test'",
+            "fields": getFieldInfo(),
+        });
+        assertTrue(result.success, "Expression should parse");
+        assertTrue(result.tokens.size() > 0, "Should return tokens");
+    }
+
+    testParseUnknownField() {
+        DataProvider::DpqlActionSession session = newSession();
+        hash<auto> result = session.handleAction("dpql-parse", {
+            "text": "@unknown == 1",
+            "fields": getFieldInfo(),
+        });
+        assertFalse(result.success, "Unknown field should fail validation");
+        assertTrue(result.diagnostics.size() > 0, "Should return diagnostics");
+    }
+
+    testCompletionsNoContext() {
+        DataProvider::DpqlActionSession session = newSession();
+        bool caught = False;
+        try {
+            session.handleAction("dpql-get-completions", {
+                "text": "@",
+                "position": 1,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("NO-CONTEXT", ex.err);
+        }
+        assertTrue(caught, "Should throw without context");
+    }
+
+    testCompletions() {
+        DataProvider::DpqlActionSession session = newSession();
+        hash<auto> result = session.handleAction("dpql-get-completions", {
+            "text": "@n",
+            "position": 2,
+            "fields": getFieldInfo(),
+        });
+        assertTrue(result.completions.size() > 0, "Should return completions");
+    }
+
+    testValidateOverride() {
+        DataProvider::DpqlActionSession session = newSession();
+        session.handleAction("dpql-set-context", {
+            "provider": "null{}",
+        });
+        hash<auto> result = session.handleAction("dpql-validate", {
+            "text": "@name == 'test'",
+            "fields": getFieldInfo(),
+        });
+        assertEq(0, result.diagnostics.size(), "Override fields should be used for validation");
+    }
+
+    testCompletionsOverride() {
+        DataProvider::DpqlActionSession session = newSession();
+        session.handleAction("dpql-set-context", {
+            "provider": "null{}",
+        });
+        hash<auto> result = session.handleAction("dpql-get-completions", {
+            "text": "@",
+            "position": 1,
+            "fields": getFieldInfo(),
+        });
+        assertTrue(result.completions.size() > 0, "Override fields should be used for completions");
+    }
+
+    testTokenize() {
+        DataProvider::DpqlActionSession session = newSession();
+        hash<auto> result = session.handleAction("dpql-get-tokens", {
+            "text": "@name == 'test'",
+        });
+        assertTrue(result.tokens.size() > 0, "Should return tokens");
+        hash<auto> tok = result.tokens[0];
+        assertTrue(tok.hasKey("type"), "Token should have type");
+        assertTrue(tok.hasKey("start"), "Token should have start");
+        assertTrue(tok.hasKey("end"), "Token should have end");
+    }
+
+    testFormatInvalid() {
+        DataProvider::DpqlActionSession session = newSession();
+        hash<auto> result = session.handleAction("dpql-format", {
+            "text": "@name == (incomplete",
+        });
+        assertFalse(result.success, "Invalid expression should not format");
+        assertEq("@name == (incomplete", result.formatted, "Should return original text");
+    }
+
+    testSerialize() {
+        DataProvider::DpqlActionSession session = newSession();
+        hash<auto> result = session.handleAction("dpql-serialize", {
+            "expression": <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "name"}, "John"),
+            },
+        });
+        assertEq('@name == "John"', result.dpql, "Serialized DPQL should match");
+    }
+}

@@ -97,7 +97,7 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
         });
 
         #! Request type
-        const RequestType = OpenAiModelCreateResponseRequestDataType;
+        const RequestType = OpenAiResponseCreateRequestDataType;
 
         #! Response type
         const ResponseType = OpenAiResponseStreamEventDataType;

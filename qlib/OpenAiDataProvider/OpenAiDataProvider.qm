@@ -35,7 +35,7 @@
 %requires FileLocationHandler
 
 module OpenAiDataProvider {
-    version = "1.6";
+    version = "1.5";
     desc = "user module providing a data provider API for OpenAI services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -421,7 +421,7 @@ string text = result.output_text;
     @code{.py}
 class MyContextStore inherits OpenAiConversationContextStore {
     *hash<auto> loadContext(string key) { return get_from_store(key); }
-    auto saveContext(string key, hash<auto> ctxt) { save_to_store(key, ctxt); }
+    nothing saveContext(string key, hash<auto> ctxt) { save_to_store(key, ctxt); }
 }
 
 OpenAiRestConnection rc = get_connection("openai");
@@ -451,10 +451,10 @@ hash<auto> result = resp.doRequest({
     @subsection openaidataprovider_context_callbacks Conversation Context Store Callbacks
 
     @code{.py}
-OpenAiConversationContextStoreCallbacks store({
-    "load": sub (string key) { return get_from_store(key); },
-    "save": sub (string key, hash<auto> ctxt) { save_to_store(key, ctxt); },
-});
+OpenAiConversationContextStoreCallbacks store(
+    sub (string key) { return get_from_store(key); },
+    nothing sub (string key, hash<auto> ctxt) { save_to_store(key, ctxt); }
+);
 
 OpenAiRestConnection rc = get_connection("openai");
 OpenAiDataProvider::OpenAiDataProvider prov(rc.get());
@@ -490,6 +490,11 @@ stream.doRequest({
 });
 @endcode
 
+    For Creator WebSocket integrations, the action-based
+    @ref OpenAiDataProvider::OpenAiResponseActionSession "OpenAiResponseActionSession"
+    class provides a transport-agnostic interface for response creation and streaming
+    with normalized rich content output.
+
     @subsection openaidataprovider_stream_events Stream Event Payloads
 
     The stream provider emits SSE events with a `type` field matching the Responses API event types. A few common
@@ -503,17 +508,16 @@ stream.doRequest({
 
     @section openaidataprovider_relnotes Release Notes
 
-    @subsection openaidataprovider_v1_6 OpenAiDataProvider v1.6
+    @subsection openaidataprovider_v1_5 OpenAiDataProvider v1.5
+    - added OpenAiResponseActionSession for action-based response creation and streaming
     - added typed response output items for tool calls, tool results, and output content parts
     - added response stream data provider for Server-Sent Events streaming
+    - response stream requests now accept a model argument for responses API compatibility
+    - action session text normalization now tolerates missing output format hints
     - added conversation context store hooks for response continuity
     - added action catalog entry for streaming responses
-
-    @subsection openaidataprovider_v1_5 OpenAiDataProvider v1.5
     - added responses API input content support for text, image, audio, and file parts
     - added conversation context helpers for response continuity
-
-    @subsection openaidataprovider_v1_4 OpenAiDataProvider v1.4
     - missing APIs and actions to handle image analysis
       (<a href="https://github.com/qoretechnologies/qore/issues/4947">issue 4947</a>)
     - added APIs to handle image generation

@@ -38,7 +38,7 @@
 %requires reflection
 
 module QoreRepl {
-    version = "1.1";
+    version = "1.0";
     desc = "Qore REPL (Read-Eval-Print Loop) module";
     author = "Qore Technologies, s.r.o.";
     url = "https://qoretechnologies.com";
@@ -57,6 +57,7 @@ module QoreRepl {
 
     The module provides:
     - @ref QoreRepl::QoreRepl "QoreRepl": Core REPL class for evaluation
+    - @ref QoreRepl::QoreReplActionSession "QoreReplActionSession": Action-based REPL session
     - @ref QoreRepl::QoreReplWebSocketHandler "QoreReplWebSocketHandler": WebSocket handler for HttpServer
     - @ref QoreRepl::QoreReplWebSocketConnection "QoreReplWebSocketConnection": Per-client WebSocket connection
 
@@ -203,8 +204,10 @@ server.start();
 
     @section qorerepl_relnotes Release Notes
 
-    @subsection qorerepl_v1_1 v1.1
+    @subsection qorerepl_v1_0 v1.0
+    - Initial release
     - Added WebSocket server support with QoreReplWebSocketHandler and QoreReplWebSocketConnection
+    - Added action-based REPL session for Creator WebSocket integration
     - Added AsyncAPI 3.0 schema for the WebSocket message protocol
     - Added sandboxing support with graceful handling of restricted commands
     - Added introspection commands: /functions, /classes, /constants, /namespaces, /modules, /type, /describe
@@ -212,9 +215,6 @@ server.start();
     - Added file commands: /save, /pwd, /cd
     - Added auto-return for pure expressions (e.g., "1 + 1" displays "=> 2")
     - Added comprehensive tests
-
-    @subsection qorerepl_v1_0 v1.0
-    - Initial release
 */
 
 #! Main namespace for the QoreRepl module

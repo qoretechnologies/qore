@@ -38,7 +38,7 @@ class MyContextStore inherits OpenAiConversationContextStore {
         return get_from_store(key);
     }
 
-    auto saveContext(string key, hash<auto> ctxt) {
+    nothing saveContext(string key, hash<auto> ctxt) {
         save_to_store(key, ctxt);
     }
 }
@@ -46,10 +46,10 @@ class MyContextStore inherits OpenAiConversationContextStore {
 
     @par Example: callback-based store
     @code{.py}
-OpenAiConversationContextStoreCallbacks store({
-    "load": *hash<auto> sub (string key) { return get_from_store(key); },
-    "save": auto sub (string key, hash<auto> ctxt) { save_to_store(key, ctxt); },
-});
+OpenAiConversationContextStoreCallbacks store(
+    *hash<auto> sub (string key) { return get_from_store(key); },
+    nothing sub (string key, hash<auto> ctxt) { save_to_store(key, ctxt); }
+);
     @endcode
 */
 public class OpenAiConversationContextStore {
@@ -66,22 +66,22 @@ public class OpenAiConversationContextStore {
     /** @param key an opaque identifier for the conversation
         @param ctxt the context hash to persist (see class description for supported keys)
 
-        @return a value ignored by callers (implementations may return \c nothing)
+        @return nothing
     */
-    abstract auto saveContext(string key, hash<auto> ctxt);
+    abstract nothing saveContext(string key, hash<auto> ctxt);
 }
 
 #! Conversation context store with callbacks
 public class OpenAiConversationContextStoreCallbacks inherits OpenAiConversationContextStore {
     private {
-        *code load_cb;
-        *code save_cb;
+        *code<*hash<auto>(string)> load_cb;
+        *code<nothing(string, hash<auto>)> save_cb;
     }
 
     #! Creates the callback store
-    constructor(hash<auto> options) {
-        load_cb = options.load;
-        save_cb = options.save;
+    constructor(code<*hash<auto>(string)> load_cb, code<nothing(string, hash<auto>)> save_cb) {
+        self.load_cb = load_cb;
+        self.save_cb = save_cb;
     }
 
     #! Loads conversation context for the given key
@@ -93,9 +93,9 @@ public class OpenAiConversationContextStoreCallbacks inherits OpenAiConversation
     }
 
     #! Saves conversation context for the given key
-    auto saveContext(string key, hash<auto> ctxt) {
+    nothing saveContext(string key, hash<auto> ctxt) {
         if (save_cb) {
-            return save_cb(key, ctxt);
+            save_cb(key, ctxt);
         }
     }
 }
