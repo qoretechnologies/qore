@@ -399,7 +399,7 @@ public class LinearRestConnection inherits RestClient::RestConnection {
 
     #! Sets the update options code for the connection
     /** The closure or call reference must have the following signature:
-        <tt><update_options(hash<auto> options)</tt>
+        <tt>update_options(hash<auto> options)</tt>
     */
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);

@@ -81,7 +81,7 @@ public class LinearCreateCycleDataProvider inherits LinearDataProviderBase {
         }
         @assert(data.cycleCreate.cycle, "created cycle cannot be null on success");
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: created cycle id=%y", data.cycleCreate.cycle.id));
-        return data.cycleCreate.cycle;
+        return flattenConnections(data.cycleCreate.cycle);
     }
 
     #! Returns the description of a successful request message, if any

@@ -82,7 +82,7 @@ public class LinearCreateCommentDataProvider inherits LinearDataProviderBase {
         }
         @assert(data.commentCreate.comment, "created comment cannot be null on success");
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: created comment id=%y", data.commentCreate.comment.id));
-        return data.commentCreate.comment;
+        return flattenConnections(data.commentCreate.comment);
     }
 
     #! Returns the description of a successful request message, if any

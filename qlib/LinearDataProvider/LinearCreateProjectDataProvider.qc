@@ -85,7 +85,7 @@ public class LinearCreateProjectDataProvider inherits LinearDataProviderBase {
         }
         @assert(data.projectCreate.project, "created project cannot be null on success");
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: created project id=%y", data.projectCreate.project.id));
-        return data.projectCreate.project;
+        return flattenConnections(data.projectCreate.project);
     }
 
     #! Returns the description of a successful request message, if any

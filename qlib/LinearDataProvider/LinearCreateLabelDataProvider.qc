@@ -81,7 +81,7 @@ public class LinearCreateLabelDataProvider inherits LinearDataProviderBase {
         }
         @assert(data.issueLabelCreate.issueLabel, "created label cannot be null on success");
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: created label id=%y", data.issueLabelCreate.issueLabel.id));
-        return data.issueLabelCreate.issueLabel;
+        return flattenConnections(data.issueLabelCreate.issueLabel);
     }
 
     #! Returns the description of a successful request message, if any
