@@ -131,11 +131,12 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - ALPN (Application-Layer Protocol Negotiation) support in Socket class for TLS protocol selection
       - HTTPClient support for HTTP/2 with automatic fallback to HTTP/1.1
       - transparent to existing HTTP code - default mode is "auto" (use HTTP/2 if available)
-      - new \c HTTPClient::setHttp2Mode() method to control HTTP/2 mode ("auto", "disabled", "required")
+      - new @ref Qore::HTTPClient::setHttp2Mode() "HTTPClient::setHttp2Mode()" method to control HTTP/2 mode ("auto", "disabled", "required")
+      - new @ref Qore::HTTP2Mode "HTTP2Mode" enum for type-safe HTTP/2 mode selection
       - HttpServer support for HTTP/2 with async I/O integration
       - new \c http_version listener option for server-side HTTP/2 mode control
-      - new \c Socket::startPollReadHttp2Request() for non-blocking HTTP/2 request reading
-      - new \c Socket::startPollSendHttp2Response() for non-blocking HTTP/2 response sending
+      - new @ref Qore::Socket::startPollReadHttp2Request() "Socket::startPollReadHttp2Request()" for non-blocking HTTP/2 request reading
+      - new @ref Qore::Socket::startPollSendHttp2Response() "Socket::startPollSendHttp2Response()" for non-blocking HTTP/2 response sending
       - new \c http_version option in @ref ConnectionProvider "ConnectionProvider" for client-side HTTP version control
       - WebSocket over HTTP/2 support (RFC 8441 extended CONNECT method)
       - Server-Sent Events (SSE) over HTTP/2 support

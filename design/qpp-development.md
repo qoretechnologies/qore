@@ -185,6 +185,32 @@ Use `ns=Qore` to place the class in the Qore namespace:
 qclass ClassName [dom=NETWORK; arg=ClassNamePriv* priv; ns=Qore];
 ```
 
+### Enum Declarations
+
+QPP supports Qore enum declarations. Add a documentation comment and a line starting with `enum`:
+
+```cpp
+//! HTTP/2 mode enum
+/** @since %Qore 2.3 */
+enum HTTP2Mode : int {
+    //! HTTP/2 disabled
+    Disabled = 0,
+    //! HTTP/2 auto (default)
+    Auto = 1,
+    //! HTTP/2 required
+    Required = 2,
+};
+```
+
+Notes:
+- Base types: `int` (default), `string`, `float`, or `number`.
+- String enums require explicit values for all members.
+- Enums are placed in the Qore namespace unless you include a namespace prefix in the name (for example,
+  `Qore::HTTP2Mode`).
+- Use `enum<HTTP2Mode>` or `*enum<HTTP2Mode>` in QPP type signatures.
+- QPP emits an `init_enum_<EnumName>()` function; for system enums, register it in
+  `lib/QoreNamespace.cpp` using `addSystemEnum(init_enum_<EnumName>(qns));`.
+
 ## Class Creation Checklist
 
 1. [ ] Create `lib/QC_ClassName.qpp`

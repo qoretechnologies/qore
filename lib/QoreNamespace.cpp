@@ -210,6 +210,7 @@ const TypedHashDecl* hashdeclStatInfo,
 
 DLLLOCAL void init_context_functions(QoreNamespace& ns);
 DLLLOCAL void init_RangeIterator_functions(QoreNamespace& ns);
+DLLLOCAL QoreEnumDecl* init_enum_HTTP2Mode(QoreNamespace& ns);
 
 GVEntryBase::GVEntryBase(const QoreProgramLocation* loc, char* n, const QoreTypeInfo* typeInfo,
         QoreParseTypeInfo* parseTypeInfo, qore_var_t type) :
@@ -284,6 +285,60 @@ void QoreNamespace::addSystemHashDecl(TypedHashDecl* hd) {
     rns->thdmap.update(hd->getName(), priv, hd);
 }
 
+void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
+    qore_enum_decl_private* enum_priv = qore_enum_decl_private::get(*enumdecl);
+
+    // set sys and pub flags
+    enum_priv->setSystemPublic();
+    enum_priv->setNamespace(priv);
+
+#ifdef DEBUG
+    if (priv->enumList.add(enumdecl)) {
+        assert(false);
+    } else {
+        assert(!priv->classList.find(enumdecl->getName()));
+        assert(!priv->nsl.find(enumdecl->getName()));
+    }
+#else
+    priv->enumList.add(enumdecl);
+#endif
+
+    bool new_ns = false;
+    qore_ns_private* enum_ns_priv = nullptr;
+    QoreNamespace* existing_ns = priv->nsl.find(enumdecl->getName());
+    if (existing_ns) {
+        enum_ns_priv = qore_ns_private::get(*existing_ns);
+    } else {
+        QoreNamespace* enum_ns = new QoreNamespace(enumdecl->getName());
+        enum_ns_priv = qore_ns_private::get(*enum_ns);
+        new_ns = true;
+        priv->nsl.runtimeAdd(enum_ns, priv);
+    }
+
+    if (enum_priv->isPublic()) {
+        enum_ns_priv->setPublic();
+    }
+
+    const std::vector<QoreEnumMember*>& members = enum_priv->getMembers();
+    for (auto* member : members) {
+        if (enum_ns_priv->constant.inList(member->getName())) {
+            continue;
+        }
+        QoreValue val = member->getValue();
+        val.ref();
+        enum_ns_priv->constant.add(member->getName(), val, enum_priv->getTypeInfo());
+    }
+
+    qore_root_ns_private* rns = priv->getRoot();
+    if (rns && new_ns) {
+        rns->rebuildIndexes(enum_ns_priv);
+    }
+    if (!rns) {
+        return;
+    }
+    rns->edmap.update(enumdecl->getName(), priv, enumdecl);
+}
+
 // public, only called in single-threaded initialization
 void QoreNamespace::addSystemClass(QoreClass* oc) {
     QORE_TRACE("QoreNamespace::addSystemClass()");
@@ -339,6 +394,8 @@ qore_ns_private::qore_ns_private(const QoreProgramLocation* loc) : loc(loc), con
 }
 
 qore_ns_private::~qore_ns_private() {
+    purge();
+
     // Clean up typedef entries
     for (auto& i : typedefMap) {
         delete i.second;
@@ -1154,6 +1211,8 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclFilesystemSecurityConfigInfo = init_hashdecl_FilesystemSecurityConfigInfo(qns);
     hashdeclNetworkSecurityConfigInfo = init_hashdecl_NetworkSecurityConfigInfo(qns);
     hashdeclSandboxConfigInfo = init_hashdecl_SandboxConfigInfo(qns);
+
+    qns.addSystemEnum(init_enum_HTTP2Mode(qns));
 
     qore_ns_private::addNamespace(qns, get_thread_ns(qns));
 
@@ -2738,6 +2797,9 @@ void qore_ns_private::parseRollback(ExceptionSink* xsink, bool atomic_rollback) 
 
         // delete hashdecls
         hashDeclList.reset();
+
+        // delete enums
+        enumList.reset();
 
         // rollback namespaces
         nsl.parseRollback(xsink, atomic_rollback);
