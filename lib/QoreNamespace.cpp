@@ -289,7 +289,9 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
     qore_enum_decl_private* enum_priv = qore_enum_decl_private::get(*enumdecl);
 
     // set sys and pub flags
-    enum_priv->setSystemPublic();
+    if (!enum_priv->isSystem()) {
+        enum_priv->setSystemPublic();
+    }
     enum_priv->setNamespace(priv);
 
 #ifdef DEBUG
@@ -297,7 +299,6 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
         assert(false);
     } else {
         assert(!priv->classList.find(enumdecl->getName()));
-        assert(!priv->nsl.find(enumdecl->getName()));
     }
 #else
     priv->enumList.add(enumdecl);
@@ -1212,7 +1213,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclNetworkSecurityConfigInfo = init_hashdecl_NetworkSecurityConfigInfo(qns);
     hashdeclSandboxConfigInfo = init_hashdecl_SandboxConfigInfo(qns);
 
-    qns.addSystemEnum(init_enum_HTTP2Mode(qns));
+    init_enum_HTTP2Mode(qns);
 
     qore_ns_private::addNamespace(qns, get_thread_ns(qns));
 

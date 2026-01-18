@@ -208,8 +208,8 @@ Notes:
 - Enums are placed in the Qore namespace unless you include a namespace prefix in the name (for example,
   `Qore::HTTP2Mode`).
 - Use `enum<HTTP2Mode>` or `*enum<HTTP2Mode>` in QPP type signatures.
-- QPP emits an `init_enum_<EnumName>()` function; for system enums, register it in
-  `lib/QoreNamespace.cpp` using `addSystemEnum(init_enum_<EnumName>(qns));`.
+- QPP emits an `init_enum_<EnumName>()` function; for system enums, call it from
+  `lib/QoreNamespace.cpp` (it registers itself via `addSystemEnum()` internally).
 
 ## Class Creation Checklist
 
