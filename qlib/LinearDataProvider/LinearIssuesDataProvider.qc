@@ -179,6 +179,16 @@ public class LinearIssuesDataProvider inherits LinearDataProviderBase {
             recordType.getFields());
     }
 
+    #! Returns the record type for create operations
+    private *hash<string, AbstractDataField> getCreateRecordTypeImpl(*hash<auto> search_options) {
+        return (new LinearIssueCreateDataType()).getFields();
+    }
+
+    #! Returns the record type for update operations
+    private *hash<string, AbstractDataField> getUpdateRecordTypeImpl(*hash<auto> search_options) {
+        return (new LinearIssueUpdateDataType()).getFields();
+    }
+
     #! Creates a new issue
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
         @assert(rec.teamId.val(), "teamId is required to create an issue");
@@ -192,7 +202,7 @@ public class LinearIssuesDataProvider inherits LinearDataProviderBase {
         }
         @assert(data.issueCreate.issue, "created issue cannot be null on success");
         @debug(log(LoggerLevel::DEBUG, "createRecordImpl: created issue id=%y", data.issueCreate.issue.id));
-        return data.issueCreate.issue;
+        return flattenConnections(data.issueCreate.issue);
     }
 
     #! Returns static provider info

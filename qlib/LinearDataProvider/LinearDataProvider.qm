@@ -58,17 +58,20 @@ module LinearDataProvider {
             "logo": LinearLogo,
             "logo_file_name": "linear-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": ("Project & Task Management",),
         });
 
         # Register actions for issues
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
-            "path": "/issues",
+            "path": "/create-issue",
             "action": "create-issue",
+            "groups": "Issues",
             "display_name": "Create Issue",
             "short_desc": "Create a new issue in Linear",
             "desc": "Create a new issue in a Linear team with title, description, priority, and other attributes",
-            "action_code": DPAT_CREATE,
+            "action_code": DPAT_API,
+            "data_provider_info": LinearCreateIssueDataProvider::ProviderInfo,
             "options": {
                 "teamId": <ActionOptionInfo>{
                     "display_name": "Team",
@@ -86,26 +89,34 @@ module LinearDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "example_value": "Implement new feature",
                 },
                 "description": <ActionOptionInfo>{
                     "display_name": "Description",
                     "short_desc": "The issue description",
-                    "desc": "The description of the issue (supports markdown)",
+                    "desc": "The description of the issue in markdown format",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "preselected": True,
+                    "example_value": "This feature should allow users to...",
                 },
                 "priority": <ActionOptionInfo>{
                     "display_name": "Priority",
-                    "short_desc": "The issue priority (0=none, 1=urgent, 2=high, 3=medium, 4=low)",
-                    "desc": "The priority of the issue: 0 = No priority, 1 = Urgent, 2 = High, 3 = Medium, 4 = Low",
+                    "short_desc": "The issue priority",
+                    "desc": "The priority of the issue",
                     "type": AbstractDataProviderTypeMap."*int",
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": 0, "display_name": "No Priority", "desc": "No priority set"},
+                        <AllowedValueInfo>{"value": 0, "display_name": "No Priority", "desc": "No priority"},
                         <AllowedValueInfo>{"value": 1, "display_name": "Urgent", "desc": "Urgent priority"},
                         <AllowedValueInfo>{"value": 2, "display_name": "High", "desc": "High priority"},
-                        <AllowedValueInfo>{"value": 3, "display_name": "Medium", "desc": "Medium priority"},
+                        <AllowedValueInfo>{"value": 3, "display_name": "Normal", "desc": "Normal priority"},
                         <AllowedValueInfo>{"value": 4, "display_name": "Low", "desc": "Low priority"},
                     ),
+                },
+                "estimate": <ActionOptionInfo>{
+                    "display_name": "Estimate",
+                    "short_desc": "The issue estimate",
+                    "desc": "The estimated complexity/effort",
+                    "type": AbstractDataProviderTypeMap."*float",
+                    "example_value": 2.0,
                 },
                 "assigneeId": <ActionOptionInfo>{
                     "display_name": "Assignee",
@@ -114,51 +125,56 @@ module LinearDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                     "ref_data": "users",
                 },
+                "stateId": <ActionOptionInfo>{
+                    "display_name": "State",
+                    "short_desc": "The workflow state",
+                    "desc": "The workflow state to set on the issue",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "states",
+                },
                 "projectId": <ActionOptionInfo>{
                     "display_name": "Project",
-                    "short_desc": "The project to add the issue to",
+                    "short_desc": "The project",
                     "desc": "The project to add the issue to",
                     "type": AbstractDataProviderTypeMap."*string",
                     "ref_data": "projects",
                 },
                 "cycleId": <ActionOptionInfo>{
                     "display_name": "Cycle",
-                    "short_desc": "The cycle (sprint) to add the issue to",
+                    "short_desc": "The cycle/sprint",
                     "desc": "The cycle (sprint) to add the issue to",
                     "type": AbstractDataProviderTypeMap."*string",
                     "ref_data": "cycles",
                 },
-                "stateId": <ActionOptionInfo>{
-                    "display_name": "State",
-                    "short_desc": "The workflow state for the issue",
-                    "desc": "The workflow state for the issue",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "ref_data": "states",
-                },
                 "labelIds": <ActionOptionInfo>{
                     "display_name": "Labels",
-                    "short_desc": "Labels to add to the issue",
-                    "desc": "Labels to add to the issue (list of label IDs)",
+                    "short_desc": "The labels",
+                    "desc": "Labels to attach to the issue",
                     "type": AbstractDataProviderTypeMap."*softlist",
                     "element_ref_data": "labels",
                 },
-                "estimate": <ActionOptionInfo>{
-                    "display_name": "Estimate",
-                    "short_desc": "The estimate points for the issue",
-                    "desc": "The estimate points for the issue",
-                    "type": AbstractDataProviderTypeMap."*int",
+                "parentId": <ActionOptionInfo>{
+                    "display_name": "Parent Issue",
+                    "short_desc": "The parent issue",
+                    "desc": "The parent issue for creating a sub-issue",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "issues",
                 },
             },
+            "output_type": new LinearIssueDataType(),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
             "path": "/issues",
             "action": "search-issues",
+            "groups": "Issues",
             "display_name": "Search Issues",
             "short_desc": "Search for issues in Linear",
             "desc": "Search for issues with optional filters for team, project, cycle, assignee, and state",
             "action_code": DPAT_FIND,
+            "data_provider_info": LinearIssuesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ListDataType("IssueList", new LinearIssueDataType(), True); },
             "options": {
                 "teamId": <ActionOptionInfo>{
                     "display_name": "Team",
@@ -203,10 +219,13 @@ module LinearDataProvider {
             "app": LinearDataProvider::AppName,
             "path": "/issues/get",
             "action": "get-issue",
+            "groups": "Issues",
             "display_name": "Get Issue",
             "short_desc": "Get a specific issue from Linear",
             "desc": "Retrieve a specific issue by its ID",
             "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": LinearIssuesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LinearIssueDataType(); },
             "options": {
                 "id": <ActionOptionInfo>{
                     "display_name": "Issue",
@@ -224,136 +243,71 @@ module LinearDataProvider {
             "app": LinearDataProvider::AppName,
             "path": "/issues/update",
             "action": "update-issue",
+            "groups": "Issues",
             "display_name": "Update Issue",
             "short_desc": "Update an existing Linear issue",
             "desc": "Update the properties of an existing Linear issue",
             "action_code": DPAT_UPDATE,
-            "options": {
-                "id": <ActionOptionInfo>{
-                    "display_name": "Issue",
-                    "short_desc": "The issue to update",
-                    "desc": "The issue to update",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "issues",
-                },
-                "title": <ActionOptionInfo>{
-                    "display_name": "Title",
-                    "short_desc": "The new issue title",
-                    "desc": "The new title of the issue",
-                    "type": AbstractDataProviderTypeMap."*string",
-                },
-                "description": <ActionOptionInfo>{
-                    "display_name": "Description",
-                    "short_desc": "The new issue description",
-                    "desc": "The new description of the issue (supports markdown)",
-                    "type": AbstractDataProviderTypeMap."*string",
-                },
-                "priority": <ActionOptionInfo>{
-                    "display_name": "Priority",
-                    "short_desc": "The new issue priority",
-                    "desc": "The new priority of the issue",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "allowed_values": (
-                        <AllowedValueInfo>{"value": 0, "display_name": "No Priority", "desc": "No priority set"},
-                        <AllowedValueInfo>{"value": 1, "display_name": "Urgent", "desc": "Urgent priority"},
-                        <AllowedValueInfo>{"value": 2, "display_name": "High", "desc": "High priority"},
-                        <AllowedValueInfo>{"value": 3, "display_name": "Medium", "desc": "Medium priority"},
-                        <AllowedValueInfo>{"value": 4, "display_name": "Low", "desc": "Low priority"},
-                    ),
-                },
-                "assigneeId": <ActionOptionInfo>{
-                    "display_name": "Assignee",
-                    "short_desc": "The new assignee",
-                    "desc": "The new user to assign the issue to",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "ref_data": "users",
-                },
-                "stateId": <ActionOptionInfo>{
-                    "display_name": "State",
-                    "short_desc": "The new workflow state",
-                    "desc": "The new workflow state for the issue",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "ref_data": "states",
-                },
-                "projectId": <ActionOptionInfo>{
-                    "display_name": "Project",
-                    "short_desc": "The project to move the issue to",
-                    "desc": "The project to move the issue to",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "ref_data": "projects",
-                },
-                "cycleId": <ActionOptionInfo>{
-                    "display_name": "Cycle",
-                    "short_desc": "The cycle to move the issue to",
-                    "desc": "The cycle (sprint) to move the issue to",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "ref_data": "cycles",
-                },
-            },
+            "data_provider_info": LinearIssuesDataProvider::ProviderInfo,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
             "path": "/issues/archive",
             "action": "archive-issue",
+            "groups": "Issues",
             "display_name": "Archive Issue",
             "short_desc": "Archive a Linear issue",
             "desc": "Archive (soft delete) a Linear issue",
             "action_code": DPAT_DELETE,
-            "options": {
-                "id": <ActionOptionInfo>{
-                    "display_name": "Issue",
-                    "short_desc": "The issue to archive",
-                    "desc": "The issue to archive",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "preselected": True,
-                    "ref_data": "issues",
-                },
-            },
+            "data_provider_info": LinearIssuesDataProvider::ProviderInfo,
         });
 
         # Register actions for comments
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
-            "path": "/comments",
+            "path": "/create-comment",
             "action": "create-comment",
+            "groups": "Comments",
             "display_name": "Create Comment",
             "short_desc": "Add a comment to a Linear issue",
             "desc": "Create a new comment on an existing Linear issue",
-            "action_code": DPAT_CREATE,
+            "action_code": DPAT_API,
+            "data_provider_info": LinearCreateCommentDataProvider::ProviderInfo,
             "options": {
                 "issueId": <ActionOptionInfo>{
                     "display_name": "Issue",
-                    "short_desc": "The issue to comment on",
-                    "desc": "The issue to add a comment to",
+                    "short_desc": "The issue to add the comment to",
+                    "desc": "The issue to add the comment to",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
                     "ref_data": "issues",
                 },
                 "body": <ActionOptionInfo>{
-                    "display_name": "Comment Body",
-                    "short_desc": "The comment text",
-                    "desc": "The comment text (supports markdown)",
+                    "display_name": "Body",
+                    "short_desc": "The comment body",
+                    "desc": "The body/content of the comment in markdown format",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "example_value": "This looks good, but we should add more tests.",
                 },
             },
+            "output_type": new LinearCommentDataType(),
         });
 
         # Register actions for projects
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
-            "path": "/projects",
+            "path": "/create-project",
             "action": "create-project",
+            "groups": "Projects",
             "display_name": "Create Project",
             "short_desc": "Create a new project in Linear",
             "desc": "Create a new project for organizing related issues",
-            "action_code": DPAT_CREATE,
+            "action_code": DPAT_API,
+            "data_provider_info": LinearCreateProjectDataProvider::ProviderInfo,
             "options": {
                 "name": <ActionOptionInfo>{
                     "display_name": "Name",
@@ -362,32 +316,71 @@ module LinearDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "example_value": "Q1 Product Launch",
                 },
                 "description": <ActionOptionInfo>{
                     "display_name": "Description",
                     "short_desc": "The project description",
-                    "desc": "The description of the project (supports markdown)",
+                    "desc": "The description of the project",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "preselected": True,
+                    "example_value": "Launch new product features for Q1 release",
                 },
                 "teamIds": <ActionOptionInfo>{
                     "display_name": "Teams",
-                    "short_desc": "Teams to associate with the project",
-                    "desc": "Teams to associate with the project",
+                    "short_desc": "The teams to associate with the project",
+                    "desc": "The teams to associate with the project",
                     "type": AbstractDataProviderTypeMap."*softlist",
                     "element_ref_data": "teams",
                 },
+                "leadId": <ActionOptionInfo>{
+                    "display_name": "Lead",
+                    "short_desc": "The project lead",
+                    "desc": "The user leading the project",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "users",
+                },
+                "state": <ActionOptionInfo>{
+                    "display_name": "State",
+                    "short_desc": "The project state",
+                    "desc": "The initial state of the project",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "planned", "display_name": "Planned", "desc": "Planned project"},
+                        <AllowedValueInfo>{"value": "started", "display_name": "Started", "desc": "Started project"},
+                        <AllowedValueInfo>{"value": "paused", "display_name": "Paused", "desc": "Paused project"},
+                        <AllowedValueInfo>{"value": "completed", "display_name": "Completed", "desc": "Completed project"},
+                        <AllowedValueInfo>{"value": "canceled", "display_name": "Canceled", "desc": "Canceled project"},
+                    ),
+                },
+                "startDate": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "The project start date",
+                    "desc": "The planned start date of the project (YYYY-MM-DD format)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "2025-01-15",
+                },
+                "targetDate": <ActionOptionInfo>{
+                    "display_name": "Target Date",
+                    "short_desc": "The project target date",
+                    "desc": "The target completion date of the project (YYYY-MM-DD format)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "2025-03-31",
+                },
             },
+            "output_type": new LinearProjectDataType(),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
             "path": "/projects",
             "action": "search-projects",
+            "groups": "Projects",
             "display_name": "Search Projects",
             "short_desc": "Search for projects in Linear",
             "desc": "Search for projects with optional state filter",
             "action_code": DPAT_FIND,
+            "data_provider_info": LinearProjectsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ListDataType("ProjectList", new LinearProjectDataType(), True); },
             "options": {
                 "state": <ActionOptionInfo>{
                     "display_name": "State",
@@ -415,12 +408,14 @@ module LinearDataProvider {
         # Register actions for cycles
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
-            "path": "/cycles",
+            "path": "/create-cycle",
             "action": "create-cycle",
+            "groups": "Cycles",
             "display_name": "Create Cycle",
             "short_desc": "Create a new cycle (sprint) in Linear",
             "desc": "Create a new cycle for time-boxed work",
-            "action_code": DPAT_CREATE,
+            "action_code": DPAT_API,
+            "data_provider_info": LinearCreateCycleDataProvider::ProviderInfo,
             "options": {
                 "teamId": <ActionOptionInfo>{
                     "display_name": "Team",
@@ -436,32 +431,37 @@ module LinearDataProvider {
                     "short_desc": "The cycle name",
                     "desc": "The name of the cycle",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "Sprint 23",
                 },
                 "startsAt": <ActionOptionInfo>{
-                    "display_name": "Start Date",
-                    "short_desc": "The start date of the cycle",
-                    "desc": "The start date of the cycle",
-                    "type": AbstractDataProviderTypeMap."*date",
-                    "preselected": True,
+                    "display_name": "Starts At",
+                    "short_desc": "When the cycle starts",
+                    "desc": "The start date of the cycle (ISO 8601 format)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "2025-01-15T00:00:00Z",
                 },
                 "endsAt": <ActionOptionInfo>{
-                    "display_name": "End Date",
-                    "short_desc": "The end date of the cycle",
-                    "desc": "The end date of the cycle",
-                    "type": AbstractDataProviderTypeMap."*date",
-                    "preselected": True,
+                    "display_name": "Ends At",
+                    "short_desc": "When the cycle ends",
+                    "desc": "The end date of the cycle (ISO 8601 format)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "2025-01-29T00:00:00Z",
                 },
             },
+            "output_type": new LinearCycleDataType(),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
             "path": "/cycles",
             "action": "search-cycles",
+            "groups": "Cycles",
             "display_name": "Search Cycles",
             "short_desc": "Search for cycles in Linear",
             "desc": "Search for cycles with optional team filter",
             "action_code": DPAT_FIND,
+            "data_provider_info": LinearCyclesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ListDataType("CycleList", new LinearCycleDataType(), True); },
             "options": {
                 "teamId": <ActionOptionInfo>{
                     "display_name": "Team",
@@ -484,12 +484,14 @@ module LinearDataProvider {
         # Register actions for labels
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
-            "path": "/labels",
+            "path": "/create-label",
             "action": "create-label",
+            "groups": "Labels",
             "display_name": "Create Label",
             "short_desc": "Create a new label in Linear",
             "desc": "Create a new label for categorizing issues",
-            "action_code": DPAT_CREATE,
+            "action_code": DPAT_API,
+            "data_provider_info": LinearCreateLabelDataProvider::ProviderInfo,
             "options": {
                 "name": <ActionOptionInfo>{
                     "display_name": "Name",
@@ -498,38 +500,44 @@ module LinearDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
-                },
-                "color": <ActionOptionInfo>{
-                    "display_name": "Color",
-                    "short_desc": "The label color",
-                    "desc": "The color of the label (hex code without #, e.g. 'ff0000')",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "example_value": "ff0000",
+                    "example_value": "bug",
                 },
                 "description": <ActionOptionInfo>{
                     "display_name": "Description",
                     "short_desc": "The label description",
                     "desc": "The description of the label",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "Issues related to bugs and defects",
+                },
+                "color": <ActionOptionInfo>{
+                    "display_name": "Color",
+                    "short_desc": "The label color",
+                    "desc": "The color of the label in hex format",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "#FF5733",
                 },
                 "teamId": <ActionOptionInfo>{
                     "display_name": "Team",
-                    "short_desc": "The team for this label (optional for workspace labels)",
-                    "desc": "The team for this label. If not specified, creates a workspace-level label",
+                    "short_desc": "The team to create the label in",
+                    "desc": "The team to create the label in (leave empty for workspace labels)",
                     "type": AbstractDataProviderTypeMap."*string",
                     "ref_data": "teams",
                 },
             },
+            "output_type": new LinearLabelDataType(),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": LinearDataProvider::AppName,
             "path": "/labels",
             "action": "search-labels",
+            "groups": "Labels",
             "display_name": "Search Labels",
             "short_desc": "Search for labels in Linear",
             "desc": "Search for labels with optional team filter",
             "action_code": DPAT_FIND,
+            "data_provider_info": LinearLabelsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ListDataType("LabelList", new LinearLabelDataType(), True); },
             "options": {
                 "teamId": <ActionOptionInfo>{
                     "display_name": "Team",
@@ -553,10 +561,13 @@ module LinearDataProvider {
             "app": LinearDataProvider::AppName,
             "path": "/teams",
             "action": "search-teams",
+            "groups": "Teams",
             "display_name": "Search Teams",
             "short_desc": "List teams in Linear",
             "desc": "List all teams accessible to the authenticated user",
             "action_code": DPAT_FIND,
+            "data_provider_info": LinearTeamsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ListDataType("TeamList", new LinearTeamDataType(), True); },
             "options": {
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -572,10 +583,13 @@ module LinearDataProvider {
             "app": LinearDataProvider::AppName,
             "path": "/teams/get",
             "action": "get-team",
+            "groups": "Teams",
             "display_name": "Get Team",
             "short_desc": "Get a specific team from Linear",
             "desc": "Retrieve a specific team by its ID",
             "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": LinearTeamsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new LinearTeamDataType(); },
             "options": {
                 "id": <ActionOptionInfo>{
                     "display_name": "Team",
@@ -587,6 +601,64 @@ module LinearDataProvider {
                     "ref_data": "teams",
                 },
             },
+        });
+
+        # Register triggers (events)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/events/issue-created",
+            "action": "issue-created",
+            "groups": "Triggers",
+            "display_name": "Issue Created",
+            "short_desc": "Trigger when a new issue is created",
+            "desc": "Fires when a new issue is created in Linear. Uses webhooks for real-time notifications.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ISSUE_CREATED,
+            "get_output_type": AbstractDataProviderType sub () { return new LinearIssueWebhookEventDataType(); },
+            "options": {
+                "teamId": <ActionOptionInfo>{
+                    "display_name": "Team",
+                    "short_desc": "Filter to issues from a specific team",
+                    "desc": "Only trigger for issues created in this team (optional)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "teams",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/events/issue-updated",
+            "action": "issue-updated",
+            "groups": "Triggers",
+            "display_name": "Issue Updated",
+            "short_desc": "Trigger when an issue is updated",
+            "desc": "Fires when an existing issue is updated in Linear. Uses webhooks for real-time notifications.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ISSUE_UPDATED,
+            "get_output_type": AbstractDataProviderType sub () { return new LinearIssueWebhookEventDataType(); },
+            "options": {
+                "teamId": <ActionOptionInfo>{
+                    "display_name": "Team",
+                    "short_desc": "Filter to issues from a specific team",
+                    "desc": "Only trigger for issues updated in this team (optional)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "teams",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": LinearDataProvider::AppName,
+            "path": "/events/comment-created",
+            "action": "comment-created",
+            "groups": "Triggers",
+            "display_name": "Comment Created",
+            "short_desc": "Trigger when a new comment is created",
+            "desc": "Fires when a new comment is added to any issue in Linear. Uses webhooks for real-time notifications.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_COMMENT_CREATED,
+            "get_output_type": AbstractDataProviderType sub () { return new LinearCommentWebhookEventDataType(); },
         });
     };
 }

@@ -86,10 +86,10 @@ public class LinearProjectDataType inherits HashDataType {
                 "desc": "The target completion date of the project",
             },
             "lead": {
-                "type": AutoHashOrNothingType,
+                "type": new LinearLeadRefDataType(),
                 "display_name": "Lead",
                 "short_desc": "The project lead",
-                "desc": "The user leading the project",
+                "desc": "The user leading the project (id, name)",
             },
             "createdAt": {
                 "type": DateOrNothingType,
@@ -102,6 +102,68 @@ public class LinearProjectDataType inherits HashDataType {
                 "display_name": "Updated At",
                 "short_desc": "When the project was last updated",
                 "desc": "The date and time when the project was last updated",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Linear project create request type
+public class LinearProjectCreateDataType inherits HashDataType {
+    private {
+        #! Field definitions for creating projects
+        const Fields = {
+            "name": {
+                "type": StringType,
+                "display_name": "Name",
+                "short_desc": "The project name (required)",
+                "desc": "The name of the project",
+                "example_value": "Q1 Product Launch",
+            },
+            "description": {
+                "type": StringOrNothingType,
+                "display_name": "Description",
+                "short_desc": "The project description",
+                "desc": "The description of the project",
+                "example_value": "Launch new product features for Q1 release",
+            },
+            "teamIds": {
+                "type": SoftListOrNothingType,
+                "display_name": "Team IDs",
+                "short_desc": "The team IDs",
+                "desc": "Array of team IDs to associate with the project",
+            },
+            "leadId": {
+                "type": StringOrNothingType,
+                "display_name": "Lead ID",
+                "short_desc": "The project lead user ID",
+                "desc": "The ID of the user leading the project",
+                "example_value": "user-uuid-here",
+            },
+            "state": {
+                "type": StringOrNothingType,
+                "display_name": "State",
+                "short_desc": "The project state",
+                "desc": "The initial state of the project (planned, started, paused, completed, canceled)",
+                "example_value": "planned",
+            },
+            "startDate": {
+                "type": StringOrNothingType,
+                "display_name": "Start Date",
+                "short_desc": "The project start date",
+                "desc": "The planned start date of the project (YYYY-MM-DD format)",
+                "example_value": "2025-01-15",
+            },
+            "targetDate": {
+                "type": StringOrNothingType,
+                "display_name": "Target Date",
+                "short_desc": "The project target date",
+                "desc": "The target completion date of the project (YYYY-MM-DD format)",
+                "example_value": "2025-03-31",
             },
         };
     }

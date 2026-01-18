@@ -236,16 +236,16 @@ LinearRestClient linear({"token": "lin_api_xxxxx"});
     #! returns options for @ref LinearRestClient::LinearRestClient::constructor()
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
-        # Set authorization header if token is provided (simple API key auth)
-        # Linear API keys should NOT use "Bearer" prefix - just the raw key
-        if (opts.token) {
-            rv.headers.Authorization = opts.token;
-            # Remove token from opts so RestClient doesn't add "Bearer" prefix
-            remove rv.token;
-        }
         # Only add OAuth2 options if OAuth2 credentials are provided
         if (opts.oauth2_client_id) {
             rv += OAuth2Options;
+            # For OAuth2, let RestClient handle the token with Bearer prefix
+        } else if (opts.token) {
+            # API key mode: Set authorization header directly
+            # Linear API keys should NOT use "Bearer" prefix - just the raw key
+            rv.headers.Authorization = opts.token;
+            # Remove token from opts so RestClient doesn't add "Bearer" prefix
+            remove rv.token;
         }
         return rv;
     }
@@ -395,6 +395,22 @@ public class LinearRestConnection inherits RestClient::RestConnection {
     private setChildCapabilities() {
         children_can_support_records = True;
         children_can_support_apis = True;
+    }
+
+    #! Sets the update options code for the connection
+    /** The closure or call reference must have the following signature:
+        <tt><update_options(hash<auto> options)</tt>
+    */
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        # update the URL immediately if necessary
+        if (update_options && url != DefaultConnectionUrl) {
+            # NOTE: do not update the URL or real URL values here, or the external update will fail, because it will
+            # believe that no changes are necessary
+            doUpdateOptions(self, {
+                "url": DefaultConnectionUrl,
+            });
+        }
     }
 
     #! returns a @ref LinearRestClient object

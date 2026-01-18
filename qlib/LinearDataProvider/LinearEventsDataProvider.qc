@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore LinearDataProvider module definition
 
-/*  LinearDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  LinearEventsDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,59 +25,38 @@
 #! Contains all public definitions in the LinearDataProvider module
 public namespace LinearDataProvider {
 
-#! The main Linear data provider class (root provider)
-public class LinearDataProvider inherits LinearDataProviderBase {
+#! Container provider for Linear event providers (triggers)
+public class LinearEventsDataProvider inherits LinearDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "linear",
-            "desc": "Linear data provider for issue tracking and project management",
-            "type": "LinearDataProvider",
+            "name": "events",
+            "desc": "Linear events data provider - watch for issue and comment events",
+            "type": "LinearEventsDataProvider",
             "supports_children": True,
-            "children_can_support_apis": True,
-            "children_can_support_records": True,
-            "constructor_options": ConstructorOptions,
+            "children_can_support_observers": True,
         };
-
-        #! Constructor options
-        const ConstructorOptions = BaseConstructorOptions;
 
         #! Child provider map
         const ChildMap = {
-            "issues": Class::forName("LinearIssuesDataProvider"),
-            "teams": Class::forName("LinearTeamsDataProvider"),
-            "projects": Class::forName("LinearProjectsDataProvider"),
-            "cycles": Class::forName("LinearCyclesDataProvider"),
-            "labels": Class::forName("LinearLabelsDataProvider"),
-            "events": Class::forName("LinearEventsDataProvider"),
-            "create-issue": Class::forName("LinearCreateIssueDataProvider"),
-            "create-comment": Class::forName("LinearCreateCommentDataProvider"),
-            "create-project": Class::forName("LinearCreateProjectDataProvider"),
-            "create-cycle": Class::forName("LinearCreateCycleDataProvider"),
-            "create-label": Class::forName("LinearCreateLabelDataProvider"),
+            "issue-created": Class::forName("LinearIssueEventDataProvider"),
+            "issue-updated": Class::forName("LinearIssueEventDataProvider"),
+            "comment-created": Class::forName("LinearCommentEventDataProvider"),
         };
-    }
-
-    #! Creates the object with options
-    constructor(*hash<auto> options) : LinearDataProviderBase(options) {
     }
 
     #! Creates the object with a REST client
     constructor(LinearRestClient::LinearRestClient rest) : LinearDataProviderBase(rest) {
     }
 
-    #! Creates the object with a connection
-    constructor(LinearRestClient::LinearRestConnection conn) : LinearDataProviderBase(conn) {
-    }
-
     #! Returns the provider name
     string getName() {
-        return "linear";
+        return "events";
     }
 
     #! Returns the provider description
     *string getDesc() {
-        return "Linear data provider for issue tracking and project management";
+        return "Linear events data provider - watch for issue and comment events";
     }
 
     #! Returns child provider names
@@ -87,9 +66,13 @@ public class LinearDataProvider inherits LinearDataProviderBase {
 
     #! Returns a child provider by name
     private *AbstractDataProvider getChildProviderImpl(string name) {
-        *Class cls = ChildMap{name};
-        if (cls) {
-            return cls.newObject(rest);
+        switch (name) {
+            case "issue-created":
+                return new LinearIssueEventDataProvider(rest, {"event_type": EVENT_ISSUE_CREATED});
+            case "issue-updated":
+                return new LinearIssueEventDataProvider(rest, {"event_type": EVENT_ISSUE_UPDATED});
+            case "comment-created":
+                return new LinearCommentEventDataProvider(rest);
         }
     }
 

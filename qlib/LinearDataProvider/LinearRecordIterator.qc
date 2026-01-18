@@ -122,7 +122,7 @@ public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRec
         @throw INVALID-ITERATOR the iterator is not valid
     */
     hash<auto> getValue() {
-        return i.getValue();
+        return LinearDataProviderBase::flattenConnections(i.getValue());
     }
 
     #! Returns the value of a field in the current record

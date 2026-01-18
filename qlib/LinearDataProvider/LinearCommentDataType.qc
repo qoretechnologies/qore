@@ -52,16 +52,43 @@ public class LinearCommentDataType inherits HashDataType {
                 "example_value": "https://linear.app/myteam/issue/ENG-123#comment-abc",
             },
             "user": {
-                "type": AutoHashOrNothingType,
+                "type": new LinearUserRefDataType(),
                 "display_name": "User",
                 "short_desc": "The comment author",
-                "desc": "The user who created the comment",
+                "desc": "The user who created the comment (id, name, email)",
             },
             "issue": {
-                "type": AutoHashOrNothingType,
+                "type": new LinearIssueRefDataType(),
                 "display_name": "Issue",
                 "short_desc": "The issue",
-                "desc": "The issue the comment belongs to",
+                "desc": "The issue the comment belongs to (id, identifier)",
+            },
+            "issueId": {
+                "type": StringOrNothingType,
+                "display_name": "Issue ID",
+                "short_desc": "The issue ID",
+                "desc": "The ID of the issue the comment belongs to",
+                "example_value": "8f7e6d5c-4b3a-2198-7f6e-5d4c3b2a1098",
+            },
+            "userId": {
+                "type": StringOrNothingType,
+                "display_name": "User ID",
+                "short_desc": "The author's user ID",
+                "desc": "The ID of the user who created the comment",
+                "example_value": "d7gc8f1h-0cef-6h74-cd6g-hg6f06eh73dc",
+            },
+            "edited": {
+                "type": BoolOrNothingType,
+                "display_name": "Edited",
+                "short_desc": "Whether the comment was edited",
+                "desc": "True if the comment has been edited after creation",
+                "example_value": False,
+            },
+            "archivedAt": {
+                "type": DateOrNothingType,
+                "display_name": "Archived At",
+                "short_desc": "When the comment was archived",
+                "desc": "The date and time when the comment was archived (if archived)",
             },
             "createdAt": {
                 "type": DateOrNothingType,
@@ -74,6 +101,34 @@ public class LinearCommentDataType inherits HashDataType {
                 "display_name": "Updated At",
                 "short_desc": "When the comment was last updated",
                 "desc": "The date and time when the comment was last updated",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Linear comment create request type
+public class LinearCommentCreateDataType inherits HashDataType {
+    private {
+        #! Field definitions for creating comments
+        const Fields = {
+            "issueId": {
+                "type": StringType,
+                "display_name": "Issue ID",
+                "short_desc": "The issue ID (required)",
+                "desc": "The ID of the issue to add the comment to",
+                "example_value": "8f7e6d5c-4b3a-2198-7f6e-5d4c3b2a1098",
+            },
+            "body": {
+                "type": StringType,
+                "display_name": "Body",
+                "short_desc": "The comment body (required)",
+                "desc": "The body/content of the comment in markdown format",
+                "example_value": "This looks good, but we should add more tests.",
             },
         };
     }

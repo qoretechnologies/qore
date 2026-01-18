@@ -101,6 +101,11 @@ public class LinearProjectDataProvider inherits LinearDataProviderBase {
         return data.projectArchive.success ? 1 : 0;
     }
 
+    #! Returns example data for the record type without making API calls
+    private hash<auto> getExampleRecordDataImpl() {
+        return generateExampleData(recordType.getFields());
+    }
+
     #! Returns static provider info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return cast<hash<DataProviderInfo>>(ProviderInfo + {

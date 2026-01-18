@@ -523,6 +523,41 @@ query ListIssuesRef($first: Int, $after: String, $filter: IssueFilter) {
 }
 ";
 
+#! Webhook fields fragment for GraphQL queries
+public const WebhookFieldsFragment = "
+    id
+    label
+    url
+    enabled
+    team {
+        id
+        name
+    }
+    resourceTypes
+    createdAt
+    updatedAt
+";
+
+#! GraphQL mutation for creating a webhook
+public const CreateWebhookMutation = "
+mutation CreateWebhook($input: WebhookCreateInput!) {
+    webhookCreate(input: $input) {
+        success
+        webhook {" + WebhookFieldsFragment + "
+        }
+    }
+}
+";
+
+#! GraphQL mutation for deleting a webhook
+public const DeleteWebhookMutation = "
+mutation DeleteWebhook($id: String!) {
+    webhookDelete(id: $id) {
+        success
+    }
+}
+";
+
 #! Linear logo in SVG format
 public const LinearLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <svg width=\"100\" height=\"100\" viewBox=\"0 0 100 100\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">

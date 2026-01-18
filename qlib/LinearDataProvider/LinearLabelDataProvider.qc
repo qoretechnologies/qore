@@ -100,6 +100,11 @@ public class LinearLabelDataProvider inherits LinearDataProviderBase {
         return data.issueLabelDelete.success ? 1 : 0;
     }
 
+    #! Returns example data for the record type without making API calls
+    private hash<auto> getExampleRecordDataImpl() {
+        return generateExampleData(recordType.getFields());
+    }
+
     #! Returns static provider info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return cast<hash<DataProviderInfo>>(ProviderInfo + {

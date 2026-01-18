@@ -75,6 +75,11 @@ public class LinearTeamDataProvider inherits LinearDataProviderBase {
             where_cond, search_options, recordType.getFields());
     }
 
+    #! Returns example data for the record type without making API calls
+    private hash<auto> getExampleRecordDataImpl() {
+        return generateExampleData(recordType.getFields());
+    }
+
     #! Returns static provider info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return cast<hash<DataProviderInfo>>(ProviderInfo + {
