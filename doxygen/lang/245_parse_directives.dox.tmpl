@@ -98,6 +98,7 @@
     |@ref no-thread-info "%no-thread-info"|Disallows any access to functionality that provides threading information (see @ref no-thread-info "%no-thread-info" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_INFO and the <tt>-</tt><tt>-no-thread-info</tt> command line option
     |@ref no-threads "%no-threads"|Disallows access to all thread control operations and thread classes (equivalent to <tt>-</tt><tt>-no-thread-control</tt> and <tt>-</tt><tt>-no-thread-classes</tt> together); equivalent to parse option @ref Qore::PO_NO_THREADS and the <tt>-</tt><tt>-no-threads</tt> command line option
     |@ref no-typedef "%no-typedef"|Disables the \c typedef keyword; equivalent to parse option @ref Qore::PO_NO_TYPEDEF <br><br>Since %Qore 2.3
+    |@ref no-enum "%no-enum"|Disables the \c enum keyword; equivalent to parse option @ref Qore::PO_NO_ENUM <br><br>Since %Qore 2.3
     |@ref no-top-level "%no-top-level"|Disallows any further top level code; equivalent to parse option @ref Qore::PO_NO_TOP_LEVEL_STATEMENTS and the <tt>-</tt><tt>-no-top-level</tt> command line option
     |@ref no-transient "%no-transient"|Removes the @ref transient keyword for backwards-compatibility; equivalent to parse option @ref Qore::PO_NO_TRANSIENT
     |@ref no-uncontrolled-apis "%no-uncontrolled-apis"|Disallows access to uncontrolled APIs such as external language bindings or direct generic system call APIs that could bypass %Qore's sandboxing controls
@@ -1868,6 +1869,26 @@ sub validate_input(int value, int max_value) {
     as a keyword and can be used as an identifier (variable name, function name, etc.).
 
     This option is provided for backwards compatibility with code that uses \c typedef as an identifier.
+
+    <hr>
+    @section no-enum %no-enum
+
+    @par Parse Directive:
+    <tt>%%no-enum</tt>
+
+    @par Command Line:
+    <tt>-pno-enum</tt>
+
+    @par Parse Option Constant:
+    @ref Qore::PO_NO_ENUM
+
+    @par Description:
+    Disables the @ref enums "enum" keyword. When this option is set, \c enum is not recognized
+    as a keyword and cannot be used to declare enums.
+
+    This option is provided for backwards compatibility with code that uses \c enum as an identifier.
+
+    @see @ref enums "Enums: Type-Safe Enumerated Constants"
 
     @since %Qore 2.3
 

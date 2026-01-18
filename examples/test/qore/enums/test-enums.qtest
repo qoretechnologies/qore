@@ -361,9 +361,24 @@ class EnumTest inherits QUnit::Test {
 
         # Using enum value directly
         assertEq("medium", getPriorityName(Priority::Medium));
+
+        # Function with enum parameter type
+        assertEq("low", getPriorityNameEnum(Priority::Low));
+        assertEq("high", getPriorityNameEnum(Priority::High));
+        assertThrows("RUNTIME-CAST-ERROR", sub () { getPriorityNameEnum(cast<enum<Priority>>(99)); });
     }
 
     string getPriorityName(int priority) {
+        switch (priority) {
+            case Priority::Low: return "low";
+            case Priority::Medium: return "medium";
+            case Priority::High: return "high";
+            case Priority::Critical: return "critical";
+            default: return "unknown";
+        }
+    }
+
+    string getPriorityNameEnum(enum<Priority> priority) {
         switch (priority) {
             case Priority::Low: return "low";
             case Priority::Medium: return "medium";

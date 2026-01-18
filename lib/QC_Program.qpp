@@ -313,6 +313,15 @@ const PO_LOCKDOWN = PO_LOCKDOWN;
  */
 const PO_NEW_STYLE = PO_NEW_STYLE;
 
+//! Sets @ref new-style "%new-style", @ref require-types "%require-types", and @ref strict-args "%strict-args" and enables all warnings
+/** made up of @ref PO_NEW_STYLE | @ref PO_REQUIRE_TYPES | @ref PO_STRICT_ARGS
+
+    @see @ref modern "%modern"
+
+    @since %Qore 2.3
+*/
+const PO_MODERN = PO_MODERN;
+
 //! Disallows loading @ref qore_modules "modules" with the @ref requires "%requires" directive or at runtime with load_module()
 /**
     @see @ref no-modules "%no-modules"
@@ -725,9 +734,9 @@ const PO_ALLOW_DEBUGGER = PO_ALLOW_DEBUGGER;
 
     @note Parsing is only allowed when no threads are active in the Program.
 
-    @see @ref parsePending() "Program::parsePending()"
-    @see @ref parseCommit() "Program::parseCommit()"
-    @see @ref parseRollback() "Program::parseRollback()"
+    @see @ref Qore::Program::parsePending() "Program::parsePending()"
+    @see @ref Qore::Program::parseCommit() "Program::parseCommit()"
+    @see @ref Qore::Program::parseRollback() "Program::parseRollback()"
 
     @since %Qore 2.3
  */
@@ -798,7 +807,7 @@ const PO_BROKEN_VARARGS = PO_BROKEN_VARARGS;
 */
 const PO_ENABLE_DEBUG = PO_ENABLE_DEBUG;
 
-//! Disables the @ref typedef keyword
+//! Disables the @ref typedef_keyword "typedef" keyword
 /** @see @ref no-typedef "%no-typedef"
 
     @since %Qore 2.3
@@ -816,6 +825,8 @@ const PO_BROKEN_NARROWED_TYPES = PO_BROKEN_NARROWED_TYPES;
 
 //! Do not allow enum declarations
 /**
+    @see @ref no-enum "%no-enum"
+
     @since %Qore 2.3
 */
 const PO_NO_ENUM = PO_NO_ENUM;

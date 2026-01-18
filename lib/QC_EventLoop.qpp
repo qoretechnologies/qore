@@ -411,7 +411,7 @@ if (events) {
 }
     @endcode
 
-    @param timeout Timeout for the poll operation; a negative value waits indefinitely,
+    @param timeout_ms Timeout for the poll operation; a negative value waits indefinitely,
            0 returns immediately, positive values wait up to that duration
 
     @return A list of hash<EventInfo> for sockets/files with events, or NOTHING on timeout

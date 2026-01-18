@@ -210,6 +210,8 @@ Notes:
 - Use `enum<HTTP2Mode>` or `*enum<HTTP2Mode>` in QPP type signatures.
 - QPP emits an `init_enum_<EnumName>()` function; for system enums, call it from
   `lib/QoreNamespace.cpp` (it registers itself via `addSystemEnum()` internally).
+- When used in QPP method signatures, enum parameters are passed to C++ as the enum's base type
+  (`int64`, `const QoreStringNode*`, `double`, or `const QoreNumberNode*`).
 
 ## Class Creation Checklist
 

@@ -337,7 +337,9 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/210_constants.dox.tmpl
     doxygen/lang/215_classes.dox.tmpl
     doxygen/lang/217_hashdecl.dox.tmpl
+    doxygen/lang/218_enums.dox.tmpl
     doxygen/lang/220_threading.dox.tmpl
+    doxygen/lang/222_sandboxing.dox.tmpl
     doxygen/lang/225_exception_handling.dox.tmpl
     doxygen/lang/230_signal_handling.dox.tmpl
     doxygen/lang/235_event_handling.dox.tmpl

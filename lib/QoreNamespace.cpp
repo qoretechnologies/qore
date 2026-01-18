@@ -208,6 +208,8 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclNetworkSecurityConfigInfo,
     * hashdeclSandboxConfigInfo;
 
+const QoreEnumDecl* enumHTTP2Mode;
+
 DLLLOCAL void init_context_functions(QoreNamespace& ns);
 DLLLOCAL void init_RangeIterator_functions(QoreNamespace& ns);
 DLLLOCAL QoreEnumDecl* init_enum_HTTP2Mode(QoreNamespace& ns);
@@ -1213,7 +1215,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclNetworkSecurityConfigInfo = init_hashdecl_NetworkSecurityConfigInfo(qns);
     hashdeclSandboxConfigInfo = init_hashdecl_SandboxConfigInfo(qns);
 
-    init_enum_HTTP2Mode(qns);
+    enumHTTP2Mode = init_enum_HTTP2Mode(qns);
 
     qore_ns_private::addNamespace(qns, get_thread_ns(qns));
 

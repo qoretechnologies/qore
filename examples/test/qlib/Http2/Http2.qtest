@@ -1744,22 +1744,22 @@ public class Http2Test inherits QUnit::Test {
         # Test mode setting via constants
         HTTPClient client({"url": "https://example.com"});
 
-        client.setHttp2Mode(HTTP2_MODE_DISABLED);
+        client.setHttp2Mode(HTTP2Mode::Disabled);
         assertEq("disabled", client.getHttp2Mode());
 
-        client.setHttp2Mode(HTTP2_MODE_AUTO);
+        client.setHttp2Mode(HTTP2Mode::Auto);
         assertEq("auto", client.getHttp2Mode());
 
-        client.setHttp2Mode(HTTP2_MODE_REQUIRED);
+        client.setHttp2Mode(HTTP2Mode::Required);
         assertEq("required", client.getHttp2Mode());
 
         # Test h2c modes on non-SSL URL
         HTTPClient h2c_client({"url": "http://example.com"});
 
-        h2c_client.setHttp2Mode(HTTP2_MODE_H2C_DIRECT);
+        h2c_client.setHttp2Mode(HTTP2Mode::H2cDirect);
         assertEq("h2c", h2c_client.getHttp2Mode());  # Canonical name is "h2c"
 
-        h2c_client.setHttp2Mode(HTTP2_MODE_H2C_UPGRADE);
+        h2c_client.setHttp2Mode(HTTP2Mode::H2cUpgrade);
         assertEq("h2c-upgrade", h2c_client.getHttp2Mode());
     }
 
@@ -2395,14 +2395,14 @@ public class Http2Test inherits QUnit::Test {
         set_global_http2_mode("auto");
         assertEq("auto", get_global_http2_mode(), "global mode should be 'auto' after setting");
 
-        # Test 5: Set mode using integer constants
-        set_global_http2_mode(HTTP2_MODE_DISABLED);
+        # Test 5: Set mode using enum constants
+        set_global_http2_mode(HTTP2Mode::Disabled);
         assertEq("disabled", get_global_http2_mode(), "global mode should be 'disabled' after setting with int");
 
-        set_global_http2_mode(HTTP2_MODE_REQUIRED);
+        set_global_http2_mode(HTTP2Mode::Required);
         assertEq("required", get_global_http2_mode(), "global mode should be 'required' after setting with int");
 
-        set_global_http2_mode(HTTP2_MODE_AUTO);
+        set_global_http2_mode(HTTP2Mode::Auto);
         assertEq("auto", get_global_http2_mode(), "global mode should be 'auto' after setting with int");
 
         # Test 6: Case insensitivity of string mode
@@ -2415,9 +2415,9 @@ public class Http2Test inherits QUnit::Test {
         # Test 7: Invalid string mode should throw exception
         assertThrows("SET-GLOBAL-HTTP2-MODE-ERROR", sub () { set_global_http2_mode("invalid"); });
 
-        # Test 8: Invalid integer mode should throw exception
-        assertThrows("SET-GLOBAL-HTTP2-MODE-ERROR", sub () { set_global_http2_mode(99); });
-        assertThrows("SET-GLOBAL-HTTP2-MODE-ERROR", sub () { set_global_http2_mode(-1); });
+        # Test 8: Invalid enum cast should throw exception
+        assertThrows("RUNTIME-CAST-ERROR", sub () { set_global_http2_mode(cast<enum<HTTP2Mode>>(99)); });
+        assertThrows("RUNTIME-CAST-ERROR", sub () { set_global_http2_mode(cast<enum<HTTP2Mode>>(-1)); });
 
         # Restore original mode
         set_global_http2_mode(original_mode);
@@ -3644,8 +3644,8 @@ public class Http2Test inherits QUnit::Test {
             # Invalid mode string should throw
             assertThrows("HTTP2-MODE-ERROR", sub () { client.setHttp2Mode("invalid-mode"); });
 
-            # Invalid mode integer should throw
-            assertThrows("HTTP2-MODE-ERROR", sub () { client.setHttp2Mode(999); });
+            # Invalid mode enum should throw
+            assertThrows("RUNTIME-CAST-ERROR", sub () { client.setHttp2Mode(cast<enum<HTTP2Mode>>(99)); });
         }
 
         # Test 4: Poll operation after disconnect - verify reconnect works

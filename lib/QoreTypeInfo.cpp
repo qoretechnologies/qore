@@ -36,6 +36,7 @@
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -1612,6 +1613,10 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                 case QTS_ENUM: {
                     // Same enum declaration = exact match
                     if (u.ed == t.u.ed) {
+                        max_result = QTI_IDENT;
+                        return QTI_IDENT;
+                    }
+                    if (qore_enum_decl_private::get(*u.ed)->parseEqual(*qore_enum_decl_private::get(*t.u.ed))) {
                         max_result = QTI_IDENT;
                         return QTI_IDENT;
                     }
