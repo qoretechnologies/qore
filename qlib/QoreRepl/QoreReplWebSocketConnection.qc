@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore QoreReplWebSocketConnection class definition
 
-/** QoreReplWebSocketConnection.qc Copyright 2025 Qore Technologies, s.r.o.
+/** QoreReplWebSocketConnection.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -58,14 +58,8 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
     }
 
     private {
-        #! The REPL instance for this connection
-        QoreRepl repl;
-
-        #! Unique session ID
-        string session_id;
-
-        #! Buffer for captured output
-        list<hash<auto>> output_buffer = ();
+        #! Action session implementation
+        QoreReplActionSession session;
     }
 
     #! Creates a new REPL WebSocket connection
@@ -74,21 +68,21 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
     */
     constructor(WebSocketHandler::WebSocketHandler handler, *hash<auto> repl_options)
             : WebSocketConnection(handler) {
-        repl = new QoreRepl(repl_options);
-        session_id = get_random_string(16);
+        session = new QoreReplActionSession(repl_options);
     }
 
     #! Called when the connection is registered and ready
     /** Sends session info to the client
     */
     registered() {
+        hash<auto> info = session.getSessionInfo();
         sendMessage({
             "type": "session",
-            "sessionId": session_id,
-            "version": ProtocolVersion,
-            "qoreVersion": Qore::VersionString,
+            "sessionId": info.sessionId,
+            "version": info.version,
+            "qoreVersion": info.qoreVersion,
         });
-        sendPrompt();
+        sendEvents(session.getPromptEvents(NOTHING));
     }
 
     #! Called when a message is received from the client
@@ -135,12 +129,12 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
 
     #! Returns the session ID
     string getSessionId() {
-        return session_id;
+        return session.getSessionId();
     }
 
     #! Returns the REPL instance
     QoreRepl getRepl() {
-        return repl;
+        return session.getRepl();
     }
 
     #! Handles an eval request
@@ -152,39 +146,10 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
             sendError(id, "MISSING-PARAMETER", "Missing 'code' parameter");
             return;
         }
-
-        date start = now_us();
-        *hash<auto> result = repl.eval(code);
-        int duration_ms = (now_us() - start).durationMicroseconds() / 1000;
-
-        if (!exists result) {
-            # Need more input
-            sendPrompt();
-            return;
-        }
-
-        if (result.exit) {
-            sendMessage({
-                "type": "exit",
-                "reason": "user_request",
-            });
-            stop();
-            return;
-        }
-
-        if (result.error) {
-            sendError(id, result.error.err, result.error.desc, result.error);
-        } else {
-            sendMessage({
-                "type": "result",
-                "id": id,
-                "value": QoreRepl::formatValue(result.value),
-                "valueType": result.value.fullType(),
-                "duration": duration_ms,
-            });
-        }
-
-        sendPrompt();
+        sendEvents(session.handleAction("repl-eval", {
+            "code": code,
+            "id": id,
+        }));
     }
 
     #! Handles a command request
@@ -196,37 +161,10 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
             sendError(id, "MISSING-PARAMETER", "Missing 'command' parameter");
             return;
         }
-
-        # Commands should start with /
-        if (command !~ /^\//) {
-            command = "/" + command;
-        }
-
-        date start = now_us();
-        *hash<auto> result = repl.eval(command);
-        int duration_ms = (now_us() - start).durationMicroseconds() / 1000;
-
-        if (result.exit) {
-            sendMessage({
-                "type": "exit",
-                "reason": "user_request",
-            });
-            stop();
-            return;
-        }
-
-        if (result.error) {
-            sendError(id, result.error.err, result.error.desc, result.error);
-        } else {
-            sendMessage({
-                "type": "result",
-                "id": id,
-                "value": QoreRepl::formatValue(result.value),
-                "duration": duration_ms,
-            });
-        }
-
-        sendPrompt();
+        sendEvents(session.handleAction("repl-command", {
+            "command": command,
+            "id": id,
+        }));
     }
 
     #! Handles an interrupt request
@@ -235,16 +173,12 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
         @note Currently not implemented - Qore doesn't support thread interruption
     */
     private handleInterrupt(*string id) {
-        sendError(id, "NOT-IMPLEMENTED", "Interrupt is not currently supported");
+        sendEvents(session.handleAction("repl-interrupt", {"id": id}));
     }
 
     #! Sends the current prompt state
     private sendPrompt() {
-        sendMessage({
-            "type": "prompt",
-            "value": repl.getPrompt(),
-            "needsMoreInput": repl.needsMoreInput(),
-        });
+        sendEvents(session.getPromptEvents(NOTHING));
     }
 
     #! Sends an error response
@@ -290,6 +224,49 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
             "stream": stream,
             "text": text,
         });
+    }
+
+    private sendEvents(list<hash<auto>> events) {
+        foreach hash<auto> evt in (events) {
+            string ev = evt.event ?? "";
+            hash<auto> data = evt.data ?? {};
+            switch (ev) {
+                case "result":
+                case "repl-result":
+                    sendMessage({
+                        "type": "result",
+                        "id": data.request_id,
+                        "value": data.value,
+                        "valueType": data.value_type,
+                        "duration": data.duration_ms,
+                    });
+                    break;
+
+                case "error":
+                case "repl-error":
+                    sendError(data.request_id, data.code ?? "REPL-ERROR", data.message ?? "REPL error",
+                        data.details);
+                    break;
+
+                case "prompt":
+                case "repl-prompt":
+                    sendMessage({
+                        "type": "prompt",
+                        "value": data.value,
+                        "needsMoreInput": data.needs_more_input,
+                    });
+                    break;
+
+                case "exit":
+                case "repl-exit":
+                    sendMessage({
+                        "type": "exit",
+                        "reason": data.reason ?? "user_request",
+                    });
+                    stop();
+                    break;
+            }
+        }
     }
 }
 

@@ -166,6 +166,9 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         addTestCase("response conversation callback store", \responseConversationCallbackStoreTest());
         addTestCase("response stream events", \responseStreamEventsTest());
         addTestCase("response stream error", \responseStreamErrorTest());
+        addTestCase("response action create", \responseActionCreateTest());
+        addTestCase("response action stream", \responseActionStreamTest());
+        addTestCase("response action invalid args", \responseActionInvalidArgsTest());
 
         try {
             setupConnection();
@@ -713,15 +716,15 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         OpenAiModelCreateResponseDataProvider prov = makeResponseProvider(\rest);
         hash<auto> saved;
         string saved_key;
-        OpenAiConversationContextStoreCallbacks store({
-            "load": *hash<auto> sub (string key) {
+        OpenAiConversationContextStoreCallbacks store(
+            *hash<auto> sub (string key) {
                 return saved{key};
             },
-            "save": auto sub (string key, hash<auto> ctxt) {
+            nothing sub (string key, hash<auto> ctxt) {
                 saved_key = key;
                 saved{key} = ctxt;
-            },
-        });
+            }
+        );
         prov.setConversationContextStore(store);
 
         hash<auto!> req = {
@@ -774,6 +777,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         prov.registerObserver(observer);
         prov.observersReady();
         prov.doRequest({
+            "model": "gpt-4.1-mini",
             "input": (
                 {
                     "input_item": {
@@ -808,6 +812,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         prov.registerObserver(observer);
         prov.observersReady();
         prov.doRequest({
+            "model": "gpt-4.1-mini",
             "input": (
                 {
                     "input_item": {
@@ -826,6 +831,149 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         observer.wait(1);
         assertEq("error", observer.events[0].type);
         assertEq("SSE-ERROR", observer.events[0].error.err);
+%endif
+    }
+
+    responseActionCreateTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOpenAiRestClient rest();
+        rest.response_body = {
+            "id": "resp_action",
+            "output": (
+                {
+                    "role": "assistant",
+                    "content": (
+                        {
+                            "type": "output_text",
+                            "text": "hello",
+                        },
+                    ),
+                },
+            ),
+        };
+
+        OpenAiResponseActionSession session({
+            "restclient": rest,
+        });
+        hash<auto> result = session.handleAction("openai-response-create", {
+            "model": "gpt-4.1-mini",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+        });
+        assertEq("resp_action", result.response_id);
+        assertEq(1, result.output.size());
+        assertEq("assistant", result.output[0].role);
+        assertEq("text", result.output[0].content[0].type);
+        assertEq("hello", result.output[0].content[0].text);
+%endif
+    }
+
+    responseActionStreamTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOpenAiRestClient rest();
+        rest.stream_events = (
+            <SseMessageInfo>{
+                "data": "{\"type\":\"response.output_text.delta\",\"delta\":{\"text\":\"hi\"}}",
+            },
+            <SseMessageInfo>{
+                "data": "{\"type\":\"response.completed\",\"response\":{\"id\":\"resp_stream\"}}",
+            },
+        );
+
+        list<hash<auto>> events = ();
+        Mutex m();
+        Condition cond();
+
+        OpenAiResponseActionSession session({
+            "restclient": rest,
+        });
+        session.setEmitter(sub (hash<auto> evt) {
+            m.lock();
+            on_exit m.unlock();
+            events += evt;
+            cond.broadcast();
+        });
+
+        session.handleAction("openai-response-start", {
+            "model": "gpt-4.1-mini",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+        });
+
+        date start = now_us();
+        m.lock();
+        on_exit m.unlock();
+        while (events.lsize() < 2) {
+            cond.wait(m, 1s);
+            if ((now_us() - start) > 5s) {
+                throw "ERROR", "no stream events in timeout";
+            }
+        }
+
+        assertEq("openai-response-event", events[0].event);
+        assertEq("text-delta", events[0].data.event_type);
+        assertEq("response.output_text.delta", events[0].data.openai_type);
+        assertEq("response-completed", events[1].data.event_type);
+
+        hash<auto> stop_result = session.handleAction("openai-response-stop", {});
+        assertEq("stopped", stop_result.status);
+%endif
+    }
+
+    responseActionInvalidArgsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOpenAiRestClient rest();
+        OpenAiResponseActionSession session({
+            "restclient": rest,
+        });
+
+        bool caught = False;
+        try {
+            session.handleAction("openai-response-create", {
+                "input": (
+                    {
+                        "input_item": {
+                            "role": "user",
+                            "content": (
+                                {
+                                    "type": "input_text",
+                                    "text": "hello",
+                                },
+                            ),
+                        },
+                    },
+                ),
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("INVALID-REQUEST", ex.err);
+        }
+        assertTrue(caught, "Should reject missing model");
 %endif
     }
 

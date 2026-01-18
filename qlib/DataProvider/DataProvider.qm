@@ -42,7 +42,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.6.0";
+    version = "3.3.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -445,6 +445,10 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
     language-server services for tokenization, parsing, validation, and completion, and can be used by UI clients
     for syntax highlighting, diagnostics, and completions in the context of a data provider.
 
+    For Creator WebSocket integrations, the action-based @ref DataProvider::DpqlActionSession "DpqlActionSession"
+    class provides a transport-agnostic DPQL service with context-aware operations and token output suitable for
+    editor integrations.
+
     @code{.py}
 %requires HttpServer
 %requires DpqlWebSocket
@@ -475,29 +479,6 @@ if (errors) {
     @endcode
 
     @section dataprovider_relnotes Release Notes
-
-    @subsection dataprovider_v3_4 DataProvider v3.4
-    - moved DPQL WebSocket APIs to the <a href="../../DpqlWebSocket/html/index.html">DpqlWebSocket</a> module
-    - added debug info collection infrastructure for data providers
-      - @ref DataProvider::DataProviderDebugInfo "DataProviderDebugInfo": Hashdecl for technical debug information
-      - @ref DataProvider::AbstractDebugInfoCollector "AbstractDebugInfoCollector": Abstract base class for debug collectors
-      - @ref DataProvider::BufferedDebugInfoCollector "BufferedDebugInfoCollector": Stores debug info in memory for later retrieval
-      - @ref DataProvider::ConsoleDebugInfoCollector "ConsoleDebugInfoCollector": Outputs debug info to console immediately
-      - @ref DataProvider::AbstractDataProvider::setDebugCollector() "AbstractDataProvider::setDebugCollector()": Register debug collector
-      - @ref DataProvider::AbstractDataProvider::getDebugCollector() "AbstractDataProvider::getDebugCollector()": Get current debug collector
-      - @ref DataProvider::AbstractDataProvider::debugCollectionEnabled() "AbstractDataProvider::debugCollectionEnabled()": Check if debug collection is enabled
-    - debug info includes HTTP headers, request/response bodies, timing, protocol info (HTTP/2), and more
-    - added DPQL (Data Provider Query Language) support for human-readable query expressions
-      - @ref DataProvider::DpqlTokenizer "DpqlTokenizer": Tokenizes DPQL expressions with position tracking
-      - @ref DataProvider::DpqlParser "DpqlParser": Parses DPQL strings into DataProviderExpression structures
-      - @ref DataProvider::DpqlSerializer "DpqlSerializer": Serializes DataProviderExpression back to DPQL strings
-      - @ref DataProvider::DpqlCompletionProvider "DpqlCompletionProvider": Context-aware completions for IDE support
-      - @ref DataProvider::DataProvider::parseDpqlExpression() "DataProvider::parseDpqlExpression()": Parse DPQL to expression
-      - @ref DataProvider::DataProvider::parseDpqlExpressionWithInfo() "DataProvider::parseDpqlExpressionWithInfo()": Parse with diagnostics
-      - @ref DataProvider::DataProvider::serializeDpqlExpression() "DataProvider::serializeDpqlExpression()": Serialize expression to DPQL
-      - @ref DataProvider::DataProvider::getDpqlTokens() "DataProvider::getDpqlTokens()": Get tokens for syntax highlighting
-      - @ref DataProvider::DataProvider::getDpqlCompletions() "DataProvider::getDpqlCompletions()": Get completions at cursor position
-      - @ref DataProvider::DataProvider::validateDpqlExpression() "DataProvider::validateDpqlExpression()": Validate against fields
 
     @subsection dataprovider_v3_3 DataProvider v3.3
     - added methods to return data provider types in the context of option dataprovider_message_support
