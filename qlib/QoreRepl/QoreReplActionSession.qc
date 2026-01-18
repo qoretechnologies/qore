@@ -191,7 +191,7 @@ public class QoreReplActionSession {
 
     private hash<auto> makeErrorEvent(*string request_id, string error, string description,
             *hash<ExceptionInfo> ex) {
-        hash<auto> data = {
+        hash<auto!> data = {
             "request_id": request_id,
             "code": error,
             "message": description,
