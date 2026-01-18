@@ -452,7 +452,9 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         hash<FactoryInfo> info = DataProvider::getFactoryInfoFromString(name);
 
         AbstractDataProviderFactory factory;
-        if ((*string factory_name = FactoryMap{info.name}) && DataProvider::tryLoad(factory_name)) {
+        if (*AbstractDataProviderFactory cached = DataProvider::getFactory(info.name)) {
+            factory = cached;
+        } else if ((*string factory_name = FactoryMap{info.name}) && DataProvider::tryLoad(factory_name)) {
             factory = DataProvider::getFactoryEx(info.name);
         } else {
             *object v = DataProvider::loadFromEnvironment("get_data_provider_map", "data provider", <SymbolInfo>{

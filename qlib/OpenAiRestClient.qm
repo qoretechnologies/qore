@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file OpenAiRestClient.qm Qore user module for calling OpenAi REST services
 
-/*  OpenAiRestClient.qm Copyright (C) 2020 - 2024 Qore Technologies, s.r.o.
+/*  OpenAiRestClient.qm Copyright (C) 2020 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,7 +39,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module OpenAiRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "user module for calling OpenAi REST API services";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -83,11 +83,47 @@ hash<auto> ans = rest.get("/calendar/users/me/calendarList");
 printf("%N\n", ans.body);
     @endcode
 
-    @section OpenAirestclientrelnotes Release Notes
+    @par Streaming Example:
+    @code{.py}
+OpenAiRestClient rest = get_connection("my-openai-connection");
+OpenAiResponseSseStream stream = rest.openResponsesStream({
+    "model": "gpt-4o-mini",
+    "stream": True,
+    "input": (
+        {
+            "input_item": {
+                "role": "user",
+                "content": (
+                    {
+                        "type": "input_text",
+                        "text": "Stream a response",
+                    },
+                ),
+            },
+        },
+    ),
+});
+while (hash<SseMessageInfo> evt = stream.readEvent(5s)) {
+    if (evt.data == "[DONE]") {
+        break;
+    }
+    printf("%s\n", evt.data);
+}
+stream.close();
+    @endcode
 
-    @subsection OpenAirestclientv1_0 OpenAiRestClient v1.0
+    @section OpenAiRestClientRelnotes Release Notes
+
+    @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
+    - added SSE helper for streaming responses
+
+    @subsection OpenAiRestClientv1_0 OpenAiRestClient v1.0
     - the initial version of the %OpenAiRestClient module
 */
+
+%try-module json
+%define NoJson
+%endtry
 
 #! the OpenAiRestClient namespace contains all the objects in the OpenAiRestClient module
 public namespace OpenAiRestClient {
@@ -145,6 +181,175 @@ OpenAiRestClient rest(opts);
             }
         }
         return DefaultOptions + opts;
+    }
+
+    #! Opens a Server-Sent Events stream for responses
+    OpenAiResponseSseStream openResponsesStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        return new OpenAiResponseSseStream(self, "responses", req, hdr, to);
+    }
+}
+
+#! SSE connection for OpenAI responses streams
+public class OpenAiResponseSseStream {
+    private {
+        OpenAiRestClient rest;
+        bool chunked;
+        string content_encoding;
+        StringOutputStream ostream;
+        TransformOutputStream dstream;
+        bool use_decompressor;
+        timeout timeout_ms = 15s;
+        bool closed;
+
+        const SseMimeType = "text/event-stream";
+    }
+
+    #! Creates the stream connection
+    constructor(OpenAiRestClient rest, string path, *auto body, *hash<auto> hdr, *timeout to) {
+        self.rest = rest;
+        if (to) {
+            timeout_ms = to;
+        }
+        hash<auto> headers = rest.getDefaultHeaders() + (hdr ?? {});
+        headers.Accept = SseMimeType;
+        data payload;
+        if (exists body) {
+            payload = getSerializedBody(body, \headers);
+        }
+        string full_path = buildPath(path);
+        hash<auto> info;
+        hash<auto> resp = rest.send(payload, "POST", full_path, headers, False, \info);
+        if (resp.status_code != 200) {
+            throw "SSE-ERROR", sprintf("unexpected status code %d %s", resp.status_code, resp.status_message);
+        }
+        string content_type = normalizeContentType(resp."content-type");
+        if (content_type != SseMimeType) {
+            throw "SSE-ERROR", sprintf("expected Content-Type %y but got %y", SseMimeType, resp."content-type");
+        }
+        if (resp."content-encoding".val()) {
+            content_encoding = tolower(resp."content-encoding");
+        }
+        if (resp."transfer-encoding".val()) {
+            string transfer_encoding = tolower(resp."transfer-encoding");
+            if (transfer_encoding == "chunked") {
+                chunked = True;
+            } else {
+                throw "SSE-ERROR", sprintf("unsupported Transfer-Encoding: %y", resp."transfer-encoding");
+            }
+        }
+        setupDecompression();
+    }
+
+    #! Reads the next SSE message
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (closed) {
+            return;
+        }
+        timeout use_to = to ?? timeout_ms;
+        if (chunked) {
+            hash<auto> hh = rest.readHTTPChunk(use_to);
+            if (!hh.body) {
+                return;
+            }
+            if (use_decompressor) {
+                dstream.write(hh.body);
+            } else {
+                ostream.write(hh.body);
+            }
+            return rest.parseServerSentEvent(ostream.getData());
+        }
+        return rest.readServerSentEvent(content_encoding, use_to);
+    }
+
+    #! Closes the stream connection
+    close() {
+        if (!closed) {
+            closed = True;
+            rest.disconnect();
+        }
+    }
+
+    private string buildPath(string path) {
+        string rv = path;
+        rv =~ s/^\/+//;
+        rv = "/" + rv;
+        *string base = rest.getConnectionPath();
+        if (base.val() && base != "/") {
+            base =~ s/\/+$//;
+            if (base !~ /^\//) {
+                base = "/" + base;
+            }
+            rv = base + rv;
+        }
+        *string defp = rest.getDefaultPath();
+        if (defp.val() && defp != "/") {
+            defp =~ s/\/+$//;
+            if (defp !~ /^\//) {
+                defp = "/" + defp;
+            }
+            rv = defp + rv;
+        }
+        return rv;
+    }
+
+    private data getSerializedBody(data body, reference<hash<auto>> headers) {
+        if (body.typeCode() == NT_STRING) {
+            if (!headers."Content-Type") {
+                headers."Content-Type" = "application/json";
+            }
+            return body;
+        }
+%ifdef NoJson
+        throw "SSE-ERROR", "json module is required to serialize SSE request body";
+%else
+        if (!headers."Content-Type") {
+            headers."Content-Type" = "application/json";
+        }
+        return call_function_args("to_json", (body,));
+%endif
+    }
+
+    private setupDecompression() {
+        if (!chunked) {
+            return;
+        }
+        ostream = new StringOutputStream();
+        Transform decompressor;
+        switch (content_encoding) {
+            case "deflate":
+                use_decompressor = True;
+                decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZLIB);
+                break;
+            case "gzip":
+                use_decompressor = True;
+                decompressor = get_decompressor(Qore::COMPRESSION_ALG_GZIP);
+                break;
+            case "bzip2":
+                use_decompressor = True;
+                decompressor = get_decompressor(Qore::COMPRESSION_ALG_BZIP2);
+                break;
+            case NOTHING:
+            case "identity":
+                use_decompressor = False;
+                break;
+
+            default:
+                throw "ENCODING-ERROR", sprintf("Don't know how to handle Content-Encoding %y", content_encoding);
+        }
+        if (use_decompressor) {
+            dstream = new TransformOutputStream(ostream, decompressor);
+        }
+    }
+
+    private static string normalizeContentType(*string content_type) {
+        if (!content_type.val()) {
+            return "";
+        }
+        string rv = content_type;
+        rv =~ s/\s*;.*$//;
+        rv =~ s/^\s+//;
+        rv =~ s/\s+$//;
+        return tolower(rv);
     }
 }
 
@@ -246,7 +451,8 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
-    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
     }
 
     #! returns \c "openai"

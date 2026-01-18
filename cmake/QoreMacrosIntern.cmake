@@ -376,19 +376,31 @@ return i;
 endmacro()
 
 macro(create_git_revision)
-if (NOT EXISTS ${CMAKE_SOURCE_DIR}/include/qore/intern/git-revision.h)
-   find_package(Git)
-   if(GIT_FOUND)
-       execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
-                       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-		       OUTPUT_VARIABLE GIT_REV OUTPUT_STRIP_TRAILING_WHITESPACE)
-       file(WRITE ${CMAKE_BINARY_DIR}/include/qore/intern/git-revision.h "#define BUILD \"${GIT_REV}\"")
-   else()
-       message(FATAL_ERROR "Git is needed to generate git-revision.h")
-   endif()
-
-endif()
-
+    # Always regenerate git-revision.h during cmake configure to ensure
+    # the git hash is up-to-date after pulling new commits
+    find_package(Git)
+    if(GIT_FOUND)
+        execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+                        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                        OUTPUT_VARIABLE GIT_REV OUTPUT_STRIP_TRAILING_WHITESPACE)
+        # Check if file exists and has same content to avoid unnecessary rebuilds
+        set(_git_rev_file "${CMAKE_BINARY_DIR}/include/qore/intern/git-revision.h")
+        set(_git_rev_content "#define BUILD \"${GIT_REV}\"")
+        if(EXISTS ${_git_rev_file})
+            file(READ ${_git_rev_file} _existing_content)
+            string(STRIP "${_existing_content}" _existing_content)
+            string(STRIP "${_git_rev_content}" _git_rev_content_stripped)
+            if(NOT "${_existing_content}" STREQUAL "${_git_rev_content_stripped}")
+                file(WRITE ${_git_rev_file} "${_git_rev_content}")
+                message(STATUS "Updated git-revision.h: ${GIT_REV}")
+            endif()
+        else()
+            file(WRITE ${_git_rev_file} "${_git_rev_content}")
+            message(STATUS "Created git-revision.h: ${GIT_REV}")
+        endif()
+    else()
+        message(FATAL_ERROR "Git is needed to generate git-revision.h")
+    endif()
 endmacro()
 
 

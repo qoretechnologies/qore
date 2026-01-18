@@ -951,8 +951,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 remove cache{key};
                             }
                         }
-                        map $1.broadcast(), cond_list;
+                        # IMPORTANT: doCancelIntern() must complete BEFORE broadcasting to waiters
+                        # This ensures socket references are released before callers return
                         map doCancelIntern($1), cancel_list;
+                        map $1.broadcast(), cond_list;
                         return True;
                     }
 
@@ -977,11 +979,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             @debug(log(LoggerLevel::INFO, "AsyncSocketIoController cancel request for unknown key: %y",
                                 args[0]));
                         }
-                        if (c) {
-                            c.broadcast();
-                        }
+                        # IMPORTANT: doCancelIntern() must complete BEFORE broadcasting to waiters
+                        # This ensures the socket reference in cinfo is released before the caller
+                        # returns, preventing race conditions where a new listener tries to bind
+                        # to the same port while the old socket is still referenced
                         if (cinfo) {
                             doCancelIntern(cinfo);
+                        }
+                        if (c) {
+                            c.broadcast();
                         }
                         break;
                     }
@@ -1007,8 +1013,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 }
                             }
                         }
-                        map $1.broadcast(), cond_list;
+                        # IMPORTANT: doCancelIntern() must complete BEFORE broadcasting to waiters
+                        # This ensures socket references are released before callers return
                         map doCancelIntern($1), cancel_list;
+                        map $1.broadcast(), cond_list;
                         @debug(log(LoggerLevel::INFO, "AsyncSocketIoController canceled %d operations for owner %s",
                             cancel_list.size(), owner));
                         break;
