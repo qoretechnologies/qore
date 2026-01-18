@@ -143,6 +143,9 @@ static strmap_t dmap;
 // map of negative functional domains to parse restriction codes
 static strmap_t dnmap;
 
+// enum name to base type map
+static strmap_t enum_base_type_map;
+
 // set of possible code flags
 static strset_t fset;
 
@@ -2589,6 +2592,52 @@ protected:
                 continue;
             }
 
+            if (ptype == "enum" || ptype == "*enum") {
+                size_t lt = p.type.find('<');
+                size_t gt = p.type.rfind('>');
+                std::string ename;
+                if (lt != std::string::npos && gt != std::string::npos && gt > lt) {
+                    ename = p.type.substr(lt + 1, gt - lt - 1);
+                    trim(ename);
+                    if (!ename.compare(0, 2, "::")) {
+                        ename.erase(0, 2);
+                    }
+                }
+                strmap_t::iterator ei = enum_base_type_map.find(ename);
+                if (ei == enum_base_type_map.end()) {
+                    size_t nspos = ename.rfind(':');
+                    if (nspos != std::string::npos) {
+                        std::string short_name = ename.substr(nspos + 1);
+                        ei = enum_base_type_map.find(short_name);
+                    }
+                }
+
+                if (ei != enum_base_type_map.end()) {
+                    const std::string& base = ei->second;
+                    if (base == "int") {
+                        fprintf(fp, "    int64 %s = HARD_QORE_VALUE_INT(args, %d);\n", p.name.c_str(), i);
+                        continue;
+                    }
+                    if (base == "string") {
+                        fprintf(fp, "    const QoreStringNode* %s = HARD_QORE_VALUE_STRING(args, %d);\n",
+                            p.name.c_str(), i);
+                        continue;
+                    }
+                    if (base == "float") {
+                        fprintf(fp, "    double %s = HARD_QORE_VALUE_FLOAT(args, %d);\n", p.name.c_str(), i);
+                        continue;
+                    }
+                    if (base == "number") {
+                        fprintf(fp, "    const QoreNumberNode* %s = HARD_QORE_VALUE_NUMBER(args, %d);\n",
+                            p.name.c_str(), i);
+                        continue;
+                    }
+                }
+
+                fprintf(fp, "    QoreValue %s = get_param_value(args, %d);\n", p.name.c_str(), i);
+                continue;
+            }
+
             if (ptype == "any" || ptype == "data" || ptype == "auto") {
                 fprintf(fp, "    QoreValue %s = get_param_value(args, %d);\n", p.name.c_str(), i);
                 continue;
@@ -4060,6 +4109,14 @@ public:
             error("%s:%d: missing '{' after enum declaration\n", fileName, lineNumber);
             valid = false;
             return;
+        }
+
+        {
+            std::string key = name;
+            enum_base_type_map[key] = baseType;
+            if (!ns.empty()) {
+                enum_base_type_map[ns + "::" + name] = baseType;
+            }
         }
 
         if (parseMembers(fp, fileName, lineNumber)) {

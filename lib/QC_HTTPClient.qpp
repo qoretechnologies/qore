@@ -464,13 +464,13 @@ nothing HTTPClient::setHttp2Enabled(softbool enable = True) {
     - \c "h2c" or "h2c-direct" or 3: h2c (HTTP/2 cleartext) using prior knowledge - starts HTTP/2 directly
     - \c "h2c-upgrade" or 4: h2c via HTTP/1.1 Upgrade header (not yet implemented)
 
-    @param mode the HTTP/2 mode: @ref HTTP2Mode enum, "disabled", "auto", "required", "h2c", "h2c-upgrade" (or 0-4)
+    @param mode the HTTP/2 mode string: "disabled", "auto", "required", "h2c", "h2c-upgrade" (or 0-4)
 
     @par Example:
     @code{.py}
 httpclient.setHttp2Mode("auto");
 # or
-httpclient.setHttp2Mode(HTTP2_MODE_AUTO);
+httpclient.setHttp2Mode(HTTP2Mode::Auto);
 # or
 httpclient.setHttp2Mode(HTTP2Mode::Auto);
 # For h2c (cleartext HTTP/2) with prior knowledge:
@@ -488,34 +488,39 @@ httpclient.setHttp2Mode("h2c");
     @see getHttp2Mode()
     @see setHTTPVersion()
 */
-nothing HTTPClient::setHttp2Mode(auto mode) {
+nothing HTTPClient::setHttp2Mode(string mode) {
+    const char* str = mode->c_str();
     int mode_int;
-    if (mode.getType() == NT_STRING) {
-        const QoreStringNode* mode_str = mode.get<const QoreStringNode>();
-        const char* str = mode_str->c_str();
-        if (!strcasecmp(str, "disabled") || !strcmp(str, "0")) {
-            mode_int = HTTP2_MODE_DISABLED;
-        } else if (!strcasecmp(str, "auto") || !strcmp(str, "1")) {
-            mode_int = HTTP2_MODE_AUTO;
-        } else if (!strcasecmp(str, "required") || !strcmp(str, "2")) {
-            mode_int = HTTP2_MODE_REQUIRED;
-        } else if (!strcasecmp(str, "h2c") || !strcasecmp(str, "h2c-direct") || !strcmp(str, "3")) {
-            mode_int = HTTP2_MODE_H2C_DIRECT;
-        } else if (!strcasecmp(str, "h2c-upgrade") || !strcmp(str, "4")) {
-            mode_int = HTTP2_MODE_H2C_UPGRADE;
-        } else {
-            xsink->raiseException("HTTP2-MODE-ERROR", "invalid value '%s' for HTTP/2 mode; "
-                "valid values are: \"disabled\", \"auto\", \"required\", \"h2c\", \"h2c-upgrade\" (or 0-4)", str);
-            return QoreValue();
-        }
+    if (!strcasecmp(str, "disabled") || !strcmp(str, "0")) {
+        mode_int = HTTP2_MODE_DISABLED;
+    } else if (!strcasecmp(str, "auto") || !strcmp(str, "1")) {
+        mode_int = HTTP2_MODE_AUTO;
+    } else if (!strcasecmp(str, "required") || !strcmp(str, "2")) {
+        mode_int = HTTP2_MODE_REQUIRED;
+    } else if (!strcasecmp(str, "h2c") || !strcasecmp(str, "h2c-direct") || !strcmp(str, "3")) {
+        mode_int = HTTP2_MODE_H2C_DIRECT;
+    } else if (!strcasecmp(str, "h2c-upgrade") || !strcmp(str, "4")) {
+        mode_int = HTTP2_MODE_H2C_UPGRADE;
     } else {
-        mode_int = (int)mode.getAsBigInt();
-        if (mode_int < HTTP2_MODE_DISABLED || mode_int > HTTP2_MODE_H2C_UPGRADE) {
-            xsink->raiseException("HTTP2-MODE-ERROR", "invalid mode value %d; valid values are: 0-4", mode_int);
-            return QoreValue();
-        }
+        xsink->raiseException("HTTP2-MODE-ERROR", "invalid value '%s' for HTTP/2 mode; "
+            "valid values are: \"disabled\", \"auto\", \"required\", \"h2c\", \"h2c-upgrade\" (or 0-4)", str);
+        return QoreValue();
     }
     client->setHttp2Mode(mode_int, xsink);
+}
+
+//! Sets the HTTP/2 protocol mode
+/** @param mode the HTTP/2 mode as an enum
+
+    @since %Qore 2.3
+*/
+nothing HTTPClient::setHttp2Mode(enum<HTTP2Mode> mode) {
+    int64 mode_int = mode.getAsBigInt();
+    if (mode_int < HTTP2_MODE_DISABLED || mode_int > HTTP2_MODE_H2C_UPGRADE) {
+        xsink->raiseException("HTTP2-MODE-ERROR", "invalid mode value %d; valid values are: 0-4", (int)mode_int);
+        return QoreValue();
+    }
+    client->setHttp2Mode((int)mode_int, xsink);
 }
 
 //! Returns the current HTTP/2 protocol mode

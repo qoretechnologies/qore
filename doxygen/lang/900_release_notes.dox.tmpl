@@ -142,7 +142,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - Server-Sent Events (SSE) over HTTP/2 support
       - new @ref Qore::set_global_http2_mode() "set_global_http2_mode()" function to globally control HTTP/2 mode
         at runtime (\c "auto", \c "disabled", or \c "required") - affects all new HTTP connections
-        (requires @ref Qore::QDOM_PROCESS "QDOM_PROCESS" rights)
+        (requires @ref Qore::DOM_PROCESS_CONTROL "DOM_PROCESS_CONTROL" rights)
       - new @ref Qore::get_global_http2_mode() "get_global_http2_mode()" function to query the current global HTTP/2 mode
       - new @ref Qore::Option::HAVE_HTTP2 "Option::HAVE_HTTP2" constant (always \c True as nghttp2 is now required)
     - <b>Parameterized date type restrictions</b>
@@ -188,6 +188,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         - DPQL syntax: \c @name \c == \c "John" \c && \c @age \c > \c 18
         - supports field refs (\c @field), comparison ops, logical ops, ranges, \c in, and regex
         - the \c qdp CLI supports DPQL expressions for search criteria with auto-detection or the \c -q/--dpql option
+        - the \c qdp CLI accepts \c - or \c {} as an empty DPQL expression to search without filters
         - new \c qdp --dpql-help output with DPQL syntax and examples
         - DPQL now supports ISO-8601 date literals, binary literals (\c <deadbeef>), list/hash literals, and unquoted string values
     - @ref OpenApi3 "OpenApi3" module
@@ -364,7 +365,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - or-nothing support: \c *Status, \c *enum<Status>, and \c cast<*enum<Status>>()
       - namespace support: enums can be declared in namespaces
       - reflection support via @ref Qore::Reflection::Enum "Enum" and @ref Qore::Reflection::EnumMember "EnumMember" classes
-      - can be disabled with \c %%no-enum parse directive or @ref Qore::PO_NO_ENUM "PO_NO_ENUM"
+      - can be disabled with @ref no-enum "%no-enum" parse directive or @ref Qore::PO_NO_ENUM "PO_NO_ENUM"
     - @ref ElasticSearchDataProvider "ElasticSearchDataProvider" module
       - added Bulk API support with NDJSON format and partial failure handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)

@@ -1581,8 +1581,16 @@ class QdpCmd {
             || (text =~ /\\bbetween\\b|\\bin\\b/);
     }
 
-    static hash<DataProviderExpression> parseDpqlExpression(string dpql, *AbstractDataProvider provider,
+    static bool isEmptyDpqlExpression(string dpql) {
+        string trimmed = trim(dpql);
+        return !trimmed || trimmed == "-" || trimmed == "{}";
+    }
+
+    static *hash<DataProviderExpression> parseDpqlExpression(string dpql, *AbstractDataProvider provider,
             *hash<auto> action_opts) {
+        if (QdpCmd::isEmptyDpqlExpression(dpql)) {
+            return;
+        }
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
         if (provider) {
             expressions = provider.getExpressionsWithOptions(action_opts);
@@ -1597,7 +1605,7 @@ class QdpCmd {
         }
         list<hash<DpqlDiagnostic>> errors = QdpCmd::getDpqlErrors(diagnostics);
         if (!result.success || errors) {
-            QdpCmd::error(QdpCmd::formatDpqlErrors(errors, diagnostics));
+            QdpCmd::error(QdpCmd::formatDpqlErrors(errors, diagnostics, dpql));
         }
         return result.expression;
     }
@@ -1609,24 +1617,37 @@ class QdpCmd {
         return select diagnostics, $1.severity == "error";
     }
 
-    static string formatDpqlErrors(list<hash<DpqlDiagnostic>> errors, list<hash<DpqlDiagnostic>> diagnostics) {
+    static string formatDpqlErrors(list<hash<DpqlDiagnostic>> errors, list<hash<DpqlDiagnostic>> diagnostics,
+            string dpql) {
         if (!errors && diagnostics) {
             errors = diagnostics;
         }
         if (!errors) {
             return "DPQL parse error";
         }
-        string msg = sprintf("DPQL parse error: %s", errors[0].message);
+        string msg = sprintf("DPQL parse error: %s", QdpCmd::sanitizeDpqlErrorMessage(errors[0].message, dpql));
         if (errors.size() > 1) {
             list<string> details = ();
             foreach hash<DpqlDiagnostic> diag in (errors) {
-                details += sprintf("  - %s (line %d, column %d)", diag.message, diag.line, diag.column);
+                details += sprintf("  - %s (line %d, column %d)",
+                    QdpCmd::sanitizeDpqlErrorMessage(diag.message, dpql), diag.line, diag.column);
             }
             msg += "\n" + details.join("\n");
         } else if (errors[0].line) {
             msg += sprintf(" (line %d, column %d)", errors[0].line, errors[0].column);
         }
         return msg;
+    }
+
+    static string sanitizeDpqlErrorMessage(string message, string dpql) {
+        if (message =~ /^Internal parser error:/) {
+            string hint;
+            if (QdpCmd::isEmptyDpqlExpression(dpql)) {
+                hint = " (use '-' or '{}' for an empty expression)";
+            }
+            return "invalid DPQL expression" + hint;
+        }
+        return message;
     }
 
     static hash<DataProviderExpression> getExpression(string exp, auto args) {
@@ -2065,6 +2086,8 @@ class QdpCmd {
             script, color.dim("# Show database provider info"));
         printf("  %s mydb/tables/users search '@name == \"John\"'  %s\n",
             script, color.dim("# Search users table with DPQL"));
+        printf("  %s mydb/tables/users search -              %s\n",
+            script, color.dim("# Search all records (empty expression)"));
         printf("  %s -J mydb/tables/users search -l 10       %s\n",
             script, color.dim("# JSON output, limit 10"));
         printf("  %s rest'{url=http://api.example.com}' list\n", script);
@@ -2097,6 +2120,8 @@ class QdpCmd {
         printf("  %s\n", color.key("lists: (one, two, 3)"));
         printf("  %s\n", color.key("hashes: {a=1, b=two}"));
         printf("  %s\n", color.key("unquoted identifiers are strings (ex: @domain == omq)"));
+        printf("\n%s\n", color.bold("EMPTY EXPRESSION"));
+        printf("  %s\n", color.key("Use '-' or '{}' to search without filters"));
         printf("\n%s\n", color.bold("EXAMPLES"));
         printf("  %s\n", color.key("qdp mydb/tables/users search '@name == \"John\"'"));
         printf("  %s\n", color.key("qdp mydb/tables/users search '@age between 18 and 65'"));

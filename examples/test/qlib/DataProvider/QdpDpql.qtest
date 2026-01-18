@@ -33,6 +33,9 @@ public class QdpDpqlTest inherits QUnit::Test {
         addTestCase("DPQL search returns empty list when no match", \dpqlSearchEmpty());
         addTestCase("DPQL search rejects invalid syntax", \dpqlInvalidSyntax());
         addTestCase("DPQL search rejects unknown field", \dpqlUnknownField());
+        addTestCase("DPQL empty expression with hash", \dpqlEmptyHash());
+        addTestCase("DPQL empty expression with dash", \dpqlEmptyDash());
+        addTestCase("DPQL empty expression with empty string", \dpqlEmptyString());
         addTestCase("DPQL conflicts with legacy expressions", \dpqlLegacyConflict());
         addTestCase("DPQL help output", \dpqlHelp());
 %endif
@@ -154,6 +157,29 @@ public class QdpDpqlTest inherits QUnit::Test {
         hash<auto> result = runQdp(args);
         assertTrue(result.rc != 0);
         assertTrue(result.err =~ /Unknown field/);
+    }
+
+    private dpqlEmptyHash() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("{}"));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(2, data.size());
+    }
+
+    private dpqlEmptyDash() {
+        string args = sprintf("-m CsvUtil -Y -q %s search -",
+            shellQuote(getProviderSpec()));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(2, data.size());
+    }
+
+    private dpqlEmptyString() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote(""));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(2, data.size());
     }
 
     private dpqlLegacyConflict() {

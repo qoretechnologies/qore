@@ -133,6 +133,9 @@ private:
     qore_enum_decl_private* priv;
 };
 
+// system enum declarations
+DLLEXPORT extern const QoreEnumDecl* enumHTTP2Mode;
+
 //! allows for temporary storage of a QoreEnumDecl pointer
 /** @since %Qore 2.1
 */

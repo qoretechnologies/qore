@@ -96,6 +96,7 @@ qdp mydb/tables/users search '@age between 18 and 65'
 qdp mydb/tables/users search '(@active == true) && (@age >= 21)'
 qdp mydb/tables/users search '@role in ("admin", "editor")'
     @endcode
+    Use \c - or \c {} as an empty expression to return all records.
 
     This module provides the following primary classes:
     - @ref DataProvider::AbstractDataField "AbstractDataField"

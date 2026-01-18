@@ -1222,16 +1222,6 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertEq("required", hc.getHttp2Mode());
         assertTrue(hc.isHttp2Enabled());
 
-        # Test setHttp2Mode with integer values
-        hc.setHttp2Mode(0);  # disabled
-        assertEq("disabled", hc.getHttp2Mode());
-
-        hc.setHttp2Mode(1);  # auto
-        assertEq("auto", hc.getHttp2Mode());
-
-        hc.setHttp2Mode(2);  # required
-        assertEq("required", hc.getHttp2Mode());
-
         # Test setHttp2Mode with enum values
         hc.setHttp2Mode(HTTP2Mode::Disabled);
         assertEq("disabled", hc.getHttp2Mode());
@@ -1253,7 +1243,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 
         # Test invalid mode throws exception
         assertThrows("HTTP2-MODE-ERROR", \hc.setHttp2Mode(), "invalid");
-        assertThrows("HTTP2-MODE-ERROR", \hc.setHttp2Mode(), 99);
+        assertThrows("RUNTIME-CAST-ERROR", sub () { hc.setHttp2Mode(cast<enum<HTTP2Mode>>(99)); });
         assertThrows("RUNTIME-CAST-ERROR", sub () { auto v = cast<enum<HTTP2Mode>>(99); });
 
         # Test isHttp2Active (should be false since we're not connected to an HTTP/2 server)

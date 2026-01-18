@@ -1448,12 +1448,12 @@ int qore_get_library_options() [dom=PROCESS] {
     - All new @ref HttpServer "HttpServer" connections
     - All HTTP-based connections including those via @ref ConnectionProvider "ConnectionProvider"
 
-    @note This function requires @ref Qore::QDOM_PROCESS "QDOM_PROCESS" rights (not available with
+    @note This function requires @ref Qore::DOM_PROCESS_CONTROL "DOM_PROCESS_CONTROL" rights (not available with
     @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL")
 
     @throw SET-GLOBAL-HTTP2-MODE-ERROR invalid mode string
 
-    @see set_global_http2_mode(int)
+    @see set_global_http2_mode(enum<HTTP2Mode>)
     @see get_global_http2_mode()
 
     @since %Qore 2.3
@@ -1476,10 +1476,10 @@ nothing set_global_http2_mode(string mode) [dom=PROCESS] {
 }
 
 //! Sets the global HTTP/2 mode that affects all new HTTP connections
-/** @param mode the HTTP/2 mode: @ref Qore::HTTP2_MODE_AUTO "HTTP2_MODE_AUTO" (default),
-    @ref Qore::HTTP2_MODE_DISABLED "HTTP2_MODE_DISABLED", or @ref Qore::HTTP2_MODE_REQUIRED "HTTP2_MODE_REQUIRED"
+/** @param mode the HTTP/2 mode: @ref Qore::HTTP2Mode "HTTP2Mode::Auto" (default),
+    @ref Qore::HTTP2Mode "HTTP2Mode::Disabled", or @ref Qore::HTTP2Mode "HTTP2Mode::Required"
 
-    @note This function requires @ref Qore::QDOM_PROCESS "QDOM_PROCESS" rights (not available with
+    @note This function requires @ref Qore::DOM_PROCESS_CONTROL "DOM_PROCESS_CONTROL" rights (not available with
     @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL")
 
     @throw SET-GLOBAL-HTTP2-MODE-ERROR invalid mode value
@@ -1489,14 +1489,15 @@ nothing set_global_http2_mode(string mode) [dom=PROCESS] {
 
     @since %Qore 2.3
 */
-nothing set_global_http2_mode(int mode) [dom=PROCESS] {
-    if (mode < HTTP2_MODE_DISABLED || mode > HTTP2_MODE_REQUIRED) {
+nothing set_global_http2_mode(enum<HTTP2Mode> mode) [dom=PROCESS] {
+    int64 mode_val = mode.getAsBigInt();
+    if (mode_val < HTTP2_MODE_DISABLED || mode_val > HTTP2_MODE_REQUIRED) {
         xsink->raiseException("SET-GLOBAL-HTTP2-MODE-ERROR",
             "invalid HTTP/2 mode %d; valid modes are: HTTP2_MODE_DISABLED (0), HTTP2_MODE_AUTO (1), "
-            "HTTP2_MODE_REQUIRED (2)", (int)mode);
+            "HTTP2_MODE_REQUIRED (2)", (int)mode_val);
         return QoreValue();
     }
-    qore_global_http2_mode.store((int)mode, std::memory_order_relaxed);
+    qore_global_http2_mode.store((int)mode_val, std::memory_order_relaxed);
 }
 
 //! Returns the current global HTTP/2 mode
