@@ -127,6 +127,12 @@ public:
     */
     DLLEXPORT void addSystemHashDecl(TypedHashDecl* hashdecl);
 
+    //! adds an enum declaration to a namespace
+    /**
+        @param enumdecl the enum declaration to add to the namespace
+    */
+    DLLEXPORT void addSystemEnum(QoreEnumDecl* enumdecl);
+
     //! returns a deep copy of the namespace
     /** @param po parse options to use when copying the namespace
         @return a deep copy of the namespace

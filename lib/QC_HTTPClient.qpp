@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -464,13 +464,15 @@ nothing HTTPClient::setHttp2Enabled(softbool enable = True) {
     - \c "h2c" or "h2c-direct" or 3: h2c (HTTP/2 cleartext) using prior knowledge - starts HTTP/2 directly
     - \c "h2c-upgrade" or 4: h2c via HTTP/1.1 Upgrade header (not yet implemented)
 
-    @param mode the HTTP/2 mode: "disabled", "auto", "required", "h2c", "h2c-upgrade" (or 0-4)
+    @param mode the HTTP/2 mode: @ref HTTP2Mode enum, "disabled", "auto", "required", "h2c", "h2c-upgrade" (or 0-4)
 
     @par Example:
     @code{.py}
 httpclient.setHttp2Mode("auto");
 # or
 httpclient.setHttp2Mode(HTTP2_MODE_AUTO);
+# or
+httpclient.setHttp2Mode(HTTP2Mode::Auto);
 # For h2c (cleartext HTTP/2) with prior knowledge:
 httpclient.setHttp2Mode("h2c");
     @endcode
