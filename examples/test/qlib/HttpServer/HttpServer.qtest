@@ -577,7 +577,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         hash<auto> info2;
         hash<auto> resp2 = mClient.send(NOTHING, "GET", "/test200empty/xyz", NOTHING, NOTHING, \info2);
-        assertEq(200, resp2.status_code);
+        assertEq(204, resp2.status_code);
         assertNothing(resp2.body);
     }
 

@@ -2329,8 +2329,20 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
         }
 
-        if (!head && rv."code" == 200 && !rv.streaming && !rv.hasKey("body") && !rv.hasKey("chunked_body")) {
-            rv."code" = 204;
+        if (!head && rv."code" == 200 && !rv.streaming && !rv.hasKey("chunked_body")) {
+            bool empty_body = !rv.hasKey("body");
+            if (!empty_body) {
+                int body_tc = rv.body.typeCode();
+                if (body_tc == NT_NOTHING || body_tc == NT_NULL) {
+                    empty_body = True;
+                } else if ((body_tc == NT_STRING || body_tc == NT_BINARY) && rv.body.size() == 0) {
+                    empty_body = True;
+                }
+            }
+            if (empty_body) {
+                rv."code" = 204;
+                remove rv.body;
+            }
         }
 
         rv.hdr.Date = getDateHeader();
