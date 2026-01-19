@@ -28,7 +28,7 @@ GENERATED_SOURCES = QC_AstParser.cpp QC_AstTree.cpp QC_AstTreeSearcher.cpp ql_as
 CLEANFILES = $(GENERATED_SOURCES)
 ast_parser.hpp: ast_parser.cpp
 ast_parser.cpp: ast_parser.ypp
-	bison --defines=ast_parser.hpp --output=$@ $<
+	BISON_REAL="$(YACC)" $(top_srcdir)/tools/bison-wrapper.sh --defines=ast_parser.hpp --output=$@ $<
 ast_scanner.cpp: ast_scanner.lpp
 	flex -o $@ $<
 
