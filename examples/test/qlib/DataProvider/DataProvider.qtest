@@ -259,6 +259,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("data test", \dataTest());
         addTestCase("compat test", \compatTest());
         addTestCase("pipeline test", \pipelineTest());
+        addTestCase("pipeline metrics test", \pipelineMetricsTest());
         addTestCase("type cache test", \typeCacheTest());
         addTestCase("test", \dataProviderTest());
 
@@ -1797,6 +1798,244 @@ public class DataProviderTest inherits QUnit::Test {
             pipe.waitDone();
             assertEq((l,), proc1.recs);
             assertEq((l,), proc2.recs);
+        }
+    }
+
+    #! Test pipeline metrics collection functionality
+    /** @since DataProvider 3.1
+    */
+    pipelineMetricsTest() {
+        # Test PipelineElementMetrics hashdecl
+        {
+            hash<PipelineElementMetrics> em = <PipelineElementMetrics>{
+                "element_id": "0:0",
+                "element_type": "processor",
+                "class_name": "TestProcessor",
+                "records_processed": 100,
+                "records_output": 95,
+                "processing_time_us": 5000000,
+                "min_processing_time_us": 10,
+                "max_processing_time_us": 100000,
+                "queue_wait_time_us": 1000,
+                "current_queue_depth": 5,
+                "max_queue_depth": 10,
+                "queue_full_count": 2,
+                "first_record_time": now(),
+                "last_record_time": now(),
+                "error_count": 1,
+            };
+
+            assertEq("0:0", em.element_id);
+            assertEq("processor", em.element_type);
+            assertEq(100, em.records_processed);
+            assertEq(95, em.records_output);
+        }
+
+        # Test PipelineMetricsSnapshot hashdecl
+        {
+            hash<PipelineMetricsSnapshot> ms = <PipelineMetricsSnapshot>{
+                "pipeline_name": "test-pipeline",
+                "status": PS_RUNNING,
+                "start_time": now(),
+                "snapshot_time": now(),
+                "total_records_submitted": 1000,
+                "total_records_completed": 950,
+                "records_in_flight": 50,
+                "throughput_rps": 14500.5,
+                "avg_latency_us": 250.0,
+                "element_metrics": {},
+                "num_queues": 2,
+                "bulk_mode": True,
+                "total_errors": 5,
+                "user_context": {"test_key": 123},
+            };
+
+            assertEq("test-pipeline", ms.pipeline_name);
+            assertEq(PS_RUNNING, ms.status);
+            assertEq(1000, ms.total_records_submitted);
+            assertEq(50, ms.records_in_flight);
+            assertEq(123, ms.user_context.test_key);
+        }
+
+        # Test pipeline metrics collection via callback
+        {
+            list<hash<PipelineMetricsSnapshot>> collected_metrics;
+            Mutex m();
+
+            code metrics_callback = sub (hash<PipelineMetricsSnapshot> metrics) {
+                m.lock();
+                on_exit m.unlock();
+                collected_metrics += metrics;
+            };
+
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "metrics-test-pipeline",
+                "metrics_callback": metrics_callback,
+                "metrics_interval_ms": 10,
+                "metrics_record_interval": 5,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            # Submit 20 records
+            for (int i = 0; i < 20; ++i) {
+                pipe.submit({"record": i});
+            }
+            pipe.waitDone();
+
+            assertTrue(collected_metrics.size() > 0, "should have received metrics callbacks");
+
+            # Verify metrics content
+            hash<PipelineMetricsSnapshot> last_metrics = collected_metrics[collected_metrics.size() - 1];
+            assertEq("metrics-test-pipeline", last_metrics.pipeline_name);
+            assertTrue(last_metrics.total_records_submitted > 0);
+        }
+
+        # Test getMetrics() method
+        {
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "getmetrics-test-pipeline",
+                "metrics_callback": sub (hash<PipelineMetricsSnapshot> m) {},
+                "metrics_interval_ms": 1000,
+                "metrics_record_interval": 1000,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            for (int i = 0; i < 10; ++i) {
+                pipe.submit({"record": i});
+            }
+            pipe.waitDone();
+
+            *hash<PipelineMetricsSnapshot> metrics = pipe.getMetrics();
+            assertTrue(exists metrics);
+            assertEq("getmetrics-test-pipeline", metrics.pipeline_name);
+            assertEq(10, metrics.total_records_submitted);
+            assertEq(10, metrics.total_records_completed);
+            assertEq(0, metrics.records_in_flight);
+        }
+
+        # Test metrics with user context
+        {
+            list<hash<PipelineMetricsSnapshot>> collected_metrics;
+            Mutex m();
+
+            hash<auto> user_ctx = {
+                "fsm_id": 123,
+                "exec_id": 456,
+            };
+
+            code metrics_callback = sub (hash<PipelineMetricsSnapshot> metrics) {
+                m.lock();
+                on_exit m.unlock();
+                collected_metrics += metrics;
+            };
+
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "context-test-pipeline",
+                "metrics_callback": metrics_callback,
+                "metrics_interval_ms": 10,
+                "metrics_record_interval": 1,
+                "metrics_context": user_ctx,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            pipe.submit({"record": 1});
+            pipe.waitDone();
+
+            assertTrue(collected_metrics.size() > 0);
+            hash<PipelineMetricsSnapshot> metrics = collected_metrics[0];
+            assertEq(123, metrics.user_context.fsm_id);
+            assertEq(456, metrics.user_context.exec_id);
+        }
+
+        # Test element metrics collection
+        {
+            list<hash<PipelineMetricsSnapshot>> collected_metrics;
+            Mutex m();
+
+            code metrics_callback = sub (hash<PipelineMetricsSnapshot> metrics) {
+                m.lock();
+                on_exit m.unlock();
+                collected_metrics += metrics;
+            };
+
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "element-metrics-pipeline",
+                "metrics_callback": metrics_callback,
+                "metrics_interval_ms": 10,
+                "metrics_record_interval": 5,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc1();
+            RecordProcessorSink proc2();
+            pipe.append(proc1);
+            pipe.append(proc2);
+
+            for (int i = 0; i < 15; ++i) {
+                pipe.submit({"record": i});
+            }
+            pipe.waitDone();
+
+            assertTrue(collected_metrics.size() > 0);
+            hash<PipelineMetricsSnapshot> last_metrics = collected_metrics[collected_metrics.size() - 1];
+
+            # Should have element metrics for both processors
+            assertTrue(last_metrics.element_metrics.hasKey("0:0"), "should have element 0:0");
+            assertTrue(last_metrics.element_metrics.hasKey("0:1"), "should have element 0:1");
+
+            # Verify element types are tracked
+            assertEq("processor", last_metrics.element_metrics."0:0".element_type);
+            assertEq("processor", last_metrics.element_metrics."0:1".element_type);
+        }
+
+        # Test pipeline without metrics callback (getMetrics returns NOTHING)
+        {
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "no-metrics-pipeline",
+                # No metrics_callback set
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            pipe.submit({"record": 1});
+            pipe.waitDone();
+
+            *hash<PipelineMetricsSnapshot> metrics = pipe.getMetrics();
+            assertNothing(metrics);
+        }
+
+        # Test empty pipeline metrics
+        {
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "empty-pipeline",
+                "metrics_callback": sub (hash<PipelineMetricsSnapshot> m) {},
+                "metrics_interval_ms": 100,
+                "metrics_record_interval": 10,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            # Don't submit any records
+            pipe.waitDone();
+
+            *hash<PipelineMetricsSnapshot> metrics = pipe.getMetrics();
+            assertTrue(exists metrics);
+            assertEq(0, metrics.total_records_submitted);
+            assertEq(0, metrics.total_records_completed);
+            assertEq(0, metrics.records_in_flight);
         }
     }
 
