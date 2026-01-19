@@ -9,23 +9,6 @@
 
     @subsection qore_2_3_0_compatibility Changes That Can Affect Backwards-Compatibility
 
-    @par New Required Libraries: nghttp2, Brotli, Zstd, and LZ4
-    @parblock
-    The following libraries are now required build dependencies for %Qore and cannot be disabled at build time:
-    - <b>nghttp2:</b> HTTP/2 support is always available
-    - <b>Brotli, Zstd, LZ4:</b> Compression formats are always available
-
-    Systems that previously built %Qore without these libraries will need to install the development packages:
-    - <b>Debian/Ubuntu:</b> \c libnghttp2-dev, \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev
-    - <b>RHEL/Fedora:</b> \c nghttp2-devel, \c brotli-devel, \c libzstd-devel, \c lz4-devel
-    - <b>Alpine:</b> \c nghttp2-dev, \c brotli-dev, \c zstd-dev, \c lz4-dev
-
-    The following @ref Qore::Option "Option" namespace constants are now always \c True:
-    - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
-    - @ref Qore::Option::HAVE_ZSTD "Option::HAVE_ZSTD"
-    - @ref Qore::Option::HAVE_LZ4 "Option::HAVE_LZ4"
-    @endparblock
-
     @par Parse-Time Type Narrowing
     @parblock
     %Qore now performs parse-time type narrowing for element/value types in variables declared with
@@ -56,14 +39,24 @@ val = "string";      # OK
 
     @par LoggerAppenderQueue Default Memory Limit
     @parblock
-    The @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue" no-argument constructor now enforces a
+\if QORE_LANG_FINAL
+    The @ref Qore::Logger::LoggerAppenderQueue "Qore::Logger::LoggerAppenderQueue" no-argument constructor now enforces a
+\else
+    The \c Qore::Logger::LoggerAppenderQueue no-argument constructor now enforces a
+\endif
     default 10 MiB memory limit for backpressure. Previously, the queue was unlimited by default, which could
     cause out-of-memory conditions when log producers outpace consumers.
 
     Code that relies on unlimited queue behavior may now experience blocking when the queue reaches 10 MiB.
 
     <b>Workaround:</b>
-    - Use @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "LoggerAppenderQueue(-1)" to explicitly
+\if QORE_LANG_FINAL
+    - Use @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "Qore::Logger::LoggerAppenderQueue::constructor(softint)"
+      (for example: \c LoggerAppenderQueue(-1)) to explicitly
+\else
+    - Use \c Qore::Logger::LoggerAppenderQueue::constructor(softint)
+      (for example: \c LoggerAppenderQueue(-1)) to explicitly
+\endif
       create an unlimited queue (not recommended for production)
     @endparblock
 
@@ -85,6 +78,18 @@ val = "string";      # OK
     <b>Workaround:</b>
     - Use the @ref no-enum "%no-enum" parse directive to disable the \c enum keyword
     - Use @ref Qore::PO_NO_ENUM "PO_NO_ENUM" when setting up a @ref Qore::Program "Program" object
+    @endparblock
+
+    @par Namespace Resolution Changes
+    @parblock
+    Unqualified symbol resolution now prefers symbols under the @ref Qore "Qore" namespace to prevent accidental
+    shadowing of built-in symbols by user-defined namespaces.
+
+    <b>Workaround:</b>
+    - Use the @ref broken-namespace-resolution "%broken-namespace-resolution" parse directive to restore legacy
+      resolution behavior
+    - Use @ref Qore::PO_BROKEN_NAMESPACE_RESOLUTION "PO_BROKEN_NAMESPACE_RESOLUTION" when setting up a
+      @ref Qore::Program "Program" object
     @endparblock
 
     @par New code<> Typed Callable Syntax
@@ -125,10 +130,27 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     @endparblock
 
     @subsection qore_2_3_0_new_features New Features in Qore
+    @par New Required Libraries: nghttp2, Brotli, Zstd, and LZ4
+    @parblock
+    The following libraries are now required build dependencies for %Qore and cannot be disabled at build time:
+    - <b>nghttp2:</b> HTTP/2 support is always available
+    - <b>Brotli, Zstd, LZ4:</b> Compression formats are always available
+
+    Systems that previously built %Qore without these libraries will need to install the development packages:
+    - <b>Debian/Ubuntu:</b> \c libnghttp2-dev, \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev
+    - <b>RHEL/Fedora:</b> \c nghttp2-devel, \c brotli-devel, \c libzstd-devel, \c lz4-devel
+    - <b>Alpine:</b> \c nghttp2-dev, \c brotli-dev, \c zstd-dev, \c lz4-dev
+
+    The following @ref Qore::Option "Option" namespace constants are now always \c True:
+    - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
+    - @ref Qore::Option::HAVE_ZSTD "Option::HAVE_ZSTD"
+    - @ref Qore::Option::HAVE_LZ4 "Option::HAVE_LZ4"
+    @endparblock
+
     - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>
       - new @ref modern "%modern" parse directive combines all recommended parse options into one:
         @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args",
-        and enables all warnings
+        @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings
       - files with the \c .qr extension automatically enable @ref modern "%modern" mode without any
         parse directive required
       - new @ref Qore::PO_MODERN "PO_MODERN" parse option constant
@@ -157,7 +179,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - new \c http_version listener option for server-side HTTP/2 mode control
       - new @ref Qore::Socket::startPollReadHttp2Request() "Socket::startPollReadHttp2Request()" for non-blocking HTTP/2 request reading
       - new @ref Qore::Socket::startPollSendHttp2Response() "Socket::startPollSendHttp2Response()" for non-blocking HTTP/2 response sending
-      - new \c http_version option in @ref ConnectionProvider "ConnectionProvider" for client-side HTTP version control
+      - new \c http_version option in \c ConnectionProvider for client-side HTTP version control
       - WebSocket over HTTP/2 support (RFC 8441 extended CONNECT method)
       - Server-Sent Events (SSE) over HTTP/2 support
       - new @ref Qore::set_global_http2_mode() "set_global_http2_mode()" function to globally control HTTP/2 mode
@@ -169,42 +191,42 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - new @ref date_type "date<absolute>" and @ref date_type "date<relative>" types restrict date values to absolute
         or relative date/time values
       - @ref date_or_nothing_type "*date<absolute>" and @ref date_or_nothing_type "*date<relative>" allow @ref nothing
-    - @ref AsyncApi "AsyncApi" module
+    - \c AsyncApi module
       - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
       - supports WebSocket, MQTT, Kafka, AMQP and other protocols through protocol-specific bindings
-      - new @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApiSchemaGenerator" class for generating AsyncAPI 3.0.0 schemas from Qore source code
-      - new @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer" class for parsing \@EVENT and \@WEBSOCKET documentation blocks
-      - new @ref AsyncApi::AsyncApiTypeMapper "AsyncApiTypeMapper" class for mapping Qore types to JSON Schema types
+      - new \c AsyncApi::AsyncApiSchemaGenerator class for generating AsyncAPI 3.0.0 schemas from Qore source code
+      - new \c AsyncApi::AsyncApiSchemaTokenizer class for parsing \@EVENT and \@WEBSOCKET documentation blocks
+      - new \c AsyncApi::AsyncApiTypeMapper class for mapping Qore types to JSON Schema types
       - new \c qore-asyncapi-gen CLI tool for generating schemas from source files
-    - @ref AsyncApiDataProvider "AsyncApiDataProvider" module
+    - \c AsyncApiDataProvider module
       - new module providing a data provider API for AsyncAPI schemas
       - protocol-agnostic design with pluggable transports (WebSocket, MQTT, Kafka, etc.)
       - includes built-in WebSocket transport
-    - @ref CdsRestClient "CdsRestClient" module
+    - \c CdsRestClient module
       - added support for Microsoft Dynamics 365 Business Central
-        - new @ref CdsRestClient::BusinessCentralRestConnection "BusinessCentralRestConnection" class for BC connections
+        - new \c CdsRestClient::BusinessCentralRestConnection class for BC connections
         - API profile support for BC-specific URL construction and OAuth2 scopes
         - new \c bcrests connection scheme
-    - @ref CdsRestDataProvider "CdsRestDataProvider" module
+    - \c CdsRestDataProvider module
       - added support for Microsoft Dynamics 365 Business Central with new data provider classes for CRUD operations
       - added support for the DataProvider expression framework for OData queries with support for
         contains, startsWith, endsWith, null, and notNull operators
-    - @ref ConnectionProvider "ConnectionProvider" module
-      - added the @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper" class
-      - new \c http_version option in @ref ConnectionProvider::HttpConnection "HttpConnection" for HTTP version control ("auto", "1.0", "1.1", "2.0")
-      - @ref RestClient::RestConnection "RestConnection" inherits the \c http_version option from @ref ConnectionProvider::HttpConnection "HttpConnection"
-    - @ref DataProvider "DataProvider" module
+    - \c ConnectionProvider module
+      - added the \c ConnectionProvider::RestartableIoHelper class
+      - new \c http_version option in \c ConnectionProvider::HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0")
+      - \c RestClient::RestConnection inherits the \c http_version option from \c ConnectionProvider::HttpConnection
+    - \c DataProvider module
       - added DPQL (Data Provider Query Language) for human/AI-readable query expressions
-        - new @ref DataProvider::DpqlTokenizer "DpqlTokenizer" class for lexical analysis
-        - new @ref DataProvider::DpqlParser "DpqlParser" class for parsing DPQL strings to \c DataProviderExpression hashes
-        - new @ref DataProvider::DpqlSerializer "DpqlSerializer" class for converting expressions back to DPQL strings
-        - new @ref DataProvider::DpqlCompletionProvider "DpqlCompletionProvider" class for IDE/editor autocomplete
-        - static API methods: @ref DataProvider::DataProvider::parseDpqlExpression() "parseDpqlExpression()",
-          @ref DataProvider::DataProvider::parseDpqlExpressionWithInfo() "parseDpqlExpressionWithInfo()",
-          @ref DataProvider::DataProvider::serializeDpqlExpression() "serializeDpqlExpression()",
-          @ref DataProvider::DataProvider::getDpqlTokens() "getDpqlTokens()",
-          @ref DataProvider::DataProvider::getDpqlCompletions() "getDpqlCompletions()",
-          @ref DataProvider::DataProvider::validateDpqlExpression() "validateDpqlExpression()"
+        - new \c DataProvider::DpqlTokenizer class for lexical analysis
+        - new \c DataProvider::DpqlParser class for parsing DPQL strings to \c DataProviderExpression hashes
+        - new \c DataProvider::DpqlSerializer class for converting expressions back to DPQL strings
+        - new \c DataProvider::DpqlCompletionProvider class for IDE/editor autocomplete
+        - static API methods: \c DataProvider::DataProvider::parseDpqlExpression(),
+          \c DataProvider::DataProvider::parseDpqlExpressionWithInfo(),
+          \c DataProvider::DataProvider::serializeDpqlExpression(),
+          \c DataProvider::DataProvider::getDpqlTokens(),
+          \c DataProvider::DataProvider::getDpqlCompletions(),
+          \c DataProvider::DataProvider::validateDpqlExpression()
         - DPQL syntax: \c @name \c == \c "John" \c && \c @age \c > \c 18
         - supports field refs (\c @field), comparison ops, logical ops, ranges, \c in, and regex
         - the \c qdp CLI supports DPQL expressions for search criteria with auto-detection or the \c -q/--dpql option
@@ -247,15 +269,23 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - refactored authentication methods to provide a more extensible and clear design
       - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 mode control
     - @ref Logger "Logger" module
-      - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
+\if QORE_LANG_FINAL
+      - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "Qore::Logger::LoggerAppenderQueue"
+\else
+      - added memory-based backpressure support to \c Qore::Logger::LoggerAppenderQueue
+\endif
         to prevent unbounded memory growth when log producers outpace consumers
-        - new @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "constructor(softint max_bytes)" with
+\if QORE_LANG_FINAL
+        - new @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "Qore::Logger::LoggerAppenderQueue::constructor(softint)" with
+\else
+        - new \c Qore::Logger::LoggerAppenderQueue::constructor(softint) with
+\endif
           configurable memory limit (default: 10 MiB, -1 for unlimited)
-        - updated @ref Qore::Logger::LoggerAppenderQueue::push() "push()" with optional timeout parameter for
+        - updated \c Qore::Logger::LoggerAppenderQueue::push() with optional timeout parameter for
           backpressure control: block indefinitely (0), block with timeout (>0), or drop immediately (<0)
-        - new monitoring methods: @ref Qore::Logger::LoggerAppenderQueue::maxBytes() "maxBytes()",
-          @ref Qore::Logger::LoggerAppenderQueue::currentBytes() "currentBytes()",
-          @ref Qore::Logger::LoggerAppenderQueue::isFull() "isFull()"
+        - new monitoring methods: \c Qore::Logger::LoggerAppenderQueue::maxBytes(),
+          \c Qore::Logger::LoggerAppenderQueue::currentBytes(),
+          \c Qore::Logger::LoggerAppenderQueue::isFull()
       - added \c max_bytes parameter to @ref Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool"
         constructor for memory-limited thread pool logging
     - @ref SqlUtil "SqlUtil" module
@@ -307,8 +337,8 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - new \c ReadOnlyFile::readShortBinary() method returns immediately with any available data without trying to
         fill the requested size
     - new classes and methods in the @ref reflection "reflection" module:
-      - @ref Qore::Reflection::Enum "Enum" class for enum reflection
-      - @ref Qore::Reflection::EnumMember "EnumMember" class for enum member reflection
+      - \c Qore::Reflection::Enum class for enum reflection
+      - \c Qore::Reflection::EnumMember class for enum member reflection
       - @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()" to list enums in a namespace
       - @ref Qore::Reflection::Namespace::getEnum() "Namespace::getEnum()" to get an enum by name
       - @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
@@ -384,7 +414,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - enum names can be used directly as type names: \c Status \c s or \c enum<Status> \c s (equivalent)
       - or-nothing support: \c *Status, \c *enum<Status>, and \c cast<*enum<Status>>()
       - namespace support: enums can be declared in namespaces
-      - reflection support via @ref Qore::Reflection::Enum "Enum" and @ref Qore::Reflection::EnumMember "EnumMember" classes
+      - reflection support via \c Qore::Reflection::Enum and \c Qore::Reflection::EnumMember classes
       - can be disabled with @ref no-enum "%no-enum" parse directive or @ref Qore::PO_NO_ENUM "PO_NO_ENUM"
     - @ref ElasticSearchDataProvider "ElasticSearchDataProvider" module
       - added Bulk API support with NDJSON format and partial failure handling
@@ -510,6 +540,22 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - improved @ref Qore::backquote() "backquote()" and the @ref backquote_operator "backquote operator" on Linux
         to use \c posix_spawn(), restore an unblocked signal mask in child processes, and terminate the entire process
         group on sandbox interrupts
+      - fixed bareword resolution in constructors and class scopes
+        (<a href="https://github.com/qoretechnologies/qore/issues/40">issue 40</a>)
+      - fixed calls to member closures defined as class fields
+        (<a href="https://github.com/qoretechnologies/qore/issues/39">issue 39</a>)
+      - added parse warnings for ambiguous namespace function resolution when \c %require-types is enabled
+        (<a href="https://github.com/qoretechnologies/qore/issues/55">issue 55</a>)
+      - added parse warnings for ambiguous method overloads across class hierarchies when \c %require-types is enabled
+        (<a href="https://github.com/qoretechnologies/qore/issues/188">issue 188</a>)
+      - ambiguous overload and call resolution warnings are now strict warnings and are excluded from \c WARN_ALL;
+        enable them explicitly with \c WARN_STRICT when needed
+      - \c %enable-all-warnings and \c %modern now enable only non-strict warnings; use \c --strict-warnings or
+        \c WARN_STRICT to include ambiguous overload/call warnings
+      - added \c %strict-warnings to enable strict warnings from parse directives
+      - added \c -M / \c --modern and \c -G / \c --enable-debug short command-line options
+      - unqualified symbol resolution now prioritizes \c ::Qore entries to prevent user namespace overrides of
+        system symbols
     - @ref RestClient "RestClient" module
       - fixed non-blocking polling with connections that use basic auth
         (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)

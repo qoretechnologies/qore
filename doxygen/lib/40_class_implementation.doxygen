@@ -114,7 +114,7 @@
 
     As with functions, if the method raises a Qore-language exception against the ExceptionSink pointer, the return value should be 0.  Argument handling is the same as with builtin functions.
 
-    Previously the \ref MUTEX_lock function implementation (for Qore class method Mutex::lock()) was given as an example, and here you can see how it's bound to the QoreClass object:
+    Previously the MUTEX_lock function implementation (for Qore class method Mutex::lock()) was given as an example, and here you can see how it's bound to the QoreClass object:
 
     @code{.cpp}
        QC_MUTEX->addMethod("lock",          (q_method_t)MUTEX_lock);

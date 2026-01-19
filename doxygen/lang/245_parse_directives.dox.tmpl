@@ -7,11 +7,11 @@
     Parse directives that set parsing options can be used any time parse options have not been locked on a @ref Qore::Program "Program object". They are used most often when it's not possible or desirable to set the parse options in the qore command line.
 
     The recommended parse directive for %Qore programming is @ref modern "%modern", which combines all the recommended parse options into a single directive:
-    - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", and enables all warnings
+    - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings
 
     Alternatively, files with the \c .qr extension automatically enable @ref modern "%modern" mode without any parse directive.
 
-    @note The individual parse directives (@ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref enable-all-warnings "%enable-all-warnings") are still supported for backward compatibility and fine-grained control.
+    @note The individual parse directives (@ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref enable-all-warnings "%enable-all-warnings", @ref strict-warnings "%strict-warnings") are still supported for backward compatibility and fine-grained control.
 
     <b>Parse Directives</b>
     |!Directive|!Description
@@ -29,6 +29,7 @@
     |@ref broken-list-parsing "%broken-list-parsing"|Use old pre-0.8.12 broken list parsing where certain lists without parentheses would be rewritten to make top-level statements like <tt>list l = 1, 2, 3;</tt> valid
     |@ref broken-list-range "%broken-list-range"|Assume broken list range operator as per pre-2.0
     |@ref broken-logic-precedence "%broken-logic-precedence"|Use old pre-0.8.12 precedence of logical and bitwise operators
+    |@ref broken-namespace-resolution "%broken-namespace-resolution"|Use legacy namespace resolution behavior
     |@ref broken-loop-statement "%broken-loop-statement"|Accept @ref break "break" and @ref continue "continue" outside of loops as with pre-0.8.13
     |@ref broken-narrowed-types "%broken-narrowed-types"|Disable parse-time type narrowing for \c auto, \c hash<auto>, and \c list<auto> variables <br><br>Since %Qore 2.3
     |@ref broken-operators "%broken-operators"|Accept spaces in multi-character operators as with pre-0.8.12
@@ -41,6 +42,7 @@
     |@ref correct-list-parsing "%correct-list-parsing"|revert the effect of the @ref broken-list-parsing "%broken-list-parsing" parse option
     |@ref correct-list-range "%correct-list-range"|revert the effect of the @ref broken-list-range "%broken-list-range" parse option
     |@ref correct-logic-precedence "%correct-logic-precedence"|revert the effect of the @ref broken-logic-precedence "%broken-logic-precedence" parse option
+    |@ref correct-namespace-resolution "%correct-namespace-resolution"|revert the effect of the @ref broken-namespace-resolution "%broken-namespace-resolution" parse option
     |@ref correct-loop-statement "%correct-loop-statement"|revert the effect of the @ref broken-loop-statement "%broken-loop-statement" parse option
     |@ref correct-narrowed-types "%correct-narrowed-types"|revert the effect of the @ref broken-narrowed-types "%broken-narrowed-types" parse option <br><br>Since %Qore 2.3
     |@ref correct-operators "%correct-operators"|revert the effect of the @ref broken-operators "%broken-operators" parse option
@@ -54,7 +56,8 @@
     |@ref disable-warning "%disable-warning" <em>@ref warnings "warning-code"</em>|Disables the named @ref warnings "warning" until @ref enable-warning "%enable-warning" is encountered with the same code or @ref enable-all-warnings "%enable-all-warnings" is encountered
     |@ref elif "%elif" <em>expression</em>|Allows for testing additional conditions in a @ref conditional_parsing "conditionally-parsed" block started by @ref parse_if "%if"; uses the same expression syntax as @ref parse_if "%if"
     |@ref else "%else"|Allows for parsing an alternate block when used with the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing based on parse defines") <br><br>Since %Qore 0.8.3
-    |@ref enable-all-warnings "%enable-all-warnings"|Turns on all @ref warnings "warnings"
+    |@ref enable-all-warnings "%enable-all-warnings"|Turns on all non-strict @ref warnings "warnings"
+    |@ref strict-warnings "%strict-warnings"|Enables strict warnings (ambiguous overload/call resolution)<br><br>Since %Qore 2.3
     |@ref enable-debug "%enable-debug"|Enables @@assert and @@debug statements; without this directive, these statements are skipped at parse time with no runtime overhead; equivalent to parse option @ref Qore::PO_ENABLE_DEBUG<br><br>Since %Qore 2.1
     |@ref enable-warning "%enable-warning" <em>@ref warnings "warning-code"</em>|Enables the named @ref warnings "warning"
     |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives <br><br>Since %Qore 0.8.3
@@ -68,7 +71,7 @@
     |@ref lock-options "%lock-options"|Prohibits further changes to parse options (equivalent to the <tt>-</tt><tt>-lock-options</tt> command line option)
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
-    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", and enables all warnings. This is the recommended parse directive for modern %Qore programming. Files with the \c .qr extension automatically enable this mode.<br><br>Since %Qore 2.3
+    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with the \c .qr extension automatically enable this mode.<br><br>Since %Qore 2.3
     |@ref loose-types "%loose-types"|@deprecated support removed in %Qore 2.3; this directive has no effect
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br><br>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br><br>Since %Qore 0.8.4
@@ -415,6 +418,26 @@
     @since %Qore 0.8.12
 
     <hr>
+    @section broken-namespace-resolution %broken-namespace-resolution
+
+    @par Parse Directive:
+    <tt>%%broken-namespace-resolution</tt>
+
+    @par Command Line:
+    <tt>-pbroken-namespace-resolution</tt>
+
+    @par Parse Option Constant:
+    @ref Qore::PO_BROKEN_NAMESPACE_RESOLUTION
+
+    @par Description:
+    Enables legacy namespace resolution behavior where symbol resolution prefers the shortest path and can
+    allow user-defined symbols to shadow symbols in the @ref Qore "Qore" namespace.
+
+    @see @ref correct-namespace-resolution "%correct-namespace-resolution"
+
+    @since %Qore 2.3
+
+    <hr>
     @section broken-loop-statement %broken-loop-statement
 
     @par Parse Directive:
@@ -683,6 +706,25 @@ i+ =4;
     @since %Qore 0.8.12.10
 
     <hr>
+    @section correct-namespace-resolution %correct-namespace-resolution
+
+    @par Parse Directive:
+    <tt>%%correct-namespace-resolution</tt>
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    n/a
+
+    @par Description:
+    Reverts the effect of the @ref broken-namespace-resolution "%broken-namespace-resolution" parse option.
+
+    @see @ref broken-namespace-resolution "%broken-namespace-resolution"
+
+    @since %Qore 2.3
+
+    <hr>
     @section correct-narrowed-types %correct-narrowed-types
 
     @par Parse Directive:
@@ -923,7 +965,25 @@ i+ =4;
     n/a
 
     @par Description
-    Enables all warnings while parsing. See @ref warnings for more information.
+    Enables all non-strict warnings while parsing. See @ref warnings for more information.
+
+    <hr>
+    @section strict-warnings %strict-warnings
+
+    @par Parse Directive:
+    <tt>%%strict-warnings</tt>
+
+    @par Command Line:
+    <tt>-</tt><tt>-strict-warnings</tt>
+
+    @par Parse Option Constant:
+    n/a
+
+    @par Description
+    Enables strict warnings (ambiguous overload and call resolution) while parsing. See @ref warnings for more
+    information.
+
+    @since %Qore 2.3
 
     <hr>
     @section enable-debug %enable-debug
@@ -932,7 +992,7 @@ i+ =4;
     <tt>%%enable-debug</tt>
 
     @par Command Line:
-    <tt>-</tt><tt>-enable-debug</tt>
+    <tt>-</tt><tt>-enable-debug, -G</tt>
 
     @par Parse Option Constant:
     @ref Qore::PO_ENABLE_DEBUG
@@ -1248,13 +1308,13 @@ sub validate_input(int value, int max_value) {
     <tt>%%modern</tt>
 
     @par Command Line:
-    <tt>-</tt><tt>-set-parse-option=modern</tt>
+    <tt>-</tt><tt>-set-parse-option=modern, -M</tt>
 
     @par Parse Option Constant:
     @ref Qore::PO_MODERN
 
     @par Description:
-    Sets @ref new-style "%new-style" (@ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local"), @ref require-types "%require-types", @ref strict-args "%strict-args", and enables all warnings.
+    Sets @ref new-style "%new-style" (@ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local"), @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings.
 
     This is the recommended parse directive for modern %Qore programming. It combines all the best practices into a single directive.
 
@@ -1535,7 +1595,7 @@ sub validate_input(int value, int max_value) {
     <tt>%%no-global-vars</tt>
 
     @par Command Line:
-    <tt>-</tt><tt>-no-global-vars, -G</tt>
+    <tt>-</tt><tt>-no-global-vars</tt>
 
     @par Parse Option Constant:
     @ref Qore::PO_NO_GLOBAL_VARS
@@ -1615,7 +1675,7 @@ sub validate_input(int value, int max_value) {
     <tt>%%no-namespace-defs</tt>
 
     @par Command Line:
-    <tt>-</tt><tt>-no-namespace-defs, -M</tt>
+    <tt>-</tt><tt>-no-namespace-defs</tt>
 
     @par Parse Option Constant:
     @ref Qore::PO_NO_NAMESPACE_DEFS
