@@ -55,6 +55,8 @@ public class LinearDataProvider inherits LinearDataProviderBase {
             "create-project": Class::forName("LinearCreateProjectDataProvider"),
             "create-cycle": Class::forName("LinearCreateCycleDataProvider"),
             "create-label": Class::forName("LinearCreateLabelDataProvider"),
+            "update-issue": Class::forName("LinearUpdateIssueDataProvider"),
+            "archive-issue": Class::forName("LinearArchiveIssueDataProvider"),
         };
     }
 

@@ -321,7 +321,7 @@ public class LinearIssueCreateDataType inherits HashDataType {
     }
 }
 
-#! Linear issue update input type
+#! Linear issue update input type (for record-based updates)
 public class LinearIssueUpdateDataType inherits HashDataType {
     private {
         #! Field definitions for updating issues
@@ -393,6 +393,96 @@ public class LinearIssueUpdateDataType inherits HashDataType {
                 "display_name": "Parent ID",
                 "short_desc": "The parent issue ID",
                 "desc": "The ID of the parent issue",
+                "example_value": "parent-issue-uuid",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Linear issue update request type (for request-based API with id)
+public class LinearIssueUpdateRequestDataType inherits HashDataType {
+    private {
+        #! Field definitions for update request
+        const Fields = {
+            "id": {
+                "type": StringType,
+                "display_name": "Issue",
+                "short_desc": "The issue to update",
+                "desc": "The ID of the issue to update",
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            },
+            "title": {
+                "type": StringOrNothingType,
+                "display_name": "Title",
+                "short_desc": "The new issue title",
+                "desc": "The new title of the issue",
+                "example_value": "Updated issue title",
+            },
+            "description": {
+                "type": StringOrNothingType,
+                "display_name": "Description",
+                "short_desc": "The new issue description",
+                "desc": "The new description of the issue (supports markdown)",
+                "example_value": "Updated description content",
+            },
+            "priority": {
+                "type": IntOrNothingType,
+                "display_name": "Priority",
+                "short_desc": "The new issue priority",
+                "desc": "The new priority of the issue (0=None, 1=Urgent, 2=High, 3=Medium, 4=Low)",
+                "example_value": 2,
+            },
+            "estimate": {
+                "type": FloatOrNothingType,
+                "display_name": "Estimate",
+                "short_desc": "The new issue estimate",
+                "desc": "The new estimated complexity/effort",
+                "example_value": 3.0,
+            },
+            "assigneeId": {
+                "type": StringOrNothingType,
+                "display_name": "Assignee",
+                "short_desc": "The new assignee",
+                "desc": "The new user to assign the issue to",
+                "example_value": "user-uuid-here",
+            },
+            "stateId": {
+                "type": StringOrNothingType,
+                "display_name": "State",
+                "short_desc": "The new workflow state",
+                "desc": "The new workflow state for the issue",
+                "example_value": "state-uuid-here",
+            },
+            "projectId": {
+                "type": StringOrNothingType,
+                "display_name": "Project",
+                "short_desc": "The project to move the issue to",
+                "desc": "The project to move the issue to",
+                "example_value": "project-uuid-here",
+            },
+            "cycleId": {
+                "type": StringOrNothingType,
+                "display_name": "Cycle",
+                "short_desc": "The cycle to move the issue to",
+                "desc": "The cycle (sprint) to move the issue to",
+                "example_value": "cycle-uuid-here",
+            },
+            "labelIds": {
+                "type": SoftListOrNothingType,
+                "display_name": "Labels",
+                "short_desc": "The labels to set",
+                "desc": "Array of label IDs to set on the issue (replaces existing labels)",
+            },
+            "parentId": {
+                "type": StringOrNothingType,
+                "display_name": "Parent Issue",
+                "short_desc": "The parent issue",
+                "desc": "The parent issue ID (to make this a sub-issue)",
                 "example_value": "parent-issue-uuid",
             },
         };

@@ -420,7 +420,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         *hash<DataProviderActionInfo> createIssue = DataProviderActionCatalog::getAppAction("Linear", "create-issue");
         assertTrue(exists createIssue, "create-issue action should exist");
         assertEq("create-issue", createIssue.action);
-        assertEq(DPAT_CREATE, createIssue.action_code);
+        assertEq(DPAT_API, createIssue.action_code);
         assertTrue(createIssue.options.hasKey("teamId"), "create-issue should have teamId option");
         assertTrue(createIssue.options.hasKey("title"), "create-issue should have title option");
         assertTrue(createIssue.options.hasKey("assigneeId"), "create-issue should have assigneeId option");
@@ -449,18 +449,26 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Verify update-issue action has id and update options
         *hash<DataProviderActionInfo> updateIssue = DataProviderActionCatalog::getAppAction("Linear", "update-issue");
         assertTrue(exists updateIssue, "update-issue action should exist");
-        assertEq(DPAT_UPDATE, updateIssue.action_code);
+        assertEq(DPAT_API, updateIssue.action_code);
         assertTrue(updateIssue.options.hasKey("id"), "update-issue should have id option");
         assertEq("issues", updateIssue.options.id.ref_data, "update-issue id should have ref_data=issues");
+        assertTrue(updateIssue.options.id.required, "update-issue id should be required");
         assertTrue(updateIssue.options.hasKey("title"), "update-issue should have title option");
         assertTrue(updateIssue.options.hasKey("assigneeId"), "update-issue should have assigneeId option");
+        assertEq("users", updateIssue.options.assigneeId.ref_data, "update-issue assigneeId should have ref_data=users");
+        assertTrue(updateIssue.options.hasKey("stateId"), "update-issue should have stateId option");
+        assertEq("states", updateIssue.options.stateId.ref_data, "update-issue stateId should have ref_data=states");
+        assertTrue(updateIssue.options.hasKey("priority"), "update-issue should have priority option");
+        assertTrue(updateIssue.options.priority.allowed_values.size() > 0, "update-issue priority should have allowed_values");
+        assertTrue(updateIssue.options.priority.allowed_values_creatable, "update-issue priority should have allowed_values_creatable");
 
         # Verify archive-issue action
         *hash<DataProviderActionInfo> archiveIssue = DataProviderActionCatalog::getAppAction("Linear", "archive-issue");
         assertTrue(exists archiveIssue, "archive-issue action should exist");
-        assertEq(DPAT_DELETE, archiveIssue.action_code);
+        assertEq(DPAT_API, archiveIssue.action_code);
         assertTrue(archiveIssue.options.hasKey("id"), "archive-issue should have id option");
         assertEq("issues", archiveIssue.options.id.ref_data, "archive-issue id should have ref_data=issues");
+        assertTrue(archiveIssue.options.id.required, "archive-issue id should be required");
 
         # Verify search-issues action (FIND type)
         *hash<DataProviderActionInfo> searchIssues = DataProviderActionCatalog::getAppAction("Linear", "search-issues");
@@ -472,7 +480,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Verify create-comment action has issueId option
         *hash<DataProviderActionInfo> createComment = DataProviderActionCatalog::getAppAction("Linear", "create-comment");
         assertTrue(exists createComment, "create-comment action should exist");
-        assertEq(DPAT_CREATE, createComment.action_code);
+        assertEq(DPAT_API, createComment.action_code);
         assertTrue(createComment.options.hasKey("issueId"), "create-comment should have issueId option");
         assertEq("issues", createComment.options.issueId.ref_data, "create-comment issueId should have ref_data=issues");
         assertTrue(createComment.options.hasKey("body"), "create-comment should have body option");
@@ -492,7 +500,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Verify project actions
         *hash<DataProviderActionInfo> createProject = DataProviderActionCatalog::getAppAction("Linear", "create-project");
         assertTrue(exists createProject, "create-project action should exist");
-        assertEq(DPAT_CREATE, createProject.action_code);
+        assertEq(DPAT_API, createProject.action_code);
         assertTrue(createProject.options.hasKey("name"), "create-project should have name option");
         assertTrue(createProject.options.hasKey("teamIds"), "create-project should have teamIds option");
         assertEq("teams", createProject.options.teamIds.element_ref_data, "create-project teamIds should have element_ref_data=teams");
@@ -500,7 +508,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Verify cycle actions
         *hash<DataProviderActionInfo> createCycle = DataProviderActionCatalog::getAppAction("Linear", "create-cycle");
         assertTrue(exists createCycle, "create-cycle action should exist");
-        assertEq(DPAT_CREATE, createCycle.action_code);
+        assertEq(DPAT_API, createCycle.action_code);
         assertTrue(createCycle.options.hasKey("teamId"), "create-cycle should have teamId option");
         assertEq("teams", createCycle.options.teamId.ref_data, "create-cycle teamId should have ref_data=teams");
         assertTrue(createCycle.options.hasKey("startsAt"), "create-cycle should have startsAt option");
@@ -516,7 +524,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Verify label actions
         *hash<DataProviderActionInfo> createLabel = DataProviderActionCatalog::getAppAction("Linear", "create-label");
         assertTrue(exists createLabel, "create-label action should exist");
-        assertEq(DPAT_CREATE, createLabel.action_code);
+        assertEq(DPAT_API, createLabel.action_code);
         assertTrue(createLabel.options.hasKey("name"), "create-label should have name option");
         assertTrue(createLabel.options.hasKey("color"), "create-label should have color option");
         assertTrue(createLabel.options.hasKey("teamId"), "create-label should have teamId option");
