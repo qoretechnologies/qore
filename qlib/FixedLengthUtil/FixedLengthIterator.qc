@@ -70,7 +70,6 @@ while (i.next()) {
         @endcode
 
         @param input The @ref Qore::InputStream "InputStream" providing input data to process
-        @param encoding the encoding of the input stream
         @param spec Fixed-length line specification; see @ref fixedlengthspec for more information
         @param opts Global options; see @ref fixedlengthglobals for valid values
     */

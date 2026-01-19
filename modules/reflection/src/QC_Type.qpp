@@ -252,42 +252,42 @@ const SoftIntType = qore(get_type_object(softBigIntTypeInfo));
 */
 const SoftIntOrNothingType = qore(get_type_object(softBigIntOrNothingTypeInfo));
 
-//! @ref hexbinary_type "hexbinary type"
+//! hexbinary type
 /**
 */
 const HexBinaryType = qore(get_type_object(hexBinaryTypeInfo));
 
-//! @ref hexbinary_or_nothing_type "*hexbinary type"
+//! *hexbinary type
 /**
 */
 const HexBinaryOrNothingType = qore(get_type_object(hexBinaryOrNothingTypeInfo));
 
-//! @ref base64binary_type "base64binary type"
+//! base64binary type
 /**
 */
 const Base64BinaryType = qore(get_type_object(base64BinaryTypeInfo));
 
-//! @ref base64binary_or_nothing_type "*base64binary type"
+//! *base64binary type
 /**
 */
 const Base64BinaryOrNothingType = qore(get_type_object(base64BinaryOrNothingTypeInfo));
 
-//! @ref base64urlbinary_type "base64urlbinary type"
+//! base64urlbinary type
 /**
 */
 const Base64UrlBinaryType = qore(get_type_object(base64UrlBinaryTypeInfo));
 
-//! @ref base64urlbinary_or_nothing_type "*base64urlbinary type"
+//! *base64urlbinary type
 /**
 */
 const Base64UrlBinaryOrNothingType = qore(get_type_object(base64UrlBinaryOrNothingTypeInfo));
 
-//! @ref softbinary_type "softbinary type"
+//! softbinary type
 /**
 */
 const SoftBinaryType = qore(get_type_object(softBinaryTypeInfo));
 
-//! @ref softbinary_or_nothing_type "*softbinary type"
+//! *softbinary type
 /**
 */
 const SoftBinaryOrNothingType = qore(get_type_object(softBinaryOrNothingTypeInfo));
@@ -411,7 +411,7 @@ const QTI_IDENT = QTI_IDENT;
 qclass Type [ns=Qore::Reflection; arg=QoreType* t; dom=REFLECTION; vparent=Serializable; serializer=reinterpret_cast<q_serializer_t>(Type_serializer); deserializer=Type_deserializer];
 
 //! Creates the type from the given string
-/** @param string the type string
+/** @param typestr the type string
 
     @throw UNKNOWN-TYPE cannot find the given type
  */

@@ -152,7 +152,7 @@ class TypedefTest inherits QUnit::Test {
         p.parse("
             typedef MyInt = int;
 
-            class Counter {
+            class TypedefCounter {
                 private {
                     MyInt count = 0;
                 }
@@ -167,7 +167,7 @@ class TypedefTest inherits QUnit::Test {
             }
 
             int sub test() {
-                Counter c();
+                TypedefCounter c();
                 c.increment(5);
                 c.increment(3);
                 return c.getCount();

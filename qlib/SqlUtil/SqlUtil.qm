@@ -218,7 +218,7 @@ module SqlUtil {
 
     @subsection sqlutilv1_4 SqlUtil v1.4
     - fixed a bug in update and upsert statement generation when the given data does not have enough columns to use the unique index found, an error message is generated that contains all the columns names instead of just the column names required by the index (<a href="https://github.com/qoretechnologies/qore/issues/1013">issue 1013</a>)
-    - implemented @ref cop_trunc_date() operator (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
+    - implemented \c cop_trunc_date() operator (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
     - updated to support complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
     - implemented analytic/window functions: new functions [<a href="https://github.com/qoretechnologies/qore/issues/2203">issue 2202</a>]
     - implemented analytic/window functions: cop_over full support including ORDER BY [<a href="https://github.com/qoretechnologies/qore/issues/2203">issue 2203</a>]
@@ -240,7 +240,7 @@ module SqlUtil {
     - implemented the @ref SqlUtil::cop_length() column function (<a href="https://github.com/qoretechnologies/qore/issues/1395">issue 1395</a>)
 
     @subsection sqlutilv1_3 SqlUtil v1.3
-    - implemented insert option support (see @ref SqlUtil::AbstractTable::InsertOptions "AbstractTable::InsertOptions") with the \c "returning" clause in supported drivers
+    - implemented insert option support (see \c SqlUtil::AbstractTable::InsertOptions "AbstractTable::InsertOptions") with the \c "returning" clause in supported drivers
     - implemented support for late table resolution in joins to support executing SQL from serialized parameters
     - improved error messages for common errors such as join errors
     - implemented support for DBA actions (see @ref dba_management)
@@ -256,10 +256,10 @@ module SqlUtil {
     - implemented the @ref SqlUtil::cop_coalesce() column operator functions for the \c "COALESCE" operator returning the first non-NULL value in a list of columns (<a href="https://github.com/qoretechnologies/qore/issues/671">issue 671</a>)
     - column aliases (defined with @ref SqlUtil::cop_as()) can now be used in the @ref where_clauses "where hash argument" and in join criteria
     - removed all APIs that handle implicit transactions; APIs must commit transactions explicitly (<a href="https://github.com/qoretechnologies/qore/issues/533">issue 533</a>)
-    - @ref sql_cop_funcs "column operator functions" can be used in @ref where_clauses "where hashes" (<a href="https://github.com/qoretechnologies/qore/issues/529">issue 529</a>)
+    - \c sql_cop_funcs "column operator functions" can be used in @ref where_clauses "where hashes" (<a href="https://github.com/qoretechnologies/qore/issues/529">issue 529</a>)
     - implemented @ref SqlUtil::AbstractTable::bindEmptyStringsAsNull() (<a href="https://github.com/qoretechnologies/qore/issues/776">issue 776</a>)
-    - implemented the \c "omit_update" @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" for asymmetrical upserts (updates only update a subset of the columns inserted) (<a href="https://github.com/qoretechnologies/qore/issues/791">issue 791</a>)
-    - implemented the @ref SqlUtil::AbstractTable::UpsertUpdateOnly upsert option (<a href="https://github.com/qoretechnologies/qore/issues/793">issue 793</a>)
+    - implemented the \c "omit_update" \c SqlUtil::AbstractTable::UpsertOptions "upsert option" for asymmetrical upserts (updates only update a subset of the columns inserted) (<a href="https://github.com/qoretechnologies/qore/issues/791">issue 791</a>)
+    - implemented the \c SqlUtil::AbstractTable::UpsertUpdateOnly upsert option (<a href="https://github.com/qoretechnologies/qore/issues/793">issue 793</a>)
     - implemented @ref SqlUtil::cop_substr() and @ref SqlUtil::uop_substr() operators (<a href="https://github.com/qoretechnologies/qore/issues/801">issue 801</a>)
     - implemented @ref SqlUtil::op_substr() where operator (<a href="https://github.com/qoretechnologies/qore/issues/883">issue 883</a>)
     - fixed a bug with queries using a \a desc argument with the @ref select_option_orderby "orderby" query option with multiple sort columns; the \c "desc" string was added only to the last column but should have been added to all columns
@@ -269,7 +269,7 @@ module SqlUtil {
     - fixed a bug in the partition by/over operator where column names as given in the query argument hash were not properly recognized
     - fixed a bug in schema alignment; when aligning a schema and an index supporting a PK constraint is introduced in the new schema, the alignment would fail when a constraint is attempted to be disabled that doesn't exist
     - fixed a bug generating select statements for tables accessed through a synonym when used with join clauses; previously inconsistent schema prefixes could be used which could cause errors parsing the SQL statements generated
-    - fixed a bug where the @ref SqlUtil::AbstractTable "AbstractTable" lock was held while executing SQL to determine the upsert strategy to use with @ref SqlUtil::AbstractTable::UpsertAuto "UpsertAuto" (<a href="https://github.com/qoretechnologies/qore/issues/408">issue 409</a>)
+    - fixed a bug where the @ref SqlUtil::AbstractTable "AbstractTable" lock was held while executing SQL to determine the upsert strategy to use with \c SqlUtil::AbstractTable::UpsertAuto "UpsertAuto" (<a href="https://github.com/qoretechnologies/qore/issues/408">issue 409</a>)
     - fixed a bug where complex bind values as hashes (such as used by the pgsql and oracle drivers) were rejected by SqlUtil (<a href="https://github.com/qoretechnologies/qore/issues/494">issue 494</a>) when updating
     - fixed a bug where wildcard columns in join tables were not working (<a href="https://github.com/qoretechnologies/qore/issues/499">issue 499</a>)
     - fixed a bug in @ref SqlUtil::op_in() where invalid SQL was generated with an argument of 0 (<a href="https://github.com/qoretechnologies/qore/issues/500">issue 500</a>)
@@ -284,7 +284,7 @@ module SqlUtil {
 
     @subsection sqlutilv1_2 SqlUtil v1.2
     - added insert operator support; for example, for inserting with values from sequences
-    - added new upsert constant maps: @ref SqlUtil::AbstractTable::UpsertStrategyMap "UpsertStrategyMap" and @ref SqlUtil::AbstractTable::UpsertStrategyDescriptionMap "UpsertStrategyDescriptionMap"
+    - added new upsert constant maps: \c SqlUtil::AbstractTable::UpsertStrategyMap "UpsertStrategyMap" and \c SqlUtil::AbstractTable::UpsertStrategyDescriptionMap "UpsertStrategyDescriptionMap"
     - added static SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() method
     - added new AbstractTable::insertFromSelect*() variants taking Table arguments
     - added SqlUtil::AbstractTable::checkExistence() method
@@ -293,7 +293,7 @@ module SqlUtil {
     - fixed a bug where select and row iterator operations could fail with certain select hash arguments without a \c "columns" entry but where column names were otherwise required
 
     @subsection sqlutilv1_1 SqlUtil v1.1
-    - implemented new upsert strategy @ref SqlUtil::AbstractTable::UpsertInsertOnly
+    - implemented new upsert strategy \c SqlUtil::AbstractTable::UpsertInsertOnly
     - adding a default value to a column with a not null constraint and existing data populates existing null columns with the new default value automatically in schema alignment
     - fixed an infinitely recursive call in SqlUtil::AbstractTable::del()
     - fixed bugs generating "create table" and "align table" SQL with DBs where unique indexes automatically create unique constraints (ex: MySQL)
@@ -322,21 +322,21 @@ module SqlUtil {
     @section retrieving_data Retrieving Data from the Database
 
     There are many methods in the @ref SqlUtil::AbstractTable "AbstractTable" class for retrieving data from the database; here is an overview:
-    - @ref SqlUtil::AbstractTable::find(auto): finds a row corresponding to the given single value of the primary key; if not present @ref nothing is returned
-    - @ref SqlUtil::AbstractTable::find(list<auto>): finds all rows corresponding to the given list of values of the primary key; if none are present @ref nothing is returned
-    - @ref SqlUtil::AbstractTable::find(hash<auto>): find a row corresponding to the given hash of column name/value pairs, which must at least reference all columns of the table's primary key; if no row matches, @ref nothing is returned
-    - @ref SqlUtil::AbstractTable::findSingle(): finds the first (of possibly many) rows that match the @ref where_clauses "where clause hash argument" or returns @ref nothing if no row matches
-    - @ref SqlUtil::AbstractTable::findAll(): returns all rows that match the @ref where_clauses "where clause hash argument" or returns @ref nothing if no row matches
-    - @ref SqlUtil::AbstractTable::getStatement(): returns an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object iterating rows that match the @ref select_option_hash "select option hash" argument
-    - @ref SqlUtil::AbstractTable::getSelectSql(): returns an SQL string and bind arguments for the @ref select_option_hash "select option hash" argument
-    - @ref SqlUtil::AbstractTable::select(): returns a hash keyed by column name of lists (row values) corresponding to the @ref select_option_hash "select option hash" argument
-    - @ref SqlUtil::AbstractTable::selectRow(): return a hash repersenting a single row corresponding to the @ref select_option_hash "select option hash" argument; if the query returns more than one row an exception will be raised
-    - @ref SqlUtil::AbstractTable::selectRows(): returns lists of row values corresponding to the @ref select_option_hash "select option hash" argument
+    - @ref SqlUtil::AbstractTable::find(auto) : finds a row corresponding to the given single value of the primary key; if not present @ref nothing is returned
+    - @ref SqlUtil::AbstractTable::find(list<auto>) : finds all rows corresponding to the given list of values of the primary key; if none are present @ref nothing is returned
+    - \c SqlUtil::AbstractTable::find(hash<auto>): find a row corresponding to the given hash of column name/value pairs, which must at least reference all columns of the table's primary key; if no row matches, @ref nothing is returned
+    - @ref SqlUtil::AbstractTable::findSingle() : finds the first (of possibly many) rows that match the @ref where_clauses "where clause hash argument" or returns @ref nothing if no row matches
+    - @ref SqlUtil::AbstractTable::findAll() : returns all rows that match the @ref where_clauses "where clause hash argument" or returns @ref nothing if no row matches
+    - @ref SqlUtil::AbstractTable::getStatement() : returns an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object iterating rows that match the @ref select_option_hash "select option hash" argument
+    - @ref SqlUtil::AbstractTable::getSelectSql() : returns an SQL string and bind arguments for the @ref select_option_hash "select option hash" argument
+    - @ref SqlUtil::AbstractTable::select() : returns a hash keyed by column name of lists (row values) corresponding to the @ref select_option_hash "select option hash" argument
+    - @ref SqlUtil::AbstractTable::selectRow() : return a hash repersenting a single row corresponding to the @ref select_option_hash "select option hash" argument; if the query returns more than one row an exception will be raised
+    - @ref SqlUtil::AbstractTable::selectRows() : returns lists of row values corresponding to the @ref select_option_hash "select option hash" argument
 
     @subsection find_single_row Retrieving a Single Row
 
     @par From the Primary Key
-    To retrieve a single row based on a single primary key value, use @ref SqlUtil::AbstractTable::find(auto):
+    To retrieve a single row based on a single primary key value, use @ref SqlUtil::AbstractTable::find(auto) :
     @code{.py}
 *hash<auto> row = table.find(id);
     @endcode
@@ -345,7 +345,7 @@ module SqlUtil {
 *hash<auto> row = ds.selectRow("select * from schema.table where id = %v", id);
     @endcode
     \n
-    To retrieve a single row based on a complex primary key value, or a single primary key value and extra criteria, use @ref SqlUtil::AbstractTable::find(hash):
+    To retrieve a single row based on a complex primary key value, or a single primary key value and extra criteria, use \c SqlUtil::AbstractTable::find(hash):
     @code{.py}
 *hash<auto> row = table.find(("account_type": type, "name": name));
     @endcode
@@ -355,7 +355,7 @@ module SqlUtil {
     @endcode
 
     @par At Most One Matching Row From the Table
-    To retrieve at most one matching row from the table, use @ref SqlUtil::AbstractTable::findSingle():
+    To retrieve at most one matching row from the table, use @ref SqlUtil::AbstractTable::findSingle() :
     @code{.py}
 *hash<auto> row = table.findSingle(("permission_type": op_between("US", "UX")));
     @endcode
@@ -370,21 +370,21 @@ module SqlUtil {
     @subsection find_multiple_rows Retrieving Multiple Rows
 
     @par From the Primary Key
-    To retrieve multiple rows from a list of single primary key values, use @ref SqlUtil::AbstractTable::find(list)
+    To retrieve multiple rows from a list of single primary key values, use \c SqlUtil::AbstractTable::find(list)
     @code{.py}
 *list<auto> rows = table.find(list);
     @endcode
     All rows matching the single primary key values in the argument list are returned; if no rows match, @ref nothing is returned.
 
     @par From Simple Where Criteria
-    To find all rows matching simple where criteria, use @ref SqlUtil::AbstractTable::findAll():
+    To find all rows matching simple where criteria, use @ref SqlUtil::AbstractTable::findAll() :
     @code{.py}
 *list<auto> rows = table.findAll({"id": op_gt(100), "created": op_gt(2013-03-01)});
     @endcode
     See @ref where_clauses for a description of the hash argument; if no rows match, @ref nothing is returned.
 
     @par From Complex Select Criteria
-    To select a hash keyed by column name of lists (row values) based on complex select criteria, use @ref SqlUtil::AbstractTable::select():
+    To select a hash keyed by column name of lists (row values) based on complex select criteria, use @ref SqlUtil::AbstractTable::select() :
     @code{.py}
 hash<auto> sh = {
     "columns": ("id", "name", "q.*"),
@@ -397,7 +397,7 @@ hash<auto> sh = {
     @endcode
     See @ref select_option_hash for a description of the hash argument; if no rows match, then a hash with column
     names assigned to empty lists is returned.\n\n
-    To select a list of row hashes based on complex select criteria, use @ref SqlUtil::AbstractTable::selectRows():
+    To select a list of row hashes based on complex select criteria, use @ref SqlUtil::AbstractTable::selectRows() :
     @code{.py}
 *list<auto> rows = table.selectRows(sh);
     @endcode
@@ -405,7 +405,7 @@ hash<auto> sh = {
 
     @subsection get_row_iterator Acquiring a Row Iterator for Query Results
     @par From Complex Select Criteria
-    To get an iterator for the row values corresponding to a select statement, use @ref SqlUtil::AbstractTable::getStatement():
+    To get an iterator for the row values corresponding to a select statement, use @ref SqlUtil::AbstractTable::getStatement() :
     @code{.py}
 Table t(ds, "table_name");
 AbstractSQLStatement i = table.getStatement(sh);
@@ -417,7 +417,7 @@ map printf("row: %y\n", $1), i;
 
     @subsection get_rows_in_batches Retrieving Multiple Rows in Batches
     @par From Complex Select Criteria
-    Multiple rows can be retrieved from a single call to an @ref Qore::SQL::AbstractSQLStatement object as returned by @ref SqlUtil::AbstractTable::getStatement():
+    Multiple rows can be retrieved from a single call to an @ref Qore::SQL::AbstractSQLStatement object as returned by @ref SqlUtil::AbstractTable::getStatement() :
     @code{.py}
 Table t(ds, "table_name");
 AbstractSQLStatement i = table.getStatement(sh);
@@ -477,14 +477,14 @@ hash soh = (
     - @ref select_option_columns "columns": describes the output columns and any output column operations; if not present, then all columns are returned directly in the output
     - @ref select_option_where "where": (@ref hash_type "hash") describes how any \c "where" clause will be built; if not present, then there is no \c where clause
     - @ref select_option_orderby "orderby": (@ref list_type "list of strings") describes the ordering of the results; if not present (and no other output ordering is required, such as implied by the @ref select_option_offset "offset" option), then results are returned in the order returned by the database server
-    - @ref select_option_desc "desc": (@ref bool_type "bool") specifies descending order for results; if not present or not @ref True "True" and results are ordered, then the results are returned in ascending order
+    - @ref select_option_desc "desc": (\c bool_type "bool") specifies descending order for results; if not present or not @ref True "True" and results are ordered, then the results are returned in ascending order
     - @ref select_option_limit "limit": (@ref int_type "int") specifies the maximum number of results to be returned; if not present, then all results are returned
     - @ref select_option_offset "offset": (@ref int_type "int") specifies the starting offset of the first record to be returned (starting with 0)
     - @ref select_option_join "join": (@ref hash_type "hash") specifies any SQL join operations to return results from multiple tables
     - @ref select_option_groupby "groupby": (@ref list_type "list of strings") specifies grouping for aggregate column functions
     - @ref select_option_having "having": (@ref hash_type "hash") specifies filtering for results with aggregate column functions
     - @ref select_option_superquery "superquery": (@ref hash_type "hash") specifies that the rest of the argument belong to a subquery and the hash arguments under this key will select from the subquery
-    - @ref select_option_forupdate "forupdate": (@ref bool_type "bool") adds a \c "for update" clause to a select query
+    - @ref select_option_forupdate "forupdate": (\c bool_type "bool") adds a \c "for update" clause to a select query
 
     @subsubsection select_option_alias Select Option "alias"
     This option provides a table alias for the main table when @ref select_option_join "join" options are also used.
@@ -556,7 +556,7 @@ hash<auto> sh = (
     @endcode \n
     <b>A Column Operation Specified by a Column Operator Function</b>\n
     ex: <tt>cop_as("column_name", "column_alias")</tt> \n
-    See @ref sql_cop_funcs "column operator function" for more information on column operator functions
+    See \c sql_cop_funcs "column operator function" for more information on column operator functions
     @code{.py}
 list<auto> columns = (
     "id",
@@ -565,7 +565,7 @@ list<auto> columns = (
 );
 *list<auto> rows = table.selectRows({"columns": columns});
     @endcode
-    For @ref sql_cop_funcs "column operator functions" taking a column name, either a string name or a name in dot notation is acceptable\n\n
+    For \c sql_cop_funcs "column operator functions" taking a column name, either a string name or a name in dot notation is acceptable\n\n
     <b>The Value \c "*", Meaning All Columns</b>\n
     ex: \c "*"
     @code{.py}
@@ -670,7 +670,7 @@ hash<auto> sh = {
 };
 *list<auto> rows = table.selectRows(sh);
     @endcode
-    To join multiple tables in a single query, use the \c "join" option.  The \c "join" hash key should be assigned to a join description hash as returned by one of the @ref sql_jop_funcs or combined join description hash created by concatenating such values (see an example of this above).
+    To join multiple tables in a single query, use the \c "join" option.  The \c "join" hash key should be assigned to a join description hash as returned by one of the \c sql_jop_funcs or combined join description hash created by concatenating such values (see an example of this above).
     @note the join columns do not need to be specified in the case that a foreign key in one table exists to the primary key of the other table; in this case this information is assumed for the join automatically
 
     @see @ref joins for more examples
@@ -687,7 +687,7 @@ hash<auto> sh = {
 };
 *list<auto> rows = table.selectRows(sh);
     @endcode
-    The \c "groupby" option allows for aggregate SQL column operator functions to be used (ex: @ref cop_max(), cop_min()) in select statements.
+    The \c "groupby" option allows for aggregate SQL column operator functions to be used (ex: \c cop_max(), cop_min()) in select statements.
     The \c "groupby" hash key should be assigned to a list of column specifiers or a single column specifier.  Column specifiers for the \c "groupby"
     key are strings giving column names, optionally in dot notation or positive column numbers.
 
@@ -707,7 +707,7 @@ hash<auto> sh = {
 *list<auto> rows = table.selectRows(sh);
     @endcode
     The \c "having" option allows for query results with aggregate SQL column operator functions to be filtered by user-defined criteria.
-    The \c "having" hash key should be assigned to a hash where each key is a column specifier (optionally in dot notation) and the values are lists with two elements; the first element must be a @ref sql_cops "column operator code", and the second element is a column operator description normally provided by using a @ref sql_cop_funcs "column operator function" as in the above example.
+    The \c "having" hash key should be assigned to a hash where each key is a column specifier (optionally in dot notation) and the values are lists with two elements; the first element must be a \c sql_cops "column operator code", and the second element is a column operator description normally provided by using a \c sql_cop_funcs "column operator function" as in the above example.
 
     @subsubsection select_option_superquery Select Option "superquery"
     <b>Superquery Example:</b>
@@ -796,10 +796,10 @@ if (h)
     @section inserting_data Inserting Data into the Database
 
     The following methods can be used to insert data into the database:
-    - @ref SqlUtil::AbstractTable::insert(): inserts a single row into a table without committing the transaction
-    - @ref SqlUtil::AbstractTable::insertCommit(): inserts a single row into a table and commits the transaction
-    - @ref SqlUtil::AbstractTable::insertFromSelect(): inserts data in a table based on a select statement created from the @ref select_option_hash "select option hash" argument and without committing the transaction
-    - @ref SqlUtil::AbstractTable::insertFromSelectCommit(): inserts data in a table based on a select statement created from the @ref select_option_hash "select option hash" argument and commits the transaction
+    - @ref SqlUtil::AbstractTable::insert() : inserts a single row into a table without committing the transaction
+    - @ref SqlUtil::AbstractTable::insertCommit() : inserts a single row into a table and commits the transaction
+    - @ref SqlUtil::AbstractTable::insertFromSelect() : inserts data in a table based on a select statement created from the @ref select_option_hash "select option hash" argument and without committing the transaction
+    - @ref SqlUtil::AbstractTable::insertFromSelectCommit() : inserts data in a table based on a select statement created from the @ref select_option_hash "select option hash" argument and commits the transaction
 
     @see @ref sql_upsert for information about upserting or merging data
 
@@ -812,7 +812,7 @@ table.insert({"id": id, "name": name, "created": now_us()});
 
     Data can be explicitly inserted into the database with immediate values with @ref SqlUtil::AbstractTable::insert() and @ref SqlUtil::AbstractTable::insertCommit() as in the above example.
 
-    Additionally, instead of giving a literal value to be inserted, @ref sql_iop_funcs can be used to insert values based on SQL operations used directly in the insert statement.
+    Additionally, instead of giving a literal value to be inserted, \c sql_iop_funcs can be used to insert values based on SQL operations used directly in the insert statement.
 
     @subsection inserting_data_from_select Inserting Data From a Select Statement
 
@@ -844,13 +844,13 @@ table.insertFromIterator(l.iterator(), ("commit_block": 5000));
 
     The iterator given to the @ref SqlUtil::AbstractTable::insertFromIterator() or @ref SqlUtil::AbstractTable::insertFromIteratorCommit() methods can be any iterator whose @ref Qore::AbstractIterator::getValue() "getValue()" method returns a @ref hash_type "hash".
 
-    @note the @ref SqlUtil::AbstractTable::InsertFromIteratorOptions "insert option" \c "commit_block" can be used to insert a large amount of data in pieces in order to avoid overwhelming the database server's rollback cache
+    @note the \c SqlUtil::AbstractTable::InsertFromIteratorOptions "insert option" \c "commit_block" can be used to insert a large amount of data in pieces in order to avoid overwhelming the database server's rollback cache
 
     @section updating_data Updating Data
 
     The following methods can be used to update data:
-    - @ref SqlUtil::AbstractTable::update(): updates a single row and does not commit the transaction
-    - @ref SqlUtil::AbstractTable::updateCommit(): updates a single row and commits the transaction
+    - @ref SqlUtil::AbstractTable::update() : updates a single row and does not commit the transaction
+    - @ref SqlUtil::AbstractTable::updateCommit() : updates a single row and commits the transaction
 
     @par Example:
     @code{.py}
@@ -869,10 +869,10 @@ return ds.vexec("update schema.table set permission_type = concat(lower(permissi
     @section deleting_data Deleting Data
 
     The following methods can be used to dekete data:
-    - @ref SqlUtil::AbstractTable::del(): updates the table based on a @ref where_clauses "where clause" and does not commit the transaction
-    - @ref SqlUtil::AbstractTable::delCommit(): updates the table based on a @ref where_clauses "where clause" and commits the transaction
-    - @ref SqlUtil::AbstractTable::truncate(): truncates the table and does not commit the transaction
-    - @ref SqlUtil::AbstractTable::truncateCommit(): truncates the table and commits the transaction releasing the transaction lock on the underlying datasource object
+    - @ref SqlUtil::AbstractTable::del() : updates the table based on a @ref where_clauses "where clause" and does not commit the transaction
+    - @ref SqlUtil::AbstractTable::delCommit() : updates the table based on a @ref where_clauses "where clause" and commits the transaction
+    - @ref SqlUtil::AbstractTable::truncate() : truncates the table and does not commit the transaction
+    - @ref SqlUtil::AbstractTable::truncateCommit() : truncates the table and commits the transaction releasing the transaction lock on the underlying datasource object
 
     @par Example:
     @code{.py}
@@ -897,7 +897,7 @@ return ds.vexec("delete from schema.table where record_type = %v", ("OLD-CUSTOME
     @endcode
     In the above example, \a table is joined with \a table2 on <tt>table.id = table2.altid</tt>.
 
-    Joins on multiple tables are performed by combining the results of @ref sql_jop_funcs "join functions" with the @ref plus_operator "+ operator"
+    Joins on multiple tables are performed by combining the results of \c sql_jop_funcs "join functions" with the @ref plus_operator "+ operator"
     as follows:
     @code{.py}
 *list<auto> rows = table.selectRows({"join": join_inner(table2, "t2", ("id": "altid")) + join_inner(table3, "t3")});
@@ -906,7 +906,7 @@ return ds.vexec("delete from schema.table where record_type = %v", ("OLD-CUSTOME
     automatically detected primary key to foreign key relationship between the two tables.
 
     Joins are by default made with the primary table; to join with another join table, then give the alias for the table as the first
-    argument to the @ref sql_jop_funcs "join function" as in the following example:
+    argument to the \c sql_jop_funcs "join function" as in the following example:
     @code{.py}
 *list<auto> rows = table.selectRows({"join": join_inner(table2, "t2", ("id": "altid")) + join_inner("t2", table3, "t3")});
     @endcode
@@ -940,11 +940,11 @@ return ds.vexec("delete from schema.table where record_type = %v", ("OLD-CUSTOME
 
     @subsection where_clauses_advanced Advanced Where Clauses
 
-    These where clauses are arbitrarily-complex expressions defined by a @ref DataProviderExpression hash.
+    These where clauses are arbitrarily-complex expressions defined by a \c DataProviderExpression hash.
 
     These clauses can use any kind of logical groupings or operators / functions supported by the SQL driver.
 
-    For a default set of expressions, see @ref DefaultExpressionMap.
+    For a default set of expressions, see \c DefaultExpressionMap.
 
     @par Advanced Where Hash Example:
     @code{.py}
@@ -988,14 +988,14 @@ list<auto> rows = mytable.selectRows(select_hash);
     The where condition hash has the following format:
     - each key gives a column name or a table/alias with column name in dot notation
     - the values are either direct values, meaning that the equality operator (\c "==") is used, or a
-      @ref sql_op_funcs "SQL operator function" for operators in the where clause
+      \c sql_op_funcs "SQL operator function" for operators in the where clause
 
     @note To reference a column more than once in a simple where clause, prefix the column specification with a unique
     number and a colon as in the following example:
 
     @code{.py} hash<auto> w = ("0:created": op_ge(mindate), "1:created": op_lt(maxdate)); @endcode
 
-    See @ref sql_op_funcs for a list of operator functions.
+    See \c sql_op_funcs for a list of operator functions.
 
     @par Simple Where Hash Example:
     @code{.py}
@@ -1049,8 +1049,8 @@ ds.vexec("select * from table where id > %v and created > %v", (100, 2013-03-01)
     following methods:
     - @ref SqlUtil::AbstractTable::upsert()
     - @ref SqlUtil::AbstractTable::upsertCommit()
-    - @ref SqlUtil::AbstractTable::getUpsertClosure()
-    - @ref SqlUtil::AbstractTable::getUpsertClosureWithValidation()
+    - \c SqlUtil::AbstractTable::getUpsertClosure()
+    - \c SqlUtil::AbstractTable::getUpsertClosureWithValidation()
     - @ref SqlUtil::AbstractTable::upsertFromIterator()
     - @ref SqlUtil::AbstractTable::upsertFromIteratorCommit()
     - @ref SqlUtil::AbstractTable::upsertFromSelect()
@@ -1069,8 +1069,8 @@ table.upsert(("id": id, "name": name, "account_type": account_type));
 
     @subsection sql_upsert_many Upserting Many Rows Using An Upsert Closure
 
-    To upsert or merge many rows by using an upsert closure, call @ref SqlUtil::AbstractTable::getUpsertClosure() or
-    @ref SqlUtil::AbstractTable::getUpsertClosureWithValidation() and provide an example row as an argument to acquire
+    To upsert or merge many rows by using an upsert closure, call \c SqlUtil::AbstractTable::getUpsertClosure() or
+    \c SqlUtil::AbstractTable::getUpsertClosureWithValidation() and provide an example row as an argument to acquire
     a closure that will be executed on the rest of the rows as in the following example.
 
     @par Simple Example:
@@ -1179,7 +1179,7 @@ if (sh) {
     @ref SqlUtil::AbstractTable::upsertFromIteratorCommit() methods can be any iterator whose
     @ref Qore::AbstractIterator::getValue() "getValue()" method returns a @ref hash_type "hash".
 
-    @note the @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c "commit_block" can be used to insert a
+    @note the \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c "commit_block" can be used to insert a
     large amount of data in pieces in order to avoid overwhelming the database server's rollback cache
 
     @subsection sql_upsert_from_select Upserting Many Rows from a Select Statement
@@ -1228,12 +1228,12 @@ if (sh) {
     The source table does not have to be in the same database or even of the same database type (ie you can upsert to
     and from any database type supported by SqlUtil).
 
-    @note the @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c "commit_block" can be used to insert a
+    @note the \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c "commit_block" can be used to insert a
     large amount of data in pieces in order to avoid overwhelming the database server's rollback cache
 
     @subsection sql_upsert_with_delete Upserting Many Rows and Deleting Unwanted Rows
 
-    Call any of the batch upsert methods with @ref SqlUtil::AbstractTable::UpsertOptions "upsert option"
+    Call any of the batch upsert methods with \c SqlUtil::AbstractTable::UpsertOptions "upsert option"
     \c delete_others set to @ref True "True" to perform a batch upsert / merge operation on a table, and then scan the
     table and delete any unwanted rows.  If there are no rows to be deleted, these calls have very similar performance
     to the batch upsert method calls without any deletions, however, if there are rows to be deleted, then the entire
@@ -1241,7 +1241,7 @@ if (sh) {
     for large tables this can be an expensive operation.
 
     The only difference in the following examples and the preceding ones is that
-    @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True" in these examples.
+    \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True" in these examples.
 
     @par Simple Example: any
     @code{.py}
@@ -1295,18 +1295,18 @@ if (sh) {
 }
     @endcode
 
-    @note the @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c "commit_block" can be used to insert a large amount of data in pieces in order to avoid overwhelming the database server's rollback cache
+    @note the \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c "commit_block" can be used to insert a large amount of data in pieces in order to avoid overwhelming the database server's rollback cache
 
     @subsection sql_upsert_strategies Upsert Strategies
-    The approach used is based on one of the following strategies (see @ref upsert_options):
-    - @ref SqlUtil::AbstractTable::UpsertAuto "AbstractTable::UpsertAuto": if the target table is empty, then @ref SqlUtil::AbstractTable::UpsertInsertFirst is used, otherwise @ref SqlUtil::AbstractTable::UpsertUpdateFirst is used; note that if a driver-specific optimized version of the upsert operation is implemented, this strategy will normally result in the best performance
-    - @ref SqlUtil::AbstractTable::UpsertInsertFirst "AbstractTable::UpsertInsertFirst": first an insert will be attempted, if it fails due to a duplicate key, then an update will be made; this strategy should be used if more inserts will be made than updates
-    - @ref SqlUtil::AbstractTable::UpsertUpdateFirst "AbstractTable::UpsertUpdateFirst": first an update will be attempted, if it fails due to missing data, then an insert is performed; this strategy should be used if more updates will be made then inserts
-    - @ref SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst": first a select is made on the unique key, if the data to be updated is equal, nothing is done and @ref upsert_results "upsert result" @ref SqlUtil::AbstractTable::UR_Unchanged is returned
-    - @ref SqlUtil::AbstractTable::UpsertInsertOnly "AbstractTable::UpsertInsertOnly": insert if the row doesn't exist, otherwise do nothing and @ref upsert_results "upsert result" @ref SqlUtil::AbstractTable::UR_Unchanged is returned
-    - @ref SqlUtil::AbstractTable::UpsertUpdateOnly "AbstractTable::UpsertUpdateOnly": update if the row exists, otherwise do nothing and @ref upsert_results "upsert result" @ref SqlUtil::AbstractTable::UR_Unchanged is returned
+    The approach used is based on one of the following strategies (see \c upsert_options):
+    - \c SqlUtil::AbstractTable::UpsertAuto "AbstractTable::UpsertAuto": if the target table is empty, then \c SqlUtil::AbstractTable::UpsertInsertFirst is used, otherwise \c SqlUtil::AbstractTable::UpsertUpdateFirst is used; note that if a driver-specific optimized version of the upsert operation is implemented, this strategy will normally result in the best performance
+    - \c SqlUtil::AbstractTable::UpsertInsertFirst "AbstractTable::UpsertInsertFirst": first an insert will be attempted, if it fails due to a duplicate key, then an update will be made; this strategy should be used if more inserts will be made than updates
+    - \c SqlUtil::AbstractTable::UpsertUpdateFirst "AbstractTable::UpsertUpdateFirst": first an update will be attempted, if it fails due to missing data, then an insert is performed; this strategy should be used if more updates will be made then inserts
+    - \c SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst": first a select is made on the unique key, if the data to be updated is equal, nothing is done and \c upsert_results "upsert result" \c SqlUtil::AbstractTable::UR_Unchanged is returned
+    - \c SqlUtil::AbstractTable::UpsertInsertOnly "AbstractTable::UpsertInsertOnly": insert if the row doesn't exist, otherwise do nothing and \c upsert_results "upsert result" \c SqlUtil::AbstractTable::UR_Unchanged is returned
+    - \c SqlUtil::AbstractTable::UpsertUpdateOnly "AbstractTable::UpsertUpdateOnly": update if the row exists, otherwise do nothing and \c upsert_results "upsert result" \c SqlUtil::AbstractTable::UR_Unchanged is returned
 
-    @note @ref SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst" is the only upsert strategy that can return @ref SqlUtil::AbstractTable::UR_Updated; the @ref SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst" strategy should be used when verbose reporting is required, particularly if it's necessary to report the actual number of changed rows.
+    @note \c SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst" is the only upsert strategy that can return \c SqlUtil::AbstractTable::UR_Updated; the \c SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst" strategy should be used when verbose reporting is required, particularly if it's necessary to report the actual number of changed rows.
 */
 /** @page schema_management Schema Management
 
@@ -1350,15 +1350,15 @@ if (sh) {
     - For objects that are dropped and recreated, renaming the object is generally supported if the underlying database server supports
     renaming.
     - Schemas (and other objects) can also be dropped based on a generic description (or descriptions derived from the database); see
-    @ref SqlUtil::AbstractDatabase::getDropSchemaSql()
+    \c SqlUtil::AbstractDatabase::getDropSchemaSql()
 
     @section creating_new_objects Creating New Objects
 
     New objects are generally creating using appropriate methods from the @ref SqlUtil::Database "Database" class, such as the following:
-    - @ref SqlUtil::AbstractDatabase::makeFunction() "AbstractDatabase::makeFunction()"
-    - @ref SqlUtil::AbstractDatabase::makeProcedure() "AbstractDatabase::makeProcedure()"
-    - @ref SqlUtil::AbstractDatabase::makeSequence() "AbstractDatabase::makeSequence()"
-    - @ref SqlUtil::AbstractDatabase::makeTable() "AbstractDatabase::makeTable()"
+    - \c SqlUtil::AbstractDatabase::makeFunction() "AbstractDatabase::makeFunction()"
+    - \c SqlUtil::AbstractDatabase::makeProcedure() "AbstractDatabase::makeProcedure()"
+    - \c SqlUtil::AbstractDatabase::makeSequence() "AbstractDatabase::makeSequence()"
+    - \c SqlUtil::AbstractDatabase::makeTable() "AbstractDatabase::makeTable()"
 
     Tables can also be created by instantiating a @ref SqlUtil::Table "Table" object (see @ref SqlUtil::AbstractTable::constructor()).
 
@@ -1594,7 +1594,7 @@ const Schema = (
 
     @subsection creating_new_tables Creating New Tables
 
-    Tables can be created manually, by creating a @ref SqlUtil::Table "Table object" and then populating the table with columns, indexes, etc, and then calling @ref SqlUtil::AbstractTable::create() for example.
+    Tables can be created manually, by creating a @ref SqlUtil::Table "Table object" and then populating the table with columns, indexes, etc, and then calling \c SqlUtil::AbstractTable::create() for example.
     The following methods can be used for adding new attributes to a table:
     - @ref SqlUtil::AbstractTable::addColumn()
     - @ref SqlUtil::AbstractTable::addPrimaryKey()
@@ -1609,17 +1609,17 @@ const Schema = (
     Alternatively, the following methods can be used to retrieve the SQL that can be executed for the particular database driver that the @ref SqlUtil::Table object is based on:
     - @ref SqlUtil::AbstractTable::getAddColumnSql()
     - @ref SqlUtil::AbstractTable::getAddPrimaryKeySql()
-    - @ref SqlUtil::AbstractTable::getAddUniqueConstraintSql()
-    - @ref SqlUtil::AbstractTable::getAddIndexSql()
-    - @ref SqlUtil::AbstractTable::getAddForeignConstraintSql()
-    - @ref SqlUtil::AbstractTable::getAddCheckConstraintSql()
-    - @ref SqlUtil::AbstractTable::getAddTriggerSql()
+    - \c SqlUtil::AbstractTable::getAddUniqueConstraintSql()
+    - \c SqlUtil::AbstractTable::getAddIndexSql()
+    - \c SqlUtil::AbstractTable::getAddForeignConstraintSql()
+    - \c SqlUtil::AbstractTable::getAddCheckConstraintSql()
+    - \c SqlUtil::AbstractTable::getAddTriggerSql()
 
     Otherwise a table can be built from a @ref table_desc_hash "table description hash" with one of the following methods:
     - @ref SqlUtil::AbstractTable::constructor()
-    - @ref SqlUtil::AbstractTable::setupTable()
+    - \c SqlUtil::AbstractTable::setupTable()
 
-    Table description hashes are also used when aligning tables to a template, which can be used to automate schema upgrades; see @ref SqlUtil::AbstractTable::getAlignSql(), @ref SqlUtil::AbstractDatabase::getAlignSql(), and @ref table_desc_hash "table description hash" for more information.
+    Table description hashes are also used when aligning tables to a template, which can be used to automate schema upgrades; see \c SqlUtil::AbstractTable::getAlignSql(), \c SqlUtil::AbstractDatabase::getAlignSql(), and @ref table_desc_hash "table description hash" for more information.
 
     @subsection retrieving_table_info Retrieving Table Information
 
@@ -1800,7 +1800,7 @@ hash table_desc = (
       the information required for the column including driver-specific options; any driver-specific options will
       overwrite values in the top level of the hash if there are duplicate hash keys, see below for an example
 
-    Note that the above structure is an extension of the fields in @ref SqlUtil::AbstractTable::ColumnDescOptions,
+    Note that the above structure is an extension of the fields in \c SqlUtil::AbstractTable::ColumnDescOptions,
     adding \c notnull and \c driver keys for additional information to create the column in the table.
 
     Here is an example of a column description hash:
@@ -1984,7 +1984,7 @@ table.insertFromIterator(i, sqlarg_callback);
     is called whenever an row result is available; this callback takes the following arguments:
     - @ref string_type "string" table_name: the name of the table
     - @ref hash_type "hash" row: the row affected
-    - @ref int_type "int" result: the upsert result code (see @ref upsert_results) for possible values
+    - @ref int_type "int" result: the upsert result code (see \c upsert_results) for possible values
 
     Here is an example of an upsert callback:
     @code{.py}
@@ -2017,7 +2017,7 @@ hash<auto> sh = table.upsertFromIterator(i, upsert_strategy, False, ("info_callb
     @subsection insert_info_callback Insert Info Callback
 
     This option is identical to @ref upsert_info_callback, except the \a result argument is always
-    @ref SqlUtil::AbstractTable::UR_Inserted.
+    \c SqlUtil::AbstractTable::UR_Inserted.
 */
 /** @page dba_management DBA Management
 
@@ -2195,33 +2195,33 @@ public namespace SqlUtil {
         *bool auto_increment;
     }
 
-    #! SQL operator info hash as returned by all @ref sql_op_funcs "operator functions"
+    #! SQL operator info hash as returned by all \c sql_op_funcs "operator functions"
     public hashdecl OperatorInfo {
         string op;   #!< the operator string code
         auto arg;     #!< optional argument
     }
 
-    #! column operator info hash as returned by all @ref sql_cop_funcs "column operator functions"
+    #! column operator info hash as returned by all \c sql_cop_funcs "column operator functions"
     public hashdecl ColumnOperatorInfo {
         string cop;  #!< the column operator string code
         auto column;  #!< column sopecifier, may be a string or a complex hash
         auto arg;     #!< optional argument
     }
 
-    #! insert operator info hash as returned by all @ref sql_iop_funcs() "insert operator functions"
+    #! insert operator info hash as returned by all \c sql_iop_funcs() "insert operator functions"
     public hashdecl InsertOperatorInfo {
         string _iop;  #!< the insert operator string code
         any arg;      #!< optional argument
     }
 
-    #! update operator info hash as returned by all @ref sql_uop_funcs() "update operator functions"
+    #! update operator info hash as returned by all \c sql_uop_funcs() "update operator functions"
     public hashdecl UpdateOperatorInfo {
         string uop;  #!< the update operator string code
         auto arg;     #!< optional argument
         *hash nest;  #!< option nested operation hash
     }
 
-    #! join operator info hash as returned by all @ref sql_jop_funcs "join operator functions"
+    #! join operator info hash as returned by all \c sql_jop_funcs "join operator functions"
     public hashdecl JoinOperatorInfo {
         string jop;           #!< the join operator string code
         auto table;           #!< the table to join with (either an @ref SqlUtil::AbstractTable "AbstractTable" object or a string table name)
@@ -2473,7 +2473,7 @@ public namespace SqlUtil {
     #! to return the date with truncated value
     /** @see cop_trunc_date()
 
-        See also @ref sql_cop_trunc_date_enum
+        See also \c sql_cop_trunc_date_enum
 
         @since %SqlUtil 1.4.0
      */
@@ -2783,7 +2783,7 @@ public namespace SqlUtil {
         - @ref cop_distinct(): add \c DISTINCT to the column name
         - @ref cop_length(): return the length of the given text column
         - @ref cop_lower(): return a column in lower case
-        - @ref cop_max(): return the maximum value for the given column when grouping
+        - \c cop_max(): return the maximum value for the given column when grouping
         - @ref cop_min(): return the minimum value for the given column when grouping
         - @ref cop_over(): return a hash for the \c "over" operator for windowing functions
         - @ref cop_prepend(): prepend a string to the output of a column
@@ -2797,7 +2797,7 @@ public namespace SqlUtil {
         - @ref cop_year_day(): return the year to day value of the given date column
         - @ref cop_year_hour(): return the year to hour value of the given date column
         - @ref cop_year_month(): return the year and month value of the given date column
-        - @ref cop_trunc_date(): return truncated date regarding the mask
+        - \c cop_trunc_date(): return truncated date regarding the mask
         - @ref cop_cume_dist(): analytic/window function
         - @ref cop_dense_rank(): analytic/window function
         - @ref cop_first_value(): analytic/window function
@@ -2815,7 +2815,7 @@ public namespace SqlUtil {
      */
     #/@{
     #! returns a @ref ColumnOperatorInfo hash
-    /** @param cop the column operator (one of @ref sql_cops)
+    /** @param cop the column operator (one of \c sql_cops)
         @param column the column name
         @param arg the argument to the operator
 
@@ -3320,7 +3320,7 @@ sql: select 1 as as_int,1.2 as as_float,3.2 as as_numeric,to_timestamp('20150421
         @endcode
 
         @param column the column specification for the column (string name or dot notation for use in joins)
-        @param mask the string with one of specified values rederenced in @ref sql_cop_trunc_date_enum
+        @param mask the string with one of specified values rederenced in \c sql_cop_trunc_date_enum
 
         @return a column operator description hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
@@ -3603,7 +3603,7 @@ select row_number() over (partition by row_type order by id) as "row_number" fro
     #/@}
 
     /** @defgroup sql_cop_trunc_date_enum cop_trunc_date formats
-        These are formatting constant which can be used in @ref cop_trunc_date() formatting argument.
+        These are formatting constant which can be used in \c cop_trunc_date() formatting argument.
 
         Input date used in the table below: 20.4.2017 14:27:34
 
@@ -3721,7 +3721,7 @@ int rows_updated = t.update(("permission_type": uop_append("-migrated", uop_lowe
      */
     #/@{
     #! returns an @ref UpdateOperatorInfo hash
-    /** @param uop the update operator (one of @ref sql_uops)
+    /** @param uop the update operator (one of \c sql_uops)
         @param arg the argument to the operator
         @param nest any nested operation to the operator
 
@@ -3899,7 +3899,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     /** @defgroup sql_jops SQL Join Operators
         These are the operators that can be used in the @ref select_option_join "join" argument in a @ref select_option_hash "select option hash"
 
-        @note these operators are normally not used directly, but rather are used by the @ref sql_jop_funcs
+        @note these operators are normally not used directly, but rather are used by the \c sql_jop_funcs
     */
     #/@{
     #! for standard inner joins
@@ -3936,7 +3936,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     #/@{
     #! returns hash keyed with the table name assigned to a @ref JoinOperatorInfo hash
     /**
-        @note this function is normally not used directly, but rather is called by the other @ref sql_jop_funcs
+        @note this function is normally not used directly, but rather is called by the other \c sql_jop_funcs
     */
     public hash<string, hash<JoinOperatorInfo>> sub make_jop(string jop, AbstractTable table, *string alias, *hash jcols, *hash cond, *string ta, *hash<auto> opt) {
         string hk = alias ? alias : table.getSqlName();
@@ -3946,7 +3946,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     #! returns a hash keyed with the table name assigned to a @ref JoinOperatorInfo hash
     /** This version is used for deferred table resolution at join time
 
-        @note this function is normally not used directly, but rather is called by the other @ref sql_jop_funcs
+        @note this function is normally not used directly, but rather is called by the other \c sql_jop_funcs
     */
     public hash<string, hash<JoinOperatorInfo>> sub make_jop(string jop, string table_name, *string alias, *hash jcols, *hash cond, *string ta, *hash<auto> opt) {
         string hk = alias ? alias : table_name;
@@ -5853,7 +5853,7 @@ select * from schema.table where name = other_name and ((type = %v and validatio
     /** @defgroup sql_iops SQL Insert Operators
         These are operators that can be used for special value functions as the values of inserted columns.
 
-        @note these operators are normally not used directly, but rather are used by the @ref sql_iop_funcs
+        @note these operators are normally not used directly, but rather are used by the \c sql_iop_funcs
     */
     #/@{
     #! for using the value of a sequence
@@ -5876,7 +5876,7 @@ select * from schema.table where name = other_name and ((type = %v and validatio
     */
     #/@{
     #! returns an @ref InsertOperatorInfo hash
-    /** @param iop the value operator (one of @ref sql_iops)
+    /** @param iop the value operator (one of \c sql_iops)
         @param arg the argument to the operator
 
         @return an @ref InsertOperatorInfo hash corresponding to the arguments for use as values in insert queries
@@ -6493,7 +6493,7 @@ int num = l.size();
             @ref nothing is returned
 
             @param name the name of the table to find all the foreigjn constraints for
-            @param opt a hash of options for the SQL strings; see @ref AbstractDatabase::DropSchemaOptions for common
+            @param opt a hash of options for the SQL strings; see \c AbstractDatabase::DropSchemaOptions for common
             options; each driver can support additional driver-specific options
 
             @return a list of SQL strings that can be used to drop all the foreign constraints on a particular table
@@ -6580,7 +6580,7 @@ AbstractTable t = tables.table_name;
 
             @param old_name the current name of the table
             @param new_name the new name of the table
-            @param opts optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+            @param opts optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
             @return an SQL string that can be used to rename the given table if it exists and the target does not exist, otherwise returns @ref nothing
          */
@@ -6653,7 +6653,7 @@ tables.tableRenamed(old, newv);
 
             @param tname the name of the table
             @param cname the name of the constraint to drop if it exists
-            @param opts optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+            @param opts optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
             @return an SQL string that can be used to drop an existing constraint on a table, if the table is not already cached or the constraint does not exist, then @ref nothing is returned
         */

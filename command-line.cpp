@@ -175,7 +175,8 @@ static const char helpstr[] =
    "  -s, --show-charsets          displays known character encodings\n"
    "  -V, --version                show program version information and quit\n"
    "      --short-version          show short version information and quit\n"
-   "  -W, --enable-all-warnings    turn on all warnings (recommended)\n"
+   "  -W, --enable-all-warnings    turn on all non-strict warnings (recommended)\n"
+   "      --strict-warnings        turn on strict warnings (ambiguous overloads/calls)\n"
    "  -w, --enable-warning=arg     turn on warning given by argument\n"
    "  -x, --exec-class[=arg]       instantiate class with same name as file name\n"
    "                               (override with arg, also sets --no-top-level)\n"
@@ -189,6 +190,9 @@ static const char helpstr[] =
    "      --no-repl                disable automatic REPL when stdin is a terminal\n"
    "\n"
    " PARSE OPTIONS:\n"
+   "  -G, --enable-debug           enable @debug and @assert statements\n"
+   "  -M, --modern                 turn on recommended parse options\n"
+   "      --no-global-vars         make global variable definitions illegal\n"
    "  -H, --parse-option-help      display options controlling parse options";
 
 static const char parseopts[] =    "qore options controlling parse options:\n"
@@ -196,7 +200,7 @@ static const char parseopts[] =    "qore options controlling parse options:\n"
    "  -p, --set-parse-option=arg   set parse option (ex: -pno-database)\n"
    "\n PARSE OPTIONS:\n"
    "  -A, --lock-warnings          do not allow changes in warning levels\n"
-   "      --enable-debug           enable @debug and @assert statements\n"
+   "  -G, --enable-debug           enable @debug and @assert statements\n"
    "      --lockdown               only allow single-threaded code execution with\n"
    "                               no external access or terminal or GUI I/O\n"
    "      --allow-bare-refs        allow refs to vars without '$' and refs to\n"
@@ -210,12 +214,14 @@ static const char parseopts[] =    "qore options controlling parse options:\n"
    "      --no-external-info       disallow access to external info\n"
    "  -E, --no-external-process    make access to external processes illegal\n"
    "  -F, --no-filesystem          disallow access to the local filesystem\n"
-   "  -G, --no-global-vars         make global variable definitions illegal\n"
+   "      --no-global-vars         make global variable definitions illegal\n"
    "      --no-gui                 do not allow access to GUI functionality\n"
    "      --no-io                  do not allow any I/O of any sort,\n"
    "  -I, --no-child-restrictions  do not restrict subprograms' parse options\n"
    "  -K, --lock-options           disable changes to parse options in program\n"
    "  -L, --no-top-level           make top-level statements illegal\n"
+   "  -M, --modern                 turns on 'new-style', 'require-types', and\n"
+   "                               'strict-args' (recommended)\n"
    "  -n, --new-style              turns on 'allow-bare-refs' and 'assume-local'\n"
    "                               for programming style more similar to C++/Java\n"
    "  -O, --require-our            require 'our' with global vars (recommended)\n"
@@ -343,7 +349,7 @@ static void warn_to_err(const char* arg) {
 }
 
 static void enable_warnings(const char* arg) {
-   warnings = -1;
+   warnings = QP_WARN_ALL;
 }
 
 static void enable_warning(const char* arg) {
@@ -470,6 +476,10 @@ static void do_strict_args(const char* arg) {
    parse_options |= PO_STRICT_ARGS;
 }
 
+static void do_strict_warnings(const char* arg) {
+   warnings |= QP_WARN_STRICT;
+}
+
 static void do_lock_options(const char* arg) {
    lock_options = true;
 }
@@ -484,6 +494,10 @@ static void assume_local(const char* arg) {
 
 static void new_style(const char* arg) {
    parse_options |= PO_NEW_STYLE;
+}
+
+static void do_modern(const char* arg) {
+   parse_options |= PO_MODERN;
 }
 
 static void do_enable_debug(const char* arg) {
@@ -663,6 +677,7 @@ static struct opt_struct_s {
    { '\0', "no-repl",              ARG_NONE, do_no_repl },
    { 'r', "warnings-are-errors",   ARG_NONE, warn_to_err },
    { 's', "show-charsets",         ARG_NONE, show_charsets },
+   { '\0', "strict-warnings",      ARG_NONE, do_strict_warnings },
    { 'w', "enable-warning",        ARG_MAND, enable_warning },
    { 'x', "exec-class",            ARG_OPT,  do_exec_class },
    { '\0', "lockdown",             ARG_NONE, do_lockdown },
@@ -670,16 +685,17 @@ static struct opt_struct_s {
    { '\0', "allow-bare-refs",      ARG_NONE, allow_bare_refs },
    { '\0', "allow-reparse",        ARG_NONE, do_allow_reparse },
    { '\0', "assume-local",         ARG_NONE, assume_local },
+   { 'M', "modern",                ARG_NONE, do_modern },
    { 'n', "new-style",             ARG_NONE, new_style },
    { '\0', "no-class-defs",        ARG_NONE, do_no_class_defs },
-   { '\0', "enable-debug",         ARG_NONE, do_enable_debug },
+   { 'G', "enable-debug",          ARG_NONE, do_enable_debug },
    { '\0', "no-database",          ARG_NONE, do_no_database },
    { 'D', "define",                ARG_MAND, set_define },
    { 'E', "no-external-process",   ARG_NONE, do_no_external_process },
    { '\0', "no-external-access",   ARG_NONE, do_no_external_access },
    { '\0', "no-external-info",     ARG_NONE, do_no_external_info },
    { 'F', "no-filesystem",         ARG_NONE, do_no_filesystem },
-   { 'G', "no-global-vars",        ARG_NONE, do_no_global_vars },
+   { '\0', "no-global-vars",       ARG_NONE, do_no_global_vars },
    { 'H', "parse-option-help",     ARG_NONE, show_parse_option_help },
    { 'I', "no-child-restrictions", ARG_NONE, do_no_child_po_restrictions },
    { 'K', "lock-options",          ARG_NONE, do_lock_options },

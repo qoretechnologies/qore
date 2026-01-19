@@ -269,7 +269,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         Use this after submitting operations to ensure the I/O thread is polling before
         attempting to connect to the socket.
 
-        @param timeout maximum time to wait; use @ref NOTHING for no timeout
+        @param to maximum time to wait; use @ref NOTHING for no timeout
 
         @return @ref True if the I/O thread is ready, @ref False if the timeout expired
     */
@@ -392,8 +392,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Cancels any operation in progress for the given Socket
     /** @param sock the socket to cancel any operation in progress for
 
-        @return @ref True if an operation for the socket was canceled, @ref False if not
-
         @note Stops the I/O thread if the last operation is canceled and the \a autostop flag is enabled
 
         @see cancelEx()
@@ -452,10 +450,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         @see cancel()
     */
-    cancelEx(Socket sock) {
+    bool cancelEx(Socket sock) {
         if (!cancel(sock)) {
             throw "CONTROLLER-CANCEL-ERROR", sprintf("Socket %y has no operation in progress", sock.uniqueHash());
         }
+        return True;
     }
 
     #! Cancels all operations belonging to a specific owner

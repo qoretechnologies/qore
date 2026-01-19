@@ -149,7 +149,7 @@ module EmpathicBuildingDataProvider {
     </div>
     @endhtmlonly
 
-    The %EmpathicBuildingDataProvider module provides a @ref dataproviderintro "data provider" API for Haltian
+    The %EmpathicBuildingDataProvider module provides a \c dataproviderintro "data provider" API for Haltian
     Empathic Building servers.
 
     This data provider provides EmpathicBuilding API access to:

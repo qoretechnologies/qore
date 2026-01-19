@@ -313,8 +313,8 @@ const PO_LOCKDOWN = PO_LOCKDOWN;
  */
 const PO_NEW_STYLE = PO_NEW_STYLE;
 
-//! Sets @ref new-style "%new-style", @ref require-types "%require-types", and @ref strict-args "%strict-args" and enables all warnings
-/** made up of @ref PO_NEW_STYLE | @ref PO_REQUIRE_TYPES | @ref PO_STRICT_ARGS
+//! Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", and @ref strong-encapsulation "%strong-encapsulation"; also enables all non-strict warnings
+/** made up of @ref PO_NEW_STYLE | @ref PO_REQUIRE_TYPES | @ref PO_STRICT_ARGS | @ref PO_STRONG_ENCAPSULATION
 
     @see @ref modern "%modern"
 
@@ -676,6 +676,12 @@ const PO_BROKEN_LOOP_STATEMENT = PO_BROKEN_LOOP_STATEMENT;
 */
 const PO_BROKEN_RANGE = PO_BROKEN_RANGE;
 
+//! Enables legacy namespace resolution behavior
+/**
+    @see @ref broken-namespace-resolution "%broken-namespace-resolution"
+*/
+const PO_BROKEN_NAMESPACE_RESOLUTION = PO_BROKEN_NAMESPACE_RESOLUTION;
+
 //! allows for old pre-%Qore 0.8.13 handling of @ref reference_type "reference" and @ref reference_or_nothing_type "*reference"
 /** @see @ref broken-references "%broken-references"
 
@@ -844,8 +850,18 @@ const PO_NO_ENUM = PO_NO_ENUM;
     These are the possible values that can be or'ed together to set the @ref Qore::Program "Program" warning mask
 */
 ///@{
-//! Enables all warnings
+//! Enables all non-strict warnings
+/** This warning mask excludes @ref WARN_AMBIGUOUS_CALL_RESOLUTION and @ref WARN_AMBIGUOUS_OVERLOAD; use
+    @ref WARN_STRICT to enable strict warnings.
+*/
 const WARN_ALL = QP_WARN_ALL;
+
+//! Enables strict warnings
+/** This warning mask enables:
+    - @ref WARN_AMBIGUOUS_CALL_RESOLUTION
+    - @ref WARN_AMBIGUOUS_OVERLOAD
+*/
+const WARN_STRICT = QP_WARN_STRICT;
 
 //! Enables warnings when the parser determines that the argument types of a function or method call are such that the operation is guaranteed to produce a constant value
 /** @see @ref call-with-type-errors
@@ -931,6 +947,16 @@ const WARN_NONEXISTENT_METHOD_CALL = QP_WARN_NONEXISTENT_METHOD_CALL;
 /** @see @ref return-value-ignored
  */
 const WARN_RETURN_VALUE_IGNORED = QP_WARN_RETURN_VALUE_IGNORED;
+
+//! Enables a warning when a call is ambiguous across multiple namespaces
+/** @see ambiguous-call-resolution warning
+ */
+const WARN_AMBIGUOUS_CALL_RESOLUTION = QP_WARN_AMBIGUOUS_CALL_RESOLUTION;
+
+//! Enables a warning when ambiguous overloads are defined or inherited
+/** @see ambiguous-overload warning
+ */
+const WARN_AMBIGUOUS_OVERLOAD = QP_WARN_AMBIGUOUS_OVERLOAD;
 
 //! Indicates that the embedded code referenced an undeclared variable that will be assumed to be a global variable
 /** @see @ref undeclared-var

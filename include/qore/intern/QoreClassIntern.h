@@ -3041,6 +3041,7 @@ public:
     DLLLOCAL void execBaseClassCopy(QoreObject* self, QoreObject* old, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL int parseInit();
+    DLLLOCAL void parseWarnAmbiguousOverloads();
     DLLLOCAL int parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
     DLLLOCAL void parseResolveAbstract();

@@ -31,7 +31,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
     public {
         #! table options
         /** The following keys can be set for this option:
-            - \c native_case: (@ref bool_type) if @ref True "True" then objects will be returned in the case the
+            - \c native_case: (\c bool_type) if @ref True "True" then objects will be returned in the case the
               database server returns them in even if the database server uses case-insensitive names; normally in
               this case %SqlUtil will convert the names to lower-case
             - \c table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining cached tables
@@ -45,7 +45,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! default index options
         /**
             - \c index_tablespace: (@ref string_type) a string giving the index tablespace to use for indexes
-            - \c replace: (@ref bool_type) if @ref True "True" and supported by the underlying db driver
+            - \c replace: (\c bool_type) if @ref True "True" and supported by the underlying db driver
               "create or replace" text is used when creating objects
         */
         const IndexOptions = {
@@ -54,7 +54,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         };
 
         #! default constraint options
-        /** currently this option is identical to @ref SqlUtil::AbstractTable::IndexOptions
+        /** currently this option is identical to \c SqlUtil::AbstractTable::IndexOptions
         */
         const ConstraintOptions = IndexOptions;
 
@@ -73,7 +73,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         };
 
         #! default trigger options
-        /** currently this option is identical to @ref AbstractDatabase::CreationOptions
+        /** currently this option is identical to \c AbstractDatabase::CreationOptions
         */
         const TriggerOptions = AbstractDatabase::CreationOptions;
 
@@ -106,7 +106,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         };
 
         #! table creation options
-        /** currently this option is a combination of @ref SqlUtil::AbstractTable::IndexOptions and @ref AbstractDatabase::CreationOptions plus the following:
+        /** currently this option is a combination of \c SqlUtil::AbstractTable::IndexOptions and \c AbstractDatabase::CreationOptions plus the following:
             - \c omit: a list pf attributes to omit; possible values are: \c indexes, \c foreign_constraints, \c triggers (see @ref TableOmissionOptions)
         */
         const TableCreationOptions = IndexOptions + AbstractDatabase::CreationOptions + {
@@ -120,7 +120,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c constraint_map: (@ref hash_type) a hash for automatically renaming constraints; if the source name (key) exists and the target name (value) does not exist, then the source constraint is automatically renamed
             - \c trigger_map: (@ref hash_type) a hash for automatically renaming triggers; if the source name (key) exists and the target name (value) does not exist, then the source trigger is automatically renamed
             - \c db_table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining tables in the database and foreign key relationships between tables
-            - \c force: (@ref bool_type) if @ref True "True" and supported by the driver and object, any objects dropped will be dropped with \c FORCE or \c CASCADE options
+            - \c force: (\c bool_type) if @ref True "True" and supported by the driver and object, any objects dropped will be dropped with \c FORCE or \c CASCADE options
         */
         const AlignTableOptions = TableCreationOptions + {
             "column_map": Type::Hash,
@@ -180,8 +180,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         };
 
         #! additional column description keys valid when describing columns in a @ref table_desc_hash "table description hash"
-        /** the following keys are valid in a @ref table_desc_hash "table description hash" in addition to any @ref SqlUtil::AbstractTable::ColumnDescOptions "AbstractTable::ColumnDescOptions":
-            - \c notnull: (@ref bool_type) if @ref True "True" then the column will have a not null constraint
+        /** the following keys are valid in a @ref table_desc_hash "table description hash" in addition to any \c SqlUtil::AbstractTable::ColumnDescOptions "AbstractTable::ColumnDescOptions":
+            - \c notnull: (\c bool_type) if @ref True "True" then the column will have a not null constraint
         */
         const AdditionalColumnDescOptions = {
             "notnull": Type::Boolean,
@@ -252,8 +252,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         /** @defgroup upsert_options Upsert Strategy Codes
             These options are used with:
             - @ref SqlUtil::AbstractTable::getBulkUpsertClosure()
-            - @ref SqlUtil::AbstractTable::getUpsertClosure()
-            - @ref SqlUtil::AbstractTable::getUpsertClosureWithValidation()
+            - \c SqlUtil::AbstractTable::getUpsertClosure()
+            - \c SqlUtil::AbstractTable::getUpsertClosureWithValidation()
             - @ref SqlUtil::AbstractTable::upsert()
             - @ref SqlUtil::AbstractTable::upsertCommit()
             - @ref SqlUtil::AbstractTable::upsertFromIterator()
@@ -351,7 +351,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! row was unchanged (only possible with @ref UpsertSelectFirst, @ref UpsertInsertOnly, and @ref UpsertUpdateOnly)
         const UR_Unchanged = 4;
 
-        #! row was deleted (only possible with batch upsert methods such as @ref AbstractTable::upsertFromIterator() where @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True")
+        #! row was deleted (only possible with batch upsert methods such as @ref AbstractTable::upsertFromIterator() where \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True")
         const UR_Deleted = 5;
         #/@}
 
@@ -416,7 +416,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
     /** @param nds the AbstractDatasource for the connection to the database
         @param nname the name of the table
         @param nopts an optional hash of options for the table creation string; see
-        @ref SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional
+        \c SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional
         driver-specific options
 
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -538,7 +538,7 @@ map printf("unique constraint %s\n", $1.getName()), table.getUniqueConstraintIte
 table.dropCommit();
         @endcode
 
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @throw OPTION-ERROR invalid or unknown callback option
 
@@ -557,7 +557,7 @@ table.dropCommit();
 table.drop();
         @endcode
 
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @throw OPTION-ERROR invalid or unknown callback option
 
@@ -629,7 +629,7 @@ t.tryExecRaw("drop table tmp_table");
 list l = table.getDropSql();
         @endcode
 
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @return a list of strings that can be used to drop the table and any other objects assocatied with the table
         (for example: PostgreSQL table trigger function(s))
@@ -684,7 +684,7 @@ table.truncate();
 string sql = table.getTruncateSql();
         @endcode
 
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common
         options; each driver can support additional driver-specific options
 
         @return the SQL that can be used to truncate the table
@@ -710,7 +710,7 @@ table.createCommit();
 
         @param opt a hash of options for the SQL creation strings
 
-        @note The transaction is committed if successful or rolled back if an exception occurs; use @ref create() to execute without any transaction management
+        @note The transaction is committed if successful or rolled back if an exception occurs; use \c create() to execute without any transaction management
     */
     createCommit(*hash<auto> opt) {
         on_exit ds.commit();
@@ -831,7 +831,7 @@ bool b = table.empty();
     #! creates the object from a table description hash
     /** @param desc a @ref table_desc_hash "table description hash" describing the table
         @param opt an optional hash of options for the table creation string; see
-        @ref SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional
+        \c SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional
         driver-specific options
 
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -1054,7 +1054,7 @@ list l = table.getAddColumnSql("name", ("qore_type": Type::String, "size": 50), 
         - \c default_value: the default value for the column
         - \c default_value_native: a boolean flag to say if a \c default_value should be validated against table column type (False) or used as it is (True) to allow to use DBMS native functions or features. Defaults to False. It is strongly recommended to use \c default_value_native for \c default_value in \c driver specific sub-hash to avoid non-portable schema hashes
         @param nullable if @ref True "True" then the column can hold NULL values; note that primary key columns cannot be nullable
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return a list of SQL strings that can be use to add a column to the table
 
@@ -1177,7 +1177,7 @@ list l = table.getModifyColumnSql("name", ("qore_type": Type::String, "size": 24
         - \c default_value: the default value for the column
         - \c default_value_native: a boolean flag to say if a \c default_value should be validated against table column type (False) or used as it is (True) to allow to use DBMS native functions or features. Defaults to False. It is strongly recommended to use \c default_value_native for \c default_value in \c driver specific sub-hash to avoid non-portable schema hashes
         @param nullable if @ref True "True" then the column can hold NULL values; note that primary key columns cannot be nullable
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return a list of SQL strings that can be used to modify an existing column in the table
 
@@ -1256,7 +1256,7 @@ string sql = table.getRenameColumnSql("name", "family_name");
 
         @param old_name the current name of the column
         @param new_name the new name of the column
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL string that can be used to rename an existing column in the table
 
@@ -1351,7 +1351,7 @@ printf("%s;\n", sql);
 
         @param pkname the name of the new primary key constraint
         @param cols a single column name or a list of columns that make up the primary key
-        @param opt a hash of options for the new primary key; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
+        @param opt a hash of options for the new primary key; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::ConstraintOptions
         @param sql an optional reference to a string to retrieve the SQL used to modify the table (only executed if the table is already in the database)
 
         @return an AbstractPrimaryKey object corresponding to the primary key created
@@ -1378,8 +1378,8 @@ printf("%s;\n", sql);
 
         @param pkname the name of the new primary key constraint
         @param cols a single column name or a list of columns that make up the primary key
-        @param pkopt a hash of options for the new primary key; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param pkopt a hash of options for the new primary key; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::ConstraintOptions
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return the SQL that can be used to add a primary key to the table
 
@@ -1458,7 +1458,7 @@ list l = table.getDropAllConstraintsAndIndexesOnColumnSql("status");
         @endcode
 
         @param cname the name of the column
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @throw OPTION-ERROR invalid or unsupported option passed
 
@@ -1531,7 +1531,7 @@ list l = table.getDropAllConstraintsAndIndexesOnColumnSql("status");
 list l = table.getDropPrimaryKeySql();
         @endcode
 
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return a list of SQL strings that can be used to drop the primary key from the table
 
@@ -1612,7 +1612,7 @@ printf("%s;\n", sql);
 
         @param cname the name of the new unique constraint
         @param cols a single column name or a list of columns that make up the unique constraint
-        @param opt a hash of options for the new unique constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
+        @param opt a hash of options for the new unique constraint; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::ConstraintOptions
         @param sql an optional reference to a string to retrieve the SQL used to modify the table (only executed if the table is already in the database)
 
         @return an AbstractUniqueConstraint object corresponding to the unique constraint created
@@ -1637,8 +1637,8 @@ printf("%s;\n", sql);
 
         @param cname the name of the new unique constraint
         @param cols a single column name or a list of columns that make up the unique constraint
-        @param ukopt a hash of options for the new unique constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param ukopt a hash of options for the new unique constraint; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::ConstraintOptions
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL string that can be used to add a unique constraint to the table
 
@@ -1725,7 +1725,7 @@ printf("%s;\n", sql);
         @param iname the name of the new index
         @param unique a flag to tell if the new index should be unique or not
         @param cols a single column name or a list of columns that make up the index
-        @param opt a hash of options for the new index; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::IndexOptions
+        @param opt a hash of options for the new index; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::IndexOptions
         @param sql an optional reference to a string to retrieve the SQL used to modify the table (only executed if the table is already in the database)
 
         @return an AbstractIndex object corresponding to the index created
@@ -1751,8 +1751,8 @@ printf("%s;\n", sql);
         @param iname the name of the new index
         @param unique a flag to tell if the new index should be unique or not
         @param cols a single column name or a list of columns that make up the index
-        @param ixopt a hash of options for the new index; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::IndexOptions
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param ixopt a hash of options for the new index; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::IndexOptions
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL string that can be used to add an index to the table
 
@@ -1923,7 +1923,7 @@ string sql = table.getDropIndexSql("uk_mytable_name");
         @endcode
 
         @param iname the name of the index to drop
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return the SQL that can be used to drop an index from the table
 
@@ -1966,7 +1966,7 @@ printf("%s;\n", sql);
         @param cols a single column name or a list of columns in the local table that make up the foreign constraint
         @param table the name of the other table that the constraint targets
         @param tcols a single column name or a list of columns in the foreign table or @ref nothing meaning that the column names are the same as in the local table; if column names are given the same number of columns must be given in the local and foreign tables
-        @param opt a hash of options for the new foreign constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ForeignConstraintOptions
+        @param opt a hash of options for the new foreign constraint; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::ForeignConstraintOptions
         @param sql an optional reference to a string to retrieve the SQL used to modify the table (only executed if the table is already in the database)
 
         @return an AbstractForeignConstraint object corresponding to the foreign constraint created
@@ -1993,8 +1993,8 @@ printf("%s;\n", sql);
         @param cols a single column name or a list of columns in the local table that make up the foreign constraint
         @param table the name of the other table that the constraint targets
         @param tcols a single column name or a list of columns in the foreign table or @ref nothing meaning that the column names are the same as in the local table; if column names are given the same number of columns must be given in the local and foreign tables
-        @param fkopt a hash of options for the new foreign constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ForeignConstraintOptions
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param fkopt a hash of options for the new foreign constraint; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::ForeignConstraintOptions
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL string that can be used to add a foreign constraint to the table
 
@@ -2171,7 +2171,7 @@ printf("%s;\n", sql);
 
         @param cname the name of the new constraint
         @param src the source of the constraint clause
-        @param opt a hash of options for the new constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
+        @param opt a hash of options for the new constraint; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::ConstraintOptions
         @param sql an optional reference to a string to retrieve the SQL used to modify the table (only executed if the table is already in the database)
 
         @return an AbstractCheckConstraint object corresponding to the check constraint created
@@ -2197,8 +2197,8 @@ printf("%s;\n", sql);
 
         @param cname the name of the new constraint
         @param src the source of the constraint clause
-        @param copt a hash of options for the new constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param copt a hash of options for the new constraint; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::ConstraintOptions
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL string that can be used to add a check constraint to the table
 
@@ -2326,7 +2326,7 @@ string sql = table.getDropConstraintSql("uk_mytable_name");
         @endcode
 
         @param cname the name of the constraint to drop
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return the SQL that can be used to drop a constraint from the table; this can be any constraint on the table, a primary key, a foreign key constraint, or a generic constraint
 
@@ -2361,7 +2361,7 @@ string sql = table.getDropConstraintSql("uk_mytable_name");
         @endcode
 
         @param cname the name of the constraint to drop
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
         @param cref an optional reference to an AbstractConstraint object that will return the constraint dropped
 
         @return the SQL that can be used to drop a constraint from the table if it exists, otherwise returns @ref nothing; this can be any constraint on the table, a primary key, a foreign key constraint, or a generic constraint
@@ -2486,7 +2486,7 @@ printf("%s;\n", sql);
 
         @param tname the name of the new trigger
         @param src the source of the trigger
-        @param opt a hash of options for the new trigger; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::TriggerOptions
+        @param opt a hash of options for the new trigger; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::TriggerOptions
         @param lsql an optional reference to a list of strings to retrieve the SQL used to modify the table (only executed if the table is already in the database)
 
         @return an AbstractTrigger object corresponding to the trigger created
@@ -2513,8 +2513,8 @@ printf("%s;\n", sql);
 
         @param tname the name of the new trigger
         @param src the source of the trigger
-        @param topt a hash of options for the new trigger; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::TriggerOptions
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param topt a hash of options for the new trigger; each driver may implement its own options; for common options, see \c SqlUtil::AbstractTable::TriggerOptions
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return a list of SQL strings that can be used to add a trigger to the table
 
@@ -2619,7 +2619,7 @@ string sql = table.getDropTriggerSql("trig_mytable");
         @endcode
 
         @param tname the name of the trigger to drop
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return the SQL that can be used to drop the given trigger from the table
 
@@ -2809,7 +2809,7 @@ string sql = table.getDropColumnSql("notes_2");
         @endcode
 
         @param cname the name of the column to drop
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return the SQL that can be used to drop a column from the table
 
@@ -2846,9 +2846,9 @@ string sql = table.getDropColumnSql("notes_2");
 table.insertCommit(row);
         @endcode
 
-        @param row a hash representing the row to insert; hash values can also be set with @ref sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
+        @param row a hash representing the row to insert; hash values can also be set with \c sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
 
-        @return in case the \c "returning" @ref AbstractTable::InsertOptions "insert option" is used, a hash of return values is returned, otherwise @ref nothing is returned
+        @return in case the \c "returning" \c AbstractTable::InsertOptions "insert option" is used, a hash of return values is returned, otherwise @ref nothing is returned
 
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
     */
@@ -2861,7 +2861,7 @@ table.insertCommit(row);
 
     #! @ref SqlUtil::AbstractTable::insertCommit() variant
     /**
-        @param row a hash representing the row to insert; hash values can also be set with @ref sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
+        @param row a hash representing the row to insert; hash values can also be set with \c sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
         @param sql an optional reference to a string to return the SQL generated for the insert statement
     */
     *hash<auto> insertCommit(hash<auto> row, reference<string> sql) {
@@ -2873,8 +2873,8 @@ table.insertCommit(row);
 
     #! @ref SqlUtil::AbstractTable::insertCommit() variant
     /**
-        @param row a hash representing the row to insert; hash values can also be set with @ref sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
-        @param opt optional insert options; see @ref AbstractTable::InsertOptions for more info
+        @param row a hash representing the row to insert; hash values can also be set with \c sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
+        @param opt optional insert options; see \c AbstractTable::InsertOptions for more info
     */
     *hash<auto> insertCommit(hash<auto> row, hash<auto> opt) {
         on_success ds.commit();
@@ -2885,9 +2885,9 @@ table.insertCommit(row);
 
     #! @ref SqlUtil::AbstractTable::insertCommit() variant
     /**
-        @param row a hash representing the row to insert; hash values can also be set with @ref sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
+        @param row a hash representing the row to insert; hash values can also be set with \c sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
         @param sql an optional reference to a string to return the SQL generated for the insert statement
-        @param opt optional insert options; see @ref AbstractTable::InsertOptions for more info
+        @param opt optional insert options; see \c AbstractTable::InsertOptions for more info
     */
     *hash<auto> insertCommit(hash<auto> row, reference<string> sql, hash<auto> opt) {
         on_success ds.commit();
@@ -2903,9 +2903,9 @@ table.insertCommit(row);
 table.insert(row);
         @endcode
 
-        @param row a hash representing the row to insert; hash values can also be set with @ref sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
+        @param row a hash representing the row to insert; hash values can also be set with \c sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
 
-        @return in case the \c "returning" @ref AbstractTable::InsertOptions "insert option" is used, a hash of return values is returned, otherwise @ref nothing is returned
+        @return in case the \c "returning" \c AbstractTable::InsertOptions "insert option" is used, a hash of return values is returned, otherwise @ref nothing is returned
 
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
     */
@@ -2915,7 +2915,7 @@ table.insert(row);
 
     #! @ref SqlUtil::AbstractTable::insert() variant
     /**
-        @param row a hash representing the row to insert; hash values can also be set with @ref sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
+        @param row a hash representing the row to insert; hash values can also be set with \c sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
         @param sql an optional reference to a string to return the SQL generated for the insert statement
     */
     *hash<auto> insert(hash<auto> row, reference<string> sql) {
@@ -2924,8 +2924,8 @@ table.insert(row);
 
     #! @ref SqlUtil::AbstractTable::insert() variant
     /**
-        @param row a hash representing the row to insert; hash values can also be set with @ref sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
-        @param opt optional insert options; see @ref AbstractTable::InsertOptions for more info
+        @param row a hash representing the row to insert; hash values can also be set with \c sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
+        @param opt optional insert options; see \c AbstractTable::InsertOptions for more info
     */
     *hash<auto> insert(hash<auto> row, hash<auto> opt) {
         return insertIntern(row, NOTHING, opt);
@@ -2933,18 +2933,18 @@ table.insert(row);
 
     #! @ref SqlUtil::AbstractTable::insert() variant
     /**
-        @param row a hash representing the row to insert; hash values can also be set with @ref sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
+        @param row a hash representing the row to insert; hash values can also be set with \c sql_iop_funcs to insert values based on SQL operations to be used directly in the insert statement
         @param sql an optional reference to a string to return the SQL generated for the insert statement
-        @param opt optional insert options; see @ref AbstractTable::InsertOptions for more info
+        @param opt optional insert options; see \c AbstractTable::InsertOptions for more info
     */
     *hash<auto> insert(hash<auto> row, reference<string> sql, hash<auto> opt) {
         return insertIntern(row, \sql, opt);
     }
 
     #! Inserts a row and returns the result and also the SQL used
-    /** @param row a hash representing the row to insert; hash values can also be set with @ref sql_iop_funcs to insert
+    /** @param row a hash representing the row to insert; hash values can also be set with \c sql_iop_funcs to insert
         values based on SQL operations to be used directly in the insert statement
-        @param opt optional insert options; see @ref AbstractTable::InsertOptions for more info
+        @param opt optional insert options; see \c AbstractTable::InsertOptions for more info
 
         @return a hash giving the result of the operation and the SQL used for it; the \c result key is assigned to
         the integer number of rows inserted
@@ -3105,7 +3105,7 @@ int rows = table.insertFromSelectCommit(("id", "name", "created"), source_table,
         @param source the source table for the select statement
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more inf
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more inf
 
         @return the number of rows inserted
 
@@ -3164,7 +3164,7 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         @param source the source table for the select statement
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more inf
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more inf
 
         @return the number of rows inserted
 
@@ -3204,7 +3204,7 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         @param source the source table for the select statement
         @param select_hash a hash of conditions for the select statement; see
         @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for
         more info
 
         @return a hash giving the result of the operation and the SQL used for it; the \c result key will hold the
@@ -3257,7 +3257,7 @@ int rows = table.insertFromIteratorCommit(i);
         @endcode
 
         @param i the @ref Qore::AbstractIterator argument that will provide the data to insert into the current table; the @ref Qore::AbstractIterator::getValue() "getValue()" method of this object must return a hash giving row values (for example, the @ref Qore::SQL::AbstractSQLStatement class is well-suited to be used here); note that the iterator is assumed to return the same columns in every element
-        @param opt a hash of options for the insert operation; see @ref SqlUtil::AbstractTable::InsertFromIteratorOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the insert operation; see \c SqlUtil::AbstractTable::InsertFromIteratorOptions for common options; each driver can support additional driver-specific options
 
         @return the number of rows inserted
 
@@ -3283,7 +3283,7 @@ int rows = table.insertFromIterator(i);
         @endcode
 
         @param i the @ref Qore::AbstractIterator argument that will provide the data to insert into the current table; the @ref Qore::AbstractIterator::getValue() "getValue()" method of this object must return a hash giving row values (for example, the @ref Qore::SQL::AbstractSQLStatement class is well-suited to be used here); note that the iterator is assumed to return the same columns in the same order in every element
-        @param opt a hash of options for the insert operation; see @ref SqlUtil::AbstractTable::InsertFromIteratorOptions for common options; each driver can support additional driver-specific options; note that this method ignores any \c "commit_block" option
+        @param opt a hash of options for the insert operation; see \c SqlUtil::AbstractTable::InsertFromIteratorOptions for common options; each driver can support additional driver-specific options; note that this method ignores any \c "commit_block" option
 
         @return the number of rows inserted
 
@@ -3346,10 +3346,10 @@ table.upsertCommit(row);
         @endcode
 
         @param row a hash representing the row to insert or update
-        @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
-        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
+        @param upsert_strategy see \c upsert_options for possible values for the upsert strategy
+        @param opt a hash of options for the upsert operation; see \c SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
 
-        @return an integer code giving the result of the update; see @ref upsert_results for more information
+        @return an integer code giving the result of the update; see \c upsert_results for more information
 
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
@@ -3370,10 +3370,10 @@ table.upsert(row);
         @endcode
 
         @param row a hash representing the row to insert or update
-        @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
-        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
+        @param upsert_strategy see \c upsert_options for possible values for the upsert strategy
+        @param opt a hash of options for the upsert operation; see \c SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
 
-        @return an integer code giving the result of the update; see @ref upsert_results for more information
+        @return an integer code giving the result of the update; see \c upsert_results for more information
 
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
@@ -3402,15 +3402,15 @@ map upsert($1), row_list;
 
         @param row a hash representing an example row to insert or update; every row passed to the upsert closure
         returned must have the same keys in the same order
-        @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
-        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for
+        @param upsert_strategy see \c upsert_options for possible values for the upsert strategy
+        @param opt a hash of options for the upsert operation; see \c SqlUtil::AbstractTable::UpsertOptions for
         common options; each driver can support additional driver-specific options
 
         @return a closure that can be executed given a hash argument representing a single row that will be updated or
         inserted in the database with the given upsert strategy; the closure returned does not check the input hash
         for validity; the closure has the following signature:
         @code{.py} int sub upsert(hash<auto> row) {} @endcode
-        The return value of the closure is an integer code giving the result of the update; see @ref upsert_results
+        The return value of the closure is an integer code giving the result of the update; see \c upsert_results
         for more information
 
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
@@ -3419,9 +3419,9 @@ map upsert($1), row_list;
 
         @note the row values passed to the closure for upserting are not checked if they match the example row passed
         to the getUpsertClosure() method; passing non-conforming data will cause errors; see
-        @ref SqlUtil::AbstractTable::getUpsertClosureWithValidation() for a similar method that returns a validating
+        \c SqlUtil::AbstractTable::getUpsertClosureWithValidation() for a similar method that returns a validating
         closure; the closure returned by this method is faster than the one returned by
-        @ref SqlUtil::AbstractTable::getUpsertClosure() since there is no validation
+        \c SqlUtil::AbstractTable::getUpsertClosure() since there is no validation
     */
     code<int(hash<auto>)> getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         # check upsert options
@@ -3482,15 +3482,15 @@ upsert(row_hash);
         @endcode
 
         @param example_row a hash representing an example row to insert or update; every hash passed to the upsert closure returned must have the same keys in the same order
-        @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
-        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
+        @param upsert_strategy see \c upsert_options for possible values for the upsert strategy
+        @param opt a hash of options for the upsert operation; see \c SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
 
-        @return a closure that can be executed given a hash argument representing either a single row or a set of rows (where each key value is a list of column values) that will be updated or inserted in the database with the given upsert strategy; the closure returned does not check the input hash for validity; the closure has the following signature: @code{.py} int sub upsert(hash<auto> row) {} @endcode The return value of the closure is always @ref SqlUtil::AbstractTable::UR_Verified; see @ref upsert_results for more information
+        @return a closure that can be executed given a hash argument representing either a single row or a set of rows (where each key value is a list of column values) that will be updated or inserted in the database with the given upsert strategy; the closure returned does not check the input hash for validity; the closure has the following signature: @code{.py} int sub upsert(hash<auto> row) {} @endcode The return value of the closure is always @ref SqlUtil::AbstractTable::UR_Verified; see \c upsert_results for more information
 
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
-        @note the row values passed to the closure for upserting are not checked if they match the example row passed to the getUpsertClosure() method; passing non-conforming data will cause errors; see @ref SqlUtil::AbstractTable::getUpsertClosureWithValidation() for a similar method that returns a validating closure; the closure returned by this method is faster than the one returned by @ref SqlUtil::AbstractTable::getUpsertClosure() since there is no validation
+        @note the row values passed to the closure for upserting are not checked if they match the example row passed to the getUpsertClosure() method; passing non-conforming data will cause errors; see \c SqlUtil::AbstractTable::getUpsertClosureWithValidation() for a similar method that returns a validating closure; the closure returned by this method is faster than the one returned by \c SqlUtil::AbstractTable::getUpsertClosure() since there is no validation
 
         @see
         - upsert()
@@ -3518,15 +3518,15 @@ map upsert($1), row_list;
         @endcode
 
         @param example_row a hash representing an example row to insert or update; every row passed to the upsert closure returned must have the same keys in the same order or the closure returned will throw an \c UPSERT-ERROR exception
-        @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
-        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
+        @param upsert_strategy see \c upsert_options for possible values for the upsert strategy
+        @param opt a hash of options for the upsert operation; see \c SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
 
-        @return a closure that can be executed given a hash argument representing a single row that will be updated or inserted in the database with the given upsert strategy; the closure has the following signature: @code{.py} int sub upsert(hash<auto> row) {} @endcode The return value of the closure is an integer code giving the result of the update; see @ref upsert_results for more information
+        @return a closure that can be executed given a hash argument representing a single row that will be updated or inserted in the database with the given upsert strategy; the closure has the following signature: @code{.py} int sub upsert(hash<auto> row) {} @endcode The return value of the closure is an integer code giving the result of the update; see \c upsert_results for more information
 
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
-        @note the row values passed to the closure for upserting are checked if they match the example row passed to the getUpsertClosure() method; passing non-conforming data to the closure will cause the closure to throw an \c UPSERT-ERROR exception; see @ref SqlUtil::AbstractTable::getUpsertClosure() for a similar method that returns a non-validating closure; the closure returned by this method is a little slower than the one returned by @ref SqlUtil::AbstractTable::getUpsertClosure() since each row is validated
+        @note the row values passed to the closure for upserting are checked if they match the example row passed to the getUpsertClosure() method; passing non-conforming data to the closure will cause the closure to throw an \c UPSERT-ERROR exception; see \c SqlUtil::AbstractTable::getUpsertClosure() for a similar method that returns a non-validating closure; the closure returned by this method is a little slower than the one returned by \c SqlUtil::AbstractTable::getUpsertClosure() since each row is validated
     */
     code<int(hash<auto>)> getUpsertClosureWithValidation(hash<auto> example_row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         code<int(hash<auto>)> upsert = getUpsertClosure(example_row, upsert_strategy, opt);
@@ -3548,21 +3548,21 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         @endcode
 
         @param i the @ref Qore::AbstractIterator argument that will provide the data to upsert or merge into the current table; the @ref Qore::AbstractIterator::getValue() "getValue()" method of this object must return a hash giving row values (for example, the @ref Qore::SQL::SQLStatement class is well-suited to be used here)
-        @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
-        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
+        @param upsert_strategy see \c upsert_options for possible values for the upsert strategy
+        @param opt a hash of options for the upsert operation; see \c SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
 
-        @return @ref nothing if no actions were taken or a hash with the following keys assigned to numeric values indicating the number of rows processed (keys correspond to @ref SqlUtil::AbstractTable::UpsertResultDescriptionMap keys):
+        @return @ref nothing if no actions were taken or a hash with the following keys assigned to numeric values indicating the number of rows processed (keys correspond to \c SqlUtil::AbstractTable::UpsertResultDescriptionMap keys):
         - \c "inserted": the number of rows inserted
-        - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than @ref SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
-        - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly
-        - \c "deleted": the number of rows deleted; this can only be returned if @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
+        - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than \c SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
+        - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is \c SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
+        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is \c SqlUtil::AbstractTable::UpsertSelectFirst, \c SqlUtil::AbstractTable::UpsertInsertOnly, or \c SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "deleted": the number of rows deleted; this can only be returned if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
-        @note if @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
+        @note if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
 
         @see
         - upsertFromIteratorCommit()
@@ -3589,21 +3589,21 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         @endcode
 
         @param i the @ref Qore::AbstractIterator argument that will provide the data to upsert or merge into the current table; the @ref Qore::AbstractIterator::getValue() "getValue()" method of this object must return a hash giving row values (for example, the @ref Qore::SQL::SQLStatement class is well-suited to be used here)
-        @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
-        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options; note that this method ignores any \c "commit_block" option
+        @param upsert_strategy see \c upsert_options for possible values for the upsert strategy
+        @param opt a hash of options for the upsert operation; see \c SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options; note that this method ignores any \c "commit_block" option
 
-        @return @ref nothing if no actions were taken or a hash with the following keys assigned to numeric values indicating the number of rows processed (keys correspond to @ref SqlUtil::AbstractTable::UpsertResultDescriptionMap keys):
+        @return @ref nothing if no actions were taken or a hash with the following keys assigned to numeric values indicating the number of rows processed (keys correspond to \c SqlUtil::AbstractTable::UpsertResultDescriptionMap keys):
         - \c "inserted": the number of rows inserted
-        - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than @ref SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
-        - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly,  or @ref SqlUtil::AbstractTable::UpsertUpdateOnly
-        - \c "deleted": the number of rows deleted; this can only be returned if @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
+        - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than \c SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
+        - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is \c SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
+        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is \c SqlUtil::AbstractTable::UpsertSelectFirst, \c SqlUtil::AbstractTable::UpsertInsertOnly,  or \c SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "deleted": the number of rows deleted; this can only be returned if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
-        @note if @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
+        @note if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
 
         @see
         - upsertFromIteratorCommit()
@@ -3717,24 +3717,24 @@ hash<auto> h = table.upsertFromSelectCommit(table2, ("where": ("account_type": "
         current table), nor does it need to be the same database type
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for
         information about this argument
-        @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
-        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for
+        @param upsert_strategy see \c upsert_options for possible values for the upsert strategy
+        @param opt a hash of options for the upsert operation; see \c SqlUtil::AbstractTable::UpsertOptions for
         common options; each driver can support additional driver-specific options
 
         @return @ref nothing if no actions were taken or a hash with the following keys assigned to numeric values
         indicating the number of rows processed (keys correspond to
-        @ref SqlUtil::AbstractTable::UpsertResultDescriptionMap keys):
+        \c SqlUtil::AbstractTable::UpsertResultDescriptionMap keys):
         - \c "inserted": the number of rows inserted
         - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert
-          strategy codes other than @ref SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
+          strategy codes other than \c SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
         - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is
-          @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since
+          \c SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since
           rows are updated unconditionally with other the upsert strategy codes
         - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is
-          @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly, or
-          @ref SqlUtil::AbstractTable::UpsertUpdateOnly
+          \c SqlUtil::AbstractTable::UpsertSelectFirst, \c SqlUtil::AbstractTable::UpsertInsertOnly, or
+          \c SqlUtil::AbstractTable::UpsertUpdateOnly
         - \c "deleted": the number of rows deleted; this can only be returned if
-          @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
+          \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
@@ -3742,7 +3742,7 @@ hash<auto> h = table.upsertFromSelectCommit(table2, ("where": ("account_type": "
         unique constraint/index are used in the upsert statement
 
         @note
-        - if @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a
+        - if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a
           hash of primary key values in the input data is built as the input data is iterated.  After iterating, if
           the row count of the table and the input data matches, then nothing more is done, otherwise, every row of
           the table is iterated and compared to the primary key hash; if a row does not match a primary key value,
@@ -3753,7 +3753,7 @@ hash<auto> h = table.upsertFromSelectCommit(table2, ("where": ("account_type": "
           is used to pipeline the data to the upsert code; use upsertFromSelect() to do manual transaction management
           instead
         - unlike insertFromSelect() and insertFromSelectCommit(), this method processes arbitrary input data and
-          accepts @ref SqlUtil::AbstractTable::UpsertOptions "upsert options"
+          accepts \c SqlUtil::AbstractTable::UpsertOptions "upsert options"
 
         @see
         - upsertFromSelect()
@@ -3794,24 +3794,24 @@ hash h = table.upsertFromSelect(table2, ("where": ("account_type": "CUSTOMER")),
 
         @param t the table for the source data; this does not need to be in the same database as the target (the current table), nor does it need to be the same database type
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
-        @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options; note that this method ignores any \c "commit_block" option
+        @param upsert_strategy see \c upsert_options for possible values for the upsert strategy
+        @param opt a hash of options for the upsert operation; see \c SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options; note that this method ignores any \c "commit_block" option
 
-        @return @ref nothing if no actions were taken or a hash with the following keys assigned to numeric values indicating the number of rows processed (keys correspond to @ref SqlUtil::AbstractTable::UpsertResultDescriptionMap keys):
+        @return @ref nothing if no actions were taken or a hash with the following keys assigned to numeric values indicating the number of rows processed (keys correspond to \c SqlUtil::AbstractTable::UpsertResultDescriptionMap keys):
         - \c "inserted": the number of rows inserted
-        - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than @ref SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
-        - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly
-        - \c "deleted": the number of rows deleted; this can only be returned if @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
+        - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than \c SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
+        - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is \c SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
+        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is \c SqlUtil::AbstractTable::UpsertSelectFirst, \c SqlUtil::AbstractTable::UpsertInsertOnly, or \c SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "deleted": the number of rows deleted; this can only be returned if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
         @note
-        - if @ref SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
+        - if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
         - this method uses an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object to pipeline the select data to the upsert code; to release the transaction lock acquired by the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object, a commit() or rollback() action must be executed on the underlying datasource object as in the example above
-        - unlike insertFromSelect() and insertFromSelectCommit(), this method processes arbitrary input data and accepts @ref SqlUtil::AbstractTable::UpsertOptions "upsert options"
+        - unlike insertFromSelect() and insertFromSelectCommit(), this method processes arbitrary input data and accepts \c SqlUtil::AbstractTable::UpsertOptions "upsert options"
 
         @see
         - upsertFromSelect()
@@ -3868,7 +3868,7 @@ SQLStatement i = table.getRowIterator(sh);
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return an @ref Qore::SQL::SQLStatement "SQLStatement" object that will iterate the results of a select statement matching the arguments
 
@@ -3894,7 +3894,7 @@ SQLStatement i = table.getRowIteratorNoExec(sh);
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return an @ref Qore::SQL::SQLStatement "SQLStatement" object that will iterate the results of a select statement matching the arguments
 
@@ -3921,7 +3921,7 @@ SQLStatement i = table.getRowIterator();
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return an @ref Qore::SQL::SQLStatement "SQLStatement" object that will iterate the results of a select statement matching the arguments
 
@@ -3947,7 +3947,7 @@ AbstractSQLStatement i = table.getStatement(sh);
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
 
@@ -3973,7 +3973,7 @@ AbstractSQLStatement i = table.getStatement();
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
 
@@ -4000,8 +4000,7 @@ hash<SqlResultInfo> info = table.getStatementWithInfo(sh);
 
         @param select_hash a hash of conditions for the select statement; see
         @ref select_option_hash "select option hash" for information about this argument
-        @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for
         more info
 
         @return the result info hash; the \c result key will hold an
@@ -4039,7 +4038,7 @@ AbstractSQLStatement i = table.getStatementNoExec(sh);
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
 
@@ -4066,8 +4065,7 @@ hash<SqlResultInfo> info = table.getStatementNoExecWithInfo(sh);
 
         @param select_hash a hash of conditions for the select statement; see
         @ref select_option_hash "select option hash" for information about this argument
-        @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for
         more info
 
         @return the result info hash; the \c result key will hold an
@@ -4100,7 +4098,7 @@ AbstractSQLStatement i = table.getStatement();
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
 
@@ -4148,7 +4146,7 @@ AbstractSQLStatement i = table.getStatement();
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return a hash representing the row in the table that matches the argument hash; if more than one row would be returned an exception is raised
 
@@ -4195,7 +4193,7 @@ hash<SqlResultInfo> info = table.selectRowWithInfo(sh);
 
         @param select_hash a hash of conditions for the select statement; see
         @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for
         more info
 
         @return an info hash; the \c result key will contain a hash representing the row in the table that matches the
@@ -4228,7 +4226,7 @@ hash<SqlResultInfo> info = table.selectRowWithInfo(sh);
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return a list of hashes representing the rows in the table that match the argument hash
 
@@ -4276,7 +4274,7 @@ hash<SqlResultInfo> info = table.selectRowsWithInfo(sh);
 
         @param select_hash a hash of conditions for the select statement; see
         @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for
         more info
 
         @return an info hash; the \c result key will contain a list of hashes representing the rows in the table that
@@ -4308,7 +4306,7 @@ hash<SqlResultInfo> info = table.selectRowsWithInfo(sh);
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return a hash of lists representing the columns and rows in the table that match the argument hash
 
@@ -4349,7 +4347,7 @@ hash<SqlResultInfo> info = table.selectWithInfo(sh);
 
         @param select_hash a hash of conditions for the select statement; see
         @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for
         more info
 
         @return a hash with the \c result key assigned to a hash of lists representing the columns and rows in the
@@ -4380,7 +4378,7 @@ hash<SqlResultInfo> info = table.selectWithInfo(sh);
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return a hash representing the row in the table that matches the argument hash; if more than one row would be returned an exception is raised
 
@@ -4403,7 +4401,7 @@ hash<SqlResultInfo> info = table.selectWithInfo(sh);
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return a list of hashes representing the rows in the table that match the argument hash
 
@@ -4425,7 +4423,7 @@ hash<SqlResultInfo> info = table.selectWithInfo(sh);
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return a hash of lists representing the columns and rows in the table that match the argument hash
 
@@ -5293,7 +5291,7 @@ int dcnt = table.delCommit(("name": name));
 
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for
         more info
 
         @return the count of rows deleted
@@ -5345,7 +5343,7 @@ int dcnt = table.del(("name": name));
 
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return the count of rows deleted
 
@@ -5384,7 +5382,7 @@ hash<SqlResultInfo> info = table.delWithInfo({"name": name});
         @endcode
 
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return a hash where the \c result key is the count of rows deleted
 
@@ -5420,11 +5418,11 @@ int ucnt = table.updateCommit(("id": id), ("name": name));
         @endcode
 
         @param set the hash of values to set, key values are column names, hash values are the values to assign to
-        those columns, field references (@ref DataProviderFieldReference), data provider expressions
-        (@ref DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
+        those columns, field references (\c DataProviderFieldReference), data provider expressions
+        (\c DataProviderExpressionInfo), or update operators (see \c sql_uop_funcs)
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return the count of rows updated
 
@@ -5474,11 +5472,11 @@ int ucnt = table.update(("id": id), ("name": name));
         @endcode
 
         @param set the hash of values to set, key values are column names, hash values are the values to assign to
-        those columns, field references (@ref DataProviderFieldReference), data provider expressions
-        (@ref DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
+        those columns, field references (\c DataProviderFieldReference), data provider expressions
+        (\c DataProviderExpressionInfo), or update operators (see \c sql_uop_funcs)
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
         @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
         @return the count of rows updated
 
@@ -5518,10 +5516,10 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         @endcode
 
         @param set the hash of values to set, key values are column names, hash values are the values to assign to
-        those columns, field references (@ref DataProviderFieldReference), data provider expressions
-        (@ref DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
+        those columns, field references (\c DataProviderFieldReference), data provider expressions
+        (\c DataProviderExpressionInfo), or update operators (see \c sql_uop_funcs)
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for
         more info
 
         @return an info hash where the \c result key is assigned to the count of rows updated
@@ -5539,8 +5537,8 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
 
     #! Returns the SQL for the given update parameters
     /** @param set the hash of values to set, key values are column names, hash values are the values to assign to
-        those columns, field references (@ref DataProviderFieldReference), data provider expressions
-        (@ref DataProviderExpressionInfo), or update operators (see @ref sql_uop_funcs)
+        those columns, field references (\c DataProviderFieldReference), data provider expressions
+        (\c DataProviderExpressionInfo), or update operators (see \c sql_uop_funcs)
 
         @param cond the update condition
 
@@ -5973,7 +5971,7 @@ string str = table.getSqlValue(date);
 table.cache();
         @endcode
 
-        @param opts cache options; see @ref SqlUtil::AbstractTable::CacheOptions for common options; each driver can support additional driver-specific options
+        @param opts cache options; see \c SqlUtil::AbstractTable::CacheOptions for common options; each driver can support additional driver-specific options
     */
     cache(*hash<auto> opts) {
         l.lock();
@@ -6210,7 +6208,7 @@ string sql = table.getRenameSql("new_name");
         @endcode
 
         @param new_name the new name for the table
-        @param opt a hash of options for the SQL string; see @ref SqlUtil::AbstractTable::AlignTableOptions for
+        @param opt a hash of options for the SQL string; see \c SqlUtil::AbstractTable::AlignTableOptions for
         common options; each driver can support additional driver-specific options
 
         @return an SQL string that could be used to rename the table in the database
@@ -6267,7 +6265,7 @@ printf("%s\n", table.getCreateSql());
 map printf("$1;\n", $1), table.getCreateSql();
         @endcode
 
-        @param opt a hash of options for the table, index, and constraint creation strings; see @ref TableCreationOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the table, index, and constraint creation strings; see \c TableCreationOptions for common options; each driver can support additional driver-specific options
 
         @return a list of SQL strings that could be used to create the table and all known properties of the table
     */
@@ -6288,7 +6286,7 @@ map printf("$1;\n", $1), table.getCreateSql();
 string sql = table.getCreateTableSql();
         @endcode
 
-        @param opt a hash of options for the table creation string; see @ref TableCreationOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the table creation string; see \c TableCreationOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL string that could be used to create the basic table structure without indexes and constraints
 
@@ -6340,7 +6338,7 @@ list<auto> l = table.getAlignSql(table2);
         @endcode
 
         @param t the template table that the current table will be compared to
-        @param opt a hash of options for the SQL creation string; see @ref SqlUtil::AbstractTable::AlignTableOptions
+        @param opt a hash of options for the SQL creation string; see \c SqlUtil::AbstractTable::AlignTableOptions
         for common options; each driver can support additional driver-specific options
 
         @return a list of SQL strings required to align the structure and configuration of the current table with that
@@ -6854,7 +6852,7 @@ string sql = table.getAlignSqlString(table2);
         @endcode
 
         @param t the template table that the current table will be compared to
-        @param opt a hash of options for the SQL creation string; see @ref SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL creation string; see \c SqlUtil::AbstractTable::AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL string that could be executed to align the structure and configuration of the current table with that of the argument; if the tables are identical then an empty string is returned
 
@@ -6871,7 +6869,7 @@ string sql = table.getAlignSqlString(table2);
 *list l = table.getCreateIndexesSql();
         @endcode
 
-        @param opt a hash of options for the index creation string; see @ref SqlUtil::AbstractTable::IndexOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the index creation string; see \c SqlUtil::AbstractTable::IndexOptions for common options; each driver can support additional driver-specific options
         @param cache read in data from the database for uncached properties of the table
 
         @return a list of SQL strings that could be used to create indexes on the table or @ref nothing if there are no indexes on the table
@@ -6891,7 +6889,7 @@ string sql = table.getAlignSqlString(table2);
 *string sql = table.getCreatePrimaryKeySql();
         @endcode
 
-        @param opt a hash of options for the primary key creation string; see @ref SqlUtil::AbstractTable::ConstraintOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the primary key creation string; see \c SqlUtil::AbstractTable::ConstraintOptions for common options; each driver can support additional driver-specific options
         @param cache read in data from the database for uncached properties of the table
 
         @return an SQL string that could be used to create the primary key on the table or @ref nothing if there is no primary key on the table
@@ -6911,7 +6909,7 @@ string sql = table.getAlignSqlString(table2);
 *list l = table.getCreateForeignConstraintsSql();
         @endcode
 
-        @param opt a hash of options for the foreign constraint creation string; see @ref SqlUtil::AbstractTable::ForeignConstraintOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the foreign constraint creation string; see \c SqlUtil::AbstractTable::ForeignConstraintOptions for common options; each driver can support additional driver-specific options
         @param cache read in data from the database for uncached properties of the table
 
         @return a list of SQL strings that could be used to create foreign constraints on the table or @ref nothing if there are no foreign constraints on the table
@@ -6931,7 +6929,7 @@ string sql = table.getAlignSqlString(table2);
 *list l = table.getCreateConstraintsSql();
         @endcode
 
-        @param opt a hash of options for the non-foreign constraint creation string; see @ref SqlUtil::AbstractTable::ConstraintOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the non-foreign constraint creation string; see \c SqlUtil::AbstractTable::ConstraintOptions for common options; each driver can support additional driver-specific options
         @param cache read in data from the database for uncached properties of the table
 
         @return a list of SQL strings that could be used to create non-foreign constraints on the table or @ref nothing if there are no non-foreign constraints on the table
@@ -6953,7 +6951,7 @@ string sql = table.getAlignSqlString(table2);
 *list l = table.getCreateMiscSql();
         @endcode
 
-        @param opt a hash of options for the SQL creation string; see @ref TableCreationOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL creation string; see \c TableCreationOptions for common options; each driver can support additional driver-specific options
         @param cache read in data from the database for uncached properties of the table
 
         @return a list of SQL strings that could be used to create other table attributes (such as comments, if supported and present) or @ref nothing if there are none
@@ -6973,7 +6971,7 @@ string sql = table.getAlignSqlString(table2);
 *list l = table.getCreateTriggersSql();
         @endcode
 
-        @param opt a hash of options for the trigger creation strings; see @ref TableCreationOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the trigger creation strings; see \c TableCreationOptions for common options; each driver can support additional driver-specific options
         @param cache read in data from the database for uncached properties of the table
 
         @return a list of SQL strings that could be used to create triggers on the table or @ref nothing if there are no triggers on the table
@@ -7164,6 +7162,7 @@ string sql = table.getAlignSqlString(table2);
 
     #! returns a field object for the given column
     /** @param column_name the column name
+        @param options data type options
         @param append_desc an optional string to append to the field's description
 
         @return a field object for the given column
@@ -7182,8 +7181,8 @@ string sql = table.getAlignSqlString(table2);
     }
 
     #! returns a field object for the given column
-    /** @param column_name the column
-        @param type options
+    /** @param column the column
+        @param options data type options
         @param append_desc an optional string to append to the field's description
 
         @return a field object for the given column
@@ -7209,6 +7208,7 @@ string sql = table.getAlignSqlString(table2);
 
     #! returns the data type for the given column
     /** @param column_name the column name
+        @param options data type options
 
         @return the data type for the given column
 

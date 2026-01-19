@@ -70,7 +70,6 @@ typedef void* yyscan_t;
 
 // remove this and use the following line when bison is updated on all build environments enough to support api.pure
 %pure-parser
-//%define api.pure
 %lex-param {yyscan_t yyscanner}
 %parse-param {yyscan_t yyscanner}
 %parse-param {AstParseErrorLog* errorLog}
@@ -78,7 +77,6 @@ typedef void* yyscan_t;
 %locations
 // remove this and use the following line when bison is updated on all build environments enough to support parse.error verbose
 %error-verbose
-//%define parse.error verbose
 
 // ======== PARSER CONFLICTS - INTENTIONAL BY DESIGN ========
 // This grammar has 877 shift/reduce and 933 reduce/reduce conflicts.

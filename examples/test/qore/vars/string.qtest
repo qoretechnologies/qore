@@ -113,19 +113,21 @@ class StringTest inherits QUnit::Test {
             assertEq("INVALID-OPERATION", warn.err);
         }
         {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("string str = 'a'; hash<auto> v = {}; auto x = str + v; "
-                "remove x;", ""));
-        };
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            *hash<ExceptionInfo> warn = p.parse("string str = 'a'; hash<auto> v = {}; auto x = str + v; remove x;",
+                "", -1);
+            assertEq("INVALID-OPERATION", warn.err);
+        }
         {
             Program p(PO_NEW_STYLE);
             *hash<ExceptionInfo> warn = p.parse("string str = 'a'; str += {};", "", -1);
             assertEq("INVALID-OPERATION", warn.err);
         }
         {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("string str = 'a'; str += {};", ""));
-        };
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            *hash<ExceptionInfo> warn = p.parse("string str = 'a'; str += {};", "", -1);
+            assertEq("INVALID-OPERATION", warn.err);
+        }
         {
             Program p(PO_NEW_STYLE);
             *hash<ExceptionInfo> warn = p.parse("auto sub test() { string str = 'a'; *list<auto> v = (); return str + v; }", "",

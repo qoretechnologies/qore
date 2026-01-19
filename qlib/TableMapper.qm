@@ -64,7 +64,7 @@ module TableMapper {
     @section inboundtablemapper_sequences Inserting Sequence Values with the InboundTableMapper Class
 
     @ref TableMapper::InboundTableMapper "InboundTableMapper" objects can be used to insert sequence values in the
-    target table, and the values inserted are returned in the output value of @ref TableMapper::InboundTableMapper::insertRow()
+    target table, and the values inserted are returned in the output value of \c TableMapper::InboundTableMapper::insertRow()
     "InboundTableMapper::insertRow()" and also present in the argument to any @ref TableMapper::InboundTableMapper::setRowCode() "rowcode" call when using the @ref tablemapper_bulk_insert_api "bulk insert API" on supported databases (databases supporting the \c returning clause in insert statements).
 
     The mapper field options are:
@@ -150,7 +150,7 @@ while (*hash h = m.getData()) {
     support is available, call @ref SqlUtil::AbstractTable::hasArrayBind() on the @ref SqlUtil::AbstractTable object).
 
     The bulk insert API consists of the following methods:
-    - @ref TableMapper::InboundTableMapper::queueData()
+    - \c TableMapper::InboundTableMapper::queueData()
     - @ref TableMapper::InboundTableMapper::flush()
     - @ref TableMapper::InboundTableMapper::discard()
     - @ref TableMapper::InboundTableMapper::setRowCode()
@@ -162,8 +162,8 @@ while (*hash h = m.getData()) {
 
     @subsection tablemapper_bulk_insert_api_usage InboundTableMapper Bulk Insert API Usage
 
-    To queue data for bulk insert, call @ref TableMapper::InboundTableMapper::queueData() instead of
-    @ref TableMapper::InboundTableMapper::insertRow().
+    To queue data for bulk insert, call \c TableMapper::InboundTableMapper::queueData() instead of
+    \c TableMapper::InboundTableMapper::insertRow().
     To perform per-row actions, the @ref TableMapper::InboundTableMapper::setRowCode() method should be called with a closure that accepts a hash
     representing a single row; whenever data is flushed to the database, this closure will be called with the row actually inserted
     (including sequence values used, etc).
@@ -209,8 +209,8 @@ on_error table1.rollback();
     - \c "sequence_currval": a name of a sequence to use to return the current value of the sequence; this is useful when assigning the same sequence value to multiple columns; the output buffers for this option are bound as type @ref number_type "number", so the output type depends on the database driver's number option setting (for example, with \c "optimal-numbers", the values here are generally returned as strings; cannot be used with the upsert @ref TableMapper::InboundTableMapper "InboundTableMapper" option)
 
     In both cases, the actual value inserted in the table is available in the following APIs:
-      - @ref TableMapper::InboundTableMapper::insertRow()
-      - @ref TableMapper::InboundTableMapper::queueData()
+      - \c TableMapper::InboundTableMapper::insertRow()
+      - \c TableMapper::InboundTableMapper::queueData()
       - @ref TableMapper::InboundTableMapper::flush()
 
     Additionally, the value is provided to any row code set with @ref TableMapper::InboundTableMapper::setRowCode(); see @ref tablemapper_bulk_insert_api for more information.
@@ -233,7 +233,7 @@ on_error table1.rollback();
 
     @subsection tablemapperv1_2 TableMapper v1.2
     - added support for upserts in @ref TableMapper::InboundTableMapper (<a href="https://github.com/qoretechnologies/qore/issues/1067">issue 1067</a>)
-    - added @ref TableMapper::InboundTableMapper::queueData(list, __7_ hash)
+    - added \c TableMapper::InboundTableMapper::queueData(list, __7_ hash)
     - fixed a bug with the @ref TableMapper::SqlStatementOutboundMapper::iterator() method; corrected the iterator object return value which was causing \c AbstractMapperIterator::mapBulk() to fail (<a href="https://github.com/qoretechnologies/qore/issues/979">issue 979</a>)
     - fixed a bug with @ref TableMapper::SqlStatementOutboundMapper; it would throw an error if the required \c "table" or \c "sh" options were used and only worked with subclasses that declared these options (<a href="https://github.com/qoretechnologies/qore/issues/981">issue 981</a>)
     - updated for complex types
@@ -245,7 +245,7 @@ on_error table1.rollback();
     - fixed bugs handling mapper fields with no input records in list mode (<a href="https://github.com/qoretechnologies/qore/issues/1736">issue 1736</a>)
 
     @subsection tablemapperv1_1_2 TableMapper v1.1.2
-    - performance enhancements for @ref TableMapper::InboundTableMapper::queueData() "InboundTableMapper::queueData()" when called with a hash of lists (<a href="https://github.com/qoretechnologies/qore/issues/1626">issue 1626</a>)
+    - performance enhancements for \c TableMapper::InboundTableMapper::queueData() "InboundTableMapper::queueData()" when called with a hash of lists (<a href="https://github.com/qoretechnologies/qore/issues/1626">issue 1626</a>)
 
     @subsection tablemapperv1_1_1 TableMapper v1.1.1
     - fixed runtime option propagation to @ref TableMapper::SqlStatementMapperIterator "SqlStatementMapperIterator" from @ref TableMapper::AbstractSqlStatementOutboundMapper::iterator() "AbstractSqlStatementOutboundMapper::iterator()" (<a href="https://github.com/qoretechnologies/qore/issues/1418">issue 1418</a>)
@@ -397,7 +397,7 @@ InboundTableMapper mapper(table, DbMapper);
             - \c "insert_block": for DB drivers supporting bulk DML (for use with the queueData(), flush(), and discard() methods), the number of rows inserted/upserted at once (default: 1000, only used when \c "unstable_input" is @ref False "False") and bulk inserts are supported in the table object; see @ref tablemapper_bulk_insert_api for more information; note that this is also applied when upserting despite the name
             - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts/upserts; this must take a single hash argument and will be called for every row after a bulk insert/upsert; the hash argument representing the row inserted/upserted will also contain any output values for inserts if applicable (such as sequence values inserted from \c "sequence" field options for the given column)
             - \c "upsert": if @ref True "True" then data will be upserted instead of inserted (default is to insert)
-            - \c "upsert_strategy": see @ref upsert_options for possible values for the upsert strategy; if this option is present, then \c "upsert" is also assumed to be @ref True "True"; if not present but \c "upsert" is @ref True "True", then @ref SqlUtil::AbstractTable::UpsertAuto is assumed
+            - \c "upsert_strategy": see \c upsert_options for possible values for the upsert strategy; if this option is present, then \c "upsert" is also assumed to be @ref True "True"; if not present but \c "upsert" is @ref True "True", then \c SqlUtil::AbstractTable::UpsertAuto is assumed
 
             @throw MAP-ERROR the map hash has a logical error (ex: \c "trunc" key given without \c "maxlen", invalid map key); insert-only options used with the \c "upsert" option
             @throw TABLE-ERROR the table includes a column using an unknown native data type
@@ -436,7 +436,7 @@ InboundTableMapper mapper(table, DbMapper);
             - \c "insert_block": for DB drivers supporting bulk DML (for use with the queueData(), flush(), and discard() methods), the number of rows inserted/upserted at once (default: 1000, only used when \c "unstable_input" is @ref False "False") and bulk inserts are supported in the table object; see @ref tablemapper_bulk_insert_api for more information; note that this is also applied when upserting despite the name
             - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts/upserts; this must take a single hash argument and will be called for every row after a bulk insert/upsert; the hash argument representing the row inserted/upserted will also contain any output values for inserts if applicable (such as sequence values inserted from \c "sequence" field options for the given column)
             - \c "upsert": if @ref True "True" then data will be upserted instead of inserted (default is to insert)
-            - \c "upsert_strategy": see @ref upsert_options for possible values for the upsert strategy; if this option is present, then \c "upsert" is also assumed to be @ref True "True"; if not present but \c "upsert" is @ref True "True", then @ref SqlUtil::AbstractTable::UpsertAuto is assumed
+            - \c "upsert_strategy": see \c upsert_options for possible values for the upsert strategy; if this option is present, then \c "upsert" is also assumed to be @ref True "True"; if not present but \c "upsert" is @ref True "True", then \c SqlUtil::AbstractTable::UpsertAuto is assumed
 
             @throw MAP-ERROR the map hash has a logical error (ex: \c "trunc" key given without \c "maxlen", invalid map key); insert-only options used with the \c "upsert" option
             @throw TABLE-ERROR the table includes a column using an unknown native data type
@@ -1408,7 +1408,7 @@ InboundTableMapperIterator i(input, table, DbMapper);
             @param target the target table object
             @param mapv a hash providing field mappings; each hash key is the name of the output column in lower case in the target table; each value is either @ref True "True" (meaning no translations are done; the data is copied 1:1) or a hash describing the mapping; see @ref mapperkeys for detailed documentation for this option
             @param opts an optional hash of options for the mapper; see @ref mapperoptions for a description of valid mapper options; note that options related to bulk DML are ignored by this object since it works on one row at a time
-            @param commit_limit row count before a commit is made; if <= 0 then no commits are made by this object, otherwise a commit is made for each \a commit_limit rows processed by this object, commits are made in calls to @ref next()
+            @param commit_limit row count before a commit is made; if <= 0 then no commits are made by this object, otherwise a commit is made for each \a commit_limit rows processed by this object, commits are made in calls to \c next()
 
             @note by default \a commit_limit is 0 meaning that this object will make no commits; in this case the transaction will
             have to be commited explicitly externally
@@ -1442,7 +1442,7 @@ InboundTableMapperIterator i(input, table, DbMapper);
             @param target the target table object
             @param mapv a hash providing field mappings; each hash key is the name of the output column in lower case in the target table; each value is either @ref True "True" (meaning no translations are done; the data is copied 1:1) or a hash describing the mapping; see @ref mapperkeys for detailed documentation for this option
             @param opts an optional hash of options for the mapper; see @ref mapperoptions for a description of valid mapper options; note that options related to bulk DML are ignored by this object since it works on one row at a time
-            @param commit_limit row count before a commit is made; if <= 0 then no commits are made by this object, otherwise a commit is made for each \a commit_limit rows processed by this object, commits are made in calls to @ref next()
+            @param commit_limit row count before a commit is made; if <= 0 then no commits are made by this object, otherwise a commit is made for each \a commit_limit rows processed by this object, commits are made in calls to \c next()
 
             @note by default \a commit_limit is 0 meaning that this object will make no commits; in this case the transaction will
             have to be commited explicitly externally
@@ -1474,7 +1474,7 @@ InboundTableMapperIterator i(input, mapper);
 
             @param i input iterator; @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()" must return a hash
             @param mapv the mapper to transform the data
-            @param commit_limit row count before a commit is made; if <= 0 then no commits are made by this object, otherwise a commit is made for each \a commit_limit rows processed by this object, commits are made in calls to @ref next()
+            @param commit_limit row count before a commit is made; if <= 0 then no commits are made by this object, otherwise a commit is made for each \a commit_limit rows processed by this object, commits are made in calls to \c next()
         */
         constructor(Qore::AbstractIterator i, TableMapper::InboundTableMapper mapv, int commit_limit) : Mapper::AbstractMapperIterator(i) {
             mapc = mapv;

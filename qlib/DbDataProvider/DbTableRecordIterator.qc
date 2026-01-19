@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbTableRecordIterator class definition
 
-/** DbTableRecordIterator.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DbTableRecordIterator.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,6 +33,7 @@ public class DbTableRecordIterator inherits AbstractDbRecordIterator {
 
     #! creates the iterator
     /** @param table the table to iteratate
+        @param where_cond the where clause hash for the select
         @param search_options search options; assumed to have already been processed for validity before this call
     */
     constructor(AbstractTable table, *hash<auto> where_cond, *hash<auto> search_options)

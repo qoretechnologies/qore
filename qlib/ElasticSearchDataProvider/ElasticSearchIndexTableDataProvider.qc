@@ -397,7 +397,7 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
     #! Updates a single document in the index
     /** @param set the hash of field data to set
         @param where_cond a hash for identifying the record(s) to be updated
-        @param search_options the search options (see @ref SearchOptions) after processing by validateSearchOptions()
+        @param search_options the search options (see \c SearchOptions) after processing by validateSearchOptions()
 
         @return the number of records updated
 
@@ -413,7 +413,7 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
 
     /**
         @param where_cond a hash for identifying the record(s) to be deleted; can only contain the \c "_id" field
-        @param search_options the search options (see @ref SearchOptions) after processing by validateSearchOptions();
+        @param search_options the search options (see \c SearchOptions) after processing by validateSearchOptions();
         ignored for this API call
 
         @return the number of records deleted
@@ -429,7 +429,7 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
 
     #! Writes the given record to the data provider
     /** @param rec a hash representing a single input record
-        @param create_options the create options (see @ref CreateOptions) after processing by validateCreateOptions()
+        @param create_options the create options (see \c CreateOptions) after processing by validateCreateOptions()
 
         @return the data written to the data provider plus any output (returning) variables
 

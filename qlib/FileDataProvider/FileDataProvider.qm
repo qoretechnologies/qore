@@ -212,7 +212,7 @@ module FileDataProvider {
     @section filedataproviderintro Introduction to the FileDataProvider Module
 
     The %FileDataProvider module provides a data provider API for the server filesystem through the
-    @ref dataproviderintro "DataProvider" API.
+    \c dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
     - @ref FileDataProvider::FileCopyDataProvider "FileCopyDataProvider"

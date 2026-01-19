@@ -3656,7 +3656,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns information on supported reference data
     /** @return a hash of supported reference data; keys in the hash returned are supported in calls to
-        @ref getReferenceData()
+        \c getReferenceData()
 
         @since DataProvider 3.0
     */
@@ -3836,7 +3836,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns information on supported reference data values
     /** @return a hash of supported reference data values; keys in the hash returned are supported in calls to
-        @ref getReferenceDataValue()
+        \c getReferenceDataValue()
 
         @since DataProvider 3.0
     */

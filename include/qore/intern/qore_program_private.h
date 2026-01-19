@@ -1351,7 +1351,7 @@ public:
         size_t len = strlen(filename);
         if (len > 3 && !strcmp(filename + len - 3, ".qr")) {
             pwo.parse_options |= PO_MODERN;
-            pgm->setWarningMask(-1);
+            pgm->setWarningMask(QP_WARN_ALL);
         }
 
         setScriptPath(filename);

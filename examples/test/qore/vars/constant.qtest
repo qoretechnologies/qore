@@ -36,9 +36,10 @@ namespace NTest {
 
     namespace Type {
         const i = 1;
+        const val1 = 1;
     }
 
-    const Type::hithere = 1;
+    const hithere = 1;
 
     class C {
         const a = 1;
@@ -58,7 +59,7 @@ namespace NTest {
     sub test(reference ct) {
         ct.assertEq("hello", t1, "1st namespace constant resolution");
         ct.assertEq(1, Type::i, "2nd namespace constant resolution");
-        ct.assertEq(1, Type::hithere, "3rd namespace constant resolution");
+        ct.assertEq(1, hithere, "3rd namespace constant resolution");
         ct.assertEq(1, C::a, "class constant resolution in namespace context");
         ct.assertEq(1, C::t1(), "static method resolution in namespace context");
         ct.assertEq(1, C::t2(), "constant resolution in namespace context in class code");
@@ -72,9 +73,9 @@ namespace NTest {
     const t2 = 2;
 }
 
-const NTest::Type::val1 = 1;
-
-const Qore::myconst = 1;
+namespace Qore {
+    const myconst = 1;
+}
 
 
 %exec-class ConstantTest
@@ -90,7 +91,7 @@ public class ConstantTest inherits QUnit::Test {
 
     testConstants() {
         assertEq(1, i, "simple constant");
-        assertEq("integer", type(Type::val1), "first namespace constant");
+        assertEq("integer", type(NTest::Type::val1), "first namespace constant");
         assertEq(NTest::Type::val1, Qore::myconst, "second namespace constant");
         assertEq(1, NTest::Type::i, "third namespace constant");
         assertEq((1, 2, 3), chash{b}, "indirect constant");

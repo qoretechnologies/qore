@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class Issue55Test
+
+public class Issue55Test inherits QUnit::Test {
+    constructor() : QUnit::Test("Issue55 test", "1.0") {
+        addTestCase("WarnWithRequireTypes", \warnWithRequireTypes());
+        addTestCase("NoWarnWithoutRequireTypes", \noWarnWithoutRequireTypes());
+        addTestCase("NoWarnWithQualifiedCall", \noWarnWithQualifiedCall());
+        set_return_value(main());
+    }
+
+    private string getAmbiguousCode() {
+        return "namespace myspace { public int sub myfunc() { return 3; } } "
+            "namespace myspace2 { public int sub myfunc() { return 4; } } "
+            "int sub call() { return myfunc(); }";
+    }
+
+    private warnWithRequireTypes() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        *hash h = p.parse(getAmbiguousCode(), "issue55", WARN_STRICT);
+        assertTrue(exists h);
+        assertEq("AMBIGUOUS-CALL-RESOLUTION", h.err);
+        assertRegex("myspace::myfunc", h.desc);
+        assertRegex("myspace2::myfunc", h.desc);
+        assertRegex("fully-qualified namespace path", h.desc);
+        assertRegex("rename the object", h.desc);
+        assertEq(4, p.callFunction("call"));
+    }
+
+    private noWarnWithoutRequireTypes() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.replaceParseOptions(PO_NEW_STYLE);
+        *hash h = p.parse(getAmbiguousCode(), "issue55", WARN_STRICT);
+        assertFalse(exists h);
+        assertEq(4, p.callFunction("call"));
+    }
+
+    private noWarnWithQualifiedCall() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        string code = "namespace myspace { public int sub myfunc() { return 3; } } "
+            "namespace myspace2 { public int sub myfunc() { return 4; } } "
+            "int sub call() { return myspace::myfunc(); }";
+        *hash h = p.parse(code, "issue55", WARN_STRICT);
+        assertFalse(exists h);
+        assertEq(3, p.callFunction("call"));
+    }
+}

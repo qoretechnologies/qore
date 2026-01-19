@@ -67,7 +67,7 @@ module HttpServer {
     The main classes is (see @ref httpserverutilintro "HttpServerUtil" for supporting definitions; note that the
     @ref httpserverutilintro "HttpServerUtil" module's definitions are also imported into @ref Qore::Program "Program"
     objects @ref requires "requiring" this module):
-    - @ref HttpServer::HttpServer "HttpServer": this class implements the main interface to the HTTP server provided
+    - \c HttpServer::HttpServer "HttpServer": this class implements the main interface to the HTTP server provided
       by this module
 
     See also:
@@ -179,7 +179,7 @@ log("started listener on %s", lh.desc);
       (<a href="https://github.com/qoretechnologies/qore/issues/4363">issue 4363</a>)
 
     @subsection http1_0_2 HttpServer 1.0.2
-    - @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" has no mechanism for returning errors
+    - \c HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" has no mechanism for returning errors
       to the caller
       (<a href="https://github.com/qoretechnologies/qore/issues/4312">issue 4312</a>)
 
@@ -226,7 +226,7 @@ log("started listener on %s", lh.desc);
     - added the \c "header-info" hash to the context argument when calling handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/3026">issue 3026</a>)
     - added support for adding new HTTP methods to the server with the
-      @ref HttpServer::HttpServer::addHttpMethod() "HttpServer::addHttpMethod()" method
+      \c HttpServer::HttpServer::addHttpMethod() "HttpServer::addHttpMethod()" method
       (<a href="https://github.com/qoretechnologies/qore/issues/2805">issue 2805</a>)
 
     @subsection http03121 HttpServer 0.3.12.1
@@ -239,17 +239,17 @@ log("started listener on %s", lh.desc);
     - added support for the HTTP \c "PATCH" method
 
     @subsection http03111 HttpServer 0.3.11.1
-    - fixed a bug where @ref HttpServer::HttpServer::addListener() would not accept port 0 meaning bind on any random open port (<a href="https://github.com/qoretechnologies/qore/issues/1284">bug 1284</a>)
+    - fixed a bug where \c HttpServer::HttpServer::addListener() would not accept port 0 meaning bind on any random open port (<a href="https://github.com/qoretechnologies/qore/issues/1284">bug 1284</a>)
 
     @subsection http0311 HttpServer 0.3.11
-    - fixed a bug setting the response encoding in @ref HttpServer::HttpServer::setReplyHeaders() where the Socket encoding was not set properly and therefore the encoding in the \c Content-Type in the response header did not necessarily match the encoding of the response
+    - fixed a bug setting the response encoding in \c HttpServer::HttpServer::setReplyHeaders() where the Socket encoding was not set properly and therefore the encoding in the \c Content-Type in the response header did not necessarily match the encoding of the response
     - added support for private keys with passwords
     - added the @ref HttpServer::PermissiveAuthenticator "PermissiveAuthenticator" class
     - moved base code to the @ref httpserverutilintro "HttpServerUtil" module (imported with the \c reexport option) and santized APIs, made HttpListener class private/internal again
     - fixed a socket / connection performance problem with HTTPS listeners where the SSL connection was being negotiated inline with the accept instead of in the connection thread, thereby blocking new connections from being accepted
     - new methods implemented in HttpServer:
-      - @ref HttpServer::HttpServer::setListenerLogOptions()
-      - @ref HttpServer::HttpServer::setListenerLogOptionsID()
+      - \c HttpServer::HttpServer::setListenerLogOptions()
+      - \c HttpServer::HttpServer::setListenerLogOptionsID()
     - performance improvement of matching handlers to request URIs (not used for RegExp matching)
     - changed the order of path-based handler matching:
       - the old implementation selects the first (in order of their registration) handler whose path matches the request URI, regexp and path matching have the same priority
@@ -257,9 +257,9 @@ log("started listener on %s", lh.desc);
         - first, handlers without regexp are considered - if there are some handler with their path matching the request, the one with the longest path is selected
         - otherwise, the first (in order of their registration) handler with regexp that matches the request URI is chosen
       - if no path matches the request, the same logic as before applies
-    - added @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners(string, hash, *code, *code, *code, *string, int)"
-    - fixed a bug in @ref HttpServer::HttpServer::addListener() with an integer argument; a UNIX socket was opened instead of a wildcard listener on the given port
-    - added the @ref HttpServer::HttpServer::listenerStarted() method to allow for reporting when listeners are actually running since they are started asynchronously
+    - added \c HttpServer::HttpServer::addListeners() "HttpServer::addListeners(string, hash, *code, *code, *code, *string, int)"
+    - fixed a bug in \c HttpServer::HttpServer::addListener() with an integer argument; a UNIX socket was opened instead of a wildcard listener on the given port
+    - added the \c HttpServer::HttpServer::listenerStarted() method to allow for reporting when listeners are actually running since they are started asynchronously
     - added the \c "ssl" key to the listener socket info hash
     - fixed typos causing bugs in HTTP error logging (<a href="https://github.com/qoretechnologies/qore/issues/308">bug 308</a>)
     - fixed bugs handling persistent connections
@@ -268,7 +268,7 @@ log("started listener on %s", lh.desc);
     - if an error occurs receiving a message with chunked transfer encoding, send the response immediately before reading the rest of the chunked transfer
 
     @subsection http039 HttpServer 0.3.9
-    - when binding a wildcard address with @ref Qore::AF_UNSPEC "AF_UNSPEC" on Windows with @ref HttpServer::HttpServer::addListeners()
+    - when binding a wildcard address with @ref Qore::AF_UNSPEC "AF_UNSPEC" on Windows with \c HttpServer::HttpServer::addListeners()
       and both IPv6 and IPv4 addresses are returned, bind both addresses since Windows doesn't direct the IPv4 requests to the wildcard-bound IPv6 listener
 
     @subsection http038 HttpServer 0.3.8
@@ -296,13 +296,13 @@ log("started listener on %s", lh.desc);
     - improved handler matching algorithm
     - implemented many performance improvements
     - implemented support for simple string path matching when finding a handler for a request
-    - added static @ref HttpServer::AbstractHttpRequestHandler::redirect() to help in generating 301 Moved Permanently messages
+    - added static \c HttpServer::AbstractHttpRequestHandler::redirect() to help in generating 301 Moved Permanently messages
 
     @subsection http036 HttpServer 0.3.6
     - fixed a race condition in tracking active requests in dynamic HTTP handlers and removing dynamic HTTP handlers
 
     @subsection http035 HttpServer 0.3.5
-    - fixed bugs in regexes in the @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" and
+    - fixed bugs in regexes in the \c HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" and
       \c HttpServer::addListenersWithHandler() methods
     - updated module example code in summary
     - added \c "listener-id" to request context hash
@@ -2691,7 +2691,7 @@ class HttpPersistentHandlerInfo {
     }
 }
 
-#! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class
+#! Implements listeners for the \c HttpServer::HttpServer "HttpServer" class
 public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
     public {
         # TID of the background listener thread

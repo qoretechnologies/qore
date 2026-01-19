@@ -24,7 +24,7 @@
 
 #! contains all public definitions in the SalesforceRestDataProvider module
 public namespace SalesforceRestDataProvider {
- #! SOQL operator info hash as returned by all @ref soql_op_funcs "operator functions"
+ #! SOQL operator info hash as returned by all \c soql_op_funcs "operator functions"
 public hashdecl SoqlOperatorInfo {
     string op;   #!< the operator string code (e.g., "=", "<", ">=", "like", "in")
     auto arg;    #!< optional argument; type depends on the operator (e.g., scalar, list, or hash)
@@ -35,7 +35,7 @@ public hashdecl SoqlOperatorInfo {
     int op_args = 1;
 }
 
-#! column operator info hash as returned by all @ref soql_soql_cop_funcs "column operator functions"
+#! column operator info hash as returned by all \c soql_soql_cop_funcs "column operator functions"
 public hashdecl SoqlColumnOperatorInfo {
     string cop;   #!< the column operator string code
     auto column;  #!< column sopecifier, may be a string or a complex hash
@@ -412,7 +412,7 @@ public const SOQL_DATE_NEXT_FISCAL_YEAR = "NEXT_FISCAL_YEAR";
 */
 #/@{
 #! returns a @ref SoqlColumnOperatorInfo hash
-/** @param cop the column operator (one of @ref soql_cops)
+/** @param cop the column operator (one of \c soql_cops)
     @param column the column name
     @param arg the argument to the operator
 

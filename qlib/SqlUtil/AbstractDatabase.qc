@@ -29,7 +29,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
     public {
         #! database options
         /** The following keys can be set for this option:
-            - \c native_case: (@ref bool_type) if @ref True "True" then objects will be returned in the case the database server returns them in even if the database server uses case-insensitive names; normally in this case %SqlUtil will convert the names to lower-case
+            - \c native_case: (\c bool_type) if @ref True "True" then objects will be returned in the case the database server returns them in even if the database server uses case-insensitive names; normally in this case %SqlUtil will convert the names to lower-case
         */
         const DatabaseOptions = (
             "native_case": Type::Boolean,
@@ -149,8 +149,8 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
         );
 
         #! default generic creation options
-        /** This option is comprised of @ref AbstractDatabase::CallbackOptions plus the following keys:
-            - \c replace: (@ref bool_type) if @ref True "True" and supported by the underlying db driver, \c "create or replace" text is used when creating objects
+        /** This option is comprised of \c AbstractDatabase::CallbackOptions plus the following keys:
+            - \c replace: (\c bool_type) if @ref True "True" and supported by the underlying db driver, \c "create or replace" text is used when creating objects
             - \c table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining cached tables and foreign key relationships between tables
             - \c data_tablespace: (@ref string_type) a string giving the data tablespace to use for tables
             - \c index_tablespace: (@ref string_type) a string giving the index tablespace to use for indexes
@@ -163,16 +163,16 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
         );
 
         #! default generic schema description / alignment options
-        /** Currently this option is identical to @ref AbstractDatabase::CreationOptions plus the following keys:
-            - \c force: (@ref bool_type) is @ref True "True" and supported by the underlying db driver, \c FORCE or \c CASCADE options are used when dropping or aligning objects
+        /** Currently this option is identical to \c AbstractDatabase::CreationOptions plus the following keys:
+            - \c force: (\c bool_type) is @ref True "True" and supported by the underlying db driver, \c FORCE or \c CASCADE options are used when dropping or aligning objects
         */
         const AlignSchemaOptions = CreationOptions + (
             "force": Type::Boolean,
         );
 
         #! default generic drop schema options
-        /** Currently this option is identical to @ref AbstractDatabase::CallbackOptions plus the following keys:
-            - \c force: (@ref bool_type) is @ref True "True" and supported by the underlying db driver, \c FORCE or \c CASCADE options are used when dropping objects
+        /** Currently this option is identical to \c AbstractDatabase::CallbackOptions plus the following keys:
+            - \c force: (\c bool_type) is @ref True "True" and supported by the underlying db driver, \c FORCE or \c CASCADE options are used when dropping objects
         */
         const DropSchemaOptions = CallbackOptions + (
             "force": Type::Boolean,
@@ -182,7 +182,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
         /** The following keys can be set in @ref schema_desc_hash "schema description hashes":
             - \c tables: a hash keyed by table name set to @ref table_desc_hash "table description hash" values
             - \c table_map: a hash for automatically renaming tables; if the source name (key) exists and the target name (value) does not exist, then the source table is automatically renamed
-            - \c sequences: a hash keyed by sequence name set to @ref AbstractDatabase::SequenceDescriptionOptions "sequence hash<auto> description" values
+            - \c sequences: a hash keyed by sequence name set to \c AbstractDatabase::SequenceDescriptionOptions "sequence hash<auto> description" values
             - \c sequence_map: a hash for automatically renaming sequences; if the source name (key) exists and the target name (value) does not exist, then the source sequence is automatically renamed
             - \c functions: a hash keyed by function name set to function source string values
             - \c function_map: a hash for automatically renaming functions; if the source name (key) exists and the target name (value) does not exist, then the source function is automatically renamed
@@ -241,7 +241,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
 
     #! creates the object; private constructor
     /** @param nds the AbstractDatasource for the connection to the database
-        @param nopts a hash of options for the function creation string; see @ref AbstractDatabase::DatabaseOptions for common options; each driver can support additional driver-specific options
+        @param nopts a hash of options for the function creation string; see \c AbstractDatabase::DatabaseOptions for common options; each driver can support additional driver-specific options
 
         @throw OPTION-ERROR invalid or unsupported option passed
         */
@@ -251,7 +251,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
             native_case = True;
     }
 
-    #! See @ref DBFeaturesConstants
+    #! See \c DBFeaturesConstants
     list features() {
         return featuresImpl();
     }
@@ -389,7 +389,7 @@ list l = db.getAlignSql(schema_hash);
         @endcode
 
         @param schema_hash the @ref schema_desc_hash "schema description hash" that decribes the target state of the schema
-        @param opt a hash of options for the SQL creation strings; see @ref AbstractDatabase::AlignSchemaOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL creation strings; see \c AbstractDatabase::AlignSchemaOptions for common options; each driver can support additional driver-specific options
         @param table_cache an optional object of class Tables to return the cache of AbstractTable objects keyed by table name for the schema template (ie target table definitions)
 
         @return a list of SQL strings that can be used to align the structure and configuration of the current schema with that of the argument; if the objects described are identical then an empty list is returned
@@ -514,7 +514,7 @@ list l = db.getDropSchemaSql(schema_hash);
         @endcode
 
         @param schema_hash the @ref schema_desc_hash "schema description hash" that decribes the state of the schema
-        @param opt a hash of options for the SQL creation strings; see @ref AbstractDatabase::DropSchemaOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL creation strings; see \c AbstractDatabase::DropSchemaOptions for common options; each driver can support additional driver-specific options
 
         @return a list of SQL strings that can be used to drop any existing objects in the database; if none of the described objects exist, then an empty list is returned
 
@@ -675,7 +675,7 @@ AbstractSequence seq = db.makeSequence("seq_queues");
         @param increment the increment value of the sequence
         @param end the endinf value of the sequence, omit for no ending value
         @param opts an optional hash of options for the creation of the sequence; see
-        @ref AbstractDatabase::CreationOptions for common options; each driver can support additional driver-specific
+        \c AbstractDatabase::CreationOptions for common options; each driver can support additional driver-specific
         options
 
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -707,7 +707,7 @@ AbstractTable table = db.makeTable("table", th);
         @param name the name of the table
         @param desc a @ref table_desc_hash "table description hash" describing the table
         @param opts an optional hash of options for the table creation string; see
-        @ref SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional
+        \c SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional
         driver-specific options
 
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -735,7 +735,7 @@ AbstractFunction f = db.makeFunction("update_queue", src);
         information about the format of this parameter; generally it's simply the normal source code for the function
         required by the database)
         @param opts an optional hash of options for the creation of the function; see
-        @ref AbstractDatabase::CreationOptions for common options; each driver can support additional driver-specific
+        \c AbstractDatabase::CreationOptions for common options; each driver can support additional driver-specific
         options
 
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -761,7 +761,7 @@ AbstractFunction f = db.makeProcedure("get_queue_info", src);
         for information about the format of this parameter; generally it's simply the normal source code for the
         stored procedure required by the database)
         @param opt an optional hash of options for the creation of the stored procedure; see
-        @ref AbstractDatabase::CreationOptions for common options; each driver can support additional driver-specific
+        \c AbstractDatabase::CreationOptions for common options; each driver can support additional driver-specific
         options
 
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -783,7 +783,7 @@ db.dropFunctionIfExists(name);
         @endcode
 
         @param name the name of the function
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @return @ref True "True" if the function was dropped, @ref False "False" if not
 
@@ -804,7 +804,7 @@ db.dropProcedureIfExists(name);
         @endcode
 
         @param name the name of the procedure
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @return @ref True "True" if the procedure was dropped, @ref False "False" if not
 
@@ -825,7 +825,7 @@ db.dropSequenceIfExists(name);
         @endcode
 
         @param name the name of the sequence
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @return @ref True "True" if the sequence was dropped, @ref False "False" if not
 
@@ -846,7 +846,7 @@ db.dropViewIfExists(name);
         @endcode
 
         @param name the name of the view
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @return @ref True "True" if the view was dropped, @ref False "False" if not
 
@@ -867,7 +867,7 @@ db.dropTableIfExists(name);
         @endcode
 
         @param name the name of the table
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @return @ref True "True" if the table was dropped, @ref False "False" if not
 
@@ -889,7 +889,7 @@ string sql = db.getDropFunctionSqlIfExists(name);
         @endcode
 
         @param name the name of the function
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @return the SQL require to drop the given function if it exists or @ref nothing if the named function does not exist
 
@@ -910,7 +910,7 @@ string sql = db.getDropProcedureSqlIfExists(name);
         @endcode
 
         @param name the name of the procedure
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @return the SQL require to drop the given procedure if it exists or @ref nothing if the named procedure does not exist
 
@@ -931,7 +931,7 @@ string sql = db.getDropSequenceSqlIfExists(name);
         @endcode
 
         @param name the name of the sequence
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @return the SQL require to drop the given sequence if it exists or @ref nothing if the named sequence does not exist
 
@@ -952,7 +952,7 @@ string sql = db.getDropTableSqlIfExists(name);
         @endcode
 
         @param name the name of the table
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional callback options; see \c AbstractDatabase::CallbackOptions for more info
 
         @return the SQL require to drop the given table if it exists or @ref nothing if the named table does not exist
 
@@ -989,7 +989,7 @@ list l = db.getAlignFunctionSql(f);
         @endcode
 
         @param f the template or target version of the function to compare to the database version
-        @param opt an optional hash of options for the generation of the SQL strings; see @ref AbstractDatabase::CreationOptions for common options; each driver can support additional driver-specific options
+        @param opt an optional hash of options for the generation of the SQL strings; see \c AbstractDatabase::CreationOptions for common options; each driver can support additional driver-specific options
 
         @return a list of SQL strings that can be used to update a function in the database to the function definition passed as an argument
 
@@ -1020,7 +1020,7 @@ list l = db.getAlignProcedureSql(f);
         @endcode
 
         @param f the template or target version of the stored procedure to compare to the database version
-        @param opt an optional hash of options for the generation of the SQL strings; see @ref AbstractDatabase::CreationOptions for common options; each driver can support additional driver-specific options
+        @param opt an optional hash of options for the generation of the SQL strings; see \c AbstractDatabase::CreationOptions for common options; each driver can support additional driver-specific options
 
         @return a list of SQL strings that can be used to update a stored procedure in the database to the stored procedure definition passed as an argument
 

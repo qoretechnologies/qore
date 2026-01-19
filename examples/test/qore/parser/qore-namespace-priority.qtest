@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class QoreNamespacePriorityTest
+
+public class QoreNamespacePriorityTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Qore namespace priority test", "1.0") {
+        addTestCase("QoreFunctionPriority", \qoreFunctionPriority());
+        addTestCase("QoreClassPriority", \qoreClassPriority());
+        addTestCase("BrokenNamespaceResolutionOption", \brokenNamespaceResolutionOption());
+        addTestCase("BrokenNamespaceResolutionDirective", \brokenNamespaceResolutionDirective());
+        addTestCase("CorrectNamespaceResolutionDirective", \correctNamespaceResolutionDirective());
+        addTestCase("BrokenNamespaceResolutionClass", \brokenNamespaceResolutionClass());
+        addTestCase("StrictWarningsDirective", \strictWarningsDirective());
+        addTestCase("StrictWarningsDirectiveDisabled", \strictWarningsDirectiveDisabled());
+        set_return_value(main());
+    }
+
+    private qoreFunctionPriority() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        string code = "int sub abs(int i) { return 1234; } int sub call() { return abs(-20); }";
+        *hash h = p.parse(code, "qore-priority-fn", WARN_STRICT);
+        assertFalse(exists h);
+        assertEq(20, p.callFunction("call"));
+    }
+
+    private qoreClassPriority() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        string code = "class Program { int marker() { return 1234; } } int sub call() { Program p(); return p.marker(); }";
+        *hash h = p.parse(code, "qore-priority-class", WARN_ALL);
+        assertTrue(exists h);
+        assertEq("NON-EXISTENT-METHOD-CALL", h.err);
+    }
+
+    private brokenNamespaceResolutionOption() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS | PO_BROKEN_NAMESPACE_RESOLUTION);
+        string code = "int sub abs(int i) { return 1234; } int sub call() { return abs(-20); }";
+        *hash h = p.parse(code, "qore-broken-ns-opt", WARN_ALL);
+        assertFalse(exists h);
+        assertEq(1234, p.callFunction("call"));
+    }
+
+    private brokenNamespaceResolutionDirective() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        string code = "%broken-namespace-resolution\n"
+            "int sub abs(int i) { return 1234; } int sub call() { return abs(-20); }";
+        *hash h = p.parse(code, "qore-broken-ns-directive", WARN_ALL);
+        assertFalse(exists h);
+        assertEq(1234, p.callFunction("call"));
+    }
+
+    private correctNamespaceResolutionDirective() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        string code = "%broken-namespace-resolution\n%correct-namespace-resolution\n"
+            "int sub abs(int i) { return 1234; } int sub call() { return abs(-20); }";
+        *hash h = p.parse(code, "qore-correct-ns-directive", WARN_ALL);
+        assertFalse(exists h);
+        assertEq(20, p.callFunction("call"));
+    }
+
+    private brokenNamespaceResolutionClass() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS | PO_BROKEN_NAMESPACE_RESOLUTION);
+        string code = "class Program { int marker() { return 1234; } } "
+            "int sub call() { Program p(); return p.marker(); }";
+        *hash h = p.parse(code, "qore-broken-ns-class", WARN_ALL);
+        assertFalse(exists h);
+        assertEq(1234, p.callFunction("call"));
+    }
+
+    private strictWarningsDirective() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        string code = "%strict-warnings\n"
+            "namespace A { int sub ambiguous_fn() { return 1; } } "
+            "namespace B { int sub ambiguous_fn() { return 2; } } "
+            "int sub call() { return ambiguous_fn(); }";
+        *hash h = p.parse(code, "qore-strict-warn", WARN_ALL);
+        assertTrue(exists h);
+        assertEq("AMBIGUOUS-CALL-RESOLUTION", h.err);
+    }
+
+    private strictWarningsDirectiveDisabled() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        string code = "namespace A { int sub ambiguous_fn() { return 1; } } "
+            "namespace B { int sub ambiguous_fn() { return 2; } } "
+            "int sub call() { return ambiguous_fn(); }";
+        *hash h = p.parse(code, "qore-strict-warn-off", WARN_ALL);
+        assertFalse(exists h);
+    }
+}

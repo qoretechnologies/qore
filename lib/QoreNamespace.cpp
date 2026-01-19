@@ -31,6 +31,8 @@
 
 #include <qore/Qore.h>
 
+#include <algorithm>
+
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreRegexBase.h"
 #include "qore/intern/ssl_constants.h"
@@ -2206,6 +2208,80 @@ const FunctionEntry* qore_root_ns_private::parseResolveFunctionEntryIntern(const
     return nullptr;
 }
 
+void qore_root_ns_private::parseWarnAmbiguousFunctionCall(const QoreProgramLocation* loc, const char* fname,
+        const FunctionEntry* resolved) const {
+    assert(loc);
+    assert(fname);
+    assert(resolved);
+
+    if (parse_check_parse_option(PO_IN_MODULE)) {
+        return;
+    }
+
+    const qore_ns_private* resolved_ns = resolved->getNamespace();
+    if (!parse_check_parse_option(PO_BROKEN_NAMESPACE_RESOLUTION)) {
+        const qore_ns_private* qore_ns = getQore();
+        if (resolved_ns && qore_ns) {
+            for (const qore_ns_private* cur = resolved_ns; cur; cur = cur->parent) {
+                if (cur == qore_ns) {
+                    return;
+                }
+            }
+        }
+    }
+    qore_ns_private* nscx = parse_get_ns();
+    if (nscx && resolved_ns && nscx == resolved_ns) {
+        return;
+    }
+
+    std::vector<std::string> match_paths;
+    ConstAllNamespacesIterator nsi(nsmap);
+    while (nsi.next()) {
+        const QoreNamespace* ns = nsi.get();
+        if (!ns) {
+            continue;
+        }
+        const qore_ns_private* ns_priv = qore_ns_private::get(*ns);
+        if (!ns_priv->func_list.findNode(fname)) {
+            continue;
+        }
+        std::string path;
+        ns_priv->getPath(path, false, true);
+        match_paths.push_back(path);
+    }
+
+    if (match_paths.size() <= 1) {
+        return;
+    }
+
+    std::string resolved_path;
+    if (resolved_ns) {
+        resolved_ns->getPath(resolved_path, false, true);
+    }
+
+    std::sort(match_paths.begin(), match_paths.end());
+    QoreString matches;
+    for (size_t i = 0; i < match_paths.size(); ++i) {
+        if (i) {
+            matches.concat(", ");
+        }
+        matches.sprintf("'%s%s()'", match_paths[i].c_str(), fname);
+    }
+
+    QoreStringNode* desc = new QoreStringNode;
+    if (!resolved_path.empty()) {
+        desc->sprintf("call to function '%s()' is ambiguous; matches: %s; resolved to '%s%s()'; use a "
+            "fully-qualified namespace path in the call or rename the object to remove ambiguity", fname,
+            matches.c_str(), resolved_path.c_str(), fname);
+    } else {
+        desc->sprintf("call to function '%s()' is ambiguous; matches: %s; use a fully-qualified namespace path in "
+            "the call or rename the object to remove ambiguity", fname, matches.c_str());
+    }
+
+    qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_AMBIGUOUS_CALL_RESOLUTION,
+        "AMBIGUOUS-CALL-RESOLUTION", desc);
+}
+
 AbstractCallReferenceNode* qore_root_ns_private::parseResolveCallReferenceIntern(
         UnresolvedProgramCallReferenceNode* fr) {
     std::unique_ptr<UnresolvedProgramCallReferenceNode> fr_holder(fr);
@@ -2213,6 +2289,9 @@ AbstractCallReferenceNode* qore_root_ns_private::parseResolveCallReferenceIntern
 
     FunctionEntry* fe = parseFindFunctionEntryIntern(fname);
     if (fe) {
+        if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
+            parseWarnAmbiguousFunctionCall(fr->loc, fname, fe);
+        }
         // check parse options to see if access is allowed
         if (!qore_program_private::parseAddDomain(getProgram(), fe->getFunction()->parseGetUniqueFunctionality()))
             return fe->makeCallReference(fr->loc);

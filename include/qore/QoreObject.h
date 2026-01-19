@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -343,7 +343,7 @@ public:
     //! evaluates the given method with the given class context and arguments passed and returns the return value
     /** The caller owns the AbstractQoreNode (reference) returned
 
-        @param method the method to evaluate
+        @param name the method to evaluate
         @param class_ctx the class context for the method evaluation for evaluating private:internal methods
         @param args the arguments for the method (may be 0)
         @param xsink if an error occurs, the Qore-language exception information will be added here

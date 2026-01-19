@@ -158,7 +158,7 @@ OpenAiRestClient rest(opts);
         @endcode
 
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class; note
-        that the URL is set by default if not provided (see @ref DefaultUrl)
+        that the URL is set by default if not provided (see \c DefaultUrl)
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
 
@@ -354,7 +354,7 @@ public class OpenAiResponseSseStream {
 }
 
 #! Class for OpenAi REST connections; returns @ref OpenAiRestClient objects
-/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"
+/** This class implements all options of \c RestClient::RestClientConnection "RestClientConnection"
 
     @see @ref OpenAiRestClient::OpenAiRestClient::constructor() for more information on the above options
 */
@@ -424,7 +424,7 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -460,10 +460,10 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
         return "openai";
     }
 
-    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
     */
     bool hasDataProvider() {
         return True;

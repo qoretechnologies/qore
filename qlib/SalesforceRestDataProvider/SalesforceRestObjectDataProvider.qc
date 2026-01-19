@@ -265,7 +265,7 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
     /** @param rec a hash representing a single input record
         @param upsert_options the create options after processing by validateUpsertOptions()
 
-        @return see @ref db_provider_upsert_results for possible values
+        @return see \c db_provider_upsert_results for possible values
     */
     private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
         string extid = upsert_options.extidfield;

@@ -141,7 +141,7 @@ module RedisDataProvider {
 
     @section redisdataproviderintro Introduction to the RedisDataProvider Module
 
-    The %RedisDataProvider module provides a @ref dataproviderintro "data provider" API for Redis
+    The %RedisDataProvider module provides a \c dataproviderintro "data provider" API for Redis
     servers. It provides connection management and a comprehensive API for all Redis data types
     and operations.
 
@@ -155,15 +155,15 @@ module RedisDataProvider {
     Redis connections can be created using the \c redis:// or \c rediss:// (TLS) URL schemes:
 
     @par Connection URL Format
-    @verbatim redis://[username:password@]host[:port][/db]
-    rediss://[username:password@]host[:port][/db]
+    @verbatim redis://[username:password\@]host[:port][/db]
+    rediss://[username:password\@]host[:port][/db]
     @endverbatim
 
     @par Examples
     - \c redis://localhost - connect to localhost on default port 6379
     - \c redis://localhost:6380 - connect to localhost on port 6380
-    - \c redis://secret@localhost/1 - authenticate with password, select db 1
-    - \c redis://user:secret@localhost/0 - ACL auth with username (Redis 6.0+)
+    - \c redis://secret\@localhost/1 - authenticate with password, select db 1
+    - \c redis://user:secret\@localhost/0 - ACL auth with username (Redis 6.0+)
     - \c rediss://localhost - TLS connection to localhost
 
     @section redis_dataprovider_factory Redis Data Provider Factory

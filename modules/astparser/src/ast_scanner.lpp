@@ -828,11 +828,13 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%broken-loop-statement{WS}*$           { yylval->parseopt = new ASTParseOption(APOK_BROKEN_LOOP_STATEMENT); return PARSE_OPTION_FULL; }
 ^%broken-int-assignments{WS}*$          { yylval->parseopt = new ASTParseOption(APOK_BROKEN_INT_ASSIGNMENTS); return PARSE_OPTION_FULL; }
 ^%broken-operators{WS}*$                { PO_BROKEN_OPERATORS = true; yylval->parseopt = new ASTParseOption(APOK_BROKEN_OPERATORS); return PARSE_OPTION_FULL; }
+^%broken-namespace-resolution{WS}*$     { yylval->parseopt = new ASTParseOption(APOK_BROKEN_NAMESPACE_RESOLUTION); return PARSE_OPTION_FULL; }
 ^%correct-list-parsing{WS}*$            { yylval->parseopt = new ASTParseOption(APOK_CORRECT_LIST_PARSING); return PARSE_OPTION_FULL; }
 ^%correct-logic-precedence{WS}*$        { PO_BROKEN_LOGIC_PRECEDENCE = false; yylval->parseopt = new ASTParseOption(APOK_CORRECT_LOGIC_PRECEDENCE); return PARSE_OPTION_FULL; }
 ^%correct-loop-statement{WS}*$          { yylval->parseopt = new ASTParseOption(APOK_CORRECT_LOOP_STATEMENT); return PARSE_OPTION_FULL; }
 ^%correct-int-assignments{WS}*$         { yylval->parseopt = new ASTParseOption(APOK_CORRECT_INT_ASSIGNMENTS); return PARSE_OPTION_FULL; }
 ^%correct-operators{WS}*$               { PO_BROKEN_OPERATORS = false; yylval->parseopt = new ASTParseOption(APOK_CORRECT_OPERATORS); return PARSE_OPTION_FULL; }
+^%correct-namespace-resolution{WS}*$    { yylval->parseopt = new ASTParseOption(APOK_CORRECT_NAMESPACE_RESOLUTION); return PARSE_OPTION_FULL; }
 ^%loose-args{WS}*$                      { yylval->parseopt = new ASTParseOption(APOK_LOOSE_ARGS); return PARSE_OPTION_FULL; }
 ^%broken-range{WS}*$                    { yylval->parseopt = new ASTParseOption(APOK_BROKEN_RANGE); return PARSE_OPTION_FULL; }
 ^%correct-range{WS}*$                   { yylval->parseopt = new ASTParseOption(APOK_CORRECT_RANGE); return PARSE_OPTION_FULL; }

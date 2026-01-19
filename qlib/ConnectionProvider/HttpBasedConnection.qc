@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore HttpBasedConnection class definition
 
-/*  HttpBasedConnection.qc Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  HttpBasedConnection.qc Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,8 +36,9 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         @param url connection URL (potentially with password info)
         @param attributes various attributes. See below
         @param options connection options
+        @param logger optional logger interface for the connection
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -88,7 +89,7 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
     }
 
     #! Called by the constructor to set the real URL
-    /** @path the new URL
+    /** @param url the new URL
 
         sets the real HTTP URL for HTTP-based connections
     */

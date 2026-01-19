@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -329,7 +329,7 @@ public:
 
     //! Sets a key value in the namespace's key-value store unconditionally
     /** @param key the key to store
-        @param value the value to store; must be already referenced for storage
+        @param val the value to store; must be already referenced for storage
 
         @return any value previously stored in that key; must be dereferenced by the caller
 
@@ -341,7 +341,7 @@ public:
 
     //! Sets a key value in the namespace's key-value store only if no value exists for the given key
     /** @param key the key to store
-        @param value the value to store; must be already referenced for storage
+        @param val the value to store; must be already referenced for storage
 
         @return returns \a value if another value already exists for that key, otherwise returns no value
 
@@ -355,9 +355,9 @@ public:
 
     //! Sets a key value in the namespace's key-value store only if no value exists for the given key
     /** @param key the key to store
-        @param value the string to store; will be converted to a QoreStringNode if stored
+        @param str the string to store; will be converted to a QoreStringNode if stored
 
-        @param returns true if the value was set, false if not (a value is already in place)
+        @return true if the value was set, false if not (a value is already in place)
 
         @note All namespace key-value operations are atomic
 

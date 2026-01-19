@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -191,11 +191,26 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     if (!meth) {
         // if there is no method, then check for a methodGate() method or a pseudo-method
         if (!qore_class_private::get(*qc)->parseHasMethodGate()) {
+            bool member_callable = false;
+            const qore_class_private* member_class_ctx = nullptr;
+            ClassAccess member_access = Public;
+            const QoreMemberInfo* mi = qore_class_private::get(*qc)->parseFindMember(mname, member_class_ctx,
+                member_access);
+            if (mi && (member_access <= Public || qore_class_private::parseCheckPrivateClassAccess(*qc))) {
+                const QoreTypeInfo* member_type_info = mi->parseGetTypeInfo();
+                if (member_type_info && QoreTypeInfo::hasType(member_type_info)
+                    && QoreTypeInfo::parseAccepts(codeTypeInfo, member_type_info)) {
+                    member_callable = true;
+                }
+            }
+
             // check if it could be a pseudo-method call
-            meth = pseudo_classes_find_method(NT_OBJECT, mname, qc);
+            if (!member_callable) {
+                meth = pseudo_classes_find_method(NT_OBJECT, mname, qc);
+            }
             if (meth) {
                 m->setPseudo(qc->getTypeInfo());
-            } else {
+            } else if (!member_callable) {
                 raise_nonexistent_method_call_warning(loc, qc, mname);
             }
         }

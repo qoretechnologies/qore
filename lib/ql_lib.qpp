@@ -1445,8 +1445,8 @@ int qore_get_library_options() [dom=PROCESS] {
 
     This setting affects:
     - All new @ref Qore::HTTPClient "HTTPClient" connections
-    - All new @ref HttpServer "HttpServer" connections
-    - All HTTP-based connections including those via @ref ConnectionProvider "ConnectionProvider"
+    - All new \c HttpServer connections
+    - All HTTP-based connections including those via \c ConnectionProvider
 
     @note This function requires @ref Qore::DOM_PROCESS_CONTROL "DOM_PROCESS_CONTROL" rights (not available with
     @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL")

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -331,6 +331,8 @@ public:
     //! creates the QoreClass object and assigns the name and the functional domain
     /** @note class names and subnamespaces names must be unique in a namespace; i.e. no class may have the same name as a subnamespace within a namespace and vice-versa
         @param n_name the name of the class
+        @param ns_path the full pathname of the class with namespaces, including the root "::" namespace as the
+        leading element
         @param n_domain the functional domain of the class to be used to enforce functional restrictions within a Program object
 
         @see QoreProgram
@@ -342,6 +344,8 @@ public:
     //! creates the QoreClass object and assigns the name and the functional domain
     /** @note class names and subnamespaces names must be unique in a namespace; i.e. no class may have the same name as a subnamespace within a namespace and vice-versa
         @param n_name the name of the class
+        @param ns_path the full pathname of the class with namespaces, including the root "::" namespace as the
+        leading element
         @param n_domain the functional domain of the class to be used to enforce functional restrictions within a Program object
 
         @see QoreProgram
@@ -1105,7 +1109,7 @@ public:
 
     //! Sets a key value in the class's key-value store unconditionally
     /** @param key the key to store
-        @param value the value to store; must be already referenced for storage
+        @param val the value to store; must be already referenced for storage
 
         @return any value previously stored in that key; must be dereferenced by the caller
 
@@ -1117,7 +1121,7 @@ public:
 
     //! Sets a key value in the class's key-value store only if no value exists for the given key
     /** @param key the key to store
-        @param value the value to store; must be already referenced for storage
+        @param val the value to store; must be already referenced for storage
 
         @return returns \a value if another value already exists for that key, otherwise returns no value
 
@@ -1131,9 +1135,9 @@ public:
 
     //! Sets a key value in the class's key-value store only if no value exists for the given key
     /** @param key the key to store
-        @param value the string to store; will be converted to a QoreStringNode if stored
+        @param str the string to store; will be converted to a QoreStringNode if stored
 
-        @param returns true if the value was set, false if not (a value is already in place)
+        @return true if the value was set, false if not (a value is already in place)
 
         @note All class key-value operations are atomic
 

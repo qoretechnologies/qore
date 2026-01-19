@@ -59,12 +59,12 @@ public class InputStreamLineIteratorFake inherits Qore::AbstractLineIterator {
     }
 }
 
-public class MyClass inherits Class {
-    constructor(string path) : Class(path) {
+public class MyClass inherits Qore::Reflection::Class {
+    constructor(string path) : Qore::Reflection::Class(path) {
     }
 
-    static Class forName(string path) {
-        return Class::forName("Mutex");
+    static Qore::Reflection::Class forName(string path) {
+        return Qore::Reflection::Class::forName("Mutex");
     }
 }
 
@@ -84,7 +84,7 @@ public class DIJClass inherits QUnit::DependencyInjectedTest {
 
     private performInjectionsImpl() {
         # do builtin module injections here
-        injectClass("MyClass", "Class");
+        injectClass("MyClass", "Qore::Reflection::Class");
 
         injectUserModule("../../../../qlib/FixedLengthUtil");
     }
@@ -95,7 +95,7 @@ public class DIJClass inherits QUnit::DependencyInjectedTest {
     }
 
     testBuiltinModuleInjection() {
-        Class c = Class::forName("invalid");
+        Qore::Reflection::Class c = Qore::Reflection::Class::forName("invalid");
         assertEq("Mutex", c.getName());
     }
 

@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class Issue39Test
+
+namespace Issue39CallMemberClosure {
+    class A {
+        public {
+            code<int(int)> f = int sub (int x) { return x * x; };
+        }
+    }
+
+    class B {
+        public {
+            int f = 3;
+        }
+    }
+
+    class C {
+        public {
+            code<int(int)> f = int sub (int x) { return x + 1; };
+        }
+
+        int call(int x) {
+            return self.f(x);
+        }
+    }
+}
+
+public class Issue39Test inherits QUnit::Test {
+    constructor() : QUnit::Test("Issue39 test", "1.0") {
+        addTestCase("CallMemberClosure", \callMemberClosure());
+        addTestCase("CallMemberClosureFromMethod", \callMemberClosureFromMethod());
+        addTestCase("ParseNoWarning", \parseNoWarning());
+        addTestCase("NonCallableMember", \nonCallableMember());
+        set_return_value(main());
+    }
+
+    private callMemberClosure() {
+        Issue39CallMemberClosure::A a();
+        assertEq(25, a.f(5));
+    }
+
+    private callMemberClosureFromMethod() {
+        Issue39CallMemberClosure::C c();
+        assertEq(5, c.call(4));
+    }
+
+    private parseNoWarning() {
+        Program p(PO_MODERN);
+        *hash h = p.parse("namespace N { class A { public { code<int(int)> f = int sub (int x) { return x; }; } } } "
+            "sub test() { N::A a(); a.f(5); }",
+            "issue39", WARN_ALL);
+        assertFalse(exists h);
+    }
+
+    private nonCallableMember() {
+        Issue39CallMemberClosure::B b();
+        bool ok = False;
+        try {
+            cast<object>(b).f(1);
+        } catch (hash<ExceptionInfo> ex) {
+            ok = (ex.err == "METHOD-DOES-NOT-EXIST");
+        }
+        assertTrue(ok);
+    }
+}

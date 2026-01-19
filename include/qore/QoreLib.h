@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -848,7 +848,7 @@ DLLEXPORT bool q_active_exception();
 /** @param name the name of the module
     @param msg the message that will be included in any exception when the module is attempted to be loaded
 
-    @ereturn 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
+    @return 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
 
     @since %Qore 2.0.1
 */

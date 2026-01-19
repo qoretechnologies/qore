@@ -1316,6 +1316,8 @@ public:
         }
     }
 
+    DLLLOCAL bool parseHasAmbiguousSignature(const MethodFunctionBase& other, bool relaxed_match) const;
+
     DLLLOCAL int parseInit();
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseRollback();

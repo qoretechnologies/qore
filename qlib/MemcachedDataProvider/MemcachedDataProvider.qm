@@ -220,7 +220,7 @@ module MemcachedDataProvider {
     </div>
     @endhtmlonly
 
-    The %MemcachedDataProvider module provides a @ref dataproviderintro "data provider" API for
+    The %MemcachedDataProvider module provides a \c dataproviderintro "data provider" API for
     Memcached servers. It implements the memcached binary protocol for efficient communication
     and provides a complete set of operations for cache management.
 

@@ -80,7 +80,7 @@ module MysqlSqlUtil {
     |@ref SqlUtil::NUMERIC|\c decimal
     |@ref SqlUtil::VARCHAR|\c varchar
 
-    To use other types, use the \c "native_type" @ref SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the
+    To use other types, use the \c "native_type" \c SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the
     native MySQL type name instead (under the \c "driver" and \c "mysql" keys for schemas supporting multiple databases).
 
     @subsection mysql_column_notnull NOT NULL Constraints on MySQL
@@ -140,7 +140,7 @@ module MysqlSqlUtil {
 
     @subsection mysqlsqlutilv111 MysqlSqlUtil v1.1.1
     - implemented the \a force option (i.e. cascade) for dropping code objects (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
-    - implemented @ref cop_trunc_date() operator (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
+    - implemented \c cop_trunc_date() operator (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection mysqlsqlutilv11 MysqlSqlUtil v1.1
     - corrected support for the \c varbinary type (<a href="https://github.com/qoretechnologies/qore/issues/403">bug 403</a>)
@@ -1377,7 +1377,7 @@ end";
                 "table_encoding": Type::String,
             );
 
-            #! extends @ref SqlUtil::AbstractTable::ColumnDescOptions with MySQL-specific values
+            #! extends \c SqlUtil::AbstractTable::ColumnDescOptions with MySQL-specific values
             /** the new keys are as follows:
                 - \c "unsigned": only valid with numeric/integer/floating-point types
                 - \c "auto_increment": only valid with integer/floating-point types

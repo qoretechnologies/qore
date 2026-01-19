@@ -75,7 +75,7 @@ module DiscordWebSocketClient {
 
     @section discordwebsocketclientrelnotes Release Notes
 
-    @subsection discordwebsocketclientv1_0 DiscordWebSocketClient v1.0.1
+    @subsection discordwebsocketclientv1_0_1 DiscordWebSocketClient v1.0.1
     - fixed a bug handling \c HELLO messages
       (<a href="https://github.com/qoretechnologies/qore/issues/4986">issue 4986</a>)
 
@@ -342,7 +342,7 @@ DiscordWebSocketClient ws();
         @endcode
 
         @param opts All options accepted by
-        @ref WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()" with the following
+        \c WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()" with the following
         differences:
         - \c token: must be a bot token and is a required option
         - \c intents: optional integer intent for the identify message
@@ -688,7 +688,7 @@ hash<auto> h = ws.getInfo();
 }
 
 #! class for Discord websocket connections; returns an object of class @ref DiscordWebSocketClient
-/** Supports all the options of the @ref WebSocketClient::WebSocketConnection "WebSocketConnection" class; note that
+/** Supports all the options of the \c WebSocketClient::WebSocketConnection "WebSocketConnection" class; note that
     the \c token option is required by this class and is used as the gateway token after connecting and not as an HTTP
     authentication token
 */
@@ -724,7 +724,7 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
         @param attributes various attributes. See below
         @param options connection options
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -781,7 +781,7 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
     }
 
     #! Called by the constructor to set the real URL
-    /** @path the new URL
+    /** @param url the new URL
 
         sets the real WS URL for WebSocket-based connections
     */
@@ -810,4 +810,3 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
     }
 }
 }
-

@@ -70,9 +70,9 @@ module JdbcMicrosoftSqlUtil {
 
     @see @ref mssqlsqlutilbaseintro for implementation information about this module
 
-    @section ora_relnotes Release Notes
+    @section jdbcmssql_relnotes Release Notes
 
-    @subsection Microsoft15 JdbcMicrosoftSqlUtil v1.0
+    @subsection jdbcmssql_v1_0 JdbcMicrosoftSqlUtil v1.0
     - initial release
 */
 

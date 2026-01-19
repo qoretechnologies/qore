@@ -51,17 +51,17 @@ module AwsRestClientDataProvider {
 
     @tableofcontents
 
-    @section restclientdataproviderintro Introduction to the AwsRestClientDataProvider Module
+    @section awsrestclientdataprovider_intro Introduction to the AwsRestClientDataProvider Module
 
     The %AwsRestClientDataProvider module provides a data provider API for REST servers through the
-    @ref dataproviderintro "DataProvider" API.
+    \c dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
     - @ref AwsRestClientDataProvider::AwsRestClientCallDataProvider "AwsRestClientCallDataProvider"
-    - @ref AwsRestClientDataProvider::AwsRestClientCallRequestDataType "AwsRestClientCallRequestDataType"
-    - @ref AwsRestClientDataProvider::AwsRestClientCallResponseDataType "AwsRestClientCallResponseDataType"
-    - @ref AwsRestClientDataProvider::AwsRestClientCallWithMethodRequestDataType "AwsRestClientCallWithMethodRequestDataType"
-    - @ref AwsRestClientDataProvider::AwsRestClientCallWithoutBodyRequestDataType "AwsRestClientCallWithoutBodyRequestDataType"
+    - \c AwsRestClientDataProvider::AwsRestClientCallRequestDataType "AwsRestClientCallRequestDataType"
+    - \c AwsRestClientDataProvider::AwsRestClientCallResponseDataType "AwsRestClientCallResponseDataType"
+    - \c AwsRestClientDataProvider::AwsRestClientCallWithMethodRequestDataType "AwsRestClientCallWithMethodRequestDataType"
+    - \c AwsRestClientDataProvider::AwsRestClientCallWithoutBodyRequestDataType "AwsRestClientCallWithoutBodyRequestDataType"
     - @ref AwsRestClientDataProvider::AwsRestClientDataProviderFactory "AwsRestClientDataProviderFactory"
     - @ref AwsRestClientDataProvider::AwsRestClientDataProvider "AwsRestClientDataProvider"
     - @ref AwsRestClientDataProvider::AwsRestClientDeleteDataProvider "AwsRestClientDeleteDataProvider"
@@ -72,9 +72,9 @@ module AwsRestClientDataProvider {
     - @ref AwsRestClientDataProvider::AwsRestClientPostDataProvider "AwsRestClientPostDataProvider"
     - @ref AwsRestClientDataProvider::AwsRestClientPutDataProvider "AwsRestClientPutDataProvider"
 
-    @section restclientdataprovider_relnotes Release Notes
+    @section awsrestclientdataprovider_relnotes Release Notes
 
-    @subsection restclientdataprovider_v1_0 AwsRestClientDataProvider v1.0
+    @subsection awsrestclientdataprovider_v1_0 AwsRestClientDataProvider v1.0
     - initial release of the module
 */
 
