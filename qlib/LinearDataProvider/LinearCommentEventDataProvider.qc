@@ -187,7 +187,8 @@ public class LinearCommentEventDataProvider inherits LinearDataProviderBase, Dat
             return;
         }
 
-        log(LoggerLevel::DEBUG, "handleWebhookEvent: comment created on issue %s", payload.data.issue.identifier);
+        log(LoggerLevel::DEBUG, "handleWebhookEvent: comment created on issue %s",
+            payload.data.issue.identifier ?? "<unknown>");
         notifyObservers(EVENT_COMMENT_CREATED, payload);
     }
 }

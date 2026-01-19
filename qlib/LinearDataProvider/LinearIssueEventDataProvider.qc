@@ -261,11 +261,12 @@ public class LinearIssueEventDataProvider inherits LinearDataProviderBase, DataP
         }
 
         # Filter by team if specified
-        if (teamId && payload.data.team.id != teamId) {
+        if (teamId && (!payload.data.team || payload.data.team.id != teamId)) {
             return;
         }
 
-        log(LoggerLevel::DEBUG, "handleWebhookEvent: %s for issue %s", action, payload.data.identifier);
+        log(LoggerLevel::DEBUG, "handleWebhookEvent: %s for issue %s", action,
+            payload.data.identifier ?? "<unknown>");
         notifyObservers(event_type, payload);
     }
 }
