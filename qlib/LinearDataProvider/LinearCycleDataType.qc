@@ -64,10 +64,10 @@ public class LinearCycleDataType inherits HashDataType {
                 "desc": "The end date of the cycle",
             },
             "team": {
-                "type": AutoHashOrNothingType,
+                "type": new LinearTeamRefDataType(),
                 "display_name": "Team",
                 "short_desc": "The team",
-                "desc": "The team the cycle belongs to",
+                "desc": "The team the cycle belongs to (id, name, key)",
             },
             "createdAt": {
                 "type": DateOrNothingType,
@@ -80,6 +80,48 @@ public class LinearCycleDataType inherits HashDataType {
                 "display_name": "Updated At",
                 "short_desc": "When the cycle was last updated",
                 "desc": "The date and time when the cycle was last updated",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Linear cycle create request type
+public class LinearCycleCreateDataType inherits HashDataType {
+    private {
+        #! Field definitions for creating cycles
+        const Fields = {
+            "teamId": {
+                "type": StringType,
+                "display_name": "Team ID",
+                "short_desc": "The team ID (required)",
+                "desc": "The ID of the team to create the cycle in",
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            },
+            "name": {
+                "type": StringOrNothingType,
+                "display_name": "Name",
+                "short_desc": "The cycle name",
+                "desc": "The name of the cycle",
+                "example_value": "Sprint 23",
+            },
+            "startsAt": {
+                "type": StringOrNothingType,
+                "display_name": "Starts At",
+                "short_desc": "When the cycle starts",
+                "desc": "The start date of the cycle (ISO 8601 format)",
+                "example_value": "2025-01-15T00:00:00Z",
+            },
+            "endsAt": {
+                "type": StringOrNothingType,
+                "display_name": "Ends At",
+                "short_desc": "When the cycle ends",
+                "desc": "The end date of the cycle (ISO 8601 format)",
+                "example_value": "2025-01-29T00:00:00Z",
             },
         };
     }

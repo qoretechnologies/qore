@@ -59,10 +59,10 @@ public class LinearLabelDataType inherits HashDataType {
                 "example_value": "#FF5733",
             },
             "team": {
-                "type": AutoHashOrNothingType,
+                "type": new LinearTeamRefDataType(),
                 "display_name": "Team",
                 "short_desc": "The team",
-                "desc": "The team the label belongs to (null for workspace labels)",
+                "desc": "The team the label belongs to (id, name, key) - null for workspace labels",
             },
             "createdAt": {
                 "type": DateOrNothingType,
@@ -81,6 +81,86 @@ public class LinearLabelDataType inherits HashDataType {
 
     #! Creates the type
     constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Linear label create request type
+public class LinearLabelCreateDataType inherits HashDataType {
+    private {
+        #! Field definitions for creating labels
+        const Fields = {
+            "name": {
+                "type": StringType,
+                "display_name": "Name",
+                "short_desc": "The label name (required)",
+                "desc": "The name of the label",
+                "example_value": "bug",
+            },
+            "description": {
+                "type": StringOrNothingType,
+                "display_name": "Description",
+                "short_desc": "The label description",
+                "desc": "The description of the label",
+                "example_value": "Issues related to bugs and defects",
+            },
+            "color": {
+                "type": StringOrNothingType,
+                "display_name": "Color",
+                "short_desc": "The label color",
+                "desc": "The color of the label in hex format",
+                "example_value": "#FF5733",
+            },
+            "teamId": {
+                "type": StringOrNothingType,
+                "display_name": "Team ID",
+                "short_desc": "The team ID",
+                "desc": "The ID of the team to create the label in (null for workspace labels)",
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Linear label reference type (embedded in issue responses)
+/** This is a simplified label type used when labels are embedded in issue responses,
+    containing only id, name, and color fields.
+*/
+public class LinearLabelRefDataType inherits HashDataType {
+    private {
+        #! Field definitions for embedded label references
+        const Fields = {
+            "id": {
+                "type": StringType,
+                "display_name": "ID",
+                "short_desc": "The unique identifier of the label",
+                "desc": "The unique identifier of the label",
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            },
+            "name": {
+                "type": StringType,
+                "display_name": "Name",
+                "short_desc": "The label name",
+                "desc": "The name of the label",
+                "example_value": "bug",
+            },
+            "color": {
+                "type": StringOrNothingType,
+                "display_name": "Color",
+                "short_desc": "The label color",
+                "desc": "The color of the label in hex format",
+                "example_value": "#FF5733",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() : HashDataType("LabelRef") {
         addQoreFields(Fields);
     }
 }

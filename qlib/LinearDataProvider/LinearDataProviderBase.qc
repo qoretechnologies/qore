@@ -169,6 +169,37 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
         return rv;
     }
 
+    #! Flattens GraphQL connection fields (those with 'nodes') to plain arrays
+    /** GraphQL Relay-style connections return arrays as { nodes: [...] }. This method
+        converts them to plain arrays for cleaner output.
+
+        @param data the data hash to process
+        @return the processed data with flattened connection fields
+    */
+    static hash<auto> flattenConnections(hash<auto> data) {
+        hash<auto> rv = {};
+        foreach hash<auto> i in (data.pairIterator()) {
+            if (i.value.typeCode() == NT_HASH) {
+                # Check if this is a connection object with 'nodes'
+                if (i.value.hasKey("nodes") && i.value.nodes.typeCode() == NT_LIST) {
+                    # Flatten: replace { nodes: [...] } with just [...]
+                    rv{i.key} = map LinearDataProviderBase::flattenConnections($1), i.value.nodes;
+                } else {
+                    # Recursively process nested hashes
+                    rv{i.key} = LinearDataProviderBase::flattenConnections(i.value);
+                }
+            } else if (i.value.typeCode() == NT_LIST) {
+                # Recursively process list elements
+                rv{i.key} = map $1.typeCode() == NT_HASH
+                    ? LinearDataProviderBase::flattenConnections($1)
+                    : $1, i.value;
+            } else {
+                rv{i.key} = i.value;
+            }
+        }
+        return rv;
+    }
+
     #! Returns information on supported reference data
     /** @return a hash of supported reference data; keys in the hash returned are supported in calls to
         @ref getReferenceData()
@@ -182,6 +213,17 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
             "labels": True,
             "states": True,
             "issues": True,
+        };
+    }
+
+    #! Returns information on supported element reference data (for list-type options)
+    /** @return a hash of supported element reference data; keys in the hash returned are supported in calls to
+        @ref getElementReferenceData()
+    */
+    *hash<string, bool> getSupportedElementReferenceData() {
+        return {
+            "teams": True,
+            "labels": True,
         };
     }
 
@@ -200,6 +242,19 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
             case "labels": return getReferenceLabels(action_opts.teamId);
             case "states": return getReferenceStates(action_opts.teamId);
             case "issues": return getReferenceIssues(action_opts.teamId);
+        }
+    }
+
+    #! Returns element reference data of the given kind if available (for list-type options)
+    /** @param type the unique type name of the element reference data
+        @param action_opts an optional hash of action options when called when working with an app action
+
+        @return a list of allowed values for elements of this list type
+    */
+    private *list<hash<AllowedValueInfo>> getElementReferenceDataImpl(string type, *hash<auto> action_opts) {
+        switch (type) {
+            case "teams": return getReferenceTeams();
+            case "labels": return getReferenceLabels(action_opts.teamId);
         }
     }
 

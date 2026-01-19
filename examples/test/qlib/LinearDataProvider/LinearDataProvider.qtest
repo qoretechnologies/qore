@@ -75,6 +75,9 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Integration tests (require LINEAR_TOKEN environment variable or -t option)
         addTestCase("integration tests", \integrationTests());
 
+        # Webhook trigger tests (require LINEAR_TOKEN and webhook infrastructure)
+        addTestCase("webhook trigger tests", \webhookTriggerTests());
+
         # Try to set up connection for integration tests
         try {
             setupConnection();
@@ -417,7 +420,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         *hash<DataProviderActionInfo> createIssue = DataProviderActionCatalog::getAppAction("Linear", "create-issue");
         assertTrue(exists createIssue, "create-issue action should exist");
         assertEq("create-issue", createIssue.action);
-        assertEq(DPAT_CREATE, createIssue.action_code);
+        assertEq(DPAT_API, createIssue.action_code);
         assertTrue(createIssue.options.hasKey("teamId"), "create-issue should have teamId option");
         assertTrue(createIssue.options.hasKey("title"), "create-issue should have title option");
         assertTrue(createIssue.options.hasKey("assigneeId"), "create-issue should have assigneeId option");
@@ -446,18 +449,26 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Verify update-issue action has id and update options
         *hash<DataProviderActionInfo> updateIssue = DataProviderActionCatalog::getAppAction("Linear", "update-issue");
         assertTrue(exists updateIssue, "update-issue action should exist");
-        assertEq(DPAT_UPDATE, updateIssue.action_code);
+        assertEq(DPAT_API, updateIssue.action_code);
         assertTrue(updateIssue.options.hasKey("id"), "update-issue should have id option");
         assertEq("issues", updateIssue.options.id.ref_data, "update-issue id should have ref_data=issues");
+        assertTrue(updateIssue.options.id.required, "update-issue id should be required");
         assertTrue(updateIssue.options.hasKey("title"), "update-issue should have title option");
         assertTrue(updateIssue.options.hasKey("assigneeId"), "update-issue should have assigneeId option");
+        assertEq("users", updateIssue.options.assigneeId.ref_data, "update-issue assigneeId should have ref_data=users");
+        assertTrue(updateIssue.options.hasKey("stateId"), "update-issue should have stateId option");
+        assertEq("states", updateIssue.options.stateId.ref_data, "update-issue stateId should have ref_data=states");
+        assertTrue(updateIssue.options.hasKey("priority"), "update-issue should have priority option");
+        assertTrue(updateIssue.options.priority.allowed_values.size() > 0, "update-issue priority should have allowed_values");
+        assertTrue(updateIssue.options.priority.allowed_values_creatable, "update-issue priority should have allowed_values_creatable");
 
         # Verify archive-issue action
         *hash<DataProviderActionInfo> archiveIssue = DataProviderActionCatalog::getAppAction("Linear", "archive-issue");
         assertTrue(exists archiveIssue, "archive-issue action should exist");
-        assertEq(DPAT_DELETE, archiveIssue.action_code);
+        assertEq(DPAT_API, archiveIssue.action_code);
         assertTrue(archiveIssue.options.hasKey("id"), "archive-issue should have id option");
         assertEq("issues", archiveIssue.options.id.ref_data, "archive-issue id should have ref_data=issues");
+        assertTrue(archiveIssue.options.id.required, "archive-issue id should be required");
 
         # Verify search-issues action (FIND type)
         *hash<DataProviderActionInfo> searchIssues = DataProviderActionCatalog::getAppAction("Linear", "search-issues");
@@ -469,7 +480,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Verify create-comment action has issueId option
         *hash<DataProviderActionInfo> createComment = DataProviderActionCatalog::getAppAction("Linear", "create-comment");
         assertTrue(exists createComment, "create-comment action should exist");
-        assertEq(DPAT_CREATE, createComment.action_code);
+        assertEq(DPAT_API, createComment.action_code);
         assertTrue(createComment.options.hasKey("issueId"), "create-comment should have issueId option");
         assertEq("issues", createComment.options.issueId.ref_data, "create-comment issueId should have ref_data=issues");
         assertTrue(createComment.options.hasKey("body"), "create-comment should have body option");
@@ -489,7 +500,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Verify project actions
         *hash<DataProviderActionInfo> createProject = DataProviderActionCatalog::getAppAction("Linear", "create-project");
         assertTrue(exists createProject, "create-project action should exist");
-        assertEq(DPAT_CREATE, createProject.action_code);
+        assertEq(DPAT_API, createProject.action_code);
         assertTrue(createProject.options.hasKey("name"), "create-project should have name option");
         assertTrue(createProject.options.hasKey("teamIds"), "create-project should have teamIds option");
         assertEq("teams", createProject.options.teamIds.element_ref_data, "create-project teamIds should have element_ref_data=teams");
@@ -497,7 +508,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Verify cycle actions
         *hash<DataProviderActionInfo> createCycle = DataProviderActionCatalog::getAppAction("Linear", "create-cycle");
         assertTrue(exists createCycle, "create-cycle action should exist");
-        assertEq(DPAT_CREATE, createCycle.action_code);
+        assertEq(DPAT_API, createCycle.action_code);
         assertTrue(createCycle.options.hasKey("teamId"), "create-cycle should have teamId option");
         assertEq("teams", createCycle.options.teamId.ref_data, "create-cycle teamId should have ref_data=teams");
         assertTrue(createCycle.options.hasKey("startsAt"), "create-cycle should have startsAt option");
@@ -513,7 +524,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         # Verify label actions
         *hash<DataProviderActionInfo> createLabel = DataProviderActionCatalog::getAppAction("Linear", "create-label");
         assertTrue(exists createLabel, "create-label action should exist");
-        assertEq(DPAT_CREATE, createLabel.action_code);
+        assertEq(DPAT_API, createLabel.action_code);
         assertTrue(createLabel.options.hasKey("name"), "create-label should have name option");
         assertTrue(createLabel.options.hasKey("color"), "create-label should have color option");
         assertTrue(createLabel.options.hasKey("teamId"), "create-label should have teamId option");
@@ -774,5 +785,409 @@ public class LinearDataProviderTest inherits QUnit::Test {
         if (m_options.verbose) {
             printf("\n--- All CRUD tests completed successfully ---\n");
         }
+    }
+
+    #! Webhook trigger tests - test registration and deregistration with Linear API
+    webhookTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No connection to Linear (set LINEAR_TOKEN env var or use -t option)");
+        }
+
+        # Register mock webhook APIs for testing
+        # We track webhooks created/deleted to verify the lifecycle
+        list<hash<auto>> created_webhooks = ();
+        list<string> deleted_webhook_ids = ();
+        int webhook_counter = 0;
+
+        code mockCreate = hash<auto> sub (hash<auto> config) {
+            webhook_counter++;
+            string url = sprintf("https://test-webhook-%d.example.com/webhook", webhook_counter);
+            hash<auto> ctx = {
+                "id": webhook_counter,
+                "config": config,
+            };
+            created_webhooks += {"url": url, "ctx": ctx};
+            return {"url": url, "ctx": ctx};
+        };
+
+        code mockDelete = sub (hash<auto> info) {
+            deleted_webhook_ids += info.ctx.id.toString();
+        };
+
+        # Only register if not already registered (avoid conflicts with Qorus environment)
+        bool registered_mock = False;
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            DataProvider::DataProviderWebhook::registerWebhookApis(mockCreate, mockDelete);
+            registered_mock = True;
+        }
+
+        on_exit {
+            # Note: We can't unregister the mock APIs, but tests that follow won't use them
+            # unless they also need webhook support
+        }
+
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            testSkip("Webhook infrastructure not available and could not register mock");
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Webhook Trigger Registration/Deregistration ---\n");
+        }
+
+        # ============================================
+        # Test Issue Created Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting LinearIssueEventDataProvider (issue-created)...\n");
+        }
+
+        # Create issue event provider
+        LinearDataProvider::LinearIssueEventDataProvider issueCreatedProvider(client, {
+            "event_type": LinearDataProvider::EVENT_ISSUE_CREATED,
+        });
+
+        # Verify provider metadata
+        assertEq(LinearDataProvider::EVENT_ISSUE_CREATED, issueCreatedProvider.getName());
+        assertTrue(issueCreatedProvider.getInfo().supports_observable);
+
+        # Get event types
+        hash<string, hash<DataProviderMessageInfo>> eventTypes = issueCreatedProvider.getEventTypes();
+        assertTrue(eventTypes.hasKey(LinearDataProvider::EVENT_ISSUE_CREATED));
+        assertTrue(eventTypes{LinearDataProvider::EVENT_ISSUE_CREATED}.desc.val());
+
+        # Get example event data and verify structure matches Linear webhook format
+        auto exampleData = issueCreatedProvider.getExampleEventData(LinearDataProvider::EVENT_ISSUE_CREATED);
+        assertTrue(exampleData.hasKey("action"));
+        assertTrue(exampleData.hasKey("type"));
+        assertTrue(exampleData.hasKey("data"));
+        assertTrue(exampleData.hasKey("actor"));
+        assertTrue(exampleData.hasKey("organizationId"));
+        assertTrue(exampleData.hasKey("webhookTimestamp"));
+        assertTrue(exampleData.hasKey("webhookId"));
+        assertTrue(exampleData.hasKey("createdAt"));
+        assertTrue(exampleData.hasKey("url"));
+        assertEq(LinearDataProvider::LinearActionCreate, exampleData.action);
+        assertEq(LinearDataProvider::LinearEventTypeIssue, exampleData.type);
+
+        # Verify actor structure
+        assertTrue(exampleData.actor.hasKey("id"));
+        assertTrue(exampleData.actor.hasKey("name"));
+        assertTrue(exampleData.actor.hasKey("type"));
+        assertTrue(exampleData.actor.hasKey("email"));
+        assertTrue(exampleData.actor.hasKey("url"));
+
+        # Verify data contains issue fields
+        assertTrue(exampleData.data.hasKey("id"));
+        assertTrue(exampleData.data.hasKey("title"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys eventTypes);
+            printf("  Example data has keys: %y\n", keys exampleData);
+            printf("  Actor keys: %y\n", keys exampleData.actor);
+        }
+
+        # Create a test observer
+        TestObserver issueObserver();
+        issueCreatedProvider.registerObserver(issueObserver);
+
+        # Get Linear webhooks before registration
+        hash<auto> beforeWebhooks = client.graphql("query { webhooks { nodes { id url label enabled } } }");
+        int webhookCountBefore = beforeWebhooks.body.data.webhooks.nodes.size();
+
+        if (m_options.verbose) {
+            printf("  Webhooks before registration: %d\n", webhookCountBefore);
+        }
+
+        # Trigger observer ready - this should register the webhook with Linear
+        issueCreatedProvider.observersReady();
+
+        # Get Linear webhooks after registration
+        hash<auto> afterWebhooks = client.graphql("query { webhooks { nodes { id url label enabled } } }");
+        int webhookCountAfter = afterWebhooks.body.data.webhooks.nodes.size();
+
+        if (m_options.verbose) {
+            printf("  Webhooks after registration: %d\n", webhookCountAfter);
+        }
+
+        # Verify webhook was created in Linear
+        assertEq(webhookCountBefore + 1, webhookCountAfter);
+
+        # Find the webhook we created (it should be the newest one, or we can match by label)
+        *hash<auto> ourWebhook;
+        foreach hash<auto> wh in (afterWebhooks.body.data.webhooks.nodes) {
+            if (wh.label =~ /Qorus.*issue-created/) {
+                ourWebhook = wh;
+                break;
+            }
+        }
+        assertTrue(exists ourWebhook, "Should find our issue-created webhook in Linear");
+        assertTrue(ourWebhook.enabled);
+
+        if (m_options.verbose) {
+            printf("  Created webhook ID: %s, URL: %s\n", ourWebhook.id, ourWebhook.url);
+        }
+
+        # Stop events - this should delete the webhook from Linear
+        issueCreatedProvider.stopEvents();
+
+        # Verify webhook was deleted from Linear
+        hash<auto> afterStopWebhooks = client.graphql("query { webhooks { nodes { id url label enabled } } }");
+        int webhookCountAfterStop = afterStopWebhooks.body.data.webhooks.nodes.size();
+
+        if (m_options.verbose) {
+            printf("  Webhooks after stopEvents: %d\n", webhookCountAfterStop);
+        }
+
+        assertEq(webhookCountBefore, webhookCountAfterStop);
+
+        # Verify the specific webhook is gone
+        bool webhookStillExists = False;
+        foreach hash<auto> wh in (afterStopWebhooks.body.data.webhooks.nodes) {
+            if (wh.id == ourWebhook.id) {
+                webhookStillExists = True;
+                break;
+            }
+        }
+        assertFalse(webhookStillExists, "Webhook should be deleted after stopEvents");
+
+        if (m_options.verbose) {
+            printf("  Issue-created webhook lifecycle test passed\n");
+        }
+
+        # ============================================
+        # Test Issue Updated Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting LinearIssueEventDataProvider (issue-updated)...\n");
+        }
+
+        LinearDataProvider::LinearIssueEventDataProvider issueUpdatedProvider(client, {
+            "event_type": LinearDataProvider::EVENT_ISSUE_UPDATED,
+        });
+
+        assertEq(LinearDataProvider::EVENT_ISSUE_UPDATED, issueUpdatedProvider.getName());
+
+        # Get example data for update event - should include updatedFrom
+        auto updateExampleData = issueUpdatedProvider.getExampleEventData(LinearDataProvider::EVENT_ISSUE_UPDATED);
+        assertEq(LinearDataProvider::LinearActionUpdate, updateExampleData.action);
+        assertTrue(updateExampleData.hasKey("updatedFrom"), "Update event should have updatedFrom field");
+        assertTrue(updateExampleData.updatedFrom.hasKey("stateId") || updateExampleData.updatedFrom.hasKey("assigneeId"),
+            "updatedFrom should contain previous values");
+
+        if (m_options.verbose) {
+            printf("  Update event updatedFrom keys: %y\n", keys updateExampleData.updatedFrom);
+        }
+
+        TestObserver updateObserver();
+        issueUpdatedProvider.registerObserver(updateObserver);
+
+        # Get count before
+        hash<auto> beforeUpdate = client.graphql("query { webhooks { nodes { id } } }");
+        int countBeforeUpdate = beforeUpdate.body.data.webhooks.nodes.size();
+
+        # Register
+        issueUpdatedProvider.observersReady();
+
+        # Verify created
+        hash<auto> afterUpdate = client.graphql("query { webhooks { nodes { id label } } }");
+        assertEq(countBeforeUpdate + 1, afterUpdate.body.data.webhooks.nodes.size());
+
+        # Stop and verify deleted
+        issueUpdatedProvider.stopEvents();
+        hash<auto> afterUpdateStop = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeUpdate, afterUpdateStop.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Issue-updated webhook lifecycle test passed\n");
+        }
+
+        # ============================================
+        # Test Comment Event Providers
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting LinearCommentEventDataProvider (comment-created)...\n");
+        }
+
+        LinearDataProvider::LinearCommentEventDataProvider commentCreatedProvider(client);
+
+        assertEq(LinearDataProvider::EVENT_COMMENT_CREATED, commentCreatedProvider.getName());
+
+        # Verify event types
+        hash<string, hash<DataProviderMessageInfo>> commentEventTypes = commentCreatedProvider.getEventTypes();
+        assertTrue(commentEventTypes.hasKey(LinearDataProvider::EVENT_COMMENT_CREATED));
+
+        # Get example data
+        auto commentExampleData = commentCreatedProvider.getExampleEventData(LinearDataProvider::EVENT_COMMENT_CREATED);
+        assertEq(LinearDataProvider::LinearActionCreate, commentExampleData.action);
+        assertEq(LinearDataProvider::LinearEventTypeComment, commentExampleData.type);
+
+        TestObserver commentObserver();
+        commentCreatedProvider.registerObserver(commentObserver);
+
+        # Get count before
+        hash<auto> beforeComment = client.graphql("query { webhooks { nodes { id } } }");
+        int countBeforeComment = beforeComment.body.data.webhooks.nodes.size();
+
+        # Register
+        commentCreatedProvider.observersReady();
+
+        # Verify created
+        hash<auto> afterComment = client.graphql("query { webhooks { nodes { id label } } }");
+        assertEq(countBeforeComment + 1, afterComment.body.data.webhooks.nodes.size());
+
+        # Find our webhook
+        *hash<auto> ourCommentWebhook;
+        foreach hash<auto> wh in (afterComment.body.data.webhooks.nodes) {
+            if (wh.label =~ /Qorus.*comment-created/) {
+                ourCommentWebhook = wh;
+                break;
+            }
+        }
+        assertTrue(exists ourCommentWebhook, "Should find our comment-created webhook in Linear");
+
+        # Stop and verify deleted
+        commentCreatedProvider.stopEvents();
+        hash<auto> afterCommentStop = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeComment, afterCommentStop.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Comment-created webhook lifecycle test passed\n");
+        }
+
+        # ============================================
+        # Test Team Filter Option
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting team filter option...\n");
+        }
+
+        # Get a team ID for testing
+        hash<auto> teamsResult = client.graphql("query { teams { nodes { id name } } }");
+        string testTeamId = teamsResult.body.data.teams.nodes[0].id;
+
+        LinearDataProvider::LinearIssueEventDataProvider teamFilteredProvider(client, {
+            "event_type": LinearDataProvider::EVENT_ISSUE_CREATED,
+            "teamId": testTeamId,
+        });
+
+        TestObserver teamObserver();
+        teamFilteredProvider.registerObserver(teamObserver);
+
+        hash<auto> beforeTeamFilter = client.graphql("query { webhooks { nodes { id } } }");
+        int countBeforeTeamFilter = beforeTeamFilter.body.data.webhooks.nodes.size();
+
+        teamFilteredProvider.observersReady();
+
+        hash<auto> afterTeamFilter = client.graphql("query { webhooks { nodes { id label } } }");
+        assertEq(countBeforeTeamFilter + 1, afterTeamFilter.body.data.webhooks.nodes.size());
+
+        teamFilteredProvider.stopEvents();
+
+        hash<auto> afterTeamFilterStop = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeTeamFilter, afterTeamFilterStop.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Team filter option test passed (team: %s)\n", testTeamId);
+        }
+
+        # ============================================
+        # Test Multiple Webhooks Simultaneously
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting multiple webhooks simultaneously...\n");
+        }
+
+        LinearDataProvider::LinearIssueEventDataProvider multi1(client, {
+            "event_type": LinearDataProvider::EVENT_ISSUE_CREATED,
+        });
+        LinearDataProvider::LinearIssueEventDataProvider multi2(client, {
+            "event_type": LinearDataProvider::EVENT_ISSUE_UPDATED,
+        });
+        LinearDataProvider::LinearCommentEventDataProvider multi3(client);
+
+        TestObserver multiObserver1();
+        TestObserver multiObserver2();
+        TestObserver multiObserver3();
+
+        multi1.registerObserver(multiObserver1);
+        multi2.registerObserver(multiObserver2);
+        multi3.registerObserver(multiObserver3);
+
+        hash<auto> beforeMulti = client.graphql("query { webhooks { nodes { id } } }");
+        int countBeforeMulti = beforeMulti.body.data.webhooks.nodes.size();
+
+        # Register all three
+        multi1.observersReady();
+        multi2.observersReady();
+        multi3.observersReady();
+
+        hash<auto> afterMulti = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeMulti + 3, afterMulti.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Created 3 webhooks simultaneously\n");
+        }
+
+        # Stop all three
+        multi1.stopEvents();
+        multi2.stopEvents();
+        multi3.stopEvents();
+
+        hash<auto> afterMultiStop = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeMulti, afterMultiStop.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Deleted all 3 webhooks successfully\n");
+        }
+
+        # ============================================
+        # Test Destructor Cleanup
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting destructor cleanup...\n");
+        }
+
+        hash<auto> beforeDestructor = client.graphql("query { webhooks { nodes { id } } }");
+        int countBeforeDestructor = beforeDestructor.body.data.webhooks.nodes.size();
+
+        {
+            LinearDataProvider::LinearIssueEventDataProvider destructorTest(client, {
+                "event_type": LinearDataProvider::EVENT_ISSUE_CREATED,
+            });
+            TestObserver destructorObserver();
+            destructorTest.registerObserver(destructorObserver);
+            destructorTest.observersReady();
+
+            # Verify webhook was created
+            hash<auto> duringDestructor = client.graphql("query { webhooks { nodes { id } } }");
+            assertEq(countBeforeDestructor + 1, duringDestructor.body.data.webhooks.nodes.size());
+        }
+        # destructorTest goes out of scope, destructor should clean up
+
+        # Small delay to allow cleanup to complete
+        sleep(1);
+
+        hash<auto> afterDestructor = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeDestructor, afterDestructor.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Destructor cleanup test passed\n");
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- All Webhook Trigger Tests Completed Successfully ---\n");
+        }
+    }
+}
+
+#! Test observer for webhook events
+class TestObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events += {"event_id": event_id, "data": data_};
     }
 }
