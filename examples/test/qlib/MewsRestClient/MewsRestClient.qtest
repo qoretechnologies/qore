@@ -129,6 +129,9 @@ public class Main inherits QUnit::Test {
                 if (status_code == 429 || status_code == 408 || info.ex.desc =~ /429 Too Many Requests/) {
                     testSkip("rate limited");
                 }
+                if (status_code && status_code >= 500) {
+                    testSkip("external service unavailable: HTTP " + status_code);
+                }
                 # skip if external API returns unexpected response (null body, etc)
                 if (info.ex.err == "SCHEMA-VALIDATION-ERROR") {
                     testSkip("external API returned unexpected response: " + info.ex.desc);
@@ -143,6 +146,9 @@ public class Main inherits QUnit::Test {
             if (status_code == 429 || status_code == 408) {
                 remove mrc;
                 testSkip("rate limited");
+            }
+            if (status_code && status_code >= 500) {
+                testSkip("external service unavailable: HTTP " + status_code);
             }
             rethrow;
         }
