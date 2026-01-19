@@ -87,6 +87,13 @@ class SimpleHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that returns an empty body with HTTP 200
+class EmptyBodyHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "", {"Content-Type": "text/plain"});
+    }
+}
+
 #! Handler that returns a mixed-case header
 class HeaderCaseHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -319,6 +326,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
     constructor() : Test("HttpServerAsyncHttp2Test", "1.0") {
         addTestCase("basic HTTP/2 async response", \testBasicHttp2Response());
+        addTestCase("HTTP/2 empty body returns 204", \testHttp2EmptyBodyBecomes204());
         addTestCase("HTTP/2 SOAP content-type body", \testSoapContentTypeHttp2());
         addTestCase("HTTP/2 gzip decoded body", \testGzipContentTypeHttp2());
         addTestCase("HTTP/2 gzip passthru body", \testGzipPassthruHttp2());
@@ -360,6 +368,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # Set up handlers
         mServer.setHandler("simple", "/simple", NOTHING, new SimpleHandler());
+        mServer.setHandler("empty-body", "/empty-body", NOTHING, new EmptyBodyHandler());
         mServer.setHandler("header-case", "/header-case", NOTHING, new HeaderCaseHandler());
         mServer.setHandler("request-header-case", "/request-header-case", NOTHING,
             new RequestHeaderLowercaseHandler());
@@ -416,6 +425,19 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         if (m_options.verbose > 1) {
             printf("Basic HTTP/2 response: OK (http_version: %y)\n", resp.http_version);
         }
+    }
+
+    testHttp2EmptyBodyBecomes204() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/empty-body");
+        assertEq(204, resp.status_code, "HTTP/2 empty-body response should return 204");
+        assertNothing(resp.body);
     }
 
     testHttp2ResponseHeadersNoHopByHop() {
