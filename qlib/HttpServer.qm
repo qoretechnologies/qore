@@ -145,6 +145,7 @@ log("started listener on %s", lh.desc);
       (<a href="https://github.com/qoretechnologies/qore/issues/5071">issue 5071</a>)
       - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
       - requires Qore built with Brotli and/or Zstd support
+    - return HTTP 204 when a handler returns code 200 with no response body
 
     @subsection http1_5 HttpServer 1.5
     - introduced async I/O mode for HttpServer (unreleased feature)
@@ -2326,6 +2327,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             if (chunked_body) {
                 remove rv.chunked_body;
             }
+        }
+
+        if (!head && rv."code" == 200 && !rv.streaming && !rv.hasKey("body") && !rv.hasKey("chunked_body")) {
+            rv."code" = 204;
         }
 
         rv.hdr.Date = getDateHeader();
