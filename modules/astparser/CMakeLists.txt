@@ -3,6 +3,23 @@ if(NOT BISON_EXECUTABLE AND DEFINED ENV{BISON_EXECUTABLE})
     set(BISON_EXECUTABLE $ENV{BISON_EXECUTABLE} CACHE FILEPATH "Path to bison executable")
 endif()
 find_package(BISON REQUIRED)
+
+# Wrap bison to handle directive compatibility across versions, avoiding wrapper recursion.
+get_filename_component(BISON_EXECUTABLE_NAME "${BISON_EXECUTABLE}" NAME)
+if(BISON_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
+    find_program(BISON_REAL_EXECUTABLE NAMES bison)
+else()
+    set(BISON_REAL_EXECUTABLE "${BISON_EXECUTABLE}")
+endif()
+set(BISON_REAL_EXECUTABLE "${BISON_REAL_EXECUTABLE}" CACHE FILEPATH "Path to real bison executable" FORCE)
+set(BISON_WRAPPER_EXECUTABLE ${CMAKE_SOURCE_DIR}/tools/bison-wrapper.sh)
+set(BISON_WRAPPER_PATH ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
+configure_file(
+    ${CMAKE_SOURCE_DIR}/cmake/bison-wrapper.sh.in
+    ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh
+)
+execute_process(COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
+set(BISON_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh CACHE FILEPATH "Path to bison executable" FORCE)
 find_package(FLEX 2.5.35 REQUIRED)
 
 # start of hacks to simulate installed QoreConfig.cmake

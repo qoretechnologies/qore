@@ -45,16 +45,25 @@ if [ "$major" -gt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -ge 0 ]; }; then
     use_new_directives=1
 fi
 
-if [ "$use_new_directives" -eq 0 ]; then
-    exec "$bison_real" "$@"
-fi
-
-tmp="$(mktemp)"
+tmp="$(mktemp "${TMPDIR:-/tmp}/qore-bison.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
 
-sed -e 's/^[[:space:]]*%pure-parser[[:space:]]*$/%define api.pure full/' \
-    -e 's/^[[:space:]]*%error-verbose[[:space:]]*$/%define parse.error verbose/' \
-    "$input" > "$tmp"
+if [ "$use_new_directives" -eq 0 ]; then
+    # Older bison does not support %code blocks; strip them.
+    awk '
+    BEGIN { skip = 0 }
+    /^[[:space:]]*%code[[:space:]]/ { skip = 1; next }
+    skip {
+        if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) { skip = 0 }
+        next
+    }
+    { print }
+    ' "$input" > "$tmp"
+else
+    sed -e 's/^[[:space:]]*%pure-parser[[:space:]]*$/%define api.pure full/' \
+        -e 's/^[[:space:]]*%error-verbose[[:space:]]*$/%define parse.error verbose/' \
+        "$input" > "$tmp"
+fi
 
 set -- "$@"
 new_args=""
