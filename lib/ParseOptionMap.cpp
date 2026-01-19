@@ -100,7 +100,6 @@ void ParseOptionMap::static_init() {
     DO_MAP("broken-sprintf",           PO_BROKEN_SPRINTF);
     DO_MAP("broken-cast",              PO_BROKEN_CAST);
     DO_MAP("allow-returns",            PO_ALLOW_RETURNS);
-    DO_MAP("strict-types",             PO_STRICT_TYPES);
     DO_MAP("broken-range",             PO_BROKEN_RANGE);
     DO_MAP("broken-varargs",           PO_BROKEN_VARARGS);
     DO_MAP("broken-list-range",        PO_BROKEN_LIST_RANGE);

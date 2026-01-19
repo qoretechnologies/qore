@@ -87,7 +87,6 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
             } else if (!QoreTypeInfo::parseAccepts(listTypeInfo, lti)
                      && !QoreTypeInfo::parseAccepts(stringTypeInfo, lti)
                      && !QoreTypeInfo::parseAccepts(binaryTypeInfo, lti)) {
-                // FIXME: raise exceptions with %strict-types
                 QoreStringNode* edesc = new QoreStringNode("left-hand side of the expression with the '[]' " \
                     "operator is ");
                 QoreTypeInfo::getThisType(lti, *edesc);
@@ -130,14 +129,12 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     // invalid operation warning
     if (!rti_can_be_list) {
         if (!QoreTypeInfo::canConvertToScalar(rti)) {
-            // FIXME: raise exceptions with %strict-types
             QoreStringNode* edesc = new QoreStringNode("the offset operand expression with the '[]' operator is ");
             QoreTypeInfo::getThisType(rti, *edesc);
             edesc->concat(" and so will always evaluate to zero");
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",
                 edesc);
         } else if (right.isConstant() && right.getType() != NT_INT) {
-            // FIXME: raise exceptions with %strict-types
             QoreStringNode* edesc = new QoreStringNode("the offset operand expression with the '[]' operator is a "
                 "constant of ");
             QoreTypeInfo::getThisType(rti, *edesc);
@@ -231,7 +228,6 @@ int QoreSquareBracketsOperatorNode::parseCheckValueTypes(const QoreListNode* ln)
         if (QoreTypeInfo::canConvertToScalar(vti)) {
             // check if we have a cosntant value that's not an int
             if (v.isConstant() && v.getType() != NT_INT) {
-                // FIXME: raise exceptions with %strict-types
                 QoreStringNode* edesc = new QoreStringNodeMaker("the offset operand expression with the '[]' "
                     "operator in list element %d (starting with 1) is a constant of ", i.index() + 1);
                 QoreTypeInfo::getThisType(vti, *edesc);

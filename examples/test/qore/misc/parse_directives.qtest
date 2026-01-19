@@ -441,312 +441,59 @@ int sub test() { return 0; }
         }
     }
 
+    # Test that PO_STRICT_TYPES is 0 (support removed in Qore 2.3) and %strict-types/%loose-types
+    # parse directives are silently ignored
     strictTypesTest() {
+        # verify PO_STRICT_TYPES constant is 0
+        assertEq(0, PO_STRICT_TYPES);
+
+        # verify %strict-types parses without error but has no effect
         {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("INVALID-OPERATION", \p.parse(), ("auto sub t() { return { (0,): 1, }; }", ""));
+            Program p(PO_NEW_STYLE);
+            p.parse("%strict-types\nauto sub t() { int i; return i; }", "");
+            # without strict-types effect, uninitialized typed variables return NOTHING
+            assertNothing(p.callFunction("t"));
+        }
+
+        # verify %loose-types parses without error
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("%strict-types\n%loose-types\nauto sub t() { return 1; }", "");
+            assertEq(1, p.callFunction("t"));
+        }
+
+        # verify PO_STRICT_TYPES | PO_NEW_STYLE equals PO_NEW_STYLE (since PO_STRICT_TYPES is 0)
+        assertEq(PO_NEW_STYLE, PO_NEW_STYLE | PO_STRICT_TYPES);
+
+        # verify uninitialized typed variables return NOTHING (not default values)
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("auto sub t() { int i; return i; }", "");
+            assertNothing(p.callFunction("t"));
         }
 
         {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            Program p(PO_NEW_STYLE);
+            p.parse("auto sub t() { string str; return str; }", "");
+            assertNothing(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("auto sub t() { bool b; return b; }", "");
+            assertNothing(p.callFunction("t"));
+        }
+
+        # verify delete/remove on typed variables returns NOTHING (not default values)
+        {
+            Program p(PO_NEW_STYLE);
             p.parse("auto sub t() { int i = 1; delete i; return i; }", "");
-            assertEq(0, p.callFunction("t"));
+            assertNothing(p.callFunction("t"));
         }
 
         {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
+            Program p(PO_NEW_STYLE);
             p.parse("auto sub t() { int i = 1; remove i; return i; }", "");
-            assertEq(0, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("*int v0 = 0; int v1 = v0;", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("*float v0 = 0.0; float v1 = v0;", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("*number v0 = 0n; number v1 = v0;", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("*string v0 = ''; string v1 = v0;", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("*binary v0 = <00>; binary v1 = v0;", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("*date v0 = 1970-01-01Z; date v1 = v0;", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("*hash<auto> v0 = {}; hash<auto> v1 = v0;", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("*list<auto> v0 = (); list<auto> v1 = v0;", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("int sub t() { *int v0 = 0; return v0; }", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("float sub t() { *float v0 = 0.0; return v0; }", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("number sub t() { *number v0 = 0n; return v0; }", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("string sub t() { *string v0 = ''; return v0; }", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("binary sub t() { *binary v0 = <00>; return v0; }", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("date sub t() { *date v0 = 1970-01-01Z; return v0; }", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("hash<auto> sub t() { *hash<auto> v0 = {}; return v0; }", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("list<auto> sub t() { *list<auto> v0 = (); return v0; }", ""));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { bool b; return b; }", "");
-            assertEq(False, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { int i; return i; }", "");
-            assertEq(0, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { float f; return f; }", "");
-            assertEq(0.0, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { number n; return n; }", "");
-            assertEq(0n, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { string str; return str; }", "");
-            assertEq("", p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { binary b; return b; }", "");
-            assertEq(binary(), p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { date d; return d; }", "");
-            assertEq(1970-01-01Z, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { hash<auto> h; return h; }", "");
-            assertEq("hash<auto>", p.callFunction("t").fullType());
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { hash h; return h; }", "");
-            assertEq("hash", p.callFunction("t").fullType());
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { list<auto> l; return l; }", "");
-            assertEq("list<auto>", p.callFunction("t").fullType());
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { list l; return l; }", "");
-            assertEq("list", p.callFunction("t").fullType());
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { object o; return o; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE | PO_STRICT_TYPES);
-            p.parse("auto sub t() { Mutex m; return m; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        # negative tests
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { return { (0,): 1, }; }", "");
-            assertEq("hash<string, int>", p.callFunction("t").fullType());
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("int sub t() { *int v0 = 0; return v0; }", "");
-            assertEq(0, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("float sub t() { *float v0 = 0.0; return v0; }", "");
-            assertEq(0.0, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("number sub t() { *number v0 = 0n; return v0; }", "");
-            assertEq(0n, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("string sub t() { *string v0 = ''; return v0; }", "");
-            assertEq("", p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("binary sub t() { *binary v0 = <00>; return v0; }", "");
-            assertEq(<00>, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("date sub t() { *date v0 = 1970-01-01Z; return v0; }", "");
-            assertEq(1970-01-01Z, p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("hash<auto> sub t() { *hash<auto> v0 = {}; return v0; }", "");
-            assertEq("hash<auto>", p.callFunction("t").fullType());
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("list<auto> sub t() { *list<auto> v0 = (); return v0; }", "");
-            assertEq("list<auto>", p.callFunction("t").fullType());
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { bool b; return b; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { int i; return i; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { float f; return f; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { number n; return n; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { string str; return str; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { binary b; return b; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { date d; return d; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { hash<auto> h; return h; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { hash h; return h; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { list<auto> l; return l; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { list l; return l; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { object o; return o; }", "");
-            assertNothing(p.callFunction("t"));
-        }
-
-        {
-            Program p(PO_NEW_STYLE);
-            p.parse("auto sub t() { Mutex m; return m; }", "");
             assertNothing(p.callFunction("t"));
         }
     }

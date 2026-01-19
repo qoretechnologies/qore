@@ -2872,18 +2872,12 @@ try_statement:
         }
         if ($5 && missing_type_decl) {
             int64 po = parse_get_parse_options();
-            if (po & (PO_STRICT_TYPES|PO_REQUIRE_TYPES)) {
+            if (po & PO_REQUIRE_TYPES) {
                 SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("the catch block is missing a " \
                     "type declaration; the exception argument should be declared as 'hash<ExceptionInfo>' or " \
                     "with a compatible type"));
-                // issue #2943: raise an error for mixing string and non-scalar values with %strict-types
-                if (po & PO_STRICT_TYPES) {
-                    desc->concat("; this is an error when %strict-types is in effect");
-                    qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc.release());
-                } else {
-                    qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_CATCH,
-                        "INVALID-CATCH", desc.release());
-                }
+                qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_CATCH,
+                    "INVALID-CATCH", desc.release());
             }
         }
         v5.discard(nullptr);

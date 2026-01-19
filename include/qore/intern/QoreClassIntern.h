@@ -1167,10 +1167,6 @@ public:
 
     DLLLOCAL void init() {
         val.set(getTypeInfo());
-        if (getProgram()->getParseOptions64() & PO_STRICT_TYPES) {
-            // try to set an optimized value type for the value holder if possible
-            discard(val.assignInitial(QoreTypeInfo::getDefaultQoreValue(typeInfo)), nullptr);
-        }
     }
 
     // can be called during parse initialization, in which case the variable must be initialized first
@@ -3092,12 +3088,7 @@ public:
     // this = class to find in "oc"
     DLLLOCAL qore_type_result_e parseCheckCompatibleClass(const qore_class_private& oc) const {
         bool may_not_match = false;
-        qore_type_result_e rv = parseCheckCompatibleClass(oc, may_not_match);
-        // if the type may not match at runtime, then return no match with %strict-types
-        if (may_not_match && (getProgram()->getParseOptions64() & PO_STRICT_TYPES)) {
-            return QTI_NOT_EQUAL;
-        }
-        return rv;
+        return parseCheckCompatibleClass(oc, may_not_match);
     }
     DLLLOCAL qore_type_result_e parseCheckCompatibleClass(const qore_class_private& oc, bool& may_not_match) const;
     DLLLOCAL qore_type_result_e parseCheckCompatibleClassIntern(const qore_class_private& oc, bool& may_not_match) const;

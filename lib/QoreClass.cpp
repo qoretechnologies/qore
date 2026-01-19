@@ -1308,8 +1308,6 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
                 need_scan = true;
             }
         }
-    } else if (getProgram()->getParseOptions64() & PO_STRICT_TYPES) {
-        v = QoreTypeInfo::getDefaultQoreValue(info.getTypeInfo());
     }
     return 0;
 }

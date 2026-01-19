@@ -57,7 +57,6 @@ int QoreShiftLeftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     const QoreTypeInfo* rti = parse_context.typeInfo;
 
     // see if any of the arguments cannot be converted to an integer, if so generate a warning
-    // FIXME: raise exceptions with %strict-types
     if (!QoreTypeInfo::canConvertToScalar(lti)) {
         lti->doNonNumericWarning(loc, "the left hand expression of the 'shift left' operator (<<) expression is ");
     }

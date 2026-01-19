@@ -570,11 +570,7 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    if (getProgram()->getParseOptions64() & PO_STRICT_TYPES) {
-        return odata->priv->swapKeyValue(key, QoreTypeInfo::getDefaultQoreValue(mti), this);
-    } else {
-        return odata->priv->swapKeyValue(key, QoreValue(), this);
-    }
+    return odata->priv->swapKeyValue(key, QoreValue(), this);
 }
 
 QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
@@ -598,12 +594,7 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    QoreValue rv{};
-    if (getProgram()->getParseOptions64() & PO_STRICT_TYPES) {
-        rv = odata->priv->swapKeyValue(key, QoreTypeInfo::getDefaultQoreValue(mti), this);
-    } else {
-        rv = odata->priv->swapKeyValue(key, QoreValue(), this);
-    }
+    QoreValue rv = odata->priv->swapKeyValue(key, QoreValue(), this);
 
     if (needs_scan(rv)) {
         if (!getScanCount()) {
@@ -664,9 +655,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
 
         // issue #4122: do not return values that are not set in the object
         bool exists;
-        QoreValue n = (getProgram()->getParseOptions64() & PO_STRICT_TYPES)
-            ? odata->priv->swapKeyValueIfExists(key, QoreTypeInfo::getDefaultQoreValue(mti), this, exists)
-            : odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists);
+        QoreValue n = odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists);
 
         if (!exists) {
             continue;

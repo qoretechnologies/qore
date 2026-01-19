@@ -382,15 +382,9 @@ public:
     }
 
     DLLLOCAL void instantiate(int64 parse_options) {
-        if (parse_options & PO_STRICT_TYPES) {
-            //printd(5, "LocalVar::instantiate() this: %p '%s' typeInfo: %s\n", this, name.c_str(),
-            //    QoreTypeInfo::getName(typeInfo));
-            instantiateIntern(QoreTypeInfo::getDefaultQoreValue(typeInfo), true);
-        } else {
-            //printd(5, "LocalVar::instantiate() this: %p '%s' typeInfo: %s NO ASSIGNMENT\n", this, name.c_str(),
-            //    QoreTypeInfo::getName(typeInfo));
-            instantiateIntern(QoreValue(), false);
-        }
+        //printd(5, "LocalVar::instantiate() this: %p '%s' typeInfo: %s NO ASSIGNMENT\n", this, name.c_str(),
+        //    QoreTypeInfo::getName(typeInfo));
+        instantiateIntern(QoreValue(), false);
     }
 
     DLLLOCAL void instantiate(QoreValue nval) {

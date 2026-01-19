@@ -84,7 +84,6 @@ int QoreExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         err = -1;
     }
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
-        // FIXME: raise an exception wth %strict-types
         parse_context.typeInfo->doNonNumericWarning(loc, "the offset expression (2nd position) with the 'extract' " \
             "operator is ");
     }
@@ -96,7 +95,6 @@ int QoreExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             err = -1;
         }
         if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
-            // FIXME: raise an exception wth %strict-types
             parse_context.typeInfo->doNonNumericWarning(loc, "the length expression (3nd position) with the " \
                 "'extract' operator is ");
         }

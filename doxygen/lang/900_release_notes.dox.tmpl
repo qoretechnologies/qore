@@ -104,6 +104,26 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - Ensure closures and call references match the expected signature
     @endparblock
 
+    @par Removal of %strict-types Support
+    @parblock
+    The @ref strict-types "%strict-types" parse directive and @ref Qore::PO_STRICT_TYPES "PO_STRICT_TYPES"
+    parse option have been removed. The @ref Qore::PO_STRICT_TYPES "PO_STRICT_TYPES" constant remains
+    defined as \c 0 for backward compatibility; code referencing it will compile but the option has no effect.
+
+    This feature was originally intended to prepare for JIT compilation by enforcing stricter typing and
+    automatically initializing typed variables with default values. However, the NaN-boxing optimization
+    for @ref QoreValue (reducing value size from 16 to 8 bytes with single-comparison type guards) addressed
+    JIT requirements more effectively without requiring behavioral changes.
+
+    The @ref loose-types "%loose-types" parse directive is also removed (it was only used to disable
+    %strict-types).
+
+    <b>Impact:</b>
+    - Code using \c %strict-types will parse without error but the directive has no effect
+    - Code checking \c PO_STRICT_TYPES will always evaluate to false
+    - Variables will not be auto-initialized with default values based on type
+    @endparblock
+
     @subsection qore_2_3_0_new_features New Features in Qore
     - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>
       - new @ref modern "%modern" parse directive combines all recommended parse options into one:
@@ -2366,8 +2386,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - fixed line number reporting for statements and expressions where the first element is optional
       (<a href="https://github.com/qoretechnologies/qore/issues/2946">issue 2946</a>)
     - added a warning when strings and non scalar types are mixed with the @ref plus_operator "+" and
-      @ref plus_equals_operator "+=" operators; these operations are errors when @ref strict-types "%strict-types"
-      is in effect
+      @ref plus_equals_operator "+=" operators
       (<a href="https://github.com/qoretechnologies/qore/issues/2943">issue 2943</a>)
     - fixed a bug where the \c ";charset=xxx" string was not added to the \c Content-Type header when sending HTTP
       messages with strings with non-ISO-8859-1 character encodings
@@ -3056,8 +3075,6 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - new parse options:
       - @ref allow-returns "%allow-returns"
       - @ref broken-cast "%broken-cast"
-      - @ref loose-types "%loose-types"
-      - @ref strict-types "%strict-types"
     - <a href="../../modules/reflection/html/index.html">reflection</a> module updates:
       - added \c Type::isAssignableFrom() methods
       - added a working \c Type::constructor() method

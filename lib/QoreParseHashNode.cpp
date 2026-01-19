@@ -78,12 +78,7 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
 
         if (!QoreTypeInfo::canConvertToScalar(argTypeInfo)) {
             QoreStringMaker str("key number %ld (starting from 0) in the hash is ", i);
-            // this is an error if %strict-types is in force
-            if (getProgram()->getParseOptions64() & PO_STRICT_TYPES) {
-                argTypeInfo->doNonStringError(lvec[i], str.c_str());
-            } else {
-                argTypeInfo->doNonStringWarning(lvec[i], str.c_str());
-            }
+            argTypeInfo->doNonStringWarning(lvec[i], str.c_str());
         }
 
         parse_context.typeInfo = nullptr;

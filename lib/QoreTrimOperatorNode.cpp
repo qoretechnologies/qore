@@ -112,7 +112,6 @@ int QoreTrimOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         && !QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_STRING)
         && !QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_LIST)
         && !QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_HASH)) {
-        // FIXME: raise exceptions with %strict-types
         QoreStringNode* desc = new QoreStringNode("the lvalue expression with the trim operator is ");
         QoreTypeInfo::getThisType(parse_context.typeInfo, *desc);
         desc->sprintf(", therefore this operation will have no effect on the lvalue and will always return " \

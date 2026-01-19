@@ -38,7 +38,6 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
 
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)
         && parse_check_parse_option(PO_STRICT_BOOLEAN_EVAL)) {
-        // FIXME: raise an error here with strict-types
         parse_context.typeInfo->doNonBooleanWarning(loc, "the initial expression with the '?:' operator is ");
     }
 

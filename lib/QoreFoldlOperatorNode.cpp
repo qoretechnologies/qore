@@ -81,7 +81,6 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     // return type of the iterated expression
     if (QoreTypeInfo::hasType(iteratorTypeInfo)) {
         if (QoreTypeInfo::isType(iteratorTypeInfo, NT_NOTHING)) {
-            // FIXME: this should be an error with %strict-types
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",
                 "the iterator expression with the foldl/r operator (the second expression) has no value (NOTHING) " \
                 "and therefore this expression will also return no value; update the expression to return a value " \

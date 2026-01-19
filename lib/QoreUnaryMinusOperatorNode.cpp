@@ -125,7 +125,6 @@ int QoreUnaryMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                     && !QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_FLOAT)
                     && !QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_INT)
                     && !QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_DATE)) {
-                    // FIXME: raise exceptions with %strict-types
                     QoreStringNode* edesc = new QoreStringNode("the expression with the unary minus '-' operator " \
                         "is ");
                     QoreTypeInfo::getThisType(parse_context.typeInfo, *edesc);

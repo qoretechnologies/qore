@@ -72,7 +72,6 @@ int QoreRegexSubstOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     int err = parse_init_value(exp, parse_context);
 
     if (!QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_STRING)) {
-        // FIXME: raise an exception with %strict-types
         QoreStringNode* desc = new QoreStringNode("the lvalue expression with the ");
         desc->sprintf("%s operator is ", op_str.c_str());
         QoreTypeInfo::getThisType(parse_context.typeInfo, *desc);

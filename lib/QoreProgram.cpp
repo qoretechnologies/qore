@@ -166,8 +166,6 @@ ParseOptionMaps::ParseOptionMaps() {
     doMap(PO_BROKEN_CAST, "PO_BROKEN_CAST");
     // 57
     doMap(PO_ALLOW_RETURNS, "PO_ALLOW_RETURNS");
-    // 58
-    doMap(PO_STRICT_TYPES, "PO_STRICT_TYPES");
     // 59
     doMap(PO_BROKEN_RANGE, "PO_BROKEN_RANGE");
     // 60

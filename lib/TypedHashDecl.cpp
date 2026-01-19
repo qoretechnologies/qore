@@ -490,29 +490,6 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
             if (needs_scan(v)) {
                 h_priv->incScanCount(1);
             }
-        } else {
-            QoreProgram* pgm = getProgram();
-            // there may be no program context when an exception is thrown while attaching to a Program in an external thread
-            if (pgm && (pgm->getParseOptions64() & PO_STRICT_TYPES)) {
-                const QoreTypeInfo* key_type = i.second->getTypeInfo();
-                bool requires_value = !QoreTypeInfo::parseAcceptsReturns(key_type, NT_NOTHING);
-                if (!requires_value) {
-                    continue;
-                }
-                if (init) {
-                    xsink->raiseException("RUNTIME-TYPE-ERROR", "hash value to initialize hashdecl '%s' is missing a " \
-                        "%s value for key '%s'", name.c_str(), QoreTypeInfo::getName(key_type), i.first);
-                    return -1;
-                }
-                qore_hash_private* h_priv = qore_hash_private::get(*h);
-                QoreValue& v = h_priv->getValueRef(i.first);
-                assert(v.isNothing());
-                v = QoreTypeInfo::getDefaultQoreValue(i.second->getTypeInfo());
-                // issue #3481: maintain DGC counts
-                if (needs_scan(v)) {
-                    h_priv->incScanCount(1);
-                }
-            }
         }
     }
 

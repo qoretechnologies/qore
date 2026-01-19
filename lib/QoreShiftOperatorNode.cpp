@@ -61,7 +61,6 @@ int QoreShiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         }
 
         if (!QoreTypeInfo::parseAcceptsReturns(expTypeInfo, NT_LIST)) {
-            // FIXME: raise an exception with %strict-types
             QoreStringNode* edesc = new QoreStringNode("the lvalue expression with the ");
             edesc->sprintf("'%s' operator is ", getTypeName());
             QoreTypeInfo::getThisType(expTypeInfo, *edesc);

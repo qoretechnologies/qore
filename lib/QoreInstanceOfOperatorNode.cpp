@@ -92,7 +92,6 @@ int QoreInstanceOfOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     // issue #4112: ensure that objects will be subject to runtime checks
     if (!QoreTypeInfo::parseAccepts(ti, lti)
         && (!QoreTypeInfo::parseAccepts(ti, objectTypeInfo) || !QoreTypeInfo::parseAccepts(lti, objectTypeInfo))) {
-        // FIXME this must be an error with %strict-types
         QoreStringNode* edesc = new QoreStringNodeMaker("'%s instanceof %s' always returns False",
             QoreTypeInfo::getName(lti), QoreTypeInfo::getName(ti));
         qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",

@@ -60,7 +60,6 @@ int QoreKeysOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             returnTypeInfo = qore_get_complex_list_type(stringTypeInfo);
         } else if (!QoreTypeInfo::parseAccepts(hashTypeInfo, expTypeInfo)
             && !QoreTypeInfo::parseAccepts(objectTypeInfo, expTypeInfo)) {
-            // FIXME raise an error with %strict-types
             QoreStringNode* edesc = new QoreStringNode("the expression with the 'keys' operator is ");
             QoreTypeInfo::getThisType(expTypeInfo, *edesc);
             edesc->concat(" and so this expression will always return NOTHING; the 'keys' operator can only return " \

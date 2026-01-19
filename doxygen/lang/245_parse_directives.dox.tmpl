@@ -69,7 +69,7 @@
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
     |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", and enables all warnings. This is the recommended parse directive for modern %Qore programming. Files with the \c .qr extension automatically enable this mode.<br><br>Since %Qore 2.3
-    |@ref loose-types "%loose-types"|reverts the effect of the @ref strict-types "%strict-types" parse options
+    |@ref loose-types "%loose-types"|@deprecated support removed in %Qore 2.3; this directive has no effect
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br><br>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br><br>Since %Qore 0.8.4
     |@ref no-debugging "%no-debugging"|Forbids debugging of the current @ref Qore::Program "Program" object <br><br>Since %Qore 0.8.13
@@ -112,7 +112,7 @@
     |@ref set-time-zone "%set-time-zone"|Sets the time zone for the current program from a UTC offset (with format \c "+/-[00[:00[:00]]"; \c ":" characters are optional) or a time zone region name (ex: \c "Europe/Prague") <br><br>Since %Qore 0.8.3
     |@ref strict-args "%strict-args"|Prohibits access to builtin functions and methods flagged with @ref RUNTIME_NOOP and also causes errors to be raised if excess arguments are given to functions that do not access excess arguments and if a non-list lvalue is passed to the @ref push, @ref pop, or @ref shift <br><br>Since %Qore 0.8.0
     |@ref strict-bool-eval "%strict-bool-eval"|Sets qore's default strict mathematic boolean evaluation mode, where any value converted to 0 is @ref False "False" and otherwise it's is @ref True "True"; this was how qore behaved by default prior to v0.8.6. <br><br>Equivalent to parse option @ref Qore::PO_STRICT_BOOLEAN_EVAL and the <tt>-pstrict-bool-eval</tt> command line option. <br><br>See also @ref perl-bool-eval "%perl-bool-eval"<br><br>Since %Qore 0.8.6
-    |@ref strict-types "%strict-types"|Sets strict type checking and automatically sets default values for lvalues with type restrictions that have default values
+    |@ref strict-types "%strict-types"|@deprecated support removed in %Qore 2.3; this directive has no effect
     |@ref strong-encapsulation "%strong-encapsulation"|Disallows out-of-line class and namespace declarations. <br><br>Since %Qore 0.8.13
     |@ref try-module "%try-module" [(@ref variable_declarations "var_decl")] <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|If the named feature is not already present in %Qore, then the \c QORE_MODULE_DIR environment variable is used to provide a list of directories to seach for a module with the same name (<em>feature</em><tt>[-api-</tt><em>x</em><tt>.</tt><em>y</em><tt>].qmod</tt> for binary modules or <em>feature</em><tt>.qm</tt> for user modules). If the module is not found, then the qore default module directory is checked.<br><br>If an error occurs loading the module, then the @ref variable_declarations "variable" declared after <tt>%%try-module</tt> is instantiated with the exception information, and the code up to the @ref endtry "%endtry" parse declaration is parsed into the program, allowing for the qore script/program to handle module loading errors at parse time for modules that must be loaded at parse time.<br><br>If version information is provided, then it is compared with the module's version information, and if it does not match a parse exception is raised that is handled like any other load error.<br><br>See also @ref Qore::load_module() for a function providing run-time module loading and @ref requires "%requires" for a similar declaration that does not allow for parse-time module loading error handling.<br><br>Since %Qore 0.8.6
     |@ref try-reexport-module "%try-reexport-module" [(@ref variable_declarations "var_decl")] <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|The same as @ref try-module "%try-module" except that if used in a @ref user_modules "user module", the module is reexported to the importing code<br><br>Since %Qore 0.8.13
@@ -1235,7 +1235,7 @@ sub validate_input(int value, int max_value) {
     n/a
 
     @par Description:
-    Reverts the effect of the @ref strict-types "%strict-types" parse option.
+    @deprecated support removed in %Qore 2.3; this directive has no effect
 
     @see strict-types "%strict-types"
 
@@ -2161,22 +2161,20 @@ if (str)
     @par Parse Directive:
     <tt>%%strict-types</tt>
 
-    @par Command Line:
-    <tt>-pstrict-types</tt>
-
     @par Parse Option Constant:
     @ref Qore::PO_STRICT_TYPES
 
     @par Description:
-    Sets strict type checking and automatically sets default values for lvalues with type restrictions that have
-    default values.
+    @deprecated support removed in %Qore 2.3; this directive has no effect. The @ref Qore::PO_STRICT_TYPES constant
+    remains defined as 0 for backward compatibility; code referencing it will compile but the option has no effect.
+
+    The %strict-types functionality was intended to prepare for JIT compilation by enforcing stricter typing and
+    automatically initializing typed variables with default values. However, the NaN-boxing optimization for
+    @ref QoreValue addressed JIT requirements more effectively without requiring behavioral changes.
 
     @see loose-types "%loose-types"
 
     @since %Qore 0.9.4
-
-    @note This parse option is experimental; do not use it for code where forwards compatibility is important until
-    its semantics have been finalized
 
     <hr>
     @section strong-encapsulation %strong-encapsulation

@@ -81,7 +81,6 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     // iterated expression
     if (QoreTypeInfo::hasType(iteratorTypeInfo)) {
         if (QoreTypeInfo::isType(iteratorTypeInfo, NT_NOTHING)) {
-            // FIXME: raise an exception with %strict-types
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",
                 "the iterator expression with the select operator (the first expression) has no value (NOTHING) " \
                 "and therefore this expression will also return no value; update the expression to return a value " \

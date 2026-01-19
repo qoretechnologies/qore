@@ -171,7 +171,6 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
                 }
             }
         } else if (!can_be_hash && !can_be_obj) {
-            // FIXME: raise an exception with %strict-types
             QoreStringNode* edesc = new QoreStringNode("left-hand side of the expression with the '.' or '{}' " \
                 "operator is ");
             QoreTypeInfo::getThisType(lti, *edesc);
@@ -195,7 +194,6 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     // and can not be a list (for a slice)
     if (!QoreTypeInfo::canConvertToScalar(rti) && !QoreTypeInfo::parseAccepts(listTypeInfo, rti)) {
         // FIXME: should be "non-string-or-list warning"
-        // FIXME: raise an exception with %strict-types
         rti->doNonStringWarning(loc, "the right side of the expression with the '.' or '{}' operator is ");
     }
 

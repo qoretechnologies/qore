@@ -103,20 +103,10 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
             ti = nullptr;
         }
     } else if (QoreTypeInfo::isType(ti, NT_STRING) && !QoreTypeInfo::canConvertToScalar(rightTypeInfo)) {
-        SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("cannot mix string and %s types with " \
-            "the += operator", QoreTypeInfo::getName(rightTypeInfo)));
-        // issue #2943: raise an error for mixing string and non-scalar values with %strict-types
-        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-            desc->concat("; the non-string value is ignored in this case; this is an error when " \
-                "%strict-types is in effect");
-            qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc.release());
-            if (!err) {
-                err = -1;
-            }
-        } else {
-            qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION,
-                "INVALID-OPERATION", desc.release());
-        }
+        QoreStringMaker desc("cannot mix string and %s types with the += operator",
+            QoreTypeInfo::getName(rightTypeInfo));
+        qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION,
+            "INVALID-OPERATION", desc.c_str());
     }
     parse_context.typeInfo = ti;
     return err;

@@ -546,11 +546,6 @@ public:
                     }
                 }
             }
-            // if the type may not match at runtime, then return no match with %strict-types
-            if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                max_result = QTI_NOT_EQUAL;
-                return QTI_NOT_EQUAL;
-            }
             max_result = QTI_IDENT;
             may_not_match = true;
             return QTI_AMBIGUOUS;
@@ -1343,11 +1338,6 @@ protected:
             bool& may_need_filter, qore_type_result_e& max_result, bool known_initial_assignment = false) const {
         //printd(5, "QoreTypeInfo::parseAccepts() '%s' <- '%s'\n", tname.c_str(), typeInfo->tname.c_str());
         if (typeInfo->return_vec.size() > accept_vec.size()) {
-            // if the type may not match at runtime, then return no match with %strict-types
-            if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                max_result = QTI_NOT_EQUAL;
-                return QTI_NOT_EQUAL;
-            }
             may_not_match = true;
         }
 
@@ -1372,11 +1362,6 @@ protected:
             }
             if (t_no_match) {
                 if (!may_not_match) {
-                    // if the type may not match at runtime, then return no match with %strict-types
-                    if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                        max_result = QTI_NOT_EQUAL;
-                        return QTI_NOT_EQUAL;
-                    }
                     may_not_match = true;
                     if (ok) {
                         return QTI_AMBIGUOUS;

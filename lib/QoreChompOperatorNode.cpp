@@ -113,7 +113,6 @@ int QoreChompOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         && !QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_STRING)
         && !QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_LIST)
         && !QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_HASH)) {
-        // FIXME: raise an error with %strict-types
         QoreStringNode* desc = new QoreStringNode("the lvalue expression with the chomp operator is ");
         QoreTypeInfo::getThisType(parse_context.typeInfo, *desc);
         desc->sprintf(", therefore this operation will have no effect on the lvalue and will always return " \

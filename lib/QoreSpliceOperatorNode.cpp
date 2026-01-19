@@ -86,7 +86,6 @@ int QoreSpliceOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
         err = -1;
     }
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
-        // FIXME: raise exceptions with %strict-types
         parse_context.typeInfo->doNonNumericWarning(loc, "the offset expression (2nd position) with the 'splice' " \
             "operator is ");
     }
@@ -98,7 +97,6 @@ int QoreSpliceOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
             err = -1;
         }
         if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
-            // FIXME: raise exceptions with %strict-types
             expTypeInfo->doNonNumericWarning(loc, "the length expression (3nd position) with the 'splice' operator " \
                 "is ");
         }

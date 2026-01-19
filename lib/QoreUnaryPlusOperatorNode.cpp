@@ -112,7 +112,6 @@ int QoreUnaryPlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         if (tcnt > 0) {
             returnTypeInfo = nullptr;
         } else if (!tcnt) {
-            // FIXME: raise exceptions with %strict-types
             QoreStringNode* edesc = new QoreStringNode("the expression with the unary plus '+' operator is ");
             QoreTypeInfo::getThisType(parse_context.typeInfo, *edesc);
             edesc->concat(" and so this expression will always return 0; the unary plus '+' operator only returns " \

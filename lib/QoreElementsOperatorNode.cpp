@@ -76,7 +76,6 @@ int QoreElementsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
         && !QoreTypeInfo::parseAccepts(stringTypeInfo, parse_context.typeInfo)
         && !QoreTypeInfo::parseAccepts(binaryTypeInfo, parse_context.typeInfo)
         && !QoreTypeInfo::parseAccepts(objectTypeInfo, parse_context.typeInfo)) {
-        // FIXME: this should be an error with %strict-types
         QoreStringNode* edesc = new QoreStringNode("the argument given to the 'elements' operator is ");
         QoreTypeInfo::getThisType(parse_context.typeInfo, *edesc);
         edesc->concat(", so this expression will always return 0; the 'elements' operator can only return a value " \

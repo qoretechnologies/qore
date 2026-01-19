@@ -1299,12 +1299,8 @@ static qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTy
         bool& may_not_match, bool& may_need_filter) {
     //printd(5, "match_type() '%s' <- '%s'\n", QoreTypeInfo::getName(this_type), QoreTypeInfo::getName(that_type));
     qore_type_result_e res = QoreTypeInfo::parseAccepts(this_type, that_type, may_not_match, may_need_filter);
-    // if the type may not match at runtime, then return no match with %strict-types
-    if (may_not_match && (parse_get_parse_options() & PO_STRICT_TYPES)) {
-        return QTI_NOT_EQUAL;
-    }
 
-    // with strict-types, may not match must be interpreted as no match
+    // even if types are 100% compatible, if they are not equal, then we perform type folding
     // however if we interpret "may not match" as "no match" here, then we introduce an incompatibility with
     // non-complex types
     // even if types are 100% compatible, if they are not equal, then we perform type folding
@@ -1359,10 +1355,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                 default: {
                     qore_type_t tt = t.getType();
                     if (tt == NT_ALL || tt == NT_OBJECT) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1403,11 +1395,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                 }
                 case QTS_TYPE:
                     if (t.getType() == NT_ALL || t.getType() == NT_HASH) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            max_result = QTI_NOT_EQUAL;
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1456,10 +1443,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                         return QTI_NEAR;
                     }
                     if (t.getType() == NT_ALL) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1515,10 +1498,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                         return QTI_NEAR;
                     }
                     if (t.getType() == NT_ALL) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1561,10 +1540,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                 }
                 case QTS_TYPE:
                     if (t.getType() == NT_REFERENCE) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1632,10 +1607,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                         return QTI_NOT_EQUAL;
                     }
                     if (t.u.t == NT_ALL) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1711,11 +1682,6 @@ qore_type_result_e QoreTypeSpec::checkMatchType(const QoreTypeSpec& t, bool& may
         return rv;
     }
     if (ot == NT_ALL) {
-        // if the type may not match at runtime, then return no match with %strict-types
-        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-            max_result = QTI_NOT_EQUAL;
-            return QTI_NOT_EQUAL;
-        }
         may_not_match = true;
         max_result = QTI_IDENT;
         return QTI_AMBIGUOUS;
