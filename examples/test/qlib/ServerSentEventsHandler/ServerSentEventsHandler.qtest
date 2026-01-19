@@ -36,6 +36,7 @@ public class Main inherits QUnit::Test {
     }
 
     constructor() : Test("ServerSentEventsHandlerTest", "1.0") {
+        addTestCase("SSE response status", \sseResponseStatusTest());
         addTestCase("main test", \mainTest());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
@@ -97,6 +98,19 @@ public class Main inherits QUnit::Test {
 
         hash<SseMessageInfo> event0 = observer.wait();
         assertEq(event, event0);
+    }
+
+    sseResponseStatusTest() {
+        checkModule();
+
+        Socket s();
+        s.connect("localhost:" + port);
+        on_exit s.close();
+        s.send("GET / HTTP/1.1\r\nHost: localhost\r\nAccept: " + MimeTypeSse + "\r\n\r\n");
+        hash<auto> rh = s.readHTTPHeader();
+        assertEq(200, rh.status_code);
+        string ct = rh."content-type" ?? rh."Content-Type";
+        assertTrue(ct && ct.lwr().startsWith(MimeTypeSse), "SSE Content-Type expected");
     }
 }
 

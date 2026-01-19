@@ -300,6 +300,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
         addTestCase("async mode WebSocket over SSL", \asyncModeWebSocketSslTest());
+        addTestCase("async mode WebSocket HTTP/2 status 200", \asyncModeWebSocketHttp2StatusTest());
         addTestCase("async mode WebSocket over SSL HTTP/1.1", \asyncModeWebSocketSslHttp1Test());
         addTestCase("async mode WebSocket 401 then success", \asyncModeWebSocket401ThenSuccessTest());
         addTestCase("async mode persistent handler", \asyncModePersistentHandlerTest());
@@ -938,6 +939,23 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         wsc.send("world-ssl");
         assertEq(0, msgReceived.waitForZero(5s));
         assertEq("ECHO:world-ssl", receivedMsg);
+    }
+
+    asyncModeWebSocketHttp2StatusTest() {
+        # Verify HTTP/2 WebSocket CONNECT succeeds (expects 200 OK)
+        code callback = sub (*data msg) { };
+        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        assertTrue(wsc.isHttp2(), "WebSocket should negotiate HTTP/2");
+        assertTrue(wsc.isOpen(), "WebSocket should be open");
     }
 
     asyncModeWebSocketSslHttp1Test() {
