@@ -709,10 +709,25 @@ int QoreHashNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) c
             QoreValue v = hi.get();
             qore_type_t vtype = v.getType();
             if (vtype == NT_HASH || vtype == NT_LIST) {
-                // Complex value: newline then indented content
-                str.concat('\n');
-                if (v.getAsString(str, foff - 2, xsink))
-                    return -1;
+                bool empty = false;
+                if (vtype == NT_HASH) {
+                    const QoreHashNode* h = v.get<const QoreHashNode>();
+                    empty = h && !h->size();
+                } else {
+                    const QoreListNode* l = v.get<const QoreListNode>();
+                    empty = l && !l->size();
+                }
+                if (empty) {
+                    // Empty container: inline in YAML long format
+                    str.concat(' ');
+                    if (v.getAsString(str, FMT_YAML_SHORT, xsink))
+                        return -1;
+                } else {
+                    // Complex value: newline then indented content
+                    str.concat('\n');
+                    if (v.getAsString(str, foff - 2, xsink))
+                        return -1;
+                }
             } else {
                 // Simple value: space then value in YAML short format
                 str.concat(' ');

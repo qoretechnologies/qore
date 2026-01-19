@@ -113,7 +113,7 @@ auto sub test1(string fmt) { softlist<auto> args = fmt; if (argv) args += argv; 
         assertEq("-\n  - 1\n  - 2\n-\n  - 3\n  - 4", sprintf("%Y", ((1, 2), (3, 4))));
 
         # Empty containers
-        assertEq("empty_hash:\n  {}\nempty_list:\n  []", sprintf("%Y", ("empty_hash": {}, "empty_list": ())));
+        assertEq("empty_hash: {}\nempty_list: []", sprintf("%Y", ("empty_hash": {}, "empty_list": ())));
 
         # NOTHING/null
         assertEq("value: null", sprintf("%Y", ("value": NOTHING)));
