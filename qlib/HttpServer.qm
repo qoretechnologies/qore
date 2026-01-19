@@ -2337,7 +2337,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
         }
 
-        if (!head && rv."code" == 200 && !rv.streaming && !is_sse && !rv.hasKey("chunked_body")) {
+        if (!head && rv."code" == 200 && hdr.method != "OPTIONS" && !rv.streaming && !is_sse
+            && !rv.hasKey("chunked_body")) {
             bool empty_body = !rv.hasKey("body");
             if (!empty_body) {
                 int body_tc = rv.body.typeCode();
