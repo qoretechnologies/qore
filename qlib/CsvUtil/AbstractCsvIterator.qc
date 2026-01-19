@@ -39,18 +39,18 @@ public namespace CsvUtil {
         |\c "encoding"|@ref string_type "string"|the @ref character_encoding "character encoding" for the file (and for tagging string data read); if the value of this key is not a string then it will be ignored
         |\c "eol"|@ref string_type "string"|the end of line character(s) (default: auto-detect); if the value of this key is not a string then it will be ignored
         |\c "header_lines"|@ref int_type "int"|the number of headers lines in the file (if not present and \c "header_names" is @ref True "True", assumed to be \c 1)
-        |\c "header_names"|@ref bool_type "bool"|if @ref True "True" then the object will parse the header names from \
+        |\c "header_names"|\c bool|if @ref True "True" then the object will parse the header names from \
             the first header row, in this case if \c "header_lines" is not set explicitly, it will be assumed to be \
             \c 1. In case of multi-type lines \c "header_names" must be @ref False "False".
-        |\c "header_reorder"|@ref bool_type "bool"|if @ref True "True" (default value) then if \"headers\" are provided by options or read from file then data fields are reordered to follow headers. It has a major effect on the return value of @ref AbstractCsvIterator::getRecordList() and also a minor effect on the hash result of AbstractCsvIterator::getRecord() when a program  depends on the order of keys. If this value is @ref False "False" then fields not yet specified are pushed at the end of the field definition.
-        |\c "ignore_empty"|@ref bool_type "bool"|if @ref True "True" (the default) then empty lines will be ignored; this option is processed with @ref Qore::parse_boolean() "parse_boolean()"
-        |\c "ignore_whitespace"|@ref bool_type "bool"|if @ref True "True" (the default) then leading and trailing whitespace will be stripped from non-quoted fields; this option is processed with @ref Qore::parse_boolean() "parse_boolean()"
+        |\c "header_reorder"|\c bool|if @ref True "True" (default value) then if \"headers\" are provided by options or read from file then data fields are reordered to follow headers. It has a major effect on the return value of @ref AbstractCsvIterator::getRecordList() and also a minor effect on the hash result of AbstractCsvIterator::getRecord() when a program  depends on the order of keys. If this value is @ref False "False" then fields not yet specified are pushed at the end of the field definition.
+        |\c "ignore_empty"|\c bool|if @ref True "True" (the default) then empty lines will be ignored; this option is processed with @ref Qore::parse_boolean() "parse_boolean()"
+        |\c "ignore_whitespace"|\c bool|if @ref True "True" (the default) then leading and trailing whitespace will be stripped from non-quoted fields; this option is processed with @ref Qore::parse_boolean() "parse_boolean()"
         |\c "number_format"|@ref string_type "string"|the default format for \c "int", \c "float", and \c "number" fields as a string giving the thousands separator character followed by the decimal separator character (ex: \c ".," for continental-European-style numbers)
         |\c "quote"|@ref string_type "string"|the field quote character (default: \c '\"')
         |\c "separator"|@ref string_type "string"|the string separating the fields in the file (default: \c ",")
         |\c "timezone"|@ref string_type "string"|the timezone to use when parsing dates (will be passed to @ref Qore::TimeZone::constructor())
-        |\c "tolwr"|@ref bool_type "bool"|if @ref True "True" then all header names will be converted to lower case letters
-        |\c "verify_columns"|@ref bool_type "bool"|if @ref True "True" (the default is @ref False "False") then if a line is parsed with a different column or field count than other lines, a \c CSVFILEITERATOR-DATA-ERROR exception is thrown
+        |\c "tolwr"|\c bool|if @ref True "True" then all header names will be converted to lower case letters
+        |\c "verify_columns"|\c bool|if @ref True "True" (the default is @ref False "False") then if a line is parsed with a different column or field count than other lines, a \c CSVFILEITERATOR-DATA-ERROR exception is thrown
 
         <b>AbstractCsvIterator Single-type-only Options </b>
         |!Option|!Data Type|!Description
@@ -59,7 +59,7 @@ public namespace CsvUtil {
 
         <b>AbstractCsvIterator Multi-type-only Options </b>
         |!Option|!Data Type|!Description
-        |\c "extended_record"|@ref boolean|if @ref True "True" then get functions will use extended hash with \"type\" and \"record\" members to provide type to calling party, Default: @ref False "False"
+        |\c "extended_record"|\c boolean|if @ref True "True" then get functions will use extended hash with \"type\" and \"record\" members to provide type to calling party, Default: @ref False "False"
 
         @note the following options separated by dashes are still supported for backwards-compatibility:
         - \c "date-format"
@@ -76,8 +76,8 @@ public namespace CsvUtil {
 
         <b>AbstractCsvIterator Option Field Types</b>
         |!Name|!Description
-        |\c "bool"|the value will be unconditionally converted to a @ref bool "bool" using the @ref Qore::parse_boolean() function
-        |\c "*bool"|the value will be converted to @ref nothing if empty, otherwise it will be converted to an @ref bool "bool" using the @ref Qore::parse_boolean() function
+        |\c "bool"|the value will be unconditionally converted to a \c bool using the @ref Qore::parse_boolean() function
+        |\c "*bool"|the value will be converted to @ref nothing if empty, otherwise it will be converted to a \c bool using the @ref Qore::parse_boolean() function
         |\c "int"|the value will be unconditionally converted to an @ref integer "integer" using the @ref Qore::int() function
         |\c "*int"|the value will be converted to @ref nothing if empty, otherwise it will be converted to an @ref integer "integer" using the @ref Qore::int() function
         |\c "float"|the value will be unconditionally converted to a @ref float "floating-point value" using the @ref Qore::float() function
@@ -592,7 +592,7 @@ string quote = i.getQuote();
 *list l = i.getHeaders();
             @endcode
 
-            @note if headers are not saved against the object in the @ref constructor(), then they are written to the object after the first call to @ref next()
+            @note if headers are not saved against the object in the \c constructor(), then they are written to the object after the first call to \c next()
          */
         *list<string> getHeaders() {
             return getHeaders(m_specs.firstKey());  # single-type

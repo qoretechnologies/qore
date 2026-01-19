@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -49,9 +49,8 @@ static void LoggerInterface_deserializer(QoreObject& self, const QoreHashNode* s
 */
 qclass LoggerInterface [ns=Qore::Logger; arg=QoreLoggerInterface* i; vparent=Serializable; serializer=reinterpret_cast<q_serializer_t>(LoggerInterface_serializer); deserializer=LoggerInterface_deserializer];
 
-//! Creates the level with the supplied arguments
-/** @param code integer log level value
-    @param level string log level value
+//! Creates the logger interface object
+/**
 */
 LoggerInterface::constructor() {
     self->setPrivate(CID_LOGGERINTERFACE, new QoreLoggerInterface(self));
@@ -160,6 +159,7 @@ abstract LoggerInterface::debug(string message, ...);
     @see @ref log()
 */
 LoggerInterface::detail(string message, ...) {
+    (void)message;
     ReferenceHolder<QoreListNode> new_args(new QoreListNode(autoTypeInfo), xsink);
     new_args->push(QLL_DETAIL, xsink);
     new_args->merge(args, xsink);

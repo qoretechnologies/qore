@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class Issue188Test
+
+public class Issue188Test inherits QUnit::Test {
+    constructor() : QUnit::Test("Issue188 test", "1.0") {
+        addTestCase("WarnHiddenBaseOverload", \warnHiddenBaseOverload());
+        addTestCase("WarnMultipleBaseClasses", \warnMultipleBaseClasses());
+        addTestCase("NoWarnWithoutRequireTypes", \noWarnWithoutRequireTypes());
+        set_return_value(main());
+    }
+
+    private string getHiddenOverloadCode() {
+        return "class Base { public int f(int x) { return 1; } public int f(float x) { return 2; } "
+            "public int call() { return f(1); } } "
+            "class Derived inherits Base { public int f(any x) { return 3; } }";
+    }
+
+    private warnHiddenBaseOverload() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        *hash h = p.parse(getHiddenOverloadCode(), "issue188-hidden", WARN_AMBIGUOUS_OVERLOAD);
+        assertTrue(exists h);
+        assertEq("AMBIGUOUS-OVERLOAD", h.err);
+        assertRegex("Derived::f\\(any", h.desc);
+        assertRegex("Base::f\\(int", h.desc);
+        assertRegex("Base::f\\(float", h.desc);
+        assertRegex("fully-qualified base class path", h.desc);
+        assertRegex("rename the object", h.desc);
+    }
+
+    private warnMultipleBaseClasses() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        string code = "class B1 { public int f(int x) { return 1; } } "
+            "class B2 { public int f(float x) { return 2; } } "
+            "class D inherits B1, B2 { }";
+        *hash h = p.parse(code, "issue188-multi", WARN_AMBIGUOUS_OVERLOAD);
+        assertTrue(exists h);
+        assertEq("AMBIGUOUS-OVERLOAD", h.err);
+        assertRegex("calls will resolve to", h.desc);
+        assertRegex("B1::f\\(int", h.desc);
+        assertRegex("B2::f\\(float", h.desc);
+        assertRegex("fully-qualified base class path", h.desc);
+        assertRegex("rename the object", h.desc);
+    }
+
+    private noWarnWithoutRequireTypes() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.replaceParseOptions(PO_NEW_STYLE);
+        *hash h = p.parse(getHiddenOverloadCode(), "issue188-no-require-types", WARN_AMBIGUOUS_OVERLOAD);
+        assertFalse(exists h);
+    }
+}

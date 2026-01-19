@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/qore_thread_intern.h"
 
 // object takes over ownership of str
 BarewordNode::BarewordNode(const QoreProgramLocation* loc, char *c_str)
@@ -86,7 +87,13 @@ char *BarewordNode::takeString() {
 int BarewordNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     //printd(5, "BarewordNode::parseInitImpl() this: %p str: %s\n", this, str);
     bool found;
-    QoreValue n = qore_root_ns_private::parseResolveBareword(loc, str, parse_context.typeInfo, found);
+    QoreValue n;
+    if (parse_context.class_ctx && parse_get_class() != parse_context.class_ctx) {
+        QoreParseClassHelper qpch(const_cast<QoreClass*>(parse_context.class_ctx));
+        n = qore_root_ns_private::parseResolveBareword(loc, str, parse_context.typeInfo, found);
+    } else {
+        n = qore_root_ns_private::parseResolveBareword(loc, str, parse_context.typeInfo, found);
+    }
     if (!found) {
         // parse exception already raised
         return -1;

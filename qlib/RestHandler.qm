@@ -102,7 +102,7 @@ module RestHandler {
     will support.
 
     Incoming requests matched by your @ref RestHandler::RestHandler "RestHandler" subclass (when called by the
-    @ref HttpServer::HttpServer "HttpServer" when requests are appropriately matched) will be dispatched to methods in
+    \c HttpServer::HttpServer "HttpServer" when requests are appropriately matched) will be dispatched to methods in
     your @ref RestHandler::AbstractRestClass "AbstractRestClass" specialization (ie your user-defined subclass of this
     class) first according to the following naming convention:
     - <tt>httpmethod</tt>[<i>RequestRestAction</i>]
@@ -239,7 +239,7 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
 
     If no such sub object exists, then the method should return @ref nothing, which will cause a
     <tt>404 Bad Request</tt> response to be returned by (to change this behavior, reimplement
-    @ref RestHandler::RestHandler::unknownSubClassError() "unknownSubClassError()" in your specialization of
+    \c RestHandler::RestHandler::unknownSubClassError() "unknownSubClassError()" in your specialization of
     @ref RestHandler::RestHandler "RestHandler".  Otherwise, if an exception occurs handling the request, a
     <tt>409 Conflict</tt> response is returned; see @ref restexceptions for more information.
 
@@ -422,8 +422,8 @@ Content-Length: 16
 
     @subsection rh_1_6 RestHandler v1.6
     - added request arguments to the
-      @ref RestHandler::RestHandler::unknownSubClassError() "RestHandler::unknownSubClassError()"
-      and @ref RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" methods
+      \c RestHandler::RestHandler::unknownSubClassError() "RestHandler::unknownSubClassError()"
+      and \c RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" methods
       (<a href="https://github.com/qoretechnologies/qore/issues/4578">issue 4578</a>)
 
     @subsection rh_1_5_2 RestHandler v1.5.2
@@ -449,7 +449,7 @@ Content-Length: 16
     - fixed a bug handling exceptions in REST methods with unserializable exception data
       (<a href="https://github.com/qoretechnologies/qore/issues/3667">issue 3667</a>)
     - renamed \c RestHandler::getPossibleSubClasses() to
-      @ref RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" in order to
+      \c RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" in order to
       avoid a collision with a REST method name
       (<a href="https://github.com/qoretechnologies/qore/issues/3614">issue 3614</a>)
     - fixed RestHandler losing internal exception info when response was considered invalid by schema validator
@@ -460,7 +460,7 @@ Content-Length: 16
       (<a href="https://github.com/qoretechnologies/qore/issues/3410">issue 3410</a>)
 
     @subsection rh_1_3 RestHandler v1.3
-    - added the @ref RestHandler::RestHandler::returnRestException() "RestHandler::returnRestException()" method that
+    - added the \c RestHandler::RestHandler::returnRestException() "RestHandler::returnRestException()" method that
       allows subclasses to determine how exceptions are handled
       (<a href="https://github.com/qoretechnologies/qore/issues/3235">issue 3235</a>)
     - updated to support alternative URI paths for actions so that an "action=xxx" argument is not needed; instead
@@ -479,7 +479,7 @@ Content-Length: 16
 
     @subsection rh_1_2 RestHandler v1.2
     - added logic to allow sensitive data to be masked in log messages (<a href="https://github.com/qoretechnologies/qore/issues/1086">issue 1086</a>)
-    - added @ref RestHandler::RestHandler::handleExternalRequest "RestHandler::handleExternalRequest()" to allow for REST API methods to be called internally (i.e. without an HTTP call)
+    - added \c RestHandler::RestHandler::handleExternalRequest "RestHandler::handleExternalRequest()" to allow for REST API methods to be called internally (i.e. without an HTTP call)
     - updated for complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
     - added support for REST schema validation
     - added default support for the HTTP \c "PATCH" method
@@ -543,7 +543,7 @@ public namespace RestHandler {
         #! this method returns the response message description hash by calling getResponseHeaderMessageImpl()
         /**
             @return a @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo" hash with the following keys:
-            - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+            - \c "code": the HTTP return code (see \c HttpServer::HttpCodes)
             - \c "body": the message body to return in the response; if this key is returned, then the reply is sent
               immediately; a chunked reply is not made, and send() and sendImpl() are not called
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed when the handler returns
@@ -639,7 +639,7 @@ public namespace RestHandler {
         #! this method should return the response message description hash
         /**
             @return an @ref HttpServer::HttpHandlerResponseInfo hash with the following keys:
-            - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+            - \c "code": the HTTP return code (see \c HttpServer::HttpCodes)
             - \c "body": the message body to return in the response; if this key is returned, then the reply is sent immediately; a chunked reply is not made, and send() and sendImpl() are not called
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed when the handler returns
             - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
@@ -716,7 +716,7 @@ public namespace RestHandler {
         # callback method for the response header; this calls @ref RestHandler::AbstractRestStreamRequestHandler::getResponseHeaderMessage() and returns the result
         /**
             @return a @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo" hash with the following keys:
-            - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+            - \c "code": the HTTP return code (see \c HttpServer::HttpCodes)
             - \c "body": the message body to return in the response; if this key is returned, then the reply is sent immediately; a chunked reply is not made, and send() and sendImpl() are not called
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed when the handler returns
             - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
@@ -1282,7 +1282,7 @@ public namespace RestHandler {
             @param b message body, if any
 
             @return a hash with the following keys:
-            - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+            - \c "code": the HTTP return code (see \c HttpServer::HttpCodes)
             - \c "body": the message body to return in the response
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed
               when the handler returns

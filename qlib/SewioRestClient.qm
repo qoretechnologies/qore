@@ -147,8 +147,8 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
 ("additional_methods": ("PROPFIND": True, "MKCOL": True ));
             @endcode
         - \c apikey: (required) the <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio api key for the target server
-        - \c content_encoding: for possible values, see @ref EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
-        - \c data: a @ref DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
+        - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+        - \c data: a \c DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
         - \c default_port: The default port number to connect to if none is given in the URL
         - \c error_passthru: if @ref True "True" then HTTP status codes indicating errors will not cause a
@@ -160,7 +160,7 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
         - \c proxy: The proxy URL for connecting through a proxy
         - \c redirect_passthru: if @ref True "True" then redirect responses will be passed to the caller instead of
             processed
-        - \c send_encoding: a @ref EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to \c "gzip" content encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+        - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to \c "gzip" content encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: \c 30s)
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
 
@@ -187,7 +187,7 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
         }
     }
 
-    #! returns options for the @ref RestClient::RestClient::constructor() "RestClient::constructor()"
+    #! returns options for the \c RestClient::RestClient::constructor() "RestClient::constructor()"
     static hash getOptions(hash opts) {
         return opts + {
             "data": "json",
@@ -197,11 +197,11 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
 }
 
 #! class for <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio REST connections; returns @ref SewioRestClient::SewioRestClient objects
-/** In addition to all options supported by @ref RestClient::RestClientConnection "RestClientConnection", this
+/** In addition to all options supported by \c RestClient::RestClientConnection "RestClientConnection", this
     connection class supports the following options:
     - \c "apikey": (required) the <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio api key
 
-    @see @ref SewioRestClient::SewioRestClient::constructor() "SewioRestClient::constructor()" for more information on the above options
+    @see \c SewioRestClient::SewioRestClient::constructor() "SewioRestClient::constructor()" for more information on the above options
 */
 public class SewioRestConnection inherits RestClient::RestConnection {
     public {
@@ -273,7 +273,7 @@ public class SewioRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */

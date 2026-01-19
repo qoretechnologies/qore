@@ -164,6 +164,7 @@ public:
         @param headers Request headers
         @param body Request body (can be nullptr)
         @param body_len Length of request body
+        @param xsink Exception sink for error reporting
         @return stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitRequest(const char* method, const char* path,
@@ -176,6 +177,7 @@ public:
         @param headers Response headers
         @param body Response body (can be nullptr)
         @param body_len Length of response body
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitResponse(int32_t stream_id, int status_code,
@@ -186,6 +188,7 @@ public:
     /** @param stream_id Stream ID of the associated request
         @param path Path of the pushed resource
         @param headers Headers for the pushed resource
+        @param xsink Exception sink for error reporting
         @return promised stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitPushPromise(int32_t stream_id, const char* path,
@@ -209,6 +212,7 @@ public:
         @param dependency Stream ID this depends on (0 for root)
         @param weight Priority weight (1-256, default 16)
         @param exclusive If true, becomes exclusive dependency
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 on error
 
         @since Qore 2.2
@@ -221,6 +225,7 @@ public:
         @param data Data to send
         @param len Length of data
         @param end_stream If true, sends END_STREAM flag (closes the stream for sending)
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 on error
     */
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
@@ -234,6 +239,7 @@ public:
         @param stream_id Stream ID for the CONNECT request
         @param status_code HTTP status code (200 to accept, 4xx to reject)
         @param headers Response headers
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitConnectResponse(int32_t stream_id, int status_code,
@@ -246,18 +252,21 @@ public:
 
     //! Send all pending data (async, non-blocking)
     /** @param timeout_ms Timeout in milliseconds (ignored, always non-blocking)
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 if need to poll for POLLOUT
     */
     DLLLOCAL int sendPendingData(int timeout_ms, ExceptionSink* xsink);
 
     //! Send all pending data (blocking with timeout to ensure flush)
     /** @param timeout_ms Timeout in milliseconds
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 if still have data to send
     */
     DLLLOCAL int sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink);
 
     //! Receive and process data
     /** @param timeout_ms Timeout in milliseconds (-1 for infinite)
+        @param xsink Exception sink for error reporting
         @return 0 on success/timeout (data may have been received), 1 if connection was closed by peer, -1 on error
     */
     DLLLOCAL int receiveData(int timeout_ms, ExceptionSink* xsink);
@@ -271,6 +280,7 @@ public:
     //! Take available stream data without blocking
     /** @param stream_id stream ID
         @param max_bytes maximum bytes to return; 0 means all available
+        @param xsink Exception sink for error reporting
     */
     DLLLOCAL BinaryNode* takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
 

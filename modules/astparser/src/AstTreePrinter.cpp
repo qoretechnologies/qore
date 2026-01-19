@@ -815,6 +815,7 @@ void AstTreePrinter::printParseOptionString(std::ostream& os, ASTParseOption* po
         case APOK_BROKEN_LOGIC_PRECEDENCE: os << "BROKEN_LOGIC_PRECEDENCE"; break;
         case APOK_BROKEN_LOOP_STATEMENT: os << "BROKEN_LOOP_STATEMENT"; break;
         case APOK_BROKEN_OPERATORS: os << "BROKEN_OPERATORS"; break;
+        case APOK_BROKEN_NAMESPACE_RESOLUTION: os << "BROKEN_NAMESPACE_RESOLUTION"; break;
         case APOK_BROKEN_REFERENCES: os << "BROKEN_REFERENCES"; break;
         case APOK_DEFINE: os << "DEFINE"; break;
         case APOK_DISABLE_ALL_WARNINGS: os << "DISABLE_ALL_WARNINGS"; break;

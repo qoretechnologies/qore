@@ -79,6 +79,8 @@ static const char* qore_warnings_l[] = {
     "module-only",
     "broken-logic-precedence",
     "invalid-catch",
+    "ambiguous-call-resolution",
+    "ambiguous-overload",
 };
 #define NUM_WARNINGS (sizeof(qore_warnings_l)/sizeof(const char* ))
 
@@ -166,6 +168,8 @@ ParseOptionMaps::ParseOptionMaps() {
     doMap(PO_BROKEN_CAST, "PO_BROKEN_CAST");
     // 57
     doMap(PO_ALLOW_RETURNS, "PO_ALLOW_RETURNS");
+    // 58
+    doMap(PO_BROKEN_NAMESPACE_RESOLUTION, "PO_BROKEN_NAMESPACE_RESOLUTION");
     // 59
     doMap(PO_BROKEN_RANGE, "PO_BROKEN_RANGE");
     // 60

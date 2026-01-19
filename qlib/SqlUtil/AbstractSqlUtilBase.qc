@@ -61,7 +61,7 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
 
     #! creates the object; private constructor
     /** @param nds the AbstractDatasource for the connection to the database
-        @param nopts a hash of options for the table creation string; see @ref SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
+        @param nopts a hash of options for the table creation string; see \c SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
 
         @throw OPTION-ERROR invalid or unsupported option passed
         */

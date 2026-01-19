@@ -256,7 +256,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             },
         };
 
-        #! Maps SqlUtil @ref upsert_results to @ref db_provider_upsert_results
+        #! Maps SqlUtil \c upsert_results to \c db_provider_upsert_results
         const DbUpsertMap = {
             AbstractTable::UR_Inserted: UpsertResultInserted,
             AbstractTable::UR_Verified: UpsertResultVerified,
@@ -397,7 +397,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
 
     #! Writes the given record to the data provider
     /** @param rec a hash representing a single input record
-        @param create_options the create options (see @ref CreateOptions) after processing by validateCreateOptions()
+        @param create_options the create options (see \c CreateOptions) after processing by validateCreateOptions()
 
         @return the data written to the data provider plus any output (returning) variables
 
@@ -444,9 +444,9 @@ public class DbTableDataProvider inherits DbDataProviderBase {
 
     #! Upserts the given record to the data provider
     /** @param rec a hash representing a single input record
-        @param upsert_options the upsert options (see @ref UpsertOptions) after processing by validateUpsertOptions()
+        @param upsert_options the upsert options (see \c UpsertOptions) after processing by validateUpsertOptions()
 
-        @return see @ref db_provider_upsert_results for possible values
+        @return see \c db_provider_upsert_results for possible values
 
         @note this API will commit the row to the database unless the datasource was already in a transaction before
         this call
@@ -463,7 +463,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         lists of record values or a single value that applies to all records to be upserted
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see \c db_provider_upsert_results
         for possible values
     */
     private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
@@ -481,7 +481,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
 
     #! Returns a single record matching the search options
     /** @param where_cond the search criteria; will be processed by processFieldValues()
-        @param search_options the search options (see @ref SearchOptions) after processing by validateSearchOptions()
+        @param search_options the search options (see \c SearchOptions) after processing by validateSearchOptions()
 
         @throw MULTIPLE-RECORDS-ERROR multiple records found
     */
@@ -499,7 +499,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     #! Returns an iterator for zero or more records matching the search options
     /** @param block_size the number of records in a read block; must be a positive number
         @param where_cond the search criteria; will be processed by processFieldValues()
-        @param search_options the search options (see @ref SearchOptions); will be processed by validateSearchOptions()
+        @param search_options the search options (see \c SearchOptions); will be processed by validateSearchOptions()
 
         @throw INVALID-BLOCK-SIZE the block size must be a positive number
         @throw INVALID-OPERATION the data provider does not support reading
@@ -511,11 +511,11 @@ public class DbTableDataProvider inherits DbDataProviderBase {
 
     #! Returns an iterator for zero or more records matching the search options
     /** @param where_cond the search criteria; will be processed by processFieldValues()
-        @param search_options the search options (see @ref SearchOptions) after processing by validateSearchOptions()
+        @param search_options the search options (see \c SearchOptions) after processing by validateSearchOptions()
 
         @note this method acquires a transaction lock if one is not already acquired; the iterator returned performs a
         rollback in the destructor if a new transaction lock was acquired by this call and
-        @ref SqlUtil::DbTableRecordIterator::keepTransactionLock() "DbTableRecordIterator::keepTransactionLock()" is
+        \c SqlUtil::DbTableRecordIterator::keepTransactionLock() "DbTableRecordIterator::keepTransactionLock()" is
         not called
     */
     private DbTableRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
@@ -525,7 +525,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     #! Updates a single record matching the search options
     /** @param set the hash of field data to set
         @param where_cond a hash for identifying the record to be update
-        @param search_options the search options (see @ref SearchOptions) after processing by validateSearchOptions()
+        @param search_options the search options (see \c SearchOptions) after processing by validateSearchOptions()
 
         @throw UPDATE-SINGLE-RECORD-ERROR if the update would update more than one record
 
@@ -545,7 +545,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     #! Updates zero or more records matching the search options
     /** @param set the hash of field data to set
         @param where_cond a hash for identifying the record(s) to be updated
-        @param search_options the search options (see @ref SearchOptions) after processing by validateSearchOptions()
+        @param search_options the search options (see \c SearchOptions) after processing by validateSearchOptions()
 
         @return the number of records updated
 
@@ -560,7 +560,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     #! Deletes zero or more records
     /**
         @param where_cond a hash for identifying the record(s) to be deleted
-        @param search_options the search options (see @ref SearchOptions) after processing by validateSearchOptions()
+        @param search_options the search options (see \c SearchOptions) after processing by validateSearchOptions()
 
         @return the number of records deleted
 
@@ -583,8 +583,6 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     /**
         @param field the field to add
         @param field_add_options the options for adding the new field
-
-        @return the new child data provider
 
         @since DataProvider 2.0
     */

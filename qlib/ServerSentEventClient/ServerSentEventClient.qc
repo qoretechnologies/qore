@@ -51,7 +51,7 @@ public const EVENT_SSE_CONNECTED = "sse-connected-event";
     thread to receive messages, which are then raised as observable events.
 
     To stop listening for SSE events, call
-    @ref ServerSentEventClient::ServerSentEventClient::disconnect() "ServerSentEventClient::disconnect()".
+    \c ServerSentEventClient::ServerSentEventClient::disconnect() "ServerSentEventClient::disconnect()".
 
     The @ref ServerSentEventClient::ServerSentEventClient "ServerSentEventClient" class includes support for running in sandboxed
     Program objects with the following parse options set:
@@ -170,10 +170,10 @@ ServerSentEventClient sse(\event(), {
         @param opts an option hash for the @ref Qore::HTTPClient::constructor(hash<auto>) "HTTPClient constructor"
         plus the following keys:
         - \c last_event_id: Request to the server to resend messages starting after this ID
-        - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c logger: an optional \c Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
-            current thread's execution to another thread (default value: @ref Qore::Threads::thread_yield());
+            current thread's execution to another thread (default value: \c Qore::Threads::thread_yield());
             required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
 
         @throw SSE-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
@@ -255,7 +255,7 @@ sse.connect();
         object will be in a disconnected state.
 
         To stop listening for SSE events, call
-        @ref ServerSentEventClient::ServerSentEventClient::disconnect() "ServerSentEventClient::disconnect()".
+        \c ServerSentEventClient::ServerSentEventClient::disconnect() "ServerSentEventClient::disconnect()".
 
         If this method is called while a connection is already in progress, then the existing connection is first
         implicitly disconnected.
@@ -308,7 +308,7 @@ sse.connect();
         return True;
     }
 
-    #! Disconnect with the given @ref closecodes "close code"
+    #! Disconnect with the given \c closecodes "close code"
     disconnect() {
         # do not reconnect if an explicit disconnect is called
         if (reconnect) {
@@ -408,7 +408,7 @@ sse.connect();
         return h;
     }
 
-    #! Disconnect with the given @ref closecodes "close code"
+    #! Disconnect with the given \c closecodes "close code"
     private disconnectIntern(*bool destroy) {
         AutoLock al(m);
 

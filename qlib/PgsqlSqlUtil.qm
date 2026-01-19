@@ -67,12 +67,12 @@ module PgsqlSqlUtil {
     @note This module requires the <a href="https://github.com/qoretechnologies/module-pgsql">pgsql</a> binary module for
     communication with PostgreSQL databases
 
-    @see @ref pgsqlsqlutilbaseintro for implementation information about this module
+    @see \c pgsqlsqlutilbaseintro for implementation information about this module
 
-    @section pgsql_relnotes Release Notes
+    @section pgsqlsqlutil_relnotes Release Notes
 
     @subsection pgsqlsqlutilv18 PgsqlSqlUtil v1.8
-    - updated to use the @ref pgsqlsqlutilbaseintro module for the base implementation
+    - updated to use the \c pgsqlsqlutilbaseintro module for the base implementation
 
     @subsection pgsqlsqlutilv171 PgsqlSqlUtil v1.7.1
     - fixed bugs handling table objects in schemas other than \c public
@@ -87,11 +87,11 @@ module PgsqlSqlUtil {
     - added supoport for the \c XML, \c JSON, and \c JSONB types
       (<a href="https://github.com/qoretechnologies/qore/issues/4448">issue 4448</a>)
 
-    @subsection pgsqlsqlutilv151 PgsqlSqlUtil v1.5.3
+    @subsection pgsqlsqlutilv153 PgsqlSqlUtil v1.5.3
     - fixed handling column names that use reserved words
       (<a href="https://github.com/qoretechnologies/qore/issues/4348">issue 4348</a>)
 
-    @subsection pgsqlsqlutilv151 PgsqlSqlUtil v1.5.2
+    @subsection pgsqlsqlutilv152 PgsqlSqlUtil v1.5.2
     - added APIs to enable duplicate record creation errors to be detected
       (<a href="https://github.com/qoretechnologies/qore/issues/4308">issue 4308</a>)
 
@@ -136,7 +136,7 @@ module PgsqlSqlUtil {
     @subsection pgsqlsqlutilv112 PgsqlSqlUtil v1.1.2
     - fixed a bug in setting a \c comment for a table column
       (<a href="https://github.com/qoretechnologies/qore/issues/1886">issue 1886</a>)
-    - implemented @ref cop_trunc_date() operator
+    - implemented \c cop_trunc_date() operator
       (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection pgsqlsqlutilv111 PgsqlSqlUtil v1.1.1

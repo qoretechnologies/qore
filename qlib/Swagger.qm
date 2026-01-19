@@ -88,7 +88,7 @@ module Swagger {
     To override the URI base path specified in the <a href="https://swagger.io/">Swagger</a> schema,
     get the <a href="https://swagger.io/">Swagger</a> schema object by calling
     \c RestClient::getValidator(), and then call
-    @ref RestSchemaValidator::AbstractRestSchemaValidator::setBasePath() "AbstractRestSchemaValidator::setBasePath()" on the validator object.
+    \c RestSchemaValidator::AbstractRestSchemaValidator::setBasePath() "AbstractRestSchemaValidator::setBasePath()" on the validator object.
 
     @par Client Example
     @code{.py}
@@ -235,7 +235,7 @@ RestHandler handler(NOTHING, swagger);
       (<a href="https://github.com/qoretechnologies/qore/issues/4203">issue 4203</a>)
 
     @subsection swagger_2_0_4 Swagger v2.0.4
-    - fixed a type error in @ref Swagger::Swagger::getBasePath() "Swagger::getBasePath()" for the case when the base
+    - fixed a type error in \c Swagger::Swagger::getBasePath() "Swagger::getBasePath()" for the case when the base
       path is not set
       (<a href="https://github.com/qoretechnologies/qore/issues/4064">issue 4064</a>)
 
@@ -255,7 +255,7 @@ RestHandler handler(NOTHING, swagger);
     @subsection swagger_2_0_1 Swagger v2.0.1
     - added support for the <tt>x-nullable</tt> attribute to allow for nullable values
       (<a href="https://github.com/qoretechnologies/qore/issues/3785">issue 3785</a>)
-    - added location support from the @ref filelocationhandlerintro "FileLocationHandler" module
+    - added location support from the \c filelocationhandlerintro "FileLocationHandler" module
       (<a href="https://github.com/qoretechnologies/qore/issues/3781">issue 3781</a>)
     - fixed support for types with no type declaration
       (<a href="https://github.com/qoretechnologies/qore/issues/3775">issue 3775</a>)
@@ -964,7 +964,7 @@ public class SwaggerLoader {
         @param swaggerSpecification <a href="https://swagger.io/">Swagger</a> API specification
         @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
         detected automatically
-        @param opts options as per @ref SwaggerSchema::SwaggerOptions
+        @param opts options as per \c SwaggerSchema::SwaggerOptions
 
         @throws JSON-MODULE-MISSING trying to parse a JSON %Swagger specification with JSON module unavailable
         @throws YAML-MODULE-MISSING trying to parse a YAML %Swagger specification with YAML module unavailable
@@ -983,7 +983,7 @@ public class SwaggerLoader {
     #! Load <a href="https://swagger.io/">Swagger</a> definition from a file.
     /**
         @param filepath path to the <a href="https://swagger.io/">Swagger</a> file
-        @param opts options as per @ref SwaggerSchema::SwaggerOptions
+        @param opts options as per \c SwaggerSchema::SwaggerOptions
 
         @throws EMPTY-SCHEMA-FILE %Swagger file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %Swagger specification with the json module unavailable
@@ -998,10 +998,10 @@ public class SwaggerLoader {
     #! Load <a href="https://swagger.io/">Swagger</a> definition from a URL or file path.
     /**
         @param url URL to the <a href="https://swagger.io/">Swagger</a> file; uses the
-        @ref filelocationhandlerintro "FileLocationHandler" to load the file
+        \c filelocationhandlerintro "FileLocationHandler" to load the file
         @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
         detected automatically
-        @param opts options as per @ref SwaggerOptions
+        @param opts options as per \c SwaggerOptions
 
         @throws EMPTY-SCHEMA-FILE %Swagger file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %Swagger specification with the json module unavailable
@@ -1252,7 +1252,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             - \c def_path: (type *string) the default path to use when retrieving external schema references
             - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
               references, must take a string argument (the resource name) and return a string (the resource data)
-            - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
+            - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
             - \c utc_dates: (type *bool) send date/time values in queries in UTC format
             - \c query_date_format: (type *string) the format string for date/time values in queries
         */
@@ -1305,7 +1305,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
     /**
         @param oh deserialized hash from the source schema description describing the root document object
-        @param opts options as per @ref SwaggerOptions
+        @param opts options as per \c SwaggerOptions
 
         @throws SWAGGER-OPTION-ERROR unsuported options in constructor
         @throws INVALID-SWAGGER-VERSION invalid or missing Swagger schema version
@@ -1322,7 +1322,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
     /** @param logger the logger to use
         @param oh deserialized hash from the source schema description describing the root document object
-        @param opts options as per @ref SwaggerOptions
+        @param opts options as per \c SwaggerOptions
 
         @throws SWAGGER-OPTION-ERROR unsuported options in constructor
         @throws INVALID-SWAGGER-VERSION invalid or missing Swagger schema version
@@ -2640,7 +2640,7 @@ public class LicenseObject inherits ObjectBase {
 
 #! Holds the relative paths to the individual endpoints.
 /**
-    The path is appended to the @ref SwaggerSchema::basePath "basePath" in order to construct the full URL.
+    The path is appended to the \c SwaggerSchema::basePath "basePath" in order to construct the full URL.
     The Paths may be empty, due to ACL constraints.
 
     This class stores a tree or a component of a path for path matching, supports wildcard matching
@@ -3651,8 +3651,8 @@ public class ExternalDocumentationObject inherits ObjectBase {
 
 #! Describes a single operation parameter.
 /**
-    A unique parameter is defined by a combination of a @ref AbstractSwaggerParameterObject::name "name"
-    and @ref AbstractSwaggerParameterObject::inLoc "location".
+    A unique parameter is defined by a combination of a \c AbstractSwaggerParameterObject::name "name"
+    and \c AbstractSwaggerParameterObject::inLoc "location".
 
     There are five possible parameter types:
     - Path: Used together with Path Templating, where the parameter value is
@@ -3813,7 +3813,7 @@ public class TypedParameter inherits AbstractSwaggerParameterObject, SchemaBase 
             \c "boolean", \c "array" or \c "file". If \c type is \c "file",
             the @ref OperationObject::consumes "consumes" MUST be either
             \c "multipart/form-data", \c " application/x-www-form-urlencoded" or
-            both and the parameter MUST be @ref AbstractSwaggerParameterObject::inLoc "in" \c "formData".
+            both and the parameter MUST be \c AbstractSwaggerParameterObject::inLoc "in" \c "formData".
         */
         string type;
 
@@ -3840,7 +3840,7 @@ public class TypedParameter inherits AbstractSwaggerParameterObject, SchemaBase 
             - \c "pipes": pipe separated values; ex: foo|bar
             - \c "multi": corresponds to multiple parameter instances instead of
                 multiple values for a single instance <tt>foo=bar&foo=baz</tt>.
-                This is valid only for parameters @ref AbstractSwaggerParameterObject::inLoc "in"
+                This is valid only for parameters \c AbstractSwaggerParameterObject::inLoc "in"
                 \c "query" or \c "formData".
 
             Default value is \c "csv".
@@ -5042,7 +5042,7 @@ public class ParameterItemsSchemaObject inherits SchemaObject {
             - \c "pipes": pipe separated values; ex: foo|bar
             - \c "multi": corresponds to multiple parameter instances instead of
                 multiple values for a single instance <tt>foo=bar&foo=baz</tt>.
-                This is valid only for parameters @ref AbstractSwaggerParameterObject::inLoc "in"
+                This is valid only for parameters \c AbstractSwaggerParameterObject::inLoc "in"
                 \c "query" or \c "formData".
 
             Default value is \c "csv".
@@ -5113,7 +5113,7 @@ public class ParameterItemsSchemaObject inherits SchemaObject {
 #! A metadata object that allows for more fine-tuned XML model definitions.
 /**
     When using arrays, XML element names are not inferred (for singular/plural
-    forms) and the @ref XmlObject::name "name" property should be used to add that information.
+    forms) and the \c XmlObject::name "name" property should be used to add that information.
     See examples for expected behavior.
  */
 public class XmlObject inherits ObjectBase {
@@ -5131,7 +5131,7 @@ public class XmlObject inherits ObjectBase {
         #! The URL of the namespace definition. Value SHOULD be in the form of a URL.
         *string ns;
 
-        #! The prefix to be used for the @ref XmlObject::name "name".
+        #! The prefix to be used for the \c XmlObject::name "name".
         *string prefix;
 
         #! Declares whether the property definition translates to an attribute instead of an element
@@ -5229,7 +5229,7 @@ public class SecuritySchemeObject inherits ObjectBase {
         @throws INVALID-FIELD-TYPE field has invalid type
         @throws INVALID-FLOW invalid OAuth2 flow value
         @throws INVALID-APIKEY-LOCATION invalid 'in' (location) value
-        @throws INVALID-SCHEME-TYPE invalid security scheme type; see @ref SecuritySchemeObject::type "type"
+        @throws INVALID-SCHEME-TYPE invalid security scheme type; see \c SecuritySchemeObject::type "type"
         @throws REQUIRED-FIELD-MISSING required field is missing
      */
     public constructor(hash<auto> oh) : ObjectBase(oh) {

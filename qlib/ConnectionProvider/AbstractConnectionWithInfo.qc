@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore AbstractConnection class definition
 
-/*  AbstractConnectionWithInfo.qc Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  AbstractConnectionWithInfo.qc Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,7 @@ public class AbstractConnectionWithInfo inherits AbstractConnection {
         @param url connection URL (potentially with password info)
         @param attributes various attributes; see below
         @param options connection options
+        @param logger optional logger interface
 
         @par Attributes
         Attributes are special flags for given connection - stored as public attributes of the object instance.

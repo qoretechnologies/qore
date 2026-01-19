@@ -47,7 +47,7 @@ module GoogleDataProvider {
 
     @section googledataproviderintro Introduction to the GoogleDataProvider Module
 
-    The %GoogleDataProvider module provides a base @ref dataproviderintro "data provider" API for Google cloud REST
+    The %GoogleDataProvider module provides a base \c dataproviderintro "data provider" API for Google cloud REST
     API services.
 
     This module provides common services for Google REST API communications, including support for the Discovery API;

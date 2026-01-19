@@ -190,9 +190,9 @@ module GoogleCalendarDataProvider {
 
     @tableofcontents
 
-    @section googledataproviderintro Introduction to the GoogleCalendarDataProvider Module
+    @section googlecalendardataproviderintro Introduction to the GoogleCalendarDataProvider Module
 
-    The %GoogleCalendarDataProvider module provides a @ref dataproviderintro "data provider" API for Google cloud REST API
+    The %GoogleCalendarDataProvider module provides a \c dataproviderintro "data provider" API for Google cloud REST API
     services.
 
     This data provider provides Google API access to the complete Google calendar API as defined by Google's Discovery
@@ -211,29 +211,29 @@ module GoogleCalendarDataProvider {
       - <b><tt>list</tt></b>
       - <b><tt>patch</tt></b>
       - <b><tt>update</tt></b>
-      - <b><tt>calendars/<calendar_id>/clear</tt></b>
-      - <b><tt>calendars/<calendar_id>/delete</tt></b>
-      - <b><tt>calendars/<calendar_id>/get</tt></b>
-      - <b><tt>calendars/<calendar_id>/patch</tt></b>
-      - <b><tt>calendars/<calendar_id>/update</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/clear</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/delete</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/get</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/patch</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/update</tt></b>
     - acl:
-      - <b><tt>calendars/<calendar_id>/acl/delete</tt></b>
-      - <b><tt>calendars/<calendar_id>/acl/get</tt></b>
-      - <b><tt>calendars/<calendar_id>/acl/insert</tt></b>
-      - <b><tt>calendars/<calendar_id>/acl/list</tt></b>
-      - <b><tt>calendars/<calendar_id>/acl/patch</tt></b>
-      - <b><tt>calendars/<calendar_id>/acl/update</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/acl/delete</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/acl/get</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/acl/insert</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/acl/list</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/acl/patch</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/acl/update</tt></b>
     - calendar events:
-      - <b><tt>calendars/<calendar_id>/events/delete</tt></b>
-      - <b><tt>calendars/<calendar_id>/events/get</tt></b>
-      - <b><tt>calendars/<calendar_id>/events/import</tt></b>
-      - <b><tt>calendars/<calendar_id>/events/insert</tt></b>
-      - <b><tt>calendars/<calendar_id>/events/instances</tt></b>
-      - <b><tt>calendars/<calendar_id>/events/list</tt></b>
-      - <b><tt>calendars/<calendar_id>/events/move</tt></b>
-      - <b><tt>calendars/<calendar_id>/events/patch</tt></b>
-      - <b><tt>calendars/<calendar_id>/events/quickAdd</tt></b>
-      - <b><tt>calendars/<calendar_id>/events/update</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/events/delete</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/events/get</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/events/import</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/events/insert</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/events/instances</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/events/list</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/events/move</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/events/patch</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/events/quickAdd</tt></b>
+      - <b><tt>calendars/&lt;calendar_id&gt;/events/update</tt></b>
 
     To use this data provider, you will need a connection that has already executed the OAuth2 authorization code flow
     and acquired a token to communicate with the Google API.
@@ -274,15 +274,15 @@ module GoogleCalendarDataProvider {
     @verbatim qdp gcal-conn/calendars/primary/events/delete dor id=event_id
     @endverbatim
 
-    @section googledataprovider_relnotes Release Notes
+    @section googlecalendardataprovider_relnotes Release Notes
 
-    @subsection googledataprovider_v2_0 GoogleCalendarDataProvider v2.0
+    @subsection googlecalendardataprovider_v2_0 GoogleCalendarDataProvider v2.0
     - split to a separate module
     - refactored to be generated from the Discovery API
     - added support for the data provider action catalog API
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
-    @subsection googledataprovider_v1_0 GoogleCalendarDataProvider v1.0
+    @subsection googlecalendardataprovider_v1_0 GoogleCalendarDataProvider v1.0
     - initial release of the module
 */
 

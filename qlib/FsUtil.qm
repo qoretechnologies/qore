@@ -296,9 +296,7 @@ public namespace FsUtil {
     }
 
     #! Returns the path resulting from joining the given paths
-    /** @param path1 the first part of the path
-        @param ... the remaining parts of the path
-
+    /**
         @return all paths joined into one valid path (i.e. delimiters are added/removed as needed) except for cases when
         one of the paths (in the list) is an absolute path or if each path is on different drive (Windows only) - in
         such cases that path is considered a new start of the resulting path. The resulting path is not normalized
@@ -933,6 +931,7 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
     /** @param source path to be copied (must be a directory or a symlink pointing to one if follow_symlinks is set)
         @param destination path the copy should be merged into (must be a directory or must not exist)
         @param follow_symlinks flag indicating whether symlink should be followed in source (False by default)
+        @param overwrite flag indicating whether destination should be overwritten if exists (False by default)
         @param fail_immediately flag indicating whether the function is supposed to fail with an exception immediately
         on the first error instead of accumulating all exceptions (True by default)
         @param depth determines how many levels of subdirectories and files should be copied

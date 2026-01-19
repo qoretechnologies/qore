@@ -189,19 +189,19 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
 
     @subsection qunit_v0_3_1 Version 0.3.1
     - added the following methods:
-      - @ref QUnit::Test::assertRegex()
-      - @ref QUnit::Test::assertNRegex()
-      - @ref QUnit::Test::assertNeq()
-      - @ref QUnit::Test::assertNeqSoft()
-      - @ref QUnit::Test::assertGt()
-      - @ref QUnit::Test::assertGtSoft()
-      - @ref QUnit::Test::assertGe()
-      - @ref QUnit::Test::assertGeSoft()
-      - @ref QUnit::Test::assertLt()
-      - @ref QUnit::Test::assertLtSoft()
-      - @ref QUnit::Test::assertLe()
-      - @ref QUnit::Test::assertLeSoft()
-      - @ref QUnit::Test::assertNothing()
+      - \c QUnit::Test::assertRegex()
+      - \c QUnit::Test::assertNRegex()
+      - \c QUnit::Test::assertNeq()
+      - \c QUnit::Test::assertNeqSoft()
+      - \c QUnit::Test::assertGt()
+      - \c QUnit::Test::assertGtSoft()
+      - \c QUnit::Test::assertGe()
+      - \c QUnit::Test::assertGeSoft()
+      - \c QUnit::Test::assertLt()
+      - \c QUnit::Test::assertLtSoft()
+      - \c QUnit::Test::assertLe()
+      - \c QUnit::Test::assertLeSoft()
+      - \c QUnit::Test::assertNothing()
 
     @subsection qunit_v0_3 Version 0.3
     - updated for complex types
@@ -214,10 +214,10 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
 */
 
 #! the main namespace for all public definitions in the %QUnit module
-public namespace QUnit;
+public namespace QUnit {
 
 #! An abstract class representing test result interface
-public class QUnit::AbstractTestResult {
+public class AbstractTestResult {
     public {
         string m_type;
         *string m_subType;
@@ -236,7 +236,7 @@ public class QUnit::AbstractTestResult {
 }
 
 #! Class representing boolean True
-public class QUnit::TestResultSuccess inherits QUnit::AbstractTestResult {
+public class TestResultSuccess inherits QUnit::AbstractTestResult {
     constructor() : AbstractTestResult("True") {
     }
 
@@ -251,7 +251,7 @@ public class QUnit::TestResultSuccess inherits QUnit::AbstractTestResult {
 }
 
 #! Class representing test function failure, both unspecific and with detail
-public class QUnit::TestResultFailure inherits QUnit::AbstractTestResult {
+public class TestResultFailure inherits QUnit::AbstractTestResult {
     private {
         *string m_detail;
     }
@@ -277,7 +277,7 @@ public class QUnit::TestResultFailure inherits QUnit::AbstractTestResult {
 }
 
 #! Class representing any non-boolean value
-public class QUnit::TestResultValue inherits QUnit::AbstractTestResult {
+public class TestResultValue inherits QUnit::AbstractTestResult {
     constructor(auto value) : AbstractTestResult("Value") {
         # treat NULL as NOTHING
         if (value === NULL)
@@ -302,7 +302,7 @@ public class QUnit::TestResultValue inherits QUnit::AbstractTestResult {
 }
 
 #! Class representing a partial match of a hash value. Common keys have to be identical.
-public class QUnit::TestResultPartialHashMatch inherits QUnit::AbstractTestResult {
+public class TestResultPartialHashMatch inherits QUnit::AbstractTestResult {
     constructor(hash<auto> value) : AbstractTestResult("PartialHashMatch") {
         if (value == NULL) {
             return;
@@ -337,7 +337,7 @@ public class QUnit::TestResultPartialHashMatch inherits QUnit::AbstractTestResul
 }
 
 #! Class representing Exception of a particular type
-public class QUnit::TestResultExceptionType inherits QUnit::AbstractTestResult {
+public class TestResultExceptionType inherits QUnit::AbstractTestResult {
     public {
         #! corresponds to the \c "err" key of @ref Qore::ExceptionInfo "ExceptionInfo" (the first value of a @ref throw "throw statement")
         string m_exceptionType;
@@ -375,7 +375,7 @@ public class QUnit::TestResultExceptionType inherits QUnit::AbstractTestResult {
 }
 
 #! Class representing Exception of a particular type with a particular detail message
-public class QUnit::TestResultExceptionDetail inherits QUnit::TestResultExceptionType {
+public class TestResultExceptionDetail inherits QUnit::TestResultExceptionType {
     private {
         string m_exceptionDetail;
     }
@@ -419,7 +419,7 @@ public class QUnit::TestResultExceptionDetail inherits QUnit::TestResultExceptio
 }
 
 #! Class representing Exception of a particular type and matching regexp for detail
-public class QUnit::TestResultExceptionRegexp inherits QUnit::TestResultExceptionType {
+public class TestResultExceptionRegexp inherits QUnit::TestResultExceptionType {
     private {
         string m_exceptionRegexp;
     }
@@ -449,7 +449,7 @@ public class QUnit::TestResultExceptionRegexp inherits QUnit::TestResultExceptio
 }
 
 #! Class representing Exception of a particular type and substring for detail
-public class QUnit::TestResultExceptionSubstring inherits QUnit::TestResultExceptionRegexp {
+public class TestResultExceptionSubstring inherits QUnit::TestResultExceptionRegexp {
     constructor(string exceptionType, string exceptionSubstring) : TestResultExceptionRegexp(exceptionType, exceptionSubstring) {
     }
 
@@ -459,7 +459,7 @@ public class QUnit::TestResultExceptionSubstring inherits QUnit::TestResultExcep
 }
 
 #! Class containing the configuration for a test case
-public class QUnit::TestCase {
+public class TestCase {
     private {
         #! the name of the test case
         string m_name;
@@ -614,7 +614,7 @@ public class QUnit::TestCase {
 }
 
 #! Base class for collecting test results and reporting
-public class QUnit::TestReporter {
+public class TestReporter {
     private {
         const PLAINQUIET = 0;
         const PLAIN = 1;
@@ -959,7 +959,7 @@ public class QUnit::TestReporter {
 }
 
 #! Base class representing a simple test, implements an implicit main() function and all utility functions for testing
-public class QUnit::Test inherits QUnit::TestReporter {
+public class Test inherits QUnit::TestReporter {
     private {
         #! list of test cases
         list<TestCase> testCases();
@@ -1860,7 +1860,7 @@ assertThrows("DIVISION-BY-ZERO", "division by zero found in integer expression",
 
         @param expectedErr the expected exception type
         @param expectedDesc the expected exception detail as a regex pattern (desc field); ignored if @ref nothing
-        @param expectedArg the expected keys in the exception \c arg hash; ignored if @ref nothing
+        @param arg the expected keys in the exception \c arg hash; ignored if @ref nothing
         @param theCode the code to execute
         @param args optional arguments to the code
         @param name an optional label for the assertion
@@ -1965,7 +1965,6 @@ fail("Unexpected code executed");
         @param condition A test function whose result we are asserting
         @param args Arguments passed to condition
 
-        @return the result of the \a condition call, if the immediate value has any further use
      */
     public testNullAssertion(string name, code condition, *softlist<auto> args) {
         testAssertion(name, condition, args, new TestResultValue());
@@ -2307,7 +2306,7 @@ fail("Unexpected code executed");
 }
 
 #! A class representing a test with injected dependencies
-public class QUnit::DependencyInjectedTest inherits QUnit::Test {
+public class DependencyInjectedTest inherits QUnit::Test {
     private {
         #! the name of the script to run with injections
         string testedFile;
@@ -2455,7 +2454,7 @@ public class QUnit::DependencyInjectedTest inherits QUnit::Test {
     private abstract string getScriptPathImpl();
 }
 
-public class QUnit::DependencyInjectedTestRunner inherits QUnit::Test {
+public class DependencyInjectedTestRunner inherits QUnit::Test {
     private {
         # necessary to allow the original class to run with the injected runtime class
         Program child;
@@ -2471,4 +2470,5 @@ public class QUnit::DependencyInjectedTestRunner inherits QUnit::Test {
 
     constructor(string name, string version, *list<auto> p_argv, *hash<auto> opts) : QUnit::Test(name, version, \p_argv, opts) {
     }
+}
 }

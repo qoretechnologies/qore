@@ -5,9 +5,10 @@
 
 %requires ../../../../qlib/QUnit.qm
 
-namespace None {}
+namespace None {
+    class NoClass {}
+}
 class NoClass {}
-class None::NoClass {}
 
 class SomeClass {
     public {}

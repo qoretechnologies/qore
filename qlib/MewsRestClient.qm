@@ -222,7 +222,7 @@ MewsRestClient rest(opts);
 }
 
 #! Class for Mews REST connections; returns @ref MewsRestClient objects
-/** This class implements a subset of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements a subset of \c RestClient::RestClientConnection "RestClientConnection"; in addition,
     this class requires values for the following options:
     - \c client_token
     - \c access_token
@@ -337,10 +337,10 @@ public class MewsRestConnection inherits RestClient::RestConnection {
         return "Mews";
     }
 
-    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
     */
     bool hasDataProvider() {
         return True;

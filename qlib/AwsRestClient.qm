@@ -175,7 +175,7 @@ AwsRestClient rest({
             required option
         - \c aws_secret: (required) the AWS secret access key value
         - \c aws_token: a temporary session token from AWS Security Token Service for this HTTP session
-        - \c content_encoding: for possible values, see @ref EncodingSupport; this sets the send encoding (if the
+        - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the
             \c "send_encoding" option is not set) and the requested response encoding (note that the
             @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
             @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
@@ -194,7 +194,7 @@ AwsRestClient rest({
         - \c redirect_passthru: if @ref True "True" then redirect responses will be passed to the caller
             instead of processed
         - \c aws_s3: set to True to flag this object for use with AWS aws_s3, which requires special message encoding
-        - \c send_encoding: a @ref EncodingSupport "send data encoding option" or the value \c "auto" which means
+        - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means
             to use automatic encoding; if not present defaults to \c "gzip" content encoding on sent message bodies
             (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies
             over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
@@ -204,8 +204,8 @@ AwsRestClient rest({
             \c 30s)
         - \c url: a string giving the URL to connect to; if not given then the target URL will be taken from any
             \c validator option, if given by calling
-            @ref RestSchemaValidator::AbstractRestSchemaValidator::getTargetUrl() "AbstractRestSchemaValidator::getTargetUrl()"
-        - \c validator: an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
+            \c RestSchemaValidator::AbstractRestSchemaValidator::getTargetUrl() "AbstractRestSchemaValidator::getTargetUrl()"
+        - \c validator: an \c RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
             object to validate request and response messages; overrides \a swagger
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -411,7 +411,7 @@ AwsRestClient rest({
     - \c "connect_timeout": connection timeout to use in milliseconds
     - \c "content_encoding": this sets the send encoding (if the \c "send_encoding" option is not set) and the
         requested response encoding; for possible values, see
-        @ref RestClient::RestClient::EncodingSupport "EncodingSupport"
+        \c RestClient::RestClient::EncodingSupport "EncodingSupport"
     - \c "error_passthru": if @ref True "True" then HTTP status codes indicating errors will not cause a
         \c REST-RESPONSE-ERROR exception to be raised, rather such responses will be passed through to the caller
         like any other response
@@ -420,14 +420,14 @@ AwsRestClient rest({
     - \c "proxy": proxy URL to use
     - \c "redirect_passthru": if @ref True "True" then redirect responses will be passed to the caller
         instead of processed
-    - \c "send_encoding": a @ref RestClient::RestClient::EncodingSupport "send data encoding option" or the value
+    - \c "send_encoding": a \c RestClient::RestClient::EncodingSupport "send data encoding option" or the value
         \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent
         message bodies
     - \c "timeout": transfer timeout to use in milliseconds
 
     @note the \c data option is always set to \c "json"
 
-    @see @ref AwsRestClient::AwsRestClient::constructor() "AwsRestClient::constructor()" for more information on
+    @see \c AwsRestClient::AwsRestClient::constructor() "AwsRestClient::constructor()" for more information on
     the above options
 */
 public class AwsRestConnection inherits RestClient::RestConnection {
@@ -511,7 +511,7 @@ public class AwsRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -572,10 +572,10 @@ public class AwsRestConnection inherits RestClient::RestConnection {
         return create_object("AwsRestClientDataProvider", get());
     }
 
-    #! returns @ref True, as this connection always returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True, as this connection always returns a data provider with the @ref getDataProvider() method
+    #! returns @ref True, as this connection always returns a data provider with the \c getDataProvider() method
+    /** @return @ref True, as this connection always returns a data provider with the \c getDataProvider() method
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
     */
     bool hasDataProvider() {
         return True;

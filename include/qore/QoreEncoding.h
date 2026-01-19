@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -57,7 +57,7 @@ typedef size_t (*mbcs_pos_t)(const char* str, const char* ptr, bool &invalid);
 
 //! for multi-byte encodings: gives the number of total bytes for the character given one or more characters
 /** @param str a pointer to the character data to check
-    @param len the number of valid bytes at the start of the character pointer
+    @param valid_len the number of valid bytes at the start of the character pointer
     @return 0=invalid, positive = number of characters needed, negative numbers = number of additional bytes needed to perform the check
  */
 typedef qore_offset_t (*mbcs_charlen_t)(const char* str, size_t valid_len);

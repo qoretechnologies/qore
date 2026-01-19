@@ -246,8 +246,9 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         @param url connection URL (potentially with password info)
         @param attributes various attributes. See below
         @param options connection options
+        @param logger optional logger interface for the connection
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -295,10 +296,10 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         return create_object("HttpDataProvider", get());
     }
 
-    #! Returns @ref True, as the connection returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True, as the connection returns a data provider with the @ref getDataProvider() method
+    #! Returns @ref True, as the connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True, as the connection returns a data provider with the \c getDataProvider() method
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
     */
     bool hasDataProvider() {
         return True;

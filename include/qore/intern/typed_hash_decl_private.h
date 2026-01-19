@@ -147,6 +147,12 @@ public:
     }
 
     DLLLOCAL bool deref() {
+        if (!thd) {
+            if (refs.ROdereference()) {
+                delete this;
+            }
+            return true;
+        }
         if (refs.ROdereference()) {
             assert(thd->priv == this);
             delete thd;

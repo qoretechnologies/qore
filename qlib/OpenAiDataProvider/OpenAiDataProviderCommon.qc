@@ -233,7 +233,7 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
 
     #! Returns information on supported reference data
     /** @return a hash of supported reference data; keys in the hash returned are supported in calls to
-        @ref getReferenceData()
+        \c getReferenceData()
 
         @since DataProvider 3.0
     */

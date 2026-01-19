@@ -1241,6 +1241,12 @@ protected:
     }
 
     DLLLOCAL const QoreClass* runtimeFindClassIntern(const char* name, const qore_ns_private*& ns) const {
+        if (!useBrokenNamespaceResolutionRuntime()) {
+            if (const QoreClass* qc = runtimeFindQoreClassIntern(name, ns)) {
+                return qc;
+            }
+        }
+
         clmap_t::const_iterator i = clmap.find(name);
 
         if (i != clmap.end()) {
@@ -1256,6 +1262,12 @@ protected:
     DLLLOCAL const QoreClass* runtimeFindClassIntern(const NamedScope& name, const qore_ns_private*& ns) const;
 
     DLLLOCAL const TypedHashDecl* runtimeFindHashDeclIntern(const char* name, const qore_ns_private*& ns) {
+        if (!useBrokenNamespaceResolutionRuntime()) {
+            if (const TypedHashDecl* hd = runtimeFindQoreHashDeclIntern(name, ns)) {
+                return hd;
+            }
+        }
+
         thdmap_t::iterator i = thdmap.find(name);
 
         if (i != thdmap.end()) {
@@ -1269,6 +1281,12 @@ protected:
     }
 
     DLLLOCAL const QoreEnumDecl* runtimeFindEnumIntern(const char* name, const qore_ns_private*& ns) {
+        if (!useBrokenNamespaceResolutionRuntime()) {
+            if (const QoreEnumDecl* ed = runtimeFindQoreEnumIntern(name, ns)) {
+                return ed;
+            }
+        }
+
         edmap_t::iterator i = edmap.find(name);
 
         if (i != edmap.end()) {
@@ -1280,6 +1298,12 @@ protected:
     }
 
     DLLLOCAL const FunctionEntry* runtimeFindFunctionEntryIntern(const char* name) {
+        if (!useBrokenNamespaceResolutionRuntime()) {
+            if (const FunctionEntry* fe = runtimeFindQoreFunctionEntryIntern(name)) {
+                return fe;
+            }
+        }
+
         fmap_t::const_iterator i = fmap.find(name);
         return i != fmap.end() ? i->second.obj : nullptr;
     }
@@ -1287,6 +1311,12 @@ protected:
     DLLLOCAL const FunctionEntry* runtimeFindFunctionEntryIntern(const NamedScope& name);
 
     DLLLOCAL FunctionEntry* parseFindFunctionEntryIntern(const char* name) {
+        if (!useBrokenNamespaceResolutionParse()) {
+            if (FunctionEntry* fe = parseFindQoreFunctionEntryIntern(name)) {
+                return fe;
+            }
+        }
+
         {
             // try to check in current namespace first
             qore_ns_private* nscx = parse_get_ns();
@@ -1322,6 +1352,9 @@ protected:
         return !fe ? 0 : fe->getFunction();
     }
 
+    DLLLOCAL void parseWarnAmbiguousFunctionCall(const QoreProgramLocation* loc, const char* fname,
+            const FunctionEntry* resolved) const;
+
     DLLLOCAL const FunctionEntry* parseResolveFunctionEntryIntern(const QoreProgramLocation* loc, const char* fname) {
         QORE_TRACE("qore_root_ns_private::parseResolveFunctionEntryIntern()");
 
@@ -1329,6 +1362,8 @@ protected:
         if (!f) {
             // cannot find function, throw exception
             parse_error(*loc, "function '%s()' cannot be found", fname);
+        } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
+            parseWarnAmbiguousFunctionCall(loc, fname, f);
         }
 
         return f;
@@ -1350,6 +1385,13 @@ protected:
     }
 
     DLLLOCAL ConstantEntry* parseFindOnlyConstantEntryIntern(const char* cname, qore_ns_private*& ns) {
+        if (!useBrokenNamespaceResolutionParse()) {
+            ConstantEntry* ce = parseFindQoreConstantEntryIntern(cname, ns);
+            if (ce) {
+                return ce;
+            }
+        }
+
         {
             // first try to look in current namespace context
             qore_ns_private* nscx = parse_get_ns();
@@ -1427,6 +1469,12 @@ protected:
     DLLLOCAL TypedHashDecl* parseFindScopedHashDeclIntern(const NamedScope& nscope, unsigned& matched);
 
     DLLLOCAL TypedHashDecl* parseFindHashDeclIntern(const char* hdname) {
+        if (!useBrokenNamespaceResolutionParse()) {
+            if (TypedHashDecl* hd = parseFindQoreHashDeclIntern(hdname)) {
+                return hd;
+            }
+        }
+
         {
             // try to check in current namespace first
             qore_ns_private* nscx = parse_get_ns();
@@ -1448,6 +1496,12 @@ protected:
     }
 
     DLLLOCAL const QoreEnumDecl* parseFindEnumIntern(const char* ename) {
+        if (!useBrokenNamespaceResolutionParse()) {
+            if (const QoreEnumDecl* ed = parseFindQoreEnumIntern(ename)) {
+                return ed;
+            }
+        }
+
         {
             // try to check in current namespace first
             qore_ns_private* nscx = parse_get_ns();
@@ -1469,6 +1523,12 @@ protected:
     }
 
     DLLLOCAL TypedefEntry* parseFindTypedefIntern(const char* tdname) {
+        if (!useBrokenNamespaceResolutionParse()) {
+            if (TypedefEntry* td = parseFindQoreTypedefIntern(tdname)) {
+                return td;
+            }
+        }
+
         {
             // try to check in current namespace first
             qore_ns_private* nscx = parse_get_ns();
@@ -1498,6 +1558,12 @@ protected:
 
     DLLLOCAL QoreClass* parseFindClassIntern(const char* cname) {
         assert(cname);
+        if (!useBrokenNamespaceResolutionParse()) {
+            if (QoreClass* qc = parseFindQoreClassIntern(cname)) {
+                return qc;
+            }
+        }
+
         {
             // try to check in current namespace first
             qore_ns_private* nscx = parse_get_ns();
@@ -1527,6 +1593,12 @@ protected:
     }
 
     DLLLOCAL const QoreClass* runtimeFindClass(const char* name) const {
+        if (!useBrokenNamespaceResolutionRuntime()) {
+            if (const QoreClass* qc = runtimeFindQoreClassIntern(name)) {
+                return qc;
+            }
+        }
+
         clmap_t::const_iterator i = clmap.find(name);
         return i != clmap.end() ? i->second.obj : nullptr;
     }
@@ -1644,6 +1716,12 @@ protected:
     }
 
     DLLLOCAL Var* parseFindGlobalVarIntern(const char* vname) {
+        if (!useBrokenNamespaceResolutionParse()) {
+            if (Var* v = parseFindQoreGlobalVarIntern(vname)) {
+                return v;
+            }
+        }
+
         {
             // try to check in current namespace first
             qore_ns_private* nscx = parse_get_ns();
@@ -1675,6 +1753,12 @@ protected:
             return runtimeFindGlobalVar(nscope, vns);
         }
 
+        if (!useBrokenNamespaceResolutionRuntime()) {
+            if (Var* v = runtimeFindQoreGlobalVarIntern(vname, vns)) {
+                return v;
+            }
+        }
+
         varmap_t::const_iterator i = varmap.find(vname);
         if (i != varmap.end()) {
             assert(i->second.ns);
@@ -1691,6 +1775,12 @@ protected:
         if (strstr(cname, "::")) {
             NamedScope nscope(cname);
             return runtimeFindNamespaceConstant(nscope, cns);
+        }
+
+        if (!useBrokenNamespaceResolutionRuntime()) {
+            if (const ConstantEntry* ce = runtimeFindQoreConstantEntryIntern(cname, cns)) {
+                return ce;
+            }
         }
 
         cnmap_t::const_iterator i = cnmap.find(cname);
@@ -1942,11 +2032,11 @@ public:
     */
 
     DLLLOCAL qore_ns_private* getQore() {
-        return qoreNS->priv;
+        return qoreNS ? qoreNS->priv : nullptr;
     }
 
     DLLLOCAL const qore_ns_private* getQore() const {
-        return qoreNS->priv;
+        return qoreNS ? qoreNS->priv : nullptr;
     }
 
     DLLLOCAL QoreHashNode* getGlobalVars() const {
@@ -2387,6 +2477,414 @@ public:
         return rns.rpriv->runtimeFindNamespaceConstant(cname, cns);
     }
 
+private:
+    DLLLOCAL bool useBrokenNamespaceResolutionParse() const {
+        return parse_get_parse_options() & PO_BROKEN_NAMESPACE_RESOLUTION;
+    }
+
+    DLLLOCAL bool useBrokenNamespaceResolutionRuntime() const {
+        return getProgram()->getParseOptions64() & PO_BROKEN_NAMESPACE_RESOLUTION;
+    }
+
+    DLLLOCAL bool isUnderQoreNamespace(const qore_ns_private* ns, const qore_ns_private* qore_ns) const {
+        if (!ns || !qore_ns) {
+            return false;
+        }
+        for (const qore_ns_private* cur = ns; cur; cur = cur->parent) {
+            if (cur == qore_ns) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    DLLLOCAL FunctionEntry* parseFindQoreFunctionEntryIntern(const char* name) {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        FunctionEntry* best = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* ns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*ns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            FunctionEntry* fe = ns_priv->func_list.findNode(name);
+            if (!fe) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = fe;
+                best_depth = ns_priv->depth;
+            }
+        }
+        return best;
+    }
+
+    DLLLOCAL ConstantEntry* parseFindQoreConstantEntryIntern(const char* cname, qore_ns_private*& ns) {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        ConstantEntry* best = nullptr;
+        qore_ns_private* best_ns = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            const ConstantEntry* ce = ns_priv->constant.findEntry(cname);
+            if (!ce) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = const_cast<ConstantEntry*>(ce);
+                best_ns = const_cast<qore_ns_private*>(ns_priv);
+                best_depth = ns_priv->depth;
+            }
+        }
+        if (best) {
+            ns = best_ns;
+        }
+        return best;
+    }
+
+    DLLLOCAL TypedHashDecl* parseFindQoreHashDeclIntern(const char* hdname) {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        TypedHashDecl* best = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            TypedHashDecl* hd = const_cast<qore_ns_private*>(ns_priv)->parseFindLocalHashDecl(hdname);
+            if (!hd) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = hd;
+                best_depth = ns_priv->depth;
+            }
+        }
+        return best;
+    }
+
+    DLLLOCAL const QoreEnumDecl* parseFindQoreEnumIntern(const char* ename) {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        const QoreEnumDecl* best = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            const QoreEnumDecl* ed = const_cast<qore_ns_private*>(ns_priv)->parseFindLocalEnum(ename);
+            if (!ed) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = ed;
+                best_depth = ns_priv->depth;
+            }
+        }
+        return best;
+    }
+
+    DLLLOCAL TypedefEntry* parseFindQoreTypedefIntern(const char* tdname) {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        TypedefEntry* best = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            const TypedefEntry* td = ns_priv->findLocalTypedef(tdname);
+            if (!td) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = const_cast<TypedefEntry*>(td);
+                best_depth = ns_priv->depth;
+            }
+        }
+        return best;
+    }
+
+    DLLLOCAL QoreClass* parseFindQoreClassIntern(const char* cname) {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        QoreClass* best = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            QoreClass* qc = const_cast<qore_ns_private*>(ns_priv)->parseFindLocalClass(cname);
+            if (!qc) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = qc;
+                best_depth = ns_priv->depth;
+            }
+        }
+        return best;
+    }
+
+    DLLLOCAL Var* parseFindQoreGlobalVarIntern(const char* vname) {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        Var* best = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            Var* v = const_cast<qore_ns_private*>(ns_priv)->var_list.parseFindVar(vname);
+            if (!v) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = v;
+                best_depth = ns_priv->depth;
+            }
+        }
+        return best;
+    }
+
+    DLLLOCAL const FunctionEntry* runtimeFindQoreFunctionEntryIntern(const char* name) const {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        const FunctionEntry* best = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* ns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*ns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            const FunctionEntry* fe = ns_priv->func_list.findNode(name);
+            if (!fe) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = fe;
+                best_depth = ns_priv->depth;
+            }
+        }
+        return best;
+    }
+
+    DLLLOCAL Var* runtimeFindQoreGlobalVarIntern(const char* vname, const qore_ns_private*& vns) const {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        Var* best = nullptr;
+        const qore_ns_private* best_ns = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            Var* v = ns_priv->var_list.runtimeFindVar(vname);
+            if (!v) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = v;
+                best_ns = ns_priv;
+                best_depth = ns_priv->depth;
+            }
+        }
+        if (best) {
+            vns = best_ns;
+        }
+        return best;
+    }
+
+    DLLLOCAL const ConstantEntry* runtimeFindQoreConstantEntryIntern(const char* cname, const qore_ns_private*& cns) const {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        const ConstantEntry* best = nullptr;
+        const qore_ns_private* best_ns = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            const ConstantEntry* ce = ns_priv->constant.findEntry(cname);
+            if (!ce) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = ce;
+                best_ns = ns_priv;
+                best_depth = ns_priv->depth;
+            }
+        }
+        if (best) {
+            cns = best_ns;
+        }
+        return best;
+    }
+
+    DLLLOCAL const QoreClass* runtimeFindQoreClassIntern(const char* name, const qore_ns_private*& ns) const {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        const QoreClass* best = nullptr;
+        const qore_ns_private* best_ns = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            const QoreClass* qc = const_cast<qore_ns_private*>(ns_priv)->parseFindLocalClass(name);
+            if (!qc) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = qc;
+                best_ns = ns_priv;
+                best_depth = ns_priv->depth;
+            }
+        }
+        if (best) {
+            ns = best_ns;
+        }
+        return best;
+    }
+
+    DLLLOCAL const QoreClass* runtimeFindQoreClassIntern(const char* name) const {
+        const qore_ns_private* ns = nullptr;
+        return runtimeFindQoreClassIntern(name, ns);
+    }
+
+    DLLLOCAL const TypedHashDecl* runtimeFindQoreHashDeclIntern(const char* name, const qore_ns_private*& ns) const {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        const TypedHashDecl* best = nullptr;
+        const qore_ns_private* best_ns = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            const TypedHashDecl* hd = const_cast<qore_ns_private*>(ns_priv)->parseFindLocalHashDecl(name);
+            if (!hd) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = hd;
+                best_ns = ns_priv;
+                best_depth = ns_priv->depth;
+            }
+        }
+        if (best) {
+            ns = best_ns;
+        }
+        return best;
+    }
+
+    DLLLOCAL const QoreEnumDecl* runtimeFindQoreEnumIntern(const char* name, const qore_ns_private*& ns) const {
+        const qore_ns_private* qore_ns = getQore();
+        if (!qore_ns) {
+            return nullptr;
+        }
+
+        const QoreEnumDecl* best = nullptr;
+        const qore_ns_private* best_ns = nullptr;
+        unsigned best_depth = 0;
+        ConstAllNamespacesIterator nsi(nsmap);
+        while (nsi.next()) {
+            const QoreNamespace* qns = nsi.get();
+            const qore_ns_private* ns_priv = qore_ns_private::get(*qns);
+            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+                continue;
+            }
+            const QoreEnumDecl* ed = const_cast<qore_ns_private*>(ns_priv)->parseFindLocalEnum(name);
+            if (!ed) {
+                continue;
+            }
+            if (!best || ns_priv->depth < best_depth) {
+                best = ed;
+                best_ns = ns_priv;
+                best_depth = ns_priv->depth;
+            }
+        }
+        if (best) {
+            ns = best_ns;
+        }
+        return best;
+    }
+
+public:
     DLLLOCAL static QoreNamespace* runtimeFindNamespaceForAddFunction(RootQoreNamespace& rns, const NamedScope& name, ExceptionSink* xsink) {
         return rns.rpriv->runtimeFindNamespaceForAddFunction(name, xsink);
     }

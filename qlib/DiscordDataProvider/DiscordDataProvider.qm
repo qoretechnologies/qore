@@ -95,7 +95,7 @@ module DiscordDataProvider {
 
     @section discorddataproviderintro Introduction to the DiscordDataProvider Module
 
-    The %DiscordDataProvider module provides a @ref dataproviderintro "data provider" API for Discord cloud REST API
+    The %DiscordDataProvider module provides a \c dataproviderintro "data provider" API for Discord cloud REST API
     services.
 
     This data provider provides Discord API access to:

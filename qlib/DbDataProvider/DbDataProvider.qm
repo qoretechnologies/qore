@@ -203,7 +203,7 @@ module DbDataProvider {
 
     The %DbDataProvider module provides a data provider API for databases and supports creating, reading, updating,
     and deleting DB records, as well as high-performance bulk operations as well as upserts through the
-    @ref dataproviderintro "DataProvider" API.
+    \c dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
     - @ref DbDataProvider::AbstractDbTableBulkOperation "AbstractDbTableBulkOperation"
@@ -236,7 +236,7 @@ module DbDataProvider {
       (<a href="https://github.com/qoretechnologies/qore/issues/4628">issue 4628</a>)
 
     @subsection dbdataprovider_v2_0 DbDataProvider v2.0
-    - added the @ref DbDataProvider::DbTransactionHelper "DbTransactionHelper" class
+    - added the \c DbDataProvider::DbTransactionHelper "DbTransactionHelper" class
     - added support for creating, reading, updating, and modifying data providers
       (<a href="https://github.com/qoretechnologies/qore/issues/4395">issue 4395</a>)
 

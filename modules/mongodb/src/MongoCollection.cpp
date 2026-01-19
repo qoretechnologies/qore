@@ -4,7 +4,7 @@
 
     Qore mongodb module - MongoCollection class implementation
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,9 @@
 #include "QC_ObjectId.h"
 #include "bson_conversion.h"
 
+#include <cstdlib>
+#include <memory>
+
 // CID_MONGOCOLLECTION and QC_MONGOCOLLECTION are defined in QC_MongoCollection.cpp (generated from .qpp)
 
 QoreHashNode* QoreMongoCollection::insertOne(const QoreHashNode* document, ExceptionSink* xsink) const {
@@ -45,15 +48,16 @@ QoreHashNode* QoreMongoCollection::insertOne(const QoreHashNode* document, Excep
     // Check if document already has an _id, if not add one
     bson_iter_t iter;
     bson_oid_t oid;
+    bool have_oid = false;
     bool had_id = bson_iter_init_find(&iter, doc, "_id");
     if (!had_id) {
         bson_oid_init(&oid, nullptr);
+        have_oid = true;
         bson_append_oid(doc, "_id", 3, &oid);
-    } else {
+    } else if (BSON_ITER_HOLDS_OID(&iter)) {
         // Copy existing OID if it's an OID type
-        if (BSON_ITER_HOLDS_OID(&iter)) {
-            bson_oid_copy(bson_iter_oid(&iter), &oid);
-        }
+        bson_oid_copy(bson_iter_oid(&iter), &oid);
+        have_oid = true;
     }
 
     bson_t reply;
@@ -71,7 +75,7 @@ QoreHashNode* QoreMongoCollection::insertOne(const QoreHashNode* document, Excep
     bson_destroy(&reply);
 
     // Add insertedId to the result
-    if (rv) {
+    if (rv && have_oid) {
         rv->setKeyValue("insertedId", new QoreObject(QC_OBJECTID, getProgram(), new QoreObjectId(oid)), xsink);
     }
 
@@ -91,22 +95,30 @@ QoreHashNode* QoreMongoCollection::insertMany(const QoreListNode* documents, Exc
     }
 
     // Convert all documents to BSON
-    std::vector<bson_t*> docs(n_documents);
+    std::vector<void*> docs(n_documents);
+    std::unique_ptr<void, decltype(&free)> doc_ptrs(std::malloc(n_documents * sizeof(const bson_t*)), &free);
+    if (!doc_ptrs) {
+        xsink->raiseException("MONGODB-COLLECTION-ERROR", "insertMany failed: out of memory");
+        return nullptr;
+    }
+    const bson_t** bson_docs = static_cast<const bson_t**>(doc_ptrs.get());
     for (size_t i = 0; i < n_documents; i++) {
         QoreValue v = documents->retrieveEntry(i);
         if (v.getType() != NT_HASH) {
             // Clean up already converted docs
             for (size_t j = 0; j < i; j++) {
-                bson_destroy(docs[j]);
+                bson_destroy(static_cast<bson_t*>(docs[j]));
             }
             xsink->raiseException("MONGODB-COLLECTION-ERROR", "document at index %zd is not a hash", i);
             return nullptr;
         }
-        docs[i] = qore_hash_to_bson(v.get<const QoreHashNode>(), xsink);
+        bson_t* bson = qore_hash_to_bson(v.get<const QoreHashNode>(), xsink);
+        docs[i] = bson;
+        bson_docs[i] = bson;
         if (*xsink) {
             // Clean up already converted docs
             for (size_t j = 0; j < i; j++) {
-                bson_destroy(docs[j]);
+                bson_destroy(static_cast<bson_t*>(docs[j]));
             }
             return nullptr;
         }
@@ -114,12 +126,11 @@ QoreHashNode* QoreMongoCollection::insertMany(const QoreListNode* documents, Exc
 
     bson_t reply;
     bson_error_t error;
-    bool result = mongoc_collection_insert_many(collection, (const bson_t**)docs.data(), n_documents,
-        nullptr, &reply, &error);
+    bool result = mongoc_collection_insert_many(collection, bson_docs, n_documents, nullptr, &reply, &error);
 
     // Clean up BSON documents
     for (size_t i = 0; i < n_documents; i++) {
-        bson_destroy(docs[i]);
+        bson_destroy(static_cast<bson_t*>(docs[i]));
     }
 
     if (!result) {

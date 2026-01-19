@@ -76,7 +76,7 @@ msg.addTO("My Best Friend <you@friend.com>");
     @section mailmessage_relnotes MailMessage Release Notes
 
     @subsection mailmessage_v1_4 MailMessage 1.4
-    - Added the @ref MailMessage::MailMessage::getInfo() "MailMessage::getInfo()" method
+    - Added the \c MailMessage::MailMessage::getInfo() "MailMessage::getInfo()" method
 
     @subsection mailmessage_v1_3_3 MailMessage 1.3.3
     - various fixes from downstream to MailMessage data handling
@@ -89,7 +89,7 @@ msg.addTO("My Best Friend <you@friend.com>");
       (issue <a href="https://github.com/qoretechnologies/qore/issues/3275">issue 3275</a>)
 
     @subsection mailmessage_v1_3_1 MailMessage 1.3.1
-    - fixed @ref MailMessage::Message::addBody() "Message::addBody()" with no body present
+    - fixed \c MailMessage::Message::addBody() "Message::addBody()" with no body present
       (issue <a href="https://github.com/qoretechnologies/qore/issues/2360">issue 2360</a>)
 
     @subsection mailmessage_v1_3 MailMessage 1.3
@@ -103,7 +103,7 @@ msg.addTO("My Best Friend <you@friend.com>");
     - converted to @ref new-style "%new-style"
 
     @subsection mailmessage_v1_1 MailMessage 1.1
-    - added the @ref MailMessage::Message::serialize() "Message::serialize()" method
+    - added the \c MailMessage::Message::serialize() "Message::serialize()" method
 
     @subsection mailmessage_v1_0_4 MailMessage 1.0.4
     - minor doc corrections and non-functional code changes
@@ -702,7 +702,7 @@ public class Message {
 
     #! sets or replaces the Message body
     /** @param body the Message body to set
-        @param enc the encoding type for the message (see @ref MessageEncodings for possible values)
+        @param enc the encoding type for the message (see \c MessageEncodings for possible values)
         @param content_type the Content-Type for the message body, if any
 
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
@@ -748,7 +748,7 @@ public class Message {
         return body;
     }
 
-    #! returns the transfer encoding for the mssage body (see @ref MessageEncodings for possible values)
+    #! returns the transfer encoding for the mssage body (see \c MessageEncodings for possible values)
     string getBodyTransferEncoding() {
         return bodyEncoding;
     }
@@ -903,7 +903,7 @@ public class Message {
     /** @param name the name of the attachment to be displayed in the message, normally a file name without any path
         @param mime the mime type for the message
         @param att the attachment itself
-        @param enc the encoding type for the message (see @ref MessageEncodings for possible values)
+        @param enc the encoding type for the message (see \c MessageEncodings for possible values)
         @param hdr optional headers for the MIME part for the attachment
 
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
@@ -1085,7 +1085,7 @@ public class Message {
 
     #! checks the data against the encoding and returns the new encoding (if the encoding is @ref EncDefault for example)
     /** @param data the data to be encoded
-        @param enc the encoding type for the data (see @ref MessageEncodings for possible values)
+        @param enc the encoding type for the data (see \c MessageEncodings for possible values)
         @param noneok if this argument is True, then @ref EncNone may be given as an argument
 
         @return the new encoding to use in case the input data was @ref EncDefault
@@ -1118,7 +1118,7 @@ public class Message {
 
     #! returns a string of message data according to the encoding passed
     /** @param data the data to encode
-        @param enc the encoding type for the data (see @ref MessageEncodings for possible values)
+        @param enc the encoding type for the data (see \c MessageEncodings for possible values)
         @param hdr a reference to a hash for header information
 
         @throw ENCODE-TRANSFER-DATA-ERROR unknown encoding passed
@@ -1207,7 +1207,7 @@ public class Message {
 #! class representing a MIME part of a Message
 /** this class wraps all the data for the Part, including:
     - the part's name if any is known or can be derived
-    - the mime type of the Part (ex: @ref MimeTypeJpeg ie \c "image/jpeg")
+    - the mime type of the Part (ex: \c MimeTypeJpeg ie \c "image/jpeg")
     - the data for the Part; either binary object or as a string
     - the encoding type for the attachment
 */
@@ -1215,7 +1215,6 @@ public class Part {
     # no public members
     public {}
 
-    #! @cond nodoc
     private {
         string name;
         string mime;
@@ -1235,7 +1234,6 @@ public class Part {
         # += to keep "hash<auto>"
         headers += hdr;
     }
-    #! @endcond
 
     #! Returns information about the part
     hash<auto> getInfo() {
@@ -1282,7 +1280,7 @@ public class Part {
 #! class representing a MIME Attachment for the Message
 /** this class wraps all the data for the attachment, including:
     - the attachment's name; ie the file name which will be shown
-    - the mime type of the Attachment (ex: @ref MimeTypeJpeg ie \c "image/jpeg")
+    - the mime type of the Attachment (ex: \c MimeTypeJpeg ie \c "image/jpeg")
     - the data for the attachment; either binary object or as a string
     - the encoding type for the attachment
 
@@ -1304,7 +1302,7 @@ public class Attachment inherits Part {
         path
         @param mime the mime type for the message
         @param part_data the attachment data itself
-        @param enc the encoding type for the message (see @ref MessageEncodings for possible values)
+        @param enc the encoding type for the message (see \c MessageEncodings for possible values)
         @param hdr optional headers for the MIME part for the attachment
 
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented

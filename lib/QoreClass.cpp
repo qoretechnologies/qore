@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,6 +37,11 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreParseClass.h"
 #include "qore/intern/RuntimeConfig.h"
+
+#include <algorithm>
+#include <set>
+#include <vector>
+#include <unordered_set>
 
 #include <cassert>
 #include <cstdlib>
@@ -3886,6 +3891,37 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
         return qore_method_private::eval(*w, xsink, rc, self, args, class_ctx);
     }
 
+    const QoreMemberInfo* mi = runtimeGetMemberInfo(nme, class_ctx);
+    if (mi) {
+        const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
+        qore_object_private* obj_priv = qore_object_private::get(*self);
+        QoreValue mv{};
+        bool exists = false;
+        {
+            QoreAutoVarRWReadLocker al(obj_priv->rml);
+            if (obj_priv->status == OS_DELETED) {
+                return QoreValue();
+            }
+            const QoreHashNode* odata = member_class_ctx ? obj_priv->getInternalData(member_class_ctx)
+                : obj_priv->data;
+            if (odata) {
+                mv = qore_hash_private::get(*odata)->getReferencedKeyValueIntern(nme, exists);
+            }
+        }
+
+        if (exists && (mv.getType() == NT_FUNCREF || mv.getType() == NT_RUNTIME_CLOSURE)) {
+            ValueHolder mvh(mv, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            const ResolvedCallReferenceNode* ref =
+                dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode());
+            if (ref) {
+                return ref->execValue(args, xsink);
+            }
+        }
+    }
+
     // first see if there is a pseudo-method for this
     QoreClass* qc = nullptr;
     w = pseudo_classes_find_method(NT_OBJECT, nme, qc);
@@ -4486,8 +4522,316 @@ int qore_class_private::parseInit() {
         err = -1;
     }
 
+    if (!err) {
+        parseWarnAmbiguousOverloads();
+    }
+
     //printd(5, "qore_class_private::parseInit() this: %p cls: %p %s scl: %p\n", this, cls, name.c_str(), scl);
     return err;
+}
+
+namespace {
+
+bool is_special_method_name(const char* name) {
+    return !strcmp(name, "constructor") || !strcmp(name, "destructor") || !strcmp(name, "copy")
+        || !strcmp(name, "methodGate") || !strcmp(name, "memberGate") || !strcmp(name, "memberNotification");
+}
+
+void collect_base_method_names(const qore_class_private& qc, bool is_static, std::set<std::string>& names,
+        std::unordered_set<qore_classid_t>& visited) {
+    if (!visited.insert(qc.classID).second) {
+        return;
+    }
+
+    const hm_method_t& map = is_static ? qc.shm : qc.hm;
+    for (const auto& i : map) {
+        if (is_special_method_name(i.second->getName())) {
+            continue;
+        }
+        names.insert(i.first);
+    }
+
+    if (!qc.scl) {
+        return;
+    }
+
+    for (auto& i : *qc.scl) {
+        if (i->sclass) {
+            collect_base_method_names(*qore_class_private::get(*i->sclass), is_static, names, visited);
+        }
+    }
+}
+
+bool local_overrides_all_base_variants(MethodFunctionBase& local_func, MethodFunctionBase& base_func,
+        bool relaxed_match) {
+    QoreFunctionIterator fiter(base_func);
+    while (fiter.next()) {
+        MethodVariantBase* base_variant = const_cast<MethodVariantBase*>(METHVB_const(fiter.getVariant()));
+        if (local_func.parseHasVariantWithSignature(base_variant, relaxed_match)) {
+            continue;
+        }
+        base_variant->parseResolveUserSignature();
+        const AbstractFunctionSignature* base_sig = base_variant->getSignature();
+        const char* base_sig_text = base_sig ? base_sig->getSignatureText() : nullptr;
+        if (base_sig_text && *base_sig_text) {
+            QoreFunctionIterator lifter(local_func);
+            while (lifter.next()) {
+                const AbstractQoreFunctionVariant* local_variant = lifter.getVariant();
+                if (!local_variant) {
+                    continue;
+                }
+                const_cast<AbstractQoreFunctionVariant*>(local_variant)->parseResolveUserSignature();
+                const AbstractFunctionSignature* local_sig = local_variant->getSignature();
+                const char* local_sig_text = local_sig ? local_sig->getSignatureText() : nullptr;
+                if (local_sig_text && !strcmp(local_sig_text, base_sig_text)) {
+                    base_sig_text = nullptr;
+                    break;
+                }
+            }
+            if (!base_sig_text) {
+                continue;
+            }
+        }
+        return false;
+    }
+    return true;
+}
+
+const QoreProgramLocation* get_method_warning_loc(const qore_class_private& qc, MethodFunctionBase& func) {
+    if (func.numVariants()) {
+        const AbstractQoreFunctionVariant* variant = func.first();
+        if (variant) {
+            const UserVariantBase* uvb = variant->getUserVariantBase();
+            if (uvb && uvb->getUserSignature() && uvb->getUserSignature()->getParseLocation()) {
+                return uvb->getUserSignature()->getParseLocation();
+            }
+        }
+    }
+    return qc.loc;
+}
+
+QoreString build_match_list(const std::vector<std::string>& matches) {
+    QoreString desc;
+    for (size_t i = 0; i < matches.size(); ++i) {
+        if (i) {
+            desc.concat(", ");
+        }
+        desc.concat("'");
+        desc.concat(matches[i].c_str());
+        desc.concat("'");
+    }
+    return desc;
+}
+
+std::vector<std::string> get_method_signature_list(const QoreMethod& method) {
+    std::set<std::string> matches;
+    MethodFunctionBase* func = qore_method_private::get(method)->getFunction();
+    const QoreClass* mclass = method.getClass();
+    const char* class_name = mclass ? mclass->getName() : "<unknown>";
+    const char* method_name = method.getName();
+
+    size_t added = 0;
+    QoreFunctionIterator fiter(*func);
+    while (fiter.next()) {
+        const AbstractQoreFunctionVariant* variant = fiter.getVariant();
+        const AbstractFunctionSignature* sig = variant ? variant->getSignature() : nullptr;
+        if (sig && sig->getSignatureText()) {
+            matches.insert(std::string(class_name) + "::" + method_name + "(" + sig->getSignatureText() + ")");
+        } else {
+            matches.insert(std::string(class_name) + "::" + method_name + "()");
+        }
+        ++added;
+    }
+
+    if (!added) {
+        matches.insert(std::string(class_name) + "::" + method_name + "()");
+    }
+
+    return std::vector<std::string>(matches.begin(), matches.end());
+}
+
+void append_method_signatures(const QoreMethod& method, std::set<std::string>& matches) {
+    const std::vector<std::string> sigs = get_method_signature_list(method);
+    matches.insert(sigs.begin(), sigs.end());
+}
+
+QoreString build_method_overload_list(const QoreMethod& method) {
+    const std::vector<std::string> sigs = get_method_signature_list(method);
+    return build_match_list(sigs);
+}
+
+bool signatures_ambiguous(const AbstractFunctionSignature& a, const AbstractFunctionSignature& b, bool relaxed_match) {
+    if (a.hasVarargs() != b.hasVarargs()) {
+        return false;
+    }
+
+    if (a.numParams() != b.numParams()) {
+        return false;
+    }
+
+    for (unsigned i = 0; i < a.numParams(); ++i) {
+        const QoreTypeInfo* at = a.getParamTypeInfo(i);
+        const QoreTypeInfo* bt = b.getParamTypeInfo(i);
+        if (!at || !bt) {
+            return true;
+        }
+        if (at == anyTypeInfo || bt == anyTypeInfo || at == autoTypeInfo || bt == autoTypeInfo) {
+            return true;
+        }
+
+        bool match = relaxed_match
+            ? (QoreTypeInfo::parseAccepts(at, bt) >= QTI_WILDCARD
+                || QoreTypeInfo::parseAccepts(bt, at) >= QTI_WILDCARD)
+            : (QoreTypeInfo::runtimeTypeMatch(at, bt) >= QTI_NEAR
+                || QoreTypeInfo::runtimeTypeMatch(bt, at) >= QTI_NEAR);
+
+        if (!match) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+QoreString build_base_class_list(const std::set<std::string>& bases) {
+    QoreString desc;
+    size_t i = 0;
+    for (const auto& base_name : bases) {
+        if (i) {
+            desc.concat(", ");
+        }
+        desc.concat("'");
+        desc.concat(base_name.c_str());
+        desc.concat("'");
+        ++i;
+    }
+    return desc;
+}
+
+} // namespace
+
+void qore_class_private::parseWarnAmbiguousOverloads() {
+    if (sys || !scl || !parse_check_parse_option(PO_REQUIRE_TYPES) || parse_check_parse_option(PO_IN_MODULE)) {
+        return;
+    }
+
+    bool relaxed_match = ahm.relaxed_match;
+
+    // warn when a local method hides base class overloads
+    for (const auto& i : hm) {
+        QoreMethod* local_method = i.second;
+        if (is_special_method_name(local_method->getName())) {
+            continue;
+        }
+
+        MethodFunctionBase* local_func = qore_method_private::get(*local_method)->getFunction();
+        std::set<std::string> hidden_base_names;
+        std::set<std::string> match_set;
+        bool hides_variants = false;
+        bool ambiguous_signatures = false;
+
+        append_method_signatures(*local_method, match_set);
+
+        for (auto& bci : *scl) {
+            if (!bci->sclass) {
+                continue;
+            }
+            const QoreMethod* base_method = bci->parseFindNormalMethod(local_method->getName(), this, true);
+            if (!base_method) {
+                continue;
+            }
+
+            MethodFunctionBase* base_func = qore_method_private::get(*base_method)->getFunction();
+            if (base_func->numVariants() > 1
+                && !local_overrides_all_base_variants(*local_func, *base_func, relaxed_match)) {
+                if (local_func->parseHasAmbiguousSignature(*base_func, relaxed_match)) {
+                    ambiguous_signatures = true;
+                }
+                const QoreClass* base_class = base_method->getClass();
+                if (base_class) {
+                    hidden_base_names.insert(base_class->getName());
+                }
+                append_method_signatures(*base_method, match_set);
+                hides_variants = true;
+            }
+        }
+
+        if (hides_variants && ambiguous_signatures) {
+            std::vector<std::string> matches(match_set.begin(), match_set.end());
+            QoreString match_list = build_match_list(matches);
+            QoreString base_list = build_base_class_list(hidden_base_names);
+            QoreString local_list = build_method_overload_list(*local_method);
+            QoreStringNode* desc = new QoreStringNode;
+            if (local_func->numVariants() > 1) {
+                desc->sprintf("method overloads %s hide overloaded variants from base class(es) %s; matches: %s; "
+                    "calls will resolve to overloads %s; use a fully-qualified base class path in the call or "
+                    "rename the object to remove ambiguity; consider adjusting one or more signatures to "
+                    "disambiguate the overloads (for example, add distinct parameter types or remove default "
+                    "arguments)", local_list.c_str(), base_list.c_str(), match_list.c_str(), local_list.c_str());
+            } else {
+                desc->sprintf("method %s hides overloaded variants from base class(es) %s; matches: %s; calls will "
+                    "resolve to %s; use a fully-qualified base class path in the call or rename the object to "
+                    "remove ambiguity; consider adjusting one or more signatures to disambiguate the overloads (for "
+                    "example, add distinct parameter types or remove default arguments)", local_list.c_str(),
+                    base_list.c_str(), match_list.c_str(), local_list.c_str());
+            }
+            qore_program_private::makeParseWarning(getProgram(), *get_method_warning_loc(*this, *local_func),
+                QP_WARN_AMBIGUOUS_OVERLOAD, "AMBIGUOUS-OVERLOAD", desc);
+        }
+    }
+
+    // warn when multiple base classes supply a method with the same name
+    std::set<std::string> base_names;
+    std::unordered_set<qore_classid_t> visited;
+    collect_base_method_names(*this, false, base_names, visited);
+
+    for (const auto& name_it : base_names) {
+        if (hm.find(name_it) != hm.end()) {
+            continue;
+        }
+
+        const QoreMethod* resolved_method = nullptr;
+        std::set<std::string> provider_names;
+        std::set<std::string> match_set;
+        for (auto& bci : *scl) {
+            if (!bci->sclass) {
+                continue;
+            }
+            const QoreMethod* base_method = bci->parseFindNormalMethod(name_it.c_str(), this, true);
+            if (!base_method) {
+                continue;
+            }
+            if (!resolved_method) {
+                resolved_method = base_method;
+            }
+            const QoreClass* method_class = base_method->getClass();
+            if (method_class) {
+                provider_names.insert(method_class->getName());
+            }
+            append_method_signatures(*base_method, match_set);
+        }
+
+        if (provider_names.size() > 1 && resolved_method) {
+            std::vector<std::string> matches(match_set.begin(), match_set.end());
+            QoreString match_list = build_match_list(matches);
+            QoreString resolved_list = build_method_overload_list(*resolved_method);
+            QoreStringNode* desc = new QoreStringNode;
+            if (qore_method_private::get(*resolved_method)->getFunction()->numVariants() > 1) {
+                desc->sprintf("method name '%s()' in class '%s' is ambiguous in calls; matches: %s; calls will "
+                    "resolve to overloads %s; use a fully-qualified base class path in the call or rename the "
+                    "object to remove ambiguity", name_it.c_str(), name.c_str(), match_list.c_str(),
+                    resolved_list.c_str());
+            } else {
+                desc->sprintf("method name '%s()' in class '%s' is ambiguous in calls; matches: %s; calls will "
+                    "resolve to %s; use a fully-qualified base class path in the call or rename the object to "
+                    "remove ambiguity", name_it.c_str(), name.c_str(), match_list.c_str(), resolved_list.c_str());
+            }
+            qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_AMBIGUOUS_OVERLOAD,
+                "AMBIGUOUS-OVERLOAD", desc);
+        }
+    }
+
+    // no warnings for static methods; they are not inherited
 }
 
 int qore_class_private::parseResolveHierarchy() {
@@ -5157,6 +5501,31 @@ MethodVariantBase* MethodFunctionBase::parseHasVariantWithSignature(MethodVarian
         }
     }
     return nullptr;
+}
+
+bool MethodFunctionBase::parseHasAmbiguousSignature(const MethodFunctionBase& other, bool relaxed_match) const {
+    for (vlist_t::const_iterator li = vlist.begin(), le = vlist.end(); li != le; ++li) {
+        (*li)->parseResolveUserSignature();
+        const AbstractFunctionSignature* lsig = (*li)->getSignature();
+        if (!lsig) {
+            return true;
+        }
+
+        int compat_count = 0;
+        for (vlist_t::const_iterator oi = other.vlist.begin(), oe = other.vlist.end(); oi != oe; ++oi) {
+            (*oi)->parseResolveUserSignature();
+            const AbstractFunctionSignature* osig = (*oi)->getSignature();
+            if (!osig) {
+                return true;
+            }
+            if (signatures_ambiguous(*lsig, *osig, relaxed_match)) {
+                if (++compat_count > 1) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 // runtime version - assumes signatures are already resolved

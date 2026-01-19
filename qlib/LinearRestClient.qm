@@ -252,7 +252,7 @@ LinearRestClient linear({"token": "lin_api_xxxxx"});
 }
 
 #! Class for Linear REST connections; returns @ref LinearRestClient objects
-/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements all options of \c RestClient::RestClientConnection "RestClientConnection"; in addition,
     this class provides the following default values for the following options:
     - \c oauth2_auth_url: \c https://linear.app/oauth/authorize
     - \c oauth2_grant_type: \c authorization_code
@@ -328,7 +328,7 @@ public class LinearRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -363,10 +363,10 @@ public class LinearRestConnection inherits RestClient::RestConnection {
         return "linear";
     }
 
-    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
     */
     bool hasDataProvider() {
         return True;

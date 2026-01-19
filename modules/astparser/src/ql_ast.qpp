@@ -497,9 +497,9 @@ const ASUK_TryStmtCatchVar = ASUK_TryStmtCatchVar;
 //! Symbol usage kind for conditions in \c while statements.
 const ASUK_WhileStmtCond = ASUK_WhileStmtCond;
 
-//! Symbol usage kind for expressions in \c @assert statements.
+//! Symbol usage kind for expressions in \c @@assert statements.
 const ASUK_AssertStmtExpr = ASUK_AssertStmtExpr;
 
-//! Symbol usage kind for expressions in \c @debug statements.
+//! Symbol usage kind for expressions in \c @@debug statements.
 const ASUK_DebugStmtExpr = ASUK_DebugStmtExpr;
 ///@}

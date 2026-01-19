@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     will unlink (delete) UNIX domain socket files when closed
 
@@ -1688,7 +1688,7 @@ public:
         The message body is returned as a QoreStringNode in the "body" key, any footers read after the body
         are returned as the other hash keys in the hash.
 
-        @param timeout_ms timeout in milliseconds, -1=never timeout, 0=do not block, return immediately if there is no
+        @param timeout timeout in milliseconds, -1=never timeout, 0=do not block, return immediately if there is no
         data waiting
         @param xsink if an error occurs, the Qore-language exception information will be added here
 

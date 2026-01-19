@@ -362,7 +362,32 @@ find_package(ICONV REQUIRED)
 if(NOT BISON_EXECUTABLE AND DEFINED ENV{BISON_EXECUTABLE})
     set(BISON_EXECUTABLE $ENV{BISON_EXECUTABLE} CACHE FILEPATH "Path to bison executable")
 endif()
+set(BISON_WRAPPER_PATH ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
+if(BISON_EXECUTABLE STREQUAL BISON_WRAPPER_PATH)
+    if(BISON_REAL_EXECUTABLE)
+        set(BISON_EXECUTABLE ${BISON_REAL_EXECUTABLE} CACHE FILEPATH "Path to bison executable" FORCE)
+    else()
+        unset(BISON_EXECUTABLE CACHE)
+    endif()
+endif()
 find_package(BISON REQUIRED)
+
+if(BISON_EXECUTABLE STREQUAL BISON_WRAPPER_PATH)
+    if(NOT BISON_REAL_EXECUTABLE)
+        find_program(BISON_REAL_EXECUTABLE NAMES bison)
+    endif()
+else()
+    set(BISON_REAL_EXECUTABLE ${BISON_EXECUTABLE})
+endif()
+set(BISON_REAL_EXECUTABLE ${BISON_REAL_EXECUTABLE} CACHE FILEPATH "Path to real bison executable" FORCE)
+set(BISON_WRAPPER_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/bison-wrapper.sh)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/bison-wrapper.sh.in
+    ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh
+    @ONLY
+)
+execute_process(COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
+set(BISON_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh CACHE FILEPATH "Path to bison executable" FORCE)
 find_package(FLEX 2.5.35 REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -565,6 +590,16 @@ endif()
 bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
 flex_target(qorescanner lib/scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(qorescanner qoreparser)
+
+# Suppress GCC's false-positive free-nonheap-object warning from the generated parser.
+set_source_files_properties(
+    ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
+    PROPERTIES COMPILE_FLAGS "-Wno-free-nonheap-object"
+)
+set_source_files_properties(
+    lib/single-compilation-unit.cpp
+    PROPERTIES COMPILE_FLAGS "-Wno-free-nonheap-object"
+)
 
 # qpp
 if(NOT HAVE_GETOPT_H)
@@ -1398,6 +1433,8 @@ if (DOXYGEN_FOUND)
     # 2. docs-lang-final: rebuilds after modules are built, with module tagfiles for cross-referencing
     message(STATUS "Preparing Doxyfile for lang (initial pass, without module tags)")
     set(QORE_LANG_DOC_TAGFILES "" CACHE INTERNAL "Module tag files for lang docs cross-referencing")
+    set(QORE_LANG_DOC_PREDEFINED "" CACHE INTERNAL "Preprocessor definitions for lang docs (initial pass)")
+    set(QORE_LANG_DOC_SECTIONS "" CACHE INTERNAL "Enabled sections for lang docs (initial pass)")
     configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial @ONLY)
     add_custom_target(docs-lang
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/lang/html
@@ -1589,14 +1626,18 @@ qore_user_module("qlib/GoogleCalendarDataProvider" "GoogleDataProvider;GoogleRes
 qore_user_module("qlib/GmailDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "gmail-logo.svg")
 
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
-if (DOXYGEN_FOUND)
-    # Build TAGFILES string from collected module names
-    set(QORE_LANG_DOC_TAGFILES "")
+    if (DOXYGEN_FOUND)
+        # Build TAGFILES string from collected module names
+        set(QORE_LANG_DOC_TAGFILES "")
     foreach(mod ${QORE_USER_MODULE_NAMES})
         # Tag file is generated in build root as {mod}.tag
         # Relative path to module html from lang html: ../modules/{mod}/html
         set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../modules/${mod}/html\"")
     endforeach()
+    # Add binary module tag files required for lang cross-references.
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../modules/logger_bin/html\"")
+    set(QORE_LANG_DOC_PREDEFINED "QORE_LANG_FINAL" CACHE INTERNAL "Preprocessor definitions for lang docs (final pass)")
+    set(QORE_LANG_DOC_SECTIONS "QORE_LANG_FINAL" CACHE INTERNAL "Enabled sections for lang docs (final pass)")
     message(STATUS "Configuring Doxyfile for lang final pass with module cross-references")
     configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final @ONLY)
 

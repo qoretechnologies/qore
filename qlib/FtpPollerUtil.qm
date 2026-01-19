@@ -188,7 +188,7 @@ public hashdecl FtpPollerFileEventInfo {
     #! Only included when `local_dir` is set; the target path for the file
     *string local_path;
 
-    #! Remote status; one of @ref ftp_remote_status_constants
+    #! Remote status; one of \c ftp_remote_status_constants
     string remote_status;
 }
 }

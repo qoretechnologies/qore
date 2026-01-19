@@ -54,10 +54,10 @@ module SwaggerDataProvider {
 
     @section swaggerdataproviderintro Introduction to the SwaggerDataProvider Module
 
-    The %SwaggerDataProvider module provides a @ref dataproviderintro "data provider" API for Swagger / Open API REST
+    The %SwaggerDataProvider module provides a \c dataproviderintro "data provider" API for Swagger / Open API REST
     APIs.  The @ref SwaggerDataProvider::SwaggerDataProvider "SwaggerDataProvider" class allows for introspecting a Swagger /
     Open API schema, while the @ref SwaggerDataProvider::SwaggerRequestDataProvider "SwaggerRequestDataProvider" class
-    supports the @ref dataproviderintro "data provider" request-reply API for communication with REST servers.
+    supports the \c dataproviderintro "data provider" request-reply API for communication with REST servers.
 
     Swagger / Open API schemas can be introspected with the following format:
     - REST operation path: <tt><i>uri_path</i>/<i>HTTP_method</i></tt>

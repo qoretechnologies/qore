@@ -24,7 +24,7 @@
 
 #! contains all public definitions in the ServiceNowRestDataProvider module
 public namespace ServiceNowRestDataProvider {
- #! Query operator info hash as returned by all @ref query_op_funcs "operator functions"
+ #! Query operator info hash as returned by all \c query_op_funcs "operator functions"
 public hashdecl QueryOperatorInfo {
     string op;   #!< the operator string code
     auto arg;    #!< optional argument

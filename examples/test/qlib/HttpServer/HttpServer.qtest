@@ -50,6 +50,10 @@ class ReqHandler inherits AbstractHttpRequestHandler {
             return makeResponse(204, "test");
         } else if (rpath =~ /^test304\//) {
             return makeResponse(304, "test");
+        } else if (rpath =~ /^test200nobody\//) {
+            return <HttpResponseInfo>{"code": 200};
+        } else if (rpath =~ /^test200empty\//) {
+            return makeResponse(200, "");
         } else if (rpath =~ /^test400close\//) {
             return makeResponse(400, new StringInputStream("test"), {"Connection": "close"});
         } else if (rpath =~ /^gzip-plain\//) {
@@ -278,6 +282,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("issue 4312", \issue4312());
         addTestCase("issue 3397", \issue3397());
         addTestCase("issue 3116", \issue3116());
+        addTestCase("200 no body returns 204", \noBody200Becomes204());
         addTestCase("recv_callback gzip decode", \recvCallbackGzipDecode());
         addTestCase("chunked gzip decode", \chunkedGzipDecode());
         addTestCase("issue 2805", \issue2805());
@@ -295,6 +300,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
         addTestCase("async mode WebSocket over SSL", \asyncModeWebSocketSslTest());
+        addTestCase("async mode WebSocket HTTP/2 status 200", \asyncModeWebSocketHttp2StatusTest());
         addTestCase("async mode WebSocket over SSL HTTP/1.1", \asyncModeWebSocketSslHttp1Test());
         addTestCase("async mode WebSocket 401 then success", \asyncModeWebSocket401ThenSuccessTest());
         addTestCase("async mode persistent handler", \asyncModePersistentHandlerTest());
@@ -562,6 +568,18 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         };
         mClient.sendWithRecvCallback(rc, NOTHING, "PUT", "/test400close/abc", NOTHING, NOTHING, NOTHING, \info);
         assertEq("test", http_msgs[1].data);
+    }
+
+    noBody200Becomes204() {
+        hash<auto> info1;
+        hash<auto> resp1 = mClient.send(NOTHING, "GET", "/test200nobody/xyz", NOTHING, NOTHING, \info1);
+        assertEq(204, resp1.status_code);
+        assertNothing(resp1.body);
+
+        hash<auto> info2;
+        hash<auto> resp2 = mClient.send(NOTHING, "GET", "/test200empty/xyz", NOTHING, NOTHING, \info2);
+        assertEq(204, resp2.status_code);
+        assertNothing(resp2.body);
     }
 
     recvCallbackGzipDecode() {
@@ -921,6 +939,23 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         wsc.send("world-ssl");
         assertEq(0, msgReceived.waitForZero(5s));
         assertEq("ECHO:world-ssl", receivedMsg);
+    }
+
+    asyncModeWebSocketHttp2StatusTest() {
+        # Verify HTTP/2 WebSocket CONNECT succeeds (expects 200 OK)
+        code callback = sub (*data msg) { };
+        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        assertTrue(wsc.isHttp2(), "WebSocket should negotiate HTTP/2");
+        assertTrue(wsc.isOpen(), "WebSocket should be open");
     }
 
     asyncModeWebSocketSslHttp1Test() {

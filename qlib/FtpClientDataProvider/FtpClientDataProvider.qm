@@ -121,7 +121,7 @@ module FtpClientDataProvider {
     @section ftpclientdataproviderintro Introduction to the FtpClientDataProvider Module
 
     The %FtpClientDataProvider module provides a data provider API for FTP servers through the
-    @ref dataproviderintro "DataProvider" API.
+    \c dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
     - @ref FtpClientDataProvider::FtpClientCreateFileDataProvider "FtpClientCreateFileDataProvider"
