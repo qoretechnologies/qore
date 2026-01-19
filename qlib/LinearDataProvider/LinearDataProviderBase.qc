@@ -202,7 +202,7 @@ public class LinearDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     #! Returns information on supported reference data
     /** @return a hash of supported reference data; keys in the hash returned are supported in calls to
-        @ref getReferenceData()
+        \c getReferenceData()
     */
     *hash<string, bool> getSupportedReferenceData() {
         return {
