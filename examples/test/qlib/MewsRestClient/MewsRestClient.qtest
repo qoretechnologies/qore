@@ -126,6 +126,12 @@ public class Main inherits QUnit::Test {
                 *softint status_code = info.ex.arg.status_code
                     ?? (info.ex.desc =~ x/status_code: ([0-9]+)/[0])
                     ?? (info.ex.desc =~ x/HTTP\/[\d.]+ 429/);
+                if (!status_code) {
+                    *list<*string> m = (info.ex.desc =~ x/([5][0-9][0-9])/);
+                    if (m) {
+                        status_code = int(m[0]);
+                    }
+                }
                 if (status_code == 429 || status_code == 408 || info.ex.desc =~ /429 Too Many Requests/) {
                     testSkip("rate limited");
                 }
@@ -143,6 +149,12 @@ public class Main inherits QUnit::Test {
             assertEq("OK", info.result);
         } catch (hash<ExceptionInfo> ex) {
             *softint status_code = ex.arg.status_code ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (!status_code) {
+                *list<*string> m = (ex.desc =~ x/([5][0-9][0-9])/);
+                if (m) {
+                    status_code = int(m[0]);
+                }
+            }
             if (status_code == 429 || status_code == 408) {
                 remove mrc;
                 testSkip("rate limited");

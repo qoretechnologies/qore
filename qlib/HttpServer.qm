@@ -2329,7 +2329,15 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
         }
 
-        if (!head && rv."code" == 200 && !rv.streaming && !rv.hasKey("chunked_body")) {
+        bool is_sse = False;
+        if (rv.hdr."Content-Type") {
+            string ct = rv.hdr."Content-Type".lwr();
+            if (ct.startsWith(MimeTypeSse)) {
+                is_sse = True;
+            }
+        }
+
+        if (!head && rv."code" == 200 && !rv.streaming && !is_sse && !rv.hasKey("chunked_body")) {
             bool empty_body = !rv.hasKey("body");
             if (!empty_body) {
                 int body_tc = rv.body.typeCode();
