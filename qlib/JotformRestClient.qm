@@ -83,7 +83,7 @@ module JotformRestClient {
 
 %requires JotformRestClient
 
-JotformRestClient jotform({"token": ENV.JOTFORM_TOKEN});
+JotformRestClient jotform({"apikey": ENV.JOTFORM_TOKEN});
 hash<auto> result = jotform.get("/user");
 printf("User: %s <%s>\n", result.body.content.name, result.body.content.email);
     @endcode
