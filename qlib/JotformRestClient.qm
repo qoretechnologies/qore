@@ -285,6 +285,30 @@ public class JotformRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "apikey,api_domain",
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "How to Obtain Your API Key",
+                    "intent": "info",
+                    "content": "1. Log in to your JotForm account\n"
+                        "2. Go to [Account > API](https://www.jotform.com/myaccount/api)\n"
+                        "3. Click **Create New Key**\n"
+                        "4. Label your key for easy identification\n"
+                        "5. Set **Full Access** permission for read/write operations, or **Read Access** "
+                            "for read-only\n\n"
+                        "**Note:** Keep your API key secure and never share it publicly.",
+                },
+                <UiMessageInfo>{
+                    "title": "Selecting the Right API Domain",
+                    "intent": "info",
+                    "content": "Choose your API domain based on your data residency requirements:\n\n"
+                        "- **Standard (api.jotform.com)**: Default for most users worldwide\n"
+                        "- **EU (eu-api.jotform.com)**: For European Union data residency and GDPR "
+                            "compliance\n"
+                        "- **HIPAA (hipaa-api.jotform.com)**: For HIPAA-compliant healthcare data in "
+                            "the US\n\n"
+                        "Select the domain that matches where your JotForm account data is stored.",
+                },
+            ),
         };
     }
 
