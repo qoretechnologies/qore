@@ -39,11 +39,14 @@ public class AstProcessorTests inherits QUnit::Test {
         addTestCase("Constant processing", \testConstantBasic());
         addTestCase("Doc comment conversion", \testDocCommentConversion());
         addTestCase("Block comment handling", \testBlockComments());
+        addTestCase("Soft type formatting", \testSoftTypeFormatting());
         addTestCase("Nested namespaces", \testNestedNamespaces());
         addTestCase("Access modifiers", \testAccessModifiers());
         addTestCase("Class with members", \testClassWithMembers());
         addTestCase("Hashdecl with doc comment", \testHashdeclDocComment());
         addTestCase("Namespace with doc comment", \testNamespaceDocComment());
+        addTestCase("Mainpage doc association", \testMainpageAssociation());
+        addTestCase("Endcond association with comments", \testDocEndcondWithComment());
         addTestCase("Conditional parsing ifdef/endif", \testConditionalIfdef());
         addTestCase("Conditional parsing if/elif/else/endif", \testConditionalIfElif());
         addTestCase("Nested conditionals", \testNestedConditionals());
@@ -60,11 +63,15 @@ public class AstProcessorTests inherits QUnit::Test {
         return tree.getNodesInfo();
     }
 
+    private string processCode(string code) {
+        list<auto> nodes = parseCode(code);
+        AstProcessor proc(nodes, {"source": code});
+        return proc.process();
+    }
+
     testNamespaceBasic() {
         string code = "namespace Test { }";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /namespace Test \{/, "namespace declaration");
         assertTrue(output =~ /\}\s*;?/, "namespace closing brace");
@@ -72,9 +79,7 @@ public class AstProcessorTests inherits QUnit::Test {
 
     testClassBasic() {
         string code = "class MyClass { }";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /class MyClass \{/, "class declaration");
         assertTrue(output =~ /public:/, "public access specifier");
@@ -83,18 +88,14 @@ public class AstProcessorTests inherits QUnit::Test {
 
     testClassInheritance() {
         string code = "class Child inherits Parent { }";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /class Child : public Parent \{/, "class with public inheritance");
     }
 
     testHashdeclBasic() {
         string code = "hashdecl MyStruct { int x; }";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /struct MyStruct \{/, "hashdecl becomes struct");
         assertTrue(output =~ /int x;/, "member preserved");
@@ -103,20 +104,16 @@ public class AstProcessorTests inherits QUnit::Test {
 
     testFunctionBasic() {
         string code = "sub myFunc() { }";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /myFunc\(\);/, "function declaration");
     }
 
     testConstantBasic() {
         string code = "const MyConst = 42;";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
-        assertTrue(output =~ /const MyConst = \.\.\.;/, "constant with simplified value");
+        assertTrue(output =~ /const auto MyConst = \.\.\.;/, "constant with simplified value");
     }
 
     testDocCommentConversion() {
@@ -124,9 +121,7 @@ public class AstProcessorTests inherits QUnit::Test {
 #! This is a doc comment
 class MyClass { }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /\/\/! This is a doc comment/, "doc comment converted from #! to //!");
     }
@@ -138,12 +133,19 @@ class MyClass { }
 */
 class MyClass { }
 ';
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /\/\*\* This is a block doc comment/, "block comment preserved");
         assertTrue(output =~ /@param x the parameter/, "param tag preserved");
+    }
+
+    testSoftTypeFormatting() {
+        string code = "sub softParam(*string name, *hash<auto> opts) { }";
+        string output = processCode(code);
+
+        assertTrue(output =~ /soft<string> name/, "soft string param");
+        assertTrue(output =~ /soft<hash<auto>> opts/, "soft hash param");
+        assertFalse(output =~ /__7_/, "no soft type markers");
     }
 
     testNestedNamespaces() {
@@ -154,9 +156,7 @@ namespace Outer {
     }
 }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /namespace Outer \{/, "outer namespace");
         assertTrue(output =~ /namespace Inner \{/, "inner namespace");
@@ -170,9 +170,7 @@ class MyClass {
     private { int y; }
 }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         # The class should have members processed
         assertTrue(output =~ /class MyClass/, "class declaration");
@@ -187,9 +185,7 @@ class MyClass {
     constructor() { }
 }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /class MyClass/, "class declaration");
         assertTrue(output =~ /int count;/, "member variable");
@@ -203,9 +199,7 @@ hashdecl MyStruct {
     int x;
 }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /\/\/! This is a hashdecl doc comment/, "hashdecl doc comment converted");
         assertTrue(output =~ /struct MyStruct \{/, "hashdecl becomes struct");
@@ -218,13 +212,49 @@ namespace MyNamespace {
     class MyClass { }
 }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /\/\/! This is a namespace doc comment/, "namespace doc comment converted");
         assertTrue(output =~ /namespace MyNamespace \{/, "namespace declaration");
         assertTrue(output =~ /class MyClass/, "class inside namespace");
+    }
+
+    testMainpageAssociation() {
+        string code = '
+%modern
+module TestModule {
+    version = "1.0";
+}
+/** @mainpage Test Module
+
+    @section test_intro Introduction
+*/
+#! Public namespace docs
+public namespace TestModule {
+    class MyClass { }
+}
+';
+        string output = processCode(code);
+
+        assertTrue(output =~ /@mainpage Test Module/, "mainpage preserved");
+        assertTrue(output =~ /namespace TestModule \{/, "namespace declared");
+        assertTrue(output =~ /class MyClass/, "class declared");
+    }
+
+    testDocEndcondWithComment() {
+        string code = "
+#! @cond nodoc
+sub hidden() { }
+#! @endcond
+# regular comment
+sub visible() { }
+";
+        string output = processCode(code);
+
+        assertFalse(output =~ /@cond/, "cond marker removed");
+        assertFalse(output =~ /@endcond/, "endcond marker removed");
+        assertTrue(output =~ /hidden\(\);/, "hidden function emitted");
+        assertTrue(output =~ /visible\(\);/, "visible function emitted");
     }
 
     testConditionalIfdef() {
@@ -237,9 +267,7 @@ class UndefinedClass { }
 %endif
 class AlwaysClass { }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         # All classes should be in the output - astparser includes all branches
         assertTrue(output =~ /class DefinedClass/, "class from ifdef branch");
@@ -258,9 +286,7 @@ class OptionB { }
 class DefaultOption { }
 %endif
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         # All classes should be in the output
         assertTrue(output =~ /class OptionA/, "class from if branch");
@@ -279,9 +305,7 @@ class InnerClass { }
 %endif
 class AfterNested { }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         # All classes should be in the output
         assertTrue(output =~ /class OuterClass/, "class from outer ifdef");

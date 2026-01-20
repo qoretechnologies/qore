@@ -651,6 +651,27 @@ public class DataProviderTest inherits QUnit::Test {
             "action_code": DPAT_API,
         });
 
+        {
+            Program p();
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (
+                "%modern\n"
+                "%disable-warning unreferenced-variable\n"
+                "%requires DataProvider\n"
+                "sub test() {\n"
+                "    hash<DataProviderActionInfo> bad = <DataProviderActionInfo>{\n"
+                "        \"app\": \"" + app + "\",\n"
+                "        \"action\": \"" + act + "\",\n"
+                "        \"path\": \"/\",\n"
+                "        \"display_name\": \"test\",\n"
+                "        \"short_desc\": \"" + short_desc + "\",\n"
+                "        \"desc\": \"" + desc + "\",\n"
+                "        \"action_code\": 1,\n"
+                "        \"requires_action_context\": 1,\n"
+                "    };\n"
+                "}\n",
+                "test"));
+        }
+
         hash<DataProviderActionInfo> action = <DataProviderActionInfo>{
             "app": app,
             "action": act,
@@ -663,6 +684,8 @@ public class DataProviderTest inherits QUnit::Test {
                 DPAD_NORMAL: True,
             },
             "output_data_type": DPAD_NORMAL,
+            "requires_action_context": "pipeline",
+            "action_context": "pipeline",
         };
         DataProviderActionCatalog::registerAction(action);
         my_app.supports_apis = True;
@@ -670,6 +693,8 @@ public class DataProviderTest inherits QUnit::Test {
         assertThrows("APP-ERROR", \DataProviderActionCatalog::getActionsEx(), get_random_string());
 
         assertEq(action, DataProviderActionCatalog::getAllActions()[0]);
+        assertEq("pipeline", DataProviderActionCatalog::getAllActions()[0].requires_action_context);
+        assertEq("pipeline", DataProviderActionCatalog::getAllActions()[0].action_context);
 
         list<hash<DataProviderAppInfo>> apps = DataProviderActionCatalog::searchAppRegex(app);
         assertEq(1, apps.size());
