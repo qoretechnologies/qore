@@ -1,0 +1,429 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore JotformDataProvider module definition
+
+/*  JotformDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# strict argument handling
+%strict-args
+# enable all warnings
+%enable-all-warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) JotformRestClient
+%requires json
+
+module JotformDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for JotForm form and submission management";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new JotformDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": JotformDataProvider::AppName,
+            "display_name": "JotForm",
+            "short_desc": "JotForm online form builder and data collection",
+            "desc": "JotForm is an online form builder that enables creating forms, collecting submissions, "
+                "and processing payments. This integration enables managing form submissions through the "
+                "JotForm REST API.\n\n"
+                "**Note:** Webhook-based triggers only fire for submissions made through the JotForm UI, "
+                "not for API-created submissions.",
+            "scheme": "jotform",
+            "logo": JotformLogo,
+            "logo_file_name": "jotform-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": ("Forms, Surveys Scheduling",),
+        });
+
+        # ========== SUBMISSION ACTIONS ==========
+
+        # Create Submission
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JotformDataProvider::AppName,
+            "path": "/create-submission",
+            "action": "create-submission",
+            "groups": "Submissions",
+            "display_name": "Create Submission",
+            "short_desc": "Create a new form submission",
+            "desc": "Submit data to a form programmatically. Select a form first to see available fields.",
+            "action_code": DPAT_API,
+            "data_provider_info": JotformCreateSubmissionDataProvider::ProviderInfo,
+            "data_dependent_options": True,
+            "options": {
+                "formID": <ActionOptionInfo>{
+                    "display_name": "Form",
+                    "short_desc": "The form to submit to",
+                    "desc": "Select the form to create a submission for. The submission fields will update based on "
+                        "your selection.",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "forms",
+                    "structural_determinate": True,
+                    "on_change": ("refetch",),
+                },
+            },
+            "output_type": new JotformSubmissionDataType(),
+        });
+
+        # Get Submission
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JotformDataProvider::AppName,
+            "path": "/submissions/get",
+            "action": "get-submission",
+            "groups": "Submissions",
+            "display_name": "Get Submission",
+            "short_desc": "Get a specific form submission",
+            "desc": "Retrieve a specific submission by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": JotformSubmissionDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new JotformSubmissionDataType(); },
+            "options": {
+                "submissionID": <ActionOptionInfo>{
+                    "display_name": "Submission ID",
+                    "short_desc": "The submission to retrieve",
+                    "desc": "The unique ID of the submission to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Form Submissions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JotformDataProvider::AppName,
+            "path": "/submissions",
+            "action": "get-form-submissions",
+            "groups": "Submissions",
+            "display_name": "Get Form Submissions",
+            "short_desc": "List submissions for a form",
+            "desc": "Retrieve all submissions for a specific form with optional filtering and pagination",
+            "action_code": DPAT_FIND,
+            "data_provider_info": JotformFormSubmissionsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("SubmissionList", new JotformSubmissionDataType(), True);
+            },
+            "options": {
+                "formID": <ActionOptionInfo>{
+                    "display_name": "Form",
+                    "short_desc": "The form to get submissions from",
+                    "desc": "Select the form to retrieve submissions for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "forms",
+                },
+                "filter": <ActionOptionInfo>{
+                    "display_name": "Filter",
+                    "short_desc": "Filter conditions",
+                    "desc": "Filter submissions using JotForm filter syntax (e.g., {\"status\": \"ACTIVE\"})",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                },
+                "orderby": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort order",
+                    "desc": "Field to sort by (e.g., 'created_at', 'updated_at')",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "created_at",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "desc": "Maximum number of submissions to return",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "example_value": 100,
+                },
+            },
+        });
+
+        # Update Submission
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JotformDataProvider::AppName,
+            "path": "/update-submission",
+            "action": "update-submission",
+            "groups": "Submissions",
+            "display_name": "Update Submission",
+            "short_desc": "Update an existing submission",
+            "desc": "Modify the answers in an existing form submission. Select a form first to see available fields.",
+            "action_code": DPAT_API,
+            "data_provider_info": JotformUpdateSubmissionDataProvider::ProviderInfo,
+            "data_dependent_options": True,
+            "options": {
+                "formID": <ActionOptionInfo>{
+                    "display_name": "Form",
+                    "short_desc": "The form containing the submission",
+                    "desc": "Select the form to get field definitions for the submission update. The submission fields "
+                        "will update based on your selection.",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "forms",
+                    "structural_determinate": True,
+                    "on_change": ("refetch",),
+                },
+                "submissionID": <ActionOptionInfo>{
+                    "display_name": "Submission ID",
+                    "short_desc": "The submission to update",
+                    "desc": "The ID of the submission to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "output_type": new JotformSubmissionDataType(),
+        });
+
+        # Delete Submission
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JotformDataProvider::AppName,
+            "path": "/delete-submission",
+            "action": "delete-submission",
+            "groups": "Submissions",
+            "display_name": "Delete Submission",
+            "short_desc": "Delete a form submission",
+            "desc": "Permanently delete a submission from a form",
+            "action_code": DPAT_API,
+            "data_provider_info": JotformDeleteSubmissionDataProvider::ProviderInfo,
+            "options": {
+                "submissionID": <ActionOptionInfo>{
+                    "display_name": "Submission ID",
+                    "short_desc": "The submission to delete",
+                    "desc": "The ID of the submission to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== FORM ACTIONS ==========
+
+        # Get Form
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JotformDataProvider::AppName,
+            "path": "/forms",
+            "action": "get-form",
+            "groups": "Forms",
+            "display_name": "Get Form",
+            "short_desc": "Get form details",
+            "desc": "Retrieve details of a specific form including title, status, and submission count",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": JotformFormsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new JotformFormDataType(); },
+            "options": {
+                "formID": <ActionOptionInfo>{
+                    "display_name": "Form",
+                    "short_desc": "The form to retrieve",
+                    "desc": "The form to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "forms",
+                },
+            },
+        });
+
+        # Get Forms List
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JotformDataProvider::AppName,
+            "path": "/forms",
+            "action": "get-forms",
+            "groups": "Forms",
+            "display_name": "Get Forms",
+            "short_desc": "List all forms",
+            "desc": "Retrieve all forms in the JotForm account with optional filtering",
+            "action_code": DPAT_FIND,
+            "data_provider_info": JotformFormsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("FormList", new JotformFormDataType(), True);
+            },
+            "options": {
+                "filter": <ActionOptionInfo>{
+                    "display_name": "Filter",
+                    "short_desc": "Filter conditions",
+                    "desc": "Filter forms using JotForm filter syntax (e.g., {\"status\": \"ENABLED\"})",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                },
+                "orderby": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort order",
+                    "desc": "Field to sort by (e.g., 'created_at', 'updated_at', 'title')",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "created_at",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "desc": "Maximum number of forms to return",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "example_value": 100,
+                },
+            },
+        });
+
+        # Get Form Reports
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JotformDataProvider::AppName,
+            "path": "/forms/reports",
+            "action": "get-form-reports",
+            "groups": "Forms",
+            "display_name": "Get Form Reports",
+            "short_desc": "Get form analytics and reports",
+            "desc": "Retrieve reports and analytics for a specific form",
+            "action_code": DPAT_FIND,
+            "data_provider_info": JotformFormReportsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ReportList", new JotformReportDataType(), True);
+            },
+            "options": {
+                "formID": <ActionOptionInfo>{
+                    "display_name": "Form",
+                    "short_desc": "The form to get reports for",
+                    "desc": "The form to retrieve reports for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "forms",
+                },
+            },
+        });
+
+        # ========== TRIGGER ACTIONS (EVENTS) ==========
+
+        # New Submission Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JotformDataProvider::AppName,
+            "path": "/events/new-submission",
+            "action": EVENT_NEW_SUBMISSION,
+            "groups": "Triggers",
+            "display_name": "New Submission",
+            "short_desc": "Trigger when a form receives a new submission",
+            "desc": "Fires when a new submission is received on a form via the JotForm UI.\n\n"
+                "**Note:** This trigger only works for submissions made through the form UI, "
+                "not for API-created submissions. This is a JotForm platform limitation.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_SUBMISSION,
+            "data_provider_info": JotformSubmissionEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new JotformSubmissionWebhookEventDataType(); },
+            "options": {
+                "formID": <ActionOptionInfo>{
+                    "display_name": "Form",
+                    "short_desc": "The form to watch for submissions",
+                    "desc": "Select the form to monitor for new submissions",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "forms",
+                },
+            },
+        });
+
+        # New Payment Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JotformDataProvider::AppName,
+            "path": "/events/new-payment",
+            "action": EVENT_NEW_PAYMENT,
+            "groups": "Triggers",
+            "display_name": "New Payment",
+            "short_desc": "Trigger when a payment is received",
+            "desc": "Fires when a payment is completed on a form with payment integration.\n\n"
+                "**Note:** This trigger only works for payments made through the form UI.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_PAYMENT,
+            "data_provider_info": JotformPaymentEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new JotformPaymentWebhookEventDataType(); },
+            "options": {
+                "formID": <ActionOptionInfo>{
+                    "display_name": "Form",
+                    "short_desc": "The form to watch for payments",
+                    "desc": "Select the form (with payment integration) to monitor for payments",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "forms",
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage JotformDataProvider Module
+
+    @tableofcontents
+
+    @section jotformdataproviderintro JotformDataProvider Introduction
+
+    The %JotformDataProvider module provides a data provider API for JotForm form and submission
+    management through the JotForm REST API.
+
+    To use this module, use \c "%requires JotformDataProvider" in your code.
+
+    All the public symbols in the module are defined in the JotformDataProvider namespace.
+
+    The main classes are:
+    - @ref JotformDataProvider::JotformDataProvider "JotformDataProvider":
+      the root data provider for JotForm with child providers for forms, submissions, and events
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires JotformDataProvider
+
+JotformDataProvider jotform({"apikey": ENV.JOTFORM_TOKEN});
+
+# List forms
+map printf("Form: %s (ID: %s)\n", $1.title, $1.id),
+    jotform.getChildProvider("forms").searchRecords();
+
+# Get submissions for a form
+string formId = "123456789";
+map printf("Submission %s: %y\n", $1.id, $1.answers),
+    jotform.getChildProvider("forms").getChildProvider(formId)
+        .getChildProvider("submissions").searchRecords();
+    @endcode
+
+    @section jotformdataproviderrelnotes Release Notes
+
+    @subsection jotformdataproviderv1_0 JotformDataProvider v1.0
+    - the initial version of the %JotformDataProvider module
+*/
+
+#! Contains all public definitions in the JotformDataProvider module
+public namespace JotformDataProvider {
+}
