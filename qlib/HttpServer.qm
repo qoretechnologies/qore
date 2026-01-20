@@ -146,6 +146,8 @@ log("started listener on %s", lh.desc);
       - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
       - requires Qore built with Brotli and/or Zstd support
     - return HTTP 204 when a handler returns code 200 with no response body
+    - fixed a shutdown crash when HttpServer instances created with the deprecated logger callback constructor were
+      torn down while async logging was still active
 
     @subsection http1_5 HttpServer 1.5
     - introduced async I/O mode for HttpServer (unreleased feature)
@@ -594,6 +596,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! logger
         *LoggerInterface logger;
+        #! callback logger appender for the deprecated constructor (if used)
+        *LoggerAppender callback_appender;
 
         #! Do not allow last listener to be stopped
         bool protect_last_listener = False;
@@ -667,7 +671,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             hash<auto> hdr = {"X-Powered-By": "Qore/" + Qore::VersionString}) {
         logger = new Logger(name);
         if (logfunc || errlogfunc) {
-            logger.addAppender(new HttpServerCallbackAppender(logfunc ?? errlogfunc));
+            callback_appender = new HttpServerCallbackAppender(logfunc ?? errlogfunc);
+            logger.addAppender(callback_appender);
             if (logfunc) {
                 logger.setLevel(LoggerLevel::INFO);
             } else {
@@ -1057,6 +1062,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
                 return;
             }
             stopping = True;
+        }
+        if (callback_appender) {
+            try {
+                logger.removeAppender(callback_appender);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            callback_appender = NOTHING;
         }
         # CRITICAL: Cancel this server's async I/O operations FIRST
         #
