@@ -38,7 +38,7 @@
 class QoreProgram;
 class QoreObject;
 class AbstractStatement;
-class QoreProgramLocation;
+struct QoreProgramLocation;
 struct ThreadLocalProgramData;
 class QoreClosureBase;
 class qore_class_private;
