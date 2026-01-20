@@ -130,6 +130,7 @@ When parsing channels with multiple message types:
 - `subscribe_schemas` list contains all `@subscribe` message schemas
 - `publish_schemas` list contains all `@publish` message schemas
 - For backwards compatibility, `subscribe_schema` and `publish_schema` contain the first message of each type
+ - The generator emits component message schemas for all message types and includes them in the channel's `messages` map
 
 ### WebSocket Block Structure
 
@@ -148,6 +149,18 @@ When parsing channels with multiple message types:
 Fields are defined using the format:
 ```
 - name (type): description
+```
+
+Nested fields are supported by indentation. Nested fields under arrays become the array's `items` schema, and nested
+fields under objects become the object's `properties`:
+
+```
+@subscribe ExampleRequest
+- action (string): Action name
+- args (hash): Arguments
+  - limit (int): Max results
+  - filters (list): Filter list
+    - value (string): Filter value
 ```
 
 Examples:

@@ -51,6 +51,7 @@ class AsyncApiGeneratorTest inherits Test {
         addTestCase("generator basic test", \testGeneratorBasic());
         addTestCase("generator with events", \testGeneratorWithEvents());
         addTestCase("generator with channels", \testGeneratorWithChannels());
+        addTestCase("generator with channel messages", \testGeneratorWithChannelMessages());
         addTestCase("generator output formats", \testGeneratorOutputFormats());
         addTestCase("malformed event block", \testMalformedEventBlock());
         addTestCase("malformed channel block", \testMalformedChannelBlock());
@@ -315,6 +316,56 @@ trailing code";
         # Channel key is path without leading /
         assertTrue(schema.channels.hasKey("stream"), "Should have stream channel");
         assertEq("/stream", schema.channels{"stream"}.address, "Channel address");
+    }
+
+    testGeneratorWithChannelMessages() {
+        AsyncApi::AsyncApiSchemaGenerator gen({
+            "title": "Channel Messages API",
+            "version": "1.0.0",
+        });
+
+        gen.addChannel(cast<hash<AsyncApi::ChannelSchemaInfo>>({
+            "path": "/creator",
+            "summary": "Creator channel",
+            "subscribe_schemas": (
+                {
+                    "name": "TestSubscribe",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "action": {"type": "string"},
+                            "args": {
+                                "type": "object",
+                                "properties": {
+                                    "limit": {"type": "integer"},
+                                },
+                            },
+                        },
+                    },
+                },
+            ),
+            "publish_schemas": (
+                {
+                    "name": "TestEvent",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "data": {"type": "object"},
+                        },
+                    },
+                },
+            ),
+        }));
+
+        hash<auto> schema = gen.generate();
+        assertTrue(schema.components.messages.hasKey("TestSubscribe"), "Should have TestSubscribe message component");
+        assertTrue(schema.components.messages.hasKey("TestEvent"), "Should have TestEvent message component");
+        assertTrue(schema.channels.creator.messages.hasKey("TestSubscribe"), "Channel should include TestSubscribe");
+        assertTrue(schema.channels.creator.messages.hasKey("TestEvent"), "Channel should include TestEvent");
+        assertEq("integer",
+            schema.components.messages.TestSubscribe.payload.properties.args.properties.limit.type,
+            "Nested args.limit should be integer");
     }
 
     testGeneratorOutputFormats() {
