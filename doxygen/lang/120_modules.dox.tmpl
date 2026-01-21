@@ -345,13 +345,28 @@ ModuleName/
     |binary|<a href="https://github.com/qoretechnologies/module-mysql">mysql</a>|Provides a MySQL / MariaDB / Percona DBI driver
     |binary|<a href="https://github.com/qoretechnologies/module-odbc">odbc</a>|Provides an ODBC DBI driver to %Qore
     |binary|<a href="https://github.com/qoretechnologies/module-oracle">oracle</a>|Provides an Oracle DBI driver, providing many advanced features such as support for named types and collections, advanced queuing, etc, also provides the following user modules:\n- <a href="http://docs.qore.org/modules/oracle/current/OracleExtensions/html/index.html">OracleExtensions</a>: provides infrastructure for SQL tracing
-    |binary|<a href="https://github.com/qoretechnologies/module-openldap">openldap</a>|Provides an OpenLDAP API to %Qore
+    |binary|<a href="https://github.com/qoretechnologies/module-openldap">openldap</a>|Provides an OpenLDAP API to %Qore, also \
+        provides the following user modules:\n\
+        - <a href="http://docs.qore.org/modules/openldap/current/LdapConnectionPool/html/index.html">LdapConnectionPool</a>: \
+            provides connection pooling for LDAP connections\n\
+        - <a href="http://docs.qore.org/modules/openldap/current/LdapHelper/html/index.html">LdapHelper</a>: \
+            provides helper APIs for working with LDAP servers
+    |binary|<a href="https://github.com/qoretechnologies/module-pdf">pdf</a>|Provides PDF manipulation APIs to %Qore \
+        using <a href="https://podofo.io">PoDoFo</a>, also provides the following user module:\n\
+        - <a href="http://docs.qore.org/modules/pdf/current/PdfDataProvider/html/index.html">PdfDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for PDF manipulation
     |binary|<a href="https://github.com/qoretechnologies/module-pgsql">pgsql</a>|Provides a PostgreSQL DBI driver
     |binary|<a href="https://github.com/qoretechnologies/module-process">process</a>|Provides an API for controlling external processes
     |binary|<a href="https://github.com/qoretechnologies/module-sqlite3">sqlite3</a>|Provides an SQLite3 DBI driver
     |binary|<a href="https://github.com/qoretechnologies/module-ssh2">ssh2</a>|Provides SSH2 and SFTP functionality, also provides the following user module:\n- <a href="http://docs.qore.org/modules/ssh2/current/SftpPoller/html/index.html">SftpPoller</a>: provides event-driven support for polling an SFTP server for new data
     |binary|<a href="https://github.com/qoretechnologies/module-sybase">sybase</a>|Provides a Sybase DBI driver
     |binary|<a href="https://github.com/qoretechnologies/module-sysconf">sysconf</a>|Provides sysconf, pathconf, and confstr APIs
+    |binary|<a href="https://github.com/qoretechnologies/module-tar">tar</a>|Provides tar archive functionality to %Qore \
+        using libarchive, also provides the following user module:\n\
+        - <a href="http://docs.qore.org/modules/tar/current/TarDataProvider/html/index.html">TarDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for tar archive manipulation
     |binary|<a href="https://github.com/qoretechnologies/module-tibae">tibae</a>|Provides TIBCO ActiveEnterprise(TM) (TIBCO, Inc) functionality
     |binary|<a href="https://github.com/qoretechnologies/module-tibrv">tibrv</a>|Provides TIBCO Rendezvous(R) (TIBCO, Inc) functionality
     |binary|<a href="https://github.com/qoretechnologies/module-uuid">uuid</a>|Provices an API for generating UUIDs
@@ -392,6 +407,11 @@ ModuleName/
         - <a href="http://docs.qore.org/modules/yaml/current/YamlRpcHandler/html/index.html">YamlRpcHandler</a>: \
             provides infrastructure for implementing YAML-RPC server-side services using the \
             <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
+    |binary|<a href="https://github.com/qoretechnologies/module-zip">zip</a>|Provides zip archive functionality to %Qore \
+        using zlib, also provides the following user module:\n\
+        - <a href="http://docs.qore.org/modules/zip/current/ZipDataProvider/html/index.html">ZipDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for zip archive manipulation
     |binary|<a href="https://github.com/qoretechnologies/module-zmq">zmq</a>|Provides <a href="https://zeromq.org/">ZeroMQ</a> \
         distributed queue and clustering API support
 

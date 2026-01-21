@@ -496,19 +496,30 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
         endforeach(fn0)
         string(REPLACE ";" " " _dox_input "${_dox_input}")
 
-        # prepare QDX arguments
+        # prepare QDX arguments - process .qm file
         configure_file(${QORE_USERMODULE_DOXYGEN_TEMPLATE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${f} @ONLY)
-        #set(QDX_DOXYFILE_ARGS -T${CMAKE_SOURCE_DIR} -M=${CMAKE_SOURCE_DIR}/${_module_file}:${CMAKE_BINARY_DIR}/doxygen/qlib/${f}.qm.dox.h ${MOD_DEPS} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${f}.tmpl ${MOD_DOXYFILE})
         set(QDX_QMDOXH_ARGS ${CMAKE_SOURCE_DIR}/${_module_file} ${CMAKE_BINARY_DIR}/doxygen/qlib/${f}/${f}.qm.dox.h)
 
+        # Build list of qdx commands for all .qc files
+        set(_qdx_qc_commands "")
+        foreach(fn0 ${_mod_targets})
+            get_filename_component(fn1 ${fn0} NAME)
+            get_filename_component(fn_ext ${fn0} EXT)
+            if("${fn_ext}" STREQUAL ".qc")
+                list(APPEND _qdx_qc_commands COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${fn0} ${CMAKE_BINARY_DIR}/doxygen/qlib/${f}/${fn1}.dox.h)
+            endif()
+        endforeach(fn0)
+
         # add CMake target for the documentation
-        #message(STATUS "Doxyfile for ${f}")
         set(QORE_QMOD_FNAME ${f}) # used for configure_file line below
 
         file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/docs/${f}/${qm_install_subdir}/)
         add_custom_target(docs-${f}
-            #COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
+            # Process the .qm file
             COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
+            # Process all .qc files
+            ${_qdx_qc_commands}
+            # Run doxygen
             COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
             COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/*.html
             COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/search/*.html
