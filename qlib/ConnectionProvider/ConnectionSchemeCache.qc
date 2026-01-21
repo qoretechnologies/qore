@@ -123,6 +123,8 @@ public class ConnectionSchemeCache {
 
             "hue": "HueRestClient",
 
+            "jotform": "JotformRestClient",
+
             # provided by the json module
             "jsonrpc": "JsonRpcClient",
             "jsonrpcs": "JsonRpcClient",
