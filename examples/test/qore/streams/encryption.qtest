@@ -64,9 +64,31 @@ public class CryptoStreamTest inherits QUnit::Test {
     constructor() : Test("CryptoStreamTest", "1.0") {
         addTestCase("issue 3111 test", \issue3111Test());
         addTestCase("crypto test", \cryptoTest());
+        addTestCase("ETM cipher test", \etmCipherTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    etmCipherTest() {
+        # Test ETM (Encrypt-then-MAC) ciphers with direct encrypt/decrypt API
+        # These are TLS-specific composite ciphers that don't work with streaming Transform API
+        map testEtmCipher($1.key, $1.value), get_crypto_info().pairIterator();
+    }
+
+    private testEtmCipher(string alg, hash<auto> eh) {
+        if (alg !~ /-etm$/) {
+            return;
+        }
+
+        *binary iv;
+        if (eh.iv_len > 0) {
+            iv = get_random_bytes(eh.iv_len);
+        }
+
+        binary encrypted = encrypt(alg, Str, Key, iv);
+        binary decrypted = decrypt_to_binary(alg, encrypted, Key, iv);
+        assertEq(Str, decrypted.toString());
     }
 
     issue3111Test() {
@@ -123,7 +145,9 @@ public class CryptoStreamTest inherits QUnit::Test {
 
     private testEncryptionStreams(string alg, hash<auto> eh) {
         # skip unsupported ciphers; currently we only support CBC and GCM modes (without CTS)
-        if (eh.cts || eh.tls_multi || (eh.type != "CBC" && eh.type != "GCM")) {
+        # ETM (Encrypt-then-MAC) ciphers are TLS-specific and don't work with streaming API
+        if (eh.cts || eh.tls_multi || (eh.type != "CBC" && eh.type != "GCM")
+            || alg =~ /-etm$/) {
             return;
         }
 
