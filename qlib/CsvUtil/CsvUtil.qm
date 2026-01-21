@@ -53,6 +53,7 @@ module CsvUtil {
             "logo": CsvWhiteLogo,
             "logo_file_name": "generic-csv-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::DataTransformation,),
         });
 
         # register all supported actions

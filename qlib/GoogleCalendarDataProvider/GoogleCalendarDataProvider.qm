@@ -53,6 +53,7 @@ module GoogleCalendarDataProvider {
             "logo": GoogleCalendarLogo,
             "logo_file_name": "google-calendar-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::GoogleWorkspace,),
         });
 
         # register all supported actions

@@ -55,6 +55,7 @@ module CdsRestDataProvider {
             "logo": DynamicsLogo,
             "logo_file_name": "dynamics-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::CrmSales,),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -164,6 +165,7 @@ module CdsRestDataProvider {
             "logo": BusinessCentralLogo,
             "logo_file_name": "business-central-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::AccountingErp,),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{

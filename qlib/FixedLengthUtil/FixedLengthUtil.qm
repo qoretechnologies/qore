@@ -51,6 +51,7 @@ module FixedLengthUtil {
             "logo": FixedLengthWhiteLogo,
             "logo_file_name": "generic-fixedlength-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::DataTransformation,),
         });
 
         # register all supported actions

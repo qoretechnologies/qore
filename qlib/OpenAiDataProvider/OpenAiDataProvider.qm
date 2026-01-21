@@ -60,6 +60,7 @@ module OpenAiDataProvider {
             "logo": OpenAiLogo,
             "logo_file_name": "openai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::AiLlm,),
         });
 
         # register all supported actions

@@ -55,6 +55,7 @@ module MewsRestDataProvider {
             "logo": MewsLogoWhite,
             "logo_file_name": "mews-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::Hospitality,),
         });
 
         # register all supported actions

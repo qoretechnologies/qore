@@ -54,6 +54,7 @@ module DiscordDataProvider {
             "logo": DiscordLogo,
             "logo_file_name": "Discord-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::Messaging,),
         });
 
         # register all supported actions

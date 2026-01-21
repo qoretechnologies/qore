@@ -53,6 +53,7 @@ module SalesforceRestDataProvider {
             "logo": SalesforceLogo,
             "logo_file_name": "salesforce-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::CrmSales,),
         });
 
         # register all supported actions
