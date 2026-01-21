@@ -117,7 +117,7 @@ public class MailgunListMailingListMembersDataProvider inherits MailgunDataProvi
 
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: list_address=%s params=%y", list_address, params));
 
-        string path = sprintf("/lists/%s/members/pages", list_address);
+        string path = sprintf("%s/lists/%s/members/pages", ApiV3, list_address);
         hash<auto> response = doGet(path, params);
         list<hash<auto>> records = response.items ?? ();
 

@@ -109,7 +109,7 @@ public class MailgunGetMailingListMemberDataProvider inherits MailgunDataProvide
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: getting member %s from list %s",
             member_address, list_address));
 
-        string path = sprintf("/lists/%s/members/%s", list_address, member_address);
+        string path = sprintf("%s/lists/%s/members/%s", ApiV3, list_address, member_address);
         hash<auto> response = doGet(path);
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: response=%y", response));

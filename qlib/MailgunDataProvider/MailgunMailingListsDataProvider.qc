@@ -96,7 +96,7 @@ public class MailgunMailingListsDataProvider inherits MailgunDataProviderBase {
 
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: params=%y", params));
 
-        hash<auto> response = doGet("/lists/pages", params);
+        hash<auto> response = doGet(ApiV3 + "/lists/pages", params);
         list<hash<auto>> records = response.items ?? ();
 
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,

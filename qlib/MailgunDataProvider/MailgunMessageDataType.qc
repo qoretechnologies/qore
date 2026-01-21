@@ -39,7 +39,7 @@ public class MailgunSendEmailRequestDataType inherits HashDataType {
                 "required": True,
             },
             "to": {
-                "type": SoftStringListType,
+                "type": new SoftListDataType(StringType),
                 "display_name": "To",
                 "short_desc": "Recipient email address(es)",
                 "desc": "One or more recipient email addresses. Can include names.",
@@ -47,13 +47,13 @@ public class MailgunSendEmailRequestDataType inherits HashDataType {
                 "required": True,
             },
             "cc": {
-                "type": SoftStringListOrNothingType,
+                "type": new SoftListDataType(StringType, True),
                 "display_name": "CC",
                 "short_desc": "CC recipients",
                 "desc": "Carbon copy recipients",
             },
             "bcc": {
-                "type": SoftStringListOrNothingType,
+                "type": new SoftListDataType(StringType, True),
                 "display_name": "BCC",
                 "short_desc": "BCC recipients",
                 "desc": "Blind carbon copy recipients",
@@ -81,7 +81,7 @@ public class MailgunSendEmailRequestDataType inherits HashDataType {
                 "example_value": "<html><body><h1>Hello!</h1></body></html>",
             },
             "o:tag": {
-                "type": SoftStringListOrNothingType,
+                "type": new SoftListDataType(StringType, True),
                 "display_name": "Tags",
                 "short_desc": "Message tags",
                 "desc": "Tags for message categorization and tracking",
@@ -193,7 +193,7 @@ public class MailgunValidateEmailResponseDataType inherits HashDataType {
                 "desc": "Whether the email is a role-based address (e.g., info@, support@)",
             },
             "reason": {
-                "type": SoftStringListOrNothingType,
+                "type": new SoftListDataType(StringType, True),
                 "display_name": "Reason",
                 "short_desc": "Validation reasons",
                 "desc": "Reasons for the validation result",

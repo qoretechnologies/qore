@@ -111,10 +111,10 @@ public class MailgunRestClient inherits RestClient::RestClient {
         #! Default Mailgun API region
         const DefaultApiRegion = "US";
 
-        #! API region base URLs
+        #! API region base URLs (without version - version is added per-endpoint)
         const ApiRegionUrls = {
-            "US": "https://api.mailgun.net/v3",
-            "EU": "https://api.eu.mailgun.net/v3",
+            "US": "https://api.mailgun.net",
+            "EU": "https://api.eu.mailgun.net",
         };
 
         #! Default "data" option value
@@ -124,7 +124,7 @@ public class MailgunRestClient inherits RestClient::RestClient {
         const DefaultPingMethod = "GET";
 
         #! Default Mailgun ping path
-        const DefaultPingPath = "/domains";
+        const DefaultPingPath = "/v3/domains";
 
         #! Default Mailgun ping headers
         const DefaultPingHeaders = {
@@ -180,8 +180,8 @@ MailgunRestClient mailgun({"apikey": "your-api-key", "api_domain": "mg.example.c
         }
 
         # Set HTTP Basic Auth: username=api, password=API_KEY
-        rv.http_username = "api";
-        rv.http_password = opts.apikey;
+        rv.username = "api";
+        rv.password = opts.apikey;
 
         # Remove custom options so RestClient doesn't try to use them
         remove rv.apikey;
@@ -311,6 +311,20 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
                         "If you're unsure, check your Mailgun dashboard URL:\n"
                         "- US accounts: app.mailgun.com\n"
                         "- EU accounts: app.eu.mailgun.com",
+                },
+                <UiMessageInfo>{
+                    "title": "When is Sending Domain Required?",
+                    "intent": "info",
+                    "content": "The **Sending Domain** is required for:\n"
+                        "- Sending emails\n"
+                        "- Registering webhooks for email events\n\n"
+                        "It is **not required** for:\n"
+                        "- Listing domains\n"
+                        "- Managing mailing lists\n"
+                        "- Creating routes\n"
+                        "- Validating email addresses\n\n"
+                        "You can find your verified domains in the Mailgun dashboard under "
+                        "**Sending > Domains**.",
                 },
             ),
         };

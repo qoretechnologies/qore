@@ -133,7 +133,7 @@ public class MailgunDeleteMailingListMemberDataProvider inherits MailgunDataProv
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: deleting member %s from list %s",
             member_address, list_address));
 
-        string path = sprintf("/lists/%s/members/%s", list_address, member_address);
+        string path = sprintf("%s/lists/%s/members/%s", ApiV3, list_address, member_address);
         hash<auto> response = doDelete(path);
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: response=%y", response));

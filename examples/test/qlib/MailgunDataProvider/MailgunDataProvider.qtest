@@ -253,11 +253,11 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         assertTrue(routeFields.hasKey("expression"));
         assertTrue(routeFields.hasKey("actions"));
 
-        # Test message data type
-        MailgunDataProvider::MailgunMessageDataType messageType();
-        hash<string, AbstractDataField> messageFields = messageType.getFields();
-        assertTrue(messageFields.hasKey("id"));
-        assertTrue(messageFields.hasKey("message"));
+        # Test send email response data type
+        MailgunDataProvider::MailgunSendEmailResponseDataType responseType();
+        hash<string, AbstractDataField> responseFields = responseType.getFields();
+        assertTrue(responseFields.hasKey("id"));
+        assertTrue(responseFields.hasKey("message"));
 
         # Test event data types
         MailgunDataProvider::MailgunClickedEventDataType clickedType();
@@ -304,15 +304,17 @@ public class MailgunDataProviderTest inherits QUnit::Test {
     cornerCaseTests() {
         checkJson();
         # Test with different API regions
+        # Note: URL includes credentials since Mailgun uses HTTP Basic Auth
+        # Note: Base URL does not include /v3 - version is added per-endpoint to support both v3 and v4 APIs
         MailgunRestClient::MailgunRestClient clientUS({"apikey": "x", "api_region": "US"});
-        assertEq("https://api.mailgun.net/v3", clientUS.getURL());
+        assertTrue(clientUS.getURL() =~ /api\.mailgun\.net$/);
 
         MailgunRestClient::MailgunRestClient clientEU({"apikey": "x", "api_region": "EU"});
-        assertEq("https://api.eu.mailgun.net/v3", clientEU.getURL());
+        assertTrue(clientEU.getURL() =~ /api\.eu\.mailgun\.net$/);
 
         # Test default region
         MailgunRestClient::MailgunRestClient clientDefault({"apikey": "x"});
-        assertEq("https://api.mailgun.net/v3", clientDefault.getURL());
+        assertTrue(clientDefault.getURL() =~ /api\.mailgun\.net$/);
 
         # Test invalid region throws error
         assertThrows("MAILGUN-ERROR", sub() {
@@ -424,7 +426,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
     #! Test API connectivity
     private testApiConnectivity() {
         # Test that we can connect to the API
-        hash<auto> response = client.get("/domains");
+        hash<auto> response = client.get("/v3/domains");
         assertTrue(response.body.hasKey("items") || response.body.hasKey("total_count"));
         if (m_options.verbose) {
             printf("Connected to Mailgun API successfully\n");

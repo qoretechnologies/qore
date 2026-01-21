@@ -107,7 +107,7 @@ public class MailgunBaseEventDataProvider inherits MailgunDataProviderBase, Data
                 "url": webhook_info.url,
             };
 
-            hash<auto> response = doPostFormEncoded(sprintf("/domains/%s/webhooks", domain), body);
+            hash<auto> response = doPostFormEncoded(sprintf("%s/domains/%s/webhooks", ApiV3, domain), body);
 
             log(LoggerLevel::INFO, "MailgunBaseEventDataProvider: registered webhook %y for %s events on domain %s",
                 webhook_info.url, webhook_name, domain);
@@ -161,7 +161,7 @@ public class MailgunBaseEventDataProvider inherits MailgunDataProviderBase, Data
         # Delete webhook from Mailgun first
         if (webhook_name && domain) {
             try {
-                doDelete(sprintf("/domains/%s/webhooks/%s", domain, webhook_name));
+                doDelete(sprintf("%s/domains/%s/webhooks/%s", ApiV3, domain, webhook_name));
                 log(LoggerLevel::INFO, "MailgunBaseEventDataProvider: deleted Mailgun webhook %s for domain %s",
                     webhook_name, domain);
             } catch (hash<ExceptionInfo> ex) {

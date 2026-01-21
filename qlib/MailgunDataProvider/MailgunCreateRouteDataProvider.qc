@@ -55,7 +55,7 @@ public class MailgunCreateRouteRequestDataType inherits HashDataType {
                 "required": True,
             },
             "action": {
-                "type": SoftStringListType,
+                "type": new SoftListDataType(StringType),
                 "display_name": "Actions",
                 "short_desc": "Route actions",
                 "desc": "Actions to execute when the expression matches. Examples:\n"
@@ -145,7 +145,7 @@ public class MailgunCreateRouteDataProvider inherits MailgunDataProviderBase {
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: creating route with body: %y", body));
 
-        hash<auto> response = doPostFormEncoded("/routes", body);
+        hash<auto> response = doPostFormEncoded(ApiV3 + "/routes", body);
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: response=%y", response));
 

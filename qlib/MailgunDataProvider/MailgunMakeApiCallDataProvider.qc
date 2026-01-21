@@ -59,8 +59,9 @@ public class MailgunMakeApiCallRequestDataType inherits HashDataType {
                 "type": StringType,
                 "display_name": "API Path",
                 "short_desc": "The API endpoint path",
-                "desc": "The API path to call (e.g., /domains, /lists/mylist@example.com/members)",
-                "example_value": "/domains",
+                "desc": "The API path to call including the version prefix (e.g., /v3/domains, "
+                    "/v3/lists/mylist@example.com/members, /v4/address/validate)",
+                "example_value": "/v3/domains",
                 "required": True,
             },
             "body": {

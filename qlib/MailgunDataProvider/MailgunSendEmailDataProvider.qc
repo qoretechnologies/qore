@@ -144,7 +144,7 @@ public class MailgunSendEmailDataProvider inherits MailgunDataProviderBase {
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: sending email via domain %s with body: %y", domain, body));
 
         # Send using form-encoded POST (Mailgun's preferred format)
-        string path = sprintf("/%s/messages", domain);
+        string path = sprintf("%s/%s/messages", ApiV3, domain);
         hash<auto> response = doPostFormEncoded(path, body);
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: response=%y", response));

@@ -83,9 +83,7 @@ public class MailgunValidateEmailDataProvider inherits MailgunDataProviderBase {
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: validating email address: %s", address));
 
-        # Note: Email validation API uses /v4 endpoint
-        # We need to use /v4/address/validate but our base URL is /v3
-        # So we construct the path relative to the base
+        # Email validation API uses /v4 endpoint (most other APIs use /v3)
         hash<auto> response = doGet("/v4/address/validate", {"address": address});
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: validation response=%y", response));

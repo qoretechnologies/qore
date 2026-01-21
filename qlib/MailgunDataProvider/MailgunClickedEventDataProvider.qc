@@ -79,6 +79,25 @@ public class MailgunClickedEventDataProvider inherits MailgunBaseEventDataProvid
         };
     }
 
+    #! Returns example data for the given observable event
+    private auto getExampleEventDataImpl(string event_id) {
+        return MailgunBaseEventDataProvider::getExampleEventDataImpl(event_id) + {
+            "url": "https://example.com/clicked-link",
+            "ip": "192.168.1.1",
+            "client-info": {
+                "client-type": "browser",
+                "client-name": "Chrome",
+                "client-os": "Windows",
+                "device-type": "desktop",
+            },
+            "geolocation": {
+                "country": "US",
+                "region": "CA",
+                "city": "San Francisco",
+            },
+        };
+    }
+
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;

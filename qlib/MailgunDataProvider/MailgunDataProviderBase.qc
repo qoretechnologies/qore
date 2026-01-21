@@ -28,6 +28,12 @@ public namespace MailgunDataProvider {
 #! Base class for Mailgun data providers
 public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! API version prefix for most Mailgun endpoints
+        const ApiV3 = "/v3";
+
+        #! API version prefix for email validation endpoint
+        const ApiV4 = "/v4";
+
         #! Base constructor options for Mailgun data providers
         const BaseConstructorOptions = {
             "mailgunrestclient": <DataProviderOptionInfo>{
@@ -61,12 +67,12 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
                     <AllowedValueInfo>{
                         "value": "US",
                         "display_name": "United States",
-                        "desc": "US API endpoint - https://api.mailgun.net/v3",
+                        "desc": "US API endpoint - https://api.mailgun.net",
                     },
                     <AllowedValueInfo>{
                         "value": "EU",
                         "display_name": "European Union",
-                        "desc": "EU API endpoint - https://api.eu.mailgun.net/v3",
+                        "desc": "EU API endpoint - https://api.eu.mailgun.net",
                     },
                 ),
             },
@@ -270,8 +276,8 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
         @debug(log(LoggerLevel::DEBUG, "doPostMultipart: POST %s with body: %y, attachments: %d",
             path, body, attachments ? attachments.size() : 0));
 
-        # Build multipart message
-        MultiPartMessage msg();
+        # Build multipart form data message
+        Mime::MultiPartFormDataMessage msg();
 
         # Add form fields
         foreach string key in (keys body) {
@@ -280,10 +286,10 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
                 if (val.typeCode() == NT_LIST) {
                     # Handle list values (e.g., multiple 'to' addresses)
                     foreach auto item in (val) {
-                        msg.addPart(new MultiPartSimple(key, string(item)));
+                        msg.addPart(string(item), key);
                     }
                 } else {
-                    msg.addPart(new MultiPartSimple(key, string(val)));
+                    msg.addPart(string(val), key);
                 }
             }
         }
@@ -291,16 +297,16 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
         # Add attachments if provided
         if (attachments) {
             foreach hash<auto> attachment in (attachments) {
-                msg.addPart(new MultiPartFile("attachment",
+                msg.addPart(attachment.content, "attachment",
                     attachment.filename,
-                    attachment.content,
-                    attachment.content_type ?? "application/octet-stream"));
+                    attachment.content_type ?? "application/octet-stream");
             }
         }
 
         # Send multipart request
+        hash<auto> msgInfo = msg.getMsgAndHeaders();
         hash<auto> info;
-        hash<auto> response = rest.doRequest("POST", path, msg.getBody(), \info, msg.getContentType());
+        hash<auto> response = rest.doRequest("POST", path, msgInfo.body, \info, NOTHING, msgInfo.hdr);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPostMultipart: success, response keys: %y", keys response.body));
         return response.body;
@@ -403,7 +409,7 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
     private *list<hash<AllowedValueInfo>> getReferenceDomains() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/domains", {"limit": DefaultPageSize});
+            hash<auto> response = doGet(ApiV3 + "/domains", {"limit": DefaultPageSize});
             if (response.items) {
                 foreach hash<auto> domain in (response.items) {
                     string display_name = domain.name;
@@ -426,7 +432,7 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
     private *list<hash<AllowedValueInfo>> getReferenceMailingLists() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/lists/pages", {"limit": DefaultPageSize});
+            hash<auto> response = doGet(ApiV3 + "/lists/pages", {"limit": DefaultPageSize});
             if (response.items) {
                 foreach hash<auto> list in (response.items) {
                     string display_name = list.name ?? list.address;
