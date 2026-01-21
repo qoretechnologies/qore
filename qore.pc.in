@@ -2,6 +2,10 @@ prefix=@prefix@
 exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
+datarootdir=@datarootdir@
+moduledir=${libdir}/qore-modules
+usermoddir=${datarootdir}/qore-modules
+usermodverdir=${usermoddir}/@VERSION@
 
 Name: Qore
 Description: Qore programming language library
@@ -9,4 +13,3 @@ URL: http://qore.org
 Version: @VERSION@
 Libs: -L${libdir} -lqore
 Cflags: -I${includedir}
-

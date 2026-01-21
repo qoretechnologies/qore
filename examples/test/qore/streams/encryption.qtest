@@ -123,7 +123,9 @@ public class CryptoStreamTest inherits QUnit::Test {
 
     private testEncryptionStreams(string alg, hash<auto> eh) {
         # skip unsupported ciphers; currently we only support CBC and GCM modes (without CTS)
-        if (eh.cts || eh.tls_multi || (eh.type != "CBC" && eh.type != "GCM")) {
+        # ETM (Encrypt-then-MAC) ciphers are TLS-specific and don't work with streaming API
+        if (eh.cts || eh.tls_multi || (eh.type != "CBC" && eh.type != "GCM")
+            || alg =~ /-etm$/) {
             return;
         }
 
