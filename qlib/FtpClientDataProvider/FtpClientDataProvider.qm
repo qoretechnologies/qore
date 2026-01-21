@@ -54,7 +54,7 @@ module FtpClientDataProvider {
             "logo": FtpWhiteLogo,
             "logo_file_name": "generic-ftp-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (AppGroup::CloudStorage,),
+            "groups": (AppGroup::FileTransfer,),
         });
 
         # register all supported actions

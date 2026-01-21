@@ -47,7 +47,7 @@ module FilePoller {
             "logo": FileWhiteLogo,
             "logo_file_name": "generic-filesystem-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (AppGroup::CloudStorage,),
+            "groups": (AppGroup::FileSystem,),
         });
 
         # register all supported actions

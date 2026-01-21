@@ -96,5 +96,11 @@ public namespace AppGroup {
     public const Iot = "IoT & Smart Building";
     #! Data Transformation utilities
     public const DataTransformation = "Data Transformation";
+    #! File System & Local Storage
+    public const FileSystem = "File System & Local Storage";
+    #! File Transfer Protocols (FTP, SFTP, etc.)
+    public const FileTransfer = "File Transfer Protocols";
+    #! API & Integration tools
+    public const ApiIntegration = "API & Integration";
 }
 #/@}
