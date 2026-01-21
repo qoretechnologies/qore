@@ -54,7 +54,7 @@ module GmailDataProvider {
             "logo": GmailLogo,
             "logo_file_name": "gmail-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (AppGroup::Email, AppGroup::GoogleWorkspace,),
+            "groups": (DataProvider::AppGroup::Email, DataProvider::AppGroup::GoogleWorkspace,),
         });
 
         # register all supported actions

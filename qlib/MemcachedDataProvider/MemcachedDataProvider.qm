@@ -57,7 +57,7 @@ module MemcachedDataProvider {
             "logo": MemcachedLogo,
             "logo_file_name": "memcached-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (AppGroup::Databases,),
+            "groups": (DataProvider::AppGroup::Databases,),
         });
 
         # register storage actions

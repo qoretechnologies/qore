@@ -67,7 +67,7 @@ module SmtpClient {
             "logo": SmtpWhiteLogo,
             "logo_file_name": "generic-smtp-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (AppGroup::Email,),
+            "groups": (DataProvider::AppGroup::Email,),
         });
 
         # register all supported actions

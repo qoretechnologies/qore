@@ -3352,6 +3352,19 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
         }
     }
 
+    // check enums
+    {
+        ConstEnumListIterator i(mns.enumList);
+        while (i.next()) {
+            if (!i.isUserPublic()) {
+                continue;
+            }
+            if (enumList.find(i.getName())) {
+                qmc.error("duplicate enum %s::%s", name.c_str(), i.getName());
+            }
+        }
+    }
+
     bool in_mod = parse_check_parse_option(PO_IN_MODULE);
 
     // check subnamespaces
@@ -3387,7 +3400,8 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 }
 
 void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
-    printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s'\n", this, name.c_str());
+    //printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s' mns: '%s' mns.enumList.empty: %d\n",
+    //    this, name.c_str(), mns.name.c_str(), mns.enumList.empty());
 
     // merge in source constants
     constant.mergeUserPublic(mns.constant);
@@ -3403,6 +3417,57 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
 
     // merge in global variables
     var_list.mergePublic(mns.var_list);
+
+    // merge in source enums
+    enumList.mergeUserPublic(mns.enumList, this);
+
+    // Create namespaces for enum member access (e.g., EnumName::MemberName)
+    // This must be done after merging enums since mergeUserPublic only copies the enum declaration
+    {
+        ConstEnumListIterator i(mns.enumList);
+        while (i.next()) {
+            //printd(5, "qore_ns_private::copyMergeCommittedNamespace() checking enum '%s' isUserPublic: %d\n",
+            //    i.getName(), i.isUserPublic());
+            if (!i.isUserPublic()) {
+                continue;
+            }
+            const char* enum_name = i.getName();
+            // Skip if this enum was not actually merged (already existed)
+            QoreEnumDecl* local_ed = enumList.find(enum_name);
+            if (!local_ed) {
+                continue;
+            }
+            // Check if namespace for this enum already exists
+            QoreNamespace* enum_ns = nsl.find(enum_name);
+            qore_ns_private* ens_priv;
+            if (!enum_ns) {
+                // Create new namespace for enum members
+                enum_ns = new QoreNamespace(enum_name);
+                ens_priv = qore_ns_private::get(*enum_ns);
+                ens_priv->setPublic();
+                ens_priv->imported = true;
+                ens_priv = nsl.runtimeAdd(enum_ns, this);
+            } else {
+                ens_priv = qore_ns_private::get(*enum_ns);
+            }
+            // Add enum members as constants in the namespace
+            qore_enum_decl_private* enum_priv = qore_enum_decl_private::get(*local_ed);
+            const std::vector<QoreEnumMember*>& members = enum_priv->getMembers();
+            for (auto* member : members) {
+                if (ens_priv->constant.inList(member->getName())) {
+                    continue;
+                }
+                QoreValue val = member->getValue();
+                val.ref();
+                ens_priv->constant.add(member->getName(), val, enum_priv->getTypeInfo());
+            }
+            // Rebuild indexes for the new namespace
+            qore_root_ns_private* rns = getRoot();
+            if (rns) {
+                rns->rebuildIndexes(ens_priv);
+            }
+        }
+    }
 
     // add sub namespaces
     for (nsmap_t::const_iterator i = mns.nsl.nsmap.begin(), e = mns.nsl.nsmap.end(); i != e; ++i) {
@@ -3464,6 +3529,9 @@ void qore_ns_private::parseAssimilate(QoreNamespace* ans) {
     // assimilate pending functions
     func_list.assimilate(pns->func_list, this, &pending_func_names);
 
+    // assimilate enums
+    enumList.assimilate(pns->enumList, *this, &pending_enum_names);
+
     // assimilate pending global variable declarations
     //printd(5, "qore_ns_private::parseAssimilate() this: %p assimilating %p (%d + %d gvars)\n", this, pns, pend_gvblist.size(), pns->pend_gvblist.size());
     for (auto& i : pns->pend_gvblist) {
@@ -3523,6 +3591,9 @@ void qore_ns_private::runtimeAssimilate(QoreNamespace* ans) {
 
     // assimilate pending functions
     func_list.assimilate(pns->func_list, this);
+
+    // assimilate enums
+    enumList.assimilate(pns->enumList, *this);
 
     if (pns->class_handler) {
         assert(!class_handler);

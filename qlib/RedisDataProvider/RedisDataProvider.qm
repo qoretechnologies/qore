@@ -57,7 +57,7 @@ module RedisDataProvider {
             "logo": RedisLogo,
             "logo_file_name": "redis-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (AppGroup::Databases,),
+            "groups": (DataProvider::AppGroup::Databases,),
         });
 
         # register actions for strings

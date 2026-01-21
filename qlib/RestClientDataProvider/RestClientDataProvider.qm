@@ -54,7 +54,7 @@ module RestClientDataProvider {
             "logo": WebHookLogo,
             "logo_mime_type": MimeTypeSvg,
             "logo_file_name": "generic-rest-logo.svg",
-            "groups": (AppGroup::ApiIntegration,),
+            "groups": (DataProvider::AppGroup::ApiIntegration,),
         });
 
         # register all supported actions

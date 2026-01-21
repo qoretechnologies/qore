@@ -54,7 +54,7 @@ module FileDataProvider {
             "logo": FileWhiteLogo,
             "logo_file_name": "generic-filesystem-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (AppGroup::FileSystem,),
+            "groups": (DataProvider::AppGroup::FileSystem,),
         });
 
         # register all supported actions
