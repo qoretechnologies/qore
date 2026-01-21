@@ -3353,15 +3353,24 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
     }
 
     // check enums
+    // NOTE: Unlike classes, enums don't support injection, so we simply skip
+    // the duplicate check if an enum with the same name already exists.
+    // mergeUserPublic() will skip adding it anyway, so this is safe.
+    // This allows modules to be loaded in sub-Programs without errors.
     {
         ConstEnumListIterator i(mns.enumList);
         while (i.next()) {
             if (!i.isUserPublic()) {
                 continue;
             }
-            if (enumList.find(i.getName())) {
-                qmc.error("duplicate enum %s::%s", name.c_str(), i.getName());
+            // Only report error if there's a conflict with a different type
+            // (e.g., a class with the same name)
+            if (classList.find(i.getName())) {
+                qmc.error("enum '%s' conflicts with class '%s::%s'", i.getName(), name.c_str(), i.getName());
+            } else if (hashDeclList.find(i.getName())) {
+                qmc.error("enum '%s' conflicts with hashdecl '%s::%s'", i.getName(), name.c_str(), i.getName());
             }
+            // If an enum with the same name exists, it's fine - skip silently
         }
     }
 
