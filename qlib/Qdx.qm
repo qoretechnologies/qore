@@ -1352,6 +1352,8 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
     public const ADK_Variable = 10;
     public const ADK_VarList = 11;
     public const ADK_Typedef = 12;
+    public const ADK_Enum = 13;
+    public const ADK_EnumMember = 14;
 
     #! Formats astparser diagnostics for output
     /** @param path source path used in formatted output
@@ -1419,9 +1421,10 @@ if (exists(diagnostics)) {
         return output;
     }
 
-    #! Processes Qore AST to generate doxygen-compatible C++ output
+    #! Processes Qore AST to generate doxygen-compatible output
     /** This class uses astparser AST nodes to transform Qore code
-        into C++-like syntax that doxygen can process.
+        into explicit Doxygen command blocks (\c @namespace, \c @class, \c @fn, etc.)
+        so that Doxygen can document Qore sources without relying on C++ parsing heuristics.
 
         @par Example:
         @code{.py}
@@ -1433,7 +1436,7 @@ AstParser parser();
 AstTree tree = parser.parseString(qore_source);
 list<auto> nodes = tree.getNodesInfo();
 
-AstProcessor proc(nodes);
+AstProcessor proc(nodes, {"source": qore_source});
 string doxygen_output = proc.process();
         @endcode
     */
@@ -1447,6 +1450,8 @@ string doxygen_output = proc.process();
             string output = "";
             #! Current indentation level
             int indent = 0;
+            #! Source lines for doc comment association
+            list<string> lines = ();
             #! Document table helper for processing tables in doc comments
             DocumentTableHelper dth();
         }
@@ -1459,6 +1464,9 @@ string doxygen_output = proc.process();
         constructor(list<auto> nodes, *hash<auto> opts) {
             self.nodes = nodes;
             self.opts = opts ?? {};
+            if (self.opts.source) {
+                self.lines = self.opts.source.split("\n");
+            }
         }
 
         #! Processes the AST nodes and returns doxygen-compatible output
@@ -1510,14 +1518,17 @@ string doxygen_output = proc.process();
                 case ADK_Variable:
                     processVariable(decl);
                     break;
+                case ADK_Enum:
+                    processEnum(decl);
+                    break;
             }
         }
 
         #! Processes a namespace declaration
         private processNamespace(hash<auto> ns) {
-            # Output doc comment if present
-            if (ns.docComment) {
-                writeDocComment(ns.docComment);
+            *string doc = getDocForNode(ns);
+            if (exists doc) {
+                writeDocComment(doc);
             }
 
             # Output namespace declaration
@@ -1539,8 +1550,9 @@ string doxygen_output = proc.process();
         #! Processes a class declaration
         private processClass(hash<auto> cls) {
             # Output doc comment if present
-            if (cls.docComment) {
-                writeDocComment(cls.docComment);
+            *string doc = getDocForNode(cls);
+            if (exists doc) {
+                writeDocComment(doc);
             }
 
             # Build class declaration
@@ -1586,7 +1598,6 @@ string doxygen_output = proc.process();
                     processClassMember(member);
                 }
             }
-
             indent--;
             writeLine("};");
             writeLine("");
@@ -1606,6 +1617,15 @@ string doxygen_output = proc.process();
                     break;
                 case ADK_Variable:
                     processVariable(member);
+                    break;
+                case ADK_Hash:
+                    processHashdecl(member);
+                    break;
+                case ADK_Typedef:
+                    processTypedef(member);
+                    break;
+                case ADK_Enum:
+                    processEnum(member);
                     break;
             }
         }
@@ -1650,8 +1670,9 @@ string doxygen_output = proc.process();
         #! Processes a method declaration
         private processMethod(hash<auto> method) {
             # Output doc comment if present
-            if (method.docComment) {
-                writeDocComment(method.docComment);
+            *string doc = getDocForNode(method);
+            if (exists doc) {
+                writeDocComment(doc);
             }
 
             # Build method signature
@@ -1669,15 +1690,12 @@ string doxygen_output = proc.process();
                     sig += mods + " ";
                 }
             }
-
-            # Return type
             if (method.returnType && method.returnType.name) {
                 sig += formatType(method.returnType.name.name) + " ";
             } else {
                 sig += "void ";
             }
 
-            # Method name
             sig += method.name.name;
 
             # Parameters
@@ -1688,27 +1706,19 @@ string doxygen_output = proc.process();
             sig += ");";
 
             writeLine(sig);
+            writeLine("");
         }
 
         #! Processes a function declaration
         private processFunction(hash<auto> func) {
             # Output doc comment if present
-            if (func.docComment) {
-                writeDocComment(func.docComment);
+            *string doc = getDocForNode(func);
+            if (exists doc) {
+                writeDocComment(doc);
             }
 
             # Build function signature
             string sig = "";
-
-            # Add modifiers
-            if (func.modifiers) {
-                string mods = func.modifiers;
-                mods =~ s/public\s*//g;
-                trim mods;
-                if (mods.val()) {
-                    sig += mods + " ";
-                }
-            }
 
             # Return type
             if (func.returnType && func.returnType.name) {
@@ -1735,19 +1745,19 @@ string doxygen_output = proc.process();
 
         #! Processes a constant declaration
         private processConstant(hash<auto> con) {
-            # Output doc comment if present
-            if (con.docComment) {
-                writeDocComment(con.docComment);
+            *string doc = getDocForNode(con);
+            if (exists doc) {
+                writeDocComment(doc);
             }
 
-            writeLine(sprintf("const %s = ...;", con.name.name));
+            writeLine(sprintf("const auto %s = ...;", con.name.name));
         }
 
         #! Processes a hashdecl declaration
         private processHashdecl(hash<auto> hd) {
-            # Output doc comment if present
-            if (hd.docComment) {
-                writeDocComment(hd.docComment);
+            *string doc = getDocForNode(hd);
+            if (exists doc) {
+                writeDocComment(doc);
             }
 
             # Use 'struct' instead of 'hashdecl'
@@ -1758,6 +1768,10 @@ string doxygen_output = proc.process();
             if (hd.declarations) {
                 foreach auto member in (hd.declarations) {
                     if (member.kind == ADK_HashMember) {
+                        *string mdoc = getDocForNode(member);
+                        if (exists mdoc) {
+                            writeDocComment(mdoc);
+                        }
                         string memberDecl = "";
                         if (member.typeName && member.typeName.name) {
                             memberDecl += formatType(member.typeName.name) + " ";
@@ -1775,9 +1789,9 @@ string doxygen_output = proc.process();
 
         #! Processes a typedef declaration
         private processTypedef(hash<auto> td) {
-            # Output doc comment if present
-            if (td.docComment) {
-                writeDocComment(td.docComment);
+            *string doc = getDocForNode(td);
+            if (exists doc) {
+                writeDocComment(doc);
             }
 
             string typeName = td.typeName && td.typeName.name ? td.typeName.name : "auto";
@@ -1787,9 +1801,9 @@ string doxygen_output = proc.process();
 
         #! Processes a variable declaration
         private processVariable(hash<auto> var) {
-            # Output doc comment if present
-            if (var.docComment) {
-                writeDocComment(var.docComment);
+            *string doc = getDocForNode(var);
+            if (exists doc) {
+                writeDocComment(doc);
             }
 
             string typeName = var.typeName && var.typeName.name ? var.typeName.name : "auto";
@@ -1799,15 +1813,41 @@ string doxygen_output = proc.process();
             }
             varDecl += formatType(typeName) + " " + var.name.name + ";";
             writeLine(varDecl);
+            writeLine("");
+        }
+
+        #! Processes an enum declaration
+        private processEnum(hash<auto> en) {
+            *string doc = getDocForNode(en);
+            if (exists doc) {
+                writeDocComment(doc);
+            }
+
+            writeLine(sprintf("enum %s {", en.name.name));
+            indent++;
+            if (en.declarations) {
+                foreach auto member in (en.declarations) {
+                    if (member.kind == ADK_EnumMember) {
+                        *string mdoc = getDocForNode(member);
+                        if (exists mdoc) {
+                            writeDocComment(mdoc);
+                        }
+                        writeLine(member.name.name + ",");
+                    }
+                }
+            }
+            indent--;
+            writeLine("};");
+            writeLine("");
         }
 
         #! Formats a type name for doxygen
-        /** Handles special cases like *type which becomes __7_ type
+        /** Handles special cases like *type which becomes soft<type>
         */
         private string formatType(string typeName) {
             # Handle soft types (*type)
             if (typeName =~ /^\*/) {
-                typeName = "__7_ " + substr(typeName, 1);
+                typeName = "soft<" + substr(typeName, 1) + ">";
             }
             # Remove $ from type names
             typeName =~ s/\$//g;
@@ -1879,6 +1919,103 @@ string doxygen_output = proc.process();
             return result;
         }
 
+        #! Returns a doc comment for the declaration based on source position
+        private *string getDocForNode(hash<auto> node) {
+            if (lines.empty() || !node.loc) {
+                return node.docComment;
+            }
+            int start_line = node.loc.start_line;
+            if (start_line <= 0) {
+                return node.docComment;
+            }
+
+            list<string> docs = getDocCommentsBeforeLine(start_line);
+            if (docs.empty()) {
+                return node.docComment;
+            }
+            return docs.join("\n");
+        }
+
+        #! Returns doc comment blocks immediately preceding the given line
+        private list<string> getDocCommentsBeforeLine(int start_line) {
+            list<string> docs = ();
+            int line = start_line - 1;
+            while (line >= 0) {
+                string cur = lines[line];
+                if (isSkippableLine(cur)) {
+                    line--;
+                    continue;
+                }
+                if (isLineDocLine(cur)) {
+                    list<string> ld = collectLineDoc(line);
+                    docs = (ld.join("\n"),) + docs;
+                    line -= ld.size();
+                    continue;
+                }
+                if (isBlockCommentEnd(cur)) {
+                    list<string> bd = collectBlockDoc(line);
+                    if (bd.size()) {
+                        docs = (bd.join("\n"),) + docs;
+                        line -= bd.size();
+                        continue;
+                    }
+                }
+                break;
+            }
+            return docs;
+        }
+
+        private bool isSkippableLine(string line) {
+            string trimmed = trim(line);
+            if (!trimmed.length()) {
+                return True;
+            }
+            if (trimmed =~ /^#/ && !(trimmed =~ /^#!/)) {
+                return True;
+            }
+            return trimmed =~ /^%/;
+        }
+
+        private bool isLineDocLine(string line) {
+            string trimmed = trim(line);
+            return trimmed =~ /^(#!|\/\/!|\/\/\/)/;
+        }
+
+        private bool isBlockCommentEnd(string line) {
+            return line =~ /\*\//;
+        }
+
+        private bool isBlockCommentStart(string line) {
+            return line =~ /\/\*\*/;
+        }
+
+        private list<string> collectLineDoc(int end_line) {
+            list<string> result = ();
+            int line = end_line;
+            while (line >= 0) {
+                string cur = lines[line];
+                if (!isLineDocLine(cur)) {
+                    break;
+                }
+                result = (cur,) + result;
+                line--;
+            }
+            return result;
+        }
+
+        private list<string> collectBlockDoc(int end_line) {
+            list<string> result = ();
+            int line = end_line;
+            while (line >= 0) {
+                result = (lines[line],) + result;
+                if (isBlockCommentStart(lines[line])) {
+                    return result;
+                }
+                line--;
+            }
+            return ();
+        }
+
         #! Writes a doc comment to output
         private writeDocComment(string comment) {
             # Handle @mainpage conversion if requested
@@ -1895,6 +2032,10 @@ string doxygen_output = proc.process();
             foreach string line in (comment.split("\n")) {
                 # Convert #! to //! (line doc comments)
                 line =~ s/^(\s*)#!/$1\/\/!/;
+                # Drop @cond/@endcond so Doxygen does not hide all members
+                if (line =~ /@cond\b/ || line =~ /@endcond\b/) {
+                    continue;
+                }
                 # Normalize @ref function references by stripping trailing ()
                 line =~ s/@ref\s+([A-Za-z0-9_:]+)\(\)/@ref $1/g;
                 # Process tables in doc comments

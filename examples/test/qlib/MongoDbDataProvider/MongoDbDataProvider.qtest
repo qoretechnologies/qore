@@ -28,6 +28,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
         *string url;
 %ifndef NoMongoDB
         *MongoClient client;
+        bool connection_failed = False;
 %endif
         string test_db = "qore_data_provider_test";
         string test_coll = "test_collection";
@@ -75,14 +76,20 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
             testSkip("MONGODB_URL not set");
             return False;
         }
+        if (connection_failed) {
+            testSkip("MongoDB connection not available");
+            return False;
+        }
         if (!client) {
             try {
                 client = new MongoClient(url);
                 if (!client.ping()) {
+                    connection_failed = True;
                     testSkip("Cannot connect to MongoDB");
                     return False;
                 }
             } catch (hash<ExceptionInfo> ex) {
+                connection_failed = True;
                 testSkip(sprintf("MongoDB connection error: %s", ex.err));
                 return False;
             }
@@ -113,8 +120,14 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
         assertEq("mongodb", conn.getType());
         assertTrue(conn.hasDataProvider());
 
-        # Test getting data provider from connection
-        AbstractDataProvider dp = conn.getDataProvider();
+        # Test getting data provider from connection - this actually connects
+        AbstractDataProvider dp;
+        try {
+            dp = conn.getDataProvider();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("MongoDB connection error: %s", ex.err));
+            return;
+        }
         assertEq("mongodb", dp.getName());
     }
 
@@ -617,10 +630,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
 
     connectionSchemeTest() {
         checkModule();
-        if (!url) {
-            testSkip("MONGODB_URL not set");
-            return;
-        }
+        if (!ensureConnection()) return;
 
         # Test connection scheme is registered
         hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("mongodb");

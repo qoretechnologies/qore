@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -524,7 +524,7 @@ public:
 
     //! returns the absolute byte position in the file
     /** @return the absolute byte position in the file
-        @deprecated: only the const variant will remain in the future
+        @deprecated only the const variant will remain in the future
     */
     DLLEXPORT size_t getPos();
 

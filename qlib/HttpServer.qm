@@ -59,6 +59,12 @@ module HttpServer {
     other types of traffic with an appropriate handler (for example handlers requiring protocol changes such as with
     the WebSocket protocol are supported as well).
 
+    The HttpServer module supports async I/O and HTTP/2. Async I/O mode uses a non-blocking I/O controller to accept
+    connections and read headers efficiently, then dispatches request processing to the thread pool. HTTP/2 support
+    requires async I/O mode; when async I/O is disabled, the server only supports HTTP/1.x. Enable async I/O with the
+    \c "async_mode" key in @ref HttpServerOptionInfo and see the @ref httpserverasyncio_intro "HttpServerAsyncIo"
+    module for additional details.
+
     To use this module, use \c "%requires HttpServer" in your code.  See examples/httpserver.q for an example program
     using this module
 
@@ -112,9 +118,7 @@ class MyHandler inherits AbstractHttpRequestHandler {
 }
 
 sub log(string str, ...) {
-    printf("%y: %s\n", now_us(), vsprintf(str, argv));    - fixed a bug reloading X.509 certificates on running listeners
-      (<a href="https://github.com/qoretechnologies/qore/issues/4720">issue 4720</a>)
-
+    printf("%y: %s\n", now_us(), vsprintf(str, argv));
 }
 
 const MyHttpPort = 19001;

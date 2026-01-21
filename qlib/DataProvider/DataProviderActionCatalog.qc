@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DataProviderActionCatalog.qc provides the DataProvider catalog API
 
-/** DataProviderActionCatalog.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/** DataProviderActionCatalog.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -417,6 +417,12 @@ public hashdecl DataProviderActionInfo {
 
     #! Describes the output data of the action and how the output type relates to it
     string output_data_type;
+
+    #! Optional context required to display this action
+    *string requires_action_context;
+
+    #! Optional context set by this action for child actions
+    *string action_context;
 
     #! A free-form string giving information about the exec type
     *string exec_type;

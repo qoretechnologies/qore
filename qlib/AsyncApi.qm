@@ -2632,19 +2632,93 @@ public class AsyncApiSchemaTokenizer {
         };
 
         list<string> lines = text.split("\n");
+        if (!lines) {
+            return schema;
+        }
+
+        # Stack to track parent fields: each entry has {indent, field_name, props_ref, is_array}
+        list<hash<auto>> stack = ();
+
+        # Determine minimum indentation (first field's indentation)
+        *int min_indent;
+        foreach string line in (lines) {
+            auto indent_match = (line =~ x/^(\s*)-/);
+            if (indent_match.typeCode() == NT_LIST && indent_match[0]) {
+                min_indent = indent_match[0].length();
+                break;
+            }
+        }
+        if (!min_indent.val()) {
+            min_indent = 0;
+        }
+
         foreach string line in (lines) {
             # Use Qore identifier pattern for field names
-            auto field_match = (line =~ x/^\s*-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
-            if (field_match.typeCode() == NT_LIST && field_match[0] && field_match[1]) {
-                string field_name = field_match[0];
-                string field_type = field_match[1];
-                *string field_desc = field_match[2];
+            auto field_match = (line =~ x/^(\s*)-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
+            if (field_match.typeCode() != NT_LIST || !field_match[1] || !field_match[2]) {
+                continue;
+            }
 
-                hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
-                if (field_desc) {
-                    field_schema.description = trim(field_desc);
-                }
+            int indent = field_match[0] ? field_match[0].length() : 0;
+            string field_name = field_match[1];
+            string field_type = field_match[2];
+            *string field_desc = field_match[3];
+
+            hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
+            if (field_desc) {
+                field_schema.description = trim(field_desc);
+            }
+
+            # Pop stack until we find a parent with smaller indentation
+            while (stack && stack.last().indent >= indent) {
+                pop stack;
+            }
+
+            if (!stack) {
                 schema.properties{field_name} = field_schema;
+                if (field_schema.type == "array" || field_schema.type == "object") {
+                    push stack, {
+                        "indent": indent,
+                        "field_name": field_name,
+                        "props_ref": \schema.properties,
+                        "is_array": field_schema.type == "array",
+                    };
+                }
+            } else {
+                reference<hash<auto>> parent_props = stack.last().props_ref;
+                string parent_name = stack.last().field_name;
+                bool is_array = stack.last().is_array;
+
+                if (is_array) {
+                    if (!parent_props{parent_name}.items) {
+                        parent_props{parent_name}.items = {
+                            "type": "object",
+                            "properties": {},
+                        };
+                    }
+                    parent_props{parent_name}.items.properties{field_name} = field_schema;
+                    if (field_schema.type == "array" || field_schema.type == "object") {
+                        push stack, {
+                            "indent": indent,
+                            "field_name": field_name,
+                            "props_ref": \parent_props{parent_name}.items.properties,
+                            "is_array": field_schema.type == "array",
+                        };
+                    }
+                } else {
+                    if (!parent_props{parent_name}.properties) {
+                        parent_props{parent_name}.properties = {};
+                    }
+                    parent_props{parent_name}.properties{field_name} = field_schema;
+                    if (field_schema.type == "array" || field_schema.type == "object") {
+                        push stack, {
+                            "indent": indent,
+                            "field_name": field_name,
+                            "props_ref": \parent_props{parent_name}.properties,
+                            "is_array": field_schema.type == "array",
+                        };
+                    }
+                }
             }
         }
 
@@ -2951,19 +3025,63 @@ public class AsyncApiSchemaGenerator {
 
         # Add channels
         asyncapi.channels = {};
+        hash<string, list<string>> channel_subscribe_msgs;
+        hash<string, list<string>> channel_publish_msgs;
+        hash<auto> message_components = generateMessageComponents();
+
         if (channels) {
             foreach hash<auto> ch in (channels.pairIterator()) {
                 string channel_name = ch.key;
                 channel_name =~ s/^\///;
                 hash<ChannelSchemaInfo> channel = ch.value;
 
+                hash<auto> channel_messages = {};
+                list<string> subscribe_keys = ();
+                list<string> publish_keys = ();
+
+                list<hash<auto>> subscribe_schemas = channel.subscribe_schemas
+                    ?? (channel.subscribe_schema ? (channel.subscribe_schema,) : ());
+                list<hash<auto>> publish_schemas = channel.publish_schemas
+                    ?? (channel.publish_schema ? (channel.publish_schema,) : ());
+
+                if (subscribe_schemas) {
+                    foreach hash<auto> msg in (subscribe_schemas) {
+                        hash<auto> msg_info = registerChannelMessageComponent(msg, channel_name,
+                            \message_components);
+                        string msg_key = makeUniqueChannelMessageKey(channel_messages, msg_info.message_key);
+                        channel_messages{msg_key} = {
+                            "\$ref": "#/components/messages/" + msg_info.component_key,
+                        };
+                        subscribe_keys += msg_key;
+                    }
+                }
+
+                if (publish_schemas) {
+                    foreach hash<auto> msg in (publish_schemas) {
+                        hash<auto> msg_info = registerChannelMessageComponent(msg, channel_name,
+                            \message_components);
+                        string msg_key = makeUniqueChannelMessageKey(channel_messages, msg_info.message_key);
+                        channel_messages{msg_key} = {
+                            "\$ref": "#/components/messages/" + msg_info.component_key,
+                        };
+                        publish_keys += msg_key;
+                    }
+                }
+
+                if (!channel_messages) {
+                    channel_messages.subscribe = {"\$ref": "#/components/messages/SubscribeMessage"};
+                    channel_messages.event = {"\$ref": "#/components/messages/EventMessage"};
+                    subscribe_keys += "subscribe";
+                    publish_keys += "event";
+                }
+
+                channel_subscribe_msgs{channel_name} = subscribe_keys;
+                channel_publish_msgs{channel_name} = publish_keys;
+
                 asyncapi.channels{channel_name} = {
                     "address": channel.path,
                     "description": channel.desc ?? channel.summary ?? "",
-                    "messages": {
-                        "subscribe": {"\$ref": "#/components/messages/SubscribeMessage"},
-                        "event": {"\$ref": "#/components/messages/EventMessage"},
-                    },
+                    "messages": channel_messages,
                 };
             }
         }
@@ -2978,28 +3096,54 @@ public class AsyncApiSchemaGenerator {
                     "event": {"\$ref": "#/components/messages/EventMessage"},
                 },
             };
+            channel_subscribe_msgs.events = ("subscribe",);
+            channel_publish_msgs.events = ("event",);
         }
 
         # Add operations
-        string first_channel = asyncapi.channels.firstKey();
-        asyncapi.operations = {
-            "subscribeToEvents": {
+        asyncapi.operations = {};
+        foreach string channel_name in (keys asyncapi.channels) {
+            foreach string msg_key in (channel_subscribe_msgs{channel_name} ?? ()) {
+                string op_name = makeOperationName("send", channel_name, msg_key);
+                asyncapi.operations{op_name} = {
+                    "action": "send",
+                    "channel": {"\$ref": "#/channels/" + channel_name},
+                    "summary": "Send " + msg_key + " message",
+                    "messages": ({"\$ref": "#/channels/" + channel_name + "/messages/" + msg_key},),
+                };
+            }
+            foreach string msg_key in (channel_publish_msgs{channel_name} ?? ()) {
+                string op_name = makeOperationName("receive", channel_name, msg_key);
+                asyncapi.operations{op_name} = {
+                    "action": "receive",
+                    "channel": {"\$ref": "#/channels/" + channel_name},
+                    "summary": "Receive " + msg_key + " message",
+                    "messages": ({"\$ref": "#/channels/" + channel_name + "/messages/" + msg_key},),
+                };
+            }
+        }
+
+        if (asyncapi.channels) {
+            string first_channel = asyncapi.channels.firstKey();
+            asyncapi.operations.subscribeToEvents = {
                 "action": "send",
                 "channel": {"\$ref": "#/channels/" + first_channel},
                 "summary": "Subscribe to event stream",
-                "messages": ({"\$ref": "#/channels/" + first_channel + "/messages/subscribe"},),
-            },
-            "receiveEvents": {
+                "messages": ({"\$ref": "#/channels/" + first_channel + "/messages/"
+                    + (channel_subscribe_msgs{first_channel} ? channel_subscribe_msgs{first_channel}[0] : "subscribe")},),
+            };
+            asyncapi.operations.receiveEvents = {
                 "action": "receive",
                 "channel": {"\$ref": "#/channels/" + first_channel},
                 "summary": "Receive event notifications",
-                "messages": ({"\$ref": "#/channels/" + first_channel + "/messages/event"},),
-            },
-        };
+                "messages": ({"\$ref": "#/channels/" + first_channel + "/messages/"
+                    + (channel_publish_msgs{first_channel} ? channel_publish_msgs{first_channel}[0] : "event")},),
+            };
+        }
 
         # Add components
         asyncapi.components = {
-            "messages": generateMessageComponents(),
+            "messages": message_components,
             "schemas": generateSchemaComponents(),
         };
 
@@ -3024,6 +3168,69 @@ public class AsyncApiSchemaGenerator {
                 "payload": {"\$ref": "#/components/schemas/EventPayload"},
             },
         };
+    }
+
+    private static hash<auto> registerChannelMessageComponent(hash<auto> msg, string channel_name,
+        reference<hash<auto>> message_components) {
+        string base_key = msg.name;
+        string component_key = makeUniqueComponentKey(base_key, channel_name, \message_components);
+
+        hash<auto> component = {
+            "name": msg.name,
+            "title": msg.name,
+            "summary": msg.summary ?? msg.name,
+            "contentType": msg.content_type ?? "application/json",
+            "payload": msg.schema ?? {"type": "object", "additionalProperties": True},
+        };
+        if (msg.desc) {
+            component.description = msg.desc;
+        }
+        message_components{component_key} = component;
+
+        return {
+            "component_key": component_key,
+            "message_key": getMessageKey(msg.name),
+        };
+    }
+
+    private static string getMessageKey(string name) {
+        if (name == "SubscribeMessage") {
+            return "subscribe";
+        }
+        if (name == "EventMessage") {
+            return "event";
+        }
+        return name;
+    }
+
+    private static string makeUniqueComponentKey(string base_key, string channel_name,
+        reference<hash<auto>> message_components) {
+        string key = base_key;
+        if (message_components{key}) {
+            key = channel_name + "_" + base_key;
+        }
+        int idx = 2;
+        while (message_components{key}) {
+            key = channel_name + "_" + base_key + "_" + idx.toString();
+            idx++;
+        }
+        return key;
+    }
+
+    private static string makeUniqueChannelMessageKey(hash<auto> channel_messages, string base_key) {
+        string key = base_key;
+        int idx = 2;
+        while (channel_messages{key}) {
+            key = base_key + "_" + idx.toString();
+            idx++;
+        }
+        return key;
+    }
+
+    private static string makeOperationName(string direction, string channel_name, string msg_key) {
+        string base = direction + "_" + channel_name + "_" + msg_key;
+        base =~ s/[^A-Za-z0-9_]/_/g;
+        return base;
     }
 
     #! Generate schema component definitions
