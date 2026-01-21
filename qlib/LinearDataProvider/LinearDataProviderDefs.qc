@@ -558,12 +558,7 @@ mutation DeleteWebhook($id: String!) {
 }
 ";
 
-#! Linear logo in SVG format
-public const LinearLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<svg width=\"100\" height=\"100\" viewBox=\"0 0 100 100\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">
-<rect width=\"100\" height=\"100\" rx=\"20\" fill=\"#5E6AD2\"/>
-<path d=\"M26.5 73.5L26.5 26.5L73.5 73.5L26.5 73.5Z\" fill=\"white\"/>
-<path d=\"M26.5 26.5L73.5 26.5L73.5 50L26.5 26.5Z\" fill=\"white\" fill-opacity=\"0.5\"/>
-</svg>";
+#! Linear logo in SVG format (loaded from file)
+public const LinearLogo = File::readTextFile(get_script_dir() + "/linear-logo.svg");
 
 } # namespace LinearDataProvider
