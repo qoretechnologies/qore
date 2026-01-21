@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -101,6 +101,8 @@ HashDeclList::HashDeclList(const HashDeclList& old, int64 po, qore_ns_private* n
         typed_hash_decl_private::get(*hd)->setNamespace(ns);
         addInternal(hd);
     }
+    // Update parent pointers to point to hashdecls in this list (not the source list)
+    updateParentPointers();
 }
 
 void HashDeclList::mergeUserPublic(const HashDeclList& old, qore_ns_private* ns) {
@@ -116,6 +118,8 @@ void HashDeclList::mergeUserPublic(const HashDeclList& old, qore_ns_private* ns)
         typed_hash_decl_private::get(*hd)->setNamespace(ns);
         addInternal(hd);
     }
+    // Update parent pointers to point to hashdecls in this list (not the source list)
+    updateParentPointers();
 }
 
 int HashDeclList::importSystemHashDecls(const HashDeclList& source, qore_ns_private* ns, ExceptionSink* xsink) {
@@ -137,6 +141,8 @@ int HashDeclList::importSystemHashDecls(const HashDeclList& source, qore_ns_priv
             ++cnt;
         }
     }
+    // Update parent pointers to point to hashdecls in this list (not the source list)
+    updateParentPointers();
     return cnt;
 }
 
@@ -208,5 +214,22 @@ void HashDeclList::parseRemove(const char* name) {
     hm_qth_t::iterator i = hm.find(name);
     if (i != hm.end()) {
         remove(i);
+    }
+}
+
+void HashDeclList::updateParentPointers() {
+    for (auto& i : hm) {
+        typed_hash_decl_private* hdp = typed_hash_decl_private::get(*i.second);
+        const char* parent_name = hdp->getParentHashDeclName();
+        if (parent_name) {
+            // Look up the parent by name in this list
+            TypedHashDecl* new_parent = find(parent_name);
+            if (new_parent) {
+                // Update the parent pointer to point to the hashdecl in this namespace
+                hdp->setParentHashDecl(new_parent);
+            }
+            // If parent not found in this list, keep the original pointer
+            // (parent might be in a parent namespace)
+        }
     }
 }

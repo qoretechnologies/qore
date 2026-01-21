@@ -301,6 +301,11 @@ public:
         parentHashDecl = parent;
     }
 
+    //! Returns the name of the parent hashdecl (for use when updating parent pointers after copying)
+    DLLLOCAL const char* getParentHashDeclName() const {
+        return parentHashDecl ? get(*parentHashDecl)->getName() : nullptr;
+    }
+
     //! Returns true if this hashdecl is a descendant of the given hashdecl
     DLLLOCAL bool isDescendantOf(const typed_hash_decl_private& ancestor) const {
         const typed_hash_decl_private* current = this;
