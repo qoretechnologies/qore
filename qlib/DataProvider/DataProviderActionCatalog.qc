@@ -424,6 +424,11 @@ public hashdecl DataProviderActionInfo {
     #! Optional context set by this action for child actions
     *string action_context;
 
+    #! If True, the UI should use a child eligibility API to determine which children can be added
+    /** This is used for actions that can have child actions with specific constraints, such as data pipeline states.
+    */
+    *bool requires_child_eligibility_check;
+
     #! A free-form string giving information about the exec type
     *string exec_type;
 
