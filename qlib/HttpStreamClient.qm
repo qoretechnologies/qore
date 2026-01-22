@@ -1,0 +1,557 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file HttpStreamClient.qm Qore user module for HTTP streaming support
+
+/*  HttpStreamClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+%require-types
+
+# enable all warnings
+%enable-all-warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%new-style
+
+%allow-weak-references
+
+module HttpStreamClient {
+    version = "1.0";
+    desc = "user module for HTTP streaming support";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage HttpStreamClient Module
+
+    @tableofcontents
+
+    @section httpstreamclientintro HttpStreamClient Introduction
+
+    The %HttpStreamClient module provides a convenience API for reading HTTP streaming responses,
+    primarily designed for Server-Sent Events (SSE) responses with Content-Type \c text/event-stream.
+
+    To use this module, use \c "%requires HttpStreamClient" in your code.
+
+    All the public symbols in the module are defined in the HttpStreamClient namespace.
+
+    The main classes are:
+    - @ref HttpStreamClient::HTTPResponseStream "HTTPResponseStream": provides streaming access to HTTP response bodies
+    - @ref HttpStreamClient::HTTPResponseStreamInfo "HTTPResponseStreamInfo": response information hashdecl
+
+    @section httpstreamclient_example Usage Example
+
+    @code{.py}
+%modern
+%requires HttpStreamClient
+%requires json
+
+HTTPClient client({"url": "https://api.example.com"});
+
+# Start streaming request
+hash<auto> info;
+HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "POST", "/events",
+    make_json({"subscribe": "updates"}),
+    {"Accept": "text/event-stream", "Content-Type": "application/json"},
+    \info);
+
+# Check response
+hash<HTTPResponseStreamInfo> resp = stream.getInfo();
+if (resp.status_code != 200) {
+    throw "HTTP-ERROR", sprintf("HTTP %d: %s", resp.status_code, resp.status_message);
+}
+
+# Read SSE events
+if (resp.content_type == "text/event-stream") {
+    while (!stream.isEof()) {
+        *hash<SseMessageInfo> evt = stream.readServerSentEvent(30s);
+        if (!evt) {
+            break;
+        }
+        printf("Event: %y, Data: %y\n", evt.event, evt.data);
+    }
+} else {
+    # Read entire body
+    *binary body;
+    while (*binary chunk = stream.readChunk(30s)) {
+        body += chunk;
+    }
+    printf("Response: %s\n", body.toString());
+}
+
+stream.close();
+    @endcode
+
+    @section httpstreamclient_relnotes Release Notes
+
+    @subsection httpstreamclient_v1_0 HttpStreamClient v1.0
+    - initial release
+*/
+
+#! The HttpStreamClient namespace contains all the public definitions in the HttpStreamClient module
+public namespace HttpStreamClient {
+    #! Response stream information hashdecl
+    /** Contains metadata about the HTTP response received before reading the body
+    */
+    public hashdecl HTTPResponseStreamInfo {
+        #! HTTP status code
+        int status_code;
+
+        #! HTTP status message
+        string status_message;
+
+        #! HTTP version (e.g., "HTTP/1.1")
+        string http_version;
+
+        #! Response headers with lowercase keys
+        hash<auto> headers;
+
+        #! Raw response headers with original case
+        hash<auto> headers_raw;
+
+        #! Content-Type without parameters, lowercase
+        *string content_type;
+
+        #! Charset from Content-Type, if present
+        *string charset;
+
+        #! Content-Encoding value, lowercase
+        *string content_encoding;
+
+        #! True if Transfer-Encoding is "chunked"
+        bool chunked;
+
+        #! Content-Length if known
+        *int content_length;
+    }
+
+    #! HTTP response stream for incremental body reading
+    /** This class provides streaming access to HTTP response bodies after headers have been received.
+
+        It supports:
+        - Server-Sent Events (SSE) with readServerSentEvent()
+        - Chunked transfer encoding with automatic decompression
+        - Raw chunk reading for non-SSE responses
+
+        @par Example:
+        @code{.py}
+HTTPClient client({"url": "https://api.example.com"});
+hash<auto> info;
+HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/stream", NOTHING, NOTHING, \info);
+while (*binary chunk = stream.readChunk()) {
+    process(chunk);
+}
+stream.close();
+        @endcode
+    */
+    public class HTTPResponseStream {
+        private {
+            #! The HTTP client
+            HTTPClient client;
+
+            #! Response information
+            hash<HTTPResponseStreamInfo> info;
+
+            #! True if stream has been closed
+            bool closed = False;
+
+            #! True if end of stream reached
+            bool eof = False;
+
+            #! Default read timeout
+            timeout read_timeout = 30s;
+
+            #! String output stream for SSE parsing when chunked
+            StringOutputStream ostream;
+
+            #! Binary output stream for chunk decompression
+            BinaryOutputStream bostream;
+
+            #! Decompression transform stream for SSE (wraps ostream)
+            TransformOutputStream dstream;
+
+            #! Decompression transform stream for binary chunks (wraps bostream)
+            TransformOutputStream bdstream;
+
+            #! The decompressor transform for reuse
+            Transform decompressor;
+
+            #! True if decompression is enabled
+            bool use_decompressor = False;
+        }
+
+        #! Creates the stream from an HTTPClient after headers have been received
+        /** @param http_client the HTTPClient that has already sent the request with \c getbody=False
+            @param response_info the response information hash from HTTPClient::send()
+            @param default_timeout the default timeout for read operations
+        */
+        constructor(HTTPClient http_client, hash<auto> response_info, timeout default_timeout = 30s) {
+            client = http_client;
+            read_timeout = default_timeout;
+            initInfo(response_info);
+            setupDecompression();
+        }
+
+        #! Gets response information including headers
+        /** @return the response stream information
+
+            The response information is available immediately after construction.
+        */
+        hash<HTTPResponseStreamInfo> getInfo() {
+            return info;
+        }
+
+        #! Reads the next SSE event from the stream
+        /** @param to optional timeout; uses the default timeout if not specified
+            @return the SSE event or @ref nothing if EOF reached
+
+            This method reads and parses the next Server-Sent Event from the stream.
+            For chunked responses, it automatically handles decompression.
+
+            @throw ENCODING-ERROR if content encoding is not supported
+        */
+        *hash<SseMessageInfo> readServerSentEvent(*timeout to) {
+            if (closed || eof) {
+                return;
+            }
+            timeout use_to = to ?? read_timeout;
+
+            if (info.chunked) {
+                hash<auto> chunk = client.readHTTPChunk(use_to);
+                if (!chunk.body) {
+                    eof = True;
+                    return;
+                }
+                if (use_decompressor) {
+                    dstream.write(chunk.body);
+                } else {
+                    ostream.write(chunk.body);
+                }
+                return client.parseServerSentEvent(ostream.getData());
+            }
+
+            *hash<SseMessageInfo> evt = client.readServerSentEvent(info.content_encoding, use_to);
+            if (!evt) {
+                eof = True;
+            }
+            return evt;
+        }
+
+        #! Reads a chunk from the stream with optional decompression
+        /** @param to optional timeout; uses the default timeout if not specified
+            @param decompress if True (the default), automatically decompress the data based on
+                Content-Encoding; if False, return raw (possibly compressed) bytes
+            @return the chunk data as binary or @ref nothing if EOF reached
+
+            For non-SSE responses, this method reads chunks. For chunked transfer encoding,
+            it reads individual chunks. For content-length responses, it reads the entire body
+            in one call.
+
+            By default, this method handles decompression (gzip, deflate, bzip2) transparently,
+            consistent with readServerSentEvent(). Set \a decompress to False to get raw bytes.
+
+            @throw ENCODING-ERROR if content encoding is not supported and decompress is True
+        */
+        *binary readChunk(*timeout to, bool decompress = True) {
+            if (closed || eof) {
+                return;
+            }
+            timeout use_to = to ?? read_timeout;
+
+            if (info.chunked) {
+                hash<auto> chunk = client.readHTTPChunk(use_to);
+                if (!chunk.body) {
+                    eof = True;
+                    return;
+                }
+                if (decompress && use_decompressor) {
+                    bdstream.write(chunk.body);
+                    return bostream.getData();
+                }
+                return chunk.body;
+            }
+
+            # For non-chunked, read the entire body at once
+            binary body;
+            if (info.content_length) {
+                body = client.recvBinary(info.content_length, use_to);
+                eof = True;
+            } else {
+                # No content-length, try to read until connection closes
+                try {
+                    body = client.recvBinary(-1, use_to);
+                    if (!body) {
+                        eof = True;
+                        return;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-CLOSED") {
+                        eof = True;
+                        return;
+                    }
+                    rethrow;
+                }
+            }
+
+            # Handle decompression for non-chunked responses
+            if (decompress && info.content_encoding) {
+                return decompressBody(body);
+            }
+            return body;
+        }
+
+        #! Reads a raw chunk from the stream without decompression
+        /** @param to optional timeout; uses the default timeout if not specified
+            @return the raw chunk data as binary or @ref nothing if EOF reached
+
+            This is a convenience method equivalent to calling readChunk(to, False).
+            Use this when you need the raw (possibly compressed) bytes.
+
+            @see readChunk()
+        */
+        *binary readRawChunk(*timeout to) {
+            return readChunk(to, False);
+        }
+
+        #! Checks if the stream has reached EOF
+        /** @return True if no more data is available
+        */
+        bool isEof() {
+            return eof;
+        }
+
+        #! Checks if the stream has been closed
+        /** @return True if the stream has been closed by calling close()
+        */
+        bool isClosed() {
+            return closed;
+        }
+
+        #! Sets the default read timeout
+        /** @param to the timeout value
+        */
+        setReadTimeout(timeout to) {
+            read_timeout = to;
+        }
+
+        #! Gets the default read timeout
+        /** @return the current default read timeout
+        */
+        timeout getReadTimeout() {
+            return read_timeout;
+        }
+
+        #! Closes the stream and disconnects the client
+        /** After calling close(), no more data can be read from the stream.
+        */
+        close() {
+            if (!closed) {
+                closed = True;
+                client.disconnect();
+            }
+        }
+
+        #! Destructor ensures the connection is closed
+        destructor() {
+            close();
+        }
+
+        #! @private
+        private initInfo(hash<auto> resp) {
+            *int cl;
+            if (resp."content-length".val()) {
+                cl = int(resp."content-length");
+            }
+            info = <HTTPResponseStreamInfo>{
+                "status_code": resp.status_code,
+                "status_message": resp.status_message,
+                "http_version": resp.http_version,
+                "headers": resp."response-headers",
+                "headers_raw": resp."response-headers-raw",
+                "content_type": normalizeContentType(resp."content-type"),
+                "charset": resp.charset,
+                "content_encoding": resp."content-encoding".val()
+                    ? tolower(resp."content-encoding")
+                    : NOTHING,
+                "chunked": tolower(resp."transfer-encoding" ?? "") == "chunked",
+                "content_length": cl,
+            };
+        }
+
+        #! @private
+        private setupDecompression() {
+            if (!info.chunked) {
+                return;
+            }
+            ostream = new StringOutputStream();
+            bostream = new BinaryOutputStream();
+
+            switch (info.content_encoding) {
+                case "deflate":
+                    use_decompressor = True;
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZLIB);
+                    break;
+                case "gzip":
+                    use_decompressor = True;
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_GZIP);
+                    break;
+                case "bzip2":
+                    use_decompressor = True;
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_BZIP2);
+                    break;
+                case "br":
+                    use_decompressor = True;
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_BROTLI);
+                    break;
+                case "zstd":
+                    use_decompressor = True;
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZSTD);
+                    break;
+                case "lz4":
+                    use_decompressor = True;
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_LZ4);
+                    break;
+                case NOTHING:
+                case "identity":
+                    use_decompressor = False;
+                    break;
+
+                default:
+                    throw "ENCODING-ERROR", sprintf("Don't know how to handle Content-Encoding %y",
+                        info.content_encoding);
+            }
+            if (use_decompressor) {
+                dstream = new TransformOutputStream(ostream, decompressor);
+                bdstream = new TransformOutputStream(bostream, decompressor);
+            }
+        }
+
+        #! @private
+        private static string normalizeContentType(*string content_type) {
+            if (!content_type.val()) {
+                return "";
+            }
+            string rv = content_type;
+            rv =~ s/\s*;.*$//;
+            rv =~ s/^\s+//;
+            rv =~ s/\s+$//;
+            return tolower(rv);
+        }
+
+        #! @private Decompress a binary body based on content encoding
+        private binary decompressBody(binary body) {
+            switch (info.content_encoding) {
+                case "deflate":
+                    return uncompress_to_binary(body);
+                case "gzip":
+                    return gunzip_to_binary(body);
+                case "bzip2":
+                    return bunzip2_to_binary(body);
+                case "br":
+                    return unbrotli_to_binary(body);
+                case "zstd":
+                    return unzstd_to_binary(body);
+                case "lz4":
+                    return unlz4_to_binary(body);
+                case NOTHING:
+                case "identity":
+                    return body;
+                default:
+                    throw "ENCODING-ERROR", sprintf("Don't know how to handle Content-Encoding %y",
+                        info.content_encoding);
+            }
+        }
+    }
+
+    #! Sends an HTTP request and returns a stream for reading the response body
+    /** @param client the HTTPClient to use for the request
+        @param method the HTTP method (GET, POST, etc.)
+        @param path the request path
+        @param body optional request body
+        @param headers optional additional headers
+        @param info reference to receive extended response information
+        @param default_timeout optional default timeout for stream read operations
+
+        @return an HTTPResponseStream object for reading the response body
+
+        This function sends an HTTP request with \c getbody=False so that only the headers
+        are received. The body can then be read incrementally using the returned stream.
+
+        @par Example:
+        @code{.py}
+HTTPClient client({"url": "https://api.example.com"});
+hash<auto> info;
+HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/events",
+    NOTHING, {"Accept": "text/event-stream"}, \info);
+# Read events...
+stream.close();
+        @endcode
+    */
+    public HTTPResponseStream sub sendAndStream(HTTPClient client, string method, *string path,
+            *data body, *hash<auto> headers, *reference<hash<auto>> info, timeout default_timeout = 30s) {
+        # Enable error passthrough to allow handling of error responses in the stream
+        # Note: This temporarily modifies the client state. If the client is shared across threads,
+        # consider using a dedicated client instance for streaming requests.
+        bool old_error_passthru = client.setErrorPassthru(True);
+        on_exit {
+            client.setErrorPassthru(old_error_passthru);
+        }
+        hash<auto> resp = client.sendAndStream(method, path, body, headers, \info);
+
+        # Build clean response-headers hash containing only actual HTTP headers
+        # (not status_code, status_message, http_version which are metadata injected by HTTPClient)
+        hash<auto> response_headers = info."response-headers" ?? {};
+        # Remove non-header metadata keys that HTTPClient adds to response-headers
+        remove response_headers.status_code;
+        remove response_headers.status_message;
+        remove response_headers.http_version;
+        # Add any header values from resp that might not be in response-headers
+        if (resp."content-type") {
+            response_headers."content-type" = resp."content-type";
+        }
+        if (resp."content-encoding") {
+            response_headers."content-encoding" = resp."content-encoding";
+        }
+        if (resp."transfer-encoding") {
+            response_headers."transfer-encoding" = resp."transfer-encoding";
+        }
+        if (resp."content-length") {
+            response_headers."content-length" = resp."content-length";
+        }
+
+        return new HTTPResponseStream(client, info + {
+            "status_code": resp.status_code,
+            "status_message": resp.status_message,
+            "http_version": resp.http_version,
+            "content-type": resp."content-type" ?? response_headers."content-type",
+            "content-encoding": resp."content-encoding" ?? response_headers."content-encoding",
+            "transfer-encoding": resp."transfer-encoding" ?? response_headers."transfer-encoding",
+            "content-length": resp."content-length" ?? response_headers."content-length",
+            "charset": info.charset,
+            "response-headers": response_headers,
+            "response-headers-raw": info."response-headers-raw",
+        }, default_timeout);
+    }
+}

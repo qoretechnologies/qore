@@ -1088,6 +1088,69 @@ hash<auto> HTTPClient::send(*binary body, string method, *string path, *hash<aut
     return *xsink ? QoreValue() : rv.release();
 }
 
+//! Sends an HTTP request and returns headers only, leaving the response body on the socket for streaming
+/** This method is designed for streaming responses such as Server-Sent Events (SSE). The response body is NOT
+    read automatically; use @ref readHTTPChunk() or @ref readServerSentEvent() to read the response body
+    incrementally.
+
+    If a connection has not already been established, an internal call to HTTPClient::connect() will be made
+    before sending the message.
+
+    @par Example:
+    @code{.py}
+hash<auto> info;
+hash<auto> resp = httpclient.sendAndStream("POST", "/events", body, headers, \info);
+if (resp.status_code == 200) {
+    while (*hash<SseMessageInfo> evt = httpclient.readServerSentEvent()) {
+        # process event
+    }
+}
+    @endcode
+
+    @param method The name of the HTTP method (\c "GET", \c "POST", etc.)
+    @param path The path for the message (i.e. \c "/path/resource?method&param=value")
+    @param body The message body to send; pass @ref nothing (no value) to send no body
+    @param headers An optional hash of headers to include in the message
+    @param info An optional reference to receive request/response information
+
+    @return The headers received from the HTTP server with all key names converted to lower-case. The \c "body"
+    key will NOT be present as the body is left on the socket for streaming. The HTTP status will be assigned
+    to the \c "status_code" key.
+
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+    @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+    @throw HTTP-CLIENT-RECEIVE-ERROR status error communicating with HTTP server; note that this error is not
+    raised for HTTP status codes indicating an error if the \c error_passthru option is set to @ref True "True"
+    @throw SOCKET-SEND-ERROR There was an error sending the data
+    @throw SOCKET-CLOSED The remote end closed the connection
+    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-TIMEOUT Data transmission or reception exceeded the timeout period
+    @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+    @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+
+    @note
+    - The response body is NOT read by this method; use @ref readHTTPChunk() or @ref readServerSentEvent()
+      to read the body incrementally
+    - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method
+
+    @since %Qore 2.3
+ */
+hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *hash<auto> headers, *reference<hash<auto>> info) {
+    OptHashRefHelper ohrh(info, xsink);
+    ReferenceHolder<QoreHashNode> rv(xsink);
+    const char* pstr = path && !path->empty() ? path->c_str() : nullptr;
+    if (get_node_type(body) == NT_STRING) {
+        rv = client->sendAndStream(method->c_str(), pstr, headers,
+            *static_cast<const QoreStringNode*>(body), *ohrh, xsink);
+    } else {
+        const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
+        rv = client->sendAndStream(method->c_str(), pstr, headers,
+            b ? b->getPtr() : nullptr, b ? b->size() : 0, *ohrh, xsink);
+    }
+    return *xsink ? QoreValue() : rv.release();
+}
+
 //! Sends an HTTP request with the specified method and chunked message body as given by a send callback and returns headers and any body received as a response in a hash format
 /** If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
 

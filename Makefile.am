@@ -66,6 +66,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/LinearRestClient.qm \
 	qlib/GoogleRestClient.qm \
 	qlib/HueRestClient.qm \
+	qlib/HttpStreamClient.qm \
 	qlib/MewsRestClient.qm \
 	qlib/NetSuiteRestClient.qm \
 	qlib/OpenAiRestClient.qm \

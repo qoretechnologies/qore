@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ConnectionProvider.qm Qore user module providing an API for providing connections to %Qore
 
-/*  ConnectionProvider.qm Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  ConnectionProvider.qm Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,7 +34,7 @@
 %requires ProviderIndexUtil
 
 module ConnectionProvider {
-    version = "2.1";
+    version = "2.2";
     desc    = "API for pluggable connection providers to Qore";
     author  = "David Nichols <david.nichols@qoretechnologies.com>";
     url     = "http://qore.org";
@@ -112,6 +112,9 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @endverbatim
 
     @section connectionproviderrelnotes Release Notes
+
+    @subsection connectionprovider_2_2 ConnectionProvider 2.2
+    - added async HTTP ping polling support for HTTP and HTTP-based connections
 
     @subsection connectionprovider_2_1 ConnectionProvider 2.1
     - added the @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper" class

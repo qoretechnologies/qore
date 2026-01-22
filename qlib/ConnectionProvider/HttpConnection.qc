@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore HttpConnection class definition
 
-/*  HttpConnection.qc Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  HttpConnection.qc Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -114,6 +114,37 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                     "short_desc": "Sets HTTP headers to include in each request",
                     "type": "hash",
                     "desc": "Sets HTTP headers to include in each outgoing request",
+                },
+                "ping_method": <ConnectionOptionInfo>{
+                    "display_name": "Ping Method",
+                    "short_desc": "The HTTP method to use for pings",
+                    "type": "string",
+                    "desc": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make "
+                        "an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method "
+                        "name",
+                },
+                "ping_path": <ConnectionOptionInfo>{
+                    "display_name": "Ping Path",
+                    "short_desc": "The URI path to use for pings",
+                    "type": "string",
+                    "desc": "The URI path to use for an advanced ping; this and `ping_method` must be set to make "
+                        "an HTTP request as a part of the socket polling ping operation.  If the value for this "
+                        "option begins with a `/` character, then it replaces any connection path for the HTTP "
+                        "client, otherwise the value is appended to the connection path for the HTTP client.",
+                },
+                "ping_headers": <ConnectionOptionInfo>{
+                    "display_name": "Ping Headers",
+                    "short_desc": "Any HTTP headers to send with pings",
+                    "type": "hash",
+                    "desc": "Any HTTP headers to send when performing an advanced ping operation; ignored if either "
+                        "one of `ping_method` and `ping_path` are not set",
+                },
+                "ping_body": <ConnectionOptionInfo>{
+                    "display_name": "Ping Body",
+                    "short_desc": "The message body to send with pings",
+                    "type": "auto",
+                    "desc": "Any message body to send when performing an advanced ping operation; ignored if either "
+                        "one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
                 },
                 "http_version": <ConnectionOptionInfo>{
                     "display_name": "HTTP Version",
@@ -323,6 +354,15 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         @since ConnectionProvider 1.7
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        if (opts.ping_method && opts.ping_path) {
+            hash<auto> headers;
+            headers += opts.headers;
+            headers += opts.ping_headers;
+            return new HttpPingPollOperation(url, opts.ping_method, opts.ping_path,
+                opts{keys ConnectionScheme.options} + {"url": url}, headers,
+                (opts.ping_method == "GET" ? NOTHING : opts.ping_body), logger, "HTTP-PING-ERROR",
+                "HttpConnection");
+        }
         return getPollImpl().startPollConnect();
     }
 

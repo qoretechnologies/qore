@@ -1859,7 +1859,7 @@ struct qore_httpclient_priv {
         const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info, int timeout_ms,
         const ResolvedCallReferenceNode* recv_callback = nullptr, QoreObject* obj = nullptr,
         OutputStream* os = nullptr, InputStream* is = nullptr, size_t max_chunk_size = 0,
-        const ResolvedCallReferenceNode* trailer_callback = nullptr);
+        const ResolvedCallReferenceNode* trailer_callback = nullptr, bool streaming = false);
 
     //! Send a request and get response using HTTP/2
     DLLLOCAL QoreHashNode* sendHttp2MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
@@ -4686,7 +4686,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body, const void* data,
         unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info,
         int timeout_ms, const ResolvedCallReferenceNode* recv_callback, QoreObject* obj, OutputStream* os,
-        InputStream* is, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback) {
+        InputStream* is, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, bool streaming) {
     assert(!(data && send_callback));
     assert(!(data && is));
     assert(!(is && send_callback));
@@ -5079,8 +5079,8 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             do_content_length_event(event_queue, msock->socket->priv, len);
         }
 
-        // do *not* read a chunked body if the content-type is "text/event-stream", indicating an SSE stream
-        if (te && !strcasecmp(te, "chunked") && (!ct || strcmp(ct, "text/event-stream"))) {
+        // do *not* read a chunked body if streaming mode is enabled or the content-type is "text/event-stream"
+        if (te && !strcasecmp(te, "chunked") && !streaming && (!ct || strcmp(ct, "text/event-stream"))) {
             // check for chunked response body
             do_event(event_queue, msock->socket->priv, QORE_EVENT_HTTP_CHUNKED_START);
             ReferenceHolder<QoreHashNode> nah(xsink);
@@ -5135,7 +5135,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                     return nullptr;
                 }
             }
-        } else if (getbody || len) {
+        } else if (!streaming && (getbody || len)) {
             if (os) {
                 msock->socket->priv->recvToOutputStream(os, len, timeout_ms, xsink, &msock->m,
                     QORE_SOURCE_HTTPCLIENT);
@@ -5244,6 +5244,25 @@ QoreHashNode* QoreHttpClientObject::send(const char* meth, const char* new_path,
     }
     return http_priv->send_internal(xsink, "send", meth, new_path, headers, *tstr, tstr->c_str(), tstr->size(),
         nullptr, getbody, info, http_priv->timeout, nullptr);
+}
+
+QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* new_path, const QoreHashNode* headers,
+        const void* data, unsigned size, QoreHashNode* info, ExceptionSink* xsink) {
+    // streaming=true means don't read the body, leave it on the socket for streaming
+    return http_priv->send_internal(xsink, "sendAndStream", meth, new_path, headers, nullptr, data, size, nullptr,
+        false, info, http_priv->timeout, nullptr, nullptr, nullptr, nullptr, 0, nullptr, true);
+}
+
+QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* new_path, const QoreHashNode* headers,
+        const QoreStringNode& body, QoreHashNode* info, ExceptionSink* xsink) {
+    const QoreEncoding* enc = http_priv->getEncoding();
+    QoreStringNodeValueHelper tstr(&body, enc, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    // streaming=true means don't read the body, leave it on the socket for streaming
+    return http_priv->send_internal(xsink, "sendAndStream", meth, new_path, headers, *tstr, tstr->c_str(), tstr->size(),
+        nullptr, false, info, http_priv->timeout, nullptr, nullptr, nullptr, nullptr, 0, nullptr, true);
 }
 
 QoreHashNode* QoreHttpClientObject::sendWithSendCallback(const char* meth, const char* mpath,
