@@ -220,30 +220,26 @@ void HashDeclList::parseRemove(const char* name) {
 void HashDeclList::updateParentPointers() {
     for (auto& i : hm) {
         typed_hash_decl_private* hdp = typed_hash_decl_private::get(*i.second);
-        const char* parent_name = hdp->getParentHashDeclName();
-        if (parent_name) {
-            // Look up the parent by name in this list
-            TypedHashDecl* new_parent = find(parent_name);
+        // parent_path contains the full namespace path (e.g., "DataProvider::DisplayDescInfo")
+        const char* parent_path = hdp->getParentHashDeclName();
+        if (parent_path) {
+            // Extract the simple name from the full path for local lookup
+            // The hashDeclList uses simple names as keys
+            const char* simple_name = strrchr(parent_path, ':');
+            simple_name = simple_name ? simple_name + 1 : parent_path;
+
+            // Look up the parent by simple name in this list
+            TypedHashDecl* new_parent = find(simple_name);
             if (new_parent) {
-                // Update the parent pointer to point to the hashdecl in this namespace
-                hdp->setParentHashDecl(new_parent);
-            } else {
-                // Parent not found in this list - look up in namespace tree
-                const qore_ns_private* ns = hdp->getNamespace();
-                if (ns) {
-                    TypedHashDecl* ns_parent = const_cast<qore_ns_private*>(ns)->parseFindLocalHashDecl(parent_name);
-                    if (ns_parent) {
-                        hdp->setParentHashDecl(ns_parent);
-                    } else {
-                        // Parent not found anywhere - clear the pointer to avoid dangling reference
-                        // The parent might be from a module that's no longer loaded
-                        hdp->setParentHashDecl(nullptr);
-                    }
-                } else {
-                    // No namespace set - clear the pointer to be safe
-                    hdp->setParentHashDecl(nullptr);
+                // Verify the full path matches to avoid name collisions
+                // Only update if this is actually the same hashdecl (same namespace path)
+                if (!strcmp(parent_path, typed_hash_decl_private::get(*new_parent)->getPath())) {
+                    hdp->setParentHashDecl(new_parent);
                 }
             }
+            // If parent not found or path doesn't match, keep the original pointer
+            // The parent might be in a different namespace (e.g., DataProvider::DisplayDescInfo)
+            // and the original pointer is still valid
         }
     }
 }
