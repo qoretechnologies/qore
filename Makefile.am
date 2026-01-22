@@ -111,6 +111,7 @@ DOX_SPLIT_MODULES = \
     qlib/AwsRestClientDataProvider \
     qlib/BulkSqlUtil \
 	qlib/CsvUtil \
+	qlib/EdifactUtil \
     qlib/CdsRestDataProvider \
     qlib/DiscordDataProvider \
     qlib/LinearDataProvider \
@@ -144,6 +145,7 @@ CdsRestDataProvider_modverdir = $(modverdir)/CdsRestDataProvider
 ConnectionProvider_modverdir = $(modverdir)/ConnectionProvider
 CsvUtil_modverdir = $(modverdir)/CsvUtil
 DataProvider_modverdir = $(modverdir)/DataProvider
+EdifactUtil_modverdir = $(modverdir)/EdifactUtil
 DbDataProvider_modverdir = $(modverdir)/DbDataProvider
 DiscordDataProvider_modverdir = $(modverdir)/DiscordDataProvider
 LinearDataProvider_modverdir = $(modverdir)/LinearDataProvider
@@ -185,6 +187,7 @@ dist_CdsRestDataProvider_modver_DATA = $(wildcard qlib/CdsRestDataProvider/*.q[c
 dist_ConnectionProvider_modver_DATA = $(wildcard qlib/ConnectionProvider/*.q[cm])
 dist_CsvUtil_modver_DATA = $(wildcard qlib/CsvUtil/*.q[cm])
 dist_DataProvider_modver_DATA = $(wildcard qlib/DataProvider/*.q[cm])
+dist_EdifactUtil_modver_DATA = $(wildcard qlib/EdifactUtil/*.q[cm])
 dist_DbDataProvider_modver_DATA = $(wildcard qlib/DbDataProvider/*.q[cm])
 dist_DiscordDataProvider_modver_DATA = $(wildcard qlib/DiscordDataProvider/*.q[cm])
 dist_LinearDataProvider_modver_DATA = $(wildcard qlib/LinearDataProvider/*.q[cm])

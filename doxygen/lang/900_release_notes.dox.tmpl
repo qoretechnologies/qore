@@ -211,6 +211,14 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - added support for Microsoft Dynamics 365 Business Central with new data provider classes for CRUD operations
       - added support for the DataProvider expression framework for OData queries with support for
         contains, startsWith, endsWith, null, and notNull operators
+    - @ref edifactutilintro "EdifactUtil" module
+      - new module for parsing and generating UN/EDIFACT electronic data interchange messages
+      - automatic UNA segment detection and custom delimiter support
+      - release character escaping/unescaping for special characters in data
+      - iterator classes for reading from files, streams, and strings
+      - writer classes for generating EDIFACT messages to files, streams, and strings
+      - service segment filtering option to skip envelope segments during iteration
+      - DataProvider integration for use in data pipelines and integration workflows
     - @ref connectionproviderintro "ConnectionProvider" module
       - added the \c ConnectionProvider::RestartableIoHelper class
       - new \c http_version option in \c ConnectionProvider::HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0")
