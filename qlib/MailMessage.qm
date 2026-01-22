@@ -372,8 +372,8 @@ public class Message {
         if (subject.empty())
             throw "MESSAGE-CONSTRUCTOR-ERROR", "subject must be not empty string";
 
-        sender = se;   # used for sending
-        from = sender; # used for displaying
+        self.sender = se;   # used for sending
+        from = self.sender; # used for displaying
         self.subject = subject;
         self.smtp_mode = smtp_mode;
     }

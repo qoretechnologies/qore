@@ -2,7 +2,7 @@
 
 # @file pop3.q example program using the Pop3Client module
 
-/*  pop3.q Copyright 2012 - 2023 David Nichols
+/*  pop3.q Copyright 2012 - 2026 David Nichols
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),

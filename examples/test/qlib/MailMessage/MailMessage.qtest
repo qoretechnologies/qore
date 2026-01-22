@@ -19,6 +19,7 @@ public class Main inherits QUnit::Test {
     constructor() : Test("MailMessageTest", "1.0") {
         addTestCase("Test serialize()", \testSerialize(), NOTHING);
         addTestCase("Test multipart type detection", \testMultipartTypeDetection(), NOTHING);
+        addTestCase("Test getFrom bug fix", \testGetFromBugFix(), NOTHING);
 
         set_return_value(main());
     }
@@ -350,6 +351,55 @@ lorem ipsum\r
 
             assertTrue(parsed.isMultipart(), "parsed message is multipart");
             assertEq("mixed", parsed.getMultipartType(), "parsed message has 'mixed' type");
+        }
+    }
+
+    # Test that getFrom() returns the correct email address for messages created via constructor
+    # This tests the fix for the bug where self.sender was not set in the constructor
+    testGetFromBugFix() {
+        # Test with simple email address
+        {
+            Message msg(Sender, Subject);
+            msg.addTO(To);
+            msg.setBody("test body");
+
+            # getFrom() should return the sender's email address for SMTP MAIL FROM
+            assertEq(Sender, msg.getFrom(), "getFrom() returns sender email for constructor-created message");
+            # getSender() returns the display format
+            assertEq(Sender, msg.getSender(), "getSender() returns sender email for simple address");
+        }
+
+        # Test with display name format "Name <email>"
+        {
+            string displaySender = "John Doe <john@example.com>";
+            Message msg(displaySender, Subject);
+            msg.addTO(To);
+            msg.setBody("test body");
+
+            # getFrom() should return just the email address
+            assertEq("john@example.com", msg.getFrom(), "getFrom() extracts email from display format");
+            # getSender() returns the full display format
+            assertEq("john@example.com", msg.getSender(), "getSender() returns extracted email");
+        }
+
+        # Test that getFrom() is not empty after construction
+        {
+            Message msg(Sender, Subject);
+            assertTrue(msg.getFrom().val(), "getFrom() is not empty after construction");
+        }
+
+        # Test that getRecipients() returns correct list for SMTP RCPT TO
+        {
+            Message msg(Sender, Subject);
+            msg.addTO(To);
+            msg.addTO("another@example.com");
+            msg.addCC("cc@example.com");
+            msg.setBody("test body");
+
+            list<string> recipients = msg.getRecipients();
+            assertTrue(recipients.contains(To), "getRecipients() contains TO address");
+            assertTrue(recipients.contains("another@example.com"), "getRecipients() contains second TO address");
+            assertTrue(recipients.contains("cc@example.com"), "getRecipients() contains CC address");
         }
     }
 }

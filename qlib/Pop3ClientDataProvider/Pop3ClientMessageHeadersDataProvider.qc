@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore Pop3ClientMessageGetDataProvider class definition
+#! Qore Pop3ClientMessageHeadersDataProvider class definition
 
-/** Pop3ClientMessageGetDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
+/** Pop3ClientMessageHeadersDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,14 +24,26 @@
 
 #! Contains all public definitions in the Pop3ClientDataProvider module
 public namespace Pop3ClientDataProvider {
-#! The POP3 message parent data provider
-public class Pop3ClientMessageGetDataProvider inherits Pop3ClientDataProviderBase {
+#! The POP3 message headers data provider - retrieves only message headers using the TOP command
+/** This is more efficient than retrieving the full message when only headers are needed.
+
+    @note This requires server support for the TOP command (RFC 2449)
+*/
+public class Pop3ClientMessageHeadersDataProvider inherits Pop3ClientDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "Pop3ClientMessageGetDataProvider",
+            "type": "Pop3ClientMessageHeadersDataProvider",
             "supports_request": True,
         };
+
+        #! Provider summary info
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        } + {
+            "name": "headers",
+            "desc": "Retrieves only the headers of a POP3 message (more efficient than full retrieval)",
+        });
     }
 
     private {
@@ -39,29 +51,29 @@ public class Pop3ClientMessageGetDataProvider inherits Pop3ClientDataProviderBas
         string id;
     }
 
-    #! Creates the object from an POP3 connection
+    #! Creates the object from a POP3 connection
     constructor(Pop3Client pop3, string id) : Pop3ClientDataProviderBase(pop3) {
         self.id = id;
     }
 
     #! Returns the data provider name
     string getName() {
-        return "get";
+        return "headers";
     }
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Get message data provider for POP3 message %y", id);
+        return sprintf("Headers-only data provider for POP3 message %y (uses TOP command)", id);
     }
 
     #! Makes a request and returns the response
     /** @param req the request info
         @param request_options the request options; will be processed by validateRequestOptions()
 
-        @return the response to the request
+        @return the response to the request (message headers as MailMessageInfo)
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        MailMessage::Message msg = pop3.getMessage(id);
+        MailMessage::Message msg = pop3.getMessageHeaders(id);
         return msg.getInfo();
     }
 

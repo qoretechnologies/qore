@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Pop3Client.qm POP3 client module definition
 
-/*  Pop3Client.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  Pop3Client.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -23,11 +23,11 @@
 */
 
 # minimum qore version
-%requires qore >= 1.0
+%requires qore >= 2.0
 
-%requires Mime >= 1.0
+%requires Mime >= 1.7
 %requires Util
-%requires(reexport) MailMessage >= 1.0
+%requires(reexport) MailMessage >= 1.5
 %requires(reexport) ConnectionProvider >= 1.4
 %requires(reexport) Logger
 
@@ -39,7 +39,7 @@
 %modern
 
 module Pop3Client {
-    version = "2.0";
+    version = "2.1";
     desc = "POP3 client support module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -87,7 +87,7 @@ Pop3Client pop3(url, {"logger": logger});
 pop3.noquit(True);
 *hash<auto> h = pop3.getMail();
 printf("Mailbox Summary:\n");
-map printf("%s: From: %s (size: %d bytes, attachments: %d)\n", $1.key, $1.value.msg.getFrom(), $1.value.size, $1.getvalue.msg.getAttachments().size()), h.pairIterator();
+map printf("%s: From: %s (size: %d bytes, attachments: %d)\n", $1.key, $1.value.msg.getFrom(), $1.value.size, $1.value.msg.getAttachments().size()), h.pairIterator();
 if (!h) {
     printf("no messages\n");
 }
@@ -96,6 +96,28 @@ if (!h) {
     @note based on http://tools.ietf.org/html/rfc1939 (POP3)
 
     @section pop3client_relnotes Pop3Client Module Release Notes
+
+    @subsection pop3client_v2_1 Pop3Client 2.1
+    - Added non-blocking ping support using the %Qore polling API:
+      - @ref Pop3Client::Pop3Connection::supportsPollingApi() "Pop3Connection::supportsPollingApi()": returns @ref True
+      - @ref Pop3Client::Pop3Connection::startPollConnect() "Pop3Connection::startPollConnect()": starts a non-blocking
+        ping operation
+      - @ref Pop3Client::Pop3PingPollOperation "Pop3PingPollOperation": state machine class for non-blocking POP3
+        connection, authentication, and ping
+    - Added @ref Pop3Client::Pop3Client::getInfo() "Pop3Client::getInfo()": returns connection info for polling
+      operations
+    - Added support for RFC 2449 CAPA (capability) command:
+      - @ref Pop3Client::Pop3Client::capa() "Pop3Client::capa()": retrieve server capabilities
+      - @ref Pop3Client::Pop3Client::hasCapability() "Pop3Client::hasCapability()": check for a specific capability
+      - @ref Pop3Client::Pop3Client::clearCapabilities() "Pop3Client::clearCapabilities()": clear cached capabilities
+    - Added support for optional POP3 commands:
+      - @ref Pop3Client::Pop3Client::uidl() "Pop3Client::uidl()": get unique IDs for messages (RFC 1939)
+      - @ref Pop3Client::Pop3Client::top() "Pop3Client::top()": retrieve message headers and partial body (RFC 1939)
+      - @ref Pop3Client::Pop3Client::getMessageHeaders() "Pop3Client::getMessageHeaders()": get parsed message headers
+    - Now requires Qore >= 2.0, Mime >= 1.7, and MailMessage >= 1.5
+    - Fixed typo in documentation example
+    - Fixed incorrect log message in SASL XOAUTH2 login
+      (<a href="https://github.com/qoretechnologies/qore/issues/5163">issue 5163</a>)
 
     @subsection pop3client_v2_0 Pop3Client 2.0
     - Added a data provider and application actions
@@ -143,7 +165,7 @@ if (!h) {
 #! the main namespace for the Pop3Client module
 /** To use this module, use \c "%requires Pop3Client" in your code.
 
-    See examples/pop3client.q for an example program using this module
+    See examples/pop3.q for an example program using this module
 
     All the public symbols in the module are defined in this namespace
 */
@@ -238,6 +260,9 @@ public class Pop3Client inherits Logger::LoggerWrapper, ConnectionProvider::Opti
 
         # sasl flag
         bool sasl;
+
+        # cached server capabilities from CAPA command (RFC 2449)
+        *hash<string, bool> capabilities;
 
         const MaxDebugLine = 2048;
     }
@@ -384,6 +409,28 @@ Pop3Client pop3("pop3s://pop.gmail.com", {
     */
     string getTarget() {
         return connect;
+    }
+
+    #! Returns a hash with information about the Pop3Client for polling operations
+    /** @return a hash with the following keys:
+        - \c target: the connection target string
+        - \c ssl: True if an immediate TLS connection should be made
+        - \c tls: True if STLS should be issued after connecting
+        - \c user: the username for authentication
+        - \c pass: the password for authentication (if using USER/PASS or APOP)
+        - \c token: the OAuth2 token (if using SASL XOAUTH2)
+
+        @since %Pop3Client 2.1
+    */
+    hash<auto> getInfo() {
+        return {
+            "target": connect,
+            "ssl": tls,
+            "tls": starttls,
+            "user": user,
+            "pass": pass,
+            "token": token,
+        };
     }
 
     #! log password
@@ -716,6 +763,216 @@ pop3.reset();
         sendCommand("RSET");
     }
 
+    #! Returns the server's capabilities using the \c "CAPA" command (RFC 2449)
+    /** @par Example:
+        @code{.py}
+*hash<string, bool> caps = pop3.capa();
+if (caps.UIDL) {
+    printf("Server supports UIDL\n");
+}
+        @endcode
+
+        @return a hash where each key is a capability name and the value is @ref True; returns @ref nothing if the
+        server doesn't support the CAPA command
+
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message
+
+        @note
+        - This method communicates with the POP3 server with the internal @ref Qore::Socket "Socket" object and
+          therefore is subject to thread serialization
+        - Capabilities are cached after the first successful call; use @ref clearCapabilities() to clear the cache
+
+        @see
+        - <a href="https://tools.ietf.org/html/rfc2449">RFC 2449</a> for more information about the CAPA command
+        - @ref hasCapability()
+        - @ref clearCapabilities()
+
+        @since %Pop3Client 2.1
+    */
+    *hash<string, bool> capa() {
+        AutoLock am(mutex);
+        if (!isConnected()) {
+            connectIntern();
+        }
+
+        return capaIntern();
+    }
+
+    #! Returns @ref True if the server has the given capability
+    /** @par Example:
+        @code{.py}
+if (pop3.hasCapability("UIDL")) {
+    *hash<string, string> uidls = pop3.uidl();
+}
+        @endcode
+
+        @param cap the capability name to check (case-insensitive)
+
+        @return @ref True if the server has the given capability
+
+        @note
+        - This method will call @ref capa() if capabilities have not yet been retrieved
+        - If the server doesn't support the CAPA command, this method returns @ref False for all capabilities
+
+        @see
+        - @ref capa()
+        - <a href="https://tools.ietf.org/html/rfc2449">RFC 2449</a>
+
+        @since %Pop3Client 2.1
+    */
+    bool hasCapability(string cap) {
+        AutoLock am(mutex);
+        if (!isConnected()) {
+            connectIntern();
+        }
+
+        if (!capabilities) {
+            capaIntern();
+        }
+        return capabilities{cap.upr()} ?? False;
+    }
+
+    #! Clears the cached server capabilities
+    /** @par Example:
+        @code{.py}
+pop3.clearCapabilities();
+        @endcode
+
+        @note This is useful if you need to re-query the server's capabilities after a state change
+
+        @since %Pop3Client 2.1
+    */
+    clearCapabilities() {
+        AutoLock am(mutex);
+        delete capabilities;
+    }
+
+    #! Returns a hash of unique IDs for all messages using the \c "UIDL" command
+    /** @par Example:
+        @code{.py}
+*hash<string, string> uidls = pop3.uidl();
+foreach hash<auto> i in (uidls.pairIterator()) {
+    printf("Message %s has UIDL: %s\n", i.key, i.value);
+}
+        @endcode
+
+        @return @ref nothing if no messages are available, or a hash where each key is the message number and the
+        value is the unique ID string for that message; returns @ref nothing if the server doesn't support UIDL
+
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message
+
+        @note This method communicates with the POP3 server with the internal @ref Qore::Socket "Socket" object and
+        therefore is subject to thread serialization
+
+        @see <a href="http://tools.ietf.org/html/rfc1939#page-12">http://tools.ietf.org/html/rfc1939#page-12</a> for
+        more information about the UIDL command
+
+        @since %Pop3Client 2.1
+    */
+    *hash<string, string> uidl() {
+        AutoLock am(mutex);
+        if (!isConnected()) {
+            connectIntern();
+        }
+
+        return uidlIntern();
+    }
+
+    #! Returns the unique ID for a specific message using the \c "UIDL" command
+    /** @par Example:
+        @code{.py}
+*string uid = pop3.uidl("1");
+printf("Message 1 has UIDL: %s\n", uid);
+        @endcode
+
+        @param msg the message number to get the unique ID for
+
+        @return the unique ID string for the message, or @ref nothing if not available
+
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message
+
+        @note This method communicates with the POP3 server with the internal @ref Qore::Socket "Socket" object and
+        therefore is subject to thread serialization
+
+        @see <a href="http://tools.ietf.org/html/rfc1939#page-12">http://tools.ietf.org/html/rfc1939#page-12</a> for
+        more information about the UIDL command
+
+        @since %Pop3Client 2.1
+    */
+    *string uidl(softstring msg) {
+        AutoLock am(mutex);
+        if (!isConnected()) {
+            connectIntern();
+        }
+
+        return uidlIntern(msg);
+    }
+
+    #! Retrieves the headers and optionally some body lines of a message using the \c "TOP" command
+    /** @par Example:
+        @code{.py}
+# get headers only
+string headers = pop3.top("1", 0);
+# get headers plus first 10 lines of body
+string preview = pop3.top("1", 10);
+        @endcode
+
+        @param msg the message number to retrieve
+        @param lines the number of lines of the message body to retrieve (0 for headers only)
+
+        @return the message headers and the specified number of body lines
+
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message
+
+        @note
+        - This method communicates with the POP3 server with the internal @ref Qore::Socket "Socket" object and
+          therefore is subject to thread serialization
+        - Not all POP3 servers support the TOP command; use @ref hasCapability() to check
+
+        @see <a href="http://tools.ietf.org/html/rfc1939#page-11">http://tools.ietf.org/html/rfc1939#page-11</a> for
+        more information about the TOP command
+
+        @since %Pop3Client 2.1
+    */
+    string top(softstring msg, int lines = 0) {
+        AutoLock am(mutex);
+        if (!isConnected()) {
+            connectIntern();
+        }
+
+        return topIntern(msg, lines);
+    }
+
+    #! Retrieves the headers of a message as a parsed MailMessage::Message object using the \c "TOP" command
+    /** @par Example:
+        @code{.py}
+MailMessage::Message msg = pop3.getMessageHeaders("1");
+printf("From: %s\nSubject: %s\n", msg.getFrom(), msg.getSubject());
+        @endcode
+
+        @param msg the message number to retrieve headers for
+
+        @return a MailMessage::Message object with headers populated (body may be empty or partial)
+
+        @throw POP3-SERVER-ERROR the POP3 server responded with an error message
+
+        @note
+        - This method communicates with the POP3 server with the internal @ref Qore::Socket "Socket" object and
+          therefore is subject to thread serialization
+        - Not all POP3 servers support the TOP command; use @ref hasCapability() to check
+
+        @since %Pop3Client 2.1
+    */
+    MailMessage::Message getMessageHeaders(softstring msg) {
+        AutoLock am(mutex);
+        if (!isConnected()) {
+            connectIntern();
+        }
+
+        string raw = topIntern(msg, 0);
+        return new MailMessage::Message(raw);
+    }
+
     #! return connection status
     /** @par Example:
         @code{.py}
@@ -994,6 +1251,90 @@ pop3.setEventQueue();
         return mih;
     }
 
+    # don't reimplement this method; fix/enhance it in the module
+    # RFC 2449 CAPA command
+    final private *hash<string, bool> capaIntern() {
+        # return cached capabilities if available
+        if (capabilities) {
+            return capabilities;
+        }
+
+        try {
+            list<string> l = sendCommandMulti("CAPA");
+            # ignore first line (status line)
+            shift l;
+            # parse capabilities into hash
+            capabilities = {};
+            foreach string cap in (l) {
+                # capability names are case-insensitive; store uppercase
+                string capName = (cap =~ x/^(\S+)/)[0];
+                if (capName) {
+                    capabilities{capName.upr()} = True;
+                }
+            }
+            logDbg("server capabilities: %y", keys capabilities);
+            return capabilities;
+        } catch (hash<ExceptionInfo> ex) {
+            # CAPA not supported
+            if (ex.err == "POP3-SERVER-ERROR") {
+                logDbg("CAPA command not supported by server");
+                capabilities = {};
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    # don't reimplement this method; fix/enhance it in the module
+    # RFC 1939 UIDL command (optional)
+    final private *hash<string, string> uidlIntern() {
+        try {
+            list<string> l = sendCommandMulti("UIDL");
+            # ignore first line (status line)
+            shift l;
+            # parse UIDL responses into hash
+            hash<string, string> uidls;
+            foreach string ul in (l) {
+                (*string id, *string uid) = (ul =~ x/^([0-9]+) (.+)$/);
+                if (id && uid) {
+                    uidls{id} = uid;
+                }
+            }
+            return uidls;
+        } catch (hash<ExceptionInfo> ex) {
+            # UIDL not supported
+            if (ex.err == "POP3-SERVER-ERROR") {
+                logDbg("UIDL command not supported by server");
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    # don't reimplement this method; fix/enhance it in the module
+    # RFC 1939 UIDL command for single message
+    final private *string uidlIntern(softstring msg) {
+        try {
+            string r = sendCommand("UIDL %s", msg);
+            # parse response: +OK msgnum uniqueid
+            *string uid = (r =~ x/^\+OK\s+\d+\s+(.+)$/)[0];
+            return uid;
+        } catch (hash<ExceptionInfo> ex) {
+            # UIDL not supported or message doesn't exist
+            if (ex.err == "POP3-SERVER-ERROR") {
+                logDbg("UIDL command failed for message %s", msg);
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    # don't reimplement this method; fix/enhance it in the module
+    # RFC 1939 TOP command (optional)
+    final private string topIntern(softstring msg, int lines) {
+        return sendCommandMultiStr("TOP %s %d", msg, lines);
+    }
+
     # read a line from the socket (terminated with \n)
     private string readLine(timeout to) {
         string str;
@@ -1181,7 +1522,7 @@ pop3.setEventQueue();
         } else {
             sendCommand("AUTH XOAUTH2 %s", login);
         }
-        log("logged in with APOP as %y", user);
+        log("logged in with SASL XOAUTH2 as %y", user);
     }
 
     private doSSLIntern() {
@@ -1219,6 +1560,307 @@ pop3.setEventQueue();
         }
     }
     #! @endcond
+}
+
+#! Poll operation for non-blocking POP3 ping operations
+/** This class implements a state machine for non-blocking POP3 connection and authentication.
+
+    @since %Pop3Client 2.1
+*/
+public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
+    public {
+        #! Connect state
+        const SPS_CONNECT = "connect";
+
+        #! Read server greeting state
+        const SPS_READ_GREETING = "read-greeting";
+
+        #! Send STLS command state
+        const SPS_SEND_STLS = "send-stls";
+
+        #! Read STLS response state
+        const SPS_READ_STLS_REPLY = "read-stls-reply";
+
+        #! Upgrade socket connection to TLS state
+        const SPS_UPGRADE_TO_TLS = "upgrade-tls";
+
+        #! Send USER command state
+        const SPS_SEND_USER = "send-user";
+
+        #! Read USER response state
+        const SPS_READ_USER_REPLY = "read-user-reply";
+
+        #! Send PASS command state
+        const SPS_SEND_PASS = "send-pass";
+
+        #! Read PASS response state
+        const SPS_READ_PASS_REPLY = "read-pass-reply";
+
+        #! Send APOP command state
+        const SPS_SEND_APOP = "send-apop";
+
+        #! Read APOP response state
+        const SPS_READ_APOP_REPLY = "read-apop-reply";
+
+        #! Send AUTH XOAUTH2 command state
+        const SPS_SEND_XOAUTH2 = "send-xoauth2";
+
+        #! Read AUTH XOAUTH2 response state
+        const SPS_READ_XOAUTH2_REPLY = "read-xoauth2-reply";
+
+        #! Send NOOP command state
+        const SPS_SEND_NOOP = "send-noop";
+
+        #! Read NOOP response state
+        const SPS_READ_NOOP_REPLY = "read-noop-reply";
+
+        #! Complete state
+        const SPS_COMPLETE = "complete";
+    }
+
+    private {
+        #! Info about the POP3 client
+        hash<auto> info;
+
+        #! The Socket for communication with the server
+        Socket sock();
+
+        #! The current internal poll operation
+        AbstractPollOperation poller;
+
+        #! Lock for atomicity
+        Mutex m();
+
+        #! Current state
+        string state;
+
+        #! Goal reached flag
+        bool goal_reached = False;
+
+        #! Server greeting (may contain APOP msg-id)
+        string greeting;
+
+        #! APOP msg-id extracted from greeting
+        *string apop_msgid;
+    }
+
+    #! Creates the object based on the Pop3Client
+    constructor(Pop3Client pop3) {
+        info = pop3.getInfo();
+
+        state = SPS_CONNECT;
+        poller = info.ssl
+            ? sock.startPollConnectSsl(info.target)
+            : sock.startPollConnect(info.target);
+    }
+
+    #! Returns the goal
+    /** @return the goal set in the constructor
+    */
+    string getGoal() {
+        return "ping";
+    }
+
+    #! Returns the current state
+    /** @return the current state
+    */
+    string getState() {
+        AutoLock al(m);
+        if (!poller) {
+            return goal_reached ? "complete" : "error";
+        }
+        return state;
+    }
+
+    #! Returns @ref True when the goal has been reached
+    /** @return @ref True when the goal has been reached
+    */
+    bool goalReached() {
+        return state == SPS_COMPLETE;
+    }
+
+    #! Returns a hash to be used for I/O polling or @ref nothing in case the poll operation is complete
+    *hash<SocketPollInfo> continuePoll() {
+        AutoLock al(m);
+        if (!poller) {
+            return;
+        }
+        while (True) {
+            *hash<SocketPollInfo> pinfo = poller.continuePoll();
+            if (pinfo) {
+                return pinfo;
+            }
+
+            if (state == SPS_CONNECT) {
+                state = SPS_READ_GREETING;
+                poller = sock.startPollRecvUntilBytesString("\n");
+                continue;
+            }
+
+            if (state == SPS_READ_GREETING) {
+                greeting = trim(poller.getOutput());
+                if (greeting !~ /^\+OK/) {
+                    throw "POP3-POLL-ERROR", sprintf("server greeting error: %s", greeting);
+                }
+                # Check for APOP msg-id (RFC822-compliant <...>)
+                apop_msgid = (greeting =~ x/(<[^>]+>)$/)[0];
+
+                # Handle STLS if needed (not SSL but starttls requested)
+                if (!info.ssl && info.tls) {
+                    state = SPS_SEND_STLS;
+                    poller = sock.startPollSend("STLS\r\n");
+                    continue;
+                }
+
+                # Start authentication
+                startAuth();
+                continue;
+            }
+
+            if (state == SPS_SEND_STLS) {
+                state = SPS_READ_STLS_REPLY;
+                poller = sock.startPollRecvUntilBytesString("\n");
+                continue;
+            }
+
+            if (state == SPS_READ_STLS_REPLY) {
+                string reply = trim(poller.getOutput());
+                if (reply !~ /^\+OK/) {
+                    throw "POP3-POLL-ERROR", sprintf("STLS command failed: %s", reply);
+                }
+
+                state = SPS_UPGRADE_TO_TLS;
+                poller = sock.startPollUpgradeClientToSSL();
+                continue;
+            }
+
+            if (state == SPS_UPGRADE_TO_TLS) {
+                # Start authentication after TLS upgrade
+                startAuth();
+                continue;
+            }
+
+            if (state == SPS_SEND_USER) {
+                state = SPS_READ_USER_REPLY;
+                poller = sock.startPollRecvUntilBytesString("\n");
+                continue;
+            }
+
+            if (state == SPS_READ_USER_REPLY) {
+                string reply = trim(poller.getOutput());
+                if (reply !~ /^\+OK/) {
+                    throw "POP3-POLL-ERROR", sprintf("USER command failed: %s", reply);
+                }
+
+                state = SPS_SEND_PASS;
+                poller = sock.startPollSend(sprintf("PASS %s\r\n", info.pass));
+                continue;
+            }
+
+            if (state == SPS_SEND_PASS) {
+                state = SPS_READ_PASS_REPLY;
+                poller = sock.startPollRecvUntilBytesString("\n");
+                continue;
+            }
+
+            if (state == SPS_READ_PASS_REPLY) {
+                string reply = trim(poller.getOutput());
+                if (reply !~ /^\+OK/) {
+                    throw "POP3-POLL-ERROR", sprintf("PASS command failed: %s", reply);
+                }
+
+                # Send NOOP to complete the ping
+                state = SPS_SEND_NOOP;
+                poller = sock.startPollSend("NOOP\r\n");
+                continue;
+            }
+
+            if (state == SPS_SEND_APOP) {
+                state = SPS_READ_APOP_REPLY;
+                poller = sock.startPollRecvUntilBytesString("\n");
+                continue;
+            }
+
+            if (state == SPS_READ_APOP_REPLY) {
+                string reply = trim(poller.getOutput());
+                if (reply !~ /^\+OK/) {
+                    throw "POP3-POLL-ERROR", sprintf("APOP command failed: %s", reply);
+                }
+
+                # Send NOOP to complete the ping
+                state = SPS_SEND_NOOP;
+                poller = sock.startPollSend("NOOP\r\n");
+                continue;
+            }
+
+            if (state == SPS_SEND_XOAUTH2) {
+                state = SPS_READ_XOAUTH2_REPLY;
+                poller = sock.startPollRecvUntilBytesString("\n");
+                continue;
+            }
+
+            if (state == SPS_READ_XOAUTH2_REPLY) {
+                string reply = trim(poller.getOutput());
+                if (reply !~ /^\+OK/) {
+                    throw "POP3-POLL-ERROR", sprintf("AUTH XOAUTH2 command failed: %s", reply);
+                }
+
+                # Send NOOP to complete the ping
+                state = SPS_SEND_NOOP;
+                poller = sock.startPollSend("NOOP\r\n");
+                continue;
+            }
+
+            if (state == SPS_SEND_NOOP) {
+                state = SPS_READ_NOOP_REPLY;
+                poller = sock.startPollRecvUntilBytesString("\n");
+                continue;
+            }
+
+            if (state == SPS_READ_NOOP_REPLY) {
+                string reply = trim(poller.getOutput());
+                if (reply !~ /^\+OK/) {
+                    throw "POP3-POLL-ERROR", sprintf("NOOP command failed: %s", reply);
+                }
+
+                delete poller;
+                state = SPS_COMPLETE;
+                goal_reached = True;
+                break;
+            }
+        }
+    }
+
+    #! Aborts the polling operation
+    abort() {
+        if (poller) {
+            poller.abort();
+        }
+    }
+
+    #! Starts the authentication process based on available credentials
+    private startAuth() {
+        # SASL XOAUTH2 takes precedence if token is available
+        if (info.token) {
+            state = SPS_SEND_XOAUTH2;
+            string login = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, Pop3Client::CtrlA, info.token,
+                Pop3Client::CtrlA, Pop3Client::CtrlA).toBase64();
+            poller = sock.startPollSend(sprintf("AUTH XOAUTH2 %s\r\n", login));
+            return;
+        }
+
+        # Try APOP if msg-id is present in greeting
+        if (apop_msgid) {
+            state = SPS_SEND_APOP;
+            string secret = (apop_msgid + info.pass).toMD5();
+            poller = sock.startPollSend(sprintf("APOP %s %s\r\n", info.user, secret));
+            return;
+        }
+
+        # Fall back to USER/PASS
+        state = SPS_SEND_USER;
+        poller = sock.startPollSend(sprintf("USER %s\r\n", info.user));
+    }
 }
 
 #! class for POP3 connections; returns an object of class @ref Pop3Client for receiving or polling for emails
@@ -1326,6 +1968,39 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
     #! returns \c "pop3"
     string getType() {
         return "pop3";
+    }
+
+    #! returns @ref True, since this connection type supports the %Qore @ref Qore::Socket "Socket-based" polling API
+    /** @return @ref True
+
+        @since %Pop3Client 2.1
+    */
+    bool supportsPollingApi() {
+        return True;
+    }
+
+    #! Called to start a non-blocking polling ping operation on the remote POP3 server
+    /** @param logger an optional logger for the polling operation
+
+        @return a socket poll operation object that will allow the connection goal to be reached with polling
+
+        @see supportsPollingApi()
+
+        @since %Pop3Client 2.1
+    */
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        return new Pop3PingPollOperation(getImpl(False));
+    }
+
+    #! Performs a blocking ping operation on the POP3 server
+    /** This method connects to the server (if not already connected), authenticates, and sends a NOOP command
+        to verify the connection is working.
+
+        @since %Pop3Client 2.1
+    */
+    private pingImpl() {
+        Pop3Client client = get();
+        client.noop();
     }
 
     #! returns a @ref Pop3Client object

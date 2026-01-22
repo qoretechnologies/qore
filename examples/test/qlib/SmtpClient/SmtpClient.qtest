@@ -20,12 +20,20 @@ public class SmtpClientTest inherits QUnit::Test {
         } + Opts;
 
         const OptionColumn = 22;
+
+        # Environment variables for live testing
+        *string smtpHost = ENV.SMTP_TEST_HOST;
+        *string smtpPort = ENV.SMTP_TEST_PORT;
+        *string testUser = ENV.SMTP_TEST_USER;
+        *string testPass = ENV.SMTP_TEST_PASS;
     }
 
     constructor() : Test("SmtpClientTest", "1.0", \ARGV, MyOpts) {
         addTestCase("real connection test", \realConnectionTest());
         addTestCase("SmtpClient test", \smtpClientTest());
         addTestCase("connection test", \connectionTest());
+        addTestCase("polling API tests", \pollingApiTests());
+        addTestCase("live async ping tests", \liveAsyncPingTests());
         set_return_value(main());
     }
 
@@ -82,6 +90,102 @@ public class SmtpClientTest inherits QUnit::Test {
         conn = new SmtpConnection("test", "test", url, {"monitor": False});
         client = conn.get(False);
         assertEq("localhost:8099", client.getTarget());
+    }
+
+    pollingApiTests() {
+        # Test that SmtpConnection supports the polling API
+        string url = "smtps://user:pass@localhost:8099";
+        SmtpConnection conn("test", "test", url);
+
+        # Test supportsPollingApi()
+        assertTrue(conn.supportsPollingApi(), "SmtpConnection supports polling API");
+
+        # Test that startPollConnect() returns a valid poll operation
+        Qore::AbstractPollOperation poller = conn.startPollConnect();
+        assertEq("SmtpPingPollOperation", poller.className(), "startPollConnect returns SmtpPingPollOperation");
+        assertEq("ping", poller.getGoal(), "poll operation goal is 'ping'");
+        assertEq("connect", poller.getState(), "initial state is 'connect'");
+        assertFalse(poller.goalReached(), "goal not reached initially");
+
+        # Test that we can abort the operation
+        poller.abort();
+        assertTrue(True, "abort() callable");
+
+        # Test SmtpPingPollOperation state constants exist
+        assertEq("connect", SmtpPingPollOperation::SPS_CONNECT, "SPS_CONNECT constant");
+        assertEq("read-hello", SmtpPingPollOperation::SPS_READ_HELLO, "SPS_READ_HELLO constant");
+        assertEq("send-hello", SmtpPingPollOperation::SPS_SEND_HELLO, "SPS_SEND_HELLO constant");
+        assertEq("read-hello-reply", SmtpPingPollOperation::SPS_READ_HELLO_REPLY, "SPS_READ_HELLO_REPLY constant");
+        assertEq("starttls", SmtpPingPollOperation::SPS_STARTTLS, "SPS_STARTTLS constant");
+        assertEq("read-starttls-reply", SmtpPingPollOperation::SPS_READ_STARTTLS_REPLY, "SPS_READ_STARTTLS_REPLY constant");
+        assertEq("upgrade-tls", SmtpPingPollOperation::SPS_UPGRADE_TO_TLS, "SPS_UPGRADE_TO_TLS constant");
+        assertEq("login", SmtpPingPollOperation::SPS_LOGIN, "SPS_LOGIN constant");
+        assertEq("read-login-reply", SmtpPingPollOperation::SPS_READ_LOGIN_REPLY, "SPS_READ_LOGIN_REPLY constant");
+        assertEq("complete", SmtpPingPollOperation::SPS_COMPLETE, "SPS_COMPLETE constant");
+    }
+
+    liveAsyncPingTests() {
+        # Skip if no test server is configured
+        if (!smtpHost || !testUser || !testPass) {
+            testSkip("Live async ping tests skipped: set SMTP_TEST_HOST, SMTP_TEST_USER, SMTP_TEST_PASS environment variables");
+        }
+
+        string port = smtpPort ?? "25";
+
+        # Test SmtpConnection async ping
+        {
+            string url = sprintf("smtp://%s:%s@%s:%s", testUser, testPass, smtpHost, port);
+            SmtpConnection conn("test", "async ping test", url);
+
+            assertTrue(conn.supportsPollingApi(), "SmtpConnection supports polling API");
+
+            # Test the full async ping cycle with actual socket polling
+            Qore::AbstractPollOperation poller = conn.startPollConnect();
+
+            assertEq("SmtpPingPollOperation", poller.className(), "startPollConnect returns correct class");
+            assertFalse(poller.goalReached(), "goal not reached initially");
+
+            # Run the poll loop
+            int iterations = 0;
+            int maxIterations = 100;
+            list<string> states = (poller.getState(),);
+
+            while (!poller.goalReached()) {
+                iterations++;
+
+                *hash<SocketPollInfo> pollInfo = poller.continuePoll();
+                string currentState = poller.getState();
+
+                # Track state transitions
+                if (states.last() != currentState) {
+                    states += currentState;
+                }
+
+                if (pollInfo) {
+                    Socket::poll((pollInfo,), 5s);
+                }
+
+                if (iterations > maxIterations) {
+                    fail(sprintf("Async ping exceeded %d iterations", maxIterations));
+                    break;
+                }
+            }
+
+            assertTrue(poller.goalReached(), "async ping completed successfully");
+            assertEq("complete", poller.getState(), "final state is complete");
+            assertTrue(iterations > 0, "async ping required iterations");
+            assertTrue(states.size() >= 2, "async ping had state transitions");
+        }
+
+        # Test blocking ping for comparison
+        {
+            string url = sprintf("smtp://%s:%s@%s:%s", testUser, testPass, smtpHost, port);
+            SmtpConnection conn("test", "blocking ping test", url);
+
+            hash<PingInfo> pingResult = conn.ping();
+            assertTrue(pingResult.ok, "blocking ping succeeded");
+            assertTrue(pingResult.time.val(), "blocking ping measured time");
+        }
     }
 }
 
