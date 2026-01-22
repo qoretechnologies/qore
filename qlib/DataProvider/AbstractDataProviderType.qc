@@ -248,6 +248,11 @@ public hashdecl DataTypeInfo {
     #! Default type for fields not listed in \a fields
     *hash<DataTypeInfo> default_field_type_info;
 
+    #! Required field groups - at least one field in each group must have a value
+    /** @since DataProvider 3.1
+    */
+    *list<list<string>> required_groups;
+
     #! Unique type identifier
     string unique_key;
 
