@@ -65,7 +65,7 @@ module MailgunDataProvider {
             "logo": MailgunLogo,
             "logo_file_name": "mailgun-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": ("Email & Email Marketing",),
+            "groups": (DataProvider::AppGroup::Email,),
         });
 
         # ========== EMAIL ACTIONS ==========
