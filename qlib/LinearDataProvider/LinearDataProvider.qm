@@ -58,7 +58,7 @@ module LinearDataProvider {
             "logo": LinearLogo,
             "logo_file_name": "linear-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": ("Project & Task Management",),
+            "groups": (DataProvider::AppGroup::ProjectManagement,),
         });
 
         # Register actions for issues

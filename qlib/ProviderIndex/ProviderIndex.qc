@@ -225,7 +225,7 @@ class IndexFileHelper {
         orig_path = ProviderIndexUtil::getIndexPath(type);
 
         # check if the index file exists and is readable
-        if (hstat(orig_path) == "REGULAR") {
+        if (hstat(orig_path).type == "REGULAR") {
             # if so, make a backup
             new_path = orig_path + ".orig";
             rename(orig_path, new_path);
