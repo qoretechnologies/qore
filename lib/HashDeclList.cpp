@@ -227,9 +227,23 @@ void HashDeclList::updateParentPointers() {
             if (new_parent) {
                 // Update the parent pointer to point to the hashdecl in this namespace
                 hdp->setParentHashDecl(new_parent);
+            } else {
+                // Parent not found in this list - look up in namespace tree
+                const qore_ns_private* ns = hdp->getNamespace();
+                if (ns) {
+                    TypedHashDecl* ns_parent = const_cast<qore_ns_private*>(ns)->parseFindLocalHashDecl(parent_name);
+                    if (ns_parent) {
+                        hdp->setParentHashDecl(ns_parent);
+                    } else {
+                        // Parent not found anywhere - clear the pointer to avoid dangling reference
+                        // The parent might be from a module that's no longer loaded
+                        hdp->setParentHashDecl(nullptr);
+                    }
+                } else {
+                    // No namespace set - clear the pointer to be safe
+                    hdp->setParentHashDecl(nullptr);
+                }
             }
-            // If parent not found in this list, keep the original pointer
-            // (parent might be in a parent namespace)
         }
     }
 }

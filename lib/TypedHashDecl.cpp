@@ -157,6 +157,8 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         typeInfo(new QoreHashDeclTypeInfo(thd, name.c_str(), path.c_str())),
         orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, name.c_str(), path.c_str())),
         parentHashDecl(old.parentHashDecl),
+        // Store parent name while old.parentHashDecl is still valid to avoid use-after-free
+        parentHashDeclName(old.parentHashDecl ? get(*old.parentHashDecl)->getName() : ""),
         pub(false),
         sys(old.sys),
         parse_init_done(old.parse_init_done) {
