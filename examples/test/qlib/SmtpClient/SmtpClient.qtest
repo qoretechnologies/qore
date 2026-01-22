@@ -114,17 +114,17 @@ public class SmtpClientTest inherits QUnit::Test {
         poller.abort();
         assertTrue(True, "abort() callable");
 
-        # Test SmtpPingPollOperation state constants exist
-        assertEq("connect", SmtpPingPollOperation::SPS_CONNECT, "SPS_CONNECT constant");
-        assertEq("read-hello", SmtpPingPollOperation::SPS_READ_HELLO, "SPS_READ_HELLO constant");
-        assertEq("send-hello", SmtpPingPollOperation::SPS_SEND_HELLO, "SPS_SEND_HELLO constant");
-        assertEq("read-hello-reply", SmtpPingPollOperation::SPS_READ_HELLO_REPLY, "SPS_READ_HELLO_REPLY constant");
-        assertEq("starttls", SmtpPingPollOperation::SPS_STARTTLS, "SPS_STARTTLS constant");
-        assertEq("read-starttls-reply", SmtpPingPollOperation::SPS_READ_STARTTLS_REPLY, "SPS_READ_STARTTLS_REPLY constant");
-        assertEq("upgrade-tls", SmtpPingPollOperation::SPS_UPGRADE_TO_TLS, "SPS_UPGRADE_TO_TLS constant");
-        assertEq("login", SmtpPingPollOperation::SPS_LOGIN, "SPS_LOGIN constant");
-        assertEq("read-login-reply", SmtpPingPollOperation::SPS_READ_LOGIN_REPLY, "SPS_READ_LOGIN_REPLY constant");
-        assertEq("complete", SmtpPingPollOperation::SPS_COMPLETE, "SPS_COMPLETE constant");
+        # Test SmtpPingState enum values
+        assertEq("connect", SmtpPingState::Connect, "SmtpPingState::Connect");
+        assertEq("read-hello", SmtpPingState::ReadHello, "SmtpPingState::ReadHello");
+        assertEq("send-hello", SmtpPingState::SendHello, "SmtpPingState::SendHello");
+        assertEq("read-hello-reply", SmtpPingState::ReadHelloReply, "SmtpPingState::ReadHelloReply");
+        assertEq("starttls", SmtpPingState::StartTls, "SmtpPingState::StartTls");
+        assertEq("read-starttls-reply", SmtpPingState::ReadStartTlsReply, "SmtpPingState::ReadStartTlsReply");
+        assertEq("upgrade-tls", SmtpPingState::UpgradeToTls, "SmtpPingState::UpgradeToTls");
+        assertEq("login", SmtpPingState::Login, "SmtpPingState::Login");
+        assertEq("read-login-reply", SmtpPingState::ReadLoginReply, "SmtpPingState::ReadLoginReply");
+        assertEq("complete", SmtpPingState::Complete, "SmtpPingState::Complete");
     }
 
     dataProviderAttachmentTests() {

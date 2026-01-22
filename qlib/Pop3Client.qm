@@ -1562,62 +1562,48 @@ pop3.setEventQueue();
     #! @endcond
 }
 
+#! POP3 ping poll operation states
+public enum Pop3PingState : string {
+    #! Connect state
+    Connect = "connect",
+    #! Read server greeting state
+    ReadGreeting = "read-greeting",
+    #! Send STLS command state
+    SendStls = "send-stls",
+    #! Read STLS response state
+    ReadStlsReply = "read-stls-reply",
+    #! Upgrade socket connection to TLS state
+    UpgradeToTls = "upgrade-tls",
+    #! Send USER command state
+    SendUser = "send-user",
+    #! Read USER response state
+    ReadUserReply = "read-user-reply",
+    #! Send PASS command state
+    SendPass = "send-pass",
+    #! Read PASS response state
+    ReadPassReply = "read-pass-reply",
+    #! Send APOP command state
+    SendApop = "send-apop",
+    #! Read APOP response state
+    ReadApopReply = "read-apop-reply",
+    #! Send AUTH XOAUTH2 command state
+    SendXoauth2 = "send-xoauth2",
+    #! Read AUTH XOAUTH2 response state
+    ReadXoauth2Reply = "read-xoauth2-reply",
+    #! Send NOOP command state
+    SendNoop = "send-noop",
+    #! Read NOOP response state
+    ReadNoopReply = "read-noop-reply",
+    #! Complete state
+    Complete = "complete",
+}
+
 #! Poll operation for non-blocking POP3 ping operations
 /** This class implements a state machine for non-blocking POP3 connection and authentication.
 
     @since %Pop3Client 2.1
 */
 public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
-    public {
-        #! Connect state
-        const SPS_CONNECT = "connect";
-
-        #! Read server greeting state
-        const SPS_READ_GREETING = "read-greeting";
-
-        #! Send STLS command state
-        const SPS_SEND_STLS = "send-stls";
-
-        #! Read STLS response state
-        const SPS_READ_STLS_REPLY = "read-stls-reply";
-
-        #! Upgrade socket connection to TLS state
-        const SPS_UPGRADE_TO_TLS = "upgrade-tls";
-
-        #! Send USER command state
-        const SPS_SEND_USER = "send-user";
-
-        #! Read USER response state
-        const SPS_READ_USER_REPLY = "read-user-reply";
-
-        #! Send PASS command state
-        const SPS_SEND_PASS = "send-pass";
-
-        #! Read PASS response state
-        const SPS_READ_PASS_REPLY = "read-pass-reply";
-
-        #! Send APOP command state
-        const SPS_SEND_APOP = "send-apop";
-
-        #! Read APOP response state
-        const SPS_READ_APOP_REPLY = "read-apop-reply";
-
-        #! Send AUTH XOAUTH2 command state
-        const SPS_SEND_XOAUTH2 = "send-xoauth2";
-
-        #! Read AUTH XOAUTH2 response state
-        const SPS_READ_XOAUTH2_REPLY = "read-xoauth2-reply";
-
-        #! Send NOOP command state
-        const SPS_SEND_NOOP = "send-noop";
-
-        #! Read NOOP response state
-        const SPS_READ_NOOP_REPLY = "read-noop-reply";
-
-        #! Complete state
-        const SPS_COMPLETE = "complete";
-    }
-
     private {
         #! Info about the POP3 client
         hash<auto> info;
@@ -1632,7 +1618,7 @@ public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
         Mutex m();
 
         #! Current state
-        string state;
+        Pop3PingState state;
 
         #! Goal reached flag
         bool goal_reached = False;
@@ -1648,7 +1634,7 @@ public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
     constructor(Pop3Client pop3) {
         info = pop3.getInfo();
 
-        state = SPS_CONNECT;
+        state = Pop3PingState::Connect;
         poller = info.ssl
             ? sock.startPollConnectSsl(info.target)
             : sock.startPollConnect(info.target);
@@ -1676,7 +1662,7 @@ public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
     /** @return @ref True when the goal has been reached
     */
     bool goalReached() {
-        return state == SPS_COMPLETE;
+        return state == Pop3PingState::Complete;
     }
 
     #! Returns a hash to be used for I/O polling or @ref nothing in case the poll operation is complete
@@ -1691,13 +1677,13 @@ public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
                 return pinfo;
             }
 
-            if (state == SPS_CONNECT) {
-                state = SPS_READ_GREETING;
+            if (state == Pop3PingState::Connect) {
+                state = Pop3PingState::ReadGreeting;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_GREETING) {
+            if (state == Pop3PingState::ReadGreeting) {
                 greeting = trim(poller.getOutput());
                 if (greeting !~ /^\+OK/) {
                     throw "POP3-POLL-ERROR", sprintf("server greeting error: %s", greeting);
@@ -1707,7 +1693,7 @@ public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
 
                 # Handle STLS if needed (not SSL but starttls requested)
                 if (!info.ssl && info.tls) {
-                    state = SPS_SEND_STLS;
+                    state = Pop3PingState::SendStls;
                     poller = sock.startPollSend("STLS\r\n");
                     continue;
                 }
@@ -1717,114 +1703,114 @@ public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
                 continue;
             }
 
-            if (state == SPS_SEND_STLS) {
-                state = SPS_READ_STLS_REPLY;
+            if (state == Pop3PingState::SendStls) {
+                state = Pop3PingState::ReadStlsReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_STLS_REPLY) {
+            if (state == Pop3PingState::ReadStlsReply) {
                 string reply = trim(poller.getOutput());
                 if (reply !~ /^\+OK/) {
                     throw "POP3-POLL-ERROR", sprintf("STLS command failed: %s", reply);
                 }
 
-                state = SPS_UPGRADE_TO_TLS;
+                state = Pop3PingState::UpgradeToTls;
                 poller = sock.startPollUpgradeClientToSSL();
                 continue;
             }
 
-            if (state == SPS_UPGRADE_TO_TLS) {
+            if (state == Pop3PingState::UpgradeToTls) {
                 # Start authentication after TLS upgrade
                 startAuth();
                 continue;
             }
 
-            if (state == SPS_SEND_USER) {
-                state = SPS_READ_USER_REPLY;
+            if (state == Pop3PingState::SendUser) {
+                state = Pop3PingState::ReadUserReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_USER_REPLY) {
+            if (state == Pop3PingState::ReadUserReply) {
                 string reply = trim(poller.getOutput());
                 if (reply !~ /^\+OK/) {
                     throw "POP3-POLL-ERROR", sprintf("USER command failed: %s", reply);
                 }
 
-                state = SPS_SEND_PASS;
+                state = Pop3PingState::SendPass;
                 poller = sock.startPollSend(sprintf("PASS %s\r\n", info.pass));
                 continue;
             }
 
-            if (state == SPS_SEND_PASS) {
-                state = SPS_READ_PASS_REPLY;
+            if (state == Pop3PingState::SendPass) {
+                state = Pop3PingState::ReadPassReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_PASS_REPLY) {
+            if (state == Pop3PingState::ReadPassReply) {
                 string reply = trim(poller.getOutput());
                 if (reply !~ /^\+OK/) {
                     throw "POP3-POLL-ERROR", sprintf("PASS command failed: %s", reply);
                 }
 
                 # Send NOOP to complete the ping
-                state = SPS_SEND_NOOP;
+                state = Pop3PingState::SendNoop;
                 poller = sock.startPollSend("NOOP\r\n");
                 continue;
             }
 
-            if (state == SPS_SEND_APOP) {
-                state = SPS_READ_APOP_REPLY;
+            if (state == Pop3PingState::SendApop) {
+                state = Pop3PingState::ReadApopReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_APOP_REPLY) {
+            if (state == Pop3PingState::ReadApopReply) {
                 string reply = trim(poller.getOutput());
                 if (reply !~ /^\+OK/) {
                     throw "POP3-POLL-ERROR", sprintf("APOP command failed: %s", reply);
                 }
 
                 # Send NOOP to complete the ping
-                state = SPS_SEND_NOOP;
+                state = Pop3PingState::SendNoop;
                 poller = sock.startPollSend("NOOP\r\n");
                 continue;
             }
 
-            if (state == SPS_SEND_XOAUTH2) {
-                state = SPS_READ_XOAUTH2_REPLY;
+            if (state == Pop3PingState::SendXoauth2) {
+                state = Pop3PingState::ReadXoauth2Reply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_XOAUTH2_REPLY) {
+            if (state == Pop3PingState::ReadXoauth2Reply) {
                 string reply = trim(poller.getOutput());
                 if (reply !~ /^\+OK/) {
                     throw "POP3-POLL-ERROR", sprintf("AUTH XOAUTH2 command failed: %s", reply);
                 }
 
                 # Send NOOP to complete the ping
-                state = SPS_SEND_NOOP;
+                state = Pop3PingState::SendNoop;
                 poller = sock.startPollSend("NOOP\r\n");
                 continue;
             }
 
-            if (state == SPS_SEND_NOOP) {
-                state = SPS_READ_NOOP_REPLY;
+            if (state == Pop3PingState::SendNoop) {
+                state = Pop3PingState::ReadNoopReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_NOOP_REPLY) {
+            if (state == Pop3PingState::ReadNoopReply) {
                 string reply = trim(poller.getOutput());
                 if (reply !~ /^\+OK/) {
                     throw "POP3-POLL-ERROR", sprintf("NOOP command failed: %s", reply);
                 }
 
                 delete poller;
-                state = SPS_COMPLETE;
+                state = Pop3PingState::Complete;
                 goal_reached = True;
                 break;
             }
@@ -1842,7 +1828,7 @@ public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
     private startAuth() {
         # SASL XOAUTH2 takes precedence if token is available
         if (info.token) {
-            state = SPS_SEND_XOAUTH2;
+            state = Pop3PingState::SendXoauth2;
             string login = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, Pop3Client::CtrlA, info.token,
                 Pop3Client::CtrlA, Pop3Client::CtrlA).toBase64();
             poller = sock.startPollSend(sprintf("AUTH XOAUTH2 %s\r\n", login));
@@ -1851,14 +1837,14 @@ public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
 
         # Try APOP if msg-id is present in greeting
         if (apop_msgid) {
-            state = SPS_SEND_APOP;
+            state = Pop3PingState::SendApop;
             string secret = (apop_msgid + info.pass).toMD5();
             poller = sock.startPollSend(sprintf("APOP %s %s\r\n", info.user, secret));
             return;
         }
 
         # Fall back to USER/PASS
-        state = SPS_SEND_USER;
+        state = Pop3PingState::SendUser;
         poller = sock.startPollSend(sprintf("USER %s\r\n", info.user));
     }
 }

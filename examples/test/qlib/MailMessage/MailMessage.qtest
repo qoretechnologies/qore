@@ -59,7 +59,7 @@ public class Main inherits QUnit::Test {
 
             msg.addTO(To);
 
-            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", EncBase64);
+            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", ContentEncoding::Base64);
             string r = msg.serialize();
 
             string refstr = "From: foo@bar.cz\r
@@ -129,7 +129,7 @@ bG9yZW0gaXBzdW0=\r
             msg.setBody("body");
             msg.addTO(To);
 
-            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", EncDefault);
+            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", ContentEncoding::Default);
             string r = msg.serialize();
 
             string refstr = "From: foo@bar.cz\r
@@ -417,7 +417,7 @@ lorem ipsum\r
 
             # Create a small binary "image" (PNG header bytes)
             binary png_data = <89504E470D0A1A0A0000000D49484452>;
-            msg.attach("image.png", MimeTypePng, png_data, EncBase64);
+            msg.attach("image.png", MimeTypePng, png_data, ContentEncoding::Base64);
 
             string serialized = msg.serialize();
             assertRegex("Content-Type: image/png", serialized);
@@ -459,22 +459,22 @@ lorem ipsum\r
             msg.setBody("Test body");
             msg.addTO(To);
 
-            msg.attach("document.txt", MimeTypeText, "Line 1\r\nLine 2\r\nLine 3", EncQuotedPrintable);
+            msg.attach("document.txt", MimeTypeText, "Line 1\r\nLine 2\r\nLine 3", ContentEncoding::QuotedPrintable);
 
             string serialized = msg.serialize();
             assertRegex("Content-Transfer-Encoding: quoted-printable", serialized);
         }
 
-        # Test attachment with no encoding (EncNone not allowed for attachments, should use EncDefault)
+        # Test attachment with no encoding (ContentEncoding::None not allowed for attachments, should use ContentEncoding::Default)
         {
             Message msg(Sender, Subject);
             msg.setBody("Test body");
             msg.addTO(To);
 
-            msg.attach("data.txt", MimeTypeText, "Simple text", EncDefault);
+            msg.attach("data.txt", MimeTypeText, "Simple text", ContentEncoding::Default);
 
             string serialized = msg.serialize();
-            # EncDefault for text should use quoted-printable
+            # ContentEncoding::Default for text should use quoted-printable
             assertRegex("Content-Transfer-Encoding: quoted-printable", serialized);
         }
 
@@ -502,7 +502,7 @@ lorem ipsum\r
 
             # Create a larger text content
             string large_content = strmul("ABCDEFGHIJ", 1000);  # 10KB
-            msg.attach("large.txt", MimeTypeText, large_content, EncBase64);
+            msg.attach("large.txt", MimeTypeText, large_content, ContentEncoding::Base64);
 
             string serialized = msg.serialize();
             Message parsed(serialized);
@@ -599,7 +599,7 @@ lorem ipsum\r
         # Test creating inline attachment
         {
             Message msg(Sender, Subject);
-            msg.setBody("<html><body><img src=\"cid:logo123\"></body></html>", EncQuotedPrintable, MimeTypeHtml);
+            msg.setBody("<html><body><img src=\"cid:logo123\"></body></html>", ContentEncoding::QuotedPrintable, MimeTypeHtml);
             msg.addTO(To);
 
             binary logo_data = <89504E470D0A1A0A>;  # PNG header
@@ -616,7 +616,7 @@ lorem ipsum\r
 
         # Test Attachment constructor with Content-ID
         {
-            Attachment att("image.jpg", MimeTypeJpeg, <FFFFFFFFFFFF>, EncBase64, NOTHING, "img001");
+            Attachment att("image.jpg", MimeTypeJpeg, <FFFFFFFFFFFF>, ContentEncoding::Base64, NOTHING, "img001");
             assertTrue(att.isInline(), "Attachment with cid is inline");
             assertEq("img001", att.getContentId(), "Content-ID from constructor");
         }
@@ -658,7 +658,7 @@ lorem ipsum\r
         # Test multiple inline attachments
         {
             Message msg(Sender, Subject);
-            msg.setBody("<html><img src=\"cid:img1\"><img src=\"cid:img2\"></html>", EncQuotedPrintable, MimeTypeHtml);
+            msg.setBody("<html><img src=\"cid:img1\"><img src=\"cid:img2\"></html>", ContentEncoding::QuotedPrintable, MimeTypeHtml);
             msg.addTO(To);
 
             msg.attachInline("img1.png", MimeTypePng, <FF>, "img1");
@@ -677,19 +677,19 @@ lorem ipsum\r
     testPartAndAttachmentClasses() {
         # Test Part getters
         {
-            Part p("test.txt", MimeTypeText, "Hello World", EncQuotedPrintable);
+            Part p("test.txt", MimeTypeText, "Hello World", ContentEncoding::QuotedPrintable);
             assertEq("test.txt", p.getName(), "Part.getName()");
             assertEq(MimeTypeText, p.getMime(), "Part.getMime()");
             assertEq("Hello World", p.getData(), "Part.getData()");
             assertEq(11, p.getSize(), "Part.getSize()");
-            assertEq(EncQuotedPrintable, p.getTransferEncoding(), "Part.getTransferEncoding()");
+            assertEq(ContentEncoding::QuotedPrintable, p.getTransferEncoding(), "Part.getTransferEncoding()");
             assertNothing(p.getContentId(), "Part.getContentId() when not set");
         }
 
         # Test Part with headers
         {
             hash<auto> hdr = {"X-Custom": "value", "content-id": "<part123>"};
-            Part p("data.bin", MimeTypeOctetStream, <DEADBEEF>, EncBase64, hdr);
+            Part p("data.bin", MimeTypeOctetStream, <DEADBEEF>, ContentEncoding::Base64, hdr);
             hash<auto> headers = p.getHeaders();
             assertEq("value", headers."X-Custom", "custom header preserved");
             assertEq("part123", p.getContentId(), "Content-ID extracted from headers");
@@ -697,34 +697,34 @@ lorem ipsum\r
 
         # Test Part.getInfo()
         {
-            Part p("info.txt", MimeTypeText, "content", EncBase64);
+            Part p("info.txt", MimeTypeText, "content", ContentEncoding::Base64);
             hash<auto> info = p.getInfo();
             assertEq("info.txt", info.name);
             assertEq(MimeTypeText, info.mime);
             assertEq("content", info.part_data);
-            assertEq(EncBase64, info.transfer_encoding);
+            assertEq(ContentEncoding::Base64, info.transfer_encoding);
             assertEq(7, info.size);
             assertNothing(info.content_id);
         }
 
         # Test Attachment inherits Part methods
         {
-            Attachment att("doc.pdf", MimeTypePdf, <25504446>, EncBase64);
+            Attachment att("doc.pdf", MimeTypePdf, <25504446>, ContentEncoding::Base64);
             assertEq("doc.pdf", att.getName());
             assertEq(MimeTypePdf, att.getMime());
             assertEq(4, att.getSize());
-            assertEq(EncBase64, att.getTransferEncoding());
+            assertEq(ContentEncoding::Base64, att.getTransferEncoding());
             assertFalse(att.isInline());
         }
 
         # Test Attachment.getInfo()
         {
-            Attachment att("file.txt", MimeTypeText, "test data", EncBase64, NOTHING, "cid123");
+            Attachment att("file.txt", MimeTypeText, "test data", ContentEncoding::Base64, NOTHING, "cid123");
             hash<auto> info = att.getInfo();
             assertEq("file.txt", info.name);
             assertEq(MimeTypeText, info.mime);
             assertEq("test data", info.part_data);
-            assertEq(EncBase64, info.transfer_encoding);
+            assertEq(ContentEncoding::Base64, info.transfer_encoding);
             assertEq(9, info.size);
             assertEq("cid123", info.content_id);
         }
@@ -744,12 +744,12 @@ lorem ipsum\r
 
         # Test Attachment encoding validation
         {
-            # EncDefault should resolve to appropriate encoding
-            Attachment att1("text.txt", MimeTypeText, "text content", EncDefault);
-            assertEq(EncQuotedPrintable, att1.getTransferEncoding(), "EncDefault for text -> quoted-printable");
+            # ContentEncoding::Default should resolve to appropriate encoding
+            Attachment att1("text.txt", MimeTypeText, "text content", ContentEncoding::Default);
+            assertEq(ContentEncoding::QuotedPrintable, att1.getTransferEncoding(), "ContentEncoding::Default for text -> quoted-printable");
 
-            Attachment att2("bin.dat", MimeTypeOctetStream, <DEADBEEF>, EncDefault);
-            assertEq(EncBase64, att2.getTransferEncoding(), "EncDefault for binary -> base64");
+            Attachment att2("bin.dat", MimeTypeOctetStream, <DEADBEEF>, ContentEncoding::Default);
+            assertEq(ContentEncoding::Base64, att2.getTransferEncoding(), "ContentEncoding::Default for binary -> base64");
         }
 
         # Test Message getInfo with attachments

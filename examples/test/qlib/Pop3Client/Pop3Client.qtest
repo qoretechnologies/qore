@@ -155,17 +155,17 @@ public class Pop3ClientTest inherits QUnit::Test {
         poller.abort();
         assertTrue(True, "abort() callable");
 
-        # Test Pop3PingPollOperation state constants exist
-        assertEq("connect", Pop3PingPollOperation::SPS_CONNECT, "SPS_CONNECT constant");
-        assertEq("read-greeting", Pop3PingPollOperation::SPS_READ_GREETING, "SPS_READ_GREETING constant");
-        assertEq("send-stls", Pop3PingPollOperation::SPS_SEND_STLS, "SPS_SEND_STLS constant");
-        assertEq("upgrade-tls", Pop3PingPollOperation::SPS_UPGRADE_TO_TLS, "SPS_UPGRADE_TO_TLS constant");
-        assertEq("send-user", Pop3PingPollOperation::SPS_SEND_USER, "SPS_SEND_USER constant");
-        assertEq("send-pass", Pop3PingPollOperation::SPS_SEND_PASS, "SPS_SEND_PASS constant");
-        assertEq("send-apop", Pop3PingPollOperation::SPS_SEND_APOP, "SPS_SEND_APOP constant");
-        assertEq("send-xoauth2", Pop3PingPollOperation::SPS_SEND_XOAUTH2, "SPS_SEND_XOAUTH2 constant");
-        assertEq("send-noop", Pop3PingPollOperation::SPS_SEND_NOOP, "SPS_SEND_NOOP constant");
-        assertEq("complete", Pop3PingPollOperation::SPS_COMPLETE, "SPS_COMPLETE constant");
+        # Test Pop3PingState enum values
+        assertEq("connect", Pop3PingState::Connect, "Pop3PingState::Connect");
+        assertEq("read-greeting", Pop3PingState::ReadGreeting, "Pop3PingState::ReadGreeting");
+        assertEq("send-stls", Pop3PingState::SendStls, "Pop3PingState::SendStls");
+        assertEq("upgrade-tls", Pop3PingState::UpgradeToTls, "Pop3PingState::UpgradeToTls");
+        assertEq("send-user", Pop3PingState::SendUser, "Pop3PingState::SendUser");
+        assertEq("send-pass", Pop3PingState::SendPass, "Pop3PingState::SendPass");
+        assertEq("send-apop", Pop3PingState::SendApop, "Pop3PingState::SendApop");
+        assertEq("send-xoauth2", Pop3PingState::SendXoauth2, "Pop3PingState::SendXoauth2");
+        assertEq("send-noop", Pop3PingState::SendNoop, "Pop3PingState::SendNoop");
+        assertEq("complete", Pop3PingState::Complete, "Pop3PingState::Complete");
     }
 
     liveAsyncPingTests() {

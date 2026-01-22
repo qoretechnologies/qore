@@ -253,28 +253,26 @@ public hashdecl MailMessageInfo {
 /** @defgroup MessageEncodings Message Encodings
 */
 #/@{
-#! default content transfer encoding depending on attachment type
-/** The default encodings are as follows per file type:
-    - text data: @ref EncQuotedPrintable
-    - binary data: @ref EncBase64
+#! Content transfer encoding for email messages and attachments
+/** @since MailMessage 1.6
 */
-public const EncDefault = "default";
-
-#! no content transfer encoding (not recommended as SMTP servers break up long lines automatically)
-public const EncNone = "none";
-
-#! base-64 content transfer encoding
-public const EncBase64 = ContentTransEncBase64;
-
-#! "quoted-printable" content transfer encoding
-public const EncQuotedPrintable = ContentTransEncQuotedPrintable;
+public enum ContentEncoding : string {
+    #! Default encoding: uses @ref QuotedPrintable for text data, @ref Base64 for binary data
+    Default = "default",
+    #! No content transfer encoding (not recommended as SMTP servers break up long lines automatically)
+    None = "none",
+    #! Base64 content transfer encoding
+    Base64 = "base64",
+    #! Quoted-printable content transfer encoding
+    QuotedPrintable = "quoted-printable",
+}
 
 #! a list of all known content encoding schemes encodings
 public const Encodings = (
-    EncDefault,
-    EncNone,
-    EncBase64,
-    EncQuotedPrintable,
+    ContentEncoding::Default,
+    ContentEncoding::None,
+    ContentEncoding::Base64,
+    ContentEncoding::QuotedPrintable,
 );
 #/@}
 
@@ -479,7 +477,7 @@ public class Message {
         *data body;
 
         # message body content transfer encoding
-        string bodyEncoding = EncDefault;
+        string bodyEncoding = ContentEncoding::Default;
 
         # message body content type
         *string bodyContentType;
@@ -766,7 +764,7 @@ public class Message {
         if (attachments) {
             MultiPartMixedMessage mpm(mpboundary);
 
-            if (bodyEncoding == EncNone) {
+            if (bodyEncoding == ContentEncoding::None) {
                 bodyEncoding = ContentTransEnc7Bit;
             }
 
@@ -779,7 +777,7 @@ public class Message {
             str += mpm.serialize().toString();
             str += "\r\n";
         } else {
-            if (bodyEncoding == EncNone) {
+            if (bodyEncoding == ContentEncoding::None) {
                 str += "\r\n" + body + "\r\n";
             } else {
                 str += "\r\n" + mime_encode_transfer_data(body, bodyEncoding) + "\r\n";
@@ -1008,7 +1006,7 @@ public class Message {
 
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
     */
-    setBody(data body, string enc = EncDefault, *string content_type) {
+    setBody(data body, string enc = ContentEncoding::Default, *string content_type) {
         bodyEncoding = Message::checkEncoding(body, enc, True);
         if (content_type)
             bodyContentType = content_type;
@@ -1024,8 +1022,8 @@ public class Message {
         if (body.typeCode() == NT_BINARY)
             throw "BODY-ERROR", sprintf("cannot concatenate a string to a binary body");
         # issue #2360 check if encoding is set
-        if (bodyEncoding == EncDefault)
-            bodyEncoding = EncQuotedPrintable;
+        if (bodyEncoding == ContentEncoding::Default)
+            bodyEncoding = ContentEncoding::QuotedPrintable;
 
         body += str;
     }
@@ -1039,8 +1037,8 @@ public class Message {
         if (body.typeCode() == NT_STRING)
             throw "BODY-ERROR", sprintf("cannot concatenate a binary object to a string body");
         # issue #2360 check if encoding is set
-        if (bodyEncoding == EncDefault)
-            bodyEncoding = EncBase64;
+        if (bodyEncoding == ContentEncoding::Default)
+            bodyEncoding = ContentEncoding::Base64;
         body += bin;
     }
 
@@ -1210,7 +1208,7 @@ public class Message {
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
         @throw INVALID-ENCODING the encoding given cannot be used with data given
     */
-    attach(string name, string mime, data att, string enc = EncBase64, *hash<auto> hdr) {
+    attach(string name, string mime, data att, string enc = ContentEncoding::Base64, *hash<auto> hdr) {
         attachments += new MailMessage::Attachment(name, mime, att, enc, hdr);
     }
 
@@ -1237,7 +1235,7 @@ public class Message {
         @code{.py}
 Message msg("sender@example.com", "HTML Email with Image");
 msg.addTO("recipient@example.com");
-msg.setBody("<html><body><img src=\"cid:logo123\"></body></html>", EncQuotedPrintable, MimeTypeHtml);
+msg.setBody("<html><body><img src=\"cid:logo123\"></body></html>", ContentEncoding::QuotedPrintable, MimeTypeHtml);
 msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         @endcode
 
@@ -1246,7 +1244,7 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
 
         @since MailMessage 1.6
     */
-    attachInline(string name, string mime, data att, string content_id, string enc = EncBase64, *hash<auto> hdr) {
+    attachInline(string name, string mime, data att, string content_id, string enc = ContentEncoding::Base64, *hash<auto> hdr) {
         attachments += new MailMessage::Attachment(name, mime, att, enc, hdr, content_id);
     }
 
@@ -1323,7 +1321,7 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
             hdr += Message::doHeaderValue(k, headers{k}, eol, encode);
 
         # include MIME headers for msg body if necessary
-        if (!attachments && bodyEncoding != EncNone) {
+        if (!attachments && bodyEncoding != ContentEncoding::None) {
             hdr += Message::doHeaderValue("MIME-Version", "1.0", eol, encode);
             if (bodyContentType)
                 hdr += Message::doHeaderValue("Content-Type", bodyContentType, eol, encode);
@@ -1413,34 +1411,34 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         return str;
     }
 
-    #! checks the data against the encoding and returns the new encoding (if the encoding is @ref EncDefault for example)
+    #! checks the data against the encoding and returns the new encoding (if the encoding is @ref ContentEncoding::Default for example)
     /** @param data the data to be encoded
         @param enc the encoding type for the data (see \c MessageEncodings for possible values)
-        @param noneok if this argument is True, then @ref EncNone may be given as an argument
+        @param noneok if this argument is True, then @ref ContentEncoding::None may be given as an argument
 
-        @return the new encoding to use in case the input data was @ref EncDefault
+        @return the new encoding to use in case the input data was @ref ContentEncoding::Default
 
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
         @throw INVALID-ENCODING the encoding given cannot be used with data given
     */
     static string checkEncoding(data data, string enc, bool noneok = False) {
-        if (enc == EncDefault) {
+        if (enc == ContentEncoding::Default) {
             # issue #3275: if the data has a line with a single dot, then encode it with base64 encoding
             if (data.typeCode() == NT_STRING) {
                 if (data =~ /^.\r?$/m) {
-                    enc = EncBase64;
+                    enc = ContentEncoding::Base64;
                 } else {
-                    enc = EncQuotedPrintable;
+                    enc = ContentEncoding::QuotedPrintable;
                 }
             } else {
-                enc = EncBase64;
+                enc = ContentEncoding::Base64;
             }
         }
-        else if (!noneok && enc == EncNone)
+        else if (!noneok && enc == ContentEncoding::None)
             throw "INVALID-ENCODING", "\"none\" may not be used; a valid encoding is required in this context";
         else if (!inlist(enc, Encodings))
             throw "UNKNOWN-ENCODING", sprintf("%y is not a known encoding; known encodings: %y", enc, Encodings);
-        else if (data.typeCode() == NT_BINARY && enc == EncNone)
+        else if (data.typeCode() == NT_BINARY && enc == ContentEncoding::None)
             throw "INVALID-ENCODING", sprintf("%y cannot be used with binary data", enc);
 
         return enc;
@@ -1455,15 +1453,15 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
     */
     static string encodeTransferData(data data, string enc, reference<hash> hdr) {
         switch (enc) {
-            case EncBase64: {
+            case ContentEncoding::Base64: {
                 hdr."Content-Transfer-Encoding" = enc;
                 return mime_encode_base64(data, 72);
             }
 
-            case EncNone:
+            case ContentEncoding::None:
                 return data;
 
-            case EncQuotedPrintable: {
+            case ContentEncoding::QuotedPrintable: {
                 hdr."Content-Transfer-Encoding" = enc;
                 return mime_encode_quoted_printable(data);
             }
@@ -1476,19 +1474,19 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
     static string encodeData(data data, string mime, string disp, string enc) {
         string str = sprintf("Content-Type: %s\r\nContent-Disposition: %s\r\n", mime, disp);
         switch (enc) {
-            case EncBase64: {
+            case ContentEncoding::Base64: {
                 str += "Content-Transfer-Encoding: base64\r\n\r\n";
                 str += mime_encode_base64(data, 72);
                 str += "\r\n";
                 break;
             }
-            case EncNone: {
+            case ContentEncoding::None: {
                 str += "\r\n";
                 str += data;
                 str += "\r\n";
                 break;
             }
-            case EncQuotedPrintable: {
+            case ContentEncoding::QuotedPrintable: {
                 str += sprintf("Content-Transfer-Encoding: quoted-printable\r\n\r\n");
                 str += mime_encode_quoted_printable(data);
                 str += "\r\n";
@@ -1558,7 +1556,7 @@ public class Part {
     }
 
     # will only be called internally when parsing a Message
-    constructor(string filename, string mimetype, data filedata, string encoding = EncDefault, *hash<auto> hdr) {
+    constructor(string filename, string mimetype, data filedata, string encoding = ContentEncoding::Default, *hash<auto> hdr) {
         name = filename;
         mime = mimetype;
         part_data = filedata;
@@ -1655,7 +1653,7 @@ msg.attach(att);
     @code{.py}
 File f();
 f.open2("logo.png");
-Attachment att("logo.png", MimeTypePng, f.readBinary(-1), EncBase64, NOTHING, "logo123");
+Attachment att("logo.png", MimeTypePng, f.readBinary(-1), ContentEncoding::Base64, NOTHING, "logo123");
 f.close();
 msg.attach(att);
 # Reference in HTML body as: <img src="cid:logo123">
@@ -1687,7 +1685,7 @@ public class Attachment inherits Part {
 
         @since MailMessage 1.6: added \a cid parameter
     */
-    constructor(string name, string mime, data part_data, string enc = EncBase64, *hash<auto> hdr, *string cid)
+    constructor(string name, string mime, data part_data, string enc = ContentEncoding::Base64, *hash<auto> hdr, *string cid)
             : Part(sanitize_filename(name), mime, part_data, enc, hdr) {
         self.enc = Message::checkEncoding(part_data, enc);
         if (cid.val()) {

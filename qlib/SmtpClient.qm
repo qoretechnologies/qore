@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file SmtpClient.qm SmtpClient module definition
 
-/*  SmtpClient.qm Copyright 2012 - 2024 Qore Technologies, s.r.o.
+/*  SmtpClient.qm Copyright 2012 - 2026 Qore Technologies, s.r.o.
 
     Original Authors: Wolfgang Ritzinger, Marian Bonda, Pavol Potoncok
 
@@ -1050,40 +1050,32 @@ smtp.setEventQueue();
     #! @endcond
 }
 
+#! SMTP ping poll operation states
+public enum SmtpPingState : string {
+    #! Connect state
+    Connect = "connect",
+    #! Read hello state
+    ReadHello = "read-hello",
+    #! Send hello state
+    SendHello = "send-hello",
+    #! Read hello reply state
+    ReadHelloReply = "read-hello-reply",
+    #! Send STARTTLS state
+    StartTls = "starttls",
+    #! Read STARTTLS reply
+    ReadStartTlsReply = "read-starttls-reply",
+    #! Upgrade socket connection to TLS
+    UpgradeToTls = "upgrade-tls",
+    #! Login state
+    Login = "login",
+    #! Read login reply
+    ReadLoginReply = "read-login-reply",
+    #! Complete state
+    Complete = "complete",
+}
+
 #! Class for SMTP non-blocking / polling pings
 public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
-    public {
-        #! Connect state
-        const SPS_CONNECT = "connect";
-
-        #! Read hello state
-        const SPS_READ_HELLO = "read-hello";
-
-        #! Send hello state
-        const SPS_SEND_HELLO = "send-hello";
-
-        #! Read hello reply state
-        const SPS_READ_HELLO_REPLY = "read-hello-reply";
-
-        #! Send STARTTLS state
-        const SPS_STARTTLS = "starttls";
-
-        #! Read STARTTLS reply
-        const SPS_READ_STARTTLS_REPLY = "read-starttls-reply";
-
-        #! Upgrade socket connection to TLS
-        const SPS_UPGRADE_TO_TLS = "upgrade-tls";
-
-        #! Login state
-        const SPS_LOGIN = "login";
-
-        #! Read login reply
-        const SPS_READ_LOGIN_REPLY = "read-login-reply";
-
-        #! Complete state
-        const SPS_COMPLETE = "complete";
-    }
-
     private {
         #! Info about the SMTP client
         hash<auto> info;
@@ -1098,7 +1090,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
         Mutex m();
 
         #! Current state
-        string state;
+        SmtpPingState state;
 
         #! Goal reached flag
         bool goal_reached = False;
@@ -1129,7 +1121,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
     constructor(SmtpClient smtp) {
         info = smtp.getInfo();
 
-        state = SPS_CONNECT;
+        state = SmtpPingState::Connect;
         poller = info.ssl
             ? sock.startPollConnectSsl(info.target)
             : sock.startPollConnect(info.target);
@@ -1157,7 +1149,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
     /** @return @ref True when the goal as been reached
     */
     bool goalReached() {
-        return state == SPS_COMPLETE;
+        return state == SmtpPingState::Complete;
     }
 
     #! Returns a hash to be used for I/O polling or @ref nothing in case the poll operation is complete
@@ -1172,27 +1164,27 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
                 return pinfo;
             }
 
-            if (state == SPS_CONNECT) {
-                state = SPS_READ_HELLO;
+            if (state == SmtpPingState::Connect) {
+                state = SmtpPingState::ReadHello;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_HELLO) {
-                state = SPS_SEND_HELLO;
+            if (state == SmtpPingState::ReadHello) {
+                state = SmtpPingState::SendHello;
                 string rep = trim(poller.getOutput());
                 esmtp = (rep =~ /ESMTP/);
                 poller = sock.startPollSend(sprintf("%s %s\r\n", esmtp ? "EHLO" : "HELO", gethostname()));
                 continue;
             }
 
-            if (state == SPS_SEND_HELLO) {
-                state = SPS_READ_HELLO_REPLY;
+            if (state == SmtpPingState::SendHello) {
+                state = SmtpPingState::ReadHelloReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_HELLO_REPLY) {
+            if (state == SmtpPingState::ReadHelloReply) {
                 if (!getReply(\hello_reply_code, \hello_reply)) {
                     # continue reading
                     continue;
@@ -1203,7 +1195,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
                 }
 
                 if (info.tls) {
-                    state = SPS_STARTTLS;
+                    state = SmtpPingState::StartTls;
                     poller = sock.startPollSend("STARTTLS\r\n");
                     continue;
                 }
@@ -1215,28 +1207,28 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
 
                 delete poller;
                 goal_reached = True;
-                state = SPS_COMPLETE;
+                state = SmtpPingState::Complete;
                 break;
             }
 
-            if (state == SPS_STARTTLS) {
-                state = SPS_READ_STARTTLS_REPLY;
+            if (state == SmtpPingState::StartTls) {
+                state = SmtpPingState::ReadStartTlsReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_STARTTLS_REPLY) {
+            if (state == SmtpPingState::ReadStartTlsReply) {
                 if (!getReply(\starttls_code, \starttls_reply)) {
                     # continue reading
                     continue;
                 }
 
-                state = SPS_UPGRADE_TO_TLS;
+                state = SmtpPingState::UpgradeToTls;
                 poller = sock.startPollUpgradeClientToSSL();
                 continue;
             }
 
-            if (state == SPS_UPGRADE_TO_TLS) {
+            if (state == SmtpPingState::UpgradeToTls) {
                 if (info.user && info.pass) {
                     startLogin();
                     continue;
@@ -1244,17 +1236,17 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
 
                 delete poller;
                 goal_reached = True;
-                state = SPS_COMPLETE;
+                state = SmtpPingState::Complete;
                 break;
             }
 
-            if (state == SPS_LOGIN) {
-                state = SPS_READ_LOGIN_REPLY;
+            if (state == SmtpPingState::Login) {
+                state = SmtpPingState::ReadLoginReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_LOGIN_REPLY) {
+            if (state == SmtpPingState::ReadLoginReply) {
                 if (!getReply(\login_code, \login_reply)) {
                     # continue reading
                     continue;
@@ -1266,7 +1258,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
 
                 delete poller;
                 goal_reached = True;
-                state = SPS_COMPLETE;
+                state = SmtpPingState::Complete;
                 break;
             }
         }
@@ -1280,7 +1272,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
 
     #! Starts the polling login state
     private startLogin() {
-        state = SPS_LOGIN;
+        state = SmtpPingState::Login;
         poller = sock.startPollSend(sprintf("AUTH PLAIN %s\r\n", make_base64_string(binary(info.user) + <00> +
             binary(info.user) + <00> + binary(info.pass))));
     }
@@ -1743,12 +1735,23 @@ public class SmtpSendEmailAttachmentDataType inherits HashDataType {
                 "display_name": "Attachment Encoding",
                 "type": StringType,
                 "short_desc": "The encoding to use for the attachment",
-                "desc": "The encoding to use for the attachment:\n"
-                    "- `default`: `quoted-printable` for string data, `base64` for binary data\n"
-                    "- `none`: no content encoding (not recommended)\n"
-                    "- `quoted-printable`: quoted printable encoding \n"
-                    "- `base64`: base64 encoding",
+                "desc": "The encoding to use for the attachment",
                 "default_value": "default",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "default",
+                        "desc": "`quoted-printable` for string data, `base64` for binary data",
+                    }, <AllowedValueInfo>{
+                        "value": "none",
+                        "desc": "No content encoding (not recommended)",
+                    }, <AllowedValueInfo>{
+                        "value": "quoted-printable",
+                        "desc": "Quoted printable encoding",
+                    }, <AllowedValueInfo>{
+                        "value": "base64",
+                        "desc": "Base64 encoding",
+                    },
+                ),
             },
             "hdr": {
                 "display_name": "Headers",
@@ -1814,13 +1817,24 @@ public class SmtpSendEmailRequestDataType inherits HashDataType {
             "body-encoding": {
                 "display_name": "Body Encoding",
                 "type": StringType,
-                "short_desc": "The encoding to use for the attachment",
-                "desc": "The encoding to use for the attachment:\n"
-                    "- `default`: `quoted-printable` for string data, `base64` for binary data\n"
-                    "- `none`: no content encoding (not recommended)\n"
-                    "- `quoted-printable`: quoted printable encoding \n"
-                    "- `base64`: base64 encoding",
+                "short_desc": "The encoding to use for the body",
+                "desc": "The encoding to use for the message body",
                 "default_value": "default",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "default",
+                        "desc": "`quoted-printable` for string data, `base64` for binary data",
+                    }, <AllowedValueInfo>{
+                        "value": "none",
+                        "desc": "No content encoding (not recommended)",
+                    }, <AllowedValueInfo>{
+                        "value": "quoted-printable",
+                        "desc": "Quoted printable encoding",
+                    }, <AllowedValueInfo>{
+                        "value": "base64",
+                        "desc": "Base64 encoding",
+                    },
+                ),
             },
             "body-mime-type": {
                 "display_name": "Body Mime Type",
