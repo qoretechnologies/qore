@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -170,14 +170,24 @@ QoreHashNode* FileReadPollOperationBase::continuePoll(ExceptionSink* xsink) {
     if (!rc) {
         // get output data
         SimpleRefHolder<BinaryNode> d(poll_state->takeOutput().get<BinaryNode>());
+        bool ok = true;
         if (to_string) {
             size_t len = d->size();
-            data = new QoreStringNode(reinterpret_cast<char*>(d->giveBuffer()), len, len + 1,
-                file->getEncoding());
+            char* buf = reinterpret_cast<char*>(d->giveBuffer());
+            char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+            if (!nbuf) {
+                xsink->outOfMemory();
+                ok = false;
+            } else {
+                nbuf[len] = '\0';
+                data = new QoreStringNode(nbuf, len, len + 1, file->getEncoding());
+            }
         } else {
             data = d.release();
         }
-        state = FPS_READ_DONE;
+        if (ok) {
+            state = FPS_READ_DONE;
+        }
     }
     if (*xsink || !rc) {
         // release the AbstractPollState value

@@ -561,6 +561,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - added \c -M / \c --modern and \c -G / \c --enable-debug short command-line options
       - unqualified symbol resolution now prioritizes \c ::Qore entries to prevent user namespace overrides of
         system symbols
+      - fixed non-blocking file and socket poll reads to ensure NUL-terminated strings when converting poll buffers
     - @ref restclientintro "RestClient" module
       - fixed non-blocking polling with connections that use basic auth
         (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)

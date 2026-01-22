@@ -3,6 +3,10 @@
 
 %modern
 
+%try-module xml
+%define NoXml
+%endtry
+
 %requires ../../../../../qlib/Util.qm
 %requires ../../../../../qlib/FsUtil.qm
 %requires ../../../../../qlib/QUnit.qm
@@ -18,6 +22,7 @@ class FileTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("File", "1.0") {
         addTestCase("non-blocking I/O", \testNonBlockingIo());
+        addTestCase("poll xml parse", \pollXmlParseTest());
         addTestCase("FileTest", \fileTest());
         addTestCase("issue 3061", \issue3061());
         addTestCase("redirect test", \redirectTest());
@@ -55,6 +60,42 @@ class FileTest inherits QUnit::Test {
         assertTrue(fpop.goalReached(), label + "goal reached");
 
         assertEq(content, fpop.getOutput(), label + "content matches");
+    }
+
+    pollXmlParseTest() {
+%ifdef NoXml
+        testSkip("no XML module present");
+%else
+        string xml = "<root><a>1</a></root>";
+        TmpFile tmp("qore-File-");
+        tmp.file.write(xml);
+        tmp.file.close();
+
+        File f();
+        FilePollOperation fpop = f.startPollRead(tmp.path, True);
+        while (*hash<SocketPollInfo> info = fpop.continuePoll()) {
+            Socket::poll((info,), 1s);
+        }
+        assertTrue(fpop.goalReached(), "poll read goal reached");
+
+        string xml_read = fpop.getOutput();
+        assertEq(xml, xml_read, "poll read XML matches");
+        hash parsed = parse_xml(xml_read, XPF_NONE);
+        assertEq(NT_HASH, parsed.typeCode(), "parse_xml returned a hash");
+        assertEq("1", parsed.root.a, "parse_xml content matches");
+
+        TmpFile empty_tmp("qore-File-");
+        empty_tmp.file.write("");
+        empty_tmp.file.close();
+
+        File f2();
+        FilePollOperation fpop2 = f2.startPollRead(empty_tmp.path, True);
+        while (*hash<SocketPollInfo> info2 = fpop2.continuePoll()) {
+            Socket::poll((info2,), 1s);
+        }
+        assertEq("", fpop2.getOutput(), "empty poll read returns empty string");
+        assertThrows("PARSE-XML-EXCEPTION", \parse_xml(), ("", XPF_NONE));
+%endif
     }
 
     fileTest() {
