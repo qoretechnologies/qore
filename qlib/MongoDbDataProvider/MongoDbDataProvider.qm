@@ -57,6 +57,7 @@ module MongoDbDataProvider {
             "logo": MongoDbLogo,
             "logo_file_name": "mongodb-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Databases,),
         });
 
         # path variable definitions for collection actions

@@ -61,7 +61,7 @@ module JotformDataProvider {
             "logo": JotformLogo,
             "logo_file_name": "jotform-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": ("Forms, Surveys Scheduling",),
+            "groups": (DataProvider::AppGroup::FormsSurveys,),
         });
 
         # ========== SUBMISSION ACTIONS ==========

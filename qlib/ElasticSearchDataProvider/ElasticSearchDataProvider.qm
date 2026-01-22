@@ -67,6 +67,7 @@ module ElasticSearchDataProvider {
             "logo": ElasticSearchLogo,
             "logo_file_name": "elasticsearch-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Databases,),
         });
 
         # register all supported actions

@@ -54,6 +54,7 @@ module ServiceNowRestDataProvider {
             "logo": ServiceNowWhiteLogo,
             "logo_file_name": "sn.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CustomerSupport,),
         });
 
         # register all supported actions
