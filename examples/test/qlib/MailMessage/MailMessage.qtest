@@ -18,6 +18,7 @@ public class Main inherits QUnit::Test {
 
     constructor() : Test("MailMessageTest", "1.0") {
         addTestCase("Test serialize()", \testSerialize(), NOTHING);
+        addTestCase("Test multipart type detection", \testMultipartTypeDetection(), NOTHING);
 
         set_return_value(main());
     }
@@ -161,6 +162,194 @@ lorem ipsum\r
             msg.addTO(To);
             string r = msg.serialize();
             assertRegex("Content-Transfer-Encoding: quoted-printable", r);
+        }
+    }
+
+    testMultipartTypeDetection() {
+        # Test non-multipart message
+        {
+            string simpleMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: simple test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: text/plain\r\n"
+                "\r\n"
+                "Hello world\r\n";
+
+            Message msg(simpleMsg);
+            assertFalse(msg.isMultipart(), "simple message is not multipart");
+            assertNothing(msg.getMultipartType(), "simple message has no multipart type");
+            assertFalse(msg.isSigned(), "simple message is not signed");
+            assertFalse(msg.isEncrypted(), "simple message is not encrypted");
+            assertFalse(msg.isDigest(), "simple message is not digest");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertFalse(info.is_multipart, "info.is_multipart is False");
+            assertNothing(info.multipart_type, "info.multipart_type is nothing");
+            assertFalse(info.is_signed, "info.is_signed is False");
+            assertFalse(info.is_encrypted, "info.is_encrypted is False");
+            assertFalse(info.is_digest, "info.is_digest is False");
+        }
+
+        # Test multipart/mixed message
+        {
+            string mixedMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: mixed test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/mixed; boundary=boundary123\r\n"
+                "\r\n"
+                "--boundary123\r\n"
+                "Content-Type: text/plain\r\n"
+                "\r\n"
+                "Hello world\r\n"
+                "--boundary123--\r\n";
+
+            Message msg(mixedMsg);
+            assertTrue(msg.isMultipart(), "mixed message is multipart");
+            assertEq("mixed", msg.getMultipartType(), "mixed message has 'mixed' type");
+            assertFalse(msg.isSigned(), "mixed message is not signed");
+            assertFalse(msg.isEncrypted(), "mixed message is not encrypted");
+            assertFalse(msg.isDigest(), "mixed message is not digest");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertTrue(info.is_multipart, "info.is_multipart is True");
+            assertEq("mixed", info.multipart_type, "info.multipart_type is 'mixed'");
+        }
+
+        # Test multipart/alternative message
+        {
+            string altMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: alternative test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/alternative; boundary=altbound\r\n"
+                "\r\n"
+                "--altbound\r\n"
+                "Content-Type: text/plain\r\n"
+                "\r\n"
+                "Plain text\r\n"
+                "--altbound\r\n"
+                "Content-Type: text/html\r\n"
+                "\r\n"
+                "<html><body>HTML</body></html>\r\n"
+                "--altbound--\r\n";
+
+            Message msg(altMsg);
+            assertTrue(msg.isMultipart(), "alternative message is multipart");
+            assertEq("alternative", msg.getMultipartType(), "alternative message has 'alternative' type");
+            assertFalse(msg.isSigned(), "alternative message is not signed");
+            assertFalse(msg.isEncrypted(), "alternative message is not encrypted");
+            assertFalse(msg.isDigest(), "alternative message is not digest");
+        }
+
+        # Test multipart/signed message (RFC 1847)
+        {
+            string signedMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: signed test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/signed; boundary=sigbound; "
+                    "micalg=sha-256; protocol=\"application/pkcs7-signature\"\r\n"
+                "\r\n"
+                "--sigbound\r\n"
+                "Content-Type: text/plain\r\n"
+                "\r\n"
+                "Signed content\r\n"
+                "--sigbound\r\n"
+                "Content-Type: application/pkcs7-signature\r\n"
+                "\r\n"
+                "signature-data\r\n"
+                "--sigbound--\r\n";
+
+            Message msg(signedMsg);
+            assertTrue(msg.isMultipart(), "signed message is multipart");
+            assertEq("signed", msg.getMultipartType(), "signed message has 'signed' type");
+            assertTrue(msg.isSigned(), "signed message isSigned() returns True");
+            assertFalse(msg.isEncrypted(), "signed message is not encrypted");
+            assertFalse(msg.isDigest(), "signed message is not digest");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertTrue(info.is_signed, "info.is_signed is True");
+        }
+
+        # Test multipart/encrypted message (RFC 1847)
+        {
+            string encMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: encrypted test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/encrypted; boundary=encbound; "
+                    "protocol=\"application/pgp-encrypted\"\r\n"
+                "\r\n"
+                "--encbound\r\n"
+                "Content-Type: application/pgp-encrypted\r\n"
+                "\r\n"
+                "Version: 1\r\n"
+                "--encbound\r\n"
+                "Content-Type: application/octet-stream\r\n"
+                "\r\n"
+                "encrypted-data\r\n"
+                "--encbound--\r\n";
+
+            Message msg(encMsg);
+            assertTrue(msg.isMultipart(), "encrypted message is multipart");
+            assertEq("encrypted", msg.getMultipartType(), "encrypted message has 'encrypted' type");
+            assertFalse(msg.isSigned(), "encrypted message is not signed");
+            assertTrue(msg.isEncrypted(), "encrypted message isEncrypted() returns True");
+            assertFalse(msg.isDigest(), "encrypted message is not digest");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertTrue(info.is_encrypted, "info.is_encrypted is True");
+        }
+
+        # Test multipart/digest message (RFC 2046)
+        {
+            string digestMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: digest test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/digest; boundary=digestbound\r\n"
+                "\r\n"
+                "--digestbound\r\n"
+                "Content-Type: message/rfc822\r\n"
+                "\r\n"
+                "From: user1@example.com\r\n"
+                "Subject: Message 1\r\n"
+                "\r\n"
+                "First message\r\n"
+                "--digestbound\r\n"
+                "Content-Type: message/rfc822\r\n"
+                "\r\n"
+                "From: user2@example.com\r\n"
+                "Subject: Message 2\r\n"
+                "\r\n"
+                "Second message\r\n"
+                "--digestbound--\r\n";
+
+            Message msg(digestMsg);
+            assertTrue(msg.isMultipart(), "digest message is multipart");
+            assertEq("digest", msg.getMultipartType(), "digest message has 'digest' type");
+            assertFalse(msg.isSigned(), "digest message is not signed");
+            assertFalse(msg.isEncrypted(), "digest message is not encrypted");
+            assertTrue(msg.isDigest(), "digest message isDigest() returns True");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertTrue(info.is_digest, "info.is_digest is True");
+        }
+
+        # Test that roundtrip serialization preserves multipart status
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("body content");
+            msg.addTO(To);
+            msg.attach("file.txt", MimeTypeText, "attachment content");
+
+            string serialized = msg.serialize();
+            Message parsed(serialized);
+
+            assertTrue(parsed.isMultipart(), "parsed message is multipart");
+            assertEq("mixed", parsed.getMultipartType(), "parsed message has 'mixed' type");
         }
     }
 }
