@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Mime.qm Mime module definition
 
-/*  Mime.qm Copyright (C) 2012 - 2024 Qore Technologies, s.r.o.
+/*  Mime.qm Copyright (C) 2012 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,9 +29,12 @@
 
 # assume local var scope, do not use "$" for vars, members, and method calls
 %new-style
+%strict-args
+%require-types
+%enable-all-warnings
 
 module Mime {
-    version = "1.6.1";
+    version = "1.7";
     desc = "Mime module providing MIME-related definitions";
     author = "David Nichols";
     url = "http://qore.org";
@@ -60,6 +63,11 @@ module Mime {
     - \c MultiPartConstants "MultiPartConstants": constants for the MultiPartMessage classes
     - @ref Mime::MultiPartAlternativeMessage "MultiPartAlternativeMessage": a class for handling multipart/alternative
       messages
+    - @ref Mime::MultiPartByteRangesMessage "MultiPartByteRangesMessage": a class for handling HTTP 206 partial
+      content responses
+    - @ref Mime::MultiPartDigestMessage "MultiPartDigestMessage": a class for handling email digests
+    - @ref Mime::MultiPartEncryptedMessage "MultiPartEncryptedMessage": a class for handling S/MIME and PGP/MIME
+      encrypted messages
     - @ref Mime::MultiPartFormDataMessage "MultiPartFormDataMessage": a class for handling multipart/form-data
       messages
     - @ref Mime::MultiPartMessage "MultiPartMessage": the base class for MultiPartMessage classes
@@ -67,8 +75,11 @@ module Mime {
         parse a multipart message body (including parts with subparts if the \a decode argument is @ref True "True");
         this static method can be used for both HTTP multipart messages or text multipart messages (for example as
         sent in an email/SMTP message)
+    - @ref Mime::MultiPartMessageMessage "MultiPartMessageMessage": a class for encapsulating RFC 822 messages
     - @ref Mime::MultiPartMixedMessage "MultiPartMixedMessage": a class for handling multipart/mixed messages
     - @ref Mime::MultiPartRelatedMessage "MultiPartRelatedMessage": a class for handling multipart/related messages
+    - @ref Mime::MultiPartSignedMessage "MultiPartSignedMessage": a class for handling S/MIME and PGP/MIME signed
+      messages
 
     based on:
     - http://tools.ietf.org/html/rfc1521: quoted printable & base 64 transfer encodings
@@ -97,6 +108,33 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     @endverbatim
 
     @section mimereleasenotes Release Notes
+
+    @subsection mime_1_7 v1.7
+    - added new multipart message classes:
+      - @ref Mime::MultiPartDigestMessage "MultiPartDigestMessage": for email digests (RFC 2046 section 5.1.5)
+      - @ref Mime::MultiPartByteRangesMessage "MultiPartByteRangesMessage": for HTTP 206 partial content responses
+      - @ref Mime::MultiPartSignedMessage "MultiPartSignedMessage": for S/MIME and PGP/MIME signed messages (RFC 1847)
+      - @ref Mime::MultiPartEncryptedMessage "MultiPartEncryptedMessage": for S/MIME and PGP/MIME encrypted messages (RFC 1847)
+      - @ref Mime::MultiPartMessageMessage "MultiPartMessageMessage": for encapsulating RFC 822 messages
+    - added new MIME type constants:
+      - @ref Mime::MimeTypeMultipartAlternative "MimeTypeMultipartAlternative"
+      - @ref Mime::MimeTypeMultipartDigest "MimeTypeMultipartDigest"
+      - @ref Mime::MimeTypeMultipartSigned "MimeTypeMultipartSigned"
+      - @ref Mime::MimeTypeMultipartEncrypted "MimeTypeMultipartEncrypted"
+      - @ref Mime::MimeTypeMultipartByteranges "MimeTypeMultipartByteranges"
+      - @ref Mime::MimeTypeMessage "MimeTypeMessage"
+    - added the @ref Mime::is_mime_json() "is_mime_json()" function and
+      @ref Mime::MimeTypesJson "MimeTypesJson" constant for detecting JSON-compatible MIME types
+    - added additional JSON-compatible MIME types to @ref Mime::MimeTypesJson "MimeTypesJson":
+      \c "application/hal+json", \c "application/problem+json", \c "application/merge-patch+json",
+      \c "application/json-patch+json", \c "application/geo+json", \c "application/manifest+json"
+    - added new file extensions to @ref Mime::MimeTypes "MimeTypes": \c gql, \c graphql, \c heic, \c heif,
+      \c jsx, \c md, \c markdown, \c rst, \c sql, \c toml, \c ts, \c tsx, \c wasm
+    - fixed incorrect MIME types for \c weba (now \c "audio/webm") and \c webm (now \c "video/webm")
+    - fixed a bug in @ref Mime::mime_decode_transfer_data() "mime_decode_transfer_data()" where the transfer
+      encoding was incorrectly used as a character encoding when decoding base64 and quoted-printable data
+    - improved type safety by adding explicit type annotations to hash declarations
+    - added \c %strict-args, \c %require-types, and \c %enable-all-warnings parse directives
 
     @subsection mime_1_6_1 v1.6.1
     - fixed a bug in encoding URL values with non-ASCII characters in
@@ -188,7 +226,7 @@ public namespace Mime {
     */
     public hashdecl MessageInfo {
         #! message or part headers
-        hash hdr;
+        hash<auto> hdr;
         #! the data for the message or part
         data body;
         #! parts of the message or subparts of the part
@@ -200,7 +238,7 @@ public namespace Mime {
         #! part body data
         data data;
         #! part header hash
-        hash hdr;
+        hash<auto> hdr;
     }
 
     #! parsed form-data message part info
@@ -210,7 +248,7 @@ public namespace Mime {
         #! the optional filename for the part
         *string filename;
         #! message or part headers
-        hash hdr;
+        hash<auto> hdr;
         #! the data for the message or part
         data body;
     }
@@ -282,6 +320,24 @@ public namespace Mime {
     #! Mime type for multipart mixed
     public const MimeTypeMultipartMixed = "multipart/mixed";
 
+    #! Mime type for multipart alternative
+    public const MimeTypeMultipartAlternative = "multipart/alternative";
+
+    #! Mime type for multipart digest
+    public const MimeTypeMultipartDigest = "multipart/digest";
+
+    #! Mime type for multipart signed (RFC 1847)
+    public const MimeTypeMultipartSigned = "multipart/signed";
+
+    #! Mime type for multipart encrypted (RFC 1847)
+    public const MimeTypeMultipartEncrypted = "multipart/encrypted";
+
+    #! Mime type for multipart byteranges (HTTP partial content)
+    public const MimeTypeMultipartByteranges = "multipart/byteranges";
+
+    #! Mime type for RFC 822 messages
+    public const MimeTypeMessage = "message/rfc822";
+
     #! Mime type for SVG files
     public const MimeTypeSvg = "image/svg+xml";
 
@@ -323,6 +379,12 @@ public namespace Mime {
         "application/swagger+json": True,               # Swagger/OpenAPI
         "application/x-ndjson": True,                   # Newline-Delimited JSON (ElasticSearch bulk)
         "application/ld+json": True,                    # JSON-LD
+        "application/hal+json": True,                   # HAL (Hypertext Application Language)
+        "application/problem+json": True,               # RFC 7807 Problem Details
+        "application/merge-patch+json": True,           # RFC 7396 JSON Merge Patch
+        "application/json-patch+json": True,            # RFC 6902 JSON Patch
+        "application/geo+json": True,                   # GeoJSON
+        "application/manifest+json": True,              # Web App Manifest
     };
 
     #! Returns True if the MIME type is JSON-compatible
@@ -560,6 +622,8 @@ public namespace Mime {
         "gtw": "model/vnd.gtw",
         "gv": "text/vnd.graphviz",
         "gxt": "application/vnd.geonext",
+        "gql": "application/graphql",
+        "graphql": "application/graphql",
         "gz": "application/x-gzip",
         "h": MimeTypeText,
         "h261": "video/h261",
@@ -568,6 +632,8 @@ public namespace Mime {
         "hal": "application/vnd.hal+xml",
         "hbci": "application/vnd.hbci",
         "hdf": "application/x-hdf",
+        "heic": "image/heic",
+        "heif": "image/heif",
         "hh": MimeTypeText,
         "hlp": "application/winhlp",
         "hpgl": "application/vnd.hp-hpgl",
@@ -600,6 +666,7 @@ public namespace Mime {
         "js": MimeTypeJavascript,
         "json": MimeTypeJson,
         "jsonld": "application/ld+json",
+        "jsx": "text/jsx",
         "kar": "audio/midi",
         "latex": "application/x-latex",
         "lha": MimeTypeUnknown,
@@ -610,6 +677,8 @@ public namespace Mime {
         "m4p": "audio/mp4a-latm",
         "m4u": "video/vnd.mpegurl",
         "m4v": "video/x-m4v",
+        "md": "text/markdown",
+        "markdown": "text/markdown",
         "mac": "image/x-macpaint",
         "man": "application/x-troff-man",
         "mathml": "application/mathml+xml",
@@ -721,6 +790,7 @@ public namespace Mime {
         "rgb": "image/x-rgb",
         "rm": "application/vnd.rn-realmedia",
         "roff": "application/x-troff",
+        "rst": "text/x-rst",
         "rtf": "text/rtf",
         "rtx": "text/richtext",
         "sgm": "text/sgml",
@@ -738,6 +808,7 @@ public namespace Mime {
         "snd": "audio/basic",
         "so": MimeTypeUnknown,
         "spl": "application/x-futuresplash",
+        "sql": "application/sql",
         "src": "application/x-wais-source",
         "sv4cpio": "application/x-sv4cpio",
         "sv4crc": "application/x-sv4crc",
@@ -773,8 +844,11 @@ public namespace Mime {
         "tgz": "application/x-tar-gz",
         "tif": "image/tiff",
         "tiff": "image/tiff",
+        "toml": "application/toml",
         "tr": "application/x-troff",
         "tsv": "text/tab-separated-values",
+        "ts": "text/typescript",
+        "tsx": "text/typescript-jsx",
         "ttf": "font/ttf",
         "txt": MimeTypeText,
         "ustar": "application/x-ustar",
@@ -784,10 +858,11 @@ public namespace Mime {
         "vsd": "application/vnd.visio",
         "vxml": "application/voicexml+xml",
         "wav": "audio/x-wav",
+        "wasm": "application/wasm",
         "wbmp": "image/vnd.wap.wbmp",
         "wbmxl": "application/vnd.wap.wbxml",
-        "weba": "image/weba",
-        "webm": "image/webm",
+        "weba": "audio/webm",
+        "webm": "video/webm",
         "webp": "image/webp",
         "wml": "text/vnd.wap.wml",
         "wmlc": "application/vnd.wap.wmlc",
@@ -1029,11 +1104,9 @@ public namespace Mime {
     public string sub mime_decode_quoted_printable(string str, *string encoding, *bool is_body) {
         str = force_encoding(str, "us-ascii");
 
-        if (encoding.empty())
+        if (encoding.empty()) {
             encoding = get_default_encoding();
-
-        string rv;
-        int lp = 0;
+        }
 
         # recombine broken lines
         str = replace(str, "=\r\n", "");
@@ -1085,15 +1158,18 @@ public namespace Mime {
                 break;
 
             case ContentTransEncBase64: {
+                # base64 encoded data is always ASCII
                 mime_data = (mime_data.typeCode() == NT_STRING)
                     ? mime_decode_base64(mime_data)
-                    : mime_decode_base64(binary_to_string(mime_data, enc));
+                    : mime_decode_base64(binary_to_string(mime_data, "us-ascii"));
                 break;
             }
 
             case ContentTransEncQuotedPrintable: {
+                # extract charset from content-type if available for output encoding
+                *string charset = (ct =~ x/charset="?([^"]+)"?/)[0];
                 mime_data = mime_decode_quoted_printable(
-                    mime_data.typeCode() == NT_STRING ? mime_data : mime_data.toString(enc), enc, is_body
+                    mime_data.typeCode() == NT_STRING ? mime_data : mime_data.toString("us-ascii"), charset, is_body
                 );
                 break;
             }
@@ -1338,7 +1414,7 @@ public namespace Mime {
             list<hash<MessagePartInfo>> l();
 
             #! a hash of the headers of the message
-            hash hdr;
+            hash<auto> hdr;
 
             #! constants for parsing MIME multipart messages
             const ASCII_CR = 13;
@@ -1524,7 +1600,7 @@ hash: (2 members)
                 # get header string
                 string phdr = pstr.substr(0, i).toString();
                 # parse header
-                hash h;
+                hash<auto> h;
                 list<string> pl = phdr.split("\r\n");
                 for (int k = 0; k < pl.size(); ++k) {
                     string phl = pl[k];
@@ -1718,7 +1794,7 @@ hash: (2 members)
 
             @throw MULTIPART-RELATED-ERROR if the id parameter is empty, this exception is thrown
          */
-        addPart(data mime_data, string id, string content_type, *hash hdr) {
+        addPart(data mime_data, string id, string content_type, *hash<auto> hdr) {
             if (id.empty()) {
                 throw "MULTIPART-RELATED-ERROR", "missing second argument giving the Content-ID identifying the "
                     "part; this header is required for each part as this is how the parts are related to the main "
@@ -1757,7 +1833,7 @@ hash: (2 members)
             };
         }
 
-        #! adds a message part to the start of the list; the data muyst already be encoded and any Content-Transfer-Encoding header must already be present in hdr
+        #! adds a message part to the start of the list; the data must already be encoded and any Content-Transfer-Encoding header must already be present in hdr
         /** @param mime_data the data for the part
             @param content_type the content_type for the part
             @param disp the Content-Disposition header (ex: \c 'inline', \c 'attachment; filename="file.txt"')
@@ -1780,7 +1856,7 @@ hash: (2 members)
             });
         }
 
-        #! adds a message part to the end of the list; the data muyst already be encoded and any Content-Transfer-Encoding header must already be present in hdr
+        #! adds a message part to the end of the list; the data must already be encoded and any Content-Transfer-Encoding header must already be present in hdr
         /** @param mime_data the data for the part
             @param content_type the content_type for the part
             @param disp the Content-Disposition header (ex: \c 'inline', \c 'attachment; filename="file.txt"')
@@ -1905,7 +1981,7 @@ hash: (2 members)
             });
         }
 
-        #! adds a message part to the end of the list; the data muyst already be encoded and any Content-Transfer-Encoding header must already be present in hdr
+        #! adds a message part to the end of the list; the data must already be encoded and any Content-Transfer-Encoding header must already be present in hdr
         /** @param mime_data the data for the part
             @param content_type the content_type for the part
             @param disp the Content-Disposition header (ex: \c 'inline', \c 'attachment; filename="file.txt"')
@@ -2007,7 +2083,7 @@ hash: (2 members)
     public class MultiPartFormDataMessage inherits MultiPartMessage {
         private {
             #! hash of part names to ensure uniqueness
-            hash parts;
+            hash<string, bool> parts;
         }
 
         #! creates the object
@@ -2023,7 +2099,7 @@ hash: (2 members)
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty or conflicts with an existing part name
          */
-        splicePart(data mime_data, string name, *hash hdr) {
+        splicePart(data mime_data, string name, *hash<auto> hdr) {
             checkPartName(name);
             splicePartIntern(mime_data, getPartHeader(name, NOTHING, NOTHING, hdr));
         }
@@ -2037,7 +2113,7 @@ hash: (2 members)
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty or conflicts with an existing part name; empty filename or content_type arguments
          */
-        splicePart(data mime_data, string name, string filename, string content_type, *hash hdr) {
+        splicePart(data mime_data, string name, string filename, string content_type, *hash<auto> hdr) {
             checkPartName(name);
             splicePartIntern(mime_data, getPartHeader(name, filename, content_type, hdr));
         }
@@ -2059,7 +2135,7 @@ hash: (2 members)
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty or conflicts with an existing part name
          */
-        addPart(data mime_data, string name, *hash hdr) {
+        addPart(data mime_data, string name, *hash<auto> hdr) {
             checkPartName(name);
             addPartIntern(mime_data, getPartHeader(name, NOTHING, NOTHING, hdr));
         }
@@ -2073,7 +2149,7 @@ hash: (2 members)
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty or conflicts with an existing part name; empty filename or content_type arguments
          */
-        addPart(data mime_data, string name, string filename, string content_type, *hash hdr) {
+        addPart(data mime_data, string name, string filename, string content_type, *hash<auto> hdr) {
             checkPartName(name);
             addPartIntern(mime_data, getPartHeader(name, filename, content_type, hdr));
         }
@@ -2097,7 +2173,7 @@ hash: (2 members)
             return getMsgAndHeadersIntern(NOTHING, False);
         }
 
-        #! parses a multipart/form-data encoded message and returns a hash of its ContentTransEnc7Bit
+        #! parses a multipart/form-data encoded message and returns a hash of its parts
         /** @param content the message \c Content-Type string which must contain the message boundary string
             @param body the message body to parse
 
@@ -2184,6 +2260,332 @@ hash: (2 members)
             }
             hdr."Content-Disposition" = cd;
             return hdr;
+        }
+    }
+
+    #! implements the MultiPartDigestMessage class for email digests (RFC 2046 section 5.1.5)
+    /** This class is used for sending multiple messages in a digest format, commonly used for
+        mailing list digests. Each part defaults to message/rfc822 content type.
+
+        @since %Mime 1.7
+    */
+    public class MultiPartDigestMessage inherits MultiPartMessage {
+        #! creates the object
+        /** @param boundary the boundary to use between parts
+         */
+        constructor(string boundary = MultiPartMessage::getBoundary()) : MultiPartMessage(MPT_DIGEST, boundary) {
+            hdr = {
+                "MIME-Version": "1.0",
+            };
+        }
+
+        #! adds a message part to the start of the list
+        /** @param mime_data the message data for the part (typically a complete RFC 822 message)
+            @param content_type the content_type for the part (default: message/rfc822)
+            @param hdr an optional hash of headers for the part
+
+            @see MultiPartDigestMessage::addPart()
+         */
+        splicePart(data mime_data, string content_type = MimeTypeMessage, *hash<auto> hdr) {
+            splicePartIntern(mime_data, hdr + {
+                "Content-Type": content_type,
+            });
+        }
+
+        #! adds a message part to the end of the list
+        /** @param mime_data the message data for the part (typically a complete RFC 822 message)
+            @param content_type the content_type for the part (default: message/rfc822)
+            @param hdr an optional hash of headers for the part
+
+            @see MultiPartDigestMessage::splicePart()
+         */
+        addPart(data mime_data, string content_type = MimeTypeMessage, *hash<auto> hdr) {
+            addPartIntern(mime_data, hdr + {
+                "Content-Type": content_type,
+            });
+        }
+
+        #! returns a hash of the message
+        /** @return a hash of the message with the following keys:
+            - \c hdr: a hash of header information
+            - \c body: a binary object of serialized message parts
+         */
+        hash<MessageInfo> getMsgAndHeaders() {
+            return getMsgAndHeadersIntern(NOTHING, False);
+        }
+    }
+
+    #! implements the MultiPartByteRangesMessage class for HTTP partial content responses (RFC 2616)
+    /** This class is used for HTTP 206 Partial Content responses when serving multiple byte ranges.
+        It's commonly used for resumable downloads and video streaming.
+
+        @since %Mime 1.7
+    */
+    public class MultiPartByteRangesMessage inherits MultiPartMessage {
+        #! creates the object
+        /** @param boundary the boundary to use between parts
+         */
+        constructor(string boundary = MultiPartMessage::getBoundary()) : MultiPartMessage(MPT_BYTERANGES, boundary) {
+        }
+
+        #! adds a byte range part to the start of the list
+        /** @param range_data the data for this byte range
+            @param content_type the content type of the original resource
+            @param range_start the starting byte position of this range
+            @param range_end the ending byte position of this range
+            @param total_size the total size of the complete resource (use "*" if unknown)
+            @param hdr an optional hash of additional headers for the part
+
+            @see MultiPartByteRangesMessage::addPart()
+         */
+        splicePart(data range_data, string content_type, int range_start, int range_end,
+                softstring total_size, *hash<auto> hdr) {
+            splicePartIntern(range_data, hdr + {
+                "Content-Type": content_type,
+                "Content-Range": sprintf("bytes %d-%d/%s", range_start, range_end, total_size),
+            });
+        }
+
+        #! adds a byte range part to the end of the list
+        /** @param range_data the data for this byte range
+            @param content_type the content type of the original resource
+            @param range_start the starting byte position of this range
+            @param range_end the ending byte position of this range
+            @param total_size the total size of the complete resource (use "*" if unknown)
+            @param hdr an optional hash of additional headers for the part
+
+            @see MultiPartByteRangesMessage::splicePart()
+         */
+        addPart(data range_data, string content_type, int range_start, int range_end,
+                softstring total_size, *hash<auto> hdr) {
+            addPartIntern(range_data, hdr + {
+                "Content-Type": content_type,
+                "Content-Range": sprintf("bytes %d-%d/%s", range_start, range_end, total_size),
+            });
+        }
+
+        #! returns a hash of the message
+        /** @return a hash of the message with the following keys:
+            - \c hdr: a hash of header information
+            - \c body: a binary object of serialized message parts
+         */
+        hash<MessageInfo> getMsgAndHeaders() {
+            return getMsgAndHeadersIntern(NOTHING, False);
+        }
+    }
+
+    #! implements the MultiPartSignedMessage class for signed messages (RFC 1847 section 2.1)
+    /** This class is used for S/MIME and PGP/MIME signed messages. The message contains two parts:
+        the content being signed and the detached signature.
+
+        @note The actual cryptographic signing must be performed externally; this class only handles
+        the MIME structure.
+
+        @since %Mime 1.7
+    */
+    public class MultiPartSignedMessage inherits MultiPartMessage {
+        private {
+            #! the signature protocol (e.g., "application/pgp-signature" or "application/pkcs7-signature")
+            string protocol;
+            #! the message integrity check algorithm (e.g., "sha256", "sha512")
+            string micalg;
+        }
+
+        #! creates the object
+        /** @param protocol the signature protocol MIME type (e.g., "application/pgp-signature")
+            @param micalg the message integrity check algorithm (e.g., "sha256")
+            @param boundary the boundary to use between parts
+         */
+        constructor(string protocol, string micalg, string boundary = MultiPartMessage::getBoundary())
+                : MultiPartMessage(MPT_SIGNED, boundary) {
+            self.protocol = protocol;
+            self.micalg = micalg;
+            hdr = {
+                "MIME-Version": "1.0",
+            };
+        }
+
+        #! sets the content part (the data being signed)
+        /** @param mime_data the content data
+            @param content_type the content type of the data
+            @param hdr an optional hash of headers for the part
+
+            @throw MULTIPART-SIGNED-ERROR if the content part has already been set
+         */
+        setContent(data mime_data, string content_type, *hash<auto> hdr) {
+            if (size() > 0 && l[0].hdr."Content-Type" !~ /signature/) {
+                throw "MULTIPART-SIGNED-ERROR", "content part has already been set";
+            }
+            splicePartIntern(mime_data, hdr + {
+                "Content-Type": content_type,
+            });
+        }
+
+        #! sets the signature part
+        /** @param signature the signature data
+            @param hdr an optional hash of headers for the part
+
+            @throw MULTIPART-SIGNED-ERROR if the signature part has already been set or content not set first
+         */
+        setSignature(data signature, *hash<auto> hdr) {
+            if (size() == 0) {
+                throw "MULTIPART-SIGNED-ERROR", "content part must be set before signature";
+            }
+            if (size() > 1) {
+                throw "MULTIPART-SIGNED-ERROR", "signature part has already been set";
+            }
+            addPartIntern(signature, hdr + {
+                "Content-Type": protocol,
+            });
+        }
+
+        #! returns a hash of the message
+        /** @return a hash of the message with the following keys:
+            - \c hdr: a hash of header information
+            - \c body: a binary object of serialized message parts
+
+            @throw MULTIPART-SIGNED-ERROR if the message doesn't have exactly 2 parts (content + signature)
+         */
+        hash<MessageInfo> getMsgAndHeaders() {
+            if (size() != 2) {
+                throw "MULTIPART-SIGNED-ERROR", sprintf("signed message must have exactly 2 parts (content + "
+                    "signature), has %d", size());
+            }
+            return getMsgAndHeadersIntern(sprintf("%s; protocol=%y; micalg=%s", ct, protocol, micalg), False);
+        }
+    }
+
+    #! implements the MultiPartEncryptedMessage class for encrypted messages (RFC 1847 section 2.2)
+    /** This class is used for S/MIME and PGP/MIME encrypted messages. The message contains two parts:
+        the encryption control information and the encrypted data.
+
+        @note The actual encryption must be performed externally; this class only handles the MIME structure.
+
+        @since %Mime 1.7
+    */
+    public class MultiPartEncryptedMessage inherits MultiPartMessage {
+        private {
+            #! the encryption protocol (e.g., "application/pgp-encrypted" or "application/pkcs7-mime")
+            string protocol;
+        }
+
+        #! creates the object
+        /** @param protocol the encryption protocol MIME type (e.g., "application/pgp-encrypted")
+            @param boundary the boundary to use between parts
+         */
+        constructor(string protocol, string boundary = MultiPartMessage::getBoundary())
+                : MultiPartMessage(MPT_ENCRYPTED, boundary) {
+            self.protocol = protocol;
+            hdr = {
+                "MIME-Version": "1.0",
+            };
+        }
+
+        #! sets the control information part
+        /** @param control_info the control information data (e.g., "Version: 1" for PGP)
+            @param hdr an optional hash of headers for the part
+
+            @throw MULTIPART-ENCRYPTED-ERROR if the control part has already been set
+         */
+        setControlInfo(data control_info, *hash<auto> hdr) {
+            if (size() > 0) {
+                throw "MULTIPART-ENCRYPTED-ERROR", "control info part has already been set";
+            }
+            addPartIntern(control_info, hdr + {
+                "Content-Type": protocol,
+            });
+        }
+
+        #! sets the encrypted data part
+        /** @param encrypted_data the encrypted data
+            @param content_type the content type of the encrypted data (e.g., "application/octet-stream")
+            @param hdr an optional hash of headers for the part
+
+            @throw MULTIPART-ENCRYPTED-ERROR if control info not set first or encrypted part already set
+         */
+        setEncryptedData(data encrypted_data, string content_type = MimeTypeOctetStream, *hash<auto> hdr) {
+            if (size() == 0) {
+                throw "MULTIPART-ENCRYPTED-ERROR", "control info part must be set before encrypted data";
+            }
+            if (size() > 1) {
+                throw "MULTIPART-ENCRYPTED-ERROR", "encrypted data part has already been set";
+            }
+            addPartIntern(encrypted_data, hdr + {
+                "Content-Type": content_type,
+            });
+        }
+
+        #! returns a hash of the message
+        /** @return a hash of the message with the following keys:
+            - \c hdr: a hash of header information
+            - \c body: a binary object of serialized message parts
+
+            @throw MULTIPART-ENCRYPTED-ERROR if the message doesn't have exactly 2 parts
+         */
+        hash<MessageInfo> getMsgAndHeaders() {
+            if (size() != 2) {
+                throw "MULTIPART-ENCRYPTED-ERROR", sprintf("encrypted message must have exactly 2 parts (control "
+                    "info + encrypted data), has %d", size());
+            }
+            return getMsgAndHeadersIntern(sprintf("%s; protocol=%y", ct, protocol), False);
+        }
+    }
+
+    #! implements the MultiPartMessageMessage class for encapsulating RFC 822 messages
+    /** This class is used for encapsulating complete email messages, commonly used for
+        forwarding messages as attachments.
+
+        @since %Mime 1.7
+    */
+    public class MultiPartMessageMessage inherits MultiPartMessage {
+        #! creates the object
+        /** @param boundary the boundary to use between parts
+         */
+        constructor(string boundary = MultiPartMessage::getBoundary()) : MultiPartMessage(MPT_MESSAGE, boundary) {
+            hdr = {
+                "MIME-Version": "1.0",
+            };
+        }
+
+        #! adds a message part to the start of the list
+        /** @param mime_data the complete RFC 822 message data
+            @param content_type the content_type for the part (default: message/rfc822)
+            @param disp the Content-Disposition header (default: inline)
+            @param hdr an optional hash of headers for the part
+
+            @see MultiPartMessageMessage::addPart()
+         */
+        splicePart(data mime_data, string content_type = MimeTypeMessage, string disp = "inline",
+                *hash<auto> hdr) {
+            splicePartIntern(mime_data, hdr + {
+                "Content-Type": content_type,
+                "Content-Disposition": disp,
+            });
+        }
+
+        #! adds a message part to the end of the list
+        /** @param mime_data the complete RFC 822 message data
+            @param content_type the content_type for the part (default: message/rfc822)
+            @param disp the Content-Disposition header (default: inline)
+            @param hdr an optional hash of headers for the part
+
+            @see MultiPartMessageMessage::splicePart()
+         */
+        addPart(data mime_data, string content_type = MimeTypeMessage, string disp = "inline",
+                *hash<auto> hdr) {
+            addPartIntern(mime_data, hdr + {
+                "Content-Type": content_type,
+                "Content-Disposition": disp,
+            });
+        }
+
+        #! returns a hash of the message
+        /** @return a hash of the message with the following keys:
+            - \c hdr: a hash of header information
+            - \c body: a binary object of serialized message parts
+         */
+        hash<MessageInfo> getMsgAndHeaders() {
+            return getMsgAndHeadersIntern(NOTHING, False);
         }
     }
 }
