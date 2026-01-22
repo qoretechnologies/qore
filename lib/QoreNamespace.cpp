@@ -1686,6 +1686,23 @@ const QoreEnumDecl* qore_root_ns_private::parseFindEnum(const QoreProgramLocatio
     return ed;
 }
 
+TypedefEntry* qore_root_ns_private::parseFindScopedTypedefIntern(const NamedScope& nscope, unsigned& matched) {
+    assert(nscope.size() > 1);
+
+    // iterate all namespaces with the initial name and look for the match
+    {
+        NamespaceMapIterator nmi(nsmap, nscope[0]);
+        while (nmi.next()) {
+            TypedefEntry* td;
+            if ((td = nmi.get()->parseMatchScopedTypedef(nscope, matched))) {
+                return td;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
 const QoreClass* qore_root_ns_private::runtimeFindScopedClassWithMethod(const NamedScope& scname) const {
     // must have at least 2 elements
     assert(scname.size() > 1);
@@ -3430,6 +3447,30 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
     // merge in source enums
     enumList.mergeUserPublic(mns.enumList, this);
 
+    // merge in source typedefs (with conflict checking)
+    for (const auto& i : mns.typedefMap) {
+        if (!i.second->pub) {
+            continue;
+        }
+        // skip if typedef already exists
+        if (typedefMap.find(i.first) != typedefMap.end()) {
+            continue;
+        }
+        // skip if conflicts with existing class
+        if (classList.find(i.first.c_str())) {
+            continue;
+        }
+        // skip if conflicts with existing hashdecl
+        if (hashDeclList.find(i.first.c_str())) {
+            continue;
+        }
+        // skip if conflicts with existing enum
+        if (enumList.find(i.first.c_str())) {
+            continue;
+        }
+        typedefMap[i.first] = new TypedefEntry(*i.second);
+    }
+
     // Create namespaces for enum member access (e.g., EnumName::MemberName)
     // This must be done after merging enums since mergeUserPublic only copies the enum declaration
     {
@@ -3541,6 +3582,40 @@ void qore_ns_private::parseAssimilate(QoreNamespace* ans) {
     // assimilate enums
     enumList.assimilate(pns->enumList, *this, &pending_enum_names);
 
+    // assimilate typedefs with duplicate checking
+    for (auto i = pns->typedefMap.begin(); i != pns->typedefMap.end();) {
+        // check for duplicate typedef name
+        if (typedefMap.find(i->first) != typedefMap.end()) {
+            std::string nspath;
+            getPath(nspath, true);
+            parse_error(*i->second->loc, "typedef '%s' has already been defined in '%s'", i->first.c_str(),
+                nspath.c_str());
+            delete i->second;
+            i = pns->typedefMap.erase(i);
+            continue;
+        }
+        // check for conflict with class name
+        if (classList.find(i->first.c_str())) {
+            parse_error(*i->second->loc, "typedef '%s' conflicts with existing class in namespace '%s::'",
+                i->first.c_str(), name.c_str());
+            delete i->second;
+            i = pns->typedefMap.erase(i);
+            continue;
+        }
+        // check for conflict with hashdecl name
+        if (hashDeclList.find(i->first.c_str())) {
+            parse_error(*i->second->loc, "typedef '%s' conflicts with existing hashdecl in namespace '%s::'",
+                i->first.c_str(), name.c_str());
+            delete i->second;
+            i = pns->typedefMap.erase(i);
+            continue;
+        }
+        // move typedef to this namespace
+        typedefMap[i->first] = i->second;
+        pending_typedef_names.push_back(i->first);
+        i = pns->typedefMap.erase(i);
+    }
+
     // assimilate pending global variable declarations
     //printd(5, "qore_ns_private::parseAssimilate() this: %p assimilating %p (%d + %d gvars)\n", this, pns, pend_gvblist.size(), pns->pend_gvblist.size());
     for (auto& i : pns->pend_gvblist) {
@@ -3603,6 +3678,34 @@ void qore_ns_private::runtimeAssimilate(QoreNamespace* ans) {
 
     // assimilate enums
     enumList.assimilate(pns->enumList, *this);
+
+    // assimilate typedefs (runtime - with conflict checking)
+    for (auto& i : pns->typedefMap) {
+        bool skip = false;
+        // skip if typedef already exists
+        if (typedefMap.find(i.first) != typedefMap.end()) {
+            skip = true;
+        }
+        // skip if conflicts with existing class
+        else if (classList.find(i.first.c_str())) {
+            skip = true;
+        }
+        // skip if conflicts with existing hashdecl
+        else if (hashDeclList.find(i.first.c_str())) {
+            skip = true;
+        }
+        // skip if conflicts with existing enum
+        else if (enumList.find(i.first.c_str())) {
+            skip = true;
+        }
+
+        if (skip) {
+            delete i.second;
+        } else {
+            typedefMap[i.first] = i.second;
+        }
+    }
+    pns->typedefMap.clear();
 
     if (pns->class_handler) {
         assert(!class_handler);
@@ -3810,6 +3913,36 @@ const QoreEnumDecl* qore_ns_private::parseMatchScopedEnum(const NamedScope& nsco
         }
     }
     return fns->priv->enumList.find(nscope[nscope.size() - 1]);
+}
+
+TypedefEntry* qore_ns_private::parseMatchScopedTypedef(const NamedScope& nscope, unsigned& matched) {
+    assert(nscope.size() > 1);
+
+    if (nscope[0] != name) {
+        QoreNamespace* fns = nsl.find(nscope[0]);
+        return fns ? fns->priv->parseMatchScopedTypedef(nscope, matched) : nullptr;
+    }
+
+    // mark first namespace as matched
+    if (!matched) {
+        matched = 1;
+    }
+
+    QoreNamespace* fns = ns;
+
+    // if we need to follow the namespaces, then do so
+    if (nscope.size() > 2) {
+        for (unsigned i = 1; i < (nscope.size() - 1); ++i) {
+            fns = fns->priv->parseFindLocalNamespace(nscope[i]);
+            if (!fns) {
+                return nullptr;
+            }
+            if (i >= matched) {
+                matched = i + 1;
+            }
+        }
+    }
+    return const_cast<TypedefEntry*>(fns->priv->findLocalTypedef(nscope[nscope.size() - 1]));
 }
 
 QoreClass* qore_ns_private::parseMatchScopedClass(const NamedScope& nscope, unsigned& matched) {

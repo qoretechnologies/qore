@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore Pop3ClientMessageGetDataProvider class definition
+#! Qore Pop3ClientUidlDataProvider class definition
 
-/** Pop3ClientMessageGetDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
+/** Pop3ClientUidlDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,45 +24,58 @@
 
 #! Contains all public definitions in the Pop3ClientDataProvider module
 public namespace Pop3ClientDataProvider {
-#! The POP3 message parent data provider
-public class Pop3ClientMessageGetDataProvider inherits Pop3ClientDataProviderBase {
+#! Data provider that returns unique message IDs using the UIDL command
+/** The UIDL command returns unique identifiers for messages that persist across sessions,
+    unlike message numbers which can change.
+
+    @note This requires server support for the UIDL command (RFC 1939 optional, RFC 2449)
+*/
+public class Pop3ClientUidlDataProvider inherits Pop3ClientDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "Pop3ClientMessageGetDataProvider",
+            "type": "Pop3ClientUidlDataProvider",
             "supports_request": True,
         };
+
+        #! Provider summary info
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        } + {
+            "name": "uidl",
+            "desc": "Returns unique message identifiers (UIDL) for all messages",
+        });
+
+        #! Response type for UIDL - hash mapping message number to unique ID
+        const UidlResponseType = new HashDataType(AutoHashOrNothingType, "UidlResponse");
     }
 
-    private {
-        #! Message ID
-        string id;
+    #! Creates the object from constructor options
+    constructor(*hash<auto> options) : Pop3ClientDataProviderBase(options) {
     }
 
-    #! Creates the object from an POP3 connection
-    constructor(Pop3Client pop3, string id) : Pop3ClientDataProviderBase(pop3) {
-        self.id = id;
+    #! Creates the object from a POP3 connection
+    constructor(Pop3Client pop3) : Pop3ClientDataProviderBase(pop3) {
     }
 
     #! Returns the data provider name
     string getName() {
-        return "get";
+        return "uidl";
     }
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Get message data provider for POP3 message %y", id);
+        return "Returns unique message identifiers (UIDL) for all messages on the server";
     }
 
     #! Makes a request and returns the response
     /** @param req the request info
         @param request_options the request options; will be processed by validateRequestOptions()
 
-        @return the response to the request
+        @return a hash mapping message numbers (as strings) to their unique IDs
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        MailMessage::Message msg = pop3.getMessage(id);
-        return msg.getInfo();
+        return pop3.uidl();
     }
 
     #! Returns the description of a successful request message, if any
@@ -76,7 +89,7 @@ public class Pop3ClientMessageGetDataProvider inherits Pop3ClientDataProviderBas
     /** @return the response type for this response message
     */
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new HashDataType(TypedHash::forName("MailMessage::MailMessageInfo"));
+        return UidlResponseType;
     }
 
     #! Returns data provider static info

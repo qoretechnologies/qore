@@ -157,6 +157,9 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         typeInfo(new QoreHashDeclTypeInfo(thd, name.c_str(), path.c_str())),
         orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, name.c_str(), path.c_str())),
         parentHashDecl(old.parentHashDecl),
+        // Store parent path while old.parentHashDecl is still valid to avoid use-after-free
+        // Use getPath() to get the full namespace path for cross-namespace inheritance
+        parentHashDeclName(old.parentHashDecl ? get(*old.parentHashDecl)->getPath() : ""),
         pub(false),
         sys(old.sys),
         parse_init_done(old.parse_init_done) {

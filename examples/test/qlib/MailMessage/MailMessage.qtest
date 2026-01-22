@@ -18,6 +18,12 @@ public class Main inherits QUnit::Test {
 
     constructor() : Test("MailMessageTest", "1.0") {
         addTestCase("Test serialize()", \testSerialize(), NOTHING);
+        addTestCase("Test multipart type detection", \testMultipartTypeDetection(), NOTHING);
+        addTestCase("Test getFrom bug fix", \testGetFromBugFix(), NOTHING);
+        addTestCase("Test attachment handling", \testAttachmentHandling(), NOTHING);
+        addTestCase("Test RFC 2231 filename encoding", \testRfc2231FilenameEncoding(), NOTHING);
+        addTestCase("Test inline attachments", \testInlineAttachments(), NOTHING);
+        addTestCase("Test Part and Attachment classes", \testPartAndAttachmentClasses(), NOTHING);
 
         set_return_value(main());
     }
@@ -53,7 +59,7 @@ public class Main inherits QUnit::Test {
 
             msg.addTO(To);
 
-            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", EncBase64);
+            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", ContentEncoding::Base64);
             string r = msg.serialize();
 
             string refstr = "From: foo@bar.cz\r
@@ -123,7 +129,7 @@ bG9yZW0gaXBzdW0=\r
             msg.setBody("body");
             msg.addTO(To);
 
-            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", EncDefault);
+            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", ContentEncoding::Default);
             string r = msg.serialize();
 
             string refstr = "From: foo@bar.cz\r
@@ -161,6 +167,604 @@ lorem ipsum\r
             msg.addTO(To);
             string r = msg.serialize();
             assertRegex("Content-Transfer-Encoding: quoted-printable", r);
+        }
+    }
+
+    testMultipartTypeDetection() {
+        # Test non-multipart message
+        {
+            string simpleMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: simple test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: text/plain\r\n"
+                "\r\n"
+                "Hello world\r\n";
+
+            Message msg(simpleMsg);
+            assertFalse(msg.isMultipart(), "simple message is not multipart");
+            assertNothing(msg.getMultipartType(), "simple message has no multipart type");
+            assertFalse(msg.isSigned(), "simple message is not signed");
+            assertFalse(msg.isEncrypted(), "simple message is not encrypted");
+            assertFalse(msg.isDigest(), "simple message is not digest");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertFalse(info.is_multipart, "info.is_multipart is False");
+            assertNothing(info.multipart_type, "info.multipart_type is nothing");
+            assertFalse(info.is_signed, "info.is_signed is False");
+            assertFalse(info.is_encrypted, "info.is_encrypted is False");
+            assertFalse(info.is_digest, "info.is_digest is False");
+        }
+
+        # Test multipart/mixed message
+        {
+            string mixedMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: mixed test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/mixed; boundary=boundary123\r\n"
+                "\r\n"
+                "--boundary123\r\n"
+                "Content-Type: text/plain\r\n"
+                "\r\n"
+                "Hello world\r\n"
+                "--boundary123--\r\n";
+
+            Message msg(mixedMsg);
+            assertTrue(msg.isMultipart(), "mixed message is multipart");
+            assertEq("mixed", msg.getMultipartType(), "mixed message has 'mixed' type");
+            assertFalse(msg.isSigned(), "mixed message is not signed");
+            assertFalse(msg.isEncrypted(), "mixed message is not encrypted");
+            assertFalse(msg.isDigest(), "mixed message is not digest");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertTrue(info.is_multipart, "info.is_multipart is True");
+            assertEq("mixed", info.multipart_type, "info.multipart_type is 'mixed'");
+        }
+
+        # Test multipart/alternative message
+        {
+            string altMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: alternative test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/alternative; boundary=altbound\r\n"
+                "\r\n"
+                "--altbound\r\n"
+                "Content-Type: text/plain\r\n"
+                "\r\n"
+                "Plain text\r\n"
+                "--altbound\r\n"
+                "Content-Type: text/html\r\n"
+                "\r\n"
+                "<html><body>HTML</body></html>\r\n"
+                "--altbound--\r\n";
+
+            Message msg(altMsg);
+            assertTrue(msg.isMultipart(), "alternative message is multipart");
+            assertEq("alternative", msg.getMultipartType(), "alternative message has 'alternative' type");
+            assertFalse(msg.isSigned(), "alternative message is not signed");
+            assertFalse(msg.isEncrypted(), "alternative message is not encrypted");
+            assertFalse(msg.isDigest(), "alternative message is not digest");
+        }
+
+        # Test multipart/signed message (RFC 1847)
+        {
+            string signedMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: signed test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/signed; boundary=sigbound; "
+                    "micalg=sha-256; protocol=\"application/pkcs7-signature\"\r\n"
+                "\r\n"
+                "--sigbound\r\n"
+                "Content-Type: text/plain\r\n"
+                "\r\n"
+                "Signed content\r\n"
+                "--sigbound\r\n"
+                "Content-Type: application/pkcs7-signature\r\n"
+                "\r\n"
+                "signature-data\r\n"
+                "--sigbound--\r\n";
+
+            Message msg(signedMsg);
+            assertTrue(msg.isMultipart(), "signed message is multipart");
+            assertEq("signed", msg.getMultipartType(), "signed message has 'signed' type");
+            assertTrue(msg.isSigned(), "signed message isSigned() returns True");
+            assertFalse(msg.isEncrypted(), "signed message is not encrypted");
+            assertFalse(msg.isDigest(), "signed message is not digest");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertTrue(info.is_signed, "info.is_signed is True");
+        }
+
+        # Test multipart/encrypted message (RFC 1847)
+        {
+            string encMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: encrypted test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/encrypted; boundary=encbound; "
+                    "protocol=\"application/pgp-encrypted\"\r\n"
+                "\r\n"
+                "--encbound\r\n"
+                "Content-Type: application/pgp-encrypted\r\n"
+                "\r\n"
+                "Version: 1\r\n"
+                "--encbound\r\n"
+                "Content-Type: application/octet-stream\r\n"
+                "\r\n"
+                "encrypted-data\r\n"
+                "--encbound--\r\n";
+
+            Message msg(encMsg);
+            assertTrue(msg.isMultipart(), "encrypted message is multipart");
+            assertEq("encrypted", msg.getMultipartType(), "encrypted message has 'encrypted' type");
+            assertFalse(msg.isSigned(), "encrypted message is not signed");
+            assertTrue(msg.isEncrypted(), "encrypted message isEncrypted() returns True");
+            assertFalse(msg.isDigest(), "encrypted message is not digest");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertTrue(info.is_encrypted, "info.is_encrypted is True");
+        }
+
+        # Test multipart/digest message (RFC 2046)
+        {
+            string digestMsg = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: digest test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/digest; boundary=digestbound\r\n"
+                "\r\n"
+                "--digestbound\r\n"
+                "Content-Type: message/rfc822\r\n"
+                "\r\n"
+                "From: user1@example.com\r\n"
+                "Subject: Message 1\r\n"
+                "\r\n"
+                "First message\r\n"
+                "--digestbound\r\n"
+                "Content-Type: message/rfc822\r\n"
+                "\r\n"
+                "From: user2@example.com\r\n"
+                "Subject: Message 2\r\n"
+                "\r\n"
+                "Second message\r\n"
+                "--digestbound--\r\n";
+
+            Message msg(digestMsg);
+            assertTrue(msg.isMultipart(), "digest message is multipart");
+            assertEq("digest", msg.getMultipartType(), "digest message has 'digest' type");
+            assertFalse(msg.isSigned(), "digest message is not signed");
+            assertFalse(msg.isEncrypted(), "digest message is not encrypted");
+            assertTrue(msg.isDigest(), "digest message isDigest() returns True");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertTrue(info.is_digest, "info.is_digest is True");
+        }
+
+        # Test that roundtrip serialization preserves multipart status
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("body content");
+            msg.addTO(To);
+            msg.attach("file.txt", MimeTypeText, "attachment content");
+
+            string serialized = msg.serialize();
+            Message parsed(serialized);
+
+            assertTrue(parsed.isMultipart(), "parsed message is multipart");
+            assertEq("mixed", parsed.getMultipartType(), "parsed message has 'mixed' type");
+        }
+    }
+
+    # Test that getFrom() returns the correct email address for messages created via constructor
+    # This tests the fix for the bug where self.sender was not set in the constructor
+    testGetFromBugFix() {
+        # Test with simple email address
+        {
+            Message msg(Sender, Subject);
+            msg.addTO(To);
+            msg.setBody("test body");
+
+            # getFrom() should return the sender's email address for SMTP MAIL FROM
+            assertEq(Sender, msg.getFrom(), "getFrom() returns sender email for constructor-created message");
+            # getSender() returns the display format
+            assertEq(Sender, msg.getSender(), "getSender() returns sender email for simple address");
+        }
+
+        # Test with display name format "Name <email>"
+        {
+            string displaySender = "John Doe <john@example.com>";
+            Message msg(displaySender, Subject);
+            msg.addTO(To);
+            msg.setBody("test body");
+
+            # getFrom() should return just the email address
+            assertEq("john@example.com", msg.getFrom(), "getFrom() extracts email from display format");
+            # getSender() returns the full display format
+            assertEq("john@example.com", msg.getSender(), "getSender() returns extracted email");
+        }
+
+        # Test that getFrom() is not empty after construction
+        {
+            Message msg(Sender, Subject);
+            assertTrue(msg.getFrom().val(), "getFrom() is not empty after construction");
+        }
+
+        # Test that getRecipients() returns correct list for SMTP RCPT TO
+        {
+            Message msg(Sender, Subject);
+            msg.addTO(To);
+            msg.addTO("another@example.com");
+            msg.addCC("cc@example.com");
+            msg.setBody("test body");
+
+            list<string> recipients = msg.getRecipients();
+            assertTrue(recipients.contains(To), "getRecipients() contains TO address");
+            assertTrue(recipients.contains("another@example.com"), "getRecipients() contains second TO address");
+            assertTrue(recipients.contains("cc@example.com"), "getRecipients() contains CC address");
+        }
+    }
+
+    # Test comprehensive attachment handling
+    testAttachmentHandling() {
+        # Test binary attachment
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("Test body");
+            msg.addTO(To);
+
+            # Create a small binary "image" (PNG header bytes)
+            binary png_data = <89504E470D0A1A0A0000000D49484452>;
+            msg.attach("image.png", MimeTypePng, png_data, ContentEncoding::Base64);
+
+            string serialized = msg.serialize();
+            assertRegex("Content-Type: image/png", serialized);
+            assertRegex("Content-Disposition: attachment", serialized);
+
+            # Parse the message back
+            Message parsed(serialized);
+            list<Attachment> attachments = parsed.getAttachments();
+            assertEq(1, attachments.size(), "parsed message has 1 attachment");
+            assertEq("image.png", attachments[0].getName(), "attachment name preserved");
+            assertEq(png_data, attachments[0].getData(), "binary data preserved");
+        }
+
+        # Test multiple attachments
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("Test body");
+            msg.addTO(To);
+
+            msg.attach("file1.txt", MimeTypeText, "Content 1");
+            msg.attach("file2.txt", MimeTypeText, "Content 2");
+            msg.attach("file3.txt", MimeTypeText, "Content 3");
+
+            assertEq(3, msg.getAttachments().size(), "message has 3 attachments");
+
+            string serialized = msg.serialize();
+            Message parsed(serialized);
+
+            list<Attachment> attachments = parsed.getAttachments();
+            assertEq(3, attachments.size(), "parsed message has 3 attachments");
+            assertEq("file1.txt", attachments[0].getName());
+            assertEq("file2.txt", attachments[1].getName());
+            assertEq("file3.txt", attachments[2].getName());
+        }
+
+        # Test attachment with quoted-printable encoding
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("Test body");
+            msg.addTO(To);
+
+            msg.attach("document.txt", MimeTypeText, "Line 1\r\nLine 2\r\nLine 3", ContentEncoding::QuotedPrintable);
+
+            string serialized = msg.serialize();
+            assertRegex("Content-Transfer-Encoding: quoted-printable", serialized);
+        }
+
+        # Test attachment with no encoding (ContentEncoding::None not allowed for attachments, should use ContentEncoding::Default)
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("Test body");
+            msg.addTO(To);
+
+            msg.attach("data.txt", MimeTypeText, "Simple text", ContentEncoding::Default);
+
+            string serialized = msg.serialize();
+            # ContentEncoding::Default for text should use quoted-printable
+            assertRegex("Content-Transfer-Encoding: quoted-printable", serialized);
+        }
+
+        # Test empty attachment
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("Test body");
+            msg.addTO(To);
+
+            msg.attach("empty.txt", MimeTypeText, "");
+
+            string serialized = msg.serialize();
+            Message parsed(serialized);
+
+            list<Attachment> attachments = parsed.getAttachments();
+            assertEq(1, attachments.size(), "parsed message has 1 empty attachment");
+            assertEq("", attachments[0].getData(), "empty attachment data");
+        }
+
+        # Test large attachment (simulated)
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("Test body");
+            msg.addTO(To);
+
+            # Create a larger text content
+            string large_content = strmul("ABCDEFGHIJ", 1000);  # 10KB
+            msg.attach("large.txt", MimeTypeText, large_content, ContentEncoding::Base64);
+
+            string serialized = msg.serialize();
+            Message parsed(serialized);
+
+            list<Attachment> attachments = parsed.getAttachments();
+            assertEq(1, attachments.size());
+            assertEq(large_content, attachments[0].getData(), "large attachment data preserved");
+        }
+    }
+
+    # Test RFC 2231 filename encoding/decoding for non-ASCII filenames
+    testRfc2231FilenameEncoding() {
+        # Test encode_mime_filename with ASCII filename
+        {
+            string filename = "simple.txt";
+            string encoded = encode_mime_filename(filename);
+            assertEq(filename, encoded, "ASCII filename not encoded");
+        }
+
+        # Test encode_mime_filename with non-ASCII filename
+        {
+            string filename = "文档.pdf";
+            string encoded = encode_mime_filename(filename);
+            assertTrue(encoded.regex("^utf-8''"), "non-ASCII filename RFC 2231 encoded");
+            assertNeq(filename, encoded, "non-ASCII filename is different when encoded");
+        }
+
+        # Test decode_mime_filename with plain filename
+        {
+            string filename = "simple.txt";
+            string decoded = decode_mime_filename(filename);
+            assertEq(filename, decoded, "plain filename decoded unchanged");
+        }
+
+        # Test decode_mime_filename with RFC 2231 encoded filename
+        {
+            string encoded = "utf-8''%E6%96%87%E6%A1%A3.pdf";
+            string decoded = decode_mime_filename(encoded);
+            assertEq("文档.pdf", decoded, "RFC 2231 filename decoded correctly");
+        }
+
+        # Test roundtrip encoding/decoding
+        {
+            string original = "日本語ファイル.txt";
+            string encoded = encode_mime_filename(original);
+            string decoded = decode_mime_filename(encoded);
+            assertEq(original, decoded, "RFC 2231 roundtrip preserves filename");
+        }
+
+        # Test sanitize_filename removes path separators
+        {
+            string filename = "../../../etc/passwd";
+            string sanitized = sanitize_filename(filename);
+            assertFalse(sanitized.regex("/"), "path separators removed");
+            assertFalse(sanitized.regex("\\\\"), "backslash removed");
+        }
+
+        # Test sanitize_filename removes control characters
+        {
+            string filename = "file" + chr(0) + "name" + chr(0x1f) + ".txt";
+            string sanitized = sanitize_filename(filename);
+            assertEq(-1, sanitized.find(chr(0)), "null byte removed");
+            assertEq(-1, sanitized.find(chr(0x1f)), "control character removed");
+            assertEq("filename.txt", sanitized, "control characters stripped");
+        }
+
+        # Test sanitize_filename removes leading dots
+        {
+            string filename = "...hidden.txt";
+            string sanitized = sanitize_filename(filename);
+            assertFalse(sanitized.regex("^\\."), "leading dots removed");
+            assertEq("hidden.txt", sanitized);
+        }
+
+        # Test sanitize_filename with empty result returns default
+        {
+            string filename = "///";
+            string sanitized = sanitize_filename(filename);
+            assertEq("attachment", sanitized, "empty sanitized filename returns default");
+        }
+
+        # Test filenames with spaces and special characters
+        {
+            string filename = "my file (copy).txt";
+            string encoded = encode_mime_filename(filename);
+            # Spaces and parentheses should be percent-encoded
+            assertTrue(encoded == filename || encoded.regex("%20") || encoded.regex("utf-8''"),
+                "filename with spaces encoded");
+        }
+    }
+
+    # Test inline attachments with Content-ID
+    testInlineAttachments() {
+        # Test creating inline attachment
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("<html><body><img src=\"cid:logo123\"></body></html>", ContentEncoding::QuotedPrintable, MimeTypeHtml);
+            msg.addTO(To);
+
+            binary logo_data = <89504E470D0A1A0A>;  # PNG header
+            msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
+
+            list<Attachment> attachments = msg.getAttachments();
+            assertEq(1, attachments.size());
+            assertTrue(attachments[0].isInline(), "attachment is inline");
+            assertEq("logo123", attachments[0].getContentId(), "Content-ID set correctly");
+
+            string serialized = msg.serialize();
+            assertRegex("Content-ID: <logo123>", serialized, "Content-ID header present");
+        }
+
+        # Test Attachment constructor with Content-ID
+        {
+            Attachment att("image.jpg", MimeTypeJpeg, <FFFFFFFFFFFF>, ContentEncoding::Base64, NOTHING, "img001");
+            assertTrue(att.isInline(), "Attachment with cid is inline");
+            assertEq("img001", att.getContentId(), "Content-ID from constructor");
+        }
+
+        # Test regular attachment is not inline
+        {
+            Attachment att("file.txt", MimeTypeText, "content");
+            assertFalse(att.isInline(), "regular attachment is not inline");
+            assertNothing(att.getContentId(), "no Content-ID for regular attachment");
+        }
+
+        # Test parsing message with Content-ID
+        {
+            string msgWithCid = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: inline test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/mixed; boundary=bound123\r\n"
+                "\r\n"
+                "--bound123\r\n"
+                "Content-Type: text/html\r\n"
+                "\r\n"
+                "<img src=\"cid:image001\">\r\n"
+                "--bound123\r\n"
+                "Content-Type: image/png\r\n"
+                "Content-Disposition: attachment; filename=\"logo.png\"\r\n"
+                "Content-ID: <image001>\r\n"
+                "Content-Transfer-Encoding: base64\r\n"
+                "\r\n"
+                "iVBORw0KGgo=\r\n"
+                "--bound123--\r\n";
+
+            Message msg(msgWithCid);
+            list<Attachment> attachments = msg.getAttachments();
+            assertEq(1, attachments.size());
+            assertEq("image001", attachments[0].getContentId(), "Content-ID parsed from message");
+        }
+
+        # Test multiple inline attachments
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("<html><img src=\"cid:img1\"><img src=\"cid:img2\"></html>", ContentEncoding::QuotedPrintable, MimeTypeHtml);
+            msg.addTO(To);
+
+            msg.attachInline("img1.png", MimeTypePng, <FF>, "img1");
+            msg.attachInline("img2.png", MimeTypePng, <FF>, "img2");
+
+            list<Attachment> attachments = msg.getAttachments();
+            assertEq(2, attachments.size());
+            assertTrue(attachments[0].isInline());
+            assertTrue(attachments[1].isInline());
+            assertEq("img1", attachments[0].getContentId());
+            assertEq("img2", attachments[1].getContentId());
+        }
+    }
+
+    # Test Part and Attachment class methods
+    testPartAndAttachmentClasses() {
+        # Test Part getters
+        {
+            Part p("test.txt", MimeTypeText, "Hello World", ContentEncoding::QuotedPrintable);
+            assertEq("test.txt", p.getName(), "Part.getName()");
+            assertEq(MimeTypeText, p.getMime(), "Part.getMime()");
+            assertEq("Hello World", p.getData(), "Part.getData()");
+            assertEq(11, p.getSize(), "Part.getSize()");
+            assertEq(ContentEncoding::QuotedPrintable, p.getTransferEncoding(), "Part.getTransferEncoding()");
+            assertNothing(p.getContentId(), "Part.getContentId() when not set");
+        }
+
+        # Test Part with headers
+        {
+            hash<auto> hdr = {"X-Custom": "value", "content-id": "<part123>"};
+            Part p("data.bin", MimeTypeOctetStream, <DEADBEEF>, ContentEncoding::Base64, hdr);
+            hash<auto> headers = p.getHeaders();
+            assertEq("value", headers."X-Custom", "custom header preserved");
+            assertEq("part123", p.getContentId(), "Content-ID extracted from headers");
+        }
+
+        # Test Part.getInfo()
+        {
+            Part p("info.txt", MimeTypeText, "content", ContentEncoding::Base64);
+            hash<auto> info = p.getInfo();
+            assertEq("info.txt", info.name);
+            assertEq(MimeTypeText, info.mime);
+            assertEq("content", info.part_data);
+            assertEq(ContentEncoding::Base64, info.transfer_encoding);
+            assertEq(7, info.size);
+            assertNothing(info.content_id);
+        }
+
+        # Test Attachment inherits Part methods
+        {
+            Attachment att("doc.pdf", MimeTypePdf, <25504446>, ContentEncoding::Base64);
+            assertEq("doc.pdf", att.getName());
+            assertEq(MimeTypePdf, att.getMime());
+            assertEq(4, att.getSize());
+            assertEq(ContentEncoding::Base64, att.getTransferEncoding());
+            assertFalse(att.isInline());
+        }
+
+        # Test Attachment.getInfo()
+        {
+            Attachment att("file.txt", MimeTypeText, "test data", ContentEncoding::Base64, NOTHING, "cid123");
+            hash<auto> info = att.getInfo();
+            assertEq("file.txt", info.name);
+            assertEq(MimeTypeText, info.mime);
+            assertEq("test data", info.part_data);
+            assertEq(ContentEncoding::Base64, info.transfer_encoding);
+            assertEq(9, info.size);
+            assertEq("cid123", info.content_id);
+        }
+
+        # Test binary data size
+        {
+            binary data = <0102030405060708090A>;
+            Attachment att("binary.dat", MimeTypeOctetStream, data);
+            assertEq(10, att.getSize(), "binary attachment size");
+        }
+
+        # Test empty data size
+        {
+            Attachment att("empty.txt", MimeTypeText, "");
+            assertEq(0, att.getSize(), "empty attachment size");
+        }
+
+        # Test Attachment encoding validation
+        {
+            # ContentEncoding::Default should resolve to appropriate encoding
+            Attachment att1("text.txt", MimeTypeText, "text content", ContentEncoding::Default);
+            assertEq(ContentEncoding::QuotedPrintable, att1.getTransferEncoding(), "ContentEncoding::Default for text -> quoted-printable");
+
+            Attachment att2("bin.dat", MimeTypeOctetStream, <DEADBEEF>, ContentEncoding::Default);
+            assertEq(ContentEncoding::Base64, att2.getTransferEncoding(), "ContentEncoding::Default for binary -> base64");
+        }
+
+        # Test Message getInfo with attachments
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("body");
+            msg.addTO(To);
+            msg.attach("att1.txt", MimeTypeText, "content1");
+            msg.attachInline("att2.png", MimeTypePng, <FF>, "cid2");
+
+            hash<MailMessageInfo> info = msg.getInfo();
+            assertEq(2, info.attachments.size());
+            assertEq("att1.txt", info.attachments[0].name);
+            assertEq("att2.png", info.attachments[1].name);
+            assertEq("cid2", info.attachments[1].content_id);
         }
     }
 }

@@ -32,7 +32,7 @@
 %modern
 
 module Pop3ClientDataProvider {
-    version = "2.0";
+    version = "2.1";
     desc = "POP3 client data provider module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -82,14 +82,30 @@ module Pop3ClientDataProvider {
 
     @section pop3clientdataproviderintro Introduction to the Pop3ClientDataProvider Module
 
-    The %Pop3ClientDataProvider module provides a \c dataproviderintro "data provider" API for POP3 servers.
+    The %Pop3ClientDataProvider module provides a @ref dataproviderintro "data provider" API for POP3 servers.
 
     This data provider provides Pop3Client API access to:
-    - xxx
+    - List available messages on the server (with sizes and UIDLs)
+    - Retrieve specific messages by ID
+    - Retrieve message headers only (more efficient)
+    - Get message metadata and content
+    - Query server capabilities
+    - Get unique message identifiers (UIDL)
 
     @section pop3clientdataprovider_factory Pop3Client Data Provider Factory
 
     The name of the Pop3Client data provider factory is <b><tt>pop3</tt></b>.
+
+    @section pop3clientdataprovider_structure Data Provider Structure
+
+    The data provider has the following structure:
+    - \c pop3/ - Root data provider
+      - \c list - List messages (supports request returning message info with UIDLs)
+        - \c {id}/ - Individual message provider
+          - \c get - Retrieve full message
+          - \c headers - Retrieve headers only (uses TOP command)
+      - \c capabilities - Get server capabilities (CAPA command)
+      - \c uidl - Get unique message identifiers
 
     @section pop3clientdataprovider_examples Pop3Client Data Provider Examples
 
@@ -97,23 +113,36 @@ module Pop3ClientDataProvider {
     there is an available connection called \c pop3client, which has been fully authorized with OAuth2 to access Pop3Client
     on behalf of the user.
 
-    @par Event Example: Wait for New Emails
-    @verbatim qdp pop3client/wait listen
-    @endverbatim
-
-    @par API Example: List Available Messages
+    @par API Example: List Available Messages with UIDLs
     @verbatim qdp pop3client/list
     @endverbatim
 
     @par API Example: Retrieve a Specific Message
-    @verbatim qdp pop3client/list/xxx/get dor
+    @verbatim qdp pop3client/list/1/get
     @endverbatim
 
-    @par API Example: Retrieve a Specific Message Without Marking It For Deletion
-    @verbatim qdp pop3client/list/xxx/peek dor
+    @par API Example: Retrieve Only Message Headers
+    @verbatim qdp pop3client/list/1/headers
+    @endverbatim
+
+    @par API Example: Get Server Capabilities
+    @verbatim qdp pop3client/capabilities
+    @endverbatim
+
+    @par API Example: Get Unique Message IDs
+    @verbatim qdp pop3client/uidl
     @endverbatim
 
     @section Pop3Clientdataprovider_relnotes Release Notes
+
+    @subsection Pop3Clientdataprovider_v2_1 Pop3ClientDataProvider v2.1
+    - Added \c capabilities endpoint for CAPA command (RFC 2449)
+    - Added \c uidl endpoint for UIDL command
+    - Added \c headers endpoint for efficient header-only retrieval (TOP command)
+    - Enhanced \c list endpoint to return message sizes and UIDLs via request
+
+    @subsection Pop3Clientdataprovider_v2_0 Pop3ClientDataProvider v2.0
+    - updated for new data provider API
 
     @subsection Pop3Clientdataprovider_v1_0 Pop3ClientDataProvider v1.0
     - initial release of the module

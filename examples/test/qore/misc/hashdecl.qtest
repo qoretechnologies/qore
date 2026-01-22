@@ -699,5 +699,100 @@ class HashDeclTest inherits QUnit::Test {
             assertEq("StatInfo", result[0]);
             assertTrue(result[1]);
         }
+
+        # Test 30: Import inherited hashdecls - tests parent pointer update after namespace copy
+        # This test specifically verifies that when hashdecls are copied to a new namespace,
+        # the parent pointer is correctly updated to avoid use-after-free bugs
+        {
+            # Create a Program that doesn't inherit user hashdecls automatically
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import hashdecls with inheritance chain from the parent program
+            # importHashDecl imports from the calling program's namespace
+            p.importHashDecl("BaseInfo");
+            p.importHashDecl("ExtendedInfo");
+            p.importHashDecl("DeeplyNested");
+
+            # Parse code that uses the imported hashdecls - this exercises parent member lookup
+            p.parse("
+                list sub test() {
+                    hash<ExtendedInfo> ext({'name': 'test', 'id': 42, 'created': now()});
+                    hash<DeeplyNested> deep({'name': 'deep', 'id': 99, 'created': now(), 'value': 3.14});
+                    return (
+                        ext.name,         # lookup from parent BaseInfo
+                        ext.id,           # lookup from parent BaseInfo
+                        exists ext.created, # local to ExtendedInfo
+                        deep.name,        # lookup from grandparent BaseInfo
+                        deep.id,          # lookup from grandparent BaseInfo
+                        exists deep.created, # lookup from parent ExtendedInfo
+                        deep.value,       # local to DeeplyNested
+                    );
+                }
+            ", "test-prog");
+
+            # Call the function to exercise the inheritance chain
+            list result = p.callFunction("test");
+            assertEq("test", result[0]);     # name from BaseInfo
+            assertEq(42, result[1]);         # id from BaseInfo
+            assertTrue(result[2]);           # created exists
+            assertEq("deep", result[3]);     # name from grandparent BaseInfo
+            assertEq(99, result[4]);         # id from grandparent BaseInfo
+            assertTrue(result[5]);           # created from parent ExtendedInfo
+            assertEq(3.14, result[6]);       # value local to DeeplyNested
+        }
+
+        # Test 31: Import namespaced inherited hashdecls - verifies namespace path handling
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import hashdecls from the InheritTest namespace
+            p.importHashDecl("InheritTest::ParentDecl");
+            p.importHashDecl("InheritTest::ChildDecl");
+
+            p.parse("
+                list sub test_inheritance() {
+                    hash<InheritTest::ChildDecl> child();
+                    return (
+                        child.parent_id,    # inherited from ParentDecl
+                        child.parent_name,  # inherited from ParentDecl
+                        child.child_id,     # local
+                        child.child_name,   # local
+                    );
+                }
+            ", "test-prog-2");
+
+            list result = p.callFunction("test_inheritance");
+            assertEq(100, result[0]);       # parent_id default from ParentDecl
+            assertEq("parent", result[1]);  # parent_name default from ParentDecl
+            assertEq(200, result[2]);       # child_id default
+            assertEq("child", result[3]);   # child_name default
+        }
+
+        # Test 32: Import inherited hashdecls with default values
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import hashdecls with default values inheritance chain
+            p.importHashDecl("DefaultBase");
+            p.importHashDecl("DefaultChild");
+
+            p.parse("
+                list sub test_defaults() {
+                    hash<DefaultChild> d();
+                    return (
+                        d.base_str,     # inherited default
+                        d.base_val,     # inherited default
+                        d.child_str,    # local default
+                        d.child_val,    # local default
+                    );
+                }
+            ", "test-prog-3");
+
+            list result = p.callFunction("test_defaults");
+            assertEq("base_default", result[0]);  # inherited default
+            assertEq(10, result[1]);              # inherited default
+            assertEq("child_default", result[2]); # local default
+            assertEq(20, result[3]);              # local default
+        }
     }
 }

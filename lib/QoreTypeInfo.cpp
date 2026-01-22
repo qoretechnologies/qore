@@ -3051,39 +3051,37 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveAndDelete(const QoreProgramLocatio
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* loc, const NamedScope& cscope,
         bool or_nothing, int& err) {
-    // check for typedef first (only for simple names without scope qualification)
-    if (cscope.size() == 1) {
-        TypedefEntry* td = qore_root_ns_private::parseFindTypedef(cscope.ostr);
-        if (td) {
-            // resolve the typedef's underlying type
-            const QoreTypeInfo* rv;
-            if (td->typeInfo) {
-                // already resolved
-                rv = td->typeInfo;
-            } else if (td->parseTypeInfo) {
-                // resolve the parse type info
-                rv = td->parseTypeInfo->resolve(loc, err);
-                // cache the resolved type for future lookups
-                td->typeInfo = rv;
-            } else {
-                // should not happen - typedef without type info
-                parse_error(*loc, "internal error: typedef '%s' has no type information", cscope.ostr);
-                err = -1;
-                return autoTypeInfo;
-            }
-
-            // apply or_nothing if needed and the underlying type doesn't already accept NOTHING
-            if (or_nothing && !QoreTypeInfo::parseAcceptsReturns(rv, NT_NOTHING)) {
-                // need to get the or-nothing variant of this type
-                const QoreTypeInfo* orn = qore_get_or_nothing_type(rv);
-                if (orn) {
-                    return orn;
-                }
-                // if we can't get or-nothing variant, just return the base type
-                // the caller should handle the or_nothing semantics
-            }
-            return rv;
+    // check for typedef first (both simple names and scoped names)
+    TypedefEntry* td = qore_root_ns_private::parseFindTypedef(cscope);
+    if (td) {
+        // resolve the typedef's underlying type
+        const QoreTypeInfo* rv;
+        if (td->typeInfo) {
+            // already resolved
+            rv = td->typeInfo;
+        } else if (td->parseTypeInfo) {
+            // resolve the parse type info
+            rv = td->parseTypeInfo->resolve(loc, err);
+            // cache the resolved type for future lookups
+            td->typeInfo = rv;
+        } else {
+            // should not happen - typedef without type info
+            parse_error(*loc, "internal error: typedef '%s' has no type information", cscope.ostr);
+            err = -1;
+            return autoTypeInfo;
         }
+
+        // apply or_nothing if needed and the underlying type doesn't already accept NOTHING
+        if (or_nothing && !QoreTypeInfo::parseAcceptsReturns(rv, NT_NOTHING)) {
+            // need to get the or-nothing variant of this type
+            const QoreTypeInfo* orn = qore_get_or_nothing_type(rv);
+            if (orn) {
+                return orn;
+            }
+            // if we can't get or-nothing variant, just return the base type
+            // the caller should handle the or_nothing semantics
+        }
+        return rv;
     }
 
     // resolve class (don't raise error - we'll check for enum as fallback)

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore Pop3ClientMessageGetDataProvider class definition
+#! Qore Pop3ClientCapabilitiesDataProvider class definition
 
-/** Pop3ClientMessageGetDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
+/** Pop3ClientCapabilitiesDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,45 +24,63 @@
 
 #! Contains all public definitions in the Pop3ClientDataProvider module
 public namespace Pop3ClientDataProvider {
-#! The POP3 message parent data provider
-public class Pop3ClientMessageGetDataProvider inherits Pop3ClientDataProviderBase {
+#! Data provider that returns server capabilities using the CAPA command (RFC 2449)
+/** The CAPA command returns a list of capabilities supported by the POP3 server.
+    Common capabilities include:
+    - TOP: Server supports the TOP command for retrieving headers
+    - UIDL: Server supports unique message identifiers
+    - USER: Server supports USER/PASS authentication
+    - SASL: Server supports SASL authentication mechanisms
+    - STLS: Server supports STARTTLS for encryption
+
+    @note Not all servers support the CAPA command; if unsupported, this returns NOTHING
+*/
+public class Pop3ClientCapabilitiesDataProvider inherits Pop3ClientDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "Pop3ClientMessageGetDataProvider",
+            "type": "Pop3ClientCapabilitiesDataProvider",
             "supports_request": True,
         };
+
+        #! Provider summary info
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        } + {
+            "name": "capabilities",
+            "desc": "Returns POP3 server capabilities (CAPA command, RFC 2449)",
+        });
+
+        #! Response type for capabilities - hash mapping capability name to True
+        const CapabilitiesResponseType = new HashDataType(AutoHashOrNothingType, "CapabilitiesResponse");
     }
 
-    private {
-        #! Message ID
-        string id;
+    #! Creates the object from constructor options
+    constructor(*hash<auto> options) : Pop3ClientDataProviderBase(options) {
     }
 
-    #! Creates the object from an POP3 connection
-    constructor(Pop3Client pop3, string id) : Pop3ClientDataProviderBase(pop3) {
-        self.id = id;
+    #! Creates the object from a POP3 connection
+    constructor(Pop3Client pop3) : Pop3ClientDataProviderBase(pop3) {
     }
 
     #! Returns the data provider name
     string getName() {
-        return "get";
+        return "capabilities";
     }
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Get message data provider for POP3 message %y", id);
+        return "Returns POP3 server capabilities using the CAPA command (RFC 2449)";
     }
 
     #! Makes a request and returns the response
     /** @param req the request info
         @param request_options the request options; will be processed by validateRequestOptions()
 
-        @return the response to the request
+        @return a hash mapping capability names to True, or NOTHING if CAPA is not supported
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        MailMessage::Message msg = pop3.getMessage(id);
-        return msg.getInfo();
+        return pop3.capa();
     }
 
     #! Returns the description of a successful request message, if any
@@ -76,7 +94,7 @@ public class Pop3ClientMessageGetDataProvider inherits Pop3ClientDataProviderBas
     /** @return the response type for this response message
     */
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new HashDataType(TypedHash::forName("MailMessage::MailMessageInfo"));
+        return CapabilitiesResponseType;
     }
 
     #! Returns data provider static info

@@ -220,16 +220,26 @@ void HashDeclList::parseRemove(const char* name) {
 void HashDeclList::updateParentPointers() {
     for (auto& i : hm) {
         typed_hash_decl_private* hdp = typed_hash_decl_private::get(*i.second);
-        const char* parent_name = hdp->getParentHashDeclName();
-        if (parent_name) {
-            // Look up the parent by name in this list
-            TypedHashDecl* new_parent = find(parent_name);
+        // parent_path contains the full namespace path (e.g., "DataProvider::DisplayDescInfo")
+        const char* parent_path = hdp->getParentHashDeclName();
+        if (parent_path) {
+            // Extract the simple name from the full path for local lookup
+            // The hashDeclList uses simple names as keys
+            const char* simple_name = strrchr(parent_path, ':');
+            simple_name = simple_name ? simple_name + 1 : parent_path;
+
+            // Look up the parent by simple name in this list
+            TypedHashDecl* new_parent = find(simple_name);
             if (new_parent) {
-                // Update the parent pointer to point to the hashdecl in this namespace
-                hdp->setParentHashDecl(new_parent);
+                // Verify the full path matches to avoid name collisions
+                // Only update if this is actually the same hashdecl (same namespace path)
+                if (!strcmp(parent_path, typed_hash_decl_private::get(*new_parent)->getPath())) {
+                    hdp->setParentHashDecl(new_parent);
+                }
             }
-            // If parent not found in this list, keep the original pointer
-            // (parent might be in a parent namespace)
+            // If parent not found or path doesn't match, keep the original pointer
+            // The parent might be in a different namespace (e.g., DataProvider::DisplayDescInfo)
+            // and the original pointer is still valid
         }
     }
 }

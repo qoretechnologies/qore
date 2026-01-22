@@ -5158,14 +5158,24 @@ QoreHashNode* SocketRecvPollOperationBase::continuePoll(ExceptionSink* xsink) {
     if (!rc) {
         // get output data
         SimpleRefHolder<BinaryNode> d(poll_state->takeOutput().get<BinaryNode>());
+        bool ok = true;
         if (to_string) {
             size_t len = d->size();
-            data = new QoreStringNode(reinterpret_cast<char*>(d->giveBuffer()), len, len + 1,
-                sock->getEncoding());
+            char* buf = reinterpret_cast<char*>(d->giveBuffer());
+            char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+            if (!nbuf) {
+                xsink->outOfMemory();
+                ok = false;
+            } else {
+                nbuf[len] = '\0';
+                data = new QoreStringNode(nbuf, len, len + 1, sock->getEncoding());
+            }
         } else {
             data = d.release();
         }
-        received = true;
+        if (ok) {
+            received = true;
+        }
     }
     if (*xsink || !rc) {
         // release the AbstractPollState value
