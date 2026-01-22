@@ -4,6 +4,8 @@
 %modern
 
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/MailMessage.qm
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/SmtpClient.qm
@@ -34,6 +36,7 @@ public class SmtpClientTest inherits QUnit::Test {
         addTestCase("connection test", \connectionTest());
         addTestCase("polling API tests", \pollingApiTests());
         addTestCase("live async ping tests", \liveAsyncPingTests());
+        addTestCase("data provider attachment tests", \dataProviderAttachmentTests());
         set_return_value(main());
     }
 
@@ -122,6 +125,61 @@ public class SmtpClientTest inherits QUnit::Test {
         assertEq("login", SmtpPingPollOperation::SPS_LOGIN, "SPS_LOGIN constant");
         assertEq("read-login-reply", SmtpPingPollOperation::SPS_READ_LOGIN_REPLY, "SPS_READ_LOGIN_REPLY constant");
         assertEq("complete", SmtpPingPollOperation::SPS_COMPLETE, "SPS_COMPLETE constant");
+    }
+
+    dataProviderAttachmentTests() {
+        # Test SmtpSendEmailAttachmentDataType has content-id field
+        {
+            SmtpSendEmailAttachmentDataType attType();
+            hash<auto> fields = attType.getFields();
+
+            assertTrue(fields.hasKey("name"), "attachment type has 'name' field");
+            assertTrue(fields.hasKey("mime-type"), "attachment type has 'mime-type' field");
+            assertTrue(fields.hasKey("data"), "attachment type has 'data' field");
+            assertTrue(fields.hasKey("encoding"), "attachment type has 'encoding' field");
+            assertTrue(fields.hasKey("hdr"), "attachment type has 'hdr' field");
+            assertTrue(fields.hasKey("content-id"), "attachment type has 'content-id' field");
+        }
+
+        # Test that SmtpSendEmailRequestDataType accepts attachments with content-id
+        {
+            SmtpSendEmailRequestDataType reqType();
+            hash<auto> fields = reqType.getFields();
+
+            assertTrue(fields.hasKey("attachments"), "request type has 'attachments' field");
+            assertTrue(fields.hasKey("body"), "request type has 'body' field");
+            assertTrue(fields.hasKey("sender"), "request type has 'sender' field");
+        }
+
+        # Test data provider factory exists
+        {
+            SmtpClientDataProviderFactory factory();
+            assertEq("smtpclient", factory.getName(), "factory name is 'smtpclient'");
+        }
+
+        # Test SmtpClientDataProvider has send-email child
+        {
+            string url = "smtp://user:pass@localhost:25";
+            SmtpClient client(url);
+            SmtpClientDataProvider provider(client);
+
+            *list<string> children = provider.getChildProviderNames();
+            assertTrue(children.contains("send-email"), "provider has 'send-email' child");
+        }
+
+        # Test SmtpClientSendEmailDataProvider request type includes content-id
+        {
+            string url = "smtp://user:pass@localhost:25";
+            SmtpClient client(url);
+            SmtpClientDataProvider provider(client);
+            AbstractDataProvider sendProvider = provider.getChildProvider("send-email");
+
+            assertEq("SmtpClientSendEmailDataProvider", sendProvider.className());
+
+            # Check that the request type is defined
+            *AbstractDataProviderType reqType = sendProvider.getRequestType();
+            assertTrue(reqType.val(), "send-email has request type");
+        }
     }
 
     liveAsyncPingTests() {

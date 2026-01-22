@@ -40,7 +40,7 @@
 %new-style
 
 module SmtpClient {
-    version = "2.0";
+    version = "2.2";
     desc = "SMTP client support module";
     author = "Wolfgang Ritzinger <aargon@rat.at>, Marian Bonda <marian_bonda@users.sourceforge.net>, "
         "Pavol Potoncok <ppotancok@gmail.com>";
@@ -175,6 +175,12 @@ smtp.sendMessage(msg);@endcode
     - http://tools.ietf.org/html/rfc2822: message structure, headers, body, etc
 
     @section smtpclient_relnotes SmtpClient Release Notes
+
+    @subsection smtpclient_v2_2 SmtpClient 2.2
+    - Added support for inline attachments with Content-ID in the data provider API
+      - Added \c "content-id" field to the send email attachment type
+      - Inline attachments are used for embedding images in HTML emails (referenced as \c "cid:content-id")
+    - Fixed \c SmtpPingPollOperation to set \c goal_reached on successful completion
 
     @subsection smtpclient_v2_1 SmtpClient 2.1
     - added support for the data provider action catalog API
@@ -1690,7 +1696,15 @@ public class SmtpClientSendEmailDataProvider inherits AbstractDataProvider {
         map msg.addCC($1), req.cc;
         map msg.addBCC($1), req.bcc;
         msg.setBody(req.body, req."body-encoding", req."body-mime-type");
-        map msg.attach($1.name, $1."mime-type", $1."data", $1.encoding, $1.hdr), req.attachments;
+        foreach hash<auto> att in (req.attachments) {
+            if (att."content-id".val()) {
+                # Inline attachment with Content-ID
+                msg.attachInline(att.name, att."mime-type", att."data", att."content-id", att.encoding, att.hdr);
+            } else {
+                # Regular attachment
+                msg.attach(att.name, att."mime-type", att."data", att.encoding, att.hdr);
+            }
+        }
         return smtp.sendMessage(msg);
     }
 
@@ -1753,6 +1767,14 @@ public class SmtpSendEmailAttachmentDataType inherits HashDataType {
                 "type": StringType,
                 "short_desc": "The name or filename of the attachment",
                 "desc": "The name or filename of the attachment",
+            },
+            "content-id": {
+                "display_name": "Content-ID",
+                "type": StringOrNothingType,
+                "short_desc": "Content-ID for inline attachments",
+                "desc": "Content-ID for inline attachments (without angle brackets). Use this for images "
+                    "embedded in HTML emails that are referenced as `cid:content-id` in the HTML body. "
+                    "When set, the attachment will be marked as inline rather than a regular attachment.",
             },
         };
     }
