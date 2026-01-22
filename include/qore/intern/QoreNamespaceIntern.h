@@ -191,6 +191,14 @@ public:
         if (!old.from_module.empty()) {
             from_module = old.from_module;
         }
+        // copy public typedefs if not disabled by parse options
+        if (!(po & PO_NO_TYPEDEF)) {
+            for (const auto& i : old.typedefMap) {
+                if (i.second->pub) {
+                    typedefMap[i.first] = new TypedefEntry(*i.second);
+                }
+            }
+        }
         assert(name.rfind("::") == std::string::npos);
         assert(path.rfind("::", 0) == 0);
         assert(path.rfind("::::", 0) == std::string::npos);
@@ -507,6 +515,7 @@ public:
 
     DLLLOCAL TypedHashDecl* parseMatchScopedHashDecl(const NamedScope& name, unsigned& matched);
     DLLLOCAL const QoreEnumDecl* parseMatchScopedEnum(const NamedScope& name, unsigned& matched);
+    DLLLOCAL TypedefEntry* parseMatchScopedTypedef(const NamedScope& name, unsigned& matched);
 
     DLLLOCAL QoreClass* parseMatchScopedClass(const NamedScope& name, unsigned& matched);
     DLLLOCAL QoreClass* parseMatchScopedClassWithMethod(const NamedScope& nscope, unsigned& matched);
@@ -1468,6 +1477,8 @@ protected:
 
     DLLLOCAL TypedHashDecl* parseFindScopedHashDeclIntern(const NamedScope& nscope, unsigned& matched);
 
+    DLLLOCAL TypedefEntry* parseFindScopedTypedefIntern(const NamedScope& nscope, unsigned& matched);
+
     DLLLOCAL TypedHashDecl* parseFindHashDeclIntern(const char* hdname) {
         if (!useBrokenNamespaceResolutionParse()) {
             if (TypedHashDecl* hd = parseFindQoreHashDeclIntern(hdname)) {
@@ -1522,7 +1533,15 @@ protected:
         return nullptr;
     }
 
-    DLLLOCAL TypedefEntry* parseFindTypedefIntern(const char* tdname) {
+    DLLLOCAL TypedefEntry* parseFindTypedefIntern(const NamedScope& nscope) {
+        // for scoped names (Ns::Type), use scoped lookup
+        if (nscope.size() > 1) {
+            unsigned m = 0;
+            return parseFindScopedTypedefIntern(nscope, m);
+        }
+
+        // simple name lookup
+        const char* tdname = nscope.ostr;
         if (!useBrokenNamespaceResolutionParse()) {
             if (TypedefEntry* td = parseFindQoreTypedefIntern(tdname)) {
                 return td;
@@ -2365,7 +2384,7 @@ public:
         return getRootNS()->rpriv->parseFindScopedClassWithMethodInternError(loc, name, error);
     }
 
-    DLLLOCAL static TypedefEntry* parseFindTypedef(const char* name) {
+    DLLLOCAL static TypedefEntry* parseFindTypedef(const NamedScope& name) {
         return getRootNS()->rpriv->parseFindTypedefIntern(name);
     }
 

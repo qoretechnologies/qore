@@ -1,0 +1,30 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+
+%new-style
+
+module TypedefModule {
+    version = "1.0";
+    desc = "Test module for typedef export";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+public namespace TypedefNs {
+    public typedef MyInt = int;
+    public typedef MyString = string;
+    public typedef IntList = list<int>;
+    public typedef StringHash = hash<string, string>;
+
+    # Private typedef - should NOT be exported
+    typedef PrivateType = float;
+
+    public int sub useMyInt(MyInt val) {
+        return val * 2;
+    }
+
+    public MyString sub useMyString(MyString val) {
+        return "Hello, " + val;
+    }
+}

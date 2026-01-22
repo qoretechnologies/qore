@@ -1,0 +1,152 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class TypedefModuleTest
+
+class TypedefModuleTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Typedef module test", "1.0") {
+        addTestCase("Public typedef import", \testPublicTypedefImport());
+        addTestCase("Private typedef not exported", \testPrivateTypedefNotExported());
+        addTestCase("Typedef in function signatures", \testTypedefInFunctionSignatures());
+        addTestCase("Module re-export typedefs", \testModuleReexportTypedefs());
+        addTestCase("Typedef merge conflict with class", \testTypedefMergeConflictWithClass());
+        addTestCase("Typedef merge conflict with hashdecl", \testTypedefMergeConflictWithHashdecl());
+        set_return_value(main());
+    }
+
+    testPublicTypedefImport() {
+        # Test that public typedefs are properly exported from modules
+        Program p(PO_NEW_STYLE);
+        p.setScriptPath(get_script_path());
+        p.parse("
+%requires ./TypedefModule.qm
+
+auto sub test() {
+    TypedefNs::MyInt x = 42;
+    TypedefNs::MyString s = 'world';
+    TypedefNs::IntList l = (1, 2, 3);
+    TypedefNs::StringHash h = {'key': 'value'};
+
+    return (x, s, l, h);
+}
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(42, result[0]);
+        assertEq("world", result[1]);
+        assertEq((1, 2, 3), result[2]);
+        assertEq({"key": "value"}, result[3]);
+    }
+
+    testPrivateTypedefNotExported() {
+        # Test that private typedefs are NOT exported from modules
+        Program p(PO_NEW_STYLE);
+        p.setScriptPath(get_script_path());
+        # PrivateType is private in the module - should not be visible
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("
+%requires ./TypedefModule.qm
+
+sub test() {
+    TypedefNs::PrivateType x = 1.5;  # Should fail - private typedef not exported
+}
+        ", "test"));
+    }
+
+    testTypedefInFunctionSignatures() {
+        # Test that functions using typedefs work correctly when imported
+        Program p(PO_NEW_STYLE);
+        p.setScriptPath(get_script_path());
+        p.parse("
+%requires ./TypedefModule.qm
+
+auto sub test() {
+    int doubled = TypedefNs::useMyInt(21);
+    string greeting = TypedefNs::useMyString('Alice');
+    return (doubled, greeting);
+}
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(42, result[0]);
+        assertEq("Hello, Alice", result[1]);
+    }
+
+    testModuleReexportTypedefs() {
+        # Test that typedefs are properly re-exported through module chains
+        Program p(PO_NEW_STYLE);
+        p.setScriptPath(get_script_path());
+        p.parse("
+%requires(reexport) ./TypedefModule.qm
+
+# Define a function that uses the re-exported typedef
+TypedefNs::MyInt sub doubleValue(TypedefNs::MyInt val) {
+    return val * 2;
+}
+
+auto sub test() {
+    return doubleValue(21);
+}
+        ", "test");
+        p.run();
+        assertEq(42, p.callFunction("test"));
+    }
+
+    testTypedefMergeConflictWithClass() {
+        # Test that when a class exists with the same name as a typedef,
+        # the class takes precedence and the typedef is skipped during merge
+        Program p(PO_NEW_STYLE);
+        p.setScriptPath(get_script_path());
+        p.parse("
+# Define a class with the same name as the typedef in the module BEFORE importing
+public namespace TypedefNs {
+    public class MyInt {
+        private { int val; }
+        constructor(int v) { val = v; }
+        int get() { return val; }
+    }
+}
+
+%requires ./TypedefModule.qm
+
+auto sub test() {
+    # MyInt should be the class, not the typedef
+    TypedefNs::MyInt obj(42);
+    return obj.get();
+}
+        ", "test");
+        p.run();
+        assertEq(42, p.callFunction("test"));
+    }
+
+    testTypedefMergeConflictWithHashdecl() {
+        # Test that when a hashdecl exists with the same name as a typedef,
+        # the hashdecl takes precedence and the typedef is skipped during merge
+        Program p(PO_NEW_STYLE);
+        p.setScriptPath(get_script_path());
+        p.parse("
+# Define a hashdecl with the same name as the typedef in the module BEFORE importing
+public namespace TypedefNs {
+    public hashdecl MyString {
+        string value;
+        int length;
+    }
+}
+
+%requires ./TypedefModule.qm
+
+auto sub test() {
+    # MyString should be the hashdecl, not the typedef
+    hash<TypedefNs::MyString> h = <TypedefNs::MyString>{'value': 'hello', 'length': 5};
+    return h.value;
+}
+        ", "test");
+        p.run();
+        assertEq("hello", p.callFunction("test"));
+    }
+}
