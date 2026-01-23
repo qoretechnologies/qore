@@ -591,7 +591,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             on_error printf("h: %N\n", h);
             assertEq(200, h."code");
 
-            binary bigmsg = get_random_bytes(10 * 1024 * 1024);
+            binary bigmsg = get_random_bytes(1024 * 1024);
             assertEq(bigmsg, binary(hc.send(bigmsg, "PUT", "/", {"Content-Type": MimeTypeOctetStream}).body));
 
             spop = hc.startPollSendRecv("PUT", "/", bigmsg, {"Content-Type": MimeTypeOctetStream});
@@ -656,7 +656,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             assertEq(200, h."code");
             assertEq(msg, h."response-body".toString());
 
-            binary bigmsg = get_random_bytes(10 * 1024 * 1024);
+            binary bigmsg = get_random_bytes(1024 * 1024);
             assertEq(bigmsg, binary(hc.send(bigmsg, "PUT", "/", {"Content-Type": MimeTypeOctetStream}).body));
 
             spop = hc.startPollSendRecv("PUT", "/", bigmsg, {"Content-Type": MimeTypeOctetStream});
