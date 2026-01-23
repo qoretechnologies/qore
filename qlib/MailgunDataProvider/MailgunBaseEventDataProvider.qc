@@ -39,6 +39,7 @@ public class MailgunBaseEventDataProvider inherits MailgunDataProviderBase, Data
                 "short_desc": "The domain to watch for events",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "The Mailgun domain to monitor for events. If not specified, uses the connection's default domain.",
+                "ref_data": "domains",
             },
         };
     }

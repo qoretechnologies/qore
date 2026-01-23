@@ -81,6 +81,7 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
                 "short_desc": "Mailgun sending domain",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "The Mailgun sending domain to use for email operations (e.g., mg.example.com)",
+                "ref_data": "domains",
             },
         };
     }

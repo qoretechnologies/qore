@@ -51,6 +51,7 @@ public class MailgunListMailingListMembersDataProvider inherits MailgunDataProvi
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The email address of the mailing list to get members from",
                 "required": True,
+                "ref_data": "mailing_lists",
             },
             "subscribed": <DataProviderOptionInfo>{
                 "display_name": "Subscribed",
