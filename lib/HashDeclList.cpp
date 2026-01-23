@@ -101,8 +101,9 @@ HashDeclList::HashDeclList(const HashDeclList& old, int64 po, qore_ns_private* n
         typed_hash_decl_private::get(*hd)->setNamespace(ns);
         addInternal(hd);
     }
-    // Update parent pointers to point to hashdecls in this list (not the source list)
-    updateParentPointers();
+    // Update local parent pointers to point to hashdecls in this list (not the source list)
+    // Cross-namespace parents will be resolved later by resolveExternalParentHashDecls()
+    updateLocalParentPointers();
 }
 
 void HashDeclList::mergeUserPublic(const HashDeclList& old, qore_ns_private* ns) {
@@ -118,8 +119,9 @@ void HashDeclList::mergeUserPublic(const HashDeclList& old, qore_ns_private* ns)
         typed_hash_decl_private::get(*hd)->setNamespace(ns);
         addInternal(hd);
     }
-    // Update parent pointers to point to hashdecls in this list (not the source list)
-    updateParentPointers();
+    // Update local parent pointers to point to hashdecls in this list (not the source list)
+    // Cross-namespace parents will be resolved later by resolveExternalParentHashDecls()
+    updateLocalParentPointers();
 }
 
 int HashDeclList::importSystemHashDecls(const HashDeclList& source, qore_ns_private* ns, ExceptionSink* xsink) {
@@ -141,8 +143,9 @@ int HashDeclList::importSystemHashDecls(const HashDeclList& source, qore_ns_priv
             ++cnt;
         }
     }
-    // Update parent pointers to point to hashdecls in this list (not the source list)
-    updateParentPointers();
+    // Update local parent pointers to point to hashdecls in this list (not the source list)
+    // Cross-namespace parents are resolved by the caller using resolveExternalParentHashDecls()
+    updateLocalParentPointers();
     return cnt;
 }
 
@@ -217,7 +220,7 @@ void HashDeclList::parseRemove(const char* name) {
     }
 }
 
-void HashDeclList::updateParentPointers() {
+void HashDeclList::updateLocalParentPointers() {
     for (auto& i : hm) {
         typed_hash_decl_private* hdp = typed_hash_decl_private::get(*i.second);
         // parent_path contains the full namespace path (e.g., "DataProvider::DisplayDescInfo")
@@ -235,28 +238,51 @@ void HashDeclList::updateParentPointers() {
                 // Only update if this is actually the same hashdecl (same namespace path)
                 if (!strcmp(parent_path, typed_hash_decl_private::get(*new_parent)->getPath())) {
                     hdp->setParentHashDecl(new_parent);
-                    continue;
                 }
             }
-            // Parent not found locally or path doesn't match
-            // The original pointer points to the source namespace which may be destroyed
-            // Try to look up the parent by full path in the target namespace tree
-            const qore_ns_private* ns = hdp->getNamespace();
-            if (ns) {
-                qore_root_ns_private* root = const_cast<qore_ns_private*>(ns)->getRoot();
-                if (root) {
-                    const qore_ns_private* parent_ns = nullptr;
-                    const TypedHashDecl* global_parent = qore_root_ns_private::runtimeFindHashDecl(
-                        *root->rns, parent_path, parent_ns);
-                    if (global_parent) {
-                        hdp->setParentHashDecl(global_parent);
-                        continue;
+            // If parent not found locally or path doesn't match, keep the original pointer.
+            // Cross-namespace parents will be resolved by resolveExternalParentHashDecls()
+            // after the entire namespace tree is constructed.
+        }
+    }
+}
+
+void HashDeclList::resolveExternalParentHashDecls(qore_root_ns_private* root) {
+    assert(root);
+    for (auto& i : hm) {
+        typed_hash_decl_private* hdp = typed_hash_decl_private::get(*i.second);
+        const char* parent_path = hdp->getParentHashDeclName();
+        if (parent_path) {
+            // Check if the current parent pointer needs to be resolved
+            const TypedHashDecl* current_parent = hdp->getParentHashDecl();
+            bool needs_resolution = false;
+
+            if (!current_parent) {
+                // Parent pointer is null but parent name is set - needs resolution
+                needs_resolution = true;
+            } else {
+                // Check if the current parent is in our namespace tree
+                const qore_ns_private* parent_ns = typed_hash_decl_private::get(*current_parent)->getNamespace();
+                if (parent_ns) {
+                    const qore_root_ns_private* parent_root = parent_ns->getRoot();
+                    if (parent_root != root) {
+                        // Parent is in a different namespace tree - needs resolution
+                        needs_resolution = true;
                     }
                 }
-                // Root namespace not available yet or parent not found
-                // Keep the original pointer - it may still be valid if the source
-                // namespace hasn't been destroyed yet, or it's a system hashdecl
-                // that lives in a persistent namespace
+            }
+
+            if (needs_resolution) {
+                // Look up the parent by full path in our namespace tree
+                const qore_ns_private* found_ns = nullptr;
+                const TypedHashDecl* new_parent = qore_root_ns_private::runtimeFindHashDecl(
+                    *root->rns, parent_path, found_ns);
+                if (new_parent) {
+                    hdp->setParentHashDecl(new_parent);
+                }
+                // If not found in our tree, keep the original pointer (if any).
+                // This can happen for cross-program references where the parent
+                // is in a different Program (e.g., a module's namespace).
             }
         }
     }

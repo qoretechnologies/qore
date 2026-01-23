@@ -807,9 +807,10 @@ QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, int64 po, con
     }
 }
 
-void QoreNamespaceList::resolveCopy() {
-    for (nsmap_t::iterator i = nsmap.begin(), e = nsmap.end(); i != e; ++i)
-        i->second->priv->classList.resolveCopy();
+void QoreNamespaceList::resolveExternalParentHashDeclsRecursive(qore_root_ns_private* root) {
+    for (auto& i : nsmap) {
+        i.second->priv->resolveExternalParentHashDeclsRecursive(root);
+    }
 }
 
 int QoreNamespaceList::parseInitGlobalVars() {

@@ -794,5 +794,152 @@ class HashDeclTest inherits QUnit::Test {
             assertEq("child_default", result[2]); # local default
             assertEq(20, result[3]);              # local default
         }
+
+        # Test 33: Cross-namespace parent resolution in child Program
+        # This test verifies that when a child Program is created, hashdecl parent
+        # pointers are correctly resolved to point to the copies in the new namespace tree
+        {
+            # Create a child Program that inherits hashdecls
+            Program p(PO_NEW_STYLE);
+
+            # Parse code that uses the inherited hashdecls with cross-namespace parents
+            p.parse("
+                hash<ExtendedInfo> sub test_cross_ns() {
+                    # ExtendedInfo inherits from BaseInfo
+                    # After namespace copy, the parent pointer should be updated
+                    return <ExtendedInfo>{
+                        'name': 'cross_ns_test',
+                        'id': 42,
+                        'created': now(),
+                    };
+                }
+            ", "cross-ns-test");
+
+            hash result = p.callFunction("test_cross_ns");
+            assertEq("cross_ns_test", result.name);  # inherited member
+            assertEq(42, result.id);                  # inherited member
+            assertEq(Type::Date, result.created.type());  # local member
+        }
+
+        # Test 34: Cross-namespace parent resolution with deeply nested inheritance in child Program
+        {
+            Program p(PO_NEW_STYLE);
+
+            p.parse("
+                hash<DeeplyNested> sub test_deep_cross_ns() {
+                    # DeeplyNested inherits from ExtendedInfo which inherits from BaseInfo
+                    return <DeeplyNested>{
+                        'name': 'deep_cross_ns',
+                        'id': 99,
+                        'created': now(),
+                        'value': 2.718,
+                    };
+                }
+            ", "deep-cross-ns-test");
+
+            hash result = p.callFunction("test_deep_cross_ns");
+            assertEq("deep_cross_ns", result.name);   # grandparent member
+            assertEq(99, result.id);                   # grandparent member
+            assertEq(Type::Date, result.created.type()); # parent member
+            assertEq(2.718, result.value);             # local member
+        }
+
+        # Test 35: Cross-namespace parent resolution with runtime importHashDecl
+        # This tests that parent pointers are correctly resolved when importing
+        # hashdecls one at a time at runtime
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import base first, then derived
+            p.importHashDecl("BaseInfo");
+            p.importHashDecl("ExtendedInfo");
+
+            p.parse("
+                list sub test_runtime_import() {
+                    hash<ExtendedInfo> ext({'name': 'runtime_import', 'id': 123, 'created': now()});
+                    return (
+                        ext.name,   # should access inherited member
+                        ext.id,     # should access inherited member
+                    );
+                }
+            ", "runtime-import-test");
+
+            list result = p.callFunction("test_runtime_import");
+            assertEq("runtime_import", result[0]);
+            assertEq(123, result[1]);
+        }
+
+        # Test 36: Cross-namespace parent resolution with importHashDecl - derived first
+        # This tests a potential edge case where derived is imported before parent
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import derived first (parent doesn't exist yet in target)
+            p.importHashDecl("ExtendedInfo");
+            # Now import the parent
+            p.importHashDecl("BaseInfo");
+
+            p.parse("
+                list sub test_reverse_import() {
+                    hash<ExtendedInfo> ext({'name': 'reverse_import', 'id': 456, 'created': now()});
+                    return (
+                        ext.name,
+                        ext.id,
+                    );
+                }
+            ", "reverse-import-test");
+
+            list result = p.callFunction("test_reverse_import");
+            assertEq("reverse_import", result[0]);
+            assertEq(456, result[1]);
+        }
+
+        # Test 37: Multiple sequential imports with parent resolution
+        # Tests that importing hashdecls in batches correctly resolves parents
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import the full inheritance chain
+            p.importHashDecl("BaseInfo");
+            p.importHashDecl("ExtendedInfo");
+            p.importHashDecl("DeeplyNested");
+
+            p.parse("
+                list sub test_batch_import() {
+                    hash<DeeplyNested> deep({'name': 'batch', 'id': 777, 'created': now(), 'value': 1.23});
+                    return (
+                        deep.name,    # grandparent
+                        deep.id,      # grandparent
+                        deep.value,   # local
+                    );
+                }
+            ", "batch-import-test");
+
+            list result = p.callFunction("test_batch_import");
+            assertEq("batch", result[0]);
+            assertEq(777, result[1]);
+            assertEq(1.23, result[2]);
+        }
+
+        # Test 38: Verify type compatibility works after cross-namespace resolution
+        # Derived hashdecl should be assignable to base type after parent resolution
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            p.importHashDecl("BaseInfo");
+            p.importHashDecl("ExtendedInfo");
+
+            p.parse("
+                hash<BaseInfo> sub test_type_compat() {
+                    hash<ExtendedInfo> ext({'name': 'compat', 'id': 888, 'created': now()});
+                    # Assign derived to base - should work after parent resolution
+                    return ext;
+                }
+            ", "type-compat-test");
+
+            hash result = p.callFunction("test_type_compat");
+            assertEq("compat", result.name);
+            assertEq(888, result.id);
+        }
     }
 }
