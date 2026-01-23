@@ -5,7 +5,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -91,7 +91,8 @@ QoreStringNode::QoreStringNode(const BinaryNode* b, size_t maxlinelen) : SimpleV
     //sset.add(this);
 }
 
-QoreStringNode::QoreStringNode(struct qore_string_private *p) : SimpleValueQoreNode(NT_STRING), QoreString(p) {
+QoreStringNode::QoreStringNode(struct qore_string_private *p) : SimpleValueQoreNode(NT_STRING), QoreString() {
+    qore_string_private::adopt(*this, p);
     //sset.add(this);
 }
 
@@ -227,7 +228,7 @@ QoreStringNode* QoreStringNode::substr(qore_offset_t offset, qore_offset_t lengt
 
 QoreStringNode* QoreStringNode::reverse() const {
     QoreStringNode* str = new QoreStringNode(priv->encoding);
-    concat_reverse(str);
+    priv->concat_reverse(*str->priv);
     return str;
 }
 
@@ -261,7 +262,7 @@ QoreStringNode* QoreStringNode::parseBase64UrlToString(ExceptionSink* xsink) con
 }
 
 void QoreStringNode::getStringRepresentation(QoreString &str) const {
-    str.concat(static_cast<const QoreString*>(this));
+    qore_string_private::get(str)->concat(this);
 }
 
 // if del is true, then the returned DateTime * should be deleted, if false, then it should not

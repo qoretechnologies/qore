@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -381,29 +381,7 @@ public:
     // lock not held on entry
     DLLLOCAL void doDeleteIntern(ExceptionSink* xsink);
 
-    DLLLOCAL void cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm) {
-        if (privateData) {
-            printd(5, "qore_object_private::cleanup() this: %p privateData: %p\n", this, privateData);
-            privateData->derefAll(xsink);
-            delete privateData;
-#ifdef DEBUG
-            privateData = nullptr;
-#endif
-        }
-
-        if (td) {
-            td->clear(xsink, true);
-            td->deref(xsink);
-        }
-
-        if (cdm) {
-            for (auto& i : *cdm) {
-                i.second->clear(xsink, true);
-                i.second->deref(xsink);
-            }
-            delete cdm;
-        }
-    }
+    DLLLOCAL void cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm);
 
     // this method is called when there is an exception in a constructor and the object should be deleted
     DLLLOCAL void obliterate(ExceptionSink* xsink) {

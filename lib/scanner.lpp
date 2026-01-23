@@ -46,6 +46,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ModuleInfo.h"
@@ -282,7 +283,7 @@ static void scanner_process_path(QoreString& npath, char* ip) {
                 //printd(5, "OK: adding '%s' to path list\n", sp);
                 if (npath.strlen())
                    npath.concat(':');
-                npath.concat(&tpath);
+                qore_string_private::get(npath)->concat(&tpath);
              }
 
              if (!*p)
@@ -325,7 +326,7 @@ static QoreString* get_include_file_name(char* file) {
         if (SystemEnvironment::get(var.c_str(), val)) {
             rv->concat(file);
         } else {
-            rv->concat(&val);
+            qore_string_private::get(rv)->concat(&val);
             rv->concat(file + var.size() + 1);
         }
 

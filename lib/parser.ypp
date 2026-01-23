@@ -36,6 +36,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/BreakStatement.h"
 #include "qore/intern/ContinueStatement.h"
 #include "qore/intern/ReturnStatement.h"
@@ -4647,7 +4648,7 @@ string:
     }
     | QUOTED_WORD string {
         $$ = $1;
-        $$->concat($2);
+        qore_string_private::get($$)->concat($2);
         $2->deref();
     }
     ;

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/typed_hash_decl_private.h"
 
 QoreString QoreHashObjectDereferenceOperatorNode::op_str(". or {} operator expression");
@@ -213,7 +214,7 @@ QoreValue QoreHashObjectDereferenceOperatorNode::evalImpl(bool& needs_deref, Exc
         const QoreHashNode* h = lh->get<const QoreHashNode>();
 
         if (rh->getType() == NT_LIST)
-            return h->getSlice(rh->get<const QoreListNode>(), xsink);
+            return qore_hash_private::get(*h)->getSlice(rh->get<const QoreListNode>(), xsink);
 
         QoreStringNodeValueHelper key(*rh);
         QoreValue v = h->getKeyValue(**key, xsink);

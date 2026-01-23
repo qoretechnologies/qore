@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Techologies s.r.o.
+    Copyright (C) 2003 - 2026 Qore Techologies s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 
 QoreString QoreRemoveOperatorNode::remove_str("remove operator expression");
 
@@ -39,7 +40,7 @@ QoreString* QoreRemoveOperatorNode::getAsString(bool &del, int foff, ExceptionSi
 }
 
 int QoreRemoveOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    str.concat(&remove_str);
+    qore_string_private::get(str)->concat(&remove_str);
     return 0;
 }
 

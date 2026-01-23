@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreBigIntNode.h>
 #include <qore/QoreBigFloatNode.h>
+#include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 
@@ -632,15 +633,16 @@ AbstractQoreNode* QoreValue::takeIfNode() {
 
 int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xsink) const {
     if (isNothing()) {
-        str.concat((format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
-            ? &YamlNullString : &NothingTypeString);
+        qore_string_private::get(str)->concat(
+            (format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
+                ? &YamlNullString : &NothingTypeString);
         return 0;
     }
 
     if (isInt()) {
         str.sprintf(QLLD, getInt());
     } else if (isBool()) {
-        str.concat(getBool() ? &TrueString : &FalseString);
+        qore_string_private::get(str)->concat(getBool() ? &TrueString : &FalseString);
     } else if (isFloat()) {
         size_t offset = str.size();
         str.sprintf("%.9g", getDouble());

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 
 QoreString YamlNullString("null");
 
@@ -50,7 +51,8 @@ QoreValue QoreNothingNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) con
 // use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using these functions directly
 // returns -1 for exception raised, 0 = OK
 int QoreNothingNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    str.concat((foff == FMT_YAML_SHORT || foff <= FMT_YAML_LONG) ? &YamlNullString : &NothingTypeString);
+    qore_string_private::get(str)->concat(
+        (foff == FMT_YAML_SHORT || foff <= FMT_YAML_LONG) ? &YamlNullString : &NothingTypeString);
     return 0;
 }
 

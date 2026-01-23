@@ -38,6 +38,7 @@ extern QoreListNode* ARGV, * QORE_ARGV;
 extern QoreHashNode* ENV;
 
 #include "qore/intern/ParserSupport.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QC_AutoReadLock.h"
 #include "qore/intern/QC_AutoWriteLock.h"
@@ -1402,8 +1403,9 @@ public:
     DLLLOCAL QoreHashNode* clearThreadData(ExceptionSink* xsink) {
         QoreHashNode* h = thread_local_storage->get();
         printd(5, "QoreProgram::clearThreadData() this: %p h: %p (size: %d)\n", this, h, h ? h->size() : 0);
-        if (h)
-            h->clear(xsink);
+        if (h) {
+            qore_hash_private::clear(*h, xsink);
+        }
         return h;
     }
 

@@ -44,6 +44,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/CompressionTransforms.h"
 
@@ -2928,7 +2929,7 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char*
         // issue #3818: consume any ssl_err_str remaining
         if (qs.ssl_err_str) {
             errstr->concat(": ");
-            errstr->concat(qs.ssl_err_str);
+            qore_string_private::get(*errstr)->concat(qs.ssl_err_str);
             qs.ssl_err_str->deref();
             qs.ssl_err_str = nullptr;
         }
