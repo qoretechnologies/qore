@@ -1464,6 +1464,7 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 qore_user_module("qlib/DatasourceProvider.qm" "")
 qore_user_module("qlib/DebugUtil.qm" "")
 qore_user_module("qlib/FsUtil.qm" "")
+qore_user_module("qlib/HttpStreamClient.qm" "")
 qore_user_module("qlib/Qdx.qm" "")
 qore_user_module("qlib/Qorize.qm" "")
 qore_user_module("qlib/QoreRepl" "")
@@ -1596,11 +1597,11 @@ qore_user_module("qlib/GmailDataProvider" "GoogleDataProvider;GoogleRestClient;R
         set(QORE_LANG_DOC_TAGFILES "")
     foreach(mod ${QORE_USER_MODULE_NAMES})
         # Tag file is generated in build root as {mod}.tag
-        # Relative path to module html from lang html: ../modules/{mod}/html
-        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../modules/${mod}/html\"")
+        # Relative path to module html from lang html: ../../modules/{mod}/html
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../../modules/${mod}/html\"")
     endforeach()
     # Add binary module tag files required for lang cross-references.
-    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../modules/logger_bin/html\"")
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../../modules/logger_bin/html\"")
     set(QORE_LANG_DOC_PREDEFINED "QORE_LANG_FINAL" CACHE INTERNAL "Preprocessor definitions for lang docs (final pass)")
     set(QORE_LANG_DOC_SECTIONS "QORE_LANG_FINAL" CACHE INTERNAL "Enabled sections for lang docs (final pass)")
     message(STATUS "Configuring Doxyfile for lang final pass with module cross-references")
