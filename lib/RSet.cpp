@@ -567,6 +567,20 @@ bool RSetHelper::makeChain(int i, omap_t::iterator fi, int tid) {
             mergeRSet(i, fi->second.rset);
         }
     }
+
+    // Count the forward-edge from the last object in the chain to the target object (fi)
+    // This edge wasn't counted because fi was already finalized when first encountered
+    if (!ovec.empty() && ovec.back()->second.rset == fi->second.rset) {
+        printd(QRO_LVL, " + %p '%s': counting forward-edge to %p '%s' (rcount: %d -> %d)\n",
+            ovec.back()->first, ovec.back()->first->getName(),
+            fi->first, fi->first->getName(),
+            fi->second.rcount, fi->second.rcount + 1);
+        ++fi->second.rcount;
+#ifdef _QORE_CYCLE_CHECK
+        setObjectScanContext(*fi->first, fi->second.rcount);
+#endif
+    }
+
     return false;
 }
 
