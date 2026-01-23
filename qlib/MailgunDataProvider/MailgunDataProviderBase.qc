@@ -94,6 +94,9 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
 
         #! The default domain for API calls
         *string api_domain;
+
+        #! The webhook signing key (defaults to API key)
+        *string webhook_signing_key;
     }
 
     #! Creates the object with no arguments for child classes
@@ -113,8 +116,10 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
         self.conn = conn;
         rest = conn.get(True);
         @assert(rest, "REST client from connection cannot be null");
-        # Get api_domain from connection options
-        api_domain = conn.getConnectionOptions().api_domain;
+        # Get options from connection
+        hash<auto> conn_opts = conn.getConnectionOptions();
+        api_domain = conn_opts.api_domain;
+        webhook_signing_key = conn_opts.apikey;
     }
 
     #! Creates the object with options
@@ -126,6 +131,8 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
             hash<auto> client_opts = copts.mailgunrestclient_options ?? {};
             if (copts.apikey) {
                 client_opts.apikey = copts.apikey;
+                # Store API key as webhook signing key (can be overridden)
+                webhook_signing_key = copts.apikey;
             }
             if (copts.api_region) {
                 client_opts.api_region = copts.api_region;
@@ -151,6 +158,20 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
     #! Returns the configured API domain
     *string getApiDomain() {
         return api_domain;
+    }
+
+    #! Returns the webhook signing key
+    /** Used for verifying Mailgun webhook signatures. Defaults to the API key.
+    */
+    *string getWebhookSigningKey() {
+        return webhook_signing_key;
+    }
+
+    #! Sets the webhook signing key
+    /** @param key the webhook signing key (if different from API key)
+    */
+    setWebhookSigningKey(string key) {
+        webhook_signing_key = key;
     }
 
     #! Sets the logger for the data provider

@@ -83,8 +83,11 @@ public class MailgunBaseEventDataProvider inherits MailgunDataProviderBase, Data
         # Get domain from context if not provided
         if (!domain) {
             *hash<auto> ctx = DataProvider::DataProviderDataContextHelper::getHash();
+            # Check both "domain" (LocalOptions) and "api_domain" (BaseConstructorOptions)
             if (ctx.domain) {
                 domain = ctx.domain;
+            } else if (ctx.api_domain) {
+                domain = ctx.api_domain;
             }
         }
         if (!domain) {
@@ -183,6 +186,12 @@ public class MailgunBaseEventDataProvider inherits MailgunDataProviderBase, Data
         string event_type = getEventType();
         log(LoggerLevel::DEBUG, "handleWebhookEvent: received %s event for domain %s", event_type, domain);
 
+        # Verify webhook signature for security
+        if (!verifyWebhookSignature(payload)) {
+            log(LoggerLevel::ERROR, "handleWebhookEvent: invalid webhook signature, rejecting event");
+            return;
+        }
+
         # Mailgun webhook payload contains event-data
         hash<auto> event_data = payload."event-data" ?? payload;
 
@@ -210,6 +219,53 @@ public class MailgunBaseEventDataProvider inherits MailgunDataProviderBase, Data
         transformed += getEventSpecificFields(event_data);
 
         notifyObservers(event_type, transformed);
+    }
+
+    #! Verifies the Mailgun webhook signature
+    /** Mailgun signs webhooks using HMAC-SHA256 with the webhook signing key (typically the API key).
+        The signature is computed as: HMAC-SHA256(timestamp + token, signing_key)
+
+        @param payload the webhook payload containing the signature block
+        @return True if signature is valid, False otherwise
+    */
+    private bool verifyWebhookSignature(hash<auto> payload) {
+        # Get the signature block from the payload
+        *hash<auto> sig = payload.signature;
+        if (!sig) {
+            log(LoggerLevel::WARN, "verifyWebhookSignature: no signature block in payload");
+            return False;
+        }
+
+        # Extract signature components
+        *string timestamp = string(sig.timestamp);
+        *string token = sig.token;
+        *string signature = sig.signature;
+
+        if (!timestamp || !token || !signature) {
+            log(LoggerLevel::WARN, "verifyWebhookSignature: missing signature components");
+            return False;
+        }
+
+        # Get the webhook signing key
+        *string signing_key = getWebhookSigningKey();
+        if (!signing_key) {
+            log(LoggerLevel::WARN, "verifyWebhookSignature: no webhook signing key configured, skipping verification");
+            # Allow through if no signing key is configured (for backwards compatibility)
+            return True;
+        }
+
+        # Compute expected signature: HMAC-SHA256(timestamp + token, signing_key)
+        string data = timestamp + token;
+        string expected_signature = hmac("sha256", signing_key, data).toHex().lwr();
+
+        # Compare signatures
+        if (expected_signature != signature.lwr()) {
+            log(LoggerLevel::WARN, "verifyWebhookSignature: signature mismatch");
+            return False;
+        }
+
+        log(LoggerLevel::DEBUG, "verifyWebhookSignature: signature verified successfully");
+        return True;
     }
 
     #! Returns event-specific fields from the payload

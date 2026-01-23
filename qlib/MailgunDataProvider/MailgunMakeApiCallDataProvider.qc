@@ -68,7 +68,8 @@ public class MailgunMakeApiCallRequestDataType inherits HashDataType {
                 "type": AutoHashOrNothingType,
                 "display_name": "Request Body",
                 "short_desc": "The request body",
-                "desc": "The request body for POST/PUT requests (will be form-encoded)",
+                "desc": "The request body for POST/PUT requests. POST requests are form-encoded; "
+                    "PUT requests are sent as JSON.",
             },
             "query_params": {
                 "type": AutoHashOrNothingType,
@@ -88,17 +89,12 @@ public class MailgunMakeApiCallRequestDataType inherits HashDataType {
 public class MailgunMakeApiCallResponseDataType inherits HashDataType {
     private {
         const Fields = {
-            "status_code": {
-                "type": IntOrNothingType,
-                "display_name": "Status Code",
-                "short_desc": "HTTP status code",
-                "desc": "The HTTP status code of the response",
-            },
             "body": {
                 "type": AutoHashOrNothingType,
                 "display_name": "Response Body",
                 "short_desc": "The response body",
-                "desc": "The JSON response body from the API",
+                "desc": "The JSON response body from the API. Errors throw exceptions, so successful "
+                    "responses always indicate a 2xx status code.",
             },
         };
     }
