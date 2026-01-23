@@ -949,8 +949,11 @@ void qore_program_private::runtimeImportSystemHashDecls(ExceptionSink* xsink) {
     ProgramRuntimeParseAccessHelper rah(xsink, pgm);
 
     runtimeImportSystemHashDeclsIntern(*spgm->priv, xsink);
+    // Resolve cross-namespace parent hashdecl pointers after import
+    qore_root_ns_private* rpriv = qore_root_ns_private::get(*RootNS);
+    rpriv->resolveExternalParentHashDeclsRecursive(rpriv);
     // issue #3461: must rebuild all indexes here or symbols will appear missing
-    qore_root_ns_private::get(*RootNS)->rebuildAllIndexes();
+    rpriv->rebuildAllIndexes();
 }
 
 void qore_program_private::runtimeImportSystemConstants(ExceptionSink* xsink) {
@@ -1134,6 +1137,13 @@ void qore_program_private::importHashDecl(ExceptionSink* xsink, qore_program_pri
         //printd(5, "qore_program_private::importHashDecl() this: %p path: %s nspath: %s tns: %p %s RootNS: %p %s\n",
         //  this, path, nspath.c_str(), tns, tns->getName(), RootNS, RootNS->getName());
         qore_root_ns_private::runtimeImportHashDecl(*RootNS, xsink, *tns, hd, from_pgm.pgm, set_pub, new_name);
+    }
+
+    // Resolve cross-namespace parent hashdecl pointer after import
+    // The imported hashdecl may have a parent in a different namespace
+    if (!*xsink) {
+        qore_root_ns_private* rpriv = qore_root_ns_private::get(*RootNS);
+        qore_ns_private::get(*tns)->hashDeclList.resolveExternalParentHashDecls(rpriv);
     }
 }
 

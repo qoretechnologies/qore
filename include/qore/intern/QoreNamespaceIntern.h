@@ -301,6 +301,15 @@ public:
         nsl.reset();
     }
 
+    //! Recursively resolves cross-namespace parent hashdecl pointers in this namespace and all child namespaces
+    /** This must be called after the entire namespace tree is constructed.
+        @param root the root namespace to use for lookups
+    */
+    DLLLOCAL void resolveExternalParentHashDeclsRecursive(qore_root_ns_private* root) {
+        hashDeclList.resolveExternalParentHashDecls(root);
+        nsl.resolveExternalParentHashDeclsRecursive(root);
+    }
+
     DLLLOCAL qore_root_ns_private* getRoot() {
         qore_ns_private* w = this;
         while (w->parent) {
@@ -1994,6 +2003,16 @@ public:
         qore_root_ns_private* rpriv = new qore_root_ns_private(*this, po, pgm, rv);
         rv->priv = rv->rpriv = rpriv;
         rpriv->rns = rv;
+        // Resolve cross-namespace parent hashdecl pointers now that the tree is complete.
+        //
+        // NOTE: Classes don't need this resolution because cross-namespace parent classes
+        // (system classes, module classes) live in persistent namespaces that aren't
+        // copied or destroyed. Hashdecls are different - when a hashdecl with a cross-
+        // namespace parent is copied, the parent pointer still references the source
+        // namespace tree. If both parent and child hashdecls are copied to the new tree,
+        // we need to update the child's parent pointer to reference the copy in the new
+        // tree, not the original in the source tree (which may be destroyed).
+        rpriv->resolveExternalParentHashDeclsRecursive(rpriv);
         return rv;
     }
 
