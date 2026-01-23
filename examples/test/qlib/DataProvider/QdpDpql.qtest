@@ -33,10 +33,13 @@ public class QdpDpqlTest inherits QUnit::Test {
         addTestCase("DPQL search returns empty list when no match", \dpqlSearchEmpty());
         addTestCase("DPQL search rejects invalid syntax", \dpqlInvalidSyntax());
         addTestCase("DPQL search rejects unknown field", \dpqlUnknownField());
+        addTestCase("DPQL search rejects expressions without fields", \dpqlNoFieldRefs());
         addTestCase("DPQL empty expression with hash", \dpqlEmptyHash());
         addTestCase("DPQL empty expression with dash", \dpqlEmptyDash());
         addTestCase("DPQL empty expression with empty string", \dpqlEmptyString());
+        addTestCase("DPQL legacy fallback for qdp", \dpqlLegacyFallback());
         addTestCase("DPQL conflicts with legacy expressions", \dpqlLegacyConflict());
+        addTestCase("DPQL error output is not duplicated", \dpqlErrorDedup());
         addTestCase("DPQL help output", \dpqlHelp());
 %endif
 
@@ -159,6 +162,15 @@ public class QdpDpqlTest inherits QUnit::Test {
         assertTrue(result.err =~ /Unknown field/);
     }
 
+    private dpqlNoFieldRefs() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("input_2 == \"number 1\""));
+        hash<auto> result = runQdp(args);
+        assertTrue(result.rc != 0);
+        assertTrue(result.err =~ /does not reference any server fields/);
+    }
+
     private dpqlEmptyHash() {
         string args = sprintf("-m CsvUtil -Y -q %s search %s",
             shellQuote(getProviderSpec()),
@@ -182,10 +194,29 @@ public class QdpDpqlTest inherits QUnit::Test {
         assertEq(2, data.size());
     }
 
+    private dpqlLegacyFallback() {
+        string args = sprintf("-m CsvUtil -Y %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("name=John"));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(1, data.size());
+        assertEq("John", data[0].name);
+    }
+
     private dpqlLegacyConflict() {
         hash<auto> result = runQdp("-q -x");
         assertTrue(result.rc != 0);
         assertTrue(result.err =~ /mutually exclusive/);
+    }
+
+    private dpqlErrorDedup() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("@name = \"John\""));
+        hash<auto> result = runQdp(args);
+        assertTrue(result.rc != 0);
+        int count = result.err.split("\n  - Invalid operator").size() - 1;
+        assertEq(1, count);
     }
 
     private dpqlHelp() {

@@ -1569,7 +1569,19 @@ class QdpCmd {
         }
 
         if (QdpCmd::isDpqlCandidate(arg)) {
-            return QdpCmd::parseDpqlExpression(arg, provider, DataProviderDataContextHelper::getHash());
+            hash<auto> parsed = QdpCmd::parseDpqlExpressionWithErrors(arg, provider,
+                DataProviderDataContextHelper::getHash());
+            if (!parsed.errors) {
+                return parsed.expression;
+            }
+            # Legacy fallback is only for qdp auto-detection (no --dpql / --expressions).
+            if (!opts.dpql && !opts.exp) {
+                *hash<auto> legacy = QdpCmd::tryGetHashValue(arg);
+                if (legacy) {
+                    return legacy;
+                }
+            }
+            QdpCmd::error(QdpCmd::formatDpqlErrors(parsed.errors, parsed.diagnostics, arg));
         }
 
         return QdpCmd::getHashIntern(arg, action, required);
@@ -1588,8 +1600,21 @@ class QdpCmd {
 
     static *hash<DataProviderExpression> parseDpqlExpression(string dpql, *AbstractDataProvider provider,
             *hash<auto> action_opts) {
+        hash<auto> parsed = QdpCmd::parseDpqlExpressionWithErrors(dpql, provider, action_opts);
+        if (parsed.errors) {
+            QdpCmd::error(QdpCmd::formatDpqlErrors(parsed.errors, parsed.diagnostics, dpql));
+        }
+        return parsed.expression;
+    }
+
+    static hash<auto> parseDpqlExpressionWithErrors(string dpql, *AbstractDataProvider provider,
+            *hash<auto> action_opts) {
         if (QdpCmd::isEmptyDpqlExpression(dpql)) {
-            return;
+            return {
+                "expression": NOTHING,
+                "diagnostics": (),
+                "errors": (),
+            };
         }
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
         if (provider) {
@@ -1603,11 +1628,27 @@ class QdpCmd {
                 diagnostics += DataProvider::validateDpqlExpression(dpql, fields, expressions);
             }
         }
+        diagnostics = QdpCmd::dedupeDpqlDiagnostics(diagnostics);
         list<hash<DpqlDiagnostic>> errors = QdpCmd::getDpqlErrors(diagnostics);
-        if (!result.success || errors) {
-            QdpCmd::error(QdpCmd::formatDpqlErrors(errors, diagnostics, dpql));
+        if (result.success && result.expression && !QdpCmd::hasDpqlFieldReferences(result.expression)) {
+            hash<DpqlDiagnostic> diag = <DpqlDiagnostic>{
+                "severity": "error",
+                "message": "DPQL expression does not reference any server fields; use @field or legacy search syntax",
+                "code": "DPQL-E020",
+                "line": 1,
+                "column": 1,
+                "end_line": 1,
+                "end_column": 1,
+            };
+            diagnostics += diag;
+            errors += diag;
         }
-        return result.expression;
+        errors = QdpCmd::dedupeDpqlDiagnostics(errors);
+        return {
+            "expression": result.expression,
+            "diagnostics": diagnostics,
+            "errors": errors,
+        };
     }
 
     static list<hash<DpqlDiagnostic>> getDpqlErrors(list<hash<DpqlDiagnostic>> diagnostics) {
@@ -1615,6 +1656,22 @@ class QdpCmd {
             return ();
         }
         return select diagnostics, $1.severity == "error";
+    }
+
+    static list<hash<DpqlDiagnostic>> dedupeDpqlDiagnostics(list<hash<DpqlDiagnostic>> diagnostics) {
+        if (!diagnostics) {
+            return ();
+        }
+        hash<string, bool> seen = {};
+        list<hash<DpqlDiagnostic>> rv = ();
+        foreach hash<DpqlDiagnostic> diag in (diagnostics) {
+            string key = sprintf("%s|%s|%d|%d|%s", diag.severity, diag.code, diag.line, diag.column, diag.message);
+            if (!seen{key}) {
+                seen{key} = True;
+                rv += diag;
+            }
+        }
+        return rv;
     }
 
     static string formatDpqlErrors(list<hash<DpqlDiagnostic>> errors, list<hash<DpqlDiagnostic>> diagnostics,
@@ -1637,6 +1694,29 @@ class QdpCmd {
             msg += sprintf(" (line %d, column %d)", errors[0].line, errors[0].column);
         }
         return msg;
+    }
+
+    static bool hasDpqlFieldReferences(hash<DataProviderExpression> exp) {
+        if (!exp) {
+            return False;
+        }
+        if (exp.hasKey("field")) {
+            return True;
+        }
+        if (!exp.args) {
+            return False;
+        }
+        foreach auto arg in (exp.args) {
+            if (arg.typeCode() == NT_HASH) {
+                if (arg.hasKey("field")) {
+                    return True;
+                }
+                if (arg.hasKey("exp") && QdpCmd::hasDpqlFieldReferences(arg)) {
+                    return True;
+                }
+            }
+        }
+        return False;
     }
 
     static string sanitizeDpqlErrorMessage(string message, string dpql) {
@@ -1677,6 +1757,21 @@ class QdpCmd {
     static *hash<auto> getHash(string action, *bool required) {
         auto arg = shift ARGV;
         return getHashIntern(arg, action, required);
+    }
+
+    static *hash<auto> tryGetHashValue(string text) {
+        if (!exists text) {
+            return;
+        }
+        try {
+            auto val = parse_to_qore_value(text);
+            if (exists val && val.typeCode() == NT_HASH) {
+                return val;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # no-op: only used for fallback detection
+        }
+        return;
     }
 
     static *hash<auto> getHashIntern(auto arg, string action, *bool required) {
