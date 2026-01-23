@@ -1,0 +1,536 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore MailgunDataProvider module definition
+
+/*  MailgunDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# strict argument handling
+%strict-args
+# enable all warnings
+%enable-all-warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) MailgunRestClient
+%requires json
+
+module MailgunDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Mailgun email services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new MailgunDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": MailgunDataProvider::AppName,
+            "display_name": "Mailgun",
+            "short_desc": "Mailgun email delivery and management service",
+            "desc": "Mailgun is a powerful email API service for sending, receiving, and tracking emails. "
+                "This integration enables sending transactional emails, managing mailing lists, validating "
+                "email addresses, and receiving webhooks for email events.\n\n"
+                "**Features:**\n"
+                "- Send transactional and marketing emails\n"
+                "- Email validation to verify addresses\n"
+                "- Mailing list management\n"
+                "- Inbound email routing\n"
+                "- Event tracking via webhooks",
+            "scheme": "mailgun",
+            "logo": MailgunLogo,
+            "logo_file_name": "mailgun-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Email,),
+        });
+
+        # ========== EMAIL ACTIONS ==========
+
+        # Send Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/send-email",
+            "action": "send-email",
+            "groups": "Email",
+            "display_name": "Send Email",
+            "short_desc": "Send an email via Mailgun",
+            "desc": "Send a transactional email through Mailgun. Supports HTML content, text content, "
+                "tracking options, and custom headers.",
+            "action_code": DPAT_API,
+            "data_provider_info": MailgunSendEmailDataProvider::ProviderInfo,
+        });
+
+        # Validate Email
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/validate-email",
+            "action": "validate-email",
+            "groups": "Email",
+            "display_name": "Validate Email",
+            "short_desc": "Validate an email address",
+            "desc": "Validate an email address using Mailgun's email validation API. Returns information "
+                "about deliverability, risk assessment, and suggested corrections.",
+            "action_code": DPAT_API,
+            "data_provider_info": MailgunValidateEmailDataProvider::ProviderInfo,
+        });
+
+        # Make API Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/make-api-call",
+            "action": "make-api-call",
+            "groups": "Utility",
+            "display_name": "Make API Call",
+            "short_desc": "Make a generic API call",
+            "desc": "Make a generic API call to the Mailgun API. This allows accessing API endpoints "
+                "not covered by other actions.",
+            "action_code": DPAT_API,
+            "data_provider_info": MailgunMakeApiCallDataProvider::ProviderInfo,
+        });
+
+        # ========== MAILING LIST ACTIONS ==========
+
+        # Add Mailing List Member
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/add-mailing-list-member",
+            "action": "add-mailing-list-member",
+            "groups": "Mailing Lists",
+            "display_name": "Add Mailing List Member",
+            "short_desc": "Add a member to a mailing list",
+            "desc": "Add a new member to a Mailgun mailing list. Supports custom variables and upsert mode.",
+            "action_code": DPAT_API,
+            "data_provider_info": MailgunAddMailingListMemberDataProvider::ProviderInfo,
+            "options": {
+                "list_address": <ActionOptionInfo>{
+                    "display_name": "Mailing List",
+                    "short_desc": "The mailing list to add the member to",
+                    "desc": "Select the mailing list to add the member to",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "mailing_lists",
+                },
+            },
+        });
+
+        # Get Mailing List Member
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/get-mailing-list-member",
+            "action": "get-mailing-list-member",
+            "groups": "Mailing Lists",
+            "display_name": "Get Mailing List Member",
+            "short_desc": "Get a member from a mailing list",
+            "desc": "Retrieve a specific member from a Mailgun mailing list by their email address.",
+            "action_code": DPAT_API,
+            "data_provider_info": MailgunGetMailingListMemberDataProvider::ProviderInfo,
+            "options": {
+                "list_address": <ActionOptionInfo>{
+                    "display_name": "Mailing List",
+                    "short_desc": "The mailing list to get the member from",
+                    "desc": "Select the mailing list to get the member from",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "mailing_lists",
+                },
+            },
+        });
+
+        # Delete Mailing List Member
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/delete-mailing-list-member",
+            "action": "delete-mailing-list-member",
+            "groups": "Mailing Lists",
+            "display_name": "Delete Mailing List Member",
+            "short_desc": "Remove a member from a mailing list",
+            "desc": "Remove a member from a Mailgun mailing list by their email address.",
+            "action_code": DPAT_API,
+            "data_provider_info": MailgunDeleteMailingListMemberDataProvider::ProviderInfo,
+            "options": {
+                "list_address": <ActionOptionInfo>{
+                    "display_name": "Mailing List",
+                    "short_desc": "The mailing list to remove the member from",
+                    "desc": "Select the mailing list to remove the member from",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "mailing_lists",
+                },
+            },
+        });
+
+        # List Mailing List Members
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/list-mailing-list-members",
+            "action": "list-mailing-list-members",
+            "groups": "Mailing Lists",
+            "display_name": "List Mailing List Members",
+            "short_desc": "List members of a mailing list",
+            "desc": "List all members of a Mailgun mailing list with optional filtering by subscription status.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": MailgunListMailingListMembersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("MemberList", new MailgunMailingListMemberDataType(), True);
+            },
+            "options": {
+                "list_address": <ActionOptionInfo>{
+                    "display_name": "Mailing List",
+                    "short_desc": "The mailing list to list members from",
+                    "desc": "Select the mailing list to list members from",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "mailing_lists",
+                },
+                "subscribed": <ActionOptionInfo>{
+                    "display_name": "Subscribed",
+                    "short_desc": "Filter by subscription status",
+                    "desc": "Filter members by subscription status",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "desc": "Maximum number of members to return",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "example_value": 100,
+                },
+            },
+        });
+
+        # ========== ROUTE ACTIONS ==========
+
+        # Create Route
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/create-route",
+            "action": "create-route",
+            "groups": "Routes",
+            "display_name": "Create Route",
+            "short_desc": "Create an inbound email route",
+            "desc": "Create a new inbound email route for processing incoming emails. Routes use expressions "
+                "to match incoming messages and execute actions like forwarding or storing.",
+            "action_code": DPAT_API,
+            "data_provider_info": MailgunCreateRouteDataProvider::ProviderInfo,
+        });
+
+        # ========== DOMAIN ACTIONS ==========
+
+        # List Domains
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/domains",
+            "action": "list-domains",
+            "groups": "Domains",
+            "display_name": "List Domains",
+            "short_desc": "List all sending domains",
+            "desc": "List all domains configured in your Mailgun account with optional filtering by state.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": MailgunDomainsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("DomainList", new MailgunDomainDataType(), True);
+            },
+            "options": {
+                "state": <ActionOptionInfo>{
+                    "display_name": "State",
+                    "short_desc": "Filter by domain state",
+                    "desc": "Filter domains by state (active, unverified, disabled)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "active",
+                            "desc": "Active domains",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "unverified",
+                            "desc": "Unverified domains",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "disabled",
+                            "desc": "Disabled domains",
+                        },
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "desc": "Maximum number of domains to return",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "example_value": 100,
+                },
+            },
+        });
+
+        # ========== TRIGGER ACTIONS (EVENTS) ==========
+
+        # Clicked Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/events/clicked",
+            "action": EVENT_CLICKED,
+            "groups": "Triggers",
+            "display_name": "Email Link Clicked",
+            "short_desc": "Trigger when a link in an email is clicked",
+            "desc": "Fires when a recipient clicks a link in an email. Provides information about "
+                "the clicked URL, recipient, and client information.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CLICKED,
+            "data_provider_info": MailgunClickedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new MailgunClickedEventDataType(); },
+            "options": {
+                "api_domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "The domain to watch for events",
+                    "desc": "Select the domain to monitor for click events",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "domains",
+                },
+            },
+        });
+
+        # Delivered Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/events/delivered",
+            "action": EVENT_DELIVERED,
+            "groups": "Triggers",
+            "display_name": "Email Delivered",
+            "short_desc": "Trigger when an email is delivered",
+            "desc": "Fires when an email is successfully delivered to the recipient's mail server.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_DELIVERED,
+            "data_provider_info": MailgunDeliveredEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new MailgunDeliveredEventDataType(); },
+            "options": {
+                "api_domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "The domain to watch for events",
+                    "desc": "Select the domain to monitor for delivery events",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "domains",
+                },
+            },
+        });
+
+        # Opened Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/events/opened",
+            "action": EVENT_OPENED,
+            "groups": "Triggers",
+            "display_name": "Email Opened",
+            "short_desc": "Trigger when an email is opened",
+            "desc": "Fires when a recipient opens an email. Provides information about "
+                "the recipient and client information.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_OPENED,
+            "data_provider_info": MailgunOpenedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new MailgunOpenedEventDataType(); },
+            "options": {
+                "api_domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "The domain to watch for events",
+                    "desc": "Select the domain to monitor for open events",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "domains",
+                },
+            },
+        });
+
+        # Permanent Failure Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/events/permanent-fail",
+            "action": EVENT_PERMANENT_FAIL,
+            "groups": "Triggers",
+            "display_name": "Permanent Failure",
+            "short_desc": "Trigger on permanent delivery failure (hard bounce)",
+            "desc": "Fires when an email permanently fails to deliver (hard bounce). This typically "
+                "indicates an invalid email address or blocked domain.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PERMANENT_FAIL,
+            "data_provider_info": MailgunPermanentFailEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new MailgunPermanentFailEventDataType(); },
+            "options": {
+                "api_domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "The domain to watch for events",
+                    "desc": "Select the domain to monitor for permanent failure events",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "domains",
+                },
+            },
+        });
+
+        # Temporary Failure Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/events/temporary-fail",
+            "action": EVENT_TEMPORARY_FAIL,
+            "groups": "Triggers",
+            "display_name": "Temporary Failure",
+            "short_desc": "Trigger on temporary delivery failure (soft bounce)",
+            "desc": "Fires when an email temporarily fails to deliver (soft bounce). Mailgun will "
+                "retry delivery automatically.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TEMPORARY_FAIL,
+            "data_provider_info": MailgunTemporaryFailEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new MailgunTemporaryFailEventDataType(); },
+            "options": {
+                "api_domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "The domain to watch for events",
+                    "desc": "Select the domain to monitor for temporary failure events",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "domains",
+                },
+            },
+        });
+
+        # Complained Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/events/complained",
+            "action": EVENT_COMPLAINED,
+            "groups": "Triggers",
+            "display_name": "Spam Complaint",
+            "short_desc": "Trigger when an email is marked as spam",
+            "desc": "Fires when a recipient marks an email as spam. Consider removing the recipient "
+                "from future mailings to maintain sender reputation.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_COMPLAINED,
+            "data_provider_info": MailgunComplainedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new MailgunComplainedEventDataType(); },
+            "options": {
+                "api_domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "The domain to watch for events",
+                    "desc": "Select the domain to monitor for spam complaint events",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "domains",
+                },
+            },
+        });
+
+        # Unsubscribed Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MailgunDataProvider::AppName,
+            "path": "/events/unsubscribed",
+            "action": EVENT_UNSUBSCRIBED,
+            "groups": "Triggers",
+            "display_name": "Unsubscribed",
+            "short_desc": "Trigger when a recipient unsubscribes",
+            "desc": "Fires when a recipient clicks an unsubscribe link in an email. Remove the "
+                "recipient from your mailing list to comply with their preference.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_UNSUBSCRIBED,
+            "data_provider_info": MailgunUnsubscribedEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new MailgunUnsubscribedEventDataType(); },
+            "options": {
+                "api_domain": <ActionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "The domain to watch for events",
+                    "desc": "Select the domain to monitor for unsubscribe events",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "domains",
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage MailgunDataProvider Module
+
+    @tableofcontents
+
+    @section mailgundataproviderintro MailgunDataProvider Introduction
+
+    The %MailgunDataProvider module provides a data provider API for Mailgun email services
+    through the Mailgun REST API.
+
+    To use this module, use \c "%requires MailgunDataProvider" in your code.
+
+    All the public symbols in the module are defined in the MailgunDataProvider namespace.
+
+    The main classes are:
+    - @ref MailgunDataProvider::MailgunDataProvider "MailgunDataProvider":
+      the root data provider for Mailgun with child providers for email, mailing lists, routes, and events
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires MailgunDataProvider
+
+MailgunDataProvider mailgun({"apikey": ENV.MAILGUN_API_KEY, "api_domain": "mg.example.com"});
+
+# List domains
+map printf("Domain: %s (State: %s)\n", $1.name, $1.state),
+    mailgun.getChildProvider("domains").searchRecords();
+
+# Send an email
+hash<auto> result = mailgun.getChildProvider("send-email").doRequest({
+    "from": "sender@mg.example.com",
+    "to": "recipient@example.com",
+    "subject": "Hello from Mailgun!",
+    "text": "This is a test email sent via Mailgun.",
+});
+printf("Sent: %s\n", result.id);
+    @endcode
+
+    @section mailgundataproviderrelnotes Release Notes
+
+    @subsection mailgundataproviderv1_0 MailgunDataProvider v1.0
+    - the initial version of the %MailgunDataProvider module
+*/
+
+#! Contains all public definitions in the MailgunDataProvider module
+public namespace MailgunDataProvider {
+}
