@@ -237,11 +237,22 @@ IntermediateParseReferenceNode* ParseReferenceNode::evalToIntermediate(RuntimeCo
 int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     if (!lvexp) {
         parse_context.typeInfo = typeInfo;
+        parse_context.analysis.clear();
+        if (parse_context.typeInfo) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            parse_context.analysis.known_type = parse_context.typeInfo;
+        }
         return 0;
     }
 
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(lvexp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(lvexp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
     parse_context.typeInfo = typeInfo;
     if (!lvexp) {
@@ -282,6 +293,17 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
         parse_context.typeInfo = typeInfo = qore_get_complex_hard_reference_type(argTypeInfo);
     } else {
         parse_context.typeInfo = nullptr;
+    }
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (operand_analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
     }
     //printd(5, "ParseReferenceNode::parseInitImpl() thid: %p '%s' -> '%s'\n", this,
     //  QoreTypeInfo::getName(argTypeInfo), QoreTypeInfo::getName(typeInfo));

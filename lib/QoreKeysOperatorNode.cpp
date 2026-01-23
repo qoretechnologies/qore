@@ -53,7 +53,13 @@ int QoreKeysOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
     assert(!parse_context.typeInfo);
     // check iterator expression
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* expTypeInfo = parse_context.typeInfo;
 
     if (QoreTypeInfo::hasType(expTypeInfo)) {
@@ -86,6 +92,13 @@ int QoreKeysOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             if (!result.isNothing()) {
                 parse_context.typeInfo = result.getTypeInfo();
                 val = result;
+                parse_context.analysis.clear();
+                parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+                parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+                if (!result.isNothing()) {
+                    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+                }
+                parse_context.analysis.known_type = parse_context.typeInfo;
                 return 0;
             }
             // constants not resolved - skip parse-time folding, let runtime handle it
@@ -94,11 +107,26 @@ int QoreKeysOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             ReferenceHolder<> holder(this, 0);
             parse_context.typeInfo = nothingTypeInfo;
             val.clear();
+            parse_context.analysis.clear();
+            parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+            parse_context.analysis.known_type = parse_context.typeInfo;
             return 0;
         }
     }
 
     parse_context.typeInfo = returnTypeInfo;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

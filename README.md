@@ -40,6 +40,9 @@ refer to the following files/locations for specific information:
 ### examples/test/:
   Qore test scripts. Use `run_tests.sh` script to run all the tests.
 
+### test/ir/:
+  IR smoke test. Build with `cmake --build build --target qore-ir-smoke`.
+
 
 ## Quick Build Info
 
@@ -60,6 +63,26 @@ refer to the following files/locations for specific information:
    Server, SSH2 and more can be built (see README-MODULES for details)
  * XML support has been removed as of Qore 0.8.1+; use the "xml" module
    instead
+
+## IR Smoke + Valgrind
+
+Run the IR smoke test under Valgrind with signal handling disabled:
+
+```
+cmake --build build --target qore-ir-smoke -- -j1
+QORE_VALGRIND=1 valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./build/qore-ir-smoke
+```
+
+If Valgrind headers are available, `test/ir/ir_smoke.cpp` also detects Valgrind via
+`RUNNING_ON_VALGRIND`; otherwise set `QORE_VALGRIND=1` to force signal handling off.
+
+To print IR dumps during the smoke test, set `QORE_IR_SMOKE_PRINT=1`.
+
+For Qore CLI scripts under Valgrind, disable signals with `qore -b`:
+
+```
+valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 qore -b script.q
+```
 
 
 ## History

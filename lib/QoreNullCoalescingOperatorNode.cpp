@@ -36,6 +36,20 @@
 
 QoreString QoreNullCoalescingOperatorNode::null_coalescing_str("null coalescing operator");
 
+static void set_coalescing_analysis_null(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+    }
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 // if del is true, then the returned QoreString * should be mapd, if false, then it must not be
 QoreString *QoreNullCoalescingOperatorNode::getAsString(bool &del, int foff, ExceptionSink *xsink) const {
     del = false;
@@ -49,14 +63,26 @@ int QoreNullCoalescingOperatorNode::getAsString(QoreString &str, int foff, Excep
 
 int QoreNullCoalescingOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(left, parse_context);
-
-    parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
     }
 
     parse_context.typeInfo = nullptr;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
+    }
+
+    parse_context.typeInfo = nullptr;
+    set_coalescing_analysis_null(parse_context, left_analysis, right_analysis);
     return err;
 }
 

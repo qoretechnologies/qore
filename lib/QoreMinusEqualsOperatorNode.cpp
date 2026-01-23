@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/ParseNode.h"
 
 QoreString QoreMinusEqualsOperatorNode::op_str("-= operator expression");
 
@@ -71,6 +72,12 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
             }
             parse_context.typeInfo = ti = bigIntTypeInfo;
             val = makeSpecialization<QoreIntMinusEqualsOperatorNode>();
+            if (val.hasNode()) {
+                auto* parse_node = dynamic_cast<ParseNode*>(val.getInternalNode());
+                if (parse_node) {
+                    parse_node->setParseAnalysis(parse_context.analysis);
+                }
+            }
             return err;
         } else {
             ti = nullptr;

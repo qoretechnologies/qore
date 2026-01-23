@@ -32,6 +32,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/ParseNode.h"
 
 QoreString QorePlusEqualsOperatorNode::op_str("+= operator expression");
 
@@ -98,6 +99,12 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
             }
             parse_context.typeInfo = ti = bigIntTypeInfo;
             val = makeSpecialization<QoreIntPlusEqualsOperatorNode>();
+            if (val.hasNode()) {
+                auto* parse_node = dynamic_cast<ParseNode*>(val.getInternalNode());
+                if (parse_node) {
+                    parse_node->setParseAnalysis(parse_context.analysis);
+                }
+            }
             return err;
         } else {
             ti = nullptr;

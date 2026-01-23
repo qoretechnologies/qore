@@ -29,6 +29,10 @@ option(SINGLE_COMPILATION_UNIT
        "Build libqore as a single compilation unit for faster builds"
        ON)
 
+option(QORE_BUILD_IR_SMOKE
+       "Build the Qore IR smoke test executable"
+       OFF)
+
 STRING(LENGTH ${VERSION_MINOR} MINOR_LEN)
 if (${MINOR_LEN} EQUAL 1)
     set(VERSION_FORMATTED_MINOR 0${VERSION_MINOR})
@@ -362,7 +366,49 @@ find_package(ICONV REQUIRED)
 if(NOT BISON_EXECUTABLE AND DEFINED ENV{BISON_EXECUTABLE})
     set(BISON_EXECUTABLE $ENV{BISON_EXECUTABLE} CACHE FILEPATH "Path to bison executable")
 endif()
+set(BISON_WRAPPER_PATH ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
+get_filename_component(BISON_EXECUTABLE_NAME "${BISON_EXECUTABLE}" NAME)
+get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
+if(BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
+    unset(BISON_REAL_EXECUTABLE CACHE)
+    unset(BISON_REAL_EXECUTABLE)
+endif()
+if(BISON_EXECUTABLE STREQUAL BISON_WRAPPER_PATH OR BISON_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
+    if(BISON_REAL_EXECUTABLE)
+        get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
+        if(NOT BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
+            set(BISON_EXECUTABLE ${BISON_REAL_EXECUTABLE} CACHE FILEPATH "Path to bison executable" FORCE)
+        else()
+            unset(BISON_EXECUTABLE CACHE)
+            unset(BISON_EXECUTABLE)
+        endif()
+    else()
+        unset(BISON_EXECUTABLE CACHE)
+        unset(BISON_EXECUTABLE)
+    endif()
+endif()
 find_package(BISON REQUIRED)
+
+if(BISON_EXECUTABLE STREQUAL BISON_WRAPPER_PATH OR BISON_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
+    if(NOT BISON_REAL_EXECUTABLE)
+        find_program(BISON_REAL_EXECUTABLE NAMES bison)
+    endif()
+else()
+    set(BISON_REAL_EXECUTABLE ${BISON_EXECUTABLE})
+endif()
+get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
+if(BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
+    find_program(BISON_REAL_EXECUTABLE NAMES bison)
+endif()
+set(BISON_REAL_EXECUTABLE ${BISON_REAL_EXECUTABLE} CACHE FILEPATH "Path to real bison executable" FORCE)
+set(BISON_WRAPPER_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/bison-wrapper.sh)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/bison-wrapper.sh.in
+    ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh
+    @ONLY
+)
+execute_process(COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
+set(BISON_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh CACHE FILEPATH "Path to bison executable" FORCE)
 find_package(FLEX 2.5.35 REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -566,6 +612,16 @@ bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
 flex_target(qorescanner lib/scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(qorescanner qoreparser)
 
+# Suppress GCC's false-positive free-nonheap-object warning from the generated parser.
+set_source_files_properties(
+    ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
+    PROPERTIES COMPILE_FLAGS "-Wno-free-nonheap-object"
+)
+set_source_files_properties(
+    lib/single-compilation-unit.cpp
+    PROPERTIES COMPILE_FLAGS "-Wno-free-nonheap-object"
+)
+
 # qpp
 if(NOT HAVE_GETOPT_H)
 set(QPP_GETOPT_LONG_SRC lib/getopt_long.cpp)
@@ -719,6 +775,11 @@ set(LIBQORE_CPP_SRC
     lib/QoreRegex.cpp
     lib/QoreRegexBase.cpp
     lib/QoreRegexSubst.cpp
+    lib/QoreIRBuilder.cpp
+    lib/QoreIRPrinter.cpp
+    lib/QoreIRVerifier.cpp
+    lib/QoreIRLowering.cpp
+    lib/QoreIRInterpreter.cpp
     lib/QoreTransliteration.cpp
     lib/Sequence.cpp
     lib/QoreReferenceCounter.cpp
@@ -998,6 +1059,11 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreRegex.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreRegexBase.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreRegexSubst.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRBuilder.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRPrinter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTransliteration.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/Sequence.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreReferenceCounter.cpp\"
@@ -1295,6 +1361,31 @@ target_link_libraries(qore libqore)
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)
 
+if (QORE_BUILD_IR_SMOKE)
+    if (SINGLE_COMPILATION_UNIT)
+        add_executable(qore-ir-smoke
+            test/ir/ir_smoke.cpp
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+        )
+    else()
+        add_executable(qore-ir-smoke
+            test/ir/ir_smoke.cpp
+            ${LIBQORE_QPP_CPP_SRC}
+            ${LIBQORE_CPP_SRC}
+            ${LIBQORE_ASM_SRC}
+        )
+    endif()
+    target_compile_definitions(qore-ir-smoke PRIVATE _QORE_LIB_INTERN HAVE_UNIX_CONFIG_H)
+    target_compile_definitions(qore-ir-smoke PRIVATE MODULE_DIR="${MODULE_DIR}")
+    target_compile_definitions(qore-ir-smoke PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
+    target_compile_definitions(qore-ir-smoke PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
+    target_compile_definitions(qore-ir-smoke PRIVATE USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}")
+    target_include_directories(qore-ir-smoke PRIVATE ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include
+        ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
+        ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
+    target_link_libraries(qore-ir-smoke ${QORE_LIBS})
+endif()
+
 # Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
 set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
@@ -1473,7 +1564,6 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 qore_user_module("qlib/DatasourceProvider.qm" "")
 qore_user_module("qlib/DebugUtil.qm" "")
 qore_user_module("qlib/FsUtil.qm" "")
-qore_user_module("qlib/HttpStreamClient.qm" "")
 qore_user_module("qlib/Qdx.qm" "")
 qore_user_module("qlib/Qorize.qm" "")
 qore_user_module("qlib/QoreRepl" "")
@@ -1612,11 +1702,11 @@ qore_user_module("qlib/ZohoInvoiceDataProvider" "ZohoInvoiceRestClient;RestClien
         set(QORE_LANG_DOC_TAGFILES "")
     foreach(mod ${QORE_USER_MODULE_NAMES})
         # Tag file is generated in build root as {mod}.tag
-        # Relative path to module html from lang html: ../../modules/{mod}/html
-        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../../modules/${mod}/html\"")
+        # Relative path to module html from lang html: ../modules/{mod}/html
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../modules/${mod}/html\"")
     endforeach()
     # Add binary module tag files required for lang cross-references.
-    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../../modules/logger_bin/html\"")
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../modules/logger_bin/html\"")
     set(QORE_LANG_DOC_PREDEFINED "QORE_LANG_FINAL" CACHE INTERNAL "Preprocessor definitions for lang docs (final pass)")
     set(QORE_LANG_DOC_SECTIONS "QORE_LANG_FINAL" CACHE INTERNAL "Enabled sections for lang docs (final pass)")
     message(STATUS "Configuring Doxyfile for lang final pass with module cross-references")

@@ -1,0 +1,6971 @@
+/* -*- indent-tabs-mode: nil -*- */
+/*
+    ir_smoke.cpp
+
+    Qore Programming Language
+*/
+
+#include <cstdlib>
+#include <cstring>
+#include <initializer_list>
+#include <iostream>
+
+#if defined(__has_include)
+#if __has_include(<valgrind/valgrind.h>)
+#include <valgrind/valgrind.h>
+#define QORE_IR_SMOKE_HAS_VALGRIND 1
+#endif
+#endif
+
+#ifndef QORE_IR_SMOKE_HAS_VALGRIND
+#define QORE_IR_SMOKE_HAS_VALGRIND 0
+#endif
+
+#include <qore/Qore.h>
+#include <qore/intern/QoreIRBuilder.h>
+#include <qore/intern/QoreIRInterpreter.h>
+#include <qore/intern/QoreIRLowering.h>
+#include <qore/intern/QoreIRPrinter.h>
+#include <qore/intern/QoreIRVerifier.h>
+#include <qore/intern/QoreBinaryAndOperatorNode.h>
+#include <qore/intern/QoreBinaryOrOperatorNode.h>
+#include <qore/intern/QoreBinaryXorOperatorNode.h>
+#include <qore/intern/QoreImplicitArgumentNode.h>
+#include <qore/intern/QoreLibIntern.h>
+#include <qore/intern/QoreLogicalAndOperatorNode.h>
+#include <qore/intern/QoreLogicalAbsoluteEqualsOperatorNode.h>
+#include <qore/intern/QoreLogicalAbsoluteNotEqualsOperatorNode.h>
+#include <qore/intern/QoreLogicalComparisonOperatorNode.h>
+#include <qore/intern/QoreLogicalEqualsOperatorNode.h>
+#include <qore/intern/QoreLogicalGreaterThanOperatorNode.h>
+#include <qore/intern/QoreLogicalGreaterThanOrEqualsOperatorNode.h>
+#include <qore/intern/QoreLogicalLessThanOperatorNode.h>
+#include <qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h>
+#include <qore/intern/QoreLogicalNotOperatorNode.h>
+#include <qore/intern/QoreLogicalNotEqualsOperatorNode.h>
+#include <qore/intern/QoreLogicalOrOperatorNode.h>
+#include <qore/intern/QoreAssignmentOperatorNode.h>
+#include <qore/intern/QoreDivideEqualsOperatorNode.h>
+#include <qore/intern/QorePlusEqualsOperatorNode.h>
+#include <qore/intern/QorePreIncrementOperatorNode.h>
+#include <qore/intern/QorePostIncrementOperatorNode.h>
+#include <qore/intern/QorePreDecrementOperatorNode.h>
+#include <qore/intern/QorePostDecrementOperatorNode.h>
+#include <qore/intern/QoreMultiplyEqualsOperatorNode.h>
+#include <qore/intern/QoreModuloEqualsOperatorNode.h>
+#include <qore/intern/QoreAndEqualsOperatorNode.h>
+#include <qore/intern/QoreOrEqualsOperatorNode.h>
+#include <qore/intern/QoreXorEqualsOperatorNode.h>
+#include <qore/intern/QoreModuloOperatorNode.h>
+#include <qore/intern/QoreMultiplicationOperatorNode.h>
+#include <qore/intern/QoreNullCoalescingOperatorNode.h>
+#include <qore/intern/QorePlusOperatorNode.h>
+#include <qore/intern/QoreQuestionMarkOperatorNode.h>
+#include <qore/intern/QoreDivisionOperatorNode.h>
+#include <qore/intern/QoreFoldlOperatorNode.h>
+#include <qore/intern/QoreMapOperatorNode.h>
+#include <qore/intern/QoreMinusOperatorNode.h>
+#include <qore/intern/QoreSquareBracketsOperatorNode.h>
+#include <qore/intern/QoreShiftLeftOperatorNode.h>
+#include <qore/intern/QoreShiftLeftEqualsOperatorNode.h>
+#include <qore/intern/QoreShiftRightOperatorNode.h>
+#include <qore/intern/QoreShiftRightEqualsOperatorNode.h>
+#include <qore/intern/QoreExtractOperatorNode.h>
+#include <qore/intern/QoreRemoveOperatorNode.h>
+#include <qore/intern/QoreKeysOperatorNode.h>
+#include <qore/intern/QoreUnaryMinusOperatorNode.h>
+#include <qore/intern/QoreUnaryPlusOperatorNode.h>
+#include <qore/intern/QoreValueCoalescingOperatorNode.h>
+#include <qore/intern/QoreSquareBracketsRangeOperatorNode.h>
+#include <qore/intern/QoreRangeOperatorNode.h>
+#include <qore/intern/QoreCastOperatorNode.h>
+#include <qore/intern/QoreOperatorNode.h>
+#include <qore/intern/FunctionCallNode.h>
+#include <qore/intern/LocalVar.h>
+#include <qore/intern/VarRefNode.h>
+#include <qore/intern/Variable.h>
+#include <qore/QoreBigIntNode.h>
+#include <qore/QoreProgram.h>
+#include <qore/intern/qore_thread_intern.h>
+#include <qore/intern/QoreClosureNode.h>
+#include <qore/intern/QoreClosureParseNode.h>
+#include <qore/intern/Function.h>
+#include <qore/intern/StatementBlock.h>
+#include <qore/QoreHashNode.h>
+#include <qore/QoreClass.h>
+#include <qore/QoreStringNode.h>
+#include <qore/intern/QoreParseListNode.h>
+#include <qore/intern/QoreParseHashNode.h>
+#include <qore/ReferenceArgumentHelper.h>
+#include <qore/QoreObject.h>
+#include <qore/intern/QoreInstanceOfOperatorNode.h>
+#include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
+#include <qore/intern/QoreClassIntern.h>
+#include <qore/intern/QoreNamespaceIntern.h>
+#include <qore/intern/FunctionList.h>
+#include <qore/intern/CallReferenceNode.h>
+#include <qore/intern/SelfVarrefNode.h>
+#include <qore/intern/NamedScope.h>
+
+static bool shouldPrintIR() {
+    static bool print_ir = []() {
+        const char* env = std::getenv("QORE_IR_SMOKE_PRINT");
+        return env && *env && std::strcmp(env, "0") != 0;
+    }();
+    return print_ir;
+}
+
+static bool lowerAndVerify(const char* name, QoreValue expr) {
+    ValueHolder expr_holder(expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    if (shouldPrintIR()) {
+        QoreIRPrinter::print(func, std::cout);
+    }
+    return true;
+}
+
+static bool functionHasOpcode(const QoreIRFunction& func, QoreIROpcode opcode) {
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == opcode) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static bool lowerAndExpectOpcode(const char* name, QoreValue expr, QoreIROpcode opcode) {
+    ValueHolder expr_holder(expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    if (!functionHasOpcode(func, opcode)) {
+        std::cerr << "Lowered function missing opcode (" << name << ")\n";
+        return false;
+    }
+    return true;
+}
+
+static bool lowerAndExpectOpcodeWithParseInit(const char* name, QoreValue expr, QoreIROpcode opcode) {
+    QoreParseContext parse_context;
+    QoreValue parsed_expr(expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    if (!functionHasOpcode(func, opcode)) {
+        std::cerr << "Lowered function missing opcode (" << name << ")\n";
+        return false;
+    }
+    return true;
+}
+
+static bool lowerAndExpectOpcodeWithProgramSource(const char* name, const char* source, QoreValue expr,
+        QoreIROpcode opcode) {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm_helper(xsink);
+    if (xsink) {
+        std::cerr << "Failed to initialize QoreProgram (" << name << ")\n";
+        return false;
+    }
+    QoreProgram* program = *pgm_helper;
+    QoreProgramContextHelper program_context(program);
+    ProgramRuntimeExternalParseContextHelper parse_lock(program);
+    if (!parse_lock) {
+        std::cerr << "Failed to acquire parse lock (" << name << ")\n";
+        return false;
+    }
+    if (source) {
+        program->parse(source, "ir_smoke", &xsink);
+        if (xsink) {
+            std::cerr << "Failed to parse program source (" << name << ")\n";
+            return false;
+        }
+    }
+    QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
+    QoreValue parsed_expr(expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    if (!functionHasOpcode(func, opcode)) {
+        std::cerr << "Lowered function missing opcode (" << name << ")\n";
+        return false;
+    }
+    return true;
+}
+
+static bool lowerAndExpectOpcodeFromParseAnalysis(const char* name, QoreValue expr,
+        QoreIROpcode int_opcode, QoreIROpcode float_opcode, QoreIROpcode any_opcode) {
+    QoreParseContext parse_context;
+    QoreValue parsed_expr(expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    const AbstractQoreNode* node = parsed_expr.getInternalNode();
+    const auto* bin = dynamic_cast<const QoreBinaryOperatorNode<>*>(node);
+    const auto* bin_lvalue = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node);
+    const auto* bin_int_lvalue = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node);
+    if (!bin && !bin_lvalue && !bin_int_lvalue) {
+        std::cerr << "Parse analysis helper requires a binary operator (" << name << ")\n";
+        return false;
+    }
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    QoreValue left = bin ? bin->getLeft()
+        : (bin_lvalue ? bin_lvalue->getLeft() : bin_int_lvalue->getLeft());
+    QoreValue right = bin ? bin->getRight()
+        : (bin_lvalue ? bin_lvalue->getRight() : bin_int_lvalue->getRight());
+    if (left.hasNode()) {
+        const auto* left_node = dynamic_cast<const ParseNode*>(left.getInternalNode());
+        if (left_node) {
+            left_analysis = left_node->getParseAnalysis();
+        }
+    }
+    if (right.hasNode()) {
+        const auto* right_node = dynamic_cast<const ParseNode*>(right.getInternalNode());
+        if (right_node) {
+            right_analysis = right_node->getParseAnalysis();
+        }
+    }
+    if (!left_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+        std::cerr << "Parse analysis missing type info (" << name << ")\n";
+        return false;
+    }
+    bool left_int = left_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && QoreTypeInfo::isType(left_analysis.known_type, NT_INT);
+    bool right_int = right_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && QoreTypeInfo::isType(right_analysis.known_type, NT_INT);
+    bool left_float = left_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && QoreTypeInfo::isType(left_analysis.known_type, NT_FLOAT);
+    bool right_float = right_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && QoreTypeInfo::isType(right_analysis.known_type, NT_FLOAT);
+    QoreIROpcode expected = any_opcode;
+    if (left_int && right_int) {
+        expected = int_opcode;
+    } else if (left_float && right_float) {
+        expected = float_opcode;
+    }
+
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    if (!functionHasOpcode(func, expected)) {
+        std::cerr << "Lowered function missing opcode (" << name << ")\n";
+        return false;
+    }
+    return true;
+}
+
+static bool lowerAndExpectUnaryOpcodeFromParseAnalysis(const char* name, QoreValue expr,
+        QoreIROpcode int_opcode, QoreIROpcode float_opcode, QoreIROpcode any_opcode) {
+    QoreParseContext parse_context;
+    QoreValue parsed_expr(expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    const AbstractQoreNode* node = parsed_expr.getInternalNode();
+    const auto* unary = dynamic_cast<const QoreUnaryMinusOperatorNode*>(node);
+    if (!unary) {
+        std::cerr << "Parse analysis helper requires a unary minus operator (" << name << ")\n";
+        return false;
+    }
+    QoreParseAnalysis operand_analysis;
+    QoreValue operand = unary->getExp();
+    if (operand.hasNode()) {
+        const auto* operand_node = dynamic_cast<const ParseNode*>(operand.getInternalNode());
+        if (operand_node) {
+            operand_analysis = operand_node->getParseAnalysis();
+        }
+    }
+    if (!operand_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+        std::cerr << "Parse analysis missing type info (" << name << ")\n";
+        return false;
+    }
+    bool operand_int = operand_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && QoreTypeInfo::isType(operand_analysis.known_type, NT_INT);
+    bool operand_float = operand_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && QoreTypeInfo::isType(operand_analysis.known_type, NT_FLOAT);
+    QoreIROpcode expected = any_opcode;
+    if (operand_int) {
+        expected = int_opcode;
+    } else if (operand_float) {
+        expected = float_opcode;
+    }
+
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    if (!functionHasOpcode(func, expected)) {
+        std::cerr << "Lowered function missing opcode (" << name << ")\n";
+        return false;
+    }
+    return true;
+}
+
+static bool expectParseAnalysisFlags(const char* name, QoreValue expr, const QoreTypeInfo* expected_type,
+        bool expect_known, bool expect_never_nothing, bool expect_def_assigned) {
+    QoreParseContext parse_context;
+    QoreValue parsed_expr(expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    const QoreParseAnalysis& analysis = parse_context.analysis;
+    if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) != expect_known) {
+        std::cerr << "Parse analysis KnownTypeInfo mismatch (" << name << ")\n";
+        return false;
+    }
+    if (analysis.hasFlag(QoreParseAnalysis::NeverNothing) != expect_never_nothing) {
+        std::cerr << "Parse analysis NeverNothing mismatch (" << name << ")\n";
+        return false;
+    }
+    if (analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned) != expect_def_assigned) {
+        std::cerr << "Parse analysis DefinitelyAssigned mismatch (" << name << ")\n";
+        return false;
+    }
+    if (expected_type) {
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+            std::cerr << "Parse analysis missing KnownTypeInfo for type check (" << name << ")\n";
+            return false;
+        }
+        if (!QoreTypeInfo::equal(analysis.known_type, expected_type)) {
+            std::cerr << "Parse analysis type mismatch (" << name << ")\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool expectParseAnalysisFlagsWithProgram(const char* name, QoreValue expr, const QoreTypeInfo* expected_type,
+        bool expect_known, bool expect_never_nothing, bool expect_def_assigned) {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm_helper(xsink);
+    if (xsink) {
+        std::cerr << "Failed to initialize QoreProgram (" << name << ")\n";
+        return false;
+    }
+    QoreProgram* program = *pgm_helper;
+    QoreProgramContextHelper program_context(program);
+    ProgramRuntimeExternalParseContextHelper parse_lock(program);
+    if (!parse_lock) {
+        std::cerr << "Failed to acquire parse lock (" << name << ")\n";
+        return false;
+    }
+    QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
+    QoreValue parsed_expr(expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    const QoreParseAnalysis& analysis = parse_context.analysis;
+    if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) != expect_known) {
+        std::cerr << "Parse analysis KnownTypeInfo mismatch (" << name << ")\n";
+        return false;
+    }
+    if (analysis.hasFlag(QoreParseAnalysis::NeverNothing) != expect_never_nothing) {
+        std::cerr << "Parse analysis NeverNothing mismatch (" << name << ")\n";
+        return false;
+    }
+    if (analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned) != expect_def_assigned) {
+        std::cerr << "Parse analysis DefinitelyAssigned mismatch (" << name << ")\n";
+        return false;
+    }
+    if (expected_type) {
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+            std::cerr << "Parse analysis missing KnownTypeInfo for type check (" << name << ")\n";
+            return false;
+        }
+        if (!QoreTypeInfo::equal(analysis.known_type, expected_type)) {
+            std::cerr << "Parse analysis type mismatch (" << name << ")\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool expectParseAnalysisFlagsWithProgramSource(const char* name, const char* source, QoreValue expr,
+        const QoreTypeInfo* expected_type, bool expect_known, bool expect_never_nothing, bool expect_def_assigned) {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm_helper(xsink);
+    if (xsink) {
+        std::cerr << "Failed to initialize QoreProgram (" << name << ")\n";
+        return false;
+    }
+    QoreProgram* program = *pgm_helper;
+    QoreProgramContextHelper program_context(program);
+    ProgramRuntimeExternalParseContextHelper parse_lock(program);
+    if (!parse_lock) {
+        std::cerr << "Failed to acquire parse lock (" << name << ")\n";
+        return false;
+    }
+    if (source) {
+        program->parse(source, "ir_smoke", &xsink);
+        if (xsink) {
+            std::cerr << "Failed to parse program source (" << name << ")\n";
+            return false;
+        }
+    }
+    QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
+    QoreValue parsed_expr(expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    const QoreParseAnalysis& analysis = parse_context.analysis;
+    if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) != expect_known) {
+        std::cerr << "Parse analysis KnownTypeInfo mismatch (" << name << ")\n";
+        return false;
+    }
+    if (analysis.hasFlag(QoreParseAnalysis::NeverNothing) != expect_never_nothing) {
+        std::cerr << "Parse analysis NeverNothing mismatch (" << name << ")\n";
+        return false;
+    }
+    if (analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned) != expect_def_assigned) {
+        std::cerr << "Parse analysis DefinitelyAssigned mismatch (" << name << ")\n";
+        return false;
+    }
+    if (expected_type) {
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+            std::cerr << "Parse analysis missing KnownTypeInfo for type check (" << name << ")\n";
+            return false;
+        }
+        if (!QoreTypeInfo::equal(analysis.known_type, expected_type)) {
+            std::cerr << "Parse analysis type mismatch (" << name << ")\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool expectParseAnalysisFlagsWithProgramSourceAndClassType(const char* name, const char* source, QoreValue expr,
+        const char* class_name, bool expect_known, bool expect_never_nothing, bool expect_def_assigned,
+        bool expect_or_nothing) {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm_helper(xsink);
+    if (xsink) {
+        std::cerr << "Failed to initialize QoreProgram (" << name << ")\n";
+        return false;
+    }
+    QoreProgram* program = *pgm_helper;
+    QoreProgramContextHelper program_context(program);
+    ProgramRuntimeExternalParseContextHelper parse_lock(program);
+    if (!parse_lock) {
+        std::cerr << "Failed to acquire parse lock (" << name << ")\n";
+        return false;
+    }
+    if (source) {
+        program->parse(source, "ir_smoke", &xsink);
+        if (xsink) {
+            std::cerr << "Failed to parse program source (" << name << ")\n";
+            return false;
+        }
+    }
+    QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
+    QoreValue parsed_expr(expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    const QoreParseAnalysis& analysis = parse_context.analysis;
+    if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) != expect_known) {
+        std::cerr << "Parse analysis KnownTypeInfo mismatch (" << name << ")\n";
+        return false;
+    }
+    if (analysis.hasFlag(QoreParseAnalysis::NeverNothing) != expect_never_nothing) {
+        std::cerr << "Parse analysis NeverNothing mismatch (" << name << ")\n";
+        return false;
+    }
+    if (analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned) != expect_def_assigned) {
+        std::cerr << "Parse analysis DefinitelyAssigned mismatch (" << name << ")\n";
+        return false;
+    }
+    if (class_name) {
+        const QoreClass* qc = program->findClass(class_name, &xsink);
+        if (xsink || !qc) {
+            std::cerr << "Failed to resolve class for type check (" << name << ")\n";
+            return false;
+        }
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+            std::cerr << "Parse analysis missing KnownTypeInfo for class type check (" << name << ")\n";
+            return false;
+        }
+        if (expect_or_nothing) {
+            const QoreClass* rc = QoreTypeInfo::getReturnClass(analysis.known_type);
+            if (!rc || rc != qc) {
+                std::cerr << "Parse analysis class type mismatch (" << name << ")\n";
+                return false;
+            }
+            if (QoreTypeInfo::parseReturns(analysis.known_type, NT_NOTHING) == QTI_NOT_EQUAL) {
+                std::cerr << "Parse analysis class or-nothing mismatch (" << name << ")\n";
+                return false;
+            }
+        } else {
+            if (!QoreTypeInfo::equal(analysis.known_type, qc->getTypeInfo())) {
+                std::cerr << "Parse analysis class type mismatch (" << name << ")\n";
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static bool lowerExpectFailure(const char* name, QoreValue expr) {
+    ValueHolder expr_holder(expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (lowered.isValid() || error.empty()) {
+        std::cerr << "Lowering was expected to fail (" << name << ")\n";
+        return false;
+    }
+    return true;
+}
+
+static QoreListNode* makeIntList(const std::initializer_list<int64_t>& values, ExceptionSink* xsink) {
+    QoreListNode* list = new QoreListNode(autoTypeInfo);
+    for (int64_t v : values) {
+        list->push(QoreValue(v), xsink);
+        if (xsink && *xsink) {
+            return list;
+        }
+    }
+    return list;
+}
+
+static bool runUnaryBinaryInterpreterSmoke() {
+    QoreValue bool_true = QoreIRInterpreter::evalUnary(QoreIROpcode::ToBool, QoreValue(1), nullptr);
+    QoreValue bool_false = QoreIRInterpreter::evalUnary(QoreIROpcode::ToBool, QoreValue(0), nullptr);
+    QoreValue not_true = QoreIRInterpreter::evalUnary(QoreIROpcode::Not, QoreValue(true), nullptr);
+    QoreValue is_null = QoreIRInterpreter::evalUnary(QoreIROpcode::IsNullOrNothing, QoreValue(), nullptr);
+    ExceptionSink add_xsink;
+    ExceptionSink sub_xsink;
+    ExceptionSink mod_xsink;
+    ExceptionSink any_xsink;
+    QoreValue sum_int = QoreIRInterpreter::evalBinary(QoreIROpcode::AddInt, QoreValue(1), QoreValue(2), nullptr);
+    QoreValue diff_int = QoreIRInterpreter::evalBinary(QoreIROpcode::SubInt, QoreValue(5), QoreValue(3), nullptr);
+    ValueHolder add_any_left(QoreValue(new QoreStringNode("2")), nullptr);
+    ValueHolder add_any_holder(
+        QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, add_any_left->refSelf(), QoreValue(3), &add_xsink),
+        &add_xsink);
+    ValueHolder sub_any_holder(
+        QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, QoreValue(7), QoreValue(4), &sub_xsink),
+        &sub_xsink);
+    QoreValue sum_float = QoreIRInterpreter::evalBinary(QoreIROpcode::AddFloat, QoreValue(1.5), QoreValue(2.25),
+        nullptr);
+    QoreValue diff_float = QoreIRInterpreter::evalBinary(QoreIROpcode::SubFloat, QoreValue(5.5), QoreValue(3.25),
+        nullptr);
+    QoreValue mul_int = QoreIRInterpreter::evalBinary(QoreIROpcode::MulInt, QoreValue(3), QoreValue(4), nullptr);
+    QoreValue div_int = QoreIRInterpreter::evalBinary(QoreIROpcode::DivInt, QoreValue(8), QoreValue(2), nullptr);
+    ValueHolder div_any_left(QoreValue(new QoreStringNode("8")), nullptr);
+    QoreValue div_any = QoreIRInterpreter::evalBinary(QoreIROpcode::DivAny, *div_any_left, QoreValue(2),
+        &any_xsink);
+    QoreValue mod_int = QoreIRInterpreter::evalBinary(QoreIROpcode::ModInt, QoreValue(9), QoreValue(4), nullptr);
+    ValueHolder mod_any_left(QoreValue(new QoreStringNode("9")), nullptr);
+    ValueHolder mod_any_right(QoreValue(new QoreStringNode("4")), nullptr);
+    QoreValue mod_any = QoreIRInterpreter::evalBinary(QoreIROpcode::ModAny, *mod_any_left, *mod_any_right,
+        &mod_xsink);
+    QoreValue add_nothing = QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, QoreValue::makeNothing(),
+        QoreValue(5), &any_xsink);
+    QoreValue add_null = QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, QoreValue::makeNull(), QoreValue(5),
+        &any_xsink);
+    QoreValue sub_nothing = QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, QoreValue::makeNothing(),
+        QoreValue(5), &any_xsink);
+    QoreValue div_nothing = QoreIRInterpreter::evalBinary(QoreIROpcode::DivAny, QoreValue::makeNothing(),
+        QoreValue(2), &any_xsink);
+    QoreValue mod_nothing = QoreIRInterpreter::evalBinary(QoreIROpcode::ModAny, QoreValue::makeNothing(),
+        QoreValue(3), &any_xsink);
+    QoreValue and_nothing = QoreIRInterpreter::evalBinary(QoreIROpcode::AndAny, QoreValue::makeNothing(),
+        QoreValue(3), &any_xsink);
+    QoreValue or_nothing = QoreIRInterpreter::evalBinary(QoreIROpcode::OrAny, QoreValue::makeNothing(),
+        QoreValue(3), &any_xsink);
+    QoreValue xor_nothing = QoreIRInterpreter::evalBinary(QoreIROpcode::XorAny, QoreValue::makeNothing(),
+        QoreValue(3), &any_xsink);
+    ValueHolder eq_any_left(QoreValue(new QoreStringNode("a")), nullptr);
+    ValueHolder eq_any_right(QoreValue(new QoreStringNode("a")), nullptr);
+    QoreValue eq_int = QoreIRInterpreter::evalBinary(QoreIROpcode::EqInt, QoreValue(5), QoreValue(5), nullptr);
+    QoreValue eq_any = QoreIRInterpreter::evalBinary(QoreIROpcode::EqAny, *eq_any_left, *eq_any_right, &any_xsink);
+    QoreValue ne_int = QoreIRInterpreter::evalBinary(QoreIROpcode::NeInt, QoreValue(5), QoreValue(6), nullptr);
+    ValueHolder ne_any_left(QoreValue(new QoreStringNode("a")), nullptr);
+    ValueHolder ne_any_right(QoreValue(new QoreStringNode("b")), nullptr);
+    QoreValue ne_any = QoreIRInterpreter::evalBinary(QoreIROpcode::NeAny, *ne_any_left, *ne_any_right, &any_xsink);
+    QoreValue eq_hard = QoreIRInterpreter::evalBinary(QoreIROpcode::EqHard, QoreValue(5), QoreValue(5), nullptr);
+    QoreValue ne_hard = QoreIRInterpreter::evalBinary(QoreIROpcode::NeHard, QoreValue(5), QoreValue(6), nullptr);
+    ValueHolder and_any_left(QoreValue(new QoreStringNode("5")), nullptr);
+    ValueHolder and_any_right(QoreValue(new QoreStringNode("3")), nullptr);
+    QoreValue and_any = QoreIRInterpreter::evalBinary(QoreIROpcode::AndAny, and_any_left->refSelf(),
+        and_any_right->refSelf(), &any_xsink);
+    ValueHolder or_any_left(QoreValue(new QoreStringNode("5")), nullptr);
+    ValueHolder or_any_right(QoreValue(new QoreStringNode("3")), nullptr);
+    QoreValue or_any = QoreIRInterpreter::evalBinary(QoreIROpcode::OrAny, or_any_left->refSelf(),
+        or_any_right->refSelf(), &any_xsink);
+    ValueHolder xor_any_left(QoreValue(new QoreStringNode("5")), nullptr);
+    ValueHolder xor_any_right(QoreValue(new QoreStringNode("3")), nullptr);
+    QoreValue xor_any = QoreIRInterpreter::evalBinary(QoreIROpcode::XorAny, xor_any_left->refSelf(),
+        xor_any_right->refSelf(), &any_xsink);
+    ValueHolder shl_any_left(QoreValue(new QoreStringNode("3")), nullptr);
+    ValueHolder shl_any_right(QoreValue(new QoreStringNode("1")), nullptr);
+    QoreValue shl_any = QoreIRInterpreter::evalBinary(QoreIROpcode::ShlAny, shl_any_left->refSelf(),
+        shl_any_right->refSelf(), &any_xsink);
+    ValueHolder shr_any_left(QoreValue(new QoreStringNode("12")), nullptr);
+    ValueHolder shr_any_right(QoreValue(new QoreStringNode("2")), nullptr);
+    QoreValue shr_any = QoreIRInterpreter::evalBinary(QoreIROpcode::ShrAny, shr_any_left->refSelf(),
+        shr_any_right->refSelf(), &any_xsink);
+    QoreValue lt_float = QoreIRInterpreter::evalBinary(QoreIROpcode::LtFloat, QoreValue(1.5), QoreValue(2.25),
+        nullptr);
+    QoreValue le_float = QoreIRInterpreter::evalBinary(QoreIROpcode::LeFloat, QoreValue(2.25), QoreValue(2.25),
+        nullptr);
+    QoreValue gt_float = QoreIRInterpreter::evalBinary(QoreIROpcode::GtFloat, QoreValue(2.25), QoreValue(1.5),
+        nullptr);
+    QoreValue ge_float = QoreIRInterpreter::evalBinary(QoreIROpcode::GeFloat, QoreValue(2.25), QoreValue(2.25),
+        nullptr);
+    QoreValue cmp_float = QoreIRInterpreter::evalBinary(QoreIROpcode::CmpFloat, QoreValue(2.25), QoreValue(1.5),
+        nullptr);
+    QoreValue and_int = QoreIRInterpreter::evalBinary(QoreIROpcode::AndInt, QoreValue(6), QoreValue(3), nullptr);
+    QoreValue or_int = QoreIRInterpreter::evalBinary(QoreIROpcode::OrInt, QoreValue(6), QoreValue(3), nullptr);
+    QoreValue xor_int = QoreIRInterpreter::evalBinary(QoreIROpcode::XorInt, QoreValue(6), QoreValue(3), nullptr);
+    QoreValue shl_int = QoreIRInterpreter::evalBinary(QoreIROpcode::ShlInt, QoreValue(3), QoreValue(2), nullptr);
+    QoreValue shr_int = QoreIRInterpreter::evalBinary(QoreIROpcode::ShrInt, QoreValue(12), QoreValue(2), nullptr);
+    if (!bool_true.getAsBool() || bool_false.getAsBool() || not_true.getAsBool() || !is_null.getAsBool()) {
+        std::cerr << "Unary/binary IR interpreter boolean smoke checks failed\n";
+        return false;
+    }
+    if (sum_int.getAsBigInt() != 3 || diff_int.getAsBigInt() != 2) {
+        std::cerr << "Unary/binary IR interpreter int smoke checks failed\n";
+        return false;
+    }
+    QoreStringValueHelper add_any_str(*add_any_holder, QCS_DEFAULT, &add_xsink);
+    const char* add_any_buf = add_any_str->getBuffer();
+    if (!add_any_buf || std::strcmp(add_any_buf, "23") != 0 || sub_any_holder->getAsBigInt() != 3) {
+        std::cerr << "Unary/binary IR interpreter add/sub any smoke checks failed (add_any="
+            << (add_any_buf ? add_any_buf : "<null>") << ", add_type=" << add_any_holder->getTypeName()
+            << ", sub_any=" << sub_any_holder->getAsBigInt()
+            << ", sub_type=" << sub_any_holder->getTypeName() << ")\n";
+        return false;
+    }
+    if (sum_float.getAsFloat() != 3.75 || diff_float.getAsFloat() != 2.25 || mul_int.getAsBigInt() != 12
+        || div_int.getAsBigInt() != 4 || div_any.getAsFloat() != 4.0
+        || mod_int.getAsBigInt() != 1 || mod_any.getAsBigInt() != 1) {
+        std::cerr << "Unary/binary IR interpreter numeric smoke checks failed\n";
+        return false;
+    }
+    if (add_nothing.getAsBigInt() != 5 || add_null.getAsBigInt() != 5 || sub_nothing.getAsBigInt() != -5
+        || div_nothing.getAsFloat() != 0.0 || mod_nothing.getAsBigInt() != 0
+        || and_nothing.getAsBigInt() != 0 || or_nothing.getAsBigInt() != 3 || xor_nothing.getAsBigInt() != 3) {
+        std::cerr << "Unary/binary IR interpreter nothing/null smoke checks failed\n";
+        return false;
+    }
+    if (add_xsink || sub_xsink || mod_xsink || any_xsink) {
+        std::cerr << "Unary/binary IR interpreter raised an exception\n";
+        return false;
+    }
+    if (!eq_int.getAsBool() || !eq_any.getAsBool() || !ne_int.getAsBool() || !ne_any.getAsBool()
+        || !eq_hard.getAsBool() || !ne_hard.getAsBool()) {
+        std::cerr << "Unary/binary IR interpreter equality smoke checks failed\n";
+        return false;
+    }
+    if (!lt_float.getAsBool() || !le_float.getAsBool() || !gt_float.getAsBool() || !ge_float.getAsBool()
+        || cmp_float.getAsBigInt() <= 0) {
+        std::cerr << "Unary/binary IR interpreter float compare smoke checks failed\n";
+        return false;
+    }
+    if (and_any.getAsBigInt() != 1 || or_any.getAsBigInt() != 7 || xor_any.getAsBigInt() != 6
+        || shl_any.getAsBigInt() != 6 || shr_any.getAsBigInt() != 3) {
+        std::cerr << "Unary/binary IR interpreter any bitwise smoke checks failed\n";
+        return false;
+    }
+    if (and_int.getAsBigInt() != 2 || or_int.getAsBigInt() != 7 || xor_int.getAsBigInt() != 5
+        || shl_int.getAsBigInt() != 12 || shr_int.getAsBigInt() != 3) {
+        std::cerr << "Unary/binary IR interpreter int bitwise smoke checks failed\n";
+        return false;
+    }
+    ExceptionSink date_xsink;
+    ValueHolder date_abs(QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)), &date_xsink);
+    ValueHolder date_rel(QoreValue(new DateTimeNode(0, 0, 1, 0, 0, 0, 0, true)), &date_xsink);
+    ValueHolder date_add(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, date_abs->refSelf(),
+        date_rel->refSelf(), &date_xsink), &date_xsink);
+    ValueHolder date_sub(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, date_abs->refSelf(),
+        date_rel->refSelf(), &date_xsink), &date_xsink);
+    ValueHolder date_diff(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, date_abs->refSelf(),
+        date_abs->refSelf(), &date_xsink), &date_xsink);
+    ValueHolder date_add_abs(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, date_abs->refSelf(),
+        date_abs->refSelf(), &date_xsink), &date_xsink);
+    ValueHolder date_add_rel(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, date_rel->refSelf(),
+        date_rel->refSelf(), &date_xsink), &date_xsink);
+    ValueHolder date_sub_rel(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, date_rel->refSelf(),
+        date_rel->refSelf(), &date_xsink), &date_xsink);
+    ValueHolder date_add_nothing(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, date_abs->refSelf(),
+        QoreValue(), &date_xsink), &date_xsink);
+    ValueHolder date_sub_nothing(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, date_abs->refSelf(),
+        QoreValue(), &date_xsink), &date_xsink);
+    QoreValue date_eq = QoreIRInterpreter::evalBinary(QoreIROpcode::EqAny, *date_abs,
+        *date_abs, &date_xsink);
+    QoreValue date_ne = QoreIRInterpreter::evalBinary(QoreIROpcode::NeAny, *date_abs,
+        *date_rel, &date_xsink);
+    QoreValue date_lt = QoreIRInterpreter::evalBinary(QoreIROpcode::LtAny, *date_abs,
+        *date_rel, &date_xsink);
+    QoreValue date_le = QoreIRInterpreter::evalBinary(QoreIROpcode::LeAny, *date_abs,
+        *date_rel, &date_xsink);
+    QoreValue date_gt = QoreIRInterpreter::evalBinary(QoreIROpcode::GtAny, *date_abs,
+        *date_rel, &date_xsink);
+    QoreValue date_ge = QoreIRInterpreter::evalBinary(QoreIROpcode::GeAny, *date_abs,
+        *date_rel, &date_xsink);
+    QoreValue date_cmp = QoreIRInterpreter::evalBinary(QoreIROpcode::CmpAny, *date_abs,
+        *date_rel, &date_xsink);
+    if (date_xsink || date_add->getType() != NT_DATE || date_sub->getType() != NT_DATE
+        || date_diff->getType() != NT_DATE || date_add_abs->getType() != NT_DATE
+        || date_add_rel->getType() != NT_DATE || date_sub_rel->getType() != NT_DATE
+        || date_add_nothing->getType() != NT_DATE || date_sub_nothing->getType() != NT_DATE
+        || !date_eq.getAsBool() || !date_ne.getAsBool() || date_cmp.getType() != NT_INT) {
+        std::cerr << "Unary/binary IR interpreter date smoke checks failed\n";
+        return false;
+    }
+    ExceptionSink div_zero_xsink;
+    ExceptionSink mod_zero_xsink;
+    ExceptionSink bad_unary_xsink;
+    ExceptionSink bad_binary_xsink;
+    ExceptionSink bad_expr_xsink;
+    ExceptionSink bad_cast_xsink;
+    QoreValue div_zero = QoreIRInterpreter::evalBinary(QoreIROpcode::DivInt, QoreValue(1), QoreValue(0),
+        &div_zero_xsink);
+    QoreValue mod_zero = QoreIRInterpreter::evalBinary(QoreIROpcode::ModInt, QoreValue(1), QoreValue(0),
+        &mod_zero_xsink);
+    QoreValue bad_unary = QoreIRInterpreter::evalUnary(QoreIROpcode::Call, QoreValue(1), &bad_unary_xsink);
+    QoreValue bad_binary = QoreIRInterpreter::evalBinary(QoreIROpcode::Call, QoreValue(1), QoreValue(2),
+        &bad_binary_xsink);
+    QoreValue bad_expr = QoreIRInterpreter::evalExpr(QoreIROpcode::Call, QoreValue(1), &bad_expr_xsink);
+    QoreProgramLocation cast_loc("ir_smoke", 1, 1);
+    ValueHolder parse_cast_holder(QoreValue(new QoreParseCastOperatorNode(&cast_loc,
+        new QoreParseTypeInfo(strdup("int"), false), QoreValue(1))), &bad_cast_xsink);
+    QoreValue bad_cast = QoreIRInterpreter::evalExpr(QoreIROpcode::CastAny, *parse_cast_holder, &bad_cast_xsink);
+    bool exception_ok = div_zero_xsink && mod_zero_xsink && bad_unary_xsink && bad_binary_xsink
+        && bad_expr_xsink && bad_cast_xsink
+        && div_zero.isNullOrNothing() && mod_zero.isNullOrNothing()
+        && bad_unary.isNullOrNothing() && bad_binary.isNullOrNothing()
+        && bad_expr.isNullOrNothing() && bad_cast.isNullOrNothing();
+    if (!exception_ok) {
+        std::cerr << "Unary/binary IR interpreter exception smoke checks failed\n";
+        return false;
+    }
+    div_zero_xsink.clear();
+    mod_zero_xsink.clear();
+    bad_unary_xsink.clear();
+    bad_binary_xsink.clear();
+    bad_expr_xsink.clear();
+    bad_cast_xsink.clear();
+    return true;
+}
+
+static bool runExprInterpreterSmoke() {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm_helper(xsink);
+    if (xsink) {
+        std::cerr << "Expr interpreter smoke checks failed (program init)\n";
+        return false;
+    }
+    QoreProgram* program = *pgm_helper;
+    ProgramRuntimeExternalParseContextHelper parse_lock(program);
+    if (!parse_lock) {
+        std::cerr << "Expr interpreter smoke checks failed (parse lock)\n";
+        return false;
+    }
+    const char* src = "int sub ir_expr_call(int $i) { return $i + 1; }\n"
+        "int sub ir_expr_call_int(int $i) { return $i; }\n"
+        "int sub ir_expr_call_ref(int $i) { return $i + 2; }\n"
+        "class IrExprClass { constructor() {} int m(int $i) { return $i + 3; } static int sm(int $i) { return $i + 4; } }\n";
+    program->parse(src, "ir_smoke", &xsink);
+    if (xsink) {
+        std::cerr << "Expr interpreter smoke checks failed (parse)\n";
+        return false;
+    }
+    QoreValue parsed_call;
+    QoreValue parsed_call_ref;
+    QoreValue parsed_static;
+    QoreValue parsed_self;
+    QoreValue parsed_cast;
+    const QoreClass* expr_class = nullptr;
+    {
+        QoreProgramContextHelper program_context(program);
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(2), &call_loc);
+        parsed_call = QoreValue(new FunctionCallNode(&call_loc, strdup("ir_expr_call"), call_args));
+        QoreParseContext call_context(static_cast<LocalVar*>(nullptr), program);
+        if (parse_init_value(parsed_call, call_context)) {
+            std::cerr << "Expr interpreter smoke checks failed (call parse init)\n";
+            return false;
+        }
+        const FunctionEntry* fe_ref = qore_root_ns_private::parseResolveFunctionEntry(&call_loc, "ir_expr_call_ref");
+        if (!fe_ref) {
+            std::cerr << "Expr interpreter smoke checks failed (call ref resolve)\n";
+            return false;
+        }
+        ResolvedCallReferenceNode* cref = fe_ref->makeCallReference(&call_loc);
+        if (!cref) {
+            std::cerr << "Expr interpreter smoke checks failed (call ref create)\n";
+            return false;
+        }
+        QoreParseListNode* call_ref_args = new QoreParseListNode(&call_loc);
+        call_ref_args->add(QoreValue(1), &call_loc);
+        parsed_call_ref = QoreValue(new CallReferenceCallNode(&call_loc, QoreValue(cref), call_ref_args));
+        QoreParseContext call_ref_context(static_cast<LocalVar*>(nullptr), program);
+        if (parse_init_value(parsed_call_ref, call_ref_context)) {
+            std::cerr << "Expr interpreter smoke checks failed (call ref parse init)\n";
+            return false;
+        }
+        QoreParseListNode* static_args = new QoreParseListNode(&call_loc);
+        static_args->add(QoreValue(1), &call_loc);
+        parsed_static = QoreValue(new StaticMethodCallNode(&call_loc, new NamedScope(strdup("IrExprClass::sm")),
+            static_args));
+        QoreParseContext static_context(static_cast<LocalVar*>(nullptr), program);
+        if (parse_init_value(parsed_static, static_context)) {
+            std::cerr << "Expr interpreter smoke checks failed (static call parse init)\n";
+            return false;
+        }
+        expr_class = program->findClass("IrExprClass", &xsink);
+        if (xsink || !expr_class) {
+            std::cerr << "Expr interpreter smoke checks failed (class resolve)\n";
+            return false;
+        }
+        LocalVar self_var("self", expr_class->getTypeInfo());
+        self_var.parseAssigned();
+        QoreParseListNode* self_args = new QoreParseListNode(&call_loc);
+        self_args->add(QoreValue(1), &call_loc);
+        parsed_self = QoreValue(new SelfFunctionCallNode(&call_loc, strdup("m"), self_args));
+        QoreParseContext self_context(&self_var, program);
+        if (parse_init_value(parsed_self, self_context)) {
+            std::cerr << "Expr interpreter smoke checks failed (self call parse init)\n";
+            return false;
+        }
+
+        QoreProgramLocation cast_loc("ir_smoke", 1, 1);
+        parsed_cast = QoreValue(new QoreParseCastOperatorNode(&cast_loc,
+            new QoreParseTypeInfo(strdup("hash"), false), QoreValue(new QoreParseHashNode(&cast_loc, true))));
+        QoreParseContext cast_context(static_cast<LocalVar*>(nullptr), program);
+        if (parse_init_value(parsed_cast, cast_context)) {
+            std::cerr << "Expr interpreter smoke checks failed (cast parse init)\n";
+            return false;
+        }
+    }
+
+    ProgramThreadCountContextHelper runtime_ctx(&xsink, program, true);
+    if (xsink) {
+        std::cerr << "Expr interpreter smoke checks failed (runtime context)\n";
+        return false;
+    }
+
+    {
+        ValueHolder call_holder(parsed_call, &xsink);
+        QoreValue call_result = QoreIRInterpreter::evalExpr(QoreIROpcode::Call, *call_holder, &xsink);
+        if (xsink || call_result.getAsBigInt() != 3) {
+            std::cerr << "Expr interpreter smoke checks failed (call eval)\n";
+            return false;
+        }
+    }
+    {
+        ValueHolder call_ref_holder(parsed_call_ref, &xsink);
+        QoreValue call_ref_result = QoreIRInterpreter::evalExpr(QoreIROpcode::CallIndirect, *call_ref_holder, &xsink);
+        if (xsink || call_ref_result.getAsBigInt() != 3) {
+            std::cerr << "Expr interpreter smoke checks failed (call ref eval)\n";
+            return false;
+        }
+    }
+    {
+        ValueHolder static_holder(parsed_static, &xsink);
+        QoreValue static_result = QoreIRInterpreter::evalExpr(QoreIROpcode::CallStatic, *static_holder, &xsink);
+        if (xsink || static_result.getAsBigInt() != 5) {
+            std::cerr << "Expr interpreter smoke checks failed (static call eval)\n";
+            return false;
+        }
+    }
+    {
+        QoreListNode* ctor_args = new QoreListNode(autoTypeInfo);
+        ReferenceHolder<QoreObject> obj(expr_class->execConstructor(ctor_args, &xsink), &xsink);
+        if (xsink || !obj) {
+            std::cerr << "Expr interpreter smoke checks failed (self call object)\n";
+            return false;
+        }
+        ObjectSubstitutionHelper obj_ctx(*obj, qore_class_private::get(*expr_class));
+        ValueHolder self_holder(parsed_self, &xsink);
+        QoreValue self_result = QoreIRInterpreter::evalExpr(QoreIROpcode::CallMethod, *self_holder, &xsink);
+        if (xsink || self_result.getAsBigInt() != 4) {
+            std::cerr << "Expr interpreter smoke checks failed (self call eval)\n";
+            return false;
+        }
+    }
+    {
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        const FunctionEntry* fe = qore_root_ns_private::parseResolveFunctionEntry(&call_loc, "ir_expr_call_int");
+        if (!fe) {
+            std::cerr << "Expr interpreter smoke checks failed (bad call resolve)\n";
+            return false;
+        }
+        QoreListNode* call_args = new QoreListNode(autoTypeInfo);
+        QoreHashNode* bad_hash = new QoreHashNode(autoTypeInfo);
+        if (bad_hash->setKeyValue("k", QoreValue(1), &xsink)) {
+            bad_hash->deref(&xsink);
+            std::cerr << "Expr interpreter smoke checks failed (bad call arg hash)\n";
+            return false;
+        }
+        if (call_args->push(QoreValue(bad_hash), &xsink)) {
+            std::cerr << "Expr interpreter smoke checks failed (bad call args)\n";
+            return false;
+        }
+        QoreValue bad_call(new FunctionCallNode(&call_loc, fe, call_args, program));
+        ExceptionSink bad_call_xsink;
+        ValueHolder bad_call_holder(bad_call, &bad_call_xsink);
+        QoreIRInterpreter::evalExpr(QoreIROpcode::Call, *bad_call_holder, &bad_call_xsink);
+        if (!bad_call_xsink) {
+            std::cerr << "Expr interpreter smoke checks failed (bad call eval)\n";
+            return false;
+        }
+        bad_call_xsink.clear();
+    }
+
+    {
+        ValueHolder cast_holder(parsed_cast, &xsink);
+        ValueHolder cast_result(QoreIRInterpreter::evalExpr(QoreIROpcode::CastAny, *cast_holder, &xsink), &xsink);
+        if (xsink || cast_result->getType() != NT_HASH) {
+            std::cerr << "Expr interpreter smoke checks failed (cast eval)\n";
+            return false;
+        }
+    }
+    {
+        ExceptionSink bad_cast_xsink;
+        ValueHolder bad_cast_holder(QoreValue(new QoreHashDeclCastOperatorNode(nullptr, nullptr, QoreValue(1), false)),
+            &bad_cast_xsink);
+        QoreIRInterpreter::evalExpr(QoreIROpcode::CastAny, *bad_cast_holder, &bad_cast_xsink);
+        if (!bad_cast_xsink) {
+            std::cerr << "Expr interpreter smoke checks failed (bad cast eval)\n";
+            return false;
+        }
+        bad_cast_xsink.clear();
+    }
+
+    return true;
+}
+
+static bool runRefcountOwnershipSmoke() {
+    ExceptionSink xsink;
+
+    {
+        QoreStringNode* str = new QoreStringNode("refcount");
+        ValueHolder str_holder(QoreValue(str), &xsink);
+        int base_refs = str->reference_count();
+        if (base_refs < 1) {
+            std::cerr << "String refcount smoke checks failed (base refs)\n";
+            return false;
+        }
+        {
+            ValueHolder ref_holder(str_holder.getReferencedValue(), &xsink);
+            if (str->reference_count() != base_refs + 1) {
+                std::cerr << "String refcount smoke checks failed (ref increment)\n";
+                return false;
+            }
+        }
+        if (str->reference_count() != base_refs) {
+            std::cerr << "String refcount smoke checks failed (ref release)\n";
+            return false;
+        }
+    }
+
+    {
+        QoreListNode* list = new QoreListNode(autoTypeInfo);
+        ValueHolder list_holder(QoreValue(list), &xsink);
+        int base_refs = list->reference_count();
+        if (base_refs < 1) {
+            std::cerr << "List refcount smoke checks failed (base refs)\n";
+            return false;
+        }
+        {
+            ValueHolder ref_holder(list_holder.getReferencedValue(), &xsink);
+            if (list->reference_count() != base_refs + 1) {
+                std::cerr << "List refcount smoke checks failed (ref increment)\n";
+                return false;
+            }
+        }
+        if (list->reference_count() != base_refs) {
+            std::cerr << "List refcount smoke checks failed (ref release)\n";
+            return false;
+        }
+    }
+
+    {
+        QoreListNode* list = new QoreListNode(autoTypeInfo);
+        {
+            ValueHolder item(QoreValue(new QoreStringNode("owned")), &xsink);
+            list->push(item.release(), &xsink);
+            if (xsink) {
+                std::cerr << "List ownership smoke checks failed (push)\n";
+                return false;
+            }
+        }
+        QoreValue first = list->retrieveEntry(0);
+        if (xsink || first.getType() != NT_STRING) {
+            std::cerr << "List ownership smoke checks failed (retrieve)\n";
+            return false;
+        }
+        ValueHolder list_holder(QoreValue(list), &xsink);
+        if (xsink) {
+            std::cerr << "List ownership smoke checks failed (holder)\n";
+            return false;
+        }
+    }
+
+    {
+        QoreListNode* list = new QoreListNode(autoTypeInfo);
+        ValueHolder list_holder(QoreValue(list), &xsink);
+        {
+            ValueHolder hash_holder(QoreValue(new QoreHashNode(autoTypeInfo)), &xsink);
+            list->push(hash_holder.release(), &xsink);
+        }
+        QoreValue nested = list->retrieveEntry(0);
+        if (xsink || nested.getType() != NT_HASH) {
+            std::cerr << "Nested list ownership smoke checks failed (list->hash)\n";
+            return false;
+        }
+    }
+
+    {
+        QoreHashNode* hash = new QoreHashNode(autoTypeInfo);
+        ValueHolder hash_holder(QoreValue(hash), &xsink);
+        int base_refs = hash->reference_count();
+        if (base_refs < 1) {
+            std::cerr << "Hash refcount smoke checks failed (base refs)\n";
+            return false;
+        }
+        {
+            ValueHolder ref_holder(hash_holder.getReferencedValue(), &xsink);
+            if (hash->reference_count() != base_refs + 1) {
+                std::cerr << "Hash refcount smoke checks failed (ref increment)\n";
+                return false;
+            }
+        }
+        if (hash->reference_count() != base_refs) {
+            std::cerr << "Hash refcount smoke checks failed (ref release)\n";
+            return false;
+        }
+    }
+
+    {
+        QoreHashNode* hash = new QoreHashNode(autoTypeInfo);
+        {
+            ValueHolder item(QoreValue(new QoreStringNode("owned-hash")), &xsink);
+            hash->setKeyValue("key", item.release(), &xsink);
+            if (xsink) {
+                std::cerr << "Hash ownership smoke checks failed (set)\n";
+                return false;
+            }
+        }
+        QoreValue value = hash->getKeyValue("key", &xsink);
+        if (xsink || value.getType() != NT_STRING) {
+            std::cerr << "Hash ownership smoke checks failed (get)\n";
+            return false;
+        }
+        ValueHolder hash_holder(QoreValue(hash), &xsink);
+        if (xsink) {
+            std::cerr << "Hash ownership smoke checks failed (holder)\n";
+            return false;
+        }
+    }
+
+    {
+        QoreHashNode* hash = new QoreHashNode(autoTypeInfo);
+        ValueHolder hash_holder(QoreValue(hash), &xsink);
+        {
+            ValueHolder list_holder(QoreValue(new QoreListNode(autoTypeInfo)), &xsink);
+            hash->setKeyValue("list", list_holder.release(), &xsink);
+        }
+        QoreValue nested = hash->getKeyValue("list", &xsink);
+        if (xsink || nested.getType() != NT_LIST) {
+            std::cerr << "Nested hash ownership smoke checks failed (hash->list)\n";
+            return false;
+        }
+    }
+
+    {
+        QoreBigIntNode* big = new QoreBigIntNode(123456);
+        ValueHolder big_holder(QoreValue(big), &xsink);
+        int base_refs = big->reference_count();
+        if (base_refs < 1) {
+            std::cerr << "BigInt refcount smoke checks failed (base refs)\n";
+            return false;
+        }
+        {
+            ValueHolder ref_holder(big_holder.getReferencedValue(), &xsink);
+            if (big->reference_count() != base_refs + 1) {
+                std::cerr << "BigInt refcount smoke checks failed (ref increment)\n";
+                return false;
+            }
+        }
+        if (big->reference_count() != base_refs) {
+            std::cerr << "BigInt refcount smoke checks failed (ref release)\n";
+            return false;
+        }
+    }
+
+    {
+        QoreNumberNode* number = new QoreNumberNode(3.14159);
+        ValueHolder number_holder(QoreValue(number), &xsink);
+        int base_refs = number->reference_count();
+        if (base_refs < 1) {
+            std::cerr << "Number refcount smoke checks failed (base refs)\n";
+            return false;
+        }
+        {
+            ValueHolder ref_holder(number_holder.getReferencedValue(), &xsink);
+            if (number->reference_count() != base_refs + 1) {
+                std::cerr << "Number refcount smoke checks failed (ref increment)\n";
+                return false;
+            }
+        }
+        if (number->reference_count() != base_refs) {
+            std::cerr << "Number refcount smoke checks failed (ref release)\n";
+            return false;
+        }
+    }
+
+    {
+        size_t len = 4;
+        void* data = std::malloc(len);
+        if (!data) {
+            std::cerr << "Binary refcount smoke checks failed (alloc)\n";
+            return false;
+        }
+        std::memcpy(data, "Qore", len);
+        BinaryNode* bin = new BinaryNode(data, len);
+        ValueHolder bin_holder(QoreValue(bin), &xsink);
+        int base_refs = bin->reference_count();
+        if (base_refs < 1) {
+            std::cerr << "Binary refcount smoke checks failed (base refs)\n";
+            return false;
+        }
+        {
+            ValueHolder ref_holder(bin_holder.getReferencedValue(), &xsink);
+            if (bin->reference_count() != base_refs + 1) {
+                std::cerr << "Binary refcount smoke checks failed (ref increment)\n";
+                return false;
+            }
+        }
+        if (bin->reference_count() != base_refs) {
+            std::cerr << "Binary refcount smoke checks failed (ref release)\n";
+            return false;
+        }
+    }
+
+    {
+        QoreClass* obj_class = new QoreClass("RefCountObject", "::RefCountObject");
+        obj_class->addMember("name", Public, autoTypeInfo);
+        QoreObject* obj = new QoreObject(obj_class, getProgram());
+        {
+            ValueHolder obj_holder(QoreValue(obj), &xsink);
+            int base_refs = obj->reference_count();
+            if (base_refs < 1) {
+                std::cerr << "Object refcount smoke checks failed (base refs)\n";
+                qore_class_private::get(*obj_class)->deref(true, true);
+                return false;
+            }
+            {
+                ValueHolder ref_holder(obj_holder.getReferencedValue(), &xsink);
+                if (obj->reference_count() != base_refs + 1) {
+                    std::cerr << "Object refcount smoke checks failed (ref increment)\n";
+                    qore_class_private::get(*obj_class)->deref(true, true);
+                    return false;
+                }
+            }
+            if (obj->reference_count() != base_refs) {
+                std::cerr << "Object refcount smoke checks failed (ref release)\n";
+                qore_class_private::get(*obj_class)->deref(true, true);
+                return false;
+            }
+            QoreStringNode* member_value = new QoreStringNode("member");
+            QoreValue member_qv(member_value);
+            if (obj->setMemberValue("name", obj_class, member_qv, &xsink)) {
+                member_value->deref(&xsink);
+                std::cerr << "Object ownership smoke checks failed (set member)\n";
+                qore_class_private::get(*obj_class)->deref(true, true);
+                return false;
+            }
+            member_value->deref(&xsink);
+            QoreValue member = obj->getReferencedMemberNoMethod("name", obj_class, &xsink);
+            ValueHolder member_holder(member, &xsink);
+            if (xsink || member.getType() != NT_STRING) {
+                std::cerr << "Object ownership smoke checks failed (get member)\n";
+                qore_class_private::get(*obj_class)->deref(true, true);
+                return false;
+            }
+        }
+        qore_class_private::get(*obj_class)->deref(true, true);
+    }
+
+    {
+        DateTimeNode* dt = new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false);
+        ValueHolder dt_holder(QoreValue(dt), &xsink);
+        int base_refs = dt->reference_count();
+        if (base_refs < 1) {
+            std::cerr << "Date refcount smoke checks failed (base refs)\n";
+            return false;
+        }
+        {
+            ValueHolder ref_holder(dt_holder.getReferencedValue(), &xsink);
+            if (dt->reference_count() != base_refs + 1) {
+                std::cerr << "Date refcount smoke checks failed (ref increment)\n";
+                return false;
+            }
+        }
+        if (dt->reference_count() != base_refs) {
+            std::cerr << "Date refcount smoke checks failed (ref release)\n";
+            return false;
+        }
+    }
+
+    {
+        QoreProgramHelper pgm_helper(xsink);
+        if (xsink) {
+            std::cerr << "New/call refcount smoke checks failed (program init)\n";
+            return false;
+        }
+        QoreProgram* program = *pgm_helper;
+        QoreProgramContextHelper program_context(program);
+        ProgramRuntimeExternalParseContextHelper parse_lock(program);
+        if (!parse_lock) {
+            std::cerr << "New/call refcount smoke checks failed (parse lock)\n";
+            return false;
+        }
+        const char* src = "int sub refcount_fn(int $i) { return $i; }\n"
+            "class RefcountNew { constructor(int $i) {} }\n";
+        program->parse(src, "ir_smoke", &xsink);
+        if (xsink) {
+            std::cerr << "New/call refcount smoke checks failed (parse)\n";
+            return false;
+        }
+        const QoreClass* klass = program->findClass("RefcountNew", &xsink);
+        if (xsink || !klass) {
+            std::cerr << "New/call refcount smoke checks failed (class)\n";
+            return false;
+        }
+        {
+            QoreListNode* ctor_args = new QoreListNode(autoTypeInfo);
+            if (ctor_args->push(QoreValue(1), &xsink)) {
+                std::cerr << "New/call refcount smoke checks failed (ctor args)\n";
+                return false;
+            }
+            NewObjectCallNode* new_node = new NewObjectCallNode(klass, ctor_args);
+            ValueHolder new_holder(QoreValue(new_node), &xsink);
+            int base_refs = new_node->reference_count();
+            if (base_refs < 1) {
+                std::cerr << "New object refcount smoke checks failed (base refs)\n";
+                return false;
+            }
+            {
+                ValueHolder ref_holder(new_holder.getReferencedValue(), &xsink);
+                if (new_node->reference_count() != base_refs + 1) {
+                    std::cerr << "New object refcount smoke checks failed (ref increment)\n";
+                    return false;
+                }
+            }
+            if (new_node->reference_count() != base_refs) {
+                std::cerr << "New object refcount smoke checks failed (ref release)\n";
+                return false;
+            }
+        }
+        {
+            QoreProgramLocation call_loc("ir_smoke", 1, 1);
+            QoreParseListNode* parse_args = new QoreParseListNode(&call_loc);
+            parse_args->add(QoreValue(1), &call_loc);
+            ScopedObjectCallNode* scoped_node =
+                new ScopedObjectCallNode(&call_loc, new NamedScope(strdup("RefcountNew")), parse_args);
+            ValueHolder scoped_holder(QoreValue(scoped_node), &xsink);
+            int base_refs = scoped_node->reference_count();
+            if (base_refs < 1) {
+                std::cerr << "Scoped new refcount smoke checks failed (base refs)\n";
+                return false;
+            }
+            {
+                ValueHolder ref_holder(scoped_holder.getReferencedValue(), &xsink);
+                if (scoped_node->reference_count() != base_refs + 1) {
+                    std::cerr << "Scoped new refcount smoke checks failed (ref increment)\n";
+                    return false;
+                }
+            }
+            if (scoped_node->reference_count() != base_refs) {
+                std::cerr << "Scoped new refcount smoke checks failed (ref release)\n";
+                return false;
+            }
+        }
+        {
+            QoreProgramLocation call_loc("ir_smoke", 1, 1);
+            const FunctionEntry* fe = qore_root_ns_private::parseResolveFunctionEntry(&call_loc, "refcount_fn");
+            if (!fe) {
+                std::cerr << "Call reference refcount smoke checks failed (resolve)\n";
+                return false;
+            }
+            ResolvedCallReferenceNode* cref = fe->makeCallReference(&call_loc);
+            ValueHolder cref_holder(QoreValue(cref), &xsink);
+            int base_refs = cref->reference_count();
+            if (base_refs < 1) {
+                std::cerr << "Call reference refcount smoke checks failed (base refs)\n";
+                return false;
+            }
+            {
+                ValueHolder ref_holder(cref_holder.getReferencedValue(), &xsink);
+                if (cref->reference_count() != base_refs + 1) {
+                    std::cerr << "Call reference refcount smoke checks failed (ref increment)\n";
+                    return false;
+                }
+            }
+            if (cref->reference_count() != base_refs) {
+                std::cerr << "Call reference refcount smoke checks failed (ref release)\n";
+                return false;
+            }
+            QoreParseListNode* parse_args = new QoreParseListNode(&call_loc);
+            parse_args->add(QoreValue(1), &call_loc);
+            CallReferenceCallNode* call_node = new CallReferenceCallNode(&call_loc,
+                cref_holder.getReferencedValue(), parse_args);
+            ValueHolder call_holder(QoreValue(call_node), &xsink);
+            if (cref->reference_count() != base_refs + 1) {
+                std::cerr << "Call reference ownership smoke checks failed (call node)\n";
+                return false;
+            }
+        }
+    }
+
+    if (xsink) {
+        std::cerr << "Refcount smoke checks raised an exception\n";
+        return false;
+    }
+    return true;
+}
+
+int main() {
+    auto runningUnderValgrind = []() -> bool {
+#if QORE_IR_SMOKE_HAS_VALGRIND
+        return RUNNING_ON_VALGRIND;
+#else
+        const char* env = std::getenv("QORE_VALGRIND");
+        return env && *env && std::strcmp(env, "0") != 0;
+#endif
+    };
+
+    struct QoreInitGuard {
+        explicit QoreInitGuard(bool disable_signals) {
+            int opts = QLO_NONE;
+            if (disable_signals) {
+                opts |= QLO_DISABLE_SIGNAL_HANDLING;
+            }
+            qore_init(QL_GPL, nullptr, false, opts);
+        }
+        ~QoreInitGuard() {
+            qore_cleanup();
+        }
+    } qore_guard(runningUnderValgrind());
+
+    QoreIRFunction func("ir_smoke");
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    auto* c1 = builder.createConstInt(1);
+    auto* c2 = builder.createConstInt(2);
+    builder.createBinaryOp(QoreIROpcode::AddInt, c1->result, c2->result);
+
+    ValueHolder expr_holder(QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(40), QoreValue(2))), nullptr);
+    QoreIRLowering lowering(builder);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed: " << error << "\n";
+        return 1;
+    }
+    builder.createReturnNothing();
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed: " << error << "\n";
+        return 1;
+    }
+
+    if (shouldPrintIR()) {
+        QoreIRPrinter::print(func, std::cout);
+    }
+
+    if (!lowerAndVerify("ir_logical_and",
+            QoreValue(new QoreLogicalAndOperatorNode(nullptr, QoreValue(true), QoreValue(false))))) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_logical_or",
+            QoreValue(new QoreLogicalOrOperatorNode(nullptr, QoreValue(false), QoreValue(true))))) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_logical_not",
+            QoreValue(new QoreLogicalNotOperatorNode(nullptr, QoreValue(0))))) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_eq_int",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr, QoreValue(5), QoreValue(5))),
+            QoreIROpcode::EqInt)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_eq_any",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr, QoreValue(new QoreStringNode("a")),
+                QoreValue(new QoreStringNode("a")))),
+            QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_ne_int",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr, QoreValue(5), QoreValue(6))),
+            QoreIROpcode::NeInt)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_ne_any",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr, QoreValue(new QoreStringNode("a")),
+                QoreValue(new QoreStringNode("b")))),
+            QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_eq_hard",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr, QoreValue(5), QoreValue(5))),
+            QoreIROpcode::EqHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_ne_hard",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr, QoreValue(5), QoreValue(6))),
+            QoreIROpcode::NeHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_any",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr, QoreValue(new QoreStringNode("a")),
+                QoreValue(new QoreStringNode("b")))),
+            QoreIROpcode::AndAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_any",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr, QoreValue(new QoreStringNode("a")),
+                QoreValue(new QoreStringNode("b")))),
+            QoreIROpcode::OrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_any",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr, QoreValue(new QoreStringNode("a")),
+                QoreValue(new QoreStringNode("b")))),
+            QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_unary_plus",
+            QoreValue(new QoreUnaryPlusOperatorNode(nullptr, QoreValue(4))))) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_unary_minus",
+            QoreValue(new QoreUnaryMinusOperatorNode(nullptr, QoreValue(4))))) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_add_any",
+            QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(new QoreStringNode("2")),
+                QoreValue(new QoreStringNode("3")))),
+            QoreIROpcode::AddAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_sub_any",
+            QoreValue(new QoreMinusOperatorNode(nullptr, QoreValue(new QoreStringNode("7")), QoreValue(4))),
+            QoreIROpcode::SubAny)) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_multiply",
+            QoreValue(new QoreMultiplicationOperatorNode(nullptr, QoreValue(6), QoreValue(7))))) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_divide",
+            QoreValue(new QoreDivisionOperatorNode(nullptr, QoreValue(8), QoreValue(2))))) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_div_any",
+            QoreValue(new QoreDivisionOperatorNode(nullptr, QoreValue(new QoreStringNode("8")), QoreValue(2))),
+            QoreIROpcode::DivAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_div_any",
+            QoreValue(new QoreDivisionOperatorNode(nullptr, QoreValue(new QoreStringNode("8")), QoreValue(2))),
+            QoreIROpcode::DivAny)) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_modulo",
+            QoreValue(new QoreModuloOperatorNode(nullptr, QoreValue(9), QoreValue(4))))) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_any",
+            QoreValue(new QoreModuloOperatorNode(nullptr, QoreValue(new QoreStringNode("9")),
+                QoreValue(new QoreStringNode("4")))),
+            QoreIROpcode::ModAny)) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_binary_and",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr, QoreValue(6), QoreValue(3))))) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_binary_or",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr, QoreValue(6), QoreValue(3))))) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_binary_xor",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr, QoreValue(6), QoreValue(3))))) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_shift_left",
+            QoreValue(new QoreShiftLeftOperatorNode(nullptr, QoreValue(3), QoreValue(2))))) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_any",
+            QoreValue(new QoreShiftLeftOperatorNode(nullptr, QoreValue(new QoreStringNode("3")),
+                QoreValue(new QoreStringNode("1")))),
+            QoreIROpcode::ShlAny)) {
+        return 1;
+    }
+    if (!lowerAndVerify("ir_shift_right",
+            QoreValue(new QoreShiftRightOperatorNode(nullptr, QoreValue(12), QoreValue(2))))) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_any",
+            QoreValue(new QoreShiftRightOperatorNode(nullptr, QoreValue(new QoreStringNode("12")),
+                QoreValue(new QoreStringNode("2")))),
+            QoreIROpcode::ShrAny)) {
+        return 1;
+    }
+    LocalVar shift_var("shift_tmp", bigIntTypeInfo);
+    if (!lowerAndExpectOpcode("ir_shift_left_equals",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("shift_tmp"), &shift_var, false)),
+                QoreValue(2))),
+            QoreIROpcode::ShlAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("shift_tmp"), &shift_var, false)),
+                QoreValue(2))),
+            QoreIROpcode::ShrAssignAny)) {
+        return 1;
+    }
+    LocalVar assign_local("assign_local", bigIntTypeInfo);
+    LocalVar assign_closure("assign_closure", bigIntTypeInfo);
+    Var* assign_global = new Var(nullptr, "assign_global");
+    Var* assign_thread = new Var(nullptr, "assign_thread", true);
+    if (!lowerAndExpectOpcode("ir_load_local",
+            QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+            QoreIROpcode::LoadLocal)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_load_closure",
+            QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+            QoreIROpcode::LoadClosure)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_load_global",
+            QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+            QoreIROpcode::LoadGlobal)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_load_threadlocal",
+            QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+            QoreIROpcode::LoadThreadLocal)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_assign_local",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(10))),
+            QoreIROpcode::StoreLocal)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_assign_closure",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(11))),
+            QoreIROpcode::StoreClosure)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_assign_global",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(12))),
+            QoreIROpcode::StoreGlobal)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_assign_threadlocal",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(13))),
+            QoreIROpcode::StoreThreadLocal)) {
+        return 1;
+    }
+    LocalVar list_var("list_var", autoTypeInfo);
+    LocalVar hash_var("hash_var", autoTypeInfo);
+    if (!lowerAndExpectOpcode("ir_range",
+            QoreValue(new QoreRangeOperatorNode(nullptr, QoreValue(1), QoreValue(3))),
+            QoreIROpcode::RangeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_square_brackets_range_list",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                QoreValue(0), QoreValue(1))),
+            QoreIROpcode::RangeSliceAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_square_brackets_list",
+            QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                QoreValue(0))),
+            QoreIROpcode::LoadLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_list",
+            QoreValue(new QoreShiftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)))),
+            QoreIROpcode::ShiftLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_unshift_list",
+            QoreValue(new QoreUnshiftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                QoreValue(1))),
+            QoreIROpcode::UnshiftLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_splice_list",
+            QoreValue(new QoreSpliceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                QoreValue(0),
+                QoreValue(1),
+                QoreValue())),
+            QoreIROpcode::SpliceLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_extract_list",
+            QoreValue(new QoreExtractOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                QoreValue(0),
+                QoreValue(1),
+                QoreValue())),
+            QoreIROpcode::ExtractAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_remove_lvalue",
+            QoreValue(new QoreRemoveOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)))),
+            QoreIROpcode::RemoveAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_keys_hash",
+            QoreValue(new QoreKeysOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)))),
+            QoreIROpcode::KeysAny)) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_shift_const_lvalue",
+            QoreValue(new QoreShiftOperatorNode(nullptr, QoreValue(1))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_unshift_const_lvalue",
+            QoreValue(new QoreUnshiftOperatorNode(nullptr, QoreValue(1), QoreValue(2))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_splice_const_lvalue",
+            QoreValue(new QoreSpliceOperatorNode(nullptr,
+                QoreValue(1),
+                QoreValue(0),
+                QoreValue(1),
+                QoreValue())))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_shift_range_lvalue",
+            QoreValue(new QoreShiftOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_unshift_range_lvalue",
+            QoreValue(new QoreUnshiftOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(2))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_splice_range_lvalue",
+            QoreValue(new QoreSpliceOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(0),
+                QoreValue(1),
+                QoreValue())))) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_assign_lvalue_list",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))),
+                QoreValue(14))),
+            QoreIROpcode::StoreLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_increment_lvalue_list",
+            QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))))),
+            QoreIROpcode::PreIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_increment_lvalue_list",
+            QoreValue(new QorePostIncrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))))),
+            QoreIROpcode::PostIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_decrement_lvalue_list",
+            QoreValue(new QorePreDecrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))))),
+            QoreIROpcode::PreDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_decrement_lvalue_list",
+            QoreValue(new QorePostDecrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))))),
+            QoreIROpcode::PostDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_assign_lvalue_hash_key",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(15))),
+            QoreIROpcode::StoreLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_hash_deref",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                QoreValue(new QoreStringNode("key")))),
+            QoreIROpcode::LoadLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_increment_lvalue_hash_key",
+            QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))))),
+            QoreIROpcode::PreIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_increment_lvalue_hash_key",
+            QoreValue(new QorePostIncrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))))),
+            QoreIROpcode::PostIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_decrement_lvalue_hash_key",
+            QoreValue(new QorePreDecrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))))),
+            QoreIROpcode::PreDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_decrement_lvalue_hash_key",
+            QoreValue(new QorePostDecrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))))),
+            QoreIROpcode::PostDecLValue)) {
+        return 1;
+    }
+    LocalVar obj_var("obj_var", autoTypeInfo);
+    if (!lowerAndExpectOpcode("ir_assign_lvalue_object_member",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(16))),
+            QoreIROpcode::StoreLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_increment_lvalue_object_member",
+            QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))))),
+            QoreIROpcode::PreIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_increment_lvalue_object_member",
+            QoreValue(new QorePostIncrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))))),
+            QoreIROpcode::PostIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_decrement_lvalue_object_member",
+            QoreValue(new QorePreDecrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))))),
+            QoreIROpcode::PreDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_decrement_lvalue_object_member",
+            QoreValue(new QorePostDecrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))))),
+            QoreIROpcode::PostDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_assign_lvalue_object_list_index",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(17))),
+            QoreIROpcode::StoreLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_assign_lvalue_object_hash_key",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(18))),
+            QoreIROpcode::StoreLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_increment_lvalue_object_hash_key",
+            QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))))),
+            QoreIROpcode::PreIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_increment_lvalue_object_hash_key",
+            QoreValue(new QorePostIncrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))))),
+            QoreIROpcode::PostIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_decrement_lvalue_object_hash_key",
+            QoreValue(new QorePreDecrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))))),
+            QoreIROpcode::PreDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_decrement_lvalue_object_hash_key",
+            QoreValue(new QorePostDecrementOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))))),
+            QoreIROpcode::PostDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_plus_equals_lvalue_object_hash_key",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(2))),
+            QoreIROpcode::AddAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_minus_equals_lvalue_object_hash_key",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(1))),
+            QoreIROpcode::SubAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_multiply_equals_lvalue_object_hash_key",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(3))),
+            QoreIROpcode::MulAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_divide_equals_lvalue_object_hash_key",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(2))),
+            QoreIROpcode::DivAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_equals_lvalue_object_hash_key",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(4))),
+            QoreIROpcode::ModAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_equals_lvalue_object_hash_key",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(6))),
+            QoreIROpcode::AndAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_equals_lvalue_object_hash_key",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(1))),
+            QoreIROpcode::OrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_equals_lvalue_object_hash_key",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(5))),
+            QoreIROpcode::XorAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_equals_lvalue_object_hash_key",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(2))),
+            QoreIROpcode::ShlAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals_lvalue_object_hash_key",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("hash")))),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(1))),
+            QoreIROpcode::ShrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_increment_lvalue_object_list_index",
+            QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))))),
+            QoreIROpcode::PreIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_increment_lvalue_object_list_index",
+            QoreValue(new QorePostIncrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))))),
+            QoreIROpcode::PostIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_decrement_lvalue_object_list_index",
+            QoreValue(new QorePreDecrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))))),
+            QoreIROpcode::PreDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_decrement_lvalue_object_list_index",
+            QoreValue(new QorePostDecrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))))),
+            QoreIROpcode::PostDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_plus_equals_lvalue_object_list_index",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(3))),
+            QoreIROpcode::AddAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_minus_equals_lvalue_object_list_index",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(2))),
+            QoreIROpcode::SubAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_multiply_equals_lvalue_object_list_index",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(4))),
+            QoreIROpcode::MulAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_divide_equals_lvalue_object_list_index",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(2))),
+            QoreIROpcode::DivAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_equals_lvalue_object_list_index",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(3))),
+            QoreIROpcode::ModAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_equals_lvalue_object_list_index",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(6))),
+            QoreIROpcode::AndAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_equals_lvalue_object_list_index",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(1))),
+            QoreIROpcode::OrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_equals_lvalue_object_list_index",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(5))),
+            QoreIROpcode::XorAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_equals_lvalue_object_list_index",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(2))),
+            QoreIROpcode::ShlAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals_lvalue_object_list_index",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(1))),
+            QoreIROpcode::ShrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_plus_equals_lvalue_hash_key",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(5))),
+            QoreIROpcode::AddAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_minus_equals_lvalue_hash_key",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(4))),
+            QoreIROpcode::SubAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_multiply_equals_lvalue_hash_key",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(3))),
+            QoreIROpcode::MulAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_divide_equals_lvalue_hash_key",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(2))),
+            QoreIROpcode::DivAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_equals_lvalue_hash_key",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(4))),
+            QoreIROpcode::ModAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_equals_lvalue_hash_key",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(6))),
+            QoreIROpcode::AndAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_equals_lvalue_hash_key",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(1))),
+            QoreIROpcode::OrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_equals_lvalue_hash_key",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(5))),
+            QoreIROpcode::XorAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_equals_lvalue_hash_key",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(2))),
+            QoreIROpcode::ShlAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals_lvalue_hash_key",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(1))),
+            QoreIROpcode::ShrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_assign_lvalue_hash_list_index",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(19))),
+            QoreIROpcode::StoreLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_increment_lvalue_hash_list_index",
+            QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))))),
+            QoreIROpcode::PreIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_increment_lvalue_hash_list_index",
+            QoreValue(new QorePostIncrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))))),
+            QoreIROpcode::PostIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_decrement_lvalue_hash_list_index",
+            QoreValue(new QorePreDecrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))))),
+            QoreIROpcode::PreDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_decrement_lvalue_hash_list_index",
+            QoreValue(new QorePostDecrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))))),
+            QoreIROpcode::PostDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_plus_equals_lvalue_hash_list_index",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(3))),
+            QoreIROpcode::AddAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_minus_equals_lvalue_hash_list_index",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(2))),
+            QoreIROpcode::SubAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_multiply_equals_lvalue_hash_list_index",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(4))),
+            QoreIROpcode::MulAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_divide_equals_lvalue_hash_list_index",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(2))),
+            QoreIROpcode::DivAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_equals_lvalue_hash_list_index",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(3))),
+            QoreIROpcode::ModAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_equals_lvalue_hash_list_index",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(6))),
+            QoreIROpcode::AndAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_equals_lvalue_hash_list_index",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(1))),
+            QoreIROpcode::OrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_equals_lvalue_hash_list_index",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(5))),
+            QoreIROpcode::XorAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_equals_lvalue_hash_list_index",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(2))),
+            QoreIROpcode::ShlAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals_lvalue_hash_list_index",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("list")))),
+                    QoreValue(0))),
+                QoreValue(1))),
+            QoreIROpcode::ShrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_equals_lvalue_object_member",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(6))),
+            QoreIROpcode::AndAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_plus_equals_lvalue_object_member",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(5))),
+            QoreIROpcode::AddAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_minus_equals_lvalue_object_member",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(4))),
+            QoreIROpcode::SubAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_multiply_equals_lvalue_object_member",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(3))),
+            QoreIROpcode::MulAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_divide_equals_lvalue_object_member",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(2))),
+            QoreIROpcode::DivAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_equals_lvalue_object_member",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(4))),
+            QoreIROpcode::ModAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_equals_lvalue_object_member",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(1))),
+            QoreIROpcode::OrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_equals_lvalue_object_member",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(5))),
+            QoreIROpcode::XorAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_equals_lvalue_object_member",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(2))),
+            QoreIROpcode::ShlAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals_lvalue_object_member",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("obj_var"), &obj_var, false)),
+                    QoreValue(new QoreStringNode("member")))),
+                QoreValue(1))),
+            QoreIROpcode::ShrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_assign_lvalue_range",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(15))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_plus_equals_lvalue_range",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(16))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_minus_equals_lvalue_range",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(17))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_multiply_equals_lvalue_range",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(18))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_divide_equals_lvalue_range",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(19))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_modulo_equals_lvalue_range",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(20))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_and_equals_lvalue_range",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(21))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_or_equals_lvalue_range",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(22))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_xor_equals_lvalue_range",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(23))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_shift_left_equals_lvalue_range",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(1))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_shift_right_equals_lvalue_range",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(1))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_call_lower_fail",
+            QoreValue(new FunctionCallNode(nullptr, strdup("ir_call"), nullptr)))) {
+        return 1;
+    }
+    {
+        const char* call_lower_source = "int sub ir_call(int $i) { return $i; }\n"
+            "int sub ir_call_ref(int $i) { return $i; }\n"
+            "class IrCallClass { int m(int $i) { return $i; } static int sm(int $i) { return $i; } }\n";
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(1), &call_loc);
+        if (!lowerAndExpectOpcodeWithProgramSource("ir_call_with_args_lower",
+                call_lower_source,
+                QoreValue(new FunctionCallNode(&call_loc, strdup("ir_call"), call_args)),
+                QoreIROpcode::Call)) {
+            return 1;
+        }
+    }
+    {
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(1), &call_loc);
+        if (!lowerAndExpectOpcode("ir_self_call_with_args_lower",
+                QoreValue(new SelfFunctionCallNode(&call_loc, strdup("m"), call_args)),
+                QoreIROpcode::CallMethod)) {
+            return 1;
+        }
+    }
+    {
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(1), &call_loc);
+        if (!lowerAndExpectOpcode("ir_static_call_with_args_lower",
+                QoreValue(new StaticMethodCallNode(&call_loc, new NamedScope("IrCallClass"), call_args)),
+                QoreIROpcode::CallStatic)) {
+            return 1;
+        }
+    }
+    {
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(1), &call_loc);
+        if (!lowerAndExpectOpcode("ir_call_ref_with_args_lower",
+                QoreValue(new CallReferenceCallNode(&call_loc,
+                    QoreValue(new VarRefNode(&call_loc, strdup("list_var"), &list_var, false)),
+                    call_args)),
+                QoreIROpcode::CallIndirect)) {
+            return 1;
+        }
+    }
+    if (!lowerExpectFailure("ir_self_call_lower_fail",
+            QoreValue(new SelfFunctionCallNode(nullptr, strdup("m"), nullptr)))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_static_call_lower_fail",
+            QoreValue(new StaticMethodCallNode(nullptr, new NamedScope(strdup("IrCallClass::sm")), nullptr)))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_call_ref_lower_fail",
+            QoreValue(new CallReferenceCallNode(nullptr, QoreValue(1),
+                static_cast<QoreParseListNode*>(nullptr))))) {
+        return 1;
+    }
+    {
+        QoreProgramLocation cast_loc("ir_smoke", 1, 1);
+        if (!lowerAndExpectOpcode("ir_cast_lower",
+                QoreValue(new QoreParseCastOperatorNode(&cast_loc,
+                    new QoreParseTypeInfo(strdup("int"), false),
+                    QoreValue(1))),
+                QoreIROpcode::CastAny)) {
+            return 1;
+        }
+    }
+    if (!lowerAndExpectOpcode("ir_plus_equals_local",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(4))),
+                QoreIROpcode::AddAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_plus_equals_closure",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(5))),
+                QoreIROpcode::AddAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_plus_equals_global",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(6))),
+                QoreIROpcode::AddAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_plus_equals_threadlocal",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(7))),
+                QoreIROpcode::AddAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_minus_equals_local",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(4))),
+                QoreIROpcode::SubAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_minus_equals_closure",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(5))),
+                QoreIROpcode::SubAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_minus_equals_global",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(6))),
+                QoreIROpcode::SubAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_minus_equals_threadlocal",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(7))),
+                QoreIROpcode::SubAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_multiply_equals_local",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(4))),
+                QoreIROpcode::MulAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_multiply_equals_closure",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(5))),
+                QoreIROpcode::MulAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_multiply_equals_global",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(6))),
+                QoreIROpcode::MulAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_multiply_equals_threadlocal",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(7))),
+                QoreIROpcode::MulAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_divide_equals_local",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(4))),
+                QoreIROpcode::DivAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_divide_equals_closure",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(5))),
+                QoreIROpcode::DivAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_divide_equals_global",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(6))),
+                QoreIROpcode::DivAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_divide_equals_threadlocal",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(7))),
+                QoreIROpcode::DivAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_equals_local",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(4))),
+                QoreIROpcode::ModAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_equals_closure",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(5))),
+                QoreIROpcode::ModAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_equals_global",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(6))),
+                QoreIROpcode::ModAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_equals_threadlocal",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(7))),
+                QoreIROpcode::ModAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_equals_local",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(4))),
+                QoreIROpcode::AndAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_equals_closure",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(5))),
+                QoreIROpcode::AndAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_equals_global",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(6))),
+                QoreIROpcode::AndAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_equals_threadlocal",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(7))),
+                QoreIROpcode::AndAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_equals_local",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(4))),
+                QoreIROpcode::OrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_equals_closure",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(5))),
+                QoreIROpcode::OrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_equals_global",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(6))),
+                QoreIROpcode::OrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_equals_threadlocal",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(7))),
+                QoreIROpcode::OrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_equals_local",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(4))),
+                QoreIROpcode::XorAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_equals_closure",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(5))),
+                QoreIROpcode::XorAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_equals_global",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(6))),
+                QoreIROpcode::XorAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_equals_threadlocal",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(7))),
+                QoreIROpcode::XorAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_equals_local",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(1))),
+                QoreIROpcode::ShlAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_equals_closure",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(1))),
+                QoreIROpcode::ShlAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_equals_global",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(1))),
+                QoreIROpcode::ShlAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_equals_threadlocal",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(1))),
+                QoreIROpcode::ShlAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals_local",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(1))),
+                QoreIROpcode::ShrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals_closure",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
+                QoreValue(1))),
+                QoreIROpcode::ShrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals_global",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
+                QoreValue(1))),
+                QoreIROpcode::ShrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals_threadlocal",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
+                QoreValue(1))),
+                QoreIROpcode::ShrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_multiply_equals_lvalue_list",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))),
+                QoreValue(3))),
+            QoreIROpcode::MulAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_divide_equals_lvalue_list",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))),
+                QoreValue(2))),
+            QoreIROpcode::DivAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_modulo_equals_lvalue_list",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))),
+                QoreValue(2))),
+            QoreIROpcode::ModAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_and_equals_lvalue_list",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))),
+                QoreValue(6))),
+            QoreIROpcode::AndAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_or_equals_lvalue_list",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))),
+                QoreValue(1))),
+            QoreIROpcode::OrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_xor_equals_lvalue_list",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))),
+                QoreValue(5))),
+            QoreIROpcode::XorAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_left_equals_lvalue_list",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))),
+                QoreValue(2))),
+            QoreIROpcode::ShlAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_shift_right_equals_lvalue_list",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0))),
+                QoreValue(1))),
+            QoreIROpcode::ShrAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_increment",
+            QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)))),
+            QoreIROpcode::PreIncLValue)) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_pre_increment_range",
+            QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_post_increment_range",
+            QoreValue(new QorePostIncrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_pre_decrement_range",
+            QoreValue(new QorePreDecrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_post_decrement_range",
+            QoreValue(new QorePostDecrementOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0), QoreValue(1))))))) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_increment",
+            QoreValue(new QorePostIncrementOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)))),
+            QoreIROpcode::PostIncLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pre_decrement",
+            QoreValue(new QorePreDecrementOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)))),
+            QoreIROpcode::PreDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_post_decrement",
+            QoreValue(new QorePostDecrementOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)))),
+            QoreIROpcode::PostDecLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_null_coalescing",
+            QoreValue(new QoreNullCoalescingOperatorNode(nullptr, QoreValue(), QoreValue(7))),
+            QoreIROpcode::BrIf)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_value_coalescing",
+            QoreValue(new QoreValueCoalescingOperatorNode(nullptr, QoreValue(false), QoreValue(9))),
+            QoreIROpcode::BrIf)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_ternary",
+            QoreValue(new QoreQuestionMarkOperatorNode(nullptr, QoreValue(true), QoreValue(1), QoreValue(2))),
+            QoreIROpcode::BrIf)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_foldl",
+            QoreValue(new QoreFoldlOperatorNode(nullptr, QoreValue(1), QoreValue(2))),
+            QoreIROpcode::FoldlAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_foldr",
+            QoreValue(new QoreFoldrOperatorNode(nullptr, QoreValue(1), QoreValue(2))),
+            QoreIROpcode::FoldrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_map",
+            QoreValue(new QoreMapOperatorNode(nullptr, QoreValue(1), QoreValue(2))),
+            QoreIROpcode::MapAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_add_float",
+            QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(1.5), QoreValue(2.25))),
+            QoreIROpcode::AddFloat)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_sub_float",
+            QoreValue(new QoreMinusOperatorNode(nullptr, QoreValue(5.5), QoreValue(3.25))),
+            QoreIROpcode::SubFloat)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_lt_float",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr, QoreValue(1.5), QoreValue(2.25))),
+            QoreIROpcode::LtFloat)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_le_float",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr, QoreValue(1.5), QoreValue(2.25))),
+            QoreIROpcode::LeFloat)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_gt_float",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr, QoreValue(2.25), QoreValue(1.5))),
+            QoreIROpcode::GtFloat)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_ge_float",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr, QoreValue(2.25), QoreValue(1.5))),
+            QoreIROpcode::GeFloat)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_cmp_float",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr, QoreValue(2.25), QoreValue(1.5))),
+            QoreIROpcode::CmpFloat)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_mul_float",
+            QoreValue(new QoreMultiplicationOperatorNode(nullptr, QoreValue(1.5), QoreValue(2.25))),
+            QoreIROpcode::MulFloat)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_div_float",
+            QoreValue(new QoreDivisionOperatorNode(nullptr, QoreValue(4.5), QoreValue(1.5))),
+            QoreIROpcode::DivFloat)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_const_date_abs",
+            QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)),
+            QoreIROpcode::ConstDate)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_const_date_rel",
+            QoreValue(new DateTimeNode(0, 0, 1, 2, 3, 4, 5, true)),
+            QoreIROpcode::ConstDate)) {
+        return 1;
+    }
+    const QoreTypeInfo* analysis_list_int_type = qore_get_complex_list_type(bigIntTypeInfo);
+    const QoreTypeInfo* analysis_hash_int_type = qore_get_complex_hash_type(bigIntTypeInfo);
+    const QoreTypeInfo* analysis_range_type = qore_get_complex_list_type(bigIntTypeInfo);
+    LocalVar analysis_int_left("analysis_int_left", bigIntTypeInfo);
+    LocalVar analysis_int_right("analysis_int_right", bigIntTypeInfo);
+    analysis_int_left.parseAssigned();
+    analysis_int_right.parseAssigned();
+    LocalVar analysis_float_left("analysis_float_left", floatTypeInfo);
+    LocalVar analysis_float_right("analysis_float_right", floatTypeInfo);
+    analysis_float_left.parseAssigned();
+    analysis_float_right.parseAssigned();
+    LocalVar analysis_float_maybe_left("analysis_float_maybe_left", floatTypeInfo);
+    LocalVar analysis_float_maybe_right("analysis_float_maybe_right", floatTypeInfo);
+    LocalVar analysis_date_left("analysis_date_left", dateTypeInfo);
+    LocalVar analysis_date_right("analysis_date_right", dateTypeInfo);
+    LocalVar analysis_date_maybe_left("analysis_date_maybe_left", dateTypeInfo);
+    LocalVar analysis_date_maybe_right("analysis_date_maybe_right", dateTypeInfo);
+    analysis_date_left.parseAssigned();
+    analysis_date_right.parseAssigned();
+    LocalVar analysis_list_left("analysis_list_left", analysis_list_int_type);
+    LocalVar analysis_list_maybe_left("analysis_list_maybe_left", analysis_list_int_type);
+    const QoreTypeInfo* analysis_keys_type = qore_get_complex_list_type(stringTypeInfo);
+    LocalVar analysis_key_list_maybe("analysis_key_list_maybe", analysis_keys_type);
+    LocalVar analysis_hash_left("analysis_hash_left", analysis_hash_int_type);
+    LocalVar analysis_hash_maybe_left("analysis_hash_maybe_left", analysis_hash_int_type);
+    LocalVar analysis_object_left("analysis_object_left", objectTypeInfo);
+    LocalVar analysis_object_maybe_left("analysis_object_maybe_left", objectTypeInfo);
+    LocalVar analysis_object_right("analysis_object_right", objectTypeInfo);
+    LocalVar analysis_object_maybe_right("analysis_object_maybe_right", objectTypeInfo);
+    LocalVar analysis_string_right("analysis_string_right", stringTypeInfo);
+    LocalVar analysis_string_maybe_right("analysis_string_maybe_right", stringTypeInfo);
+    LocalVar analysis_binary_left("analysis_binary_left", binaryTypeInfo);
+    LocalVar analysis_binary_maybe_left("analysis_binary_maybe_left", binaryTypeInfo);
+    LocalVar analysis_binary_maybe_right("analysis_binary_maybe_right", binaryTypeInfo);
+    analysis_list_left.parseAssigned();
+    analysis_hash_left.parseAssigned();
+    analysis_string_right.parseAssigned();
+    analysis_binary_left.parseAssigned();
+    analysis_object_left.parseAssigned();
+    analysis_object_right.parseAssigned();
+    LocalVar analysis_int_maybe_left("analysis_int_maybe_left", bigIntTypeInfo);
+    LocalVar analysis_int_maybe_right("analysis_int_maybe_right", bigIntTypeInfo);
+    LocalVar analysis_int_unassigned("analysis_int_unassigned", bigIntTypeInfo);
+    LocalVar analysis_int_unassigned_late("analysis_int_unassigned_late", bigIntTypeInfo);
+    // VarRef parse-analysis checks (assigned vs. maybe)
+    if (!expectParseAnalysisFlags("analysis_instanceof_assigned",
+            QoreValue(new QoreInstanceOfOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                bigIntTypeInfo)),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_instanceof_maybe",
+            QoreValue(new QoreInstanceOfOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                    &analysis_int_unassigned, false)),
+                bigIntTypeInfo)),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_range_assigned",
+            QoreValue(new QoreRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            analysis_range_type, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_range_maybe",
+            QoreValue(new QoreRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                    &analysis_int_unassigned, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            analysis_range_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_range_maybe_left",
+            QoreValue(new QoreRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                    &analysis_int_unassigned, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            analysis_range_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_range_maybe_right",
+            QoreValue(new QoreRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            analysis_range_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_plus_date_maybe_left",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            dateTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_plus_date_maybe_right",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            dateTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_minus_date_maybe_left",
+            QoreValue(new QoreMinusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            dateTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_minus_date_maybe_right",
+            QoreValue(new QoreMinusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            dateTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_plus_date_int_maybe_date",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            dateTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_plus_date_int_maybe_int",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            dateTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_minus_date_int_maybe_date",
+            QoreValue(new QoreMinusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            dateTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_minus_date_int_maybe_int",
+            QoreValue(new QoreMinusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            dateTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_list",
+            QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_list_maybe",
+            QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_list_maybe_left",
+            QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_list_maybe_both",
+            QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_list",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            analysis_list_int_type, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_list_maybe_left",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            analysis_list_int_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_list_maybe_start",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            analysis_list_int_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_list_maybe_end",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            analysis_list_int_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_string",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            stringTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_string_maybe_seq",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                    &analysis_string_maybe_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            stringTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_string_maybe_start",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            stringTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_string_maybe_end",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            stringTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_binary",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            binaryTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_binary_maybe_seq",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            binaryTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_binary_maybe_start",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            binaryTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_square_brackets_range_binary_maybe_end",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            binaryTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_hash_deref",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_hash_deref_maybe",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_hash_deref_maybe_key",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                    &analysis_string_maybe_right, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_hash_deref_maybe_both",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                    &analysis_string_maybe_right, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, false)) {
+        return 1;
+    }
+    {
+        QoreListNode* slice_keys = new QoreListNode(stringTypeInfo);
+        slice_keys->push(QoreValue(new QoreStringNode("a")), nullptr);
+        if (!expectParseAnalysisFlags("analysis_hash_deref_slice_assigned",
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                    QoreValue(slice_keys))),
+                analysis_hash_int_type, true, true, false)) {
+            return 1;
+        }
+    }
+    {
+        QoreListNode* slice_keys = new QoreListNode(stringTypeInfo);
+        slice_keys->push(QoreValue(new QoreStringNode("b")), nullptr);
+        if (!expectParseAnalysisFlags("analysis_hash_deref_slice_maybe_left",
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                        &analysis_hash_maybe_left, false)),
+                    QoreValue(slice_keys))),
+                analysis_hash_int_type, true, true, false)) {
+            return 1;
+        }
+    }
+    if (!expectParseAnalysisFlags("analysis_hash_deref_slice_maybe_keys",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_key_list_maybe"),
+                    &analysis_key_list_maybe, false)))),
+            analysis_hash_int_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_keys_hash_assigned",
+            QoreValue(new QoreKeysOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            analysis_keys_type, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_keys_hash_maybe",
+            QoreValue(new QoreKeysOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            analysis_keys_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_keys_object_assigned",
+            QoreValue(new QoreKeysOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)))),
+            analysis_keys_type, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_remove_assigned",
+            QoreValue(new QoreRemoveOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+            bigIntTypeInfo, true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_remove_maybe",
+            QoreValue(new QoreRemoveOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                    &analysis_int_unassigned, false)))),
+            bigIntTypeInfo, true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlagsWithProgram("analysis_cast_list_assigned",
+            QoreValue(new QoreParseCastOperatorNode(nullptr,
+                new QoreParseTypeInfo(strdup("list"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            listTypeInfo, true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlagsWithProgram("analysis_cast_list_maybe",
+            QoreValue(new QoreParseCastOperatorNode(nullptr,
+                new QoreParseTypeInfo(strdup("list"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)))),
+            listTypeInfo, true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlagsWithProgram("analysis_cast_list_or_nothing",
+            QoreValue(new QoreParseCastOperatorNode(nullptr,
+                new QoreParseTypeInfo(strdup("list"), true),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            listTypeInfo, true, false, true)) {
+        return 1;
+    }
+    const char* cast_source = "class MyCastClass {}\n"
+        "class MyOtherClass {}\n";
+    QoreProgramLocation cast_loc("ir_smoke", 1, 1);
+    if (!expectParseAnalysisFlagsWithProgramSourceAndClassType("analysis_cast_myclass_assigned",
+            cast_source,
+            QoreValue(new QoreParseCastOperatorNode(&cast_loc,
+                new QoreParseTypeInfo(strdup("MyCastClass"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)))),
+            "MyCastClass", true, false, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlagsWithProgramSourceAndClassType("analysis_cast_myclass_maybe",
+            cast_source,
+            QoreValue(new QoreParseCastOperatorNode(&cast_loc,
+                new QoreParseTypeInfo(strdup("MyCastClass"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)))),
+            "MyCastClass", true, false, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlagsWithProgramSourceAndClassType("analysis_cast_myclass_or_nothing",
+            cast_source,
+            QoreValue(new QoreParseCastOperatorNode(&cast_loc,
+                new QoreParseTypeInfo(strdup("MyCastClass"), true),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)))),
+            "MyCastClass", true, false, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlagsWithProgramSourceAndClassType("analysis_cast_myotherclass_assigned",
+            cast_source,
+            QoreValue(new QoreParseCastOperatorNode(&cast_loc,
+                new QoreParseTypeInfo(strdup("MyOtherClass"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)))),
+            "MyOtherClass", true, false, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlagsWithProgramSourceAndClassType("analysis_cast_myotherclass_maybe",
+            cast_source,
+            QoreValue(new QoreParseCastOperatorNode(&cast_loc,
+                new QoreParseTypeInfo(strdup("MyOtherClass"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)))),
+            "MyOtherClass", true, false, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlagsWithProgram("analysis_cast_hash_assigned",
+            QoreValue(new QoreParseCastOperatorNode(nullptr,
+                new QoreParseTypeInfo(strdup("hash"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            hashTypeInfo, true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_background_assigned",
+            QoreValue(new QoreBackgroundOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+            bigIntTypeInfo, true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_background_maybe",
+            QoreValue(new QoreBackgroundOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned_late"),
+                    &analysis_int_unassigned_late, false)))),
+            bigIntTypeInfo, true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_implicit_arg",
+            QoreValue(new QoreImplicitArgumentNode(nullptr, 1)),
+            nullptr, false, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_shift_list_assigned",
+            QoreValue(new QoreShiftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_shift_list_maybe",
+            QoreValue(new QoreShiftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_shift_list_maybe_rhs",
+            QoreValue(new QoreShiftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_unshift_list_assigned",
+            QoreValue(new QoreUnshiftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            listTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_unshift_list_maybe_list",
+            QoreValue(new QoreUnshiftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            listTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_unshift_list_maybe_rhs",
+            QoreValue(new QoreUnshiftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            listTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_splice_list_assigned",
+            QoreValue(new QoreSpliceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(),
+                QoreValue())),
+            analysis_list_int_type, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_splice_list_maybe_list",
+            QoreValue(new QoreSpliceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(),
+                QoreValue())),
+            analysis_list_int_type, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_splice_list_maybe_index",
+            QoreValue(new QoreSpliceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)),
+                QoreValue(),
+                QoreValue())),
+            analysis_list_int_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_splice_list_maybe_new",
+            QoreValue(new QoreSpliceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            analysis_list_int_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_varref_assigned",
+            QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+            bigIntTypeInfo, true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_varref_maybe",
+            QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned_late"),
+                &analysis_int_unassigned_late, false)),
+            bigIntTypeInfo, true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_logical_and_assigned",
+            QoreValue(new QoreLogicalAndOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_logical_and_maybe",
+            QoreValue(new QoreLogicalAndOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_logical_and_maybe_left",
+            QoreValue(new QoreLogicalAndOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned_late"),
+                    &analysis_int_unassigned_late, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_logical_or_assigned",
+            QoreValue(new QoreLogicalOrOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_logical_or_maybe",
+            QoreValue(new QoreLogicalOrOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_logical_or_maybe_left",
+            QoreValue(new QoreLogicalOrOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned_late"),
+                    &analysis_int_unassigned_late, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_unary_plus_int_assigned",
+            QoreValue(new QoreUnaryPlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+            nullptr, false, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_unary_plus_int_maybe",
+            QoreValue(new QoreUnaryPlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned_late"),
+                    &analysis_int_unassigned_late, false)))),
+            nullptr, false, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_unary_plus_float_assigned",
+            QoreValue(new QoreUnaryPlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+            nullptr, false, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_unary_plus_float_maybe",
+            QoreValue(new QoreUnaryPlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)))),
+            nullptr, false, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_eq_assigned",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_eq_maybe",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ne_assigned",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ne_maybe",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_abs_eq_assigned",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_abs_eq_maybe_right",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_abs_eq_maybe_left",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned_late"),
+                    &analysis_int_unassigned_late, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_abs_ne_assigned",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_abs_ne_maybe_right",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_abs_ne_maybe_left",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned_late"),
+                    &analysis_int_unassigned_late, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_lt_assigned",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_lt_maybe",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_le_assigned",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_le_maybe",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_gt_assigned",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_gt_maybe",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ge_assigned",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ge_maybe",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_cmp_assigned",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            bigIntTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_cmp_maybe",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            bigIntTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_eq_mixed_int_float",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_eq_mixed_int_float_maybe",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ne_mixed_int_float",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_lt_mixed_int_float",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_le_mixed_int_float",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_gt_mixed_int_float",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ge_mixed_int_float",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_cmp_mixed_int_float",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            bigIntTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_eq_mixed_int_string",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ne_mixed_int_string_maybe",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                    &analysis_string_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_eq_date_assigned",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_eq_date_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ne_date_assigned",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_lt_date_assigned",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_gt_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_cmp_date_assigned",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            bigIntTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_eq_object_assigned",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ne_object_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_lt_float_assigned",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_lt_float_maybe",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_le_float_assigned",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_le_float_maybe",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_gt_float_assigned",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_gt_float_maybe",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ge_float_assigned",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_ge_float_maybe",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_cmp_float_assigned",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            bigIntTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_cmp_float_maybe",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            bigIntTypeInfo, true, true, false)) {
+        return 1;
+    }
+    const char* call_source = "int sub ir_call(int $i) { return $i; }\n"
+        "int sub ir_call_ref(int $i) { return $i; }\n"
+        "class IrCallClass { int m(int $i) { return $i; } static int sm(int $i) { return $i; } }\n"
+        "class IrNewClass { constructor(int $i) {} }\n";
+    {
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_left"), &analysis_int_left, false)),
+            &call_loc);
+        if (!expectParseAnalysisFlagsWithProgramSource("analysis_function_call",
+                call_source,
+                QoreValue(new FunctionCallNode(&call_loc, strdup("ir_call"), call_args)),
+                bigIntTypeInfo, true, false, true)) {
+            return 1;
+        }
+    }
+    {
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_unassigned_late"),
+            &analysis_int_unassigned_late, false)), &call_loc);
+    if (!expectParseAnalysisFlagsWithProgramSource("analysis_function_call_maybe",
+            call_source,
+            QoreValue(new FunctionCallNode(&call_loc, strdup("ir_call"), call_args)),
+            bigIntTypeInfo, true, false, false)) {
+        return 1;
+    }
+}
+{
+    ExceptionSink xsink;
+    QoreProgramHelper pgm_helper(xsink);
+    if (xsink) {
+        std::cerr << "Failed to initialize QoreProgram (analysis_call_parse_node)\n";
+        return 1;
+    }
+    QoreProgram* program = *pgm_helper;
+    QoreProgramContextHelper program_context(program);
+    ProgramRuntimeExternalParseContextHelper parse_lock(program);
+    if (!parse_lock) {
+        std::cerr << "Failed to acquire parse lock (analysis_call_parse_node)\n";
+        return 1;
+    }
+    program->parse(call_source, "ir_smoke", &xsink);
+    if (xsink) {
+        std::cerr << "Failed to parse program source (analysis_call_parse_node)\n";
+        return 1;
+    }
+    QoreProgramLocation call_loc("ir_smoke", 1, 1);
+    QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+    call_args->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_left"), &analysis_int_left, false)),
+        &call_loc);
+    QoreValue call_expr(new FunctionCallNode(&call_loc, strdup("ir_call"), call_args));
+    QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
+    QoreValue parsed_expr(call_expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (analysis_call_parse_node)\n";
+        return 1;
+    }
+    ValueHolder call_holder(parsed_expr, nullptr);
+    const auto* parse_node = dynamic_cast<const ParseNode*>(parsed_expr.getInternalNode());
+    if (!parse_node) {
+        std::cerr << "Parse node missing (analysis_call_parse_node)\n";
+        return 1;
+    }
+    const QoreParseAnalysis& analysis = parse_node->getParseAnalysis();
+    if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        || !QoreTypeInfo::equal(analysis.known_type, bigIntTypeInfo)) {
+        std::cerr << "Parse analysis flags mismatch (analysis_call_parse_node)\n";
+        return 1;
+    }
+    QoreValue cast_expr(new QoreParseCastOperatorNode(&call_loc,
+        new QoreParseTypeInfo(strdup("list"), false),
+        QoreValue(new VarRefNode(&call_loc, strdup("analysis_list_left"), &analysis_list_left, false))));
+    QoreValue parsed_cast(cast_expr);
+    QoreParseContext cast_context(static_cast<LocalVar*>(nullptr), program);
+    if (parse_init_value(parsed_cast, cast_context)) {
+        std::cerr << "Parse init failed (analysis_cast_parse_node)\n";
+        return 1;
+    }
+    ValueHolder cast_holder(parsed_cast, nullptr);
+    const auto* cast_node = dynamic_cast<const ParseNode*>(parsed_cast.getInternalNode());
+    if (!cast_node) {
+        std::cerr << "Parse node missing (analysis_cast_parse_node)\n";
+        return 1;
+    }
+    const QoreParseAnalysis& cast_analysis = cast_node->getParseAnalysis();
+    if (!cast_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        || cast_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        || !cast_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        || !QoreTypeInfo::equal(cast_analysis.known_type, listTypeInfo)) {
+        std::cerr << "Parse analysis flags mismatch (analysis_cast_parse_node)\n";
+        return 1;
+    }
+}
+    {
+        ExceptionSink xsink;
+        QoreProgramHelper pgm_helper(xsink);
+        if (xsink) {
+            std::cerr << "Failed to initialize QoreProgram (analysis_call_reference)\n";
+            return 1;
+        }
+        QoreProgram* program = *pgm_helper;
+        QoreProgramContextHelper program_context(program);
+        ProgramRuntimeExternalParseContextHelper parse_lock(program);
+        if (!parse_lock) {
+            std::cerr << "Failed to acquire parse lock (analysis_call_reference)\n";
+            return 1;
+        }
+        program->parse(call_source, "ir_smoke", &xsink);
+        if (xsink) {
+            std::cerr << "Failed to parse program source (analysis_call_reference)\n";
+            return 1;
+        }
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        const FunctionEntry* fe = qore_root_ns_private::parseResolveFunctionEntry(&call_loc, "ir_call_ref");
+        if (!fe) {
+            std::cerr << "Failed to resolve function entry (analysis_call_reference)\n";
+            return 1;
+        }
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_left"), &analysis_int_left, false)),
+            &call_loc);
+        ResolvedCallReferenceNode* cref = fe->makeCallReference(&call_loc);
+        if (!cref) {
+            std::cerr << "Failed to create call reference (analysis_call_reference)\n";
+            return 1;
+        }
+        QoreValue call_expr(new CallReferenceCallNode(&call_loc, QoreValue(cref), call_args));
+        QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
+        QoreValue parsed_expr(call_expr);
+        if (parse_init_value(parsed_expr, parse_context)) {
+            std::cerr << "Parse init failed (analysis_call_reference)\n";
+            return 1;
+        }
+        ValueHolder call_expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = parse_context.analysis;
+        if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+            std::cerr << "Parse analysis flags mismatch (analysis_call_reference)\n";
+            return 1;
+        }
+        QoreParseListNode* call_args_maybe = new QoreParseListNode(&call_loc);
+        call_args_maybe->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_unassigned_late"),
+            &analysis_int_unassigned_late, false)), &call_loc);
+        ResolvedCallReferenceNode* cref_maybe = fe->makeCallReference(&call_loc);
+        if (!cref_maybe) {
+            std::cerr << "Failed to create call reference (analysis_call_reference_maybe)\n";
+            return 1;
+        }
+        QoreValue call_expr_maybe(new CallReferenceCallNode(&call_loc, QoreValue(cref_maybe), call_args_maybe));
+        QoreValue parsed_expr_maybe(call_expr_maybe);
+        if (parse_init_value(parsed_expr_maybe, parse_context)) {
+            std::cerr << "Parse init failed (analysis_call_reference_maybe)\n";
+            return 1;
+        }
+        ValueHolder call_expr_maybe_holder(parsed_expr_maybe, nullptr);
+        const QoreParseAnalysis& analysis_maybe = parse_context.analysis;
+        if (analysis_maybe.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || analysis_maybe.hasFlag(QoreParseAnalysis::NeverNothing)
+            || analysis_maybe.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+            std::cerr << "Parse analysis flags mismatch (analysis_call_reference_maybe)\n";
+            return 1;
+        }
+    }
+    {
+        ExceptionSink xsink;
+        QoreProgramHelper pgm_helper(xsink);
+        if (xsink) {
+            std::cerr << "Failed to initialize QoreProgram (analysis_method_calls)\n";
+            return 1;
+        }
+        QoreProgram* program = *pgm_helper;
+        QoreProgramContextHelper program_context(program);
+        ProgramRuntimeExternalParseContextHelper parse_lock(program);
+        if (!parse_lock) {
+            std::cerr << "Failed to acquire parse lock (analysis_method_calls)\n";
+            return 1;
+        }
+        program->parse(call_source, "ir_smoke", &xsink);
+        if (xsink) {
+            std::cerr << "Failed to parse program source (analysis_method_calls)\n";
+            return 1;
+        }
+        const QoreClass* klass = program->findClass("IrCallClass", &xsink);
+        if (xsink || !klass) {
+            std::cerr << "Failed to resolve class (analysis_method_calls)\n";
+            return 1;
+        }
+        const QoreClass* new_klass = program->findClass("IrNewClass", &xsink);
+        if (xsink || !new_klass) {
+            std::cerr << "Failed to resolve class (analysis_new_calls)\n";
+            return 1;
+        }
+        LocalVar self_var("self", klass->getTypeInfo());
+        self_var.parseAssigned();
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        {
+            QoreParseListNode* self_args = new QoreParseListNode(&call_loc);
+            self_args->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_left"),
+                &analysis_int_left, false)), &call_loc);
+            QoreValue self_expr(new SelfFunctionCallNode(&call_loc, strdup("m"), self_args));
+            QoreParseContext self_context(&self_var, program);
+            QoreValue parsed_expr(self_expr);
+            if (parse_init_value(parsed_expr, self_context)) {
+                std::cerr << "Parse init failed (analysis_self_call)\n";
+                return 1;
+            }
+            ValueHolder self_holder(parsed_expr, nullptr);
+            const QoreParseAnalysis& analysis = self_context.analysis;
+            if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                || !QoreTypeInfo::equal(analysis.known_type, bigIntTypeInfo)) {
+                std::cerr << "Parse analysis flags mismatch (analysis_self_call)\n";
+                return 1;
+            }
+        }
+        {
+            QoreParseListNode* self_args = new QoreParseListNode(&call_loc);
+            self_args->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_unassigned_late"),
+                &analysis_int_unassigned_late, false)), &call_loc);
+            QoreValue self_expr(new SelfFunctionCallNode(&call_loc, strdup("m"), self_args));
+            QoreParseContext self_context(&self_var, program);
+            QoreValue parsed_expr(self_expr);
+            if (parse_init_value(parsed_expr, self_context)) {
+                std::cerr << "Parse init failed (analysis_self_call_maybe)\n";
+                return 1;
+            }
+            ValueHolder self_holder(parsed_expr, nullptr);
+            const QoreParseAnalysis& analysis = self_context.analysis;
+            if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                || !QoreTypeInfo::equal(analysis.known_type, bigIntTypeInfo)) {
+                std::cerr << "Parse analysis flags mismatch (analysis_self_call_maybe)\n";
+                return 1;
+            }
+        }
+        {
+            QoreParseListNode* static_args = new QoreParseListNode(&call_loc);
+            static_args->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_left"),
+                &analysis_int_left, false)), &call_loc);
+            QoreValue static_expr(
+                new StaticMethodCallNode(&call_loc, new NamedScope(strdup("IrCallClass::sm")), static_args));
+            QoreParseContext static_context(static_cast<LocalVar*>(nullptr), program);
+            QoreValue parsed_expr(static_expr);
+            if (parse_init_value(parsed_expr, static_context)) {
+                std::cerr << "Parse init failed (analysis_static_call)\n";
+                return 1;
+            }
+            ValueHolder static_holder(parsed_expr, nullptr);
+            const QoreParseAnalysis& analysis = static_context.analysis;
+            if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                || !QoreTypeInfo::equal(analysis.known_type, bigIntTypeInfo)) {
+                std::cerr << "Parse analysis flags mismatch (analysis_static_call)\n";
+                return 1;
+            }
+        }
+        {
+            QoreParseListNode* static_args = new QoreParseListNode(&call_loc);
+            static_args->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_unassigned_late"),
+                &analysis_int_unassigned_late, false)), &call_loc);
+            QoreValue static_expr(
+                new StaticMethodCallNode(&call_loc, new NamedScope(strdup("IrCallClass::sm")), static_args));
+            QoreParseContext static_context(static_cast<LocalVar*>(nullptr), program);
+            QoreValue parsed_expr(static_expr);
+            if (parse_init_value(parsed_expr, static_context)) {
+                std::cerr << "Parse init failed (analysis_static_call_maybe)\n";
+                return 1;
+            }
+            ValueHolder static_holder(parsed_expr, nullptr);
+            const QoreParseAnalysis& analysis = static_context.analysis;
+            if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                || !QoreTypeInfo::equal(analysis.known_type, bigIntTypeInfo)) {
+                std::cerr << "Parse analysis flags mismatch (analysis_static_call_maybe)\n";
+                return 1;
+            }
+        }
+        {
+            QoreParseListNode* new_args = new QoreParseListNode(&call_loc);
+            new_args->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_left"),
+                &analysis_int_left, false)), &call_loc);
+            QoreValue new_expr(new ScopedObjectCallNode(&call_loc, new_klass, new_args));
+            QoreParseContext new_context(static_cast<LocalVar*>(nullptr), program);
+            QoreValue parsed_expr(new_expr);
+            if (parse_init_value(parsed_expr, new_context)) {
+                std::cerr << "Parse init failed (analysis_new_call)\n";
+                return 1;
+            }
+            ValueHolder new_holder(parsed_expr, nullptr);
+            const QoreParseAnalysis& analysis = new_context.analysis;
+            if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                || !QoreTypeInfo::equal(analysis.known_type, new_klass->getTypeInfo())) {
+                std::cerr << "Parse analysis flags mismatch (analysis_new_call)\n";
+                return 1;
+            }
+        }
+        {
+            QoreParseListNode* new_args = new QoreParseListNode(&call_loc);
+            new_args->add(QoreValue(new VarRefNode(&call_loc, strdup("analysis_int_unassigned_late"),
+                &analysis_int_unassigned_late, false)), &call_loc);
+            QoreValue new_expr(new ScopedObjectCallNode(&call_loc, new_klass, new_args));
+            QoreParseContext new_context(static_cast<LocalVar*>(nullptr), program);
+            QoreValue parsed_expr(new_expr);
+            if (parse_init_value(parsed_expr, new_context)) {
+                std::cerr << "Parse init failed (analysis_new_call_maybe)\n";
+                return 1;
+            }
+            ValueHolder new_holder(parsed_expr, nullptr);
+            const QoreParseAnalysis& analysis = new_context.analysis;
+            if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                || !QoreTypeInfo::equal(analysis.known_type, new_klass->getTypeInfo())) {
+                std::cerr << "Parse analysis flags mismatch (analysis_new_call_maybe)\n";
+                return 1;
+            }
+        }
+        {
+            QoreListNode* ctor_args = new QoreListNode(autoTypeInfo);
+            if (ctor_args->push(QoreValue(1), &xsink)) {
+                std::cerr << "Failed to create constructor args (analysis_new_calls)\n";
+                return 1;
+            }
+            if (!lowerExpectFailure("ir_new_object_lower_fail",
+                    QoreValue(new NewObjectCallNode(new_klass, ctor_args)))) {
+                return 1;
+            }
+        }
+        if (!lowerExpectFailure("ir_scoped_object_lower_fail",
+                QoreValue(new ScopedObjectCallNode(&call_loc, new NamedScope(strdup("IrNewClass")), nullptr)))) {
+            return 1;
+        }
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_plus_parse_int",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_plus_parse_int_maybe",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_plus_parse_int_mixed_assign",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mul_parse_int_mixed_assign",
+            QoreValue(new QoreMultiplicationOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::MulInt, QoreIROpcode::MulFloat, QoreIROpcode::MulAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_div_parse_int_mixed_assign",
+            QoreValue(new QoreDivisionOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::DivInt, QoreIROpcode::DivFloat, QoreIROpcode::DivAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_plus_parse_float",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_mixed_assign",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_mixed_assign",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_mixed_assign",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_mixed_assign",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_mixed_assign",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    QoreProgramLocation analysis_loc("ir_smoke");
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_sub_parse_float",
+            QoreValue(new QoreMinusOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::SubInt, QoreIROpcode::SubFloat, QoreIROpcode::SubAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_sub_parse_int",
+            QoreValue(new QoreMinusOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::SubInt, QoreIROpcode::SubFloat, QoreIROpcode::SubAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_float",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mul_parse_int",
+            QoreValue(new QoreMultiplicationOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::MulInt, QoreIROpcode::MulFloat, QoreIROpcode::MulAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mul_parse_float",
+            QoreValue(new QoreMultiplicationOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::MulInt, QoreIROpcode::MulFloat, QoreIROpcode::MulAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_div_parse_float",
+            QoreValue(new QoreDivisionOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::DivInt, QoreIROpcode::DivFloat, QoreIROpcode::DivAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_div_parse_int",
+            QoreValue(new QoreDivisionOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::DivInt, QoreIROpcode::DivFloat, QoreIROpcode::DivAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mod_parse_int",
+            QoreValue(new QoreModuloOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::ModInt, QoreIROpcode::ModAny, QoreIROpcode::ModAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mod_parse_float",
+            QoreValue(new QoreModuloOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::ModInt, QoreIROpcode::ModAny, QoreIROpcode::ModAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mod_parse_mixed",
+            QoreValue(new QoreModuloOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::ModInt, QoreIROpcode::ModAny, QoreIROpcode::ModAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_parse_int",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_int",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_int",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_parse_mixed",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_mixed",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_mixed",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shl_parse_int",
+            QoreValue(new QoreShiftLeftOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::ShlInt, QoreIROpcode::ShlAny, QoreIROpcode::ShlAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shr_parse_int",
+            QoreValue(new QoreShiftRightOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::ShrInt, QoreIROpcode::ShrAny, QoreIROpcode::ShrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shl_parse_int_maybe",
+            QoreValue(new QoreShiftLeftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::ShlInt, QoreIROpcode::ShlAny, QoreIROpcode::ShlAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shl_parse_mixed",
+            QoreValue(new QoreShiftLeftOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::ShlInt, QoreIROpcode::ShlAny, QoreIROpcode::ShlAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shr_parse_mixed",
+            QoreValue(new QoreShiftRightOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::ShrInt, QoreIROpcode::ShrAny, QoreIROpcode::ShrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_maybe",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_mixed_assign",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_mixed_assign",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_float",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_float_maybe",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_float_maybe",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_float",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_float_mixed",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_minus_parse_int",
+            QoreValue(new QoreUnaryMinusOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))))),
+            QoreIROpcode::UnaryMinusInt, QoreIROpcode::UnaryMinusFloat, QoreIROpcode::UnaryMinusAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_minus_parse_float",
+            QoreValue(new QoreUnaryMinusOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))))),
+            QoreIROpcode::UnaryMinusInt, QoreIROpcode::UnaryMinusFloat, QoreIROpcode::UnaryMinusAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_minus_parse_date",
+            QoreValue(new QoreUnaryMinusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)))),
+            QoreIROpcode::UnaryMinusInt, QoreIROpcode::UnaryMinusFloat, QoreIROpcode::UnaryMinusAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_maybe",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_maybe",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_parse_date",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_date",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_date",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shl_parse_date",
+            QoreValue(new QoreShiftLeftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::ShlInt, QoreIROpcode::ShlAny, QoreIROpcode::ShlAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shr_parse_date",
+            QoreValue(new QoreShiftRightOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::ShrInt, QoreIROpcode::ShrAny, QoreIROpcode::ShrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_plus_parse_date_int",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_plus_parse_date_date",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_minus_parse_date_int",
+            QoreValue(new QoreMinusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::SubInt, QoreIROpcode::SubFloat, QoreIROpcode::SubAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_minus_parse_date_date",
+            QoreValue(new QoreMinusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::SubInt, QoreIROpcode::SubFloat, QoreIROpcode::SubAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_abs_eq_parse_int_analysis",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::EqHard, QoreIROpcode::EqHard, QoreIROpcode::EqHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_abs_ne_parse_int_analysis",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::NeHard, QoreIROpcode::NeHard, QoreIROpcode::NeHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_abs_eq_parse_float_analysis",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::EqHard, QoreIROpcode::EqHard, QoreIROpcode::EqHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_abs_ne_parse_float_analysis",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::NeHard, QoreIROpcode::NeHard, QoreIROpcode::NeHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_abs_eq_parse_date_analysis",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqHard, QoreIROpcode::EqHard, QoreIROpcode::EqHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_abs_ne_parse_date_analysis",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeHard, QoreIROpcode::NeHard, QoreIROpcode::NeHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_abs_eq_parse_object_analysis",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqHard, QoreIROpcode::EqHard, QoreIROpcode::EqHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_abs_ne_parse_object_analysis",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeHard, QoreIROpcode::NeHard, QoreIROpcode::NeHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_float",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_abs_eq_parse_int",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::EqHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_abs_ne_parse_int",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::NeHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_mixed",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_mixed",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_mixed",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_mixed",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_mixed",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_mixed",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_mixed",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_string",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_string",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_date",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_date",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_date",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_date",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_date",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_date",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_date",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_float_string",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_float_string",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_float_string",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_float_string",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_float_string",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_float_string",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_float_string",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_string",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_string",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_string",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_string",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_string",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_string",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_string",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_string",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_string",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_string",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_string",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_string",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_string",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_string",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_date",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_date",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_date",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_date",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_date",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_date",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_date",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_add_assign_parse_int",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::AddAssignInt, QoreIROpcode::AddAssignAny, QoreIROpcode::AddAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_add_assign_parse_int_maybe",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::AddAssignInt, QoreIROpcode::AddAssignAny, QoreIROpcode::AddAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_add_assign_parse_date_int",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::AddAssignInt, QoreIROpcode::AddAssignAny, QoreIROpcode::AddAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_add_assign_parse_date_date",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::AddAssignInt, QoreIROpcode::AddAssignAny, QoreIROpcode::AddAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_sub_assign_parse_int",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::SubAssignInt, QoreIROpcode::SubAssignAny, QoreIROpcode::SubAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_sub_assign_parse_int_maybe",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::SubAssignInt, QoreIROpcode::SubAssignAny, QoreIROpcode::SubAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_sub_assign_parse_date_int",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::SubAssignInt, QoreIROpcode::SubAssignAny, QoreIROpcode::SubAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_sub_assign_parse_date_date",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::SubAssignInt, QoreIROpcode::SubAssignAny, QoreIROpcode::SubAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mul_assign_parse_int",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::MulAssignInt, QoreIROpcode::MulAssignAny, QoreIROpcode::MulAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mul_assign_parse_int_maybe",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::MulAssignInt, QoreIROpcode::MulAssignAny, QoreIROpcode::MulAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_div_assign_parse_int",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::DivAssignInt, QoreIROpcode::DivAssignAny, QoreIROpcode::DivAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_div_assign_parse_int_maybe",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::DivAssignInt, QoreIROpcode::DivAssignAny, QoreIROpcode::DivAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mod_assign_parse_int",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::ModAssignInt, QoreIROpcode::ModAssignAny, QoreIROpcode::ModAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mod_assign_parse_int_maybe",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::ModAssignInt, QoreIROpcode::ModAssignAny, QoreIROpcode::ModAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_assign_parse_int",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::AndAssignInt, QoreIROpcode::AndAssignAny, QoreIROpcode::AndAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_assign_parse_int_maybe",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::AndAssignInt, QoreIROpcode::AndAssignAny, QoreIROpcode::AndAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_assign_parse_int",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::OrAssignInt, QoreIROpcode::OrAssignAny, QoreIROpcode::OrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_assign_parse_int_maybe",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::OrAssignInt, QoreIROpcode::OrAssignAny, QoreIROpcode::OrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_assign_parse_int",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::XorAssignInt, QoreIROpcode::XorAssignAny, QoreIROpcode::XorAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_assign_parse_int_maybe",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::XorAssignInt, QoreIROpcode::XorAssignAny, QoreIROpcode::XorAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shl_assign_parse_int",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::ShlAssignInt, QoreIROpcode::ShlAssignAny, QoreIROpcode::ShlAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shl_assign_parse_int_maybe",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::ShlAssignInt, QoreIROpcode::ShlAssignAny, QoreIROpcode::ShlAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shr_assign_parse_int",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::ShrAssignInt, QoreIROpcode::ShrAssignAny, QoreIROpcode::ShrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shr_assign_parse_int_maybe",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::ShrAssignInt, QoreIROpcode::ShrAssignAny, QoreIROpcode::ShrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shl_assign_parse_mixed",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::ShlAssignInt, QoreIROpcode::ShlAssignAny, QoreIROpcode::ShlAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shr_assign_parse_mixed",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::ShrAssignInt, QoreIROpcode::ShrAssignAny, QoreIROpcode::ShrAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_add_assign_parse_mixed",
+            QoreValue(new QorePlusEqualsOperatorNode(&analysis_loc,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::AddAssignInt, QoreIROpcode::AddAssignAny, QoreIROpcode::AddAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_sub_assign_parse_mixed",
+            QoreValue(new QoreMinusEqualsOperatorNode(&analysis_loc,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::SubAssignInt, QoreIROpcode::SubAssignAny, QoreIROpcode::SubAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mul_assign_parse_mixed",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(&analysis_loc,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::MulAssignInt, QoreIROpcode::MulAssignAny, QoreIROpcode::MulAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_div_assign_parse_mixed",
+            QoreValue(new QoreDivideEqualsOperatorNode(&analysis_loc,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::DivAssignInt, QoreIROpcode::DivAssignAny, QoreIROpcode::DivAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_abs_eq_parse_float",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::EqHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_abs_ne_parse_float",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::NeHard)) {
+        return 1;
+    }
+    if (!runUnaryBinaryInterpreterSmoke()) {
+        return 1;
+    }
+    if (!runExprInterpreterSmoke()) {
+        return 1;
+    }
+    if (!runRefcountOwnershipSmoke()) {
+        return 1;
+    }
+
+    ExceptionSink xsink;
+    Var* lvalue_var = new Var(nullptr, "lvalue_scalar");
+    lvalue_var->setInitial(new QoreBigIntNode(5));
+    ValueHolder lvalue_expr(QoreValue(new GlobalVarRefNode(nullptr, strdup("lvalue_scalar"), lvalue_var)), nullptr);
+    QoreListNode* lvalue_list = makeIntList({5, 6}, &xsink);
+    if (xsink) {
+        std::cerr << "Failed to build list for lvalue interpreter checks\n";
+        return 1;
+    }
+    Var* lvalue_list_var = new Var(nullptr, "lvalue_list");
+    lvalue_list_var->setInitial(lvalue_list);
+    ValueHolder lvalue_list_ref(QoreValue(new GlobalVarRefNode(nullptr, strdup("lvalue_list"), lvalue_list_var)),
+        nullptr);
+    ValueHolder lvalue_list_expr(QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+        lvalue_list_ref->refSelf(), QoreValue(0))), nullptr);
+    Var* lvalue_unassigned = new Var(nullptr, "lvalue_unassigned", bigIntTypeInfo);
+    ValueHolder lvalue_unassigned_expr(
+        QoreValue(new GlobalVarRefNode(nullptr, strdup("lvalue_unassigned"), lvalue_unassigned)), nullptr);
+    Var* lvalue_thread_unassigned = new Var(nullptr, "lvalue_thread_unassigned", bigIntTypeInfo, false, true);
+    ValueHolder lvalue_thread_unassigned_expr(
+        QoreValue(new GlobalVarRefNode(nullptr, strdup("lvalue_thread_unassigned"), lvalue_thread_unassigned)),
+        nullptr);
+    QoreValue lstore = QoreIRInterpreter::evalLValueStore(*lvalue_expr, QoreValue(10), &xsink);
+    QoreValue lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || lstore.getAsBigInt() != 10 || lload.getAsBigInt() != 10) {
+        std::cerr << "Lvalue load/store interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue list_store = QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(10), &xsink);
+    QoreValue list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_store.getAsBigInt() != 10 || list_load.getAsBigInt() != 10) {
+        std::cerr << "Lvalue list load/store interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreHashNode* lvalue_hash = new QoreHashNode(autoTypeInfo);
+    lvalue_hash->setKeyValue("key", QoreValue(1), &xsink);
+    if (xsink) {
+        std::cerr << "Failed to initialize hash for lvalue checks\n";
+        return 1;
+    }
+    Var* lvalue_hash_var = new Var(nullptr, "lvalue_hash");
+    lvalue_hash_var->setInitial(lvalue_hash);
+    ValueHolder lvalue_hash_ref(QoreValue(new GlobalVarRefNode(nullptr, strdup("lvalue_hash"), lvalue_hash_var)),
+        nullptr);
+    ValueHolder lvalue_hash_expr(QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+        lvalue_hash_ref->refSelf(), QoreValue(new QoreStringNode("key")))), nullptr);
+    QoreValue hash_store = QoreIRInterpreter::evalLValueStore(*lvalue_hash_expr, QoreValue(11), &xsink);
+    QoreValue hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_store.getAsBigInt() != 11 || hash_load.getAsBigInt() != 11) {
+        std::cerr << "Lvalue hash key load/store interpreter smoke checks failed\n";
+        return 1;
+    }
+    ValueHolder nested_list_holder(QoreValue(makeIntList({1, 2, 3}, &xsink)), nullptr);
+    if (xsink) {
+        std::cerr << "Failed to build list for nested hash lvalue checks\n";
+        return 1;
+    }
+    ValueHolder nested_hash_holder(QoreValue(new QoreHashNode(autoTypeInfo)), nullptr);
+    nested_hash_holder->get<QoreHashNode>()->setKeyValue("list", nested_list_holder->refSelf(), &xsink);
+    if (xsink) {
+        std::cerr << "Failed to build hash for nested lvalue checks\n";
+        return 1;
+    }
+    Var* lvalue_nested_hash_var = new Var(nullptr, "lvalue_nested_hash");
+    lvalue_nested_hash_var->setInitial(nested_hash_holder.releaseAs<QoreHashNode>());
+    ValueHolder lvalue_nested_hash_ref(
+        QoreValue(new GlobalVarRefNode(nullptr, strdup("lvalue_nested_hash"), lvalue_nested_hash_var)), nullptr);
+    ValueHolder lvalue_nested_list_expr(QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+        QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr, lvalue_nested_hash_ref->refSelf(),
+            QoreValue(new QoreStringNode("list")))),
+        QoreValue(1))), nullptr);
+    QoreValue nested_list_store = QoreIRInterpreter::evalLValueStore(*lvalue_nested_list_expr, QoreValue(9), &xsink);
+    QoreValue nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_store.getAsBigInt() != 9 || nested_list_load.getAsBigInt() != 9) {
+        std::cerr << "Nested hash list lvalue load/store interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_nested_list_expr, QoreValue(5), &xsink);
+    QoreValue nested_list_preinc =
+        QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreIncLValue, *lvalue_nested_list_expr, &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_preinc.getAsBigInt() != 6 || nested_list_load.getAsBigInt() != 6) {
+        std::cerr << "Nested hash list pre-increment interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_nested_list_expr, QoreValue(5), &xsink);
+    QoreValue nested_list_postinc =
+        QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostIncLValue, *lvalue_nested_list_expr, &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_postinc.getAsBigInt() != 5 || nested_list_load.getAsBigInt() != 6) {
+        std::cerr << "Nested hash list post-increment interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_nested_list_expr, QoreValue(5), &xsink);
+    QoreValue nested_list_predec =
+        QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreDecLValue, *lvalue_nested_list_expr, &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_predec.getAsBigInt() != 4 || nested_list_load.getAsBigInt() != 4) {
+        std::cerr << "Nested hash list pre-decrement interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_nested_list_expr, QoreValue(5), &xsink);
+    QoreValue nested_list_postdec =
+        QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostDecLValue, *lvalue_nested_list_expr, &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_postdec.getAsBigInt() != 5 || nested_list_load.getAsBigInt() != 4) {
+        std::cerr << "Nested hash list post-decrement interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_nested_list_expr, QoreValue(10), &xsink);
+    QoreValue nested_list_add = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AddAssignLValue,
+        *lvalue_nested_list_expr, QoreValue(5), &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_add.getAsBigInt() != 15 || nested_list_load.getAsBigInt() != 15) {
+        std::cerr << "Nested hash list add-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue nested_list_sub = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::SubAssignLValue,
+        *lvalue_nested_list_expr, QoreValue(4), &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_sub.getAsBigInt() != 11 || nested_list_load.getAsBigInt() != 11) {
+        std::cerr << "Nested hash list sub-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue nested_list_mul = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::MulAssignLValue,
+        *lvalue_nested_list_expr, QoreValue(3), &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_mul.getAsBigInt() != 33 || nested_list_load.getAsBigInt() != 33) {
+        std::cerr << "Nested hash list mul-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue nested_list_div = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::DivAssignLValue,
+        *lvalue_nested_list_expr, QoreValue(3), &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_div.getAsBigInt() != 11 || nested_list_load.getAsBigInt() != 11) {
+        std::cerr << "Nested hash list div-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_nested_list_expr, QoreValue(9), &xsink);
+    QoreValue nested_list_mod = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ModAssignLValue,
+        *lvalue_nested_list_expr, QoreValue(4), &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_mod.getAsBigInt() != 1 || nested_list_load.getAsBigInt() != 1) {
+        std::cerr << "Nested hash list modulo-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_nested_list_expr, QoreValue(6), &xsink);
+    QoreValue nested_list_and = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AndAssignLValue,
+        *lvalue_nested_list_expr, QoreValue(3), &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_and.getAsBigInt() != 2 || nested_list_load.getAsBigInt() != 2) {
+        std::cerr << "Nested hash list and-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue nested_list_or = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::OrAssignLValue,
+        *lvalue_nested_list_expr, QoreValue(1), &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_or.getAsBigInt() != 3 || nested_list_load.getAsBigInt() != 3) {
+        std::cerr << "Nested hash list or-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue nested_list_xor = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::XorAssignLValue,
+        *lvalue_nested_list_expr, QoreValue(5), &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_xor.getAsBigInt() != 6 || nested_list_load.getAsBigInt() != 6) {
+        std::cerr << "Nested hash list xor-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_nested_list_expr, QoreValue(3), &xsink);
+    QoreValue nested_list_shl = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShlAssignLValue,
+        *lvalue_nested_list_expr, QoreValue(2), &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_shl.getAsBigInt() != 12 || nested_list_load.getAsBigInt() != 12) {
+        std::cerr << "Nested hash list shift-left-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue nested_list_shr = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShrAssignLValue,
+        *lvalue_nested_list_expr, QoreValue(1), &xsink);
+    nested_list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_nested_list_expr, &xsink);
+    if (xsink || nested_list_shr.getAsBigInt() != 6 || nested_list_load.getAsBigInt() != 6) {
+        std::cerr << "Nested hash list shift-right-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_hash_expr, QoreValue(10), &xsink);
+    QoreValue hash_add = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AddAssignLValue, *lvalue_hash_expr,
+        QoreValue(5), &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_add.getAsBigInt() != 15 || hash_load.getAsBigInt() != 15) {
+        std::cerr << "Lvalue hash add-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue hash_sub = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::SubAssignLValue, *lvalue_hash_expr,
+        QoreValue(4), &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_sub.getAsBigInt() != 11 || hash_load.getAsBigInt() != 11) {
+        std::cerr << "Lvalue hash sub-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue hash_mul = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::MulAssignLValue, *lvalue_hash_expr,
+        QoreValue(3), &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_mul.getAsBigInt() != 33 || hash_load.getAsBigInt() != 33) {
+        std::cerr << "Lvalue hash mul-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue hash_div = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::DivAssignLValue, *lvalue_hash_expr,
+        QoreValue(3), &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_div.getAsBigInt() != 11 || hash_load.getAsBigInt() != 11) {
+        std::cerr << "Lvalue hash div-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_hash_expr, QoreValue(8), &xsink);
+    QoreValue hash_mod = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ModAssignLValue, *lvalue_hash_expr,
+        QoreValue(3), &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_mod.getAsBigInt() != 2 || hash_load.getAsBigInt() != 2) {
+        std::cerr << "Lvalue hash modulo-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_hash_expr, QoreValue(6), &xsink);
+    QoreValue hash_and = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AndAssignLValue, *lvalue_hash_expr,
+        QoreValue(3), &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_and.getAsBigInt() != 2 || hash_load.getAsBigInt() != 2) {
+        std::cerr << "Lvalue hash and-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue hash_or = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::OrAssignLValue, *lvalue_hash_expr,
+        QoreValue(1), &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_or.getAsBigInt() != 3 || hash_load.getAsBigInt() != 3) {
+        std::cerr << "Lvalue hash or-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue hash_xor = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::XorAssignLValue, *lvalue_hash_expr,
+        QoreValue(5), &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_xor.getAsBigInt() != 6 || hash_load.getAsBigInt() != 6) {
+        std::cerr << "Lvalue hash xor-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_hash_expr, QoreValue(3), &xsink);
+    QoreValue hash_shl = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShlAssignLValue, *lvalue_hash_expr,
+        QoreValue(2), &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_shl.getAsBigInt() != 12 || hash_load.getAsBigInt() != 12) {
+        std::cerr << "Lvalue hash shift-left-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue hash_shr = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShrAssignLValue, *lvalue_hash_expr,
+        QoreValue(1), &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_shr.getAsBigInt() != 6 || hash_load.getAsBigInt() != 6) {
+        std::cerr << "Lvalue hash shift-right-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_hash_expr, QoreValue(5), &xsink);
+    QoreValue hash_preinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreIncLValue, *lvalue_hash_expr,
+        &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_preinc.getAsBigInt() != 6 || hash_load.getAsBigInt() != 6) {
+        std::cerr << "Lvalue hash pre-increment interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_hash_expr, QoreValue(5), &xsink);
+    QoreValue hash_postinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostIncLValue, *lvalue_hash_expr,
+        &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_postinc.getAsBigInt() != 5 || hash_load.getAsBigInt() != 6) {
+        std::cerr << "Lvalue hash post-increment interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_hash_expr, QoreValue(5), &xsink);
+    QoreValue hash_predec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreDecLValue, *lvalue_hash_expr,
+        &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_predec.getAsBigInt() != 4 || hash_load.getAsBigInt() != 4) {
+        std::cerr << "Lvalue hash pre-decrement interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_hash_expr, QoreValue(5), &xsink);
+    QoreValue hash_postdec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostDecLValue, *lvalue_hash_expr,
+        &xsink);
+    hash_load = QoreIRInterpreter::evalLValueLoad(*lvalue_hash_expr, &xsink);
+    if (xsink || hash_postdec.getAsBigInt() != 5 || hash_load.getAsBigInt() != 4) {
+        std::cerr << "Lvalue hash post-decrement interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue ladd = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AddAssignLValue, *lvalue_expr, QoreValue(5),
+        &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || ladd.getAsBigInt() != 15 || lload.getAsBigInt() != 15) {
+        std::cerr << "Lvalue add-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue list_add = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AddAssignLValue, *lvalue_list_expr,
+        QoreValue(5), &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_add.getAsBigInt() != 15 || list_load.getAsBigInt() != 15) {
+        std::cerr << "Lvalue list add-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(20), &xsink);
+    QoreValue list_sub = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::SubAssignLValue, *lvalue_list_expr,
+        QoreValue(5), &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_sub.getAsBigInt() != 15 || list_load.getAsBigInt() != 15) {
+        std::cerr << "Lvalue list sub-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(3), &xsink);
+    QoreValue list_mul = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::MulAssignLValue, *lvalue_list_expr,
+        QoreValue(4), &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_mul.getAsBigInt() != 12 || list_load.getAsBigInt() != 12) {
+        std::cerr << "Lvalue list mul-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(20), &xsink);
+    QoreValue list_div = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::DivAssignLValue, *lvalue_list_expr,
+        QoreValue(4), &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_div.getAsBigInt() != 5 || list_load.getAsBigInt() != 5) {
+        std::cerr << "Lvalue list div-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(9), &xsink);
+    QoreValue list_mod = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ModAssignLValue, *lvalue_list_expr,
+        QoreValue(4), &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_mod.getAsBigInt() != 1 || list_load.getAsBigInt() != 1) {
+        std::cerr << "Lvalue list mod-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(6), &xsink);
+    QoreValue list_and = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AndAssignLValue, *lvalue_list_expr,
+        QoreValue(3), &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_and.getAsBigInt() != 2 || list_load.getAsBigInt() != 2) {
+        std::cerr << "Lvalue list and-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(6), &xsink);
+    QoreValue list_or = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::OrAssignLValue, *lvalue_list_expr,
+        QoreValue(1), &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_or.getAsBigInt() != 7 || list_load.getAsBigInt() != 7) {
+        std::cerr << "Lvalue list or-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(6), &xsink);
+    QoreValue list_xor = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::XorAssignLValue, *lvalue_list_expr,
+        QoreValue(5), &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_xor.getAsBigInt() != 3 || list_load.getAsBigInt() != 3) {
+        std::cerr << "Lvalue list xor-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(3), &xsink);
+    QoreValue list_shl = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShlAssignLValue, *lvalue_list_expr,
+        QoreValue(2), &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_shl.getAsBigInt() != 12 || list_load.getAsBigInt() != 12) {
+        std::cerr << "Lvalue list shl-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(12), &xsink);
+    QoreValue list_shr = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShrAssignLValue, *lvalue_list_expr,
+        QoreValue(2), &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_shr.getAsBigInt() != 3 || list_load.getAsBigInt() != 3) {
+        std::cerr << "Lvalue list shr-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(5), &xsink);
+    QoreValue list_preinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreIncLValue, *lvalue_list_expr,
+        &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_preinc.getAsBigInt() != 6 || list_load.getAsBigInt() != 6) {
+        std::cerr << "Lvalue list pre-increment interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(5), &xsink);
+    QoreValue list_postinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostIncLValue, *lvalue_list_expr,
+        &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_postinc.getAsBigInt() != 5 || list_load.getAsBigInt() != 6) {
+        std::cerr << "Lvalue list post-increment interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(5), &xsink);
+    QoreValue list_predec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreDecLValue, *lvalue_list_expr,
+        &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_predec.getAsBigInt() != 4 || list_load.getAsBigInt() != 4) {
+        std::cerr << "Lvalue list pre-decrement interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(5), &xsink);
+    QoreValue list_postdec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostDecLValue, *lvalue_list_expr,
+        &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_postdec.getAsBigInt() != 5 || list_load.getAsBigInt() != 4) {
+        std::cerr << "Lvalue list post-decrement interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(5), &xsink);
+    QoreValue list_index_preinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreIncLValue, *lvalue_list_expr,
+        &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_index_preinc.getAsBigInt() != 6 || list_load.getAsBigInt() != 6) {
+        std::cerr << "Lvalue list index pre-increment interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(5), &xsink);
+    QoreValue list_index_postinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostIncLValue, *lvalue_list_expr,
+        &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_index_postinc.getAsBigInt() != 5 || list_load.getAsBigInt() != 6) {
+        std::cerr << "Lvalue list index post-increment interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(5), &xsink);
+    QoreValue list_index_predec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreDecLValue, *lvalue_list_expr,
+        &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_index_predec.getAsBigInt() != 4 || list_load.getAsBigInt() != 4) {
+        std::cerr << "Lvalue list index pre-decrement interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_list_expr, QoreValue(5), &xsink);
+    QoreValue list_index_postdec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostDecLValue, *lvalue_list_expr,
+        &xsink);
+    list_load = QoreIRInterpreter::evalLValueLoad(*lvalue_list_expr, &xsink);
+    if (xsink || list_index_postdec.getAsBigInt() != 5 || list_load.getAsBigInt() != 4) {
+        std::cerr << "Lvalue list index post-decrement interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue preinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreIncLValue, *lvalue_expr, &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || preinc.getAsBigInt() != 16 || lload.getAsBigInt() != 16) {
+        std::cerr << "Lvalue pre-increment interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue postinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostIncLValue, *lvalue_expr, &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || postinc.getAsBigInt() != 16 || lload.getAsBigInt() != 17) {
+        std::cerr << "Lvalue post-increment interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue predec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreDecLValue, *lvalue_expr, &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || predec.getAsBigInt() != 16 || lload.getAsBigInt() != 16) {
+        std::cerr << "Lvalue pre-decrement interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue postdec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostDecLValue, *lvalue_expr, &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || postdec.getAsBigInt() != 16 || lload.getAsBigInt() != 15) {
+        std::cerr << "Lvalue post-decrement interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_expr, QoreValue(8), &xsink);
+    QoreValue lmul = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::MulAssignLValue, *lvalue_expr, QoreValue(2),
+        &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || lmul.getAsBigInt() != 16 || lload.getAsBigInt() != 16) {
+        std::cerr << "Lvalue multiply-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue ldiv = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::DivAssignLValue, *lvalue_expr, QoreValue(4),
+        &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || ldiv.getAsBigInt() != 4 || lload.getAsBigInt() != 4) {
+        std::cerr << "Lvalue divide-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue lmod = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ModAssignLValue, *lvalue_expr, QoreValue(3),
+        &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || lmod.getAsBigInt() != 1 || lload.getAsBigInt() != 1) {
+        std::cerr << "Lvalue modulo-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_expr, QoreValue(6), &xsink);
+    QoreValue land = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AndAssignLValue, *lvalue_expr, QoreValue(3),
+        &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || land.getAsBigInt() != 2 || lload.getAsBigInt() != 2) {
+        std::cerr << "Lvalue and-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue lor = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::OrAssignLValue, *lvalue_expr, QoreValue(1),
+        &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || lor.getAsBigInt() != 3 || lload.getAsBigInt() != 3) {
+        std::cerr << "Lvalue or-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue lxor = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::XorAssignLValue, *lvalue_expr, QoreValue(5),
+        &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || lxor.getAsBigInt() != 6 || lload.getAsBigInt() != 6) {
+        std::cerr << "Lvalue xor-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreIRInterpreter::evalLValueStore(*lvalue_expr, QoreValue(3), &xsink);
+    QoreValue lshl = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShlAssignLValue, *lvalue_expr, QoreValue(2),
+        &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || lshl.getAsBigInt() != 12 || lload.getAsBigInt() != 12) {
+        std::cerr << "Lvalue shift-left-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue lshr = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShrAssignLValue, *lvalue_expr, QoreValue(1),
+        &xsink);
+    lload = QoreIRInterpreter::evalLValueLoad(*lvalue_expr, &xsink);
+    if (xsink || lshr.getAsBigInt() != 6 || lload.getAsBigInt() != 6) {
+        std::cerr << "Lvalue shift-right-assign interpreter smoke checks failed\n";
+        return 1;
+    }
+    QoreValue unassigned_load = QoreIRInterpreter::evalLValueLoad(*lvalue_unassigned_expr, &xsink);
+    if (xsink || !unassigned_load.isNothing()) {
+        std::cerr << "Typed unassigned lvalue load should be NOTHING\n";
+        return 1;
+    }
+    QoreValue thread_unassigned_load = QoreIRInterpreter::evalLValueLoad(*lvalue_thread_unassigned_expr, &xsink);
+    if (xsink || !thread_unassigned_load.isNothing()) {
+        std::cerr << "Typed unassigned thread-local lvalue load should be NOTHING\n";
+        return 1;
+    }
+    QoreValue unassigned_store = QoreIRInterpreter::evalLValueStore(*lvalue_unassigned_expr, QoreValue(21), &xsink);
+    unassigned_load = QoreIRInterpreter::evalLValueLoad(*lvalue_unassigned_expr, &xsink);
+    if (xsink || unassigned_store.getAsBigInt() != 21 || unassigned_load.getAsBigInt() != 21) {
+        std::cerr << "Typed unassigned lvalue store should initialize the value\n";
+        return 1;
+    }
+    QoreValue thread_unassigned_store =
+        QoreIRInterpreter::evalLValueStore(*lvalue_thread_unassigned_expr, QoreValue(22), &xsink);
+    thread_unassigned_load = QoreIRInterpreter::evalLValueLoad(*lvalue_thread_unassigned_expr, &xsink);
+    if (xsink || thread_unassigned_store.getAsBigInt() != 22 || thread_unassigned_load.getAsBigInt() != 22) {
+        std::cerr << "Typed unassigned thread-local lvalue store should initialize the value\n";
+        return 1;
+    }
+    {
+        QoreProgramHelper pgm_helper(0, xsink);
+        QoreProgram* pgm = *pgm_helper;
+        QoreExternalProgramContextHelper pgm_ctx(&xsink, pgm);
+        if (xsink) {
+            std::cerr << "Failed to initialize program context for local lvalue checks\n";
+            return 1;
+        }
+        ThreadFrameBoundaryHelper frame(true);
+
+        LocalVar lvalue_local_unassigned("lvalue_local_unassigned", bigIntTypeInfo);
+        lvalue_local_unassigned.instantiate(0);
+        ValueHolder lvalue_local_unassigned_expr(
+            QoreValue(new VarRefNode(nullptr, strdup("lvalue_local_unassigned"), &lvalue_local_unassigned, false)),
+            nullptr);
+        QoreValue local_unassigned_load = QoreIRInterpreter::evalLValueLoad(*lvalue_local_unassigned_expr, &xsink);
+        if (xsink || !local_unassigned_load.isNothing()) {
+            std::cerr << "Typed unassigned local lvalue load should be NOTHING\n";
+            return 1;
+        }
+        QoreValue local_unassigned_store =
+            QoreIRInterpreter::evalLValueStore(*lvalue_local_unassigned_expr, QoreValue(23), &xsink);
+        local_unassigned_load = QoreIRInterpreter::evalLValueLoad(*lvalue_local_unassigned_expr, &xsink);
+        if (xsink || local_unassigned_store.getAsBigInt() != 23 || local_unassigned_load.getAsBigInt() != 23) {
+            std::cerr << "Typed unassigned local lvalue store should initialize the value\n";
+            return 1;
+        }
+        {
+            ReferenceArgumentHelper ref_helper(QoreValue(30), &xsink);
+            if (xsink) {
+                std::cerr << "Failed to create reference lvalue helper\n";
+                return 1;
+            }
+            ValueHolder ref_expr(QoreValue(ref_helper.getArg()), nullptr);
+            QoreValue ref_load = QoreIRInterpreter::evalLValueLoad(*ref_expr, &xsink);
+            if (xsink || ref_load.getAsBigInt() != 30) {
+                std::cerr << "Reference lvalue load should reflect initial value\n";
+                return 1;
+            }
+            QoreValue ref_store = QoreIRInterpreter::evalLValueStore(*ref_expr, QoreValue(31), &xsink);
+            if (xsink || ref_store.getAsBigInt() != 31) {
+                std::cerr << "Reference lvalue store should update the value\n";
+                return 1;
+            }
+            QoreValue ref_add = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AddAssignLValue, *ref_expr,
+                QoreValue(4), &xsink);
+            if (xsink || ref_add.getAsBigInt() != 35) {
+                std::cerr << "Reference lvalue add-assign failed\n";
+                return 1;
+            }
+            QoreValue ref_sub = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::SubAssignLValue, *ref_expr,
+                QoreValue(5), &xsink);
+            if (xsink || ref_sub.getAsBigInt() != 30) {
+                std::cerr << "Reference lvalue sub-assign failed\n";
+                return 1;
+            }
+            QoreValue ref_mul = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::MulAssignLValue, *ref_expr,
+                QoreValue(2), &xsink);
+            if (xsink || ref_mul.getAsBigInt() != 60) {
+                std::cerr << "Reference lvalue mul-assign failed\n";
+                return 1;
+            }
+            QoreValue ref_div = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::DivAssignLValue, *ref_expr,
+                QoreValue(3), &xsink);
+            if (xsink || ref_div.getAsBigInt() != 20) {
+                std::cerr << "Reference lvalue div-assign failed\n";
+                return 1;
+            }
+            QoreValue ref_out = ref_helper.getOutputValue();
+            if (ref_out.getAsBigInt() != 20) {
+                std::cerr << "Reference lvalue output should reflect stored value\n";
+                return 1;
+            }
+        }
+        QoreClass* obj_class = new QoreClass("SmokeObject", "::SmokeObject");
+        QoreObject* obj = new QoreObject(obj_class, pgm);
+        Var* obj_var = new Var(nullptr, "lvalue_obj");
+        obj_var->setInitial(obj);
+        ValueHolder obj_ref(QoreValue(new GlobalVarRefNode(nullptr, strdup("lvalue_obj"), obj_var)), nullptr);
+        ValueHolder obj_member_expr(QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+            obj_ref->refSelf(), QoreValue(new QoreStringNode("member")))), nullptr);
+        QoreValue obj_store = QoreIRInterpreter::evalLValueStore(*obj_member_expr, QoreValue(42), &xsink);
+        QoreValue obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_store.getAsBigInt() != 42 || obj_load.getAsBigInt() != 42) {
+            std::cerr << "Object member lvalue load/store interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        ValueHolder obj_list_holder(QoreValue(makeIntList({4, 5}, &xsink)), nullptr);
+        if (xsink) {
+            std::cerr << "Failed to build list for object member lvalue checks\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        ValueHolder obj_list_expr(QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+            obj_ref->refSelf(), QoreValue(new QoreStringNode("list")))), nullptr);
+        ValueHolder obj_list_store(
+            QoreIRInterpreter::evalLValueStore(*obj_list_expr, obj_list_holder->refSelf(), &xsink), nullptr);
+        if (xsink || obj_list_store->getType() == NT_NOTHING) {
+            std::cerr << "Object member list store failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        ValueHolder obj_list_index_expr(QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+            obj_list_expr->refSelf(), QoreValue(0))), nullptr);
+        QoreValue obj_list_index_store =
+            QoreIRInterpreter::evalLValueStore(*obj_list_index_expr, QoreValue(7), &xsink);
+        QoreValue obj_list_index_load = QoreIRInterpreter::evalLValueLoad(*obj_list_index_expr, &xsink);
+        if (xsink || obj_list_index_store.getAsBigInt() != 7 || obj_list_index_load.getAsBigInt() != 7) {
+            std::cerr << "Object member list index lvalue checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_list_index_expr, QoreValue(5), &xsink);
+        QoreValue obj_list_index_preinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreIncLValue,
+            *obj_list_index_expr, &xsink);
+        obj_list_index_load = QoreIRInterpreter::evalLValueLoad(*obj_list_index_expr, &xsink);
+        if (xsink || obj_list_index_preinc.getAsBigInt() != 6 || obj_list_index_load.getAsBigInt() != 6) {
+            std::cerr << "Object member list index pre-increment interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_list_index_expr, QoreValue(5), &xsink);
+        QoreValue obj_list_index_postinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostIncLValue,
+            *obj_list_index_expr, &xsink);
+        obj_list_index_load = QoreIRInterpreter::evalLValueLoad(*obj_list_index_expr, &xsink);
+        if (xsink || obj_list_index_postinc.getAsBigInt() != 5 || obj_list_index_load.getAsBigInt() != 6) {
+            std::cerr << "Object member list index post-increment interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_list_index_expr, QoreValue(5), &xsink);
+        QoreValue obj_list_index_predec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreDecLValue,
+            *obj_list_index_expr, &xsink);
+        obj_list_index_load = QoreIRInterpreter::evalLValueLoad(*obj_list_index_expr, &xsink);
+        if (xsink || obj_list_index_predec.getAsBigInt() != 4 || obj_list_index_load.getAsBigInt() != 4) {
+            std::cerr << "Object member list index pre-decrement interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_list_index_expr, QoreValue(5), &xsink);
+        QoreValue obj_list_index_postdec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostDecLValue,
+            *obj_list_index_expr, &xsink);
+        obj_list_index_load = QoreIRInterpreter::evalLValueLoad(*obj_list_index_expr, &xsink);
+        if (xsink || obj_list_index_postdec.getAsBigInt() != 5 || obj_list_index_load.getAsBigInt() != 4) {
+            std::cerr << "Object member list index post-decrement interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        ValueHolder obj_hash_holder(QoreValue(new QoreHashNode(autoTypeInfo)), nullptr);
+        obj_hash_holder->get<QoreHashNode>()->setKeyValue("key", QoreValue(3), &xsink);
+        if (xsink) {
+            std::cerr << "Failed to build hash for object member lvalue checks\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        ValueHolder obj_hash_expr(QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+            obj_ref->refSelf(), QoreValue(new QoreStringNode("hash")))), nullptr);
+        ValueHolder obj_hash_store(
+            QoreIRInterpreter::evalLValueStore(*obj_hash_expr, obj_hash_holder->refSelf(), &xsink), nullptr);
+        if (xsink || obj_hash_store->getType() == NT_NOTHING) {
+            std::cerr << "Object member hash store failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        ValueHolder obj_hash_key_expr(QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+            obj_hash_expr->refSelf(), QoreValue(new QoreStringNode("key")))), nullptr);
+        QoreValue obj_hash_key_store =
+            QoreIRInterpreter::evalLValueStore(*obj_hash_key_expr, QoreValue(8), &xsink);
+        QoreValue obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_store.getAsBigInt() != 8 || obj_hash_key_load.getAsBigInt() != 8) {
+            std::cerr << "Object member hash key lvalue checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_hash_key_expr, QoreValue(5), &xsink);
+        QoreValue obj_hash_key_preinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreIncLValue,
+            *obj_hash_key_expr, &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_preinc.getAsBigInt() != 6 || obj_hash_key_load.getAsBigInt() != 6) {
+            std::cerr << "Object member hash key pre-increment interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_hash_key_expr, QoreValue(5), &xsink);
+        QoreValue obj_hash_key_postinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostIncLValue,
+            *obj_hash_key_expr, &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_postinc.getAsBigInt() != 5 || obj_hash_key_load.getAsBigInt() != 6) {
+            std::cerr << "Object member hash key post-increment interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_hash_key_expr, QoreValue(5), &xsink);
+        QoreValue obj_hash_key_predec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreDecLValue,
+            *obj_hash_key_expr, &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_predec.getAsBigInt() != 4 || obj_hash_key_load.getAsBigInt() != 4) {
+            std::cerr << "Object member hash key pre-decrement interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_hash_key_expr, QoreValue(5), &xsink);
+        QoreValue obj_hash_key_postdec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostDecLValue,
+            *obj_hash_key_expr, &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_postdec.getAsBigInt() != 5 || obj_hash_key_load.getAsBigInt() != 4) {
+            std::cerr << "Object member hash key post-decrement interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_hash_key_expr, QoreValue(10), &xsink);
+        QoreValue obj_hash_key_add = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AddAssignLValue,
+            *obj_hash_key_expr, QoreValue(5), &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_add.getAsBigInt() != 15 || obj_hash_key_load.getAsBigInt() != 15) {
+            std::cerr << "Object member hash key add-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_hash_key_sub = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::SubAssignLValue,
+            *obj_hash_key_expr, QoreValue(4), &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_sub.getAsBigInt() != 11 || obj_hash_key_load.getAsBigInt() != 11) {
+            std::cerr << "Object member hash key sub-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_hash_key_mul = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::MulAssignLValue,
+            *obj_hash_key_expr, QoreValue(3), &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_mul.getAsBigInt() != 33 || obj_hash_key_load.getAsBigInt() != 33) {
+            std::cerr << "Object member hash key mul-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_hash_key_div = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::DivAssignLValue,
+            *obj_hash_key_expr, QoreValue(3), &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_div.getAsBigInt() != 11 || obj_hash_key_load.getAsBigInt() != 11) {
+            std::cerr << "Object member hash key div-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_hash_key_expr, QoreValue(9), &xsink);
+        QoreValue obj_hash_key_mod = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ModAssignLValue,
+            *obj_hash_key_expr, QoreValue(4), &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_mod.getAsBigInt() != 1 || obj_hash_key_load.getAsBigInt() != 1) {
+            std::cerr << "Object member hash key modulo-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_hash_key_expr, QoreValue(6), &xsink);
+        QoreValue obj_hash_key_and = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AndAssignLValue,
+            *obj_hash_key_expr, QoreValue(3), &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_and.getAsBigInt() != 2 || obj_hash_key_load.getAsBigInt() != 2) {
+            std::cerr << "Object member hash key and-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_hash_key_or = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::OrAssignLValue,
+            *obj_hash_key_expr, QoreValue(1), &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_or.getAsBigInt() != 3 || obj_hash_key_load.getAsBigInt() != 3) {
+            std::cerr << "Object member hash key or-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_hash_key_xor = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::XorAssignLValue,
+            *obj_hash_key_expr, QoreValue(5), &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_xor.getAsBigInt() != 6 || obj_hash_key_load.getAsBigInt() != 6) {
+            std::cerr << "Object member hash key xor-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_hash_key_expr, QoreValue(3), &xsink);
+        QoreValue obj_hash_key_shl = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShlAssignLValue,
+            *obj_hash_key_expr, QoreValue(2), &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_shl.getAsBigInt() != 12 || obj_hash_key_load.getAsBigInt() != 12) {
+            std::cerr << "Object member hash key shift-left-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_hash_key_shr = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShrAssignLValue,
+            *obj_hash_key_expr, QoreValue(1), &xsink);
+        obj_hash_key_load = QoreIRInterpreter::evalLValueLoad(*obj_hash_key_expr, &xsink);
+        if (xsink || obj_hash_key_shr.getAsBigInt() != 6 || obj_hash_key_load.getAsBigInt() != 6) {
+            std::cerr << "Object member hash key shift-right-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_member_expr, QoreValue(10), &xsink);
+        QoreValue obj_add = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AddAssignLValue, *obj_member_expr,
+            QoreValue(5), &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_add.getAsBigInt() != 15 || obj_load.getAsBigInt() != 15) {
+            std::cerr << "Object member add-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_sub = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::SubAssignLValue, *obj_member_expr,
+            QoreValue(4), &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_sub.getAsBigInt() != 11 || obj_load.getAsBigInt() != 11) {
+            std::cerr << "Object member sub-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_mul = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::MulAssignLValue, *obj_member_expr,
+            QoreValue(3), &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_mul.getAsBigInt() != 33 || obj_load.getAsBigInt() != 33) {
+            std::cerr << "Object member mul-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_div = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::DivAssignLValue, *obj_member_expr,
+            QoreValue(3), &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_div.getAsBigInt() != 11 || obj_load.getAsBigInt() != 11) {
+            std::cerr << "Object member div-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_member_expr, QoreValue(9), &xsink);
+        QoreValue obj_mod = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ModAssignLValue, *obj_member_expr,
+            QoreValue(4), &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_mod.getAsBigInt() != 1 || obj_load.getAsBigInt() != 1) {
+            std::cerr << "Object member modulo-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_member_expr, QoreValue(6), &xsink);
+        QoreValue obj_and = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::AndAssignLValue, *obj_member_expr,
+            QoreValue(3), &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_and.getAsBigInt() != 2 || obj_load.getAsBigInt() != 2) {
+            std::cerr << "Object member and-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_or = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::OrAssignLValue, *obj_member_expr,
+            QoreValue(1), &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_or.getAsBigInt() != 3 || obj_load.getAsBigInt() != 3) {
+            std::cerr << "Object member or-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_xor = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::XorAssignLValue, *obj_member_expr,
+            QoreValue(5), &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_xor.getAsBigInt() != 6 || obj_load.getAsBigInt() != 6) {
+            std::cerr << "Object member xor-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_member_expr, QoreValue(3), &xsink);
+        QoreValue obj_shl = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShlAssignLValue, *obj_member_expr,
+            QoreValue(2), &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_shl.getAsBigInt() != 12 || obj_load.getAsBigInt() != 12) {
+            std::cerr << "Object member shift-left-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreValue obj_shr = QoreIRInterpreter::evalLValueBinary(QoreIROpcode::ShrAssignLValue, *obj_member_expr,
+            QoreValue(1), &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_shr.getAsBigInt() != 6 || obj_load.getAsBigInt() != 6) {
+            std::cerr << "Object member shift-right-assign interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_member_expr, QoreValue(5), &xsink);
+        QoreValue obj_preinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreIncLValue, *obj_member_expr,
+            &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_preinc.getAsBigInt() != 6 || obj_load.getAsBigInt() != 6) {
+            std::cerr << "Object member pre-increment interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_member_expr, QoreValue(5), &xsink);
+        QoreValue obj_postinc = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostIncLValue, *obj_member_expr,
+            &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_postinc.getAsBigInt() != 5 || obj_load.getAsBigInt() != 6) {
+            std::cerr << "Object member post-increment interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_member_expr, QoreValue(5), &xsink);
+        QoreValue obj_predec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PreDecLValue, *obj_member_expr,
+            &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_predec.getAsBigInt() != 4 || obj_load.getAsBigInt() != 4) {
+            std::cerr << "Object member pre-decrement interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        QoreIRInterpreter::evalLValueStore(*obj_member_expr, QoreValue(5), &xsink);
+        QoreValue obj_postdec = QoreIRInterpreter::evalLValueUnary(QoreIROpcode::PostDecLValue, *obj_member_expr,
+            &xsink);
+        obj_load = QoreIRInterpreter::evalLValueLoad(*obj_member_expr, &xsink);
+        if (xsink || obj_postdec.getAsBigInt() != 5 || obj_load.getAsBigInt() != 4) {
+            std::cerr << "Object member post-decrement interpreter smoke checks failed\n";
+            obj_var->deref(&xsink);
+            qore_class_private::get(*obj_class)->deref(true, true);
+            return 1;
+        }
+        LocalVar lvalue_closure_unassigned("lvalue_closure_unassigned", bigIntTypeInfo);
+        lvalue_closure_unassigned.setClosureUse();
+        lvalue_closure_unassigned.instantiate(0);
+        ValueHolder lvalue_closure_unassigned_expr(
+            QoreValue(new VarRefNode(nullptr, strdup("lvalue_closure_unassigned"), &lvalue_closure_unassigned, true)),
+            nullptr);
+        StatementBlock* closure_block = new StatementBlock(1, 1);
+        RetTypeInfo* closure_ret = new RetTypeInfo(nullptr, nothingTypeInfo);
+        UserClosureFunction* closure_func =
+            new UserClosureFunction(closure_block, 1, 1, QoreValue(), closure_ret, false);
+        closure_func->getVList()->add(&lvalue_closure_unassigned);
+        QoreClosureParseNode* closure_parse = new QoreClosureParseNode(nullptr, closure_func, true);
+        QoreClosureNode* closure_node = new QoreClosureNode(closure_parse);
+        QoreListNode* closure_list = new QoreListNode(autoTypeInfo);
+        ValueHolder closure_list_holder(QoreValue(closure_list), &xsink);
+        int closure_list_base_refs = closure_list->reference_count();
+        LocalVar closure_list_var("lvalue_closure_list", autoTypeInfo);
+        closure_list_var.setClosureUse();
+        closure_list_var.instantiate(QoreValue(closure_list->refSelf()));
+        QoreClosureBase* captured_closure = closure_parse->evalBackground(&xsink);
+        if (xsink || !captured_closure) {
+            std::cerr << "Closure capture smoke checks failed (evalBackground)\n";
+            closure_node->deref(&xsink);
+            return 1;
+        }
+        closure_parse->deref(&xsink);
+        {
+            ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env(closure_node);
+            QoreValue closure_unassigned_load =
+                QoreIRInterpreter::evalLValueLoad(*lvalue_closure_unassigned_expr, &xsink);
+            if (xsink || !closure_unassigned_load.isNothing()) {
+                std::cerr << "Typed unassigned closure lvalue load should be NOTHING\n";
+                closure_node->deref(&xsink);
+                return 1;
+            }
+            QoreValue closure_unassigned_store =
+                QoreIRInterpreter::evalLValueStore(*lvalue_closure_unassigned_expr, QoreValue(24), &xsink);
+            closure_unassigned_load = QoreIRInterpreter::evalLValueLoad(*lvalue_closure_unassigned_expr, &xsink);
+            if (xsink || closure_unassigned_store.getAsBigInt() != 24 || closure_unassigned_load.getAsBigInt() != 24) {
+                std::cerr << "Typed unassigned closure lvalue store should initialize the value\n";
+                closure_node->deref(&xsink);
+                return 1;
+            }
+        }
+        {
+            int base_refs = closure_node->reference_count();
+            if (base_refs < 1) {
+                std::cerr << "Closure refcount smoke checks failed (base refs)\n";
+                closure_node->deref(&xsink);
+                return 1;
+            }
+            ValueHolder ref_holder(QoreValue(closure_node->refSelf()), &xsink);
+            if (closure_node->reference_count() != base_refs + 1) {
+                std::cerr << "Closure refcount smoke checks failed (ref increment)\n";
+                closure_node->deref(&xsink);
+                return 1;
+            }
+        }
+        closure_list_var.uninstantiate(&xsink);
+        if (xsink) {
+            std::cerr << "Closure list uninstantiate failed\n";
+            captured_closure->deref(&xsink);
+            closure_node->deref(&xsink);
+            return 1;
+        }
+        if (closure_list->reference_count() < closure_list_base_refs + 1) {
+            std::cerr << "Closure list refcount missing capture\n";
+            captured_closure->deref(&xsink);
+            closure_node->deref(&xsink);
+            return 1;
+        }
+        {
+            ValueHolder captured_holder(QoreValue(captured_closure), &xsink);
+        }
+        if (closure_list->reference_count() != closure_list_base_refs) {
+            std::cerr << "Closure list refcount mismatch after capture release\n";
+            closure_node->deref(&xsink);
+            return 1;
+        }
+        closure_node->deref(&xsink);
+        lvalue_closure_unassigned.uninstantiate(&xsink);
+        lvalue_local_unassigned.uninstantiate(&xsink);
+        obj_var->deref(&xsink);
+        qore_class_private::get(*obj_class)->deref(true, true);
+    }
+        lvalue_var->deref(&xsink);
+        lvalue_list_var->deref(&xsink);
+        lvalue_unassigned->deref(&xsink);
+        lvalue_thread_unassigned->deref(&xsink);
+        lvalue_hash_var->deref(&xsink);
+        lvalue_nested_hash_var->deref(&xsink);
+        assign_global->deref(&xsink);
+        assign_thread->deref(&xsink);
+
+    QoreProgramLocation loc("ir_smoke");
+    ValueHolder list_holder(QoreValue(makeIntList({1, 2, 3}, &xsink)), nullptr);
+    if (xsink) {
+        std::cerr << "Failed to build list for functional operator checks\n";
+        return 1;
+    }
+    const QoreValue& list_val = *list_holder;
+
+    ValueHolder foldl_expr(QoreValue(new QorePlusOperatorNode(&loc,
+        QoreValue(new QoreImplicitArgumentNode(&loc, 1)),
+        QoreValue(new QoreImplicitArgumentNode(&loc, 2)))), nullptr);
+    QoreValue foldl_result = QoreIRInterpreter::evalBinary(QoreIROpcode::FoldlAny, foldl_expr->refSelf(),
+        list_val.refSelf(), &xsink);
+    if (xsink || foldl_result.getAsBigInt() != 6) {
+        std::cerr << "Foldl IR interpreter smoke checks failed\n";
+        return 1;
+    }
+
+    ValueHolder foldr_expr(QoreValue(new QorePlusOperatorNode(&loc,
+        QoreValue(new QoreImplicitArgumentNode(&loc, 1)),
+        QoreValue(new QoreImplicitArgumentNode(&loc, 2)))), nullptr);
+    QoreValue foldr_result = QoreIRInterpreter::evalBinary(QoreIROpcode::FoldrAny, foldr_expr->refSelf(),
+        list_val.refSelf(), &xsink);
+    if (xsink || foldr_result.getAsBigInt() != 6) {
+        std::cerr << "Foldr IR interpreter smoke checks failed\n";
+        return 1;
+    }
+
+    ValueHolder map_expr(QoreValue(new QorePlusOperatorNode(&loc,
+        QoreValue(new QoreImplicitArgumentNode(&loc, 1)),
+        QoreValue(1))), nullptr);
+    ValueHolder map_result_holder(
+        QoreIRInterpreter::evalBinary(QoreIROpcode::MapAny, map_expr->refSelf(), list_val.refSelf(), &xsink), nullptr);
+    const QoreListNode* map_list = map_result_holder->get<const QoreListNode>();
+    if (xsink || !map_list || map_list->size() != 3
+        || map_list->getEntryAsInt(0) != 2
+        || map_list->getEntryAsInt(1) != 3
+        || map_list->getEntryAsInt(2) != 4) {
+        std::cerr << "Map IR interpreter smoke checks failed\n";
+        return 1;
+    }
+    return 0;
+}

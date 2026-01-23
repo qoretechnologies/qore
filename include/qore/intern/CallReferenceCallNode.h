@@ -73,6 +73,9 @@ public:
     //! returns call expression (for background operator processing)
     DLLLOCAL QoreValue getExp() const { return exp; }
 
+    //! returns parse arguments
+    DLLLOCAL const QoreParseListNode* getParseArgs() const { return parse_args; }
+
     //! returns the arguments (for background operator processing)
     DLLLOCAL const QoreListNode* getArgs() const { return args; }
 };

@@ -200,6 +200,7 @@ int VarRefNode::parseInitIntern(QoreParseContext& parse_context, bool is_new) {
 
 int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.typeInfo = nullptr;
+    parse_context.analysis.clear();
     int err = parseInitIntern(parse_context);
 
     bool is_assignment = parse_context.pflag & PF_FOR_ASSIGNMENT;
@@ -226,6 +227,28 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         if (ref.var && ref.var->isAutoType() && ref.var->parseGetNarrowedType()) {
             parse_context.pflag |= PF_NARROWED_TYPE;
         }
+    }
+
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+    }
+
+    if (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) {
+        if (ref.id && ref.id->isAssigned()) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+        }
+        if (ref.id && ref.id->parseGetNarrowedType()) {
+            parse_context.analysis.narrowed_type = ref.id->parseGetNarrowedType();
+        }
+    } else if (type == VT_GLOBAL || type == VT_THREAD_LOCAL) {
+        if (ref.var && ref.var->parseGetNarrowedType()) {
+            parse_context.analysis.narrowed_type = ref.var->parseGetNarrowedType();
+        }
+    }
+
+    if (parse_context.analysis.narrowed_type) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
     }
 
     return err;

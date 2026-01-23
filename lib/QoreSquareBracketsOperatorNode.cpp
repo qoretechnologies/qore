@@ -43,16 +43,25 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
 
     assert(!typeInfo);
 
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* lti = parse_context.typeInfo;
     {
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.unsetFlags(PF_FOR_ASSIGNMENT);
 
         parse_context.typeInfo = nullptr;
+        QoreParseContextAnalysisHelper ah(parse_context);
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
 
@@ -186,6 +195,13 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         if (!result.isNothing() || **xsink) {
             val = result;
             parse_context.typeInfo = typeInfo = val.getFullTypeInfo();
+            parse_context.analysis.clear();
+            parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+            if (!val.isNothing()) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+            }
+            parse_context.analysis.known_type = parse_context.typeInfo;
             return **xsink ? -1 : 0;
         }
         // constants not resolved - skip parse-time folding, let runtime handle it
@@ -193,6 +209,18 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     }
 
     parse_context.typeInfo = typeInfo;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

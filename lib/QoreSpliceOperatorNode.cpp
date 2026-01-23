@@ -52,11 +52,18 @@ int QoreSpliceOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     int err;
+    QoreParseAnalysis lvalue_analysis;
+    bool all_definitely_assigned = true;
     {
         // check lvalue expression
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.setFlags(PF_FOR_ASSIGNMENT);
+        QoreParseContextAnalysisHelper ah(parse_context);
         err = parse_init_value(lvalue_exp, parse_context);
+        lvalue_analysis = parse_context.analysis;
+    }
+    if (!lvalue_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        all_definitely_assigned = false;
     }
     const QoreTypeInfo* expTypeInfo = parse_context.typeInfo;
 
@@ -83,8 +90,16 @@ int QoreSpliceOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
 
     // check offset expression
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(offset_exp, parse_context) && !err) {
-        err = -1;
+    QoreParseAnalysis offset_analysis;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(offset_exp, parse_context) && !err) {
+            err = -1;
+        }
+        offset_analysis = parse_context.analysis;
+    }
+    if (!offset_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        all_definitely_assigned = false;
     }
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
         parse_context.typeInfo->doNonNumericWarning(loc, "the offset expression (2nd position) with the 'splice' " \
@@ -94,9 +109,11 @@ int QoreSpliceOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     // check length expression, if any
     if (length_exp) {
         parse_context.typeInfo = nullptr;
+        QoreParseContextAnalysisHelper ah(parse_context);
         if (parse_init_value(length_exp, parse_context) && !err) {
             err = -1;
         }
+        // No analysis capture needed for length; just restoring via helper.
         if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
             expTypeInfo->doNonNumericWarning(loc, "the length expression (3nd position) with the 'splice' operator " \
                 "is ");
@@ -106,12 +123,31 @@ int QoreSpliceOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     // check new value expression, if any
     if (new_exp) {
         parse_context.typeInfo = nullptr;
-        if (parse_init_value(new_exp, parse_context) && !err) {
-            err = -1;
+        QoreParseAnalysis new_value_analysis;
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            if (parse_init_value(new_exp, parse_context) && !err) {
+                err = -1;
+            }
+            new_value_analysis = parse_context.analysis;
+        }
+        if (!new_value_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+            all_definitely_assigned = false;
         }
     }
 
     parse_context.typeInfo = returnTypeInfo;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (all_definitely_assigned) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

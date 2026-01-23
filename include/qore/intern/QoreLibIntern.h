@@ -170,6 +170,8 @@ enum q_setpub_t : unsigned char {
     CSP_SETPUB = 2,
 };
 
+#include "qore/intern/QoreParseAnalysis.h"
+
 struct QoreParseContext {
     QoreProgram* pgm;
     LocalVar* oflag = nullptr;
@@ -177,6 +179,7 @@ struct QoreParseContext {
     int pflag = 0;
     int lvids = 0;
     const QoreTypeInfo* typeInfo = nullptr;
+    QoreParseAnalysis analysis;
 
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }
@@ -230,6 +233,21 @@ public:
 private:
     QoreParseContext& parse_context;
     int pflag;
+};
+
+class QoreParseContextAnalysisHelper {
+public:
+    DLLLOCAL QoreParseContextAnalysisHelper(QoreParseContext& parse_context)
+            : parse_context(parse_context), saved(parse_context.analysis) {
+    }
+
+    DLLLOCAL ~QoreParseContextAnalysisHelper() {
+        parse_context.analysis = saved;
+    }
+
+private:
+    QoreParseContext& parse_context;
+    QoreParseAnalysis saved;
 };
 
 class QoreParseContextLvarHelper {

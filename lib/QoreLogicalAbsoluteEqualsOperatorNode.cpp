@@ -35,6 +35,19 @@ QoreString QoreLogicalAbsoluteEqualsOperatorNode::logical_absolute_equals_str("l
 QoreString QoreLogicalAbsoluteNotEqualsOperatorNode::logical_absolute_not_equals_str("logical absolute not equals " \
     "(!==) operator expression");
 
+static void set_binary_analysis_abs_eq(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 QoreValue QoreLogicalAbsoluteEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder l(left, xsink);
     if (*xsink)
@@ -49,10 +62,21 @@ QoreValue QoreLogicalAbsoluteEqualsOperatorNode::evalImpl(bool& needs_deref, Exc
 
 int QoreLogicalAbsoluteEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.typeInfo = nullptr;
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
 
     // FIXME: check type compatibility and issue a warning if the types can never be or are always equal
@@ -63,9 +87,11 @@ int QoreLogicalAbsoluteEqualsOperatorNode::parseInitImpl(QoreValue& val, QorePar
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreLogicalAbsoluteEqualsOperatorNode> del(this);
         val = hardEqual(left, right, nullptr);
+        set_binary_analysis_abs_eq(parse_context, left_analysis, right_analysis);
         return 0;
     }
 
+    set_binary_analysis_abs_eq(parse_context, left_analysis, right_analysis);
     return err;
 }
 

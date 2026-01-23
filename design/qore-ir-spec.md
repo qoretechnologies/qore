@@ -1,0 +1,225 @@
+# Qore IR Spec Outline
+
+## 1. Purpose and Non-Goals
+- Purpose: Define a Qore-specific IR that preserves interpreter semantics and enables JIT/AOT.
+- Non-goals: Performance tuning, full LLVM lowering details, or full language coverage in v1.
+
+## 2. Terminology
+- AST interpreter: existing `evalImpl()`-based execution.
+- IR interpreter: new execution engine for IR.
+- JIT: LLVM-backed native execution from IR.
+
+## 3. Semantics Contract (AST / IR / JIT)
+- Required equivalence: observable behavior, exceptions, refcounts, and side effects.
+- Allowed differences: performance, internal temporaries, diagnostic detail.
+- Error model: AST/IR interpreter continue to use `ExceptionSink`; JIT may use native C++ exceptions with stack unwinding.
+
+## 4. Value Model and Type Tags
+- QoreValue layout: NaN-boxed 64-bit word with tag in high 16 bits and payload in low 48 bits.
+- Double encoding:
+  - `DOUBLE_ENCODE_OFFSET = 0x0001000000000000` (2^48) and `DOUBLE_BOUNDARY = 0xFFF9000000000000`.
+  - Encoded doubles are `< DOUBLE_BOUNDARY` and `bits != 0`, excluding short string tag range.
+- Tag values (high 16 bits, `TAG_MASK = 0xFFFF000000000000`):
+  - `TAG_INT48 = 0xFFF9000000000000`
+  - `TAG_POINTER = 0xFFFA000000000000`
+  - `TAG_SPECIAL = 0xFFFB000000000000`
+  - `TAG_SHORTSTR_BASE = 0xFFFC000000000000` (short string len encoded in bits 48-50)
+- Payload rules (`PAYLOAD_MASK = 0x0000FFFFFFFFFFFF`):
+  - 48-bit signed integers in payload; `INT48_MIN = -(1LL << 47)`, `INT48_MAX = (1LL << 47) - 1`.
+  - Pointer payload is an `AbstractQoreNode*` stored in low 48 bits.
+  - Short string: `bits >> 52 == 0xFFC`, max 6 bytes.
+- Special values:
+  - `VAL_NOTHING = 0`
+  - `VAL_NULL = TAG_SPECIAL | 1`
+  - `VAL_FALSE = TAG_SPECIAL | 2`
+  - `VAL_TRUE = TAG_SPECIAL | 3`
+- Type introspection: IR may use tag/bit tests matching `QoreValue` helpers.
+- Ownership model: value lifetimes and refcount responsibilities; define owned vs borrowed for each tag class.
+- Cross-mode rule: no conversion or tagging differences between AST/IR/JIT.
+
+## 5. IR Structure
+- Functions: signature, argument binding, return conventions.
+- Basic blocks: single terminator per block, no implicit fallthrough.
+- SSA policy:
+  - SSA for expression temporaries and instruction results.
+  - Locals and args are modeled with `load.local` / `store.local` / `load.arg`.
+- Phi rules:
+  - Phi nodes only at block starts.
+  - Each predecessor provides one value.
+  - Verifier enforces dominance and complete predecessor coverage.
+- Exception edges:
+  - `invoke` creates an explicit unwind edge.
+  - Cleanup blocks are explicit and have terminators.
+
+## 6. Instruction Set (Phase 1 Minimal)
+- Constants: int/float/bool/nothing/string.
+- Arithmetic: add/sub/mul/div/mod (typed + any).
+- Comparisons: eq/ne/lt/le/gt/ge (typed + any).
+- Control flow: br, br.if, return, unreachable.
+- Locals: load.local, store.local, load.arg, load.closure.
+- Calls: call, call.indirect, call.method, call.static.
+- Exceptions: invoke, landingpad, catch.exception, rethrow, throw.
+- Refcount ops: incref, decref, decref.nothrow.
+
+## 7. Exception and Unwind Semantics
+- JIT path uses real C++ exceptions with stack unwinding (modeled after qore-llvm).
+- AST/IR interpreter keep `ExceptionSink` for backwards compatibility.
+- JIT exception representation: a dedicated C++ exception type carrying the active Qore exception payload.
+- Boundary rule: JIT code never allows a raw C++ exception to escape into non-JIT C ABI; all boundaries must catch and translate to `ExceptionSink` when required.
+- `invoke` behavior: normal edge + unwind edge; any op that can throw must lower to `invoke` or a wrapper that enforces equivalent semantics.
+- Cleanup on unwind: lvalue unlock + refdec temporaries in reverse order of acquisition/creation.
+- Cleanup scope model: each scope with temporaries registers a cleanup list that is consumed on normal exit and unwind.
+- Rethrow semantics: preserve original error identity and stack context.
+- Required mapping to runtime helpers (NRT-style): helpers signal errors via `ExceptionSink` and a standardized throw bridge for the JIT path.
+- Cross-mode rule: if a runtime helper sets `ExceptionSink`, JIT code must immediately throw, and IR interpreter must propagate `ExceptionSink` without further side effects.
+
+### Example: invoke with cleanup and rethrow
+
+```
+try {
+    tmp = call @f()
+    use(tmp)
+} catch (e) {
+    throw e
+}
+```
+
+IR sketch:
+
+```
+entry:
+    %tmp = invoke @f() to normal unwind on_except
+normal:
+    use %tmp
+    decref %tmp
+    br done
+on_except:
+    landingpad
+    ; cleanup list: decref temporaries in reverse order
+    decref.nothrow %tmp
+    %ex = catch.exception
+    rethrow
+done:
+    return.nothing
+```
+
+## 8. Refcount Semantics
+- Ownership rules for each instruction class.
+- Each IR value is either owned or borrowed; lowering must declare ownership for all values it produces.
+- Required ordering relative to exceptions: any incref/decref sequence must be exception-safe and deterministic.
+- Temporaries created in a scope must be decref'd on normal exit and in unwind cleanup.
+- `decref.nothrow` is only allowed in cleanup paths or other contexts where exceptions must not be raised.
+- Exception-safety requirement: no leaks or premature frees on normal or unwind paths.
+- Refcounted nodes returned from runtime helpers must define transfer semantics (owned vs borrowed) in the ABI.
+
+### Example: temporary lifetime with unwind cleanup
+
+```
+%a = call @make_object()        ; owned
+%b = call @maybe_throw(%a)      ; may throw
+store.local %slot, %b
+decref %a
+```
+
+IR cleanup rules:
+- `%a` is added to the cleanup list on creation.
+- If `maybe_throw` unwinds, cleanup runs `decref.nothrow %a`.
+- If normal path continues, explicit `decref %a` consumes the cleanup entry.
+
+## 9. Runtime ABI (NRT-Style)
+- C ABI wrapper signatures for runtime helpers; no C++ name mangling.
+- QoreValue passing/returning conventions:
+  - POD layout, passed by value where possible.
+  - Ownership semantics per function documented (owned vs borrowed).
+- Exception bridge:
+  - Helpers receive `ExceptionSink* xsink`.
+  - If `xsink` is set, JIT throws a dedicated C++ exception immediately.
+  - Interpreter path propagates `xsink` without further side effects.
+- Required helpers (Phase 1):
+  - Arithmetic and comparison for `.any` ops.
+  - Conversions: `to.int`, `to.float`, `to.string`, `to.bool`.
+  - String concat and size.
+  - Refcount ops for nodes.
+  - Exception throw helpers (create + raise).
+- Thread-safety and reentrancy constraints: helpers must be safe under nested calls.
+
+### Example: C ABI wrapper
+
+```
+extern "C" QoreValue qore_rt_add_any(QoreValue a, QoreValue b, ExceptionSink* xsink);
+extern "C" QoreValue qore_rt_to_string(QoreValue v, ExceptionSink* xsink);
+extern "C" void qore_rt_incref(QoreValue v);
+extern "C" void qore_rt_decref(QoreValue v);
+```
+
+## 10. Deoptimization and State Mapping
+- State snapshot format: locals, live SSA temps, program counter (block + instr index), exception state.
+- Live value map: IR values mapped to interpreter slots or temporary stack entries.
+- Legal deopt points: any instruction boundary with a defined state map.
+- Recovery behavior: transfer to IR interpreter with identical semantics from the deopt point.
+- Required metadata: per-block state map, value ownership state, and active cleanup list.
+
+### Example: deopt state map record
+
+```
+deopt_state {
+    block = 3
+    ip = 5
+    locals = [%l0, %l1, %l2]
+    temps = {%t7 -> stack[0], %t9 -> stack[1]}
+    cleanup = [%t7, %t3]
+}
+```
+
+## 11. AST to IR Lowering Rules (Phase 1)
+- Coverage list (Phase 1 minimum):
+  - Constants: int/float/bool/string/nothing.
+  - Variables: local references and assignments.
+  - Arithmetic and comparisons for numeric types.
+  - Logical operators with short-circuit control flow.
+  - If/else, while, for loops (simple counter form) with break/continue.
+  - Return statements.
+  - Direct function calls (no dynamic dispatch).
+- Try/catch with rethrow and cleanup semantics.
+- Unhandled constructs: function-level fallback to AST interpreter (no mixed-mode in v1).
+- Type info preservation: use `QoreTypeInfo*` where available to emit typed ops; otherwise emit `.any` ops.
+
+## 12. IR Interpreter Contract
+- Execution model: block-level instruction pointer, exception checks after any op that can throw.
+- Block semantics: instructions execute in order until a terminator; terminators update the current block/ip.
+- Consistency with AST interpreter: identical refcount behavior and exception propagation.
+- Cleanup behavior: interpreter must honor cleanup lists on normal and unwind paths.
+- Runtime calls: `.any` ops must dispatch through runtime helpers with `ExceptionSink`.
+
+## 13. Verifier Requirements
+- SSA dominance rules and phi correctness.
+- Terminator placement and block structure.
+- Type consistency (typed ops with typed inputs).
+- Cleanup list validation: temporaries tracked and consumed correctly on all exits.
+- Exception edges: every throwing op uses `invoke` or an explicitly modeled unwind edge.
+
+## 14. Testing and Validation
+- Parity tests: AST vs IR output equivalence.
+- Exception tests: cleanup order, rethrow, nested try/catch.
+- Refcount tests: leak checks and debug verification hooks.
+- Parse-analysis propagation: ensure parse-time analysis drives opcode specialization (int/float) and mixed-type fallbacks.
+
+### IR Smoke Test (CMake Optional)
+
+Build:
+
+```
+cmake -S . -B build -DQORE_BUILD_IR_SMOKE=ON
+cmake --build build --target qore-ir-smoke
+```
+
+Run:
+
+```
+./build/qore-ir-smoke
+```
+
+## 15. Open Questions / Decisions Log
+- Exception model details: sink threading vs implicit state.
+- Value tag encoding: bit layout for JIT compatibility.
+- Deopt granularity: instruction-level vs block-level.

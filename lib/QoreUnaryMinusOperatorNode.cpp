@@ -85,7 +85,13 @@ QoreValue QoreUnaryMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
 
 int QoreUnaryMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
 
     // see if the argument is a constant value, then eval immediately and substitute this node with the result
     if (!err & exp.isValue()) {
@@ -100,6 +106,13 @@ int QoreUnaryMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
         if (!result.isNothing()) {
             val = result;
             parse_context.typeInfo = val.getFullTypeInfo();
+            parse_context.analysis.clear();
+            parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+            if (!val.isNothing()) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+            }
+            parse_context.analysis.known_type = parse_context.typeInfo;
             return 0;
         }
         // constants not resolved - skip parse-time folding, let runtime handle it
@@ -140,5 +153,16 @@ int QoreUnaryMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     }
 
     returnTypeInfo = parse_context.typeInfo;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

@@ -66,9 +66,11 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     }
 
     parse_context.typeInfo = nullptr;
+    QoreParseAnalysis right_analysis;
     if (parse_init_value(right, parse_context) && !err) {
         err = -1;
     }
+    right_analysis = parse_context.analysis;
 
     // check for illegal assignment to $self
     if (parse_context.oflag && check_self_assignment(loc, left, parse_context.oflag) && !err) {
@@ -236,6 +238,24 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     }
 
     parse_context.typeInfo = ti;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (right_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            && QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    } else if (right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = right_analysis.known_type;
+        if (right_analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 
