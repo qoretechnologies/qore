@@ -19,10 +19,24 @@ public class ConnectionProviderModuleTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    private bool pathExists(string path) {
+        on_error return False;
+        hstat(path);
+        return True;
+    }
+
+    private string getConnectionProviderModulePath() {
+        string path = get_script_dir() + "../../../../qlib/ConnectionProvider";
+        if (!pathExists(path)) {
+            path = get_script_dir() + "../../../../../qlib/ConnectionProvider";
+        }
+        return path;
+    }
+
     urlProviderTest() {
         Program mp(PO_NO_CHILD_PO_RESTRICTIONS|PO_NEW_STYLE);
         mp.setGlobalVarValue("ENV", ENV + {"QORE_CONNECTION_PROVIDERS": get_script_dir() + "./TestConnectionProvider.qm"});
-        mp.loadApplyToUserModule(get_script_dir() + "../../../../qlib/ConnectionProvider", True);
+        mp.loadApplyToUserModule(getConnectionProviderModulePath(), True);
 
         {
             Program p();
@@ -51,7 +65,7 @@ public class ConnectionProviderModuleTest inherits QUnit::Test {
 
     urlProviderNegativeTest() {
         Program mp(PO_NO_CHILD_PO_RESTRICTIONS|PO_NEW_STYLE);
-        mp.loadApplyToUserModule(get_script_dir() + "../../../../qlib/ConnectionProvider", True);
+        mp.loadApplyToUserModule(getConnectionProviderModulePath(), True);
 
         Program p();
         p.loadModule("ConnectionProvider");

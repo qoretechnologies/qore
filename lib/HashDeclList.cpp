@@ -235,11 +235,29 @@ void HashDeclList::updateParentPointers() {
                 // Only update if this is actually the same hashdecl (same namespace path)
                 if (!strcmp(parent_path, typed_hash_decl_private::get(*new_parent)->getPath())) {
                     hdp->setParentHashDecl(new_parent);
+                    continue;
                 }
             }
-            // If parent not found or path doesn't match, keep the original pointer
-            // The parent might be in a different namespace (e.g., DataProvider::DisplayDescInfo)
-            // and the original pointer is still valid
+            // Parent not found locally or path doesn't match
+            // The original pointer points to the source namespace which may be destroyed
+            // Try to look up the parent by full path in the target namespace tree
+            const qore_ns_private* ns = hdp->getNamespace();
+            if (ns) {
+                qore_root_ns_private* root = const_cast<qore_ns_private*>(ns)->getRoot();
+                if (root) {
+                    const qore_ns_private* parent_ns = nullptr;
+                    const TypedHashDecl* global_parent = qore_root_ns_private::runtimeFindHashDecl(
+                        *root->rns, parent_path, parent_ns);
+                    if (global_parent) {
+                        hdp->setParentHashDecl(global_parent);
+                        continue;
+                    }
+                }
+                // Root namespace not available yet or parent not found
+                // Keep the original pointer - it may still be valid if the source
+                // namespace hasn't been destroyed yet, or it's a system hashdecl
+                // that lives in a persistent namespace
+            }
         }
     }
 }

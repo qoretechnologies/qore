@@ -26,6 +26,102 @@
 /** All public declarations in the %ConnectionProvider module are defined in this namespace
 */
 public namespace ConnectionProvider {
+#! Poll operation for async HTTP ping requests
+/** Uses only non-blocking I/O for HTTP ping requests
+
+    @since ConnectionProvider 2.2
+*/
+public class HttpPingPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        *AbstractPollOperation poller;
+        *Logger::LoggerInterface logger;
+        string err_code;
+        string log_prefix;
+        bool goal_reached = False;
+        auto output;
+        string state = "ping";
+    }
+
+    constructor(string base_url, string method, string path, *hash<auto> http_opts, *hash<auto> headers, auto body,
+            *Logger::LoggerInterface logger, string err_code = "HTTP-PING-ERROR",
+            string log_prefix = "HttpConnection") {
+        self.logger = logger;
+        self.err_code = err_code;
+        self.log_prefix = log_prefix;
+
+        string request_method = method ?? "GET";
+        string request_path = path ?? "/";
+        auto request_body = request_method == "GET" ? NOTHING : body;
+        hash<auto> req_headers;
+        req_headers += headers;
+
+        HTTPClient hc((http_opts ?? {}) + {"url": base_url});
+        if (request_path =~ /^http/) {
+            hc.setURL(request_path);
+            request_path = "";
+        } else {
+            hash<UrlInfo> u = parse_url(base_url);
+            string base_path = u.path ?? "/";
+            if (request_path[0] != "/") {
+                if (base_path[-1] != "/") {
+                    base_path += "/";
+                }
+                request_path = base_path + request_path;
+            }
+        }
+
+        log("INFO", "%s async ping start: method=%s path=%y url=%y", log_prefix, request_method, request_path,
+            base_url);
+        poller = hc.startPollSendRecv(request_method, request_path, request_body, req_headers);
+    }
+
+    string getGoal() {
+        return "ping";
+    }
+
+    string getState() {
+        return state + (poller ? ("-" + poller.getState()) : NOTHING);
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (!poller) {
+            return;
+        }
+        *hash<SocketPollInfo> info = poller.continuePoll();
+        if (info) {
+            return info;
+        }
+        hash<auto> resp = poller.getOutput();
+        if (!exists resp.code || (resp.code / 100) != 2) {
+            log("ERROR", "%s async ping failed: code=%y", log_prefix, resp.code);
+            throw err_code, sprintf("ping failed with HTTP code %y", resp.code);
+        }
+        output = resp;
+        log("INFO", "%s async ping complete: code=%d", log_prefix, resp.code);
+        goal_reached = True;
+    }
+
+    auto getOutput() {
+        return output;
+    }
+
+    abort() {
+        if (poller) {
+            poller.abort();
+        }
+    }
+
+    private log(string level, string msg, ...) {
+        if (logger) {
+            logger.logArgs(level, msg, argv);
+        }
+    }
+}
+
 #! base class for HTTP-based connections that need their URLs rewritten to create the real connection object
 /** Example of the usage is in \c RestConnection where the scheme \c rest:// is internally used as \c http://
 */
@@ -85,6 +181,10 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         @since ConnectionProvider 1.7
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        if (opts.ping_method && opts.ping_path) {
+            return new HttpPingPollOperation(getPingBaseUrl(), opts.ping_method, opts.ping_path, getPingHttpOpts(),
+                getPingHeaders(), getPingBody(opts.ping_method), logger);
+        }
         return getPollImpl().startPollConnect();
     }
 
@@ -97,6 +197,29 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         if (exists url) {
             real_url = getRealUrl(url, getConnectionSchemeInfo(), getType());
         }
+    }
+
+    #! Returns the base URL for ping operations
+    private string getPingBaseUrl() {
+        return real_url;
+    }
+
+    #! Returns HTTP options for ping operations
+    private hash<auto> getPingHttpOpts() {
+        return opts{keys HttpConnection::ConnectionScheme.options} + {"url": getPingBaseUrl()};
+    }
+
+    #! Returns HTTP headers for ping operations
+    private hash<auto> getPingHeaders() {
+        hash<auto> headers;
+        headers += opts.headers;
+        headers += opts.ping_headers;
+        return headers;
+    }
+
+    #! Returns the ping body based on the HTTP method
+    private auto getPingBody(string method) {
+        return method == "GET" ? NOTHING : opts.ping_body;
     }
 }
 } # ConnectionProvider namespace

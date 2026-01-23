@@ -3017,7 +3017,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "display_name": "Ping Path",
                     "short_desc": "The URI path to use for pings",
                     "type": "string",
-                    "desc": "The URI path to use for an advanced ping; this and `ping_method` must be made to make "
+                    "desc": "The URI path to use for an advanced ping; this and `ping_method` must be set to make "
                         "an HTTP request as a part of the socket polling ping operation.  If the value for this "
                         "option begins with a `/` character, then it replaces any connection path for the REST "
                         "client, otherwise the value is appended to the connection path for the REST client.",

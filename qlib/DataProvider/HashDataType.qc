@@ -53,6 +53,13 @@ public class HashDataType inherits QoreDataType {
 
         #! Are any fields required?
         bool required_fields;
+
+        #! Required field groups - at least one field in each group must have a value
+        /** Each inner list represents a group of field names where at least one must be provided.
+            For example, @code (("input_path", "data"),) @endcode means either "input_path" or "data"
+            must have a value.
+        */
+        *list<list<string>> required_groups;
     }
 
     #! creates the object and assigns the name as the type
@@ -126,6 +133,59 @@ public class HashDataType inherits QoreDataType {
     #! Returns the default field type for undeclared fields, if any
     *AbstractDataProviderType getDefaultOtherFieldType() {
         return default_other_field_type;
+    }
+
+    #! Sets required field groups where at least one field in each group must have a value
+    /** @param groups list of field name groups; at least one field in each group must be provided
+
+        @return self for chaining
+
+        @par Example:
+        @code{.py}
+# Require either input_path or data to be provided
+type.setRequiredGroups((("input_path", "data"),));
+
+# Multiple groups: require (input_path OR data) AND (output_path OR return_data)
+type.setRequiredGroups((("input_path", "data"), ("output_path", "return_data")));
+        @endcode
+
+        @throw REQUIRED-GROUP-ERROR if a field name in a group does not exist in the type
+
+        @since DataProvider 3.1
+    */
+    HashDataType setRequiredGroups(list<list<string>> groups) {
+        # Validate all field names exist
+        foreach list<string> group in (groups) {
+            if (group.empty()) {
+                throw "REQUIRED-GROUP-ERROR", sprintf("empty required group in type %y", getName());
+            }
+            foreach string field_name in (group) {
+                if (!fields{field_name}) {
+                    throw "REQUIRED-GROUP-ERROR", sprintf("field %y in required group does not exist in type %y; "
+                        "known fields: %y", field_name, getName(), keys fields);
+                }
+            }
+        }
+        required_groups = groups;
+        return self;
+    }
+
+    #! Returns the required field groups, if any
+    /** @return the list of required field groups, or @ref nothing if none are set
+
+        @since DataProvider 3.1
+    */
+    *list<list<string>> getRequiredGroups() {
+        return required_groups;
+    }
+
+    #! Returns True if the type has required field groups
+    /** @return True if required field groups are defined
+
+        @since DataProvider 3.1
+    */
+    bool hasRequiredGroups() {
+        return required_groups.val();
     }
 
     #! Convert to an "or-nothing" type if all fields are optional
@@ -228,6 +288,22 @@ auto v = t.getDefaultValue();
             } else if (fields) {
                 throw "RUNTIME-TYPE-ERROR", sprintf("Error in type %y: unsupported fields in value: %y; known "
                     "fields: %y", getName(), keys value_copy, keys fields);
+            }
+        }
+        # Validate required field groups
+        if (required_groups) {
+            foreach list<string> group in (required_groups) {
+                bool has_value = False;
+                foreach string field_name in (group) {
+                    if (exists value{field_name} && value{field_name}.val()) {
+                        has_value = True;
+                        break;
+                    }
+                }
+                if (!has_value) {
+                    throw "REQUIRED-FIELD-GROUP-ERROR", sprintf("Error in type %y: at least one of the following "
+                        "fields must have a value: %y", getName(), group);
+                }
             }
         }
         return value;
@@ -360,6 +436,9 @@ auto v = t.getDefaultValue();
             rv.setDefaultOtherFieldType(default_other_field_type.getSoftType());
         }
         map rv.addField($1.getSoftType()), getFields().iterator();
+        if (required_groups) {
+            rv.setRequiredGroups(required_groups);
+        }
         rv.soft_type = True;
         return rv;
     }
@@ -369,6 +448,9 @@ auto v = t.getDefaultValue();
         hash<DataTypeInfo> rv = QoreDataType::getInfo(simple);
         if (!fields && default_other_field_type) {
             rv.default_field_type_info = default_other_field_type.getInfo(simple);
+        }
+        if (required_groups) {
+            rv.required_groups = required_groups;
         }
         return rv;
     }

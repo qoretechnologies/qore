@@ -211,6 +211,14 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - added support for Microsoft Dynamics 365 Business Central with new data provider classes for CRUD operations
       - added support for the DataProvider expression framework for OData queries with support for
         contains, startsWith, endsWith, null, and notNull operators
+    - @ref edifactutilintro "EdifactUtil" module
+      - new module for parsing and generating UN/EDIFACT electronic data interchange messages
+      - automatic UNA segment detection and custom delimiter support
+      - release character escaping/unescaping for special characters in data
+      - iterator classes for reading from files, streams, and strings
+      - writer classes for generating EDIFACT messages to files, streams, and strings
+      - service segment filtering option to skip envelope segments during iteration
+      - DataProvider integration for use in data pipelines and integration workflows
     - @ref connectionproviderintro "ConnectionProvider" module
       - added the \c ConnectionProvider::RestartableIoHelper class
       - new \c http_version option in \c ConnectionProvider::HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0")
@@ -273,6 +281,12 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design
       - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 mode control
+    - @ref httpstreamclientintro "HttpStreamClient" module
+      - new module providing a convenience API for reading HTTP streaming responses
+      - supports Server-Sent Events (SSE) with @ref HttpStreamClient::HTTPResponseStream::readServerSentEvent() "HTTPResponseStream::readServerSentEvent()"
+      - supports incremental body reading with @ref HttpStreamClient::HTTPResponseStream::readChunk() "HTTPResponseStream::readChunk()"
+      - automatic decompression for gzip, deflate, bzip2, brotli, zstd, and lz4 content encodings
+      - works with the new @ref Qore::HTTPClient::sendAndStream() "HTTPClient::sendAndStream()" method
     - @ref loggerintro "Logger" module
 \if QORE_LANG_FINAL
       - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "Qore::Logger::LoggerAppenderQueue"
@@ -362,6 +376,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - @ref Qore::HTTPClient::getHttp2Settings() "HTTPClient::getHttp2Settings()": returns HTTP/2 settings
       - @ref Qore::HTTPClient::setHttp2Settings() "HTTPClient::setHttp2Settings()": sets HTTP/2 settings
       - @ref Qore::HTTPClient::getHttpVersion() "HTTPClient::getHttpVersion()": returns negotiated HTTP version
+      - @ref Qore::HTTPClient::sendAndStream() "HTTPClient::sendAndStream()": sends HTTP request and returns headers without reading body, enabling streaming response handling
     - new functions:
       - @ref Qore::clock_getseconds() "clock_getseconds()"
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers

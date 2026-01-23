@@ -1,0 +1,663 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/FileLocationHandler
+%requires ../../../../qlib/EdifactUtil
+
+%exec-class EdifactUtilTest
+
+public class EdifactUtilTest inherits QUnit::Test {
+    private {
+        # Simple EDIFACT message without UNA
+        const SimpleEdifact = "UNB+UNOC:3+SENDER+RECEIVER+260122:1200+REF001'UNH+1+ORDERS:D:96A:UN'BGM+220+PO12345+9'DTM+137:20260122:102'UNT+4+1'UNZ+1+REF001'";
+
+        # EDIFACT message with UNA segment
+        const EdifactWithUna = "UNA:+.? 'UNB+UNOC:3+SENDER+RECEIVER+260122:1200+REF001'UNH+1+ORDERS:D:96A:UN'BGM+220+PO12345+9'UNT+3+1'UNZ+1+REF001'";
+
+        # EDIFACT message with line breaks
+        const EdifactWithLineBreaks = "UNA:+.? '
+UNB+UNOC:3+SENDER+RECEIVER+260122:1200+REF001'
+UNH+1+ORDERS:D:96A:UN'
+BGM+220+PO12345+9'
+DTM+137:20260122:102'
+NAD+BY+BUYER123::91'
+UNT+5+1'
+UNZ+1+REF001'";
+
+        # EDIFACT with composite elements
+        const EdifactWithComposites = "UNB+UNOC:3+SENDER:14+RECEIVER:ZZ+260122:1200+REF001'UNH+1+ORDERS:D:96A:UN'BGM+220:ORDER+PO12345:1:ABC+9'UNT+3+1'UNZ+1+REF001'";
+
+        # EDIFACT with release character
+        const EdifactWithEscape = "UNB+UNOC:3+SENDER+RECEIVER+260122:1200+REF001'UNH+1+ORDERS:D:96A:UN'FTX+AAA+++Price is 100?+50 USD'UNT+3+1'UNZ+1+REF001'";
+
+        # Custom delimiters via UNA
+        const EdifactCustomDelimiters = "UNA;*.! @UNB*UNOC;3*SENDER*RECEIVER*260122;1200*REF001@UNH*1*ORDERS;D;96A;UN@BGM*220*PO12345*9@UNT*3*1@UNZ*1*REF001@";
+    }
+
+    constructor() : Test("EdifactUtilTest", "1.0") {
+        addTestCase("Delimiter tests", \delimiterTest());
+        addTestCase("UNA parsing tests", \unaParseTest());
+        addTestCase("Segment parsing tests", \segmentParseTest());
+        addTestCase("Split with release tests", \splitWithReleaseTest());
+        addTestCase("Iterator tests", \iteratorTest());
+        addTestCase("Iterator with UNA tests", \iteratorWithUnaTest());
+        addTestCase("Iterator with line breaks tests", \iteratorWithLineBreaksTest());
+        addTestCase("Composite element tests", \compositeElementTest());
+        addTestCase("Release character tests", \releaseCharacterTest());
+        addTestCase("Custom delimiter tests", \customDelimiterTest());
+        addTestCase("Writer tests", \writerTest());
+        addTestCase("Roundtrip tests", \roundtripTest());
+        addTestCase("Service segment skip tests", \serviceSegmentSkipTest());
+        addTestCase("Interchange header tests", \interchangeHeaderTest());
+        addTestCase("Message header tests", \messageHeaderTest());
+        addTestCase("Negative tests", \negativeTest());
+        addTestCase("File I/O tests", \fileIoTest());
+        addTestCase("Writer options tests", \writerOptionsTest());
+        addTestCase("Extended record format tests", \extendedRecordTest());
+        addTestCase("Escape in writer tests", \escapeWriterTest());
+        addTestCase("getAllSegments tests", \getAllSegmentsTest());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    delimiterTest() {
+        # Test default delimiters
+        EdifactDelimiters delim();
+        assertEq(":", delim.component_separator);
+        assertEq("+", delim.element_separator);
+        assertEq(".", delim.decimal_notation);
+        assertEq("?", delim.release_character);
+        assertEq("'", delim.segment_terminator);
+        assertFalse(delim.una_present);
+
+        # Test getInfo
+        hash<EdifactDelimiterInfo> info = delim.getInfo();
+        assertEq(":", info.component_separator);
+        assertEq("+", info.element_separator);
+
+        # Test generateUna
+        string una = delim.generateUna();
+        assertEq("UNA:+.? '", una);
+    }
+
+    unaParseTest() {
+        # Test parsing UNA segment
+        EdifactDelimiters delim("UNA:+.? '");
+        assertEq(":", delim.component_separator);
+        assertEq("+", delim.element_separator);
+        assertEq(".", delim.decimal_notation);
+        assertEq("?", delim.release_character);
+        assertEq("'", delim.segment_terminator);
+        assertTrue(delim.una_present);
+
+        # Test parsing custom UNA segment
+        EdifactDelimiters delim2("UNA;*.! @");
+        assertEq(";", delim2.component_separator);
+        assertEq("*", delim2.element_separator);
+        assertEq(".", delim2.decimal_notation);
+        assertEq("!", delim2.release_character);
+        assertEq("@", delim2.segment_terminator);
+
+        # Test error: UNA too short
+        assertThrows("EDIFACT-DELIMITER-ERROR", sub() { new EdifactDelimiters("UNA:+"); });
+
+        # Test error: invalid UNA prefix
+        assertThrows("EDIFACT-DELIMITER-ERROR", sub() { new EdifactDelimiters("XXX:+.? '"); });
+    }
+
+    segmentParseTest() {
+        EdifactBase base();
+
+        # Test simple segment
+        hash<EdifactSegment> seg = base.parseSegment("BGM+220+PO12345+9");
+        assertEq("BGM", seg.tag);
+        assertEq(3, seg.data_elements.size());
+        assertEq(("220",), seg.data_elements[0]);
+        assertEq(("PO12345",), seg.data_elements[1]);
+        assertEq(("9",), seg.data_elements[2]);
+
+        # Test segment with composite elements
+        hash<EdifactSegment> seg2 = base.parseSegment("DTM+137:20260122:102");
+        assertEq("DTM", seg2.tag);
+        assertEq(1, seg2.data_elements.size());
+        assertEq(("137", "20260122", "102"), seg2.data_elements[0]);
+
+        # Test segment with no elements
+        hash<EdifactSegment> seg3 = base.parseSegment("UNS");
+        assertEq("UNS", seg3.tag);
+        assertEq(0, seg3.data_elements.size());
+
+        # Test segment with empty elements
+        hash<EdifactSegment> seg4 = base.parseSegment("NAD+BY++BUYER");
+        assertEq("NAD", seg4.tag);
+        assertEq(3, seg4.data_elements.size());
+        assertEq(("BY",), seg4.data_elements[0]);
+        assertEq(("",), seg4.data_elements[1]);
+        assertEq(("BUYER",), seg4.data_elements[2]);
+
+        # Test simple element with escaped release character (no composite separator)
+        hash<EdifactSegment> seg5 = base.parseSegment("FTX+AAA+Text??with??escapes");
+        assertEq("FTX", seg5.tag);
+        assertEq(2, seg5.data_elements.size());
+        assertEq(("AAA",), seg5.data_elements[0]);
+        # The ?? should become ? in the output (unescaped)
+        assertEq(("Text?with?escapes",), seg5.data_elements[1]);
+
+        # Test escaped component separator in simple element - should NOT be treated as composite
+        hash<EdifactSegment> seg6 = base.parseSegment("FTX+AAA+Time?:10?:30");
+        assertEq("FTX", seg6.tag);
+        assertEq(2, seg6.data_elements.size());
+        # The ?: should become : in the output (unescaped), but NOT split as composite
+        assertEq(("Time:10:30",), seg6.data_elements[1]);
+
+        # Test error: empty segment
+        assertThrows("EDIFACT-PARSE-ERROR", sub() { base.parseSegment(""); });
+
+        # Test error: too short segment
+        assertThrows("EDIFACT-PARSE-ERROR", sub() { base.parseSegment("AB"); });
+
+        # Test error: invalid tag
+        assertThrows("EDIFACT-PARSE-ERROR", sub() { base.parseSegment("123+data"); });
+    }
+
+    splitWithReleaseTest() {
+        EdifactBase base();
+
+        # Test simple split
+        list<string> parts = base.splitWithRelease("A+B+C", "+");
+        assertEq(("A", "B", "C"), parts);
+
+        # Test split with escaped delimiter
+        list<string> parts2 = base.splitWithRelease("A+B?+C+D", "+");
+        assertEq(("A", "B+C", "D"), parts2);
+
+        # Test split with escaped release character
+        list<string> parts3 = base.splitWithRelease("A+B??C+D", "+");
+        assertEq(("A", "B?C", "D"), parts3);
+
+        # Test split with multiple escapes
+        list<string> parts4 = base.splitWithRelease("A?+B?:C+D", "+");
+        assertEq(("A+B:C", "D"), parts4);
+
+        # Test empty string
+        list<string> parts5 = base.splitWithRelease("", "+");
+        assertEq(("",), parts5);
+
+        # Test no separator in string
+        list<string> parts6 = base.splitWithRelease("ABC", "+");
+        assertEq(("ABC",), parts6);
+    }
+
+    iteratorTest() {
+        EdifactDataIterator i(SimpleEdifact);
+
+        # Count segments
+        int count = 0;
+        list<string> tags = ();
+        while (i.next()) {
+            count++;
+            push tags, i.getTag();
+        }
+
+        assertEq(6, count);
+        assertEq(("UNB", "UNH", "BGM", "DTM", "UNT", "UNZ"), tags);
+
+        # Reset and test specific segments
+        i.reset();
+        assertTrue(i.next());
+        assertEq("UNB", i.getTag());
+
+        assertTrue(i.next());
+        assertEq("UNH", i.getTag());
+
+        assertTrue(i.next());
+        assertEq("BGM", i.getTag());
+        list<auto> bgm_elements = i.getElements();
+        assertEq(3, bgm_elements.size());
+        assertEq(("220",), bgm_elements[0]);
+        assertEq(("PO12345",), bgm_elements[1]);
+        assertEq(("9",), bgm_elements[2]);
+    }
+
+    iteratorWithUnaTest() {
+        EdifactDataIterator i(EdifactWithUna);
+
+        # First segment should be UNA
+        assertTrue(i.next());
+        assertEq("UNA", i.getTag());
+
+        # Delimiters should be parsed
+        EdifactDelimiters delim = i.getDelimiters();
+        assertEq(":", delim.component_separator);
+        assertEq("+", delim.element_separator);
+    }
+
+    iteratorWithLineBreaksTest() {
+        EdifactDataIterator i(EdifactWithLineBreaks);
+
+        list<string> tags = ();
+        while (i.next()) {
+            push tags, i.getTag();
+        }
+
+        # Should handle line breaks properly
+        assertEq(("UNA", "UNB", "UNH", "BGM", "DTM", "NAD", "UNT", "UNZ"), tags);
+    }
+
+    compositeElementTest() {
+        EdifactDataIterator i(EdifactWithComposites);
+
+        # Skip to UNB
+        assertTrue(i.next());
+        assertEq("UNB", i.getTag());
+        list<auto> unb_elements = i.getElements();
+
+        # Sender should be composite
+        assertEq(("SENDER", "14"), unb_elements[1]);
+
+        # Recipient should be composite
+        assertEq(("RECEIVER", "ZZ"), unb_elements[2]);
+
+        # Skip to BGM
+        assertTrue(i.next()); # UNH
+        assertTrue(i.next()); # BGM
+        assertEq("BGM", i.getTag());
+        list<auto> bgm_elements = i.getElements();
+
+        # Document name composite
+        assertEq(("220", "ORDER"), bgm_elements[0]);
+
+        # Document ID composite
+        assertEq(("PO12345", "1", "ABC"), bgm_elements[1]);
+    }
+
+    releaseCharacterTest() {
+        EdifactDataIterator i(EdifactWithEscape);
+
+        # Skip to FTX segment
+        while (i.next()) {
+            if (i.getTag() == "FTX") {
+                break;
+            }
+        }
+
+        assertEq("FTX", i.getTag());
+        list<auto> ftx_elements = i.getElements();
+
+        # The escaped + should be preserved in the value
+        # Element 3 (index 3) contains the text with escaped +
+        assertEq("Price is 100+50 USD", ftx_elements[3][0]);
+    }
+
+    customDelimiterTest() {
+        EdifactDataIterator i(EdifactCustomDelimiters);
+
+        # First segment should be UNA
+        assertTrue(i.next());
+        assertEq("UNA", i.getTag());
+
+        # Delimiters should be custom
+        EdifactDelimiters delim = i.getDelimiters();
+        assertEq(";", delim.component_separator);
+        assertEq("*", delim.element_separator);
+        assertEq("!", delim.release_character);
+        assertEq("@", delim.segment_terminator);
+
+        # Parse rest of message
+        assertTrue(i.next());
+        assertEq("UNB", i.getTag());
+
+        list<auto> unb_elements = i.getElements();
+        # Syntax identifier composite with ; separator
+        assertEq(("UNOC", "3"), unb_elements[0]);
+    }
+
+    writerTest() {
+        EdifactDataWriter w();
+
+        w.writeInterchangeHeader(<EdifactInterchangeInfo>{
+            "sender_id": "SENDER",
+            "recipient_id": "RECEIVER",
+            "control_reference": "REF001",
+        });
+
+        w.writeMessageHeader(<EdifactMessageInfo>{
+            "message_reference": "1",
+            "message_type": "ORDERS",
+            "message_version": "D",
+            "message_release": "96A",
+        });
+
+        w.writeSegment("BGM", (("220",), ("PO12345",), ("9",)));
+        w.writeSegment("DTM", (("137", "20260122", "102"),));
+
+        w.writeMessageTrailer();
+        w.writeInterchangeTrailer();
+
+        string result = w.getData();
+
+        # Verify starts with UNA
+        assertTrue(result.find("UNA:+.? '") == 0);
+
+        # Verify contains expected segments
+        assertTrue(result.find("UNB+") > 0);
+        assertTrue(result.find("UNH+") > 0);
+        assertTrue(result.find("BGM+220+PO12345+9'") > 0);
+        assertTrue(result.find("DTM+137:20260122:102'") > 0);
+        assertTrue(result.find("UNT+") > 0);
+        assertTrue(result.find("UNZ+") > 0);
+    }
+
+    roundtripTest() {
+        # Write a message
+        EdifactDataWriter w();
+
+        w.writeInterchangeHeader(<EdifactInterchangeInfo>{
+            "sender_id": "TESTSENDER",
+            "recipient_id": "TESTRECEIVER",
+            "control_reference": "TEST001",
+        });
+
+        w.writeMessageHeader(<EdifactMessageInfo>{
+            "message_reference": "1",
+            "message_type": "ORDERS",
+            "message_version": "D",
+            "message_release": "96A",
+        });
+
+        list<hash<auto>> segments = (
+            {"tag": "BGM", "elements": (("220",), ("ORDER123",), ("9",))},
+            {"tag": "DTM", "elements": (("137", "20260122", "102"),)},
+            {"tag": "NAD", "elements": (("BY",), ("BUYER1", "", "92"))},
+        );
+
+        w.write(segments);
+        w.writeMessageTrailer();
+        w.writeInterchangeTrailer();
+
+        string written = w.getData();
+
+        # Read it back
+        EdifactDataIterator i(written);
+
+        # Skip UNA, UNB, UNH
+        assertTrue(i.next()); # UNA
+        assertTrue(i.next()); # UNB
+        assertTrue(i.next()); # UNH
+
+        # Verify BGM
+        assertTrue(i.next());
+        assertEq("BGM", i.getTag());
+        assertEq(("220",), i.getElements()[0]);
+        assertEq(("ORDER123",), i.getElements()[1]);
+
+        # Verify DTM
+        assertTrue(i.next());
+        assertEq("DTM", i.getTag());
+        assertEq(("137", "20260122", "102"), i.getElements()[0]);
+
+        # Verify NAD
+        assertTrue(i.next());
+        assertEq("NAD", i.getTag());
+        assertEq(("BY",), i.getElements()[0]);
+        assertEq(("BUYER1", "", "92"), i.getElements()[1]);
+    }
+
+    serviceSegmentSkipTest() {
+        EdifactDataIterator i(SimpleEdifact, {"skip_service_segments": True});
+
+        list<string> tags = ();
+        while (i.next()) {
+            push tags, i.getTag();
+        }
+
+        # Only non-service segments
+        assertEq(("BGM", "DTM"), tags);
+    }
+
+    interchangeHeaderTest() {
+        EdifactDataIterator i(SimpleEdifact);
+
+        # Iterate to populate interchange info
+        while (i.next()) {
+            if (i.getTag() == "UNB") {
+                break;
+            }
+        }
+
+        *hash<auto> interchange = i.getInterchange();
+        assertTrue(exists interchange);
+        assertEq("UNOC", interchange.syntax_identifier);
+        assertEq("3", interchange.syntax_version);
+        assertEq("SENDER", interchange.sender_id);
+        assertEq("RECEIVER", interchange.recipient_id);
+        assertEq("REF001", interchange.control_reference);
+    }
+
+    messageHeaderTest() {
+        EdifactDataIterator i(SimpleEdifact);
+
+        # Iterate to populate message info
+        while (i.next()) {
+            if (i.getTag() == "UNH") {
+                break;
+            }
+        }
+
+        *hash<auto> message = i.getMessage();
+        assertTrue(exists message);
+        assertEq("1", message.message_reference);
+        assertEq("ORDERS", message.message_type);
+        assertEq("D", message.message_version);
+        assertEq("96A", message.message_release);
+        assertEq("UN", message.controlling_agency);
+    }
+
+    negativeTest() {
+        # Test invalid iterator access
+        EdifactDataIterator i(SimpleEdifact);
+        assertThrows("INVALID-ITERATOR", sub() { i.getValue(); });
+        assertThrows("INVALID-ITERATOR", sub() { i.getTag(); });
+
+        # Test writer without interchange header
+        EdifactDataWriter w();
+        assertThrows("EDIFACT-WRITE-ERROR", sub() {
+            w.writeMessageHeader(<EdifactMessageInfo>{
+                "message_reference": "1",
+                "message_type": "ORDERS",
+                "message_version": "D",
+                "message_release": "96A",
+            });
+        });
+
+        # Test writer without message header
+        EdifactDataWriter w2();
+        w2.writeInterchangeHeader(<EdifactInterchangeInfo>{
+            "sender_id": "SENDER",
+            "recipient_id": "RECEIVER",
+            "control_reference": "REF001",
+        });
+        assertThrows("EDIFACT-WRITE-ERROR", sub() { w2.writeMessageTrailer(); });
+    }
+
+    fileIoTest() {
+        # Create a temp directory for file tests
+        TmpDir tmp();
+        string path = tmp.path + "/test.edi";
+
+        # Write to file
+        EdifactFileWriter fw(path);
+        fw.writeInterchangeHeader(<EdifactInterchangeInfo>{
+            "sender_id": "FILESENDER",
+            "recipient_id": "FILERECEIVER",
+            "control_reference": "FILEREF",
+        });
+        fw.writeMessageHeader(<EdifactMessageInfo>{
+            "message_reference": "1",
+            "message_type": "ORDERS",
+            "message_version": "D",
+            "message_release": "96A",
+        });
+        fw.writeSegment("BGM", (("220",), ("FILETEST",), ("9",)));
+        fw.writeMessageTrailer();
+        fw.writeInterchangeTrailer();
+        fw.close();
+
+        # Verify file path methods
+        assertEq(path, fw.getPath());
+        assertEq("test.edi", fw.getFileName());
+
+        # Read from file
+        EdifactFileIterator fi(path);
+        list<string> tags = ();
+        while (fi.next()) {
+            push tags, fi.getTag();
+        }
+
+        assertEq(("UNA", "UNB", "UNH", "BGM", "UNT", "UNZ"), tags);
+
+        # Verify file path methods on iterator
+        assertEq(path, fi.getPath());
+        assertEq("test.edi", fi.getFileName());
+    }
+
+    writerOptionsTest() {
+        # Test line_break option
+        EdifactDataWriter w1({"line_break": True});
+        w1.writeInterchangeHeader(<EdifactInterchangeInfo>{
+            "sender_id": "SENDER",
+            "recipient_id": "RECEIVER",
+            "control_reference": "REF001",
+        });
+        w1.writeMessageHeader(<EdifactMessageInfo>{
+            "message_reference": "1",
+            "message_type": "ORDERS",
+            "message_version": "D",
+            "message_release": "96A",
+        });
+        w1.writeSegment("BGM", (("220",), ("TEST",), ("9",)));
+        w1.writeMessageTrailer();
+        w1.writeInterchangeTrailer();
+
+        string result1 = w1.getData();
+        # Should contain newlines
+        assertTrue(result1.find("\n") > 0);
+
+        # Test write_una = False option
+        EdifactDataWriter w2({"write_una": False});
+        w2.writeInterchangeHeader(<EdifactInterchangeInfo>{
+            "sender_id": "SENDER",
+            "recipient_id": "RECEIVER",
+            "control_reference": "REF001",
+        });
+        w2.writeMessageHeader(<EdifactMessageInfo>{
+            "message_reference": "1",
+            "message_type": "ORDERS",
+            "message_version": "D",
+            "message_release": "96A",
+        });
+        w2.writeSegment("BGM", (("220",), ("TEST",), ("9",)));
+        w2.writeMessageTrailer();
+        w2.writeInterchangeTrailer();
+
+        string result2 = w2.getData();
+        # Should NOT start with UNA
+        assertTrue(result2.find("UNA") == -1);
+        assertTrue(result2.find("UNB+") == 0);
+
+        # Test custom syntax identifier
+        EdifactDataWriter w3({"syntax_identifier": "UNOA", "syntax_version": "2"});
+        w3.writeInterchangeHeader(<EdifactInterchangeInfo>{
+            "sender_id": "SENDER",
+            "recipient_id": "RECEIVER",
+            "control_reference": "REF001",
+        });
+        w3.writeMessageHeader(<EdifactMessageInfo>{
+            "message_reference": "1",
+            "message_type": "ORDERS",
+            "message_version": "D",
+            "message_release": "96A",
+        });
+        w3.writeMessageTrailer();
+        w3.writeInterchangeTrailer();
+
+        string result3 = w3.getData();
+        assertTrue(result3.find("UNOA:2") > 0);
+    }
+
+    extendedRecordTest() {
+        EdifactDataIterator i(SimpleEdifact, {"extended_record": True});
+
+        assertTrue(i.next()); # UNB
+        hash<auto> rec = i.getValue();
+
+        # Extended format should have 'type' and 'record' keys
+        assertTrue(exists rec.type);
+        assertTrue(exists rec.record);
+        assertEq("UNB", rec.type);
+        assertEq("UNB", rec.record.tag);
+    }
+
+    escapeWriterTest() {
+        EdifactDataWriter w();
+
+        w.writeInterchangeHeader(<EdifactInterchangeInfo>{
+            "sender_id": "SENDER",
+            "recipient_id": "RECEIVER",
+            "control_reference": "REF001",
+        });
+        w.writeMessageHeader(<EdifactMessageInfo>{
+            "message_reference": "1",
+            "message_type": "ORDERS",
+            "message_version": "D",
+            "message_release": "96A",
+        });
+
+        # Write segment with characters that need escaping
+        w.writeSegment("FTX", (("AAA",), ("",), ("",), ("Price: $10+tax",)));
+
+        w.writeMessageTrailer();
+        w.writeInterchangeTrailer();
+
+        string result = w.getData();
+
+        # The + should be escaped as ?+
+        assertTrue(result.find("Price?: $10?+tax") > 0);
+
+        # Read it back and verify unescaping works
+        EdifactDataIterator i(result);
+        while (i.next()) {
+            if (i.getTag() == "FTX") {
+                assertEq("Price: $10+tax", i.getElements()[3][0]);
+                break;
+            }
+        }
+    }
+
+    getAllSegmentsTest() {
+        EdifactDataIterator i(SimpleEdifact);
+
+        list<hash<EdifactSegment>> all = i.getAllSegments();
+
+        assertEq(6, all.size());
+        assertEq("UNB", all[0].tag);
+        assertEq("UNH", all[1].tag);
+        assertEq("BGM", all[2].tag);
+        assertEq("DTM", all[3].tag);
+        assertEq("UNT", all[4].tag);
+        assertEq("UNZ", all[5].tag);
+
+        # getSegmentCount should return total segments
+        assertEq(6, i.getSegmentCount());
+
+        # Iterator should be reset after getAllSegments
+        assertFalse(i.valid());
+    }
+}
