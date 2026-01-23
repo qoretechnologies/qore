@@ -2407,7 +2407,7 @@ QoreObject* QoreProgram::getQoreObject(QoreProgram* pgm) {
 }
 
 void qore_program_private::cleanupAllPrograms(ExceptionSink* xsink) {
-    if (!qore_shutdown.load(std::memory_order_relaxed) || threads_initialized) {
+    if (!qore_shutdown.load(std::memory_order_relaxed)) {
         return;
     }
 
@@ -2416,22 +2416,29 @@ void qore_program_private::cleanupAllPrograms(ExceptionSink* xsink) {
         QoreAutoRWWriteLocker al(&lck_programMap);
         programs.reserve(qore_program_to_object_map.size());
         for (auto& i : qore_program_to_object_map) {
+            // Add a reference to each program/object while holding the lock to prevent
+            // deletion during iteration. Items in the map must have positive ref counts.
+            if (i.first) {
+                i.first->ref();
+            }
+            if (i.second) {
+                i.second->ref();
+            }
             programs.push_back(std::make_pair(i.first, i.second));
         }
     }
 
     for (auto& entry : programs) {
         if (entry.second) {
-            int oref = entry.second->reference_count();
-            if (oref > 0) {
-                entry.second->deref(xsink);
-            }
+            // Deref twice: once for cleanup, once for the extra reference we added
+            entry.second->deref(xsink);
+            entry.second->deref(xsink);
         }
         if (entry.first) {
-            int pref = entry.first->reference_count();
-            if (pref > 0) {
-                entry.first->waitForTerminationAndDeref(xsink);
-            }
+            // waitForTerminationAndDeref does cleanup and one deref
+            entry.first->waitForTerminationAndDeref(xsink);
+            // Deref for the extra reference we added
+            entry.first->deref(xsink);
         }
     }
 }

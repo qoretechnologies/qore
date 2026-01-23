@@ -95,7 +95,9 @@
 #define PO_BROKEN_SPRINTF                   (1LL << 55)  //!< enables pre-0.9 broken sprintf handling
 #define PO_BROKEN_CAST                      (1LL << 56)  //!< enables pre-0.9.4 broken cast<> operator handling
 #define PO_ALLOW_RETURNS                    (1LL << 57)  //!< allows the use of the deprecated "returns" keyword
-#define PO_STRICT_TYPES                     (1LL << 58)  //!< enforce strict type checking and setting default values
+//! @deprecated support removed in %Qore 2.3; remains defined as 0 for backward compatibility
+#define PO_STRICT_TYPES                     0
+#define PO_BROKEN_NAMESPACE_RESOLUTION      (1LL << 58)  //!< enables legacy namespace resolution behavior
 #define PO_BROKEN_RANGE                     (1LL << 59)  //!< allow for old pre-%Qore 0.9.5 "range()" and "xrange()" behavior where the upper limit was included in the result
 #define PO_NO_INHERIT_PROGRAM_DATA          (1LL << 60)  //!< do not inherit module-specific Program data from the parent
 #define PO_BROKEN_VARARGS                   (1LL << 61)  //!< allow for old pre-%Qore 1.17 vararg handling with implicit ellipses
@@ -153,7 +155,7 @@
 #define PO_FREE_OPTIONS               (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL|PO_STRICT_BOOLEAN_EVAL \
     |PO_BROKEN_LIST_PARSING|PO_BROKEN_LOGIC_PRECEDENCE|PO_BROKEN_INT_ASSIGNMENTS|PO_BROKEN_OPERATORS \
     |PO_BROKEN_LOOP_STATEMENT|PO_BROKEN_REFERENCES|PO_BROKEN_SPRINTF|PO_BROKEN_RANGE|PO_BROKEN_VARARGS \
-    |PO_BROKEN_LIST_RANGE|PO_BROKEN_NARROWED_TYPES)
+    |PO_BROKEN_LIST_RANGE|PO_BROKEN_NARROWED_TYPES|PO_BROKEN_NAMESPACE_RESOLUTION)
 
 //! mask of options related to style but not capabilities
 #define PO_STYLE_OPTIONS              (PO_NO_TOP_LEVEL_STATEMENTS|PO_REQUIRE_PROTOTYPES|PO_REQUIRE_TYPES \

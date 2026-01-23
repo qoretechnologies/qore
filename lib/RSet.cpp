@@ -571,6 +571,10 @@ bool RSetHelper::makeChain(int i, omap_t::iterator fi, int tid) {
     // Count the forward-edge from the last object in the chain to the target object (fi)
     // This edge wasn't counted because fi was already finalized when first encountered
     if (!ovec.empty() && ovec.back()->second.rset == fi->second.rset) {
+#ifdef _QORE_CYCLE_CHECK
+        // Set scan_context to the source of the forward-edge (ovec.back()) before recording
+        RSetScanContextHelper rsc(*this, ovec.back()->first);
+#endif
         printd(QRO_LVL, " + %p '%s': counting forward-edge to %p '%s' (rcount: %d -> %d)\n",
             ovec.back()->first, ovec.back()->first->getName(),
             fi->first, fi->first->getName(),
@@ -780,11 +784,18 @@ bool RSetHelper::checkIntern(RObject& obj) {
             }
 
             if (should_count) {
+#ifdef _QORE_CYCLE_CHECK
+                // Set scan_context to the source of the forward-edge before recording
+                RSetScanContextHelper rsc(*this, curr_oi->first);
+#endif
                 printd(QRO_LVL, " + %p '%s': counting forward-edge to %p '%s' (rcount: %d -> %d)\n",
                     curr_oi->first, curr_oi->first->getName(),
                     next_oi->first, next_oi->first->getName(),
                     next_oi->second.rcount, next_oi->second.rcount + 1);
                 ++next_oi->second.rcount;
+#ifdef _QORE_CYCLE_CHECK
+                setObjectScanContext(*next_oi->first, next_oi->second.rcount);
+#endif
             }
         }
 

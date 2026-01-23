@@ -82,7 +82,7 @@ module Pop3ClientDataProvider {
 
     @section pop3clientdataproviderintro Introduction to the Pop3ClientDataProvider Module
 
-    The %Pop3ClientDataProvider module provides a \c dataproviderintro "data provider" API for POP3 servers.
+    The %Pop3ClientDataProvider module provides a @ref dataproviderintro "data provider" API for POP3 servers.
 
     This data provider provides Pop3Client API access to:
     - List available messages on the server (with sizes and UIDLs)

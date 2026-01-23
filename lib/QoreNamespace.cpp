@@ -807,9 +807,10 @@ QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, int64 po, con
     }
 }
 
-void QoreNamespaceList::resolveCopy() {
-    for (nsmap_t::iterator i = nsmap.begin(), e = nsmap.end(); i != e; ++i)
-        i->second->priv->classList.resolveCopy();
+void QoreNamespaceList::resolveExternalParentHashDeclsRecursive(qore_root_ns_private* root) {
+    for (auto& i : nsmap) {
+        i.second->priv->resolveExternalParentHashDeclsRecursive(root);
+    }
 }
 
 int QoreNamespaceList::parseInitGlobalVars() {
@@ -1651,6 +1652,23 @@ const QoreEnumDecl* qore_root_ns_private::parseFindScopedEnumIntern(const NamedS
     return nullptr;
 }
 
+TypedefEntry* qore_root_ns_private::parseFindScopedTypedefIntern(const NamedScope& nscope, unsigned& matched) {
+    assert(nscope.size() > 1);
+
+    // iterate all namespaces with the initial name and look for the match
+    {
+        NamespaceMapIterator nmi(nsmap, nscope[0]);
+        while (nmi.next()) {
+            TypedefEntry* td;
+            if ((td = nmi.get()->parseMatchScopedTypedef(nscope, matched))) {
+                return td;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
 const QoreEnumDecl* qore_root_ns_private::parseFindEnum(const QoreProgramLocation* loc, const NamedScope& nscope) {
     const QoreEnumDecl* ed;
     // if there is no namespace specified, then just find enum
@@ -2219,8 +2237,15 @@ void qore_root_ns_private::parseWarnAmbiguousFunctionCall(const QoreProgramLocat
     }
 
     const qore_ns_private* resolved_ns = resolved->getNamespace();
-    if (resolved_ns && resolved_ns == getQore()) {
-        return;
+    if (!parse_check_parse_option(PO_BROKEN_NAMESPACE_RESOLUTION)) {
+        const qore_ns_private* qore_ns = getQore();
+        if (resolved_ns && qore_ns) {
+            for (const qore_ns_private* cur = resolved_ns; cur; cur = cur->parent) {
+                if (cur == qore_ns) {
+                    return;
+                }
+            }
+        }
     }
     qore_ns_private* nscx = parse_get_ns();
     if (nscx && resolved_ns && nscx == resolved_ns) {
@@ -3345,6 +3370,28 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
         }
     }
 
+    // check enums
+    // NOTE: Unlike classes, enums don't support injection, so we simply skip
+    // the duplicate check if an enum with the same name already exists.
+    // mergeUserPublic() will skip adding it anyway, so this is safe.
+    // This allows modules to be loaded in sub-Programs without errors.
+    {
+        ConstEnumListIterator i(mns.enumList);
+        while (i.next()) {
+            if (!i.isUserPublic()) {
+                continue;
+            }
+            // Only report error if there's a conflict with a different type
+            // (e.g., a class with the same name)
+            if (classList.find(i.getName())) {
+                qmc.error("enum '%s' conflicts with class '%s::%s'", i.getName(), name.c_str(), i.getName());
+            } else if (hashDeclList.find(i.getName())) {
+                qmc.error("enum '%s' conflicts with hashdecl '%s::%s'", i.getName(), name.c_str(), i.getName());
+            }
+            // If an enum with the same name exists, it's fine - skip silently
+        }
+    }
+
     bool in_mod = parse_check_parse_option(PO_IN_MODULE);
 
     // check subnamespaces
@@ -3396,6 +3443,81 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
 
     // merge in global variables
     var_list.mergePublic(mns.var_list);
+
+    // merge in source enums
+    enumList.mergeUserPublic(mns.enumList, this);
+
+    // merge in source typedefs (with conflict checking)
+    for (const auto& i : mns.typedefMap) {
+        if (!i.second->pub) {
+            continue;
+        }
+        // skip if typedef already exists
+        if (typedefMap.find(i.first) != typedefMap.end()) {
+            continue;
+        }
+        // skip if conflicts with existing class
+        if (classList.find(i.first.c_str())) {
+            continue;
+        }
+        // skip if conflicts with existing hashdecl
+        if (hashDeclList.find(i.first.c_str())) {
+            continue;
+        }
+        // skip if conflicts with existing enum
+        if (enumList.find(i.first.c_str())) {
+            continue;
+        }
+        typedefMap[i.first] = new TypedefEntry(*i.second);
+    }
+
+    // Create namespaces for enum member access (e.g., EnumName::MemberName)
+    // This must be done after merging enums since mergeUserPublic only copies the enum declaration
+    {
+        ConstEnumListIterator i(mns.enumList);
+        while (i.next()) {
+            //printd(5, "qore_ns_private::copyMergeCommittedNamespace() checking enum '%s' isUserPublic: %d\n",
+            //    i.getName(), i.isUserPublic());
+            if (!i.isUserPublic()) {
+                continue;
+            }
+            const char* enum_name = i.getName();
+            // Skip if this enum was not actually merged (already existed)
+            QoreEnumDecl* local_ed = enumList.find(enum_name);
+            if (!local_ed) {
+                continue;
+            }
+            // Check if namespace for this enum already exists
+            QoreNamespace* enum_ns = nsl.find(enum_name);
+            qore_ns_private* ens_priv;
+            if (!enum_ns) {
+                // Create new namespace for enum members
+                enum_ns = new QoreNamespace(enum_name);
+                ens_priv = qore_ns_private::get(*enum_ns);
+                ens_priv->setPublic();
+                ens_priv->imported = true;
+                ens_priv = nsl.runtimeAdd(enum_ns, this);
+            } else {
+                ens_priv = qore_ns_private::get(*enum_ns);
+            }
+            // Add enum members as constants in the namespace
+            qore_enum_decl_private* enum_priv = qore_enum_decl_private::get(*local_ed);
+            const std::vector<QoreEnumMember*>& members = enum_priv->getMembers();
+            for (auto* member : members) {
+                if (ens_priv->constant.inList(member->getName())) {
+                    continue;
+                }
+                QoreValue val = member->getValue();
+                val.ref();
+                ens_priv->constant.add(member->getName(), val, enum_priv->getTypeInfo());
+            }
+            // Rebuild indexes for the new namespace
+            qore_root_ns_private* rns = getRoot();
+            if (rns) {
+                rns->rebuildIndexes(ens_priv);
+            }
+        }
+    }
 
     // add sub namespaces
     for (nsmap_t::const_iterator i = mns.nsl.nsmap.begin(), e = mns.nsl.nsmap.end(); i != e; ++i) {
@@ -3457,6 +3579,43 @@ void qore_ns_private::parseAssimilate(QoreNamespace* ans) {
     // assimilate pending functions
     func_list.assimilate(pns->func_list, this, &pending_func_names);
 
+    // assimilate enums
+    enumList.assimilate(pns->enumList, *this, &pending_enum_names);
+
+    // assimilate typedefs with duplicate checking
+    for (auto i = pns->typedefMap.begin(); i != pns->typedefMap.end();) {
+        // check for duplicate typedef name
+        if (typedefMap.find(i->first) != typedefMap.end()) {
+            std::string nspath;
+            getPath(nspath, true);
+            parse_error(*i->second->loc, "typedef '%s' has already been defined in '%s'", i->first.c_str(),
+                nspath.c_str());
+            delete i->second;
+            i = pns->typedefMap.erase(i);
+            continue;
+        }
+        // check for conflict with class name
+        if (classList.find(i->first.c_str())) {
+            parse_error(*i->second->loc, "typedef '%s' conflicts with existing class in namespace '%s::'",
+                i->first.c_str(), name.c_str());
+            delete i->second;
+            i = pns->typedefMap.erase(i);
+            continue;
+        }
+        // check for conflict with hashdecl name
+        if (hashDeclList.find(i->first.c_str())) {
+            parse_error(*i->second->loc, "typedef '%s' conflicts with existing hashdecl in namespace '%s::'",
+                i->first.c_str(), name.c_str());
+            delete i->second;
+            i = pns->typedefMap.erase(i);
+            continue;
+        }
+        // move typedef to this namespace
+        typedefMap[i->first] = i->second;
+        pending_typedef_names.push_back(i->first);
+        i = pns->typedefMap.erase(i);
+    }
+
     // assimilate pending global variable declarations
     //printd(5, "qore_ns_private::parseAssimilate() this: %p assimilating %p (%d + %d gvars)\n", this, pns, pend_gvblist.size(), pns->pend_gvblist.size());
     for (auto& i : pns->pend_gvblist) {
@@ -3516,6 +3675,37 @@ void qore_ns_private::runtimeAssimilate(QoreNamespace* ans) {
 
     // assimilate pending functions
     func_list.assimilate(pns->func_list, this);
+
+    // assimilate enums
+    enumList.assimilate(pns->enumList, *this);
+
+    // assimilate typedefs (runtime - with conflict checking)
+    for (auto& i : pns->typedefMap) {
+        bool skip = false;
+        // skip if typedef already exists
+        if (typedefMap.find(i.first) != typedefMap.end()) {
+            skip = true;
+        }
+        // skip if conflicts with existing class
+        else if (classList.find(i.first.c_str())) {
+            skip = true;
+        }
+        // skip if conflicts with existing hashdecl
+        else if (hashDeclList.find(i.first.c_str())) {
+            skip = true;
+        }
+        // skip if conflicts with existing enum
+        else if (enumList.find(i.first.c_str())) {
+            skip = true;
+        }
+
+        if (skip) {
+            delete i.second;
+        } else {
+            typedefMap[i.first] = i.second;
+        }
+    }
+    pns->typedefMap.clear();
 
     if (pns->class_handler) {
         assert(!class_handler);
@@ -3723,6 +3913,36 @@ const QoreEnumDecl* qore_ns_private::parseMatchScopedEnum(const NamedScope& nsco
         }
     }
     return fns->priv->enumList.find(nscope[nscope.size() - 1]);
+}
+
+TypedefEntry* qore_ns_private::parseMatchScopedTypedef(const NamedScope& nscope, unsigned& matched) {
+    assert(nscope.size() > 1);
+
+    if (nscope[0] != name) {
+        QoreNamespace* fns = nsl.find(nscope[0]);
+        return fns ? fns->priv->parseMatchScopedTypedef(nscope, matched) : nullptr;
+    }
+
+    // mark first namespace as matched
+    if (!matched) {
+        matched = 1;
+    }
+
+    QoreNamespace* fns = ns;
+
+    // if we need to follow the namespaces, then do so
+    if (nscope.size() > 2) {
+        for (unsigned i = 1; i < (nscope.size() - 1); ++i) {
+            fns = fns->priv->parseFindLocalNamespace(nscope[i]);
+            if (!fns) {
+                return nullptr;
+            }
+            if (i >= matched) {
+                matched = i + 1;
+            }
+        }
+    }
+    return const_cast<TypedefEntry*>(fns->priv->findLocalTypedef(nscope[nscope.size() - 1]));
 }
 
 QoreClass* qore_ns_private::parseMatchScopedClass(const NamedScope& nscope, unsigned& matched) {

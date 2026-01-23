@@ -354,6 +354,9 @@ void qore_cleanup() {
     // issue #3045: clear module options
     qore_delete_module_options();
 
+    // NOTE: cleanupAllPrograms removed - programs should be cleaned up by module deletion
+    // Forcing cleanup here causes crashes due to interdependencies between programs
+
     // delete thread-local data
     delete_thread_local_data();
 
@@ -374,12 +377,6 @@ void qore_cleanup() {
 
     // delete threading infrastructure
     delete_qore_threads();
-
-    // release any remaining Program objects (only safe after thread subsystem teardown)
-    {
-        ExceptionSink xsink;
-        qore_program_private::cleanupAllPrograms(&xsink);
-    }
 
     // destroy thread-local storage
     qore_thread_local_storage_destroy();
