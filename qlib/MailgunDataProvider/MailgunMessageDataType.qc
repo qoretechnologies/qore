@@ -72,6 +72,7 @@ public class MailgunSendEmailRequestDataType inherits HashDataType {
                 "short_desc": "Plain text body",
                 "desc": "Plain text version of the email body",
                 "example_value": "This is a test email.",
+                "required_groups": ("body",),
             },
             "html": {
                 "type": StringOrNothingType,
@@ -79,6 +80,7 @@ public class MailgunSendEmailRequestDataType inherits HashDataType {
                 "short_desc": "HTML body",
                 "desc": "HTML version of the email body",
                 "example_value": "<html><body><h1>Hello!</h1></body></html>",
+                "required_groups": ("body",),
             },
             "o:tag": {
                 "type": new SoftListDataType(StringType, True),

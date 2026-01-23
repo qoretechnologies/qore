@@ -112,7 +112,7 @@ public class MailgunSendEmailDataProvider inherits MailgunDataProviderBase {
             }
         }
 
-        # Body - at least one of text or html
+        # Body content (at least one of text/html enforced by MailgunSendEmailRequestDataType)
         if (req.text) {
             body.text = req.text;
         }

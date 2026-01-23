@@ -108,6 +108,8 @@ public class MailgunDataProviderBase inherits DataProvider::AbstractDataProvider
         @assert(rest, "REST client cannot be null");
         self.rest = rest;
         self.api_domain = api_domain;
+        # Default webhook signing key to the API key from the REST client
+        self.webhook_signing_key = rest.getPassword();
     }
 
     #! Creates the object with a connection
