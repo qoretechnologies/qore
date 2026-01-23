@@ -584,6 +584,81 @@ lorem ipsum\r
             assertEq("attachment", sanitized, "empty sanitized filename returns default");
         }
 
+        # Test sanitize_filename preserves UTF-8 multibyte characters
+        {
+            string filename = "文档报告.pdf";
+            string sanitized = sanitize_filename(filename);
+            assertEq(filename, sanitized, "UTF-8 Chinese characters preserved");
+        }
+
+        # Test sanitize_filename with Japanese characters
+        {
+            string filename = "日本語ファイル.txt";
+            string sanitized = sanitize_filename(filename);
+            assertEq(filename, sanitized, "UTF-8 Japanese characters preserved");
+        }
+
+        # Test sanitize_filename with mixed ASCII and UTF-8
+        {
+            string filename = "report_文档_2026.pdf";
+            string sanitized = sanitize_filename(filename);
+            assertEq(filename, sanitized, "mixed ASCII and UTF-8 preserved");
+        }
+
+        # Test sanitize_filename with UTF-8 and control chars
+        {
+            string filename = "报告" + chr(0) + "文件.txt";
+            string sanitized = sanitize_filename(filename);
+            assertEq("报告文件.txt", sanitized, "UTF-8 preserved, control chars removed");
+        }
+
+        # Test sanitize_filename with UTF-8 and path separators
+        {
+            string filename = "путь/файл.txt";
+            string sanitized = sanitize_filename(filename);
+            assertEq("путьфайл.txt", sanitized, "Cyrillic UTF-8 preserved, path separator removed");
+        }
+
+        # Test sanitize_filename with emoji (4-byte UTF-8)
+        {
+            string filename = "report_📊_2026.pdf";
+            string sanitized = sanitize_filename(filename);
+            assertEq(filename, sanitized, "emoji (4-byte UTF-8) preserved");
+        }
+
+        # Test RFC 2231 encoding in serialized message
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("test body");
+            msg.addTO(To);
+
+            # Attach a file with non-ASCII filename
+            msg.attach("文档.pdf", MimeTypePdf, <255044462D>, ContentEncoding::Base64);
+
+            string serialized = msg.serialize();
+
+            # Verify RFC 2231 encoded filename appears in serialized output
+            assertRegex("filename\\*=utf-8''", serialized, "RFC 2231 filename* parameter present");
+            assertRegex("name\\*=utf-8''", serialized, "RFC 2231 name* parameter present");
+        }
+
+        # Test RFC 2231 roundtrip: serialize then parse
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("test body");
+            msg.addTO(To);
+
+            string original_filename = "日本語レポート.xlsx";
+            msg.attach(original_filename, MimeTypeOctetStream, <DEADBEEF>, ContentEncoding::Base64);
+
+            string serialized = msg.serialize();
+            Message parsed(serialized);
+
+            list<Attachment> attachments = parsed.getAttachments();
+            assertEq(1, attachments.size(), "parsed message has attachment");
+            assertEq(original_filename, attachments[0].getName(), "UTF-8 filename preserved through roundtrip");
+        }
+
         # Test filenames with spaces and special characters
         {
             string filename = "my file (copy).txt";
@@ -670,6 +745,163 @@ lorem ipsum\r
             assertTrue(attachments[1].isInline());
             assertEq("img1", attachments[0].getContentId());
             assertEq("img2", attachments[1].getContentId());
+        }
+
+        # Test inline attachment has filename in serialized output
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("<html><img src=\"cid:logo\"></html>", ContentEncoding::QuotedPrintable, MimeTypeHtml);
+            msg.addTO(To);
+
+            msg.attachInline("company_logo.png", MimeTypePng, <89504E470D0A1A0A>, "logo");
+
+            string serialized = msg.serialize();
+
+            # Verify inline disposition with filename
+            assertRegex("Content-Disposition: inline", serialized, "inline disposition present");
+            assertRegex("filename=", serialized, "filename parameter present for inline attachment");
+            assertRegex("company_logo\\.png", serialized, "filename value correct");
+            assertRegex("Content-ID: <logo>", serialized, "Content-ID header present");
+        }
+
+        # Test inline attachment roundtrip
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("<html><body><img src=\"cid:image123\"></body></html>", ContentEncoding::QuotedPrintable, MimeTypeHtml);
+            msg.addTO(To);
+
+            binary img_data = <89504E470D0A1A0ADEADBEEF>;
+            msg.attachInline("test_image.png", MimeTypePng, img_data, "image123");
+
+            # Serialize and parse
+            string serialized = msg.serialize();
+            Message parsed(serialized);
+
+            # Verify inline attachment is returned by getAttachments()
+            list<Attachment> attachments = parsed.getAttachments();
+            assertEq(1, attachments.size(), "inline attachment returned by getAttachments()");
+            assertEq("test_image.png", attachments[0].getName(), "inline attachment name preserved");
+            assertEq("image123", attachments[0].getContentId(), "inline attachment Content-ID preserved");
+            assertEq(img_data, attachments[0].getData(), "inline attachment data preserved");
+            assertTrue(attachments[0].isInline(), "attachment recognized as inline after roundtrip");
+        }
+
+        # Test parsing message with Content-Disposition: inline and filename
+        {
+            string msgWithInline = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: inline test\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/mixed; boundary=bound456\r\n"
+                "\r\n"
+                "--bound456\r\n"
+                "Content-Type: text/html\r\n"
+                "\r\n"
+                "<html><img src=\"cid:img001\"></html>\r\n"
+                "--bound456\r\n"
+                "Content-Type: image/png\r\n"
+                "Content-Disposition: inline; filename=\"inline_image.png\"\r\n"
+                "Content-ID: <img001>\r\n"
+                "Content-Transfer-Encoding: base64\r\n"
+                "\r\n"
+                "iVBORw0KGgo=\r\n"
+                "--bound456--\r\n";
+
+            Message msg(msgWithInline);
+            list<Attachment> attachments = msg.getAttachments();
+
+            assertEq(1, attachments.size(), "inline attachment with filename parsed");
+            assertEq("inline_image.png", attachments[0].getName(), "inline attachment filename parsed");
+            assertEq("img001", attachments[0].getContentId(), "inline Content-ID parsed");
+            assertTrue(attachments[0].isInline(), "attachment marked as inline");
+        }
+
+        # Test parsing message with Content-Disposition: inline and Content-ID but no filename
+        {
+            string msgInlineNoCid = "From: foo@bar.cz\r\n"
+                "To: target@bar.cz\r\n"
+                "Subject: inline no filename\r\n"
+                "MIME-Version: 1.0\r\n"
+                "Content-Type: multipart/mixed; boundary=bound789\r\n"
+                "\r\n"
+                "--bound789\r\n"
+                "Content-Type: text/html\r\n"
+                "\r\n"
+                "<html><img src=\"cid:img002\"></html>\r\n"
+                "--bound789\r\n"
+                "Content-Type: image/jpeg\r\n"
+                "Content-Disposition: inline\r\n"
+                "Content-ID: <img002>\r\n"
+                "Content-Transfer-Encoding: base64\r\n"
+                "\r\n"
+                "/9j/4AAQ\r\n"
+                "--bound789--\r\n";
+
+            Message msg(msgInlineNoCid);
+            list<Attachment> attachments = msg.getAttachments();
+
+            assertEq(1, attachments.size(), "inline attachment with only Content-ID parsed");
+            assertEq("img002", attachments[0].getContentId(), "Content-ID parsed");
+            assertTrue(attachments[0].isInline(), "attachment marked as inline from Content-ID");
+        }
+
+        # Test inline attachment with non-ASCII filename
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("<html><img src=\"cid:logo\"></html>", ContentEncoding::QuotedPrintable, MimeTypeHtml);
+            msg.addTO(To);
+
+            string utf8_filename = "公司标志.png";
+            msg.attachInline(utf8_filename, MimeTypePng, <89504E470D0A1A0A>, "logo");
+
+            string serialized = msg.serialize();
+
+            # Should have RFC 2231 encoded filename for inline attachment
+            assertRegex("filename\\*=utf-8''", serialized, "RFC 2231 filename for inline attachment");
+
+            # Roundtrip test
+            Message parsed(serialized);
+            list<Attachment> attachments = parsed.getAttachments();
+            assertEq(1, attachments.size());
+            assertEq(utf8_filename, attachments[0].getName(), "UTF-8 inline filename preserved");
+            assertTrue(attachments[0].isInline(), "inline status preserved");
+        }
+
+        # Test mixed regular and inline attachments
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("<html><img src=\"cid:img\">Text</html>", ContentEncoding::QuotedPrintable, MimeTypeHtml);
+            msg.addTO(To);
+
+            msg.attachInline("inline.png", MimeTypePng, <FF>, "img");
+            msg.attach("regular.pdf", MimeTypePdf, <255044462D>);
+
+            string serialized = msg.serialize();
+
+            # Verify both types present
+            assertRegex("Content-Disposition: inline", serialized, "inline disposition present");
+            assertRegex("Content-Disposition: attachment", serialized, "attachment disposition present");
+
+            # Roundtrip
+            Message parsed(serialized);
+            list<Attachment> attachments = parsed.getAttachments();
+            assertEq(2, attachments.size(), "both attachments parsed");
+
+            # Find inline and regular attachments
+            bool found_inline = False;
+            bool found_regular = False;
+            for (int i = 0; i < attachments.size(); i++) {
+                if (attachments[i].getName() == "inline.png") {
+                    assertTrue(attachments[i].isInline(), "inline.png is inline");
+                    assertEq("img", attachments[i].getContentId());
+                    found_inline = True;
+                } else if (attachments[i].getName() == "regular.pdf") {
+                    assertFalse(attachments[i].isInline(), "regular.pdf is not inline");
+                    found_regular = True;
+                }
+            }
+            assertTrue(found_inline, "found inline attachment");
+            assertTrue(found_regular, "found regular attachment");
         }
     }
 
