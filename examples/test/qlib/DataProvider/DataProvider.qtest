@@ -666,7 +666,7 @@ public class DataProviderTest inherits QUnit::Test {
                 "        \"short_desc\": \"" + short_desc + "\",\n"
                 "        \"desc\": \"" + desc + "\",\n"
                 "        \"action_code\": 1,\n"
-                "        \"requires_action_context\": 1,\n"
+                "        \"requires_action_context\": \"invalid\",\n"
                 "    };\n"
                 "}\n",
                 "test"));
@@ -706,7 +706,7 @@ public class DataProviderTest inherits QUnit::Test {
                 DPAD_NORMAL: True,
             },
             "output_data_type": DPAD_NORMAL,
-            "requires_action_context": "pipeline",
+            "requires_action_context": True,
             "action_context": "pipeline",
             "requires_child_eligibility_check": True,
         };
@@ -716,7 +716,7 @@ public class DataProviderTest inherits QUnit::Test {
         assertThrows("APP-ERROR", \DataProviderActionCatalog::getActionsEx(), get_random_string());
 
         assertEq(action, DataProviderActionCatalog::getAllActions()[0]);
-        assertEq("pipeline", DataProviderActionCatalog::getAllActions()[0].requires_action_context);
+        assertTrue(DataProviderActionCatalog::getAllActions()[0].requires_action_context);
         assertEq("pipeline", DataProviderActionCatalog::getAllActions()[0].action_context);
         assertTrue(DataProviderActionCatalog::getAllActions()[0].requires_child_eligibility_check);
 

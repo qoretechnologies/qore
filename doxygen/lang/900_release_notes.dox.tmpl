@@ -484,6 +484,16 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - search capabilities with filtering for all entity types
       - action catalog integration with sensible default actions
       - connection support with \c linear:// URL scheme
+    - @ref mailgunrestclientintro "MailgunRestClient" module
+      - new module providing a REST client for Mailgun's email API
+      - supports API key authentication with US and EU region endpoints
+      - provides MailgunRestConnection for connection management with \c mailgun:// URL scheme
+    - @ref mailgundataproviderintro "MailgunDataProvider" module
+      - new module providing a data provider API for Mailgun email services
+      - send emails, validate addresses, manage domains, routes, and mailing lists
+      - webhook-based event triggers for delivery, opens, clicks, bounces, complaints, and unsubscribes
+      - action catalog integration with sensible default actions
+      - connection support with \c mailgun:// URL scheme
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support

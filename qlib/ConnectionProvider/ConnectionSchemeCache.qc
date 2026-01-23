@@ -136,6 +136,8 @@ public class ConnectionSchemeCache {
 
             "linear": "LinearRestClient",
 
+            "mailgun": "MailgunRestClient",
+
             "mewsrest": "MewsRestClient",
 
             "memcached": "MemcachedDataProvider",
