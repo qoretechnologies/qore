@@ -1336,16 +1336,6 @@ protected:
         }
 
         {
-            qore_ns_private* qore_ns = getQore();
-            if (qore_ns) {
-                FunctionEntry* fe = qore_ns->func_list.findNode(name);
-                if (fe) {
-                    return fe;
-                }
-            }
-        }
-
-        {
             // try to check in current namespace first
             qore_ns_private* nscx = parse_get_ns();
             if (nscx) {
@@ -1417,17 +1407,6 @@ protected:
             ConstantEntry* ce = parseFindQoreConstantEntryIntern(cname, ns);
             if (ce) {
                 return ce;
-            }
-        }
-
-        {
-            qore_ns_private* qore_ns = getQore();
-            if (qore_ns) {
-                ConstantEntry* ce = qore_ns->constant.findEntry(cname);
-                if (ce) {
-                    ns = qore_ns;
-                    return ce;
-                }
             }
         }
 
@@ -1517,16 +1496,6 @@ protected:
         }
 
         {
-            qore_ns_private* qore_ns = getQore();
-            if (qore_ns) {
-                TypedHashDecl* hd = qore_ns->parseFindLocalHashDecl(hdname);
-                if (hd) {
-                    return hd;
-                }
-            }
-        }
-
-        {
             // try to check in current namespace first
             qore_ns_private* nscx = parse_get_ns();
             if (nscx) {
@@ -1550,16 +1519,6 @@ protected:
         if (!useBrokenNamespaceResolutionParse()) {
             if (const QoreEnumDecl* ed = parseFindQoreEnumIntern(ename)) {
                 return ed;
-            }
-        }
-
-        {
-            qore_ns_private* qore_ns = getQore();
-            if (qore_ns) {
-                const QoreEnumDecl* ed = qore_ns->enumList.find(ename);
-                if (ed) {
-                    return ed;
-                }
             }
         }
 
@@ -1599,16 +1558,6 @@ protected:
         }
 
         {
-            qore_ns_private* qore_ns = getQore();
-            if (qore_ns) {
-                const TypedefEntry* td = qore_ns->findLocalTypedef(tdname);
-                if (td) {
-                    return const_cast<TypedefEntry*>(td);
-                }
-            }
-        }
-
-        {
             // try to check in current namespace first
             qore_ns_private* nscx = parse_get_ns();
             if (nscx) {
@@ -1640,16 +1589,6 @@ protected:
         if (!useBrokenNamespaceResolutionParse()) {
             if (QoreClass* qc = parseFindQoreClassIntern(cname)) {
                 return qc;
-            }
-        }
-
-        {
-            qore_ns_private* qore_ns = getQore();
-            if (qore_ns) {
-                QoreClass* qc = qore_ns->parseFindLocalClass(cname);
-                if (qc) {
-                    return qc;
-                }
             }
         }
 
@@ -1808,16 +1747,6 @@ protected:
         if (!useBrokenNamespaceResolutionParse()) {
             if (Var* v = parseFindQoreGlobalVarIntern(vname)) {
                 return v;
-            }
-        }
-
-        {
-            qore_ns_private* qore_ns = getQore();
-            if (qore_ns) {
-                Var* v = qore_ns->var_list.parseFindVar(vname);
-                if (v) {
-                    return v;
-                }
             }
         }
 

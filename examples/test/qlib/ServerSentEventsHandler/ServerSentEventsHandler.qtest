@@ -79,14 +79,25 @@ public class Main inherits QUnit::Test {
 
         # Wait for the server to register the connection before sending
         # (the client may report connected before the server has registered it)
+        # Use more retries for slow CI environments
         int retries = 0;
-        while (!sse.getConnectionIds() && retries < 50) {
+        while (!sse.getConnectionIds() && retries < 100) {
             usleep(100ms);
             ++retries;
         }
         if (!sse.getConnectionIds()) {
             throw "TEST-ERROR", "Server did not register connection in time";
         }
+
+        # Wait for the connected event to ensure the client is fully ready to receive events
+        observer.waitForConnected();
+
+        # Brief delay to ensure the server's I/O loop has started polling the queue.
+        # The connection is registered in doNewConnection() BEFORE the I/O loop starts,
+        # so getConnectionIds() becoming non-empty doesn't guarantee the loop is running.
+        # NOTE: A more deterministic approach would require modifying the handler to send
+        # a signal when the I/O loop starts, but this adds unnecessary complexity for tests.
+        usleep(100ms);
 
         string str = get_random_string(50);
         hash<SseMessageInfo> event = <SseMessageInfo>{
@@ -150,7 +161,7 @@ class MyObserver inherits Observer {
             cond.wait(m, 1s);
             --waiting;
             date d = now_us() - start;
-            if (d > 5s) {
+            if (d > 10s) {
                 throw "ERROR", sprintf("no matching data received in timeout; l: %y", l);
             }
             foreach hash<auto> h in (l) {
@@ -158,6 +169,29 @@ class MyObserver inherits Observer {
                     return h."data";
                 }
             }
+        }
+    }
+
+    # Wait for the connected event to ensure the client is fully ready
+    waitForConnected() {
+        date start = now_us();
+
+        m.lock();
+        on_exit m.unlock();
+
+        while (True) {
+            foreach hash<auto> h in (l) {
+                if (h.id == EVENT_SSE_CONNECTED) {
+                    return;
+                }
+            }
+            date d = now_us() - start;
+            if (d > 10s) {
+                throw "ERROR", sprintf("connected event not received in timeout; l: %y", l);
+            }
+            ++waiting;
+            cond.wait(m, 1s);
+            --waiting;
         }
     }
 
