@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file MailMessage.qm MailMessage module definition
 
-/*  MailMessage.qm Copyright 2012 - 2026 Qore Technologies, s.r.o.
+/*  MailMessage.qm Copyright 2012 - 2024 Qore Technologies, s.r.o.
 
     Original Authors: Wolfgang Ritzinger, Marian Bonda, Pavol Potoncok
 
@@ -28,7 +28,7 @@
 %requires qore >= 2.0
 
 # need mime definitions
-%requires Mime >= 1.7
+%requires Mime >= 1.3
 
 # assume local var scope, do not use "$" for vars, members, and method calls
 %modern
@@ -37,7 +37,7 @@
 # enables all warnings
 
 module MailMessage {
-    version = "1.6";
+    version = "1.4";
     desc = "defines the MailMessage class and supporting definitions";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -74,35 +74,6 @@ msg.addTO("My Best Friend <you@friend.com>");
     @endcode
 
     @section mailmessage_relnotes MailMessage Release Notes
-
-    @subsection mailmessage_v1_6 MailMessage 1.6
-    - Enhanced attachment handling:
-      - Added RFC 2231 filename encoding for non-ASCII filenames
-      - Added RFC 2231 filename decoding for incoming messages
-      - Added @ref MailMessage::Part::getSize() "Part::getSize()": returns the size of the part data
-      - Added @ref MailMessage::Part::getContentId() "Part::getContentId()": returns the Content-ID if set
-      - Added @ref MailMessage::Attachment::isInline() "Attachment::isInline()": returns @ref True if the attachment
-        is inline
-      - Added @ref MailMessage::Message::attachInline() "Message::attachInline()": attaches an inline attachment with
-        a Content-ID for use in HTML emails
-    - Added \c content_id field to @ref MailMessage::PartInfo "PartInfo" hashdecl
-    - Improved filename validation and sanitization
-      (<a href="https://github.com/qoretechnologies/qore/issues/5164">issue 5164</a>)
-
-    @subsection mailmessage_v1_5 MailMessage 1.5
-    - Added multipart type detection and helper methods:
-      - @ref MailMessage::Message::isMultipart() "Message::isMultipart()": returns @ref True if the message is multipart
-      - @ref MailMessage::Message::getMultipartType() "Message::getMultipartType()": returns the multipart subtype
-      - @ref MailMessage::Message::isSigned() "Message::isSigned()": returns @ref True if the message is signed
-        (multipart/signed)
-      - @ref MailMessage::Message::isEncrypted() "Message::isEncrypted()": returns @ref True if the message is encrypted
-        (multipart/encrypted)
-      - @ref MailMessage::Message::isDigest() "Message::isDigest()": returns @ref True if the message is a digest
-        (multipart/digest)
-    - Added new fields to @ref MailMessage::MailMessageInfo "MailMessageInfo" hashdecl:
-      - \c is_multipart, \c multipart_type, \c is_signed, \c is_encrypted, \c is_digest
-    - Now requires Mime module version 1.7 or later
-      (<a href="https://github.com/qoretechnologies/qore/issues/5162">issue 5162</a>)
 
     @subsection mailmessage_v1_4 MailMessage 1.4
     - Added the \c MailMessage::MailMessage::getInfo() "MailMessage::getInfo()" method
@@ -179,12 +150,6 @@ public hashdecl PartInfo {
 
     #! Part transfer encoding
     string transfer_encoding;
-
-    #! Content-ID for inline attachments (without angle brackets)
-    *string content_id;
-
-    #! Size of the part data in bytes
-    int size;
 }
 
 #! Message info
@@ -233,187 +198,35 @@ public hashdecl MailMessageInfo {
 
     #! Any message parts
     *list<hash<PartInfo>> parts;
-
-    #! True if the message is a multipart message
-    bool is_multipart = False;
-
-    #! The multipart subtype (e.g., "mixed", "alternative", "signed", "encrypted", "digest")
-    *string multipart_type;
-
-    #! True if the message is digitally signed (multipart/signed)
-    bool is_signed = False;
-
-    #! True if the message is encrypted (multipart/encrypted)
-    bool is_encrypted = False;
-
-    #! True if the message is a digest (multipart/digest)
-    bool is_digest = False;
 }
 
 /** @defgroup MessageEncodings Message Encodings
 */
 #/@{
-#! Content transfer encoding for email messages and attachments
-/** @since MailMessage 1.6
+#! default content transfer encoding depending on attachment type
+/** The default encodings are as follows per file type:
+    - text data: @ref EncQuotedPrintable
+    - binary data: @ref EncBase64
 */
-public enum ContentEncoding : string {
-    #! Default encoding: uses @ref QuotedPrintable for text data, @ref Base64 for binary data
-    Default = "default",
-    #! No content transfer encoding (not recommended as SMTP servers break up long lines automatically)
-    None = "none",
-    #! Base64 content transfer encoding
-    Base64 = "base64",
-    #! Quoted-printable content transfer encoding
-    QuotedPrintable = "quoted-printable",
-}
+public const EncDefault = "default";
+
+#! no content transfer encoding (not recommended as SMTP servers break up long lines automatically)
+public const EncNone = "none";
+
+#! base-64 content transfer encoding
+public const EncBase64 = ContentTransEncBase64;
+
+#! "quoted-printable" content transfer encoding
+public const EncQuotedPrintable = ContentTransEncQuotedPrintable;
 
 #! a list of all known content encoding schemes encodings
 public const Encodings = (
-    ContentEncoding::Default,
-    ContentEncoding::None,
-    ContentEncoding::Base64,
-    ContentEncoding::QuotedPrintable,
+    EncDefault,
+    EncNone,
+    EncBase64,
+    EncQuotedPrintable,
 );
 #/@}
-
-#! Encodes a filename for use in MIME headers according to RFC 2231
-/** @param filename the filename to encode
-    @return the encoded filename; if the filename contains only ASCII characters that don't need encoding,
-    returns the original filename; otherwise returns RFC 2231 encoded filename (utf-8''encoded-value)
-
-    @par Example:
-    @code{.py}
-string encoded = encode_mime_filename("文档.pdf");
-# Returns: utf-8''%E6%96%87%E6%A1%A3.pdf
-    @endcode
-
-    @see
-    - <a href="https://tools.ietf.org/html/rfc2231">RFC 2231</a>
-    - decode_mime_filename()
-
-    @since MailMessage 1.6
-*/
-public string sub encode_mime_filename(string filename) {
-    # Check if filename needs encoding (contains non-ASCII or special characters)
-    if (filename.isDataPrintableAscii() && filename !~ /[\x00-\x1f\x7f*'%\\"]/) {
-        return filename;
-    }
-
-    # RFC 2231 encoding: charset'language'encoded-value
-    # We use UTF-8 and no language tag
-    string encoded = "utf-8''";
-    binary bin = binary(filename);
-    for (int i = 0; i < bin.size(); i++) {
-        int byte = bin[i];
-        # Safe characters per RFC 2231: A-Z a-z 0-9 - _ .
-        if ((byte >= 0x41 && byte <= 0x5a) ||   # A-Z
-            (byte >= 0x61 && byte <= 0x7a) ||   # a-z
-            (byte >= 0x30 && byte <= 0x39) ||   # 0-9
-            byte == 0x2d ||                     # -
-            byte == 0x5f ||                     # _
-            byte == 0x2e) {                     # .
-            encoded += chr(byte);
-        } else {
-            encoded += sprintf("%%%02X", byte);
-        }
-    }
-    return encoded;
-}
-
-#! Decodes a MIME filename that may be RFC 2231 encoded
-/** @param filename the filename to decode; may be a plain filename, RFC 2231 encoded (charset'lang'value),
-    or RFC 2047 Q/B encoded (=?charset?Q?...?= or =?charset?B?...?=)
-    @return the decoded filename
-
-    @par Example:
-    @code{.py}
-string decoded = decode_mime_filename("utf-8''%E6%96%87%E6%A1%A3.pdf");
-# Returns: 文档.pdf
-    @endcode
-
-    @see
-    - <a href="https://tools.ietf.org/html/rfc2231">RFC 2231</a>
-    - encode_mime_filename()
-
-    @since MailMessage 1.6
-*/
-public string sub decode_mime_filename(string filename) {
-    # Check for RFC 2231 encoding: charset'language'encoded-value
-    *list<*string> match = (filename =~ x/^([^']+)'([^']*)'(.+)$/);
-    if (match) {
-        string charset = match[0] ?? "UTF-8";
-        # match[1] is language tag, which we ignore
-        string encoded = match[2] ?? "";
-
-        # Decode percent-encoded bytes
-        string decoded = "";
-        for (int i = 0; i < encoded.length(); i++) {
-            if (encoded[i] == "%" && i + 2 < encoded.length()) {
-                string hex = encoded.substr(i + 1, 2);
-                if (hex =~ /^[0-9A-Fa-f]{2}$/) {
-                    decoded += chr(parse_hex_string(hex)[0]);
-                    i += 2;
-                    continue;
-                }
-            }
-            decoded += encoded[i];
-        }
-
-        # Convert from the specified charset to UTF-8 if needed
-        if (charset.upr() != "UTF-8" && charset.upr() != "UTF8") {
-            try {
-                # First get bytes as binary, then interpret with target charset
-                decoded = force_encoding(decoded, charset);
-                decoded = convert_encoding(decoded, "UTF-8");
-            } catch () {
-                # If conversion fails, return as-is
-            }
-        }
-        return decoded;
-    }
-
-    # Check for RFC 2047 encoded word (Q or B encoding)
-    if (filename =~ /^=\?/) {
-        return mime_decode_header(filename);
-    }
-
-    return filename;
-}
-
-#! Sanitizes a filename to remove potentially dangerous characters
-/** @param filename the filename to sanitize
-    @return the sanitized filename with path separators and control characters removed
-
-    @note This function removes:
-    - Path separators (/ and \\)
-    - Control characters (0x00-0x1f, 0x7f)
-    - Leading/trailing whitespace
-    - Leading dots (to prevent hidden files)
-
-    @since MailMessage 1.6
-*/
-public string sub sanitize_filename(string filename) {
-    # Remove control characters (0x00-0x1f and 0x7f) and path separators
-    # Work with binary to handle embedded nulls that might truncate strings
-    binary bin = filename.toBinary();
-    string result = "";
-    for (int i = 0; i < bin.size(); i++) {
-        int c = bin[i];
-        # Skip control characters (0x00-0x1f), DEL (0x7f), and path separators (/ = 0x2f, \ = 0x5c)
-        if (c >= 0x20 && c != 0x7f && c != 0x2f && c != 0x5c) {
-            result += chr(c);
-        }
-    }
-    # Trim whitespace
-    trim result;
-    # Remove leading dots
-    result =~ s/^\.+//;
-    # If empty after sanitization, return a default name
-    if (result.empty()) {
-        result = "attachment";
-    }
-    return result;
-}
 
 #! The %Message class holds the information for a single email %Message
 /** @par Example:
@@ -477,7 +290,7 @@ public class Message {
         *data body;
 
         # message body content transfer encoding
-        string bodyEncoding = ContentEncoding::Default;
+        string bodyEncoding = EncDefault;
 
         # message body content type
         *string bodyContentType;
@@ -492,13 +305,6 @@ public class Message {
 
         # SMTP mode: do not serialize a single "." alone on a line
         bool smtp_mode = True;
-
-        # multipart type tracking
-        bool isMultipartMsg = False;
-        *string multipartType;
-        bool isSignedMsg = False;
-        bool isEncryptedMsg = False;
-        bool isDigestMsg = False;
     }
     #! @endcond
 
@@ -529,8 +335,8 @@ public class Message {
         if (subject.empty())
             throw "MESSAGE-CONSTRUCTOR-ERROR", "subject must be not empty string";
 
-        self.sender = se;   # used for sending
-        from = self.sender; # used for displaying
+        sender = se;   # used for sending
+        from = sender; # used for displaying
         self.subject = subject;
         self.smtp_mode = smtp_mode;
     }
@@ -606,28 +412,8 @@ public class Message {
         # try and parse the Content-Type header; assume any multipart type is "multipart/mixed"
         # (http://tools.ietf.org/html/rfc2046#section-5.1.3)
         if (mime && ct =~ /multipart\//i) {
-            isMultipartMsg = True;
-            # extract multipart subtype
-            *string subtype = (ct =~ x/multipart\/([a-z0-9\-]+)/i)[0];
-            if (subtype) {
-                multipartType = subtype.lwr();
-                # set specific multipart type flags
-                switch (multipartType) {
-                    case "signed":
-                        isSignedMsg = True;
-                        break;
-                    case "encrypted":
-                        isEncryptedMsg = True;
-                        break;
-                    case "digest":
-                        isDigestMsg = True;
-                        break;
-                }
-            }
-
-            # get message boundary - handle both quoted and unquoted boundaries
-            *list<*string> match = (ct =~ x/boundary=(?:"([^"]+)"|([^\s;]+))/);
-            *string boundary = match[0] ?? match[1];
+            # get message boundary
+            *string boundary = (ct =~ x/boundary="?([^"]+)"?/)[0];
             if (!boundary)
                 throw "MESSAGE-PARSE-ERROR", sprintf("cannot parse MIME Content-Type: %y; could not find message boundary", ct);
 
@@ -701,53 +487,7 @@ public class Message {
         if (parts) {
             rv.parts = map cast<hash<PartInfo>>($1.getInfo()), parts;
         }
-        rv.is_multipart = isMultipartMsg;
-        if (multipartType) {
-            rv.multipart_type = multipartType;
-        }
-        rv.is_signed = isSignedMsg;
-        rv.is_encrypted = isEncryptedMsg;
-        rv.is_digest = isDigestMsg;
         return rv;
-    }
-
-    #! Returns @ref True if this is a multipart message
-    /** @return @ref True if the message has a multipart content type
-    */
-    bool isMultipart() {
-        return isMultipartMsg;
-    }
-
-    #! Returns the multipart subtype if this is a multipart message
-    /** @return the multipart subtype (e.g., "mixed", "alternative", "signed", "encrypted", "digest"),
-        or @ref nothing if this is not a multipart message
-    */
-    *string getMultipartType() {
-        return multipartType;
-    }
-
-    #! Returns @ref True if this message is digitally signed (multipart/signed)
-    /** @return @ref True if the message has content type multipart/signed as defined in
-        <a href="https://tools.ietf.org/html/rfc1847">RFC 1847</a>
-    */
-    bool isSigned() {
-        return isSignedMsg;
-    }
-
-    #! Returns @ref True if this message is encrypted (multipart/encrypted)
-    /** @return @ref True if the message has content type multipart/encrypted as defined in
-        <a href="https://tools.ietf.org/html/rfc1847">RFC 1847</a>
-    */
-    bool isEncrypted() {
-        return isEncryptedMsg;
-    }
-
-    #! Returns @ref True if this message is a digest (multipart/digest)
-    /** @return @ref True if the message has content type multipart/digest as defined in
-        <a href="https://tools.ietf.org/html/rfc2046">RFC 2046</a>
-    */
-    bool isDigest() {
-        return isDigestMsg;
     }
 
     #! serializes the message to a string that can be sent to an SMTP server, for example
@@ -764,7 +504,7 @@ public class Message {
         if (attachments) {
             MultiPartMixedMessage mpm(mpboundary);
 
-            if (bodyEncoding == ContentEncoding::None) {
+            if (bodyEncoding == EncNone) {
                 bodyEncoding = ContentTransEnc7Bit;
             }
 
@@ -777,7 +517,7 @@ public class Message {
             str += mpm.serialize().toString();
             str += "\r\n";
         } else {
-            if (bodyEncoding == ContentEncoding::None) {
+            if (bodyEncoding == EncNone) {
                 str += "\r\n" + body + "\r\n";
             } else {
                 str += "\r\n" + mime_encode_transfer_data(body, bodyEncoding) + "\r\n";
@@ -799,59 +539,23 @@ public class Message {
         string pcte = ContentTransEncBinary;
         # part content disposition
         string pcd;
-        # Content-ID (for inline attachments)
-        *string cid;
 
         # process part headers
         foreach hash<auto> h in (p.hdr.pairIterator()) {
-            if (h.key == "content-transfer-encoding") {
+            if (h.key == "content-transfer-encoding")
                 pcte = h.value.lwr();
-            } else if (h.key == "content-type") {
+            else if (h.key == "content-type")
                 pct = h.value;
-            } else if (h.key == "content-disposition") {
+            else if (h.key == "content-disposition")
                 pcd = h.value;
-            } else if (h.key == "content-id") {
-                # Extract Content-ID, removing angle brackets if present
-                cid = (h.value =~ x/<([^>]+)>/)[0] ?? h.value;
-            }
         }
 
         # get the part's name if possible
-        *string pn;
-
-        # First try RFC 2231 encoded filename (filename*=charset'lang'value)
-        *list<*string> rfc2231_match = (pcd =~ x/filename\*=([^;\s]+)/i);
-        if (rfc2231_match[0]) {
-            pn = decode_mime_filename(rfc2231_match[0]);
-        }
-
-        # Fall back to regular filename parameter
-        if (!pn) {
-            pn = (pcd =~ x/filename="?([^"]+)"?/)[0];
-            if (pn) {
-                # Decode if it looks like RFC 2047 encoded
-                pn = decode_mime_filename(pn);
-            }
-        }
+        *string pn = (pcd =~ x/filename="?([^"]+)"?/)[0];
 
         # try to get the filename from the content-type header if necessary
-        if (!pn) {
-            # Try RFC 2231 encoded name first
-            rfc2231_match = (pct =~ x/name\*=([^;\s]+)/i);
-            if (rfc2231_match[0]) {
-                pn = decode_mime_filename(rfc2231_match[0]);
-            } else {
-                pn = (pct =~ x/name="?([^"]+)"?/)[0];
-                if (pn) {
-                    pn = decode_mime_filename(pn);
-                }
-            }
-        }
-
-        # Sanitize the filename if we have one
-        if (pn.val()) {
-            pn = sanitize_filename(pn);
-        }
+        if (!pn)
+            pn = (pct =~ x/name="?([^"]+)"?/)[0];
 
         # convert the content-type string to lower case
         pct = pct.lwr();
@@ -859,26 +563,23 @@ public class Message {
         # get the content type
         # strip off any additional information from the content-type
         pct =~ s/;.*$//;
-        if (pct.empty()) {
+        if (pct.empty())
             pct = MimeTypeUnknown;
-        }
 
         #printf("DBG: got part: pcte: %y pct: %y pcd: %y body: %d bytes: %y\n", pcte, pct, pcd, p.body.size(), p.body);
 
         # if not an attachment, then set as the msg body
         if (pcd !~ /attachment/i) {
-            if (!body) {
+            if (!body)
                 body = p.body;
-            } else {
+            else
                 parts += new Part(pn.val() ? pn : "", pct, p.body, pcte, p.hdr);
-            }
         } else {
             # generate a name for the part if no filename is available
-            if (!pn) {
+            if (!pn)
                 pn = "unnamed-attachment-" + $#;
-            }
 
-            attachments += new Attachment(pn, pct, p.body, pcte, p.hdr, cid);
+            attachments += new Attachment(pn, pct, p.body, pcte, p.hdr);
         }
 
         map processPart($1), p.part;
@@ -1006,7 +707,7 @@ public class Message {
 
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
     */
-    setBody(data body, string enc = ContentEncoding::Default, *string content_type) {
+    setBody(data body, string enc = EncDefault, *string content_type) {
         bodyEncoding = Message::checkEncoding(body, enc, True);
         if (content_type)
             bodyContentType = content_type;
@@ -1022,8 +723,8 @@ public class Message {
         if (body.typeCode() == NT_BINARY)
             throw "BODY-ERROR", sprintf("cannot concatenate a string to a binary body");
         # issue #2360 check if encoding is set
-        if (bodyEncoding == ContentEncoding::Default)
-            bodyEncoding = ContentEncoding::QuotedPrintable;
+        if (bodyEncoding == EncDefault)
+            bodyEncoding = EncQuotedPrintable;
 
         body += str;
     }
@@ -1037,8 +738,8 @@ public class Message {
         if (body.typeCode() == NT_STRING)
             throw "BODY-ERROR", sprintf("cannot concatenate a binary object to a string body");
         # issue #2360 check if encoding is set
-        if (bodyEncoding == ContentEncoding::Default)
-            bodyEncoding = ContentEncoding::Base64;
+        if (bodyEncoding == EncDefault)
+            bodyEncoding = EncBase64;
         body += bin;
     }
 
@@ -1208,7 +909,7 @@ public class Message {
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
         @throw INVALID-ENCODING the encoding given cannot be used with data given
     */
-    attach(string name, string mime, data att, string enc = ContentEncoding::Base64, *hash<auto> hdr) {
+    attach(string name, string mime, data att, string enc = EncBase64, *hash<auto> hdr) {
         attachments += new MailMessage::Attachment(name, mime, att, enc, hdr);
     }
 
@@ -1217,35 +918,6 @@ public class Message {
     */
     attach(Attachment att) {
         attachments += att;
-    }
-
-    #! creates an inline attachment for the Message with a Content-ID
-    /** Use this method to attach images or other content that will be referenced in HTML email bodies
-        using the \c "cid:" URL scheme.
-
-        @param name the name of the attachment to be displayed in the message, normally a file name without any path
-        @param mime the mime type for the message (e.g., \c MimeTypePng, \c MimeTypeJpeg)
-        @param att the attachment data itself
-        @param content_id the Content-ID for the attachment (without angle brackets); this ID is used to reference
-        the attachment in the HTML body as \c "cid:content_id"
-        @param enc the encoding type for the message (see \c MessageEncodings for possible values)
-        @param hdr optional additional headers for the MIME part for the attachment
-
-        @par Example:
-        @code{.py}
-Message msg("sender@example.com", "HTML Email with Image");
-msg.addTO("recipient@example.com");
-msg.setBody("<html><body><img src=\"cid:logo123\"></body></html>", ContentEncoding::QuotedPrintable, MimeTypeHtml);
-msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
-        @endcode
-
-        @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
-        @throw INVALID-ENCODING the encoding given cannot be used with data given
-
-        @since MailMessage 1.6
-    */
-    attachInline(string name, string mime, data att, string content_id, string enc = ContentEncoding::Base64, *hash<auto> hdr) {
-        attachments += new MailMessage::Attachment(name, mime, att, enc, hdr, content_id);
     }
 
     #! returns a list of Attachment objects for the Message
@@ -1321,7 +993,7 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
             hdr += Message::doHeaderValue(k, headers{k}, eol, encode);
 
         # include MIME headers for msg body if necessary
-        if (!attachments && bodyEncoding != ContentEncoding::None) {
+        if (!attachments && bodyEncoding != EncNone) {
             hdr += Message::doHeaderValue("MIME-Version", "1.0", eol, encode);
             if (bodyContentType)
                 hdr += Message::doHeaderValue("Content-Type", bodyContentType, eol, encode);
@@ -1411,34 +1083,34 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         return str;
     }
 
-    #! checks the data against the encoding and returns the new encoding (if the encoding is @ref ContentEncoding::Default for example)
+    #! checks the data against the encoding and returns the new encoding (if the encoding is @ref EncDefault for example)
     /** @param data the data to be encoded
         @param enc the encoding type for the data (see \c MessageEncodings for possible values)
-        @param noneok if this argument is True, then @ref ContentEncoding::None may be given as an argument
+        @param noneok if this argument is True, then @ref EncNone may be given as an argument
 
-        @return the new encoding to use in case the input data was @ref ContentEncoding::Default
+        @return the new encoding to use in case the input data was @ref EncDefault
 
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
         @throw INVALID-ENCODING the encoding given cannot be used with data given
     */
     static string checkEncoding(data data, string enc, bool noneok = False) {
-        if (enc == ContentEncoding::Default) {
+        if (enc == EncDefault) {
             # issue #3275: if the data has a line with a single dot, then encode it with base64 encoding
             if (data.typeCode() == NT_STRING) {
                 if (data =~ /^.\r?$/m) {
-                    enc = ContentEncoding::Base64;
+                    enc = EncBase64;
                 } else {
-                    enc = ContentEncoding::QuotedPrintable;
+                    enc = EncQuotedPrintable;
                 }
             } else {
-                enc = ContentEncoding::Base64;
+                enc = EncBase64;
             }
         }
-        else if (!noneok && enc == ContentEncoding::None)
+        else if (!noneok && enc == EncNone)
             throw "INVALID-ENCODING", "\"none\" may not be used; a valid encoding is required in this context";
         else if (!inlist(enc, Encodings))
             throw "UNKNOWN-ENCODING", sprintf("%y is not a known encoding; known encodings: %y", enc, Encodings);
-        else if (data.typeCode() == NT_BINARY && enc == ContentEncoding::None)
+        else if (data.typeCode() == NT_BINARY && enc == EncNone)
             throw "INVALID-ENCODING", sprintf("%y cannot be used with binary data", enc);
 
         return enc;
@@ -1453,15 +1125,15 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
     */
     static string encodeTransferData(data data, string enc, reference<hash> hdr) {
         switch (enc) {
-            case ContentEncoding::Base64: {
+            case EncBase64: {
                 hdr."Content-Transfer-Encoding" = enc;
                 return mime_encode_base64(data, 72);
             }
 
-            case ContentEncoding::None:
+            case EncNone:
                 return data;
 
-            case ContentEncoding::QuotedPrintable: {
+            case EncQuotedPrintable: {
                 hdr."Content-Transfer-Encoding" = enc;
                 return mime_encode_quoted_printable(data);
             }
@@ -1474,19 +1146,19 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
     static string encodeData(data data, string mime, string disp, string enc) {
         string str = sprintf("Content-Type: %s\r\nContent-Disposition: %s\r\n", mime, disp);
         switch (enc) {
-            case ContentEncoding::Base64: {
+            case EncBase64: {
                 str += "Content-Transfer-Encoding: base64\r\n\r\n";
                 str += mime_encode_base64(data, 72);
                 str += "\r\n";
                 break;
             }
-            case ContentEncoding::None: {
+            case EncNone: {
                 str += "\r\n";
                 str += data;
                 str += "\r\n";
                 break;
             }
-            case ContentEncoding::QuotedPrintable: {
+            case EncQuotedPrintable: {
                 str += sprintf("Content-Transfer-Encoding: quoted-printable\r\n\r\n");
                 str += mime_encode_quoted_printable(data);
                 str += "\r\n";
@@ -1551,24 +1223,16 @@ public class Part {
         string enc;
         # any extra headers for the message
         *hash<auto> headers;
-        #! Content-ID for inline parts (without angle brackets)
-        *string content_id;
     }
 
     # will only be called internally when parsing a Message
-    constructor(string filename, string mimetype, data filedata, string encoding = ContentEncoding::Default, *hash<auto> hdr) {
+    constructor(string filename, string mimetype, data filedata, string encoding = EncDefault, *hash<auto> hdr) {
         name = filename;
         mime = mimetype;
         part_data = filedata;
         enc = encoding;
         # += to keep "hash<auto>"
         headers += hdr;
-
-        # Extract Content-ID from headers if present
-        if (hdr."content-id") {
-            # Remove angle brackets if present
-            content_id = (hdr."content-id" =~ x/<([^>]+)>/)[0] ?? hdr."content-id";
-        }
     }
 
     #! Returns information about the part
@@ -1579,8 +1243,6 @@ public class Part {
             "part_data": getData(),
             "headers": getHeaders(),
             "transfer_encoding": getTransferEncoding(),
-            "content_id": content_id,
-            "size": getSize(),
         };
     }
 
@@ -1599,15 +1261,6 @@ public class Part {
         return part_data;
     }
 
-    #! returns the size of the Part data in bytes
-    /** @return the size of the part data in bytes
-
-        @since MailMessage 1.6
-    */
-    int getSize() {
-        return part_data.size();
-    }
-
     #! returns the transfer encoding of the Part
     string getTransferEncoding() {
         return enc;
@@ -1616,15 +1269,6 @@ public class Part {
     #! returns any headers for the Part
     *hash<auto> getHeaders() {
         return headers;
-    }
-
-    #! returns the Content-ID if set
-    /** @return the Content-ID without angle brackets, or @ref nothing if not set
-
-        @since MailMessage 1.6
-    */
-    *string getContentId() {
-        return content_id;
     }
 
     #! adds itself to a multipart/alternative message
@@ -1648,25 +1292,10 @@ Attachment att("file.jpg", MimeTypeJpeg, f.readBinary(-1));
 f.close();
 msg.attach(att);
     @endcode
-
-    @par Example: Inline attachment with Content-ID:
-    @code{.py}
-File f();
-f.open2("logo.png");
-Attachment att("logo.png", MimeTypePng, f.readBinary(-1), ContentEncoding::Base64, NOTHING, "logo123");
-f.close();
-msg.attach(att);
-# Reference in HTML body as: <img src="cid:logo123">
-    @endcode
 */
 public class Attachment inherits Part {
     # no public members
     public {}
-
-    private {
-        #! True if this is an inline attachment
-        bool inline_attachment = False;
-    }
 
     #! creates an Attachment object for a Message object
     /** @param name the name of the attachment to be displayed in the message, normally a file name without any
@@ -1675,58 +1304,21 @@ public class Attachment inherits Part {
         @param part_data the attachment data itself
         @param enc the encoding type for the message (see \c MessageEncodings for possible values)
         @param hdr optional headers for the MIME part for the attachment
-        @param cid optional Content-ID for inline attachments (without angle brackets); use this for images
-        embedded in HTML emails that are referenced as \c "cid:content-id"
 
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
         @throw INVALID-ENCODING the encoding given cannot be used with data given
-
-        @note If \a cid is provided, the attachment will be treated as an inline attachment
-
-        @since MailMessage 1.6: added \a cid parameter
     */
-    constructor(string name, string mime, data part_data, string enc = ContentEncoding::Base64, *hash<auto> hdr, *string cid)
-            : Part(sanitize_filename(name), mime, part_data, enc, hdr) {
+    constructor(string name, string mime, data part_data, string enc = EncBase64, *hash<auto> hdr)
+            : Part(name, mime, part_data, enc, hdr) {
         self.enc = Message::checkEncoding(part_data, enc);
-        if (cid.val()) {
-            content_id = cid;
-            inline_attachment = True;
-        }
-    }
-
-    #! Returns @ref True if this is an inline attachment
-    /** @return @ref True if the attachment has a Content-ID and is meant to be displayed inline
-
-        @since MailMessage 1.6
-    */
-    bool isInline() {
-        return inline_attachment;
     }
 
     #! adds itself to a multipart/mixed message
     add(MultiPartMixedMessage mpm) {
-        # Use RFC 2231 encoding for non-ASCII filenames
-        string encoded_name = encode_mime_filename(name);
-        bool use_rfc2231 = (encoded_name != name);
-
-        hash<auto> extra_hdr = {};
-        if (use_rfc2231) {
-            # RFC 2231 encoded filename
-            extra_hdr."Content-Type" = "";
-            extra_hdr."Content-Disposition" = name;
-            extra_hdr."Content-Disposition-Encoded" = encoded_name;
-        } else {
-            extra_hdr."Content-Type" = "";
-            extra_hdr."Content-Disposition" = name;
-        }
-
-        # Add Content-ID for inline attachments
-        if (content_id.val()) {
-            extra_hdr."Content-ID" = sprintf("<%s>", content_id);
-        }
-
-        string disp = inline_attachment ? "inline" : "attachment";
-        mpm.addEncodePart(part_data, enc, mime, disp, extra_hdr);
+        mpm.addEncodePart(part_data, enc, mime, "attachment", {
+            "Content-Type": "",
+            "Content-Disposition": name,
+        });
     }
 }
 }

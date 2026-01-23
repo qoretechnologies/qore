@@ -7,7 +7,7 @@
     Parse directives that set parsing options can be used any time parse options have not been locked on a @ref Qore::Program "Program object". They are used most often when it's not possible or desirable to set the parse options in the qore command line.
 
     The recommended parse directive for %Qore programming is @ref modern "%modern", which combines all the recommended parse options into a single directive:
-    - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings
+    - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", and enables all non-strict warnings
 
     Alternatively, files with the \c .qr extension automatically enable @ref modern "%modern" mode without any parse directive.
 
@@ -29,7 +29,6 @@
     |@ref broken-list-parsing "%broken-list-parsing"|Use old pre-0.8.12 broken list parsing where certain lists without parentheses would be rewritten to make top-level statements like <tt>list l = 1, 2, 3;</tt> valid
     |@ref broken-list-range "%broken-list-range"|Assume broken list range operator as per pre-2.0
     |@ref broken-logic-precedence "%broken-logic-precedence"|Use old pre-0.8.12 precedence of logical and bitwise operators
-    |@ref broken-namespace-resolution "%broken-namespace-resolution"|Use legacy namespace resolution behavior
     |@ref broken-loop-statement "%broken-loop-statement"|Accept @ref break "break" and @ref continue "continue" outside of loops as with pre-0.8.13
     |@ref broken-narrowed-types "%broken-narrowed-types"|Disable parse-time type narrowing for \c auto, \c hash<auto>, and \c list<auto> variables <br><br>Since %Qore 2.3
     |@ref broken-operators "%broken-operators"|Accept spaces in multi-character operators as with pre-0.8.12
@@ -42,7 +41,6 @@
     |@ref correct-list-parsing "%correct-list-parsing"|revert the effect of the @ref broken-list-parsing "%broken-list-parsing" parse option
     |@ref correct-list-range "%correct-list-range"|revert the effect of the @ref broken-list-range "%broken-list-range" parse option
     |@ref correct-logic-precedence "%correct-logic-precedence"|revert the effect of the @ref broken-logic-precedence "%broken-logic-precedence" parse option
-    |@ref correct-namespace-resolution "%correct-namespace-resolution"|revert the effect of the @ref broken-namespace-resolution "%broken-namespace-resolution" parse option
     |@ref correct-loop-statement "%correct-loop-statement"|revert the effect of the @ref broken-loop-statement "%broken-loop-statement" parse option
     |@ref correct-narrowed-types "%correct-narrowed-types"|revert the effect of the @ref broken-narrowed-types "%broken-narrowed-types" parse option <br><br>Since %Qore 2.3
     |@ref correct-operators "%correct-operators"|revert the effect of the @ref broken-operators "%broken-operators" parse option
@@ -71,8 +69,8 @@
     |@ref lock-options "%lock-options"|Prohibits further changes to parse options (equivalent to the <tt>-</tt><tt>-lock-options</tt> command line option)
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
-    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with the \c .qr extension automatically enable this mode.<br><br>Since %Qore 2.3
-    |@ref loose-types "%loose-types"|Deprecated: support removed in %Qore 2.3; this directive has no effect
+    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with the \c .qr extension automatically enable this mode.<br><br>Since %Qore 2.3
+    |@ref loose-types "%loose-types"|reverts the effect of the @ref strict-types "%strict-types" parse options
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br><br>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br><br>Since %Qore 0.8.4
     |@ref no-debugging "%no-debugging"|Forbids debugging of the current @ref Qore::Program "Program" object <br><br>Since %Qore 0.8.13
@@ -93,7 +91,7 @@
     |@ref no-network "%no-network"|Disallows access to the network; equivalent to parse option @ref Qore::PO_NO_NETWORK and the <tt>-</tt><tt>-no-network</tt> command line option
     |@ref no-new "%no-new"|Disallows use of the @ref new "new operator"; equivalent to parse option @ref Qore::PO_NO_NEW and the <tt>-</tt><tt>-no-new</tt> command line option
     |@ref no-process-control "%no-process-control"|Disallows access to functions that would affect the current process (see @ref no-process-control "%no-process-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_PROCESS_CONTROL and the <tt>-</tt><tt>-no-process-control</tt> command line option
-    |@ref no-reflection "%no-reflection"|Disallows access to the reflection API provided by the <a href="../../modules/reflection/html/index.html#reflectionintro">reflection</a> module; equivalent to parse option @ref Qore::PO_NO_REFLECTION<br><br>Since %Qore 0.9
+    |@ref no-reflection "%no-reflection"|Disallows access to the reflection API provided by the <a href="../../modules/reflection/html/index.html">reflection</a> module; equivalent to parse option @ref Qore::PO_NO_REFLECTION<br><br>Since %Qore 0.9
     |@ref no-subroutine-defs "%no-subroutine-defs"|Disallows subroutine (function) definitions; equivalent to parse option @ref Qore::PO_NO_SUBROUTINE_DEFS and the <tt>-</tt><tt>-no-subroutine-defs</tt> command line option
     |@ref no-terminal-io "%no-terminal-io"|Disallows access to terminal I/O (see @ref no-terminal-io "%no-terminal-io" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_TERMINAL_IO and the <tt>-pno-terminal-io</tt> command line option
     |@ref no-thread-classes "%no-thread-classes"|Disallows access to thread classes (see @ref no-thread-classes "%no-thread-classes" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_CLASSES and the <tt>-</tt><tt>-no-thread-classes</tt> command line option
@@ -115,7 +113,7 @@
     |@ref set-time-zone "%set-time-zone"|Sets the time zone for the current program from a UTC offset (with format \c "+/-[00[:00[:00]]"; \c ":" characters are optional) or a time zone region name (ex: \c "Europe/Prague") <br><br>Since %Qore 0.8.3
     |@ref strict-args "%strict-args"|Prohibits access to builtin functions and methods flagged with @ref RUNTIME_NOOP and also causes errors to be raised if excess arguments are given to functions that do not access excess arguments and if a non-list lvalue is passed to the @ref push, @ref pop, or @ref shift <br><br>Since %Qore 0.8.0
     |@ref strict-bool-eval "%strict-bool-eval"|Sets qore's default strict mathematic boolean evaluation mode, where any value converted to 0 is @ref False "False" and otherwise it's is @ref True "True"; this was how qore behaved by default prior to v0.8.6. <br><br>Equivalent to parse option @ref Qore::PO_STRICT_BOOLEAN_EVAL and the <tt>-pstrict-bool-eval</tt> command line option. <br><br>See also @ref perl-bool-eval "%perl-bool-eval"<br><br>Since %Qore 0.8.6
-    |@ref strict-types "%strict-types"|Deprecated: support removed in %Qore 2.3; this directive has no effect
+    |@ref strict-types "%strict-types"|Sets strict type checking and automatically sets default values for lvalues with type restrictions that have default values
     |@ref strong-encapsulation "%strong-encapsulation"|Disallows out-of-line class and namespace declarations. <br><br>Since %Qore 0.8.13
     |@ref try-module "%try-module" [(@ref variable_declarations "var_decl")] <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|If the named feature is not already present in %Qore, then the \c QORE_MODULE_DIR environment variable is used to provide a list of directories to seach for a module with the same name (<em>feature</em><tt>[-api-</tt><em>x</em><tt>.</tt><em>y</em><tt>].qmod</tt> for binary modules or <em>feature</em><tt>.qm</tt> for user modules). If the module is not found, then the qore default module directory is checked.<br><br>If an error occurs loading the module, then the @ref variable_declarations "variable" declared after <tt>%%try-module</tt> is instantiated with the exception information, and the code up to the @ref endtry "%endtry" parse declaration is parsed into the program, allowing for the qore script/program to handle module loading errors at parse time for modules that must be loaded at parse time.<br><br>If version information is provided, then it is compared with the module's version information, and if it does not match a parse exception is raised that is handled like any other load error.<br><br>See also @ref Qore::load_module() for a function providing run-time module loading and @ref requires "%requires" for a similar declaration that does not allow for parse-time module loading error handling.<br><br>Since %Qore 0.8.6
     |@ref try-reexport-module "%try-reexport-module" [(@ref variable_declarations "var_decl")] <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|The same as @ref try-module "%try-module" except that if used in a @ref user_modules "user module", the module is reexported to the importing code<br><br>Since %Qore 0.8.13
@@ -418,26 +416,6 @@
     @since %Qore 0.8.12
 
     <hr>
-    @section broken-namespace-resolution %broken-namespace-resolution
-
-    @par Parse Directive:
-    <tt>%%broken-namespace-resolution</tt>
-
-    @par Command Line:
-    <tt>-pbroken-namespace-resolution</tt>
-
-    @par Parse Option Constant:
-    @ref Qore::PO_BROKEN_NAMESPACE_RESOLUTION
-
-    @par Description:
-    Enables legacy namespace resolution behavior where symbol resolution prefers the shortest path and can
-    allow user-defined symbols to shadow symbols in the @ref Qore "Qore" namespace.
-
-    @see @ref correct-namespace-resolution "%correct-namespace-resolution"
-
-    @since %Qore 2.3
-
-    <hr>
     @section broken-loop-statement %broken-loop-statement
 
     @par Parse Directive:
@@ -704,25 +682,6 @@ i+ =4;
     @see @ref broken-logic-precedence "%broken-logic-precedence"
 
     @since %Qore 0.8.12.10
-
-    <hr>
-    @section correct-namespace-resolution %correct-namespace-resolution
-
-    @par Parse Directive:
-    <tt>%%correct-namespace-resolution</tt>
-
-    @par Command Line:
-    n/a
-
-    @par Parse Option Constant:
-    n/a
-
-    @par Description:
-    Reverts the effect of the @ref broken-namespace-resolution "%broken-namespace-resolution" parse option.
-
-    @see @ref broken-namespace-resolution "%broken-namespace-resolution"
-
-    @since %Qore 2.3
 
     <hr>
     @section correct-narrowed-types %correct-narrowed-types
@@ -1295,7 +1254,7 @@ sub validate_input(int value, int max_value) {
     n/a
 
     @par Description:
-    Deprecated: support removed in %Qore 2.3; this directive has no effect
+    Reverts the effect of the @ref strict-types "%strict-types" parse option.
 
     @see strict-types "%strict-types"
 
@@ -1314,7 +1273,7 @@ sub validate_input(int value, int max_value) {
     @ref Qore::PO_MODERN
 
     @par Description:
-    Sets @ref new-style "%new-style" (@ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local"), @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings.
+    Sets @ref new-style "%new-style" (@ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local"), @ref require-types "%require-types", @ref strict-args "%strict-args", and enables all warnings.
 
     This is the recommended parse directive for modern %Qore programming. It combines all the best practices into a single directive.
 
@@ -1766,7 +1725,7 @@ sub validate_input(int value, int max_value) {
     @ref Qore::PO_NO_REFLECTION
 
     @par Description:
-    Disallows access to the reflection API provided by the <a href="../../modules/reflection/html/index.html#reflectionintro">reflection</a> module.
+    Disallows access to the reflection API provided by the <a href="../../modules/reflection/html/index.html">reflection</a> module.
 
     @since %Qore 0.9
 
@@ -2142,7 +2101,7 @@ if (str)
     @code{.py}
 %requires(reexport) Mime
     @endcode \n
-    If this form is used in a @ref user_modules "user module", all public definitions from the <a href="../../modules/Mime/html/index.html#mimeintro">Mime</a> module would also be loaded into any @ref Qore::Program "Program" that requires the user module.\n\n
+    If this form is used in a @ref user_modules "user module", all public definitions from the <a href="../../modules/Mime/html/index.html">Mime</a> module would also be loaded into any @ref Qore::Program "Program" that requires the user module.\n\n
     Note that there is one special feature name: \c "qore". This pseudo-feature can be used to check the minimum %Qore version; if this feature is requested with version information, then the %Qore library's version information is used for the version number comparison.
 
     @see @ref try-module "%try-module" and @ref try-reexport-module "%try-reexport-module" for similar parse directives that allows module loading errors to be caught and handled at parse-time
@@ -2221,20 +2180,22 @@ if (str)
     @par Parse Directive:
     <tt>%%strict-types</tt>
 
+    @par Command Line:
+    <tt>-pstrict-types</tt>
+
     @par Parse Option Constant:
     @ref Qore::PO_STRICT_TYPES
 
     @par Description:
-    Deprecated: support removed in %Qore 2.3; this directive has no effect. The @ref Qore::PO_STRICT_TYPES constant
-    remains defined as 0 for backward compatibility; code referencing it will compile but the option has no effect.
-
-    The %strict-types functionality was intended to prepare for JIT compilation by enforcing stricter typing and
-    automatically initializing typed variables with default values. However, the NaN-boxing optimization for
-    @ref QoreValue addressed JIT requirements more effectively without requiring behavioral changes.
+    Sets strict type checking and automatically sets default values for lvalues with type restrictions that have
+    default values.
 
     @see loose-types "%loose-types"
 
     @since %Qore 0.9.4
+
+    @note This parse option is experimental; do not use it for code where forwards compatibility is important until
+    its semantics have been finalized
 
     <hr>
     @section strong-encapsulation %strong-encapsulation

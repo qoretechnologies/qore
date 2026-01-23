@@ -313,8 +313,8 @@ const PO_LOCKDOWN = PO_LOCKDOWN;
  */
 const PO_NEW_STYLE = PO_NEW_STYLE;
 
-//! Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", and @ref strong-encapsulation "%strong-encapsulation"; also enables all non-strict warnings
-/** made up of @ref PO_NEW_STYLE | @ref PO_REQUIRE_TYPES | @ref PO_STRICT_ARGS | @ref PO_STRONG_ENCAPSULATION
+//! Sets @ref new-style "%new-style", @ref require-types "%require-types", and @ref strict-args "%strict-args" and enables all non-strict warnings
+/** made up of @ref PO_NEW_STYLE | @ref PO_REQUIRE_TYPES | @ref PO_STRICT_ARGS
 
     @see @ref modern "%modern"
 
@@ -676,12 +676,6 @@ const PO_BROKEN_LOOP_STATEMENT = PO_BROKEN_LOOP_STATEMENT;
 */
 const PO_BROKEN_RANGE = PO_BROKEN_RANGE;
 
-//! Enables legacy namespace resolution behavior
-/**
-    @see @ref broken-namespace-resolution "%broken-namespace-resolution"
-*/
-const PO_BROKEN_NAMESPACE_RESOLUTION = PO_BROKEN_NAMESPACE_RESOLUTION;
-
 //! allows for old pre-%Qore 0.8.13 handling of @ref reference_type "reference" and @ref reference_or_nothing_type "*reference"
 /** @see @ref broken-references "%broken-references"
 
@@ -787,16 +781,8 @@ const PO_BROKEN_CAST = PO_BROKEN_CAST;
 */
 const PO_ALLOW_RETURNS = PO_ALLOW_RETURNS;
 
-//! @deprecated support removed in %Qore 2.3; remains defined as 0 for backward compatibility
-/** The @ref strict-types "%strict-types" functionality was intended to prepare for JIT compilation by
-    enforcing stricter typing and automatically initializing typed variables with default values.
-    However, the NaN-boxing optimization for @ref QoreValue addressed JIT requirements more effectively
-    without requiring behavioral changes.
-
-    Code using \c %strict-types will parse without error but the directive has no effect.
-    Code checking \c PO_STRICT_TYPES will always evaluate to false (0).
-
-    @see @ref strict-types "%strict-types"
+//! Sets strict type checking and automatically sets default values for lvalues with type restrictions for types with default values
+/** @see @ref strict-types "%strict-types"
 
     @since %Qore 0.9.4
 */

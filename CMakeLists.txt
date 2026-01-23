@@ -362,49 +362,7 @@ find_package(ICONV REQUIRED)
 if(NOT BISON_EXECUTABLE AND DEFINED ENV{BISON_EXECUTABLE})
     set(BISON_EXECUTABLE $ENV{BISON_EXECUTABLE} CACHE FILEPATH "Path to bison executable")
 endif()
-set(BISON_WRAPPER_PATH ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
-get_filename_component(BISON_EXECUTABLE_NAME "${BISON_EXECUTABLE}" NAME)
-get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
-if(BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    unset(BISON_REAL_EXECUTABLE CACHE)
-    unset(BISON_REAL_EXECUTABLE)
-endif()
-if(BISON_EXECUTABLE STREQUAL BISON_WRAPPER_PATH OR BISON_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    if(BISON_REAL_EXECUTABLE)
-        get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
-        if(NOT BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-            set(BISON_EXECUTABLE ${BISON_REAL_EXECUTABLE} CACHE FILEPATH "Path to bison executable" FORCE)
-        else()
-            unset(BISON_EXECUTABLE CACHE)
-            unset(BISON_EXECUTABLE)
-        endif()
-    else()
-        unset(BISON_EXECUTABLE CACHE)
-        unset(BISON_EXECUTABLE)
-    endif()
-endif()
 find_package(BISON REQUIRED)
-
-if(BISON_EXECUTABLE STREQUAL BISON_WRAPPER_PATH OR BISON_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    if(NOT BISON_REAL_EXECUTABLE)
-        find_program(BISON_REAL_EXECUTABLE NAMES bison)
-    endif()
-else()
-    set(BISON_REAL_EXECUTABLE ${BISON_EXECUTABLE})
-endif()
-get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
-if(BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    find_program(BISON_REAL_EXECUTABLE NAMES bison)
-endif()
-set(BISON_REAL_EXECUTABLE ${BISON_REAL_EXECUTABLE} CACHE FILEPATH "Path to real bison executable" FORCE)
-set(BISON_WRAPPER_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/bison-wrapper.sh)
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/bison-wrapper.sh.in
-    ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh
-    @ONLY
-)
-execute_process(COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
-set(BISON_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh CACHE FILEPATH "Path to bison executable" FORCE)
 find_package(FLEX 2.5.35 REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -607,16 +565,6 @@ endif()
 bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
 flex_target(qorescanner lib/scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(qorescanner qoreparser)
-
-# Suppress GCC's false-positive free-nonheap-object warning from the generated parser.
-set_source_files_properties(
-    ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
-    PROPERTIES COMPILE_FLAGS "-Wno-free-nonheap-object"
-)
-set_source_files_properties(
-    lib/single-compilation-unit.cpp
-    PROPERTIES COMPILE_FLAGS "-Wno-free-nonheap-object"
-)
 
 # qpp
 if(NOT HAVE_GETOPT_H)
@@ -1531,7 +1479,6 @@ qore_user_module("qlib/Logger.qm" "Util;modules/logger_bin/logger_bin")
 qore_user_module("qlib/Mime.qm" "Util")
 qore_user_module("qlib/QUnit.qm" "Util")
 qore_user_module("qlib/TextWrap.qm" "Util")
-qore_user_module("qlib/HttpStreamClient.qm" "")
 
 # base 3 modules
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg")
@@ -1550,7 +1497,6 @@ qore_user_module("qlib/ServerSentEventHandler" "HttpServerUtil;Logger")
 qore_user_module("qlib/SqlUtil" "Util;DataProvider" "SqlUtil-Full.svg")
 qore_user_module("qlib/ConnectionProvider" "Util;DataProvider")
 qore_user_module("qlib/CsvUtil" "Util;DataProvider")
-qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 qore_user_module("qlib/FixedLengthUtil" "Util;DataProvider")
 qore_user_module("qlib/Mapper.qm" "MapperUtil;DataProvider")
 qore_user_module("qlib/FtpPollerUtil.qm" "DataProvider")
@@ -1650,11 +1596,11 @@ qore_user_module("qlib/GmailDataProvider" "GoogleDataProvider;GoogleRestClient;R
         set(QORE_LANG_DOC_TAGFILES "")
     foreach(mod ${QORE_USER_MODULE_NAMES})
         # Tag file is generated in build root as {mod}.tag
-        # Relative path to module html from lang html: ../../modules/{mod}/html
-        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../../modules/${mod}/html\"")
+        # Relative path to module html from lang html: ../modules/{mod}/html
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../modules/${mod}/html\"")
     endforeach()
     # Add binary module tag files required for lang cross-references.
-    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../../modules/logger_bin/html\"")
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../modules/logger_bin/html\"")
     set(QORE_LANG_DOC_PREDEFINED "QORE_LANG_FINAL" CACHE INTERNAL "Preprocessor definitions for lang docs (final pass)")
     set(QORE_LANG_DOC_SECTIONS "QORE_LANG_FINAL" CACHE INTERNAL "Enabled sections for lang docs (final pass)")
     message(STATUS "Configuring Doxyfile for lang final pass with module cross-references")
