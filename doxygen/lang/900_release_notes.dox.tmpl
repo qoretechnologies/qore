@@ -570,6 +570,9 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - improved @ref Qore::backquote() "backquote()" and the @ref backquote_operator "backquote operator" on Linux
         to use \c posix_spawn(), restore an unblocked signal mask in child processes, and terminate the entire process
         group on sandbox interrupts
+      - system(), backquote(), and the backquote operator now start children in a new process group only when a
+        @ref Qore::SandboxManager "SandboxManager" is attached; otherwise they stay in the current process group so
+        terminal signals (for example, Ctrl-C) propagate to children as before
       - fixed bareword resolution in constructors and class scopes
         (<a href="https://github.com/qoretechnologies/qore/issues/40">issue 40</a>)
       - fixed calls to member closures defined as class fields
