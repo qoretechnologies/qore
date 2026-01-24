@@ -595,12 +595,6 @@ const SignalToName = (
     @param signal The signal number to process, see @ref signal_constants for possible values
     @param f The code to execute when the signal is caught; this should accept an integer argument giving the signal number
 
-    @par Process group behavior:
-    - With a @ref Qore::SandboxManager "SandboxManager" attached, the child process is started in a new process group so
-      that @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" can terminate the entire process group.
-    - Without a SandboxManager, the child stays in the current process group, so terminal signals (for example, Ctrl-C)
-      are delivered to both the parent and child as usual.
-
     @par Example:
     @code{.py}
 set_signal_handler(SIGINT, \signal_handler());
@@ -1300,6 +1294,12 @@ nothing parseURL() [flags=RUNTIME_NOOP] {
     @param rc an optional reference to an integer to return the return code of the process
 
     @return The stdout of the shell command that was executed
+
+    @par Process group behavior:
+    - With a @ref Qore::SandboxManager "SandboxManager" attached, the child process is started in a new process group so
+      that @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" can terminate the entire process group.
+    - Without a SandboxManager, the child stays in the current process group, so terminal signals (for example, Ctrl-C)
+      are delivered to both the parent and child as usual.
 
     @par Example:
     @code{.py}
