@@ -91,6 +91,7 @@ QoreValue BackquoteNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const
 
 QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
     rc = 0;
+    const bool use_pgroup = runtime_get_sandbox_manager() != nullptr;
 #if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING) && defined(HAVE_POLL)
     {
         int pipefd[2];
@@ -113,7 +114,10 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             }
         }
         if (spawn_rc == 0) {
-            short flags = static_cast<short>(POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF);
+            short flags = static_cast<short>(POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF);
+            if (use_pgroup) {
+                flags |= POSIX_SPAWN_SETPGROUP;
+            }
             spawn_rc = posix_spawnattr_setflags(&attr, flags);
 
             if (spawn_rc == 0) {
@@ -128,7 +132,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
                 sigaddset(&def, SIGQUIT);
                 spawn_rc = posix_spawnattr_setsigdefault(&attr, &def);
             }
-            if (spawn_rc == 0) {
+            if (spawn_rc == 0 && use_pgroup) {
                 spawn_rc = posix_spawnattr_setpgroup(&attr, 0);
             }
 
@@ -162,13 +166,20 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         posix_spawn_file_actions_destroy(&actions);
         posix_spawnattr_destroy(&attr);
         close(pipefd[1]);
+        bool pgroup_ok = false;
+        if (use_pgroup) {
+            // Best-effort safeguard in case POSIX_SPAWN_SETPGROUP is not applied.
+            if (setpgid(pid, pid) == 0 || errno == EACCES) {
+                pgroup_ok = true;
+            }
+        }
 
         QoreStringNodeHolder s(new QoreStringNode);
         char buf[READ_BLOCK];
         while (true) {
             if (qore_check_io_interrupt(xsink, "backquote read")) {
                 // Use SIGKILL to enforce immediate termination on interrupt.
-                kill(-pid, SIGKILL);
+                kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
                 waitpid(pid, &rc, 0);
                 close(pipefd[0]);
                 rc = -1;
@@ -227,8 +238,11 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         }
 
         pid_t pid = fork();
+        bool pgroup_ok = false;
         if (!pid) {
-            setpgid(0, 0);
+            if (use_pgroup) {
+                setpgid(0, 0);
+            }
 
             sigset_t empty;
             sigemptyset(&empty);
@@ -251,6 +265,9 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             xsink->raiseException("BACKQUOTE-ERROR", q_strerror(errno));
             return nullptr;
         }
+        if (use_pgroup && (setpgid(pid, pid) == 0 || errno == EACCES)) {
+            pgroup_ok = true;
+        }
         close(pipefd[1]);
 
         QoreStringNodeHolder s(new QoreStringNode);
@@ -258,7 +275,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         while (true) {
             if (qore_check_io_interrupt(xsink, "backquote read")) {
                 // Use SIGKILL to enforce immediate termination on interrupt.
-                kill(-pid, SIGKILL);
+                kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
                 waitpid(pid, &rc, 0);
                 close(pipefd[0]);
                 rc = -1;
