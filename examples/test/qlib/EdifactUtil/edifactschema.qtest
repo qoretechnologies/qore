@@ -588,11 +588,15 @@ public class EdifactSchemaTest inherits QUnit::Test {
         string root = normalize_dir(dirname(get_script_path()) + DirSep + "../../../..");
         string validator = root + DirSep + "tools" + DirSep + "edifact-fixture-validate.qr";
         string fixtures_root = root + DirSep + "examples/test/qlib/EdifactUtil/fixtures";
+        string qore_bin = root + DirSep + "build/qore";
+        if (FsUtil::path_exists(root + DirSep + "build-ci/qore")) {
+            qore_bin = root + DirSep + "build-ci/qore";
+        }
 
         list<string> golden_releases = ("D01B", "D10B", "D20B", "D21B", "D23A", "D25A");
         string releases_arg = golden_releases.join(",");
         string cmd = sprintf("%s %s --quiet --dir=%y --releases=%y > /dev/null 2>&1",
-            root + DirSep + "build/qore", validator, fixtures_root, releases_arg);
+            qore_bin, validator, fixtures_root, releases_arg);
         int rc = system(cmd);
         assertEq(0, rc);
 
