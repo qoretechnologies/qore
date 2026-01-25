@@ -10,4 +10,4 @@ module RD1 {
     license = "MIT";
 }
 
-%requires ./RD2
+%requires RD2
