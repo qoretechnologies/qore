@@ -1921,10 +1921,13 @@ string doxygen_output = proc.process();
 
         #! Returns a doc comment for the declaration based on source position
         private *string getDocForNode(hash<auto> node) {
+            if (node.docComment && node.docComment.val()) {
+                return node.docComment;
+            }
             if (lines.empty() || !node.loc) {
                 return node.docComment;
             }
-            int start_line = node.loc.start_line;
+            int start_line = resolveDocStartLine(node);
             if (start_line <= 0) {
                 return node.docComment;
             }
@@ -1934,6 +1937,40 @@ string doxygen_output = proc.process();
                 return node.docComment;
             }
             return docs.join("\n");
+        }
+
+        #! Resolve the best line number to use for doc comment association
+        private int resolveDocStartLine(hash<auto> node) {
+            int start_line = node.loc.start_line;
+            if (start_line <= 0 || lines.empty()) {
+                return start_line;
+            }
+            if (node.name && node.name.name) {
+                if (node.name.loc && node.name.loc.start_line > 0) {
+                    return node.name.loc.start_line;
+                }
+                string name = node.name.name;
+                int idx = start_line - 1;
+                if (idx >= 0 && idx < lines.size()) {
+                    string line = lines[idx];
+                    if ((node.kind == ADK_Function && line.find(name + "(") >= 0)
+                        || (node.kind != ADK_Function && line.find(name) >= 0)) {
+                        return start_line;
+                    }
+                }
+                int max_line = start_line + 12;
+                if (max_line > lines.size()) {
+                    max_line = lines.size();
+                }
+                for (int i = start_line - 1; i < max_line; ++i) {
+                    string line = lines[i];
+                    if ((node.kind == ADK_Function && line.find(name + "(") >= 0)
+                        || (node.kind != ADK_Function && line.find(name) >= 0)) {
+                        return i + 1;
+                    }
+                }
+            }
+            return start_line;
         }
 
         #! Returns doc comment blocks immediately preceding the given line
