@@ -1099,23 +1099,23 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	COPYING.LGPL COPYING.GPL COPYING.MIT \
 	CMakeLists.txt \
 	examples/test \
-	examples/HelloWorld.q \
-	examples/clisrv.q \
-	examples/email.q \
-	examples/exp.q \
-	examples/getch.q \
-	examples/getopt.q \
-	examples/hash.q \
-	examples/httpserver.q \
-	examples/inherit.q \
-	examples/inherit2.q \
-	examples/obj2.q \
+	examples/HelloWorld.qr \
+	examples/clisrv.qr \
+	examples/email.qr \
+	examples/exp.qr \
+	examples/getch.qr \
+	examples/getopt.qr \
+	examples/hash.qr \
+	examples/httpserver.qr \
+	examples/inherit.qr \
+	examples/inherit2.qr \
+	examples/obj2.qr \
 	examples/old2new \
-	examples/pop3.q \
-	examples/restserver.q \
+	examples/pop3.qr \
+	examples/restserver.qr \
 	examples/schema \
-	examples/stmt.q \
-	examples/telnet.q \
+	examples/stmt.qr \
+	examples/telnet.qr \
 	qore.spec \
 	qore.spec-fedora \
 	qore.spec-multi \
