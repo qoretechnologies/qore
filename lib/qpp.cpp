@@ -3279,9 +3279,14 @@ public:
                     return;
                 }
                 if (!line.compare(0, 3, "/**")) {
-                    if (get_dox_comment(fileName, lineNumber, line, fp, true)) {
-                        valid = false;
-                        return;
+                    // Check if the block comment is complete on this line
+                    // Start search at position 3 (after /**) for efficiency
+                    if (line.find("*/", 3) == std::string::npos) {
+                        // Multi-line block comment - need to read more
+                        if (get_dox_comment(fileName, lineNumber, line, fp, true)) {
+                            valid = false;
+                            return;
+                        }
                     }
                     cdoc += line;
                     line.clear();
@@ -3795,9 +3800,14 @@ public:
                 }
                 size_t t = line.find("/**", 3);
                 if (t != std::string::npos) {
-                    if (get_dox_comment(fileName, lineNumber, line, fp, true)) {
-                        valid = false;
-                        return;
+                    // Check if the block comment is complete on this line
+                    // Search for */ starting after the /** (position t + 3)
+                    if (line.find("*/", t + 3) == std::string::npos) {
+                        // Multi-line block comment - need to read more
+                        if (get_dox_comment(fileName, lineNumber, line, fp, true)) {
+                            valid = false;
+                            return;
+                        }
                     }
                     trim_end(line);
                     cdoc += "\n";
@@ -4020,9 +4030,14 @@ struct EnumMemberInfo {
     EnumMemberInfo(std::string&& c, std::string&& v, std::string&& cv)
         : comment(std::move(c)), value(std::move(v)), computed_value(std::move(cv)) {}
 
-    int serializeCpp(FILE* fp, const char* n) const {
+    int serializeCpp(FILE* fp, const char* n, const std::string& baseType) const {
         // Use computed_value which handles auto-increment
-        fprintf(fp, "    ed->addMember(\"%s\", %s);\n", n, computed_value.c_str());
+        // For string enums, wrap the value in QoreStringNode to avoid implicit bool conversion
+        if (baseType == "string") {
+            fprintf(fp, "    ed->addMember(\"%s\", new QoreStringNode(%s));\n", n, computed_value.c_str());
+        } else {
+            fprintf(fp, "    ed->addMember(\"%s\", %s);\n", n, computed_value.c_str());
+        }
         return 0;
     }
 
@@ -4150,7 +4165,7 @@ public:
                 name.c_str(), ns_path.c_str(), base_type_info.c_str());
 
         for (auto& m : members) {
-            m.second.serializeCpp(fp, m.first.c_str());
+            m.second.serializeCpp(fp, m.first.c_str(), baseType);
         }
 
         fprintf(fp, "    ns.addSystemEnum(ed);\n    return ed;\n}\n\n");

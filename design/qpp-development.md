@@ -213,6 +213,60 @@ Notes:
 - When used in QPP method signatures, enum parameters are passed to C++ as the enum's base type
   (`int64`, `const QoreStringNode*`, `double`, or `const QoreNumberNode*`).
 
+#### Using Enums in Hashdecl Fields
+
+When a hashdecl field references an enum type using `enum<EnumName>` or `*enum<EnumName>`, the
+generated C++ code calls `enumPointer->getTypeInfo()`. This requires:
+
+1. **Global enum pointer**: Declare and define a global `QoreEnumDecl*` pointer:
+   ```cpp
+   // In header file (e.g., yaml-module.h):
+   DLLLOCAL extern QoreEnumDecl* enumMyEnumType;
+
+   // In source file (e.g., yaml-module.cpp):
+   QoreEnumDecl* enumMyEnumType = nullptr;
+   ```
+
+2. **Initialization order**: Initialize enums **before** hashdecls that reference them:
+   ```cpp
+   // In module init function:
+   enumMyEnumType = init_enum_MyEnumType(ns);      // Initialize enum first
+   hashdeclMyHashDecl = init_hashdecl_MyHashDecl(ns);  // Then hashdecl
+   ```
+
+3. **Hashdecl field syntax**: Use typed enum references in hashdecl fields:
+   ```cpp
+   hashdecl MyEvent {
+       //! Required enum field
+       enum<MyEnumType> type;
+
+       //! Optional enum field
+       *enum<MyEnumType> style;
+   }
+   ```
+
+Example from the YAML module:
+```cpp
+// Enum definitions
+enum Qore::YAML::YamlSaxEventType : int {
+    StreamStart = 1,
+    Scalar = 6,
+    // ...
+};
+
+enum Qore::YAML::YamlScalarStyle : string {
+    Plain = "plain",
+    Literal = "literal",
+    // ...
+};
+
+// Hashdecl using enum types
+hashdecl YamlSaxEvent {
+    enum<YamlSaxEventType> type;      // Required int enum
+    *enum<YamlScalarStyle> style;     // Optional string enum
+}
+```
+
 ## Class Creation Checklist
 
 1. [ ] Create `lib/QC_ClassName.qpp`
