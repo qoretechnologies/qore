@@ -45,7 +45,7 @@ class SystemCallTest inherits QUnit::Test {
 %ifdef Windows
         testSkip("Windows");
 %endif
-        int rc = system("command_should_not_exist_12345");
+        int rc = system("command_should_not_exist_12345 2>/dev/null");
         assertEq(127, rc, "system() should return 127 for command not found");
     }
 
