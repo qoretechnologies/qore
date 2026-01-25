@@ -28,10 +28,12 @@
 #include <qore/intern/QoreIRPrinter.h>
 #include <qore/intern/QoreIRVerifier.h>
 #include <qore/intern/QoreBinaryAndOperatorNode.h>
+#include <qore/intern/QoreBinaryNotOperatorNode.h>
 #include <qore/intern/QoreBinaryOrOperatorNode.h>
 #include <qore/intern/QoreBinaryXorOperatorNode.h>
 #include <qore/intern/QoreImplicitArgumentNode.h>
 #include <qore/intern/QoreLibIntern.h>
+#include <qore/intern/qore_program_private.h>
 #include <qore/intern/QoreLogicalAndOperatorNode.h>
 #include <qore/intern/QoreLogicalAbsoluteEqualsOperatorNode.h>
 #include <qore/intern/QoreLogicalAbsoluteNotEqualsOperatorNode.h>
@@ -64,6 +66,10 @@
 #include <qore/intern/QoreDivisionOperatorNode.h>
 #include <qore/intern/QoreFoldlOperatorNode.h>
 #include <qore/intern/QoreMapOperatorNode.h>
+#include <qore/intern/QoreSelectOperatorNode.h>
+#include <qore/intern/QoreMapSelectOperatorNode.h>
+#include <qore/intern/QoreHashMapOperatorNode.h>
+#include <qore/intern/QoreHashMapSelectOperatorNode.h>
 #include <qore/intern/QoreMinusOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
 #include <qore/intern/QoreShiftLeftOperatorNode.h>
@@ -73,6 +79,14 @@
 #include <qore/intern/QoreExtractOperatorNode.h>
 #include <qore/intern/QoreRemoveOperatorNode.h>
 #include <qore/intern/QoreKeysOperatorNode.h>
+#include <qore/intern/QoreRegex.h>
+#include <qore/intern/QoreRegexSubst.h>
+#include <qore/intern/QoreRegexMatchOperatorNode.h>
+#include <qore/intern/QoreRegexExtractOperatorNode.h>
+#include <qore/intern/QoreRegexSubstOperatorNode.h>
+#include <qore/intern/QoreExistsOperatorNode.h>
+#include <qore/intern/QoreElementsOperatorNode.h>
+#include <qore/intern/QoreDotEvalOperatorNode.h>
 #include <qore/intern/QoreUnaryMinusOperatorNode.h>
 #include <qore/intern/QoreUnaryPlusOperatorNode.h>
 #include <qore/intern/QoreValueCoalescingOperatorNode.h>
@@ -91,6 +105,24 @@
 #include <qore/intern/QoreClosureParseNode.h>
 #include <qore/intern/Function.h>
 #include <qore/intern/StatementBlock.h>
+#include <qore/intern/IfStatement.h>
+#include <qore/intern/DoWhileStatement.h>
+#include <qore/intern/WhileStatement.h>
+#include <qore/intern/ForStatement.h>
+#include <qore/intern/ExpressionStatement.h>
+#include <qore/intern/ReturnStatement.h>
+#include <qore/intern/BreakStatement.h>
+#include <qore/intern/ContinueStatement.h>
+#include <qore/intern/ForEachStatement.h>
+#include <qore/intern/SwitchStatement.h>
+#include <qore/intern/CaseNodeWithOperator.h>
+#include <qore/intern/CaseNodeRegex.h>
+#include <qore/intern/TryStatement.h>
+#include <qore/intern/ThrowStatement.h>
+#include <qore/intern/RethrowStatement.h>
+#include <qore/intern/ThreadExitStatement.h>
+#include <qore/intern/OnBlockExitStatement.h>
+#include <qore/intern/DebugStatement.h>
 #include <qore/QoreHashNode.h>
 #include <qore/QoreClass.h>
 #include <qore/QoreStringNode.h>
@@ -106,6 +138,7 @@
 #include <qore/intern/CallReferenceNode.h>
 #include <qore/intern/SelfVarrefNode.h>
 #include <qore/intern/NamedScope.h>
+#include <qore/intern/QoreException.h>
 
 static bool shouldPrintIR() {
     static bool print_ir = []() {
@@ -151,6 +184,144 @@ static bool functionHasOpcode(const QoreIRFunction& func, QoreIROpcode opcode) {
         }
     }
     return false;
+}
+
+static bool functionHasInvokeOpcode(const QoreIRFunction& func, QoreIROpcode opcode) {
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode != QoreIROpcode::Invoke) {
+                continue;
+            }
+            auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+            if (invoke_inst && invoke_inst->invoke_opcode == opcode) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static bool functionHasInvokeOpcodes(const QoreIRFunction& func,
+        std::initializer_list<QoreIROpcode> opcodes) {
+    for (QoreIROpcode opcode : opcodes) {
+        if (!functionHasInvokeOpcode(func, opcode)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool isTerminatorOpcode(QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::Br:
+        case QoreIROpcode::BrIf:
+        case QoreIROpcode::Return:
+        case QoreIROpcode::ReturnNothing:
+        case QoreIROpcode::Throw:
+        case QoreIROpcode::Rethrow:
+        case QoreIROpcode::ThreadExit:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool blockHasTerminator(const QoreIRBasicBlock* block) {
+    if (!block || block->instructions.empty()) {
+        return false;
+    }
+    return isTerminatorOpcode(block->instructions.back()->opcode);
+}
+
+static const QoreProgramLocation* getTestLocation() {
+    QoreProgram* program = getProgram();
+    if (!program) {
+        return nullptr;
+    }
+    return qore_program_private::get(*program)->getLocation(1, 1);
+}
+
+static bool lowerStatementBlockAndExpectOpcodes(const char* name, StatementBlock* block,
+        std::initializer_list<QoreIROpcode> expected,
+        std::initializer_list<QoreIROpcode> absent = {}) {
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder);
+    std::string error;
+    if (!lowering.lowerStatementBlock(block, error)) {
+        std::cerr << "Statement lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    if (!blockHasTerminator(builder.getBlock())) {
+        builder.createReturnNothing();
+    }
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    for (auto opcode : expected) {
+        if (!functionHasOpcode(func, opcode)) {
+            std::cerr << "Lowered statement function missing opcode (" << name << ")\n";
+            return false;
+        }
+    }
+
+    for (auto opcode : absent) {
+        if (functionHasOpcode(func, opcode)) {
+            std::cerr << "Lowered statement function has unexpected opcode (" << name << ")\n";
+            return false;
+        }
+    }
+
+    if (shouldPrintIR()) {
+        QoreIRPrinter::print(func, std::cout);
+    }
+    return true;
+}
+
+static bool lowerStatementBlockAndExpectInvokeOpcode(const char* name, StatementBlock* block,
+        QoreIROpcode invoke_opcode,
+        std::initializer_list<QoreIROpcode> expected = {QoreIROpcode::Invoke, QoreIROpcode::LandingPad,
+            QoreIROpcode::CatchException}) {
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder);
+    std::string error;
+    if (!lowering.lowerStatementBlock(block, error)) {
+        std::cerr << "Statement lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    if (!blockHasTerminator(builder.getBlock())) {
+        builder.createReturnNothing();
+    }
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    for (auto opcode : expected) {
+        if (!functionHasOpcode(func, opcode)) {
+            std::cerr << "Lowered statement function missing opcode (" << name << ")\n";
+            return false;
+        }
+    }
+
+    if (!functionHasInvokeOpcode(func, invoke_opcode)) {
+        std::cerr << "Lowered statement function missing invoke opcode (" << name << ")\n";
+        return false;
+    }
+    return true;
 }
 
 static bool lowerAndExpectOpcode(const char* name, QoreValue expr, QoreIROpcode opcode) {
@@ -211,6 +382,43 @@ static bool lowerAndExpectOpcodeWithParseInit(const char* name, QoreValue expr, 
     if (!functionHasOpcode(func, opcode)) {
         std::cerr << "Lowered function missing opcode (" << name << ")\n";
         return false;
+    }
+    return true;
+}
+
+static bool lowerAndExpectOpcodesWithParseInit(const char* name, QoreValue expr,
+        std::initializer_list<QoreIROpcode> opcodes) {
+    QoreParseContext parse_context;
+    QoreValue parsed_expr(expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    for (QoreIROpcode opcode : opcodes) {
+        if (!functionHasOpcode(func, opcode)) {
+            std::cerr << "Lowered function missing opcode (" << name << "): " << static_cast<int>(opcode) << "\n";
+            return false;
+        }
     }
     return true;
 }
@@ -360,9 +568,9 @@ static bool lowerAndExpectUnaryOpcodeFromParseAnalysis(const char* name, QoreVal
         return false;
     }
     const AbstractQoreNode* node = parsed_expr.getInternalNode();
-    const auto* unary = dynamic_cast<const QoreUnaryMinusOperatorNode*>(node);
+    const auto* unary = dynamic_cast<const QoreSingleExpressionOperatorNode<QoreOperatorNode>*>(node);
     if (!unary) {
-        std::cerr << "Parse analysis helper requires a unary minus operator (" << name << ")\n";
+        std::cerr << "Parse analysis helper requires a unary operator (" << name << ")\n";
         return false;
     }
     QoreParseAnalysis operand_analysis;
@@ -463,6 +671,11 @@ static bool expectParseAnalysisFlagsWithProgram(const char* name, QoreValue expr
     ProgramRuntimeExternalParseContextHelper parse_lock(program);
     if (!parse_lock) {
         std::cerr << "Failed to acquire parse lock (" << name << ")\n";
+        return false;
+    }
+    ProgramRuntimeParseAccessHelper parse_access(&xsink, program);
+    if (xsink) {
+        std::cerr << "Failed to acquire parse access (" << name << ")\n";
         return false;
     }
     QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
@@ -638,6 +851,83 @@ static bool lowerExpectFailure(const char* name, QoreValue expr) {
     QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
     if (lowered.isValid() || error.empty()) {
         std::cerr << "Lowering was expected to fail (" << name << ")\n";
+        return false;
+    }
+    return true;
+}
+
+static bool parseExpectFailure(const char* name, QoreValue expr) {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm_helper(xsink);
+    if (xsink) {
+        std::cerr << "Failed to initialize QoreProgram (" << name << ")\n";
+        return false;
+    }
+    QoreProgram* program = *pgm_helper;
+    QoreProgramContextHelper program_context(program);
+    ProgramRuntimeExternalParseContextHelper parse_lock(program);
+    if (!parse_lock) {
+        std::cerr << "Failed to acquire parse lock (" << name << ")\n";
+        return false;
+    }
+    ProgramRuntimeParseAccessHelper parse_access(&xsink, program);
+    if (xsink) {
+        std::cerr << "Failed to acquire parse access (" << name << ")\n";
+        return false;
+    }
+    QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
+    QoreValue parsed_expr(expr);
+    int rc = parse_init_value(parsed_expr, parse_context);
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    if (ExceptionSink* psink = program->getParseExceptionSink()) {
+        if (*psink) {
+            psink->clear();
+        }
+    }
+    if (!rc) {
+        std::cerr << "Parse init was expected to fail (" << name << ")\n";
+        return false;
+    }
+    return true;
+}
+
+static bool parseExpectFailureWithProgramSource(const char* name, const char* source, QoreValue expr) {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm_helper(xsink);
+    if (xsink) {
+        std::cerr << "Failed to initialize QoreProgram (" << name << ")\n";
+        return false;
+    }
+    QoreProgram* program = *pgm_helper;
+    QoreProgramContextHelper program_context(program);
+    ProgramRuntimeExternalParseContextHelper parse_lock(program);
+    if (!parse_lock) {
+        std::cerr << "Failed to acquire parse lock (" << name << ")\n";
+        return false;
+    }
+    ProgramRuntimeParseAccessHelper parse_access(&xsink, program);
+    if (xsink) {
+        std::cerr << "Failed to acquire parse access (" << name << ")\n";
+        return false;
+    }
+    if (source) {
+        program->parse(source, "ir_smoke", &xsink);
+        if (xsink) {
+            std::cerr << "Failed to parse program source (" << name << ")\n";
+            return false;
+        }
+    }
+    QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
+    QoreValue parsed_expr(expr);
+    int rc = parse_init_value(parsed_expr, parse_context);
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    if (ExceptionSink* psink = program->getParseExceptionSink()) {
+        if (*psink) {
+            psink->clear();
+        }
+    }
+    if (!rc) {
+        std::cerr << "Parse init was expected to fail (" << name << ")\n";
         return false;
     }
     return true;
@@ -847,6 +1137,8 @@ static bool runUnaryBinaryInterpreterSmoke() {
     ExceptionSink bad_binary_xsink;
     ExceptionSink bad_expr_xsink;
     ExceptionSink bad_cast_xsink;
+    ExceptionSink invoke_sim_xsink;
+    ExceptionSink invoke_simulate_xsink;
     QoreValue div_zero = QoreIRInterpreter::evalBinary(QoreIROpcode::DivInt, QoreValue(1), QoreValue(0),
         &div_zero_xsink);
     QoreValue mod_zero = QoreIRInterpreter::evalBinary(QoreIROpcode::ModInt, QoreValue(1), QoreValue(0),
@@ -859,11 +1151,20 @@ static bool runUnaryBinaryInterpreterSmoke() {
     ValueHolder parse_cast_holder(QoreValue(new QoreParseCastOperatorNode(&cast_loc,
         new QoreParseTypeInfo(strdup("int"), false), QoreValue(1))), &bad_cast_xsink);
     QoreValue bad_cast = QoreIRInterpreter::evalExpr(QoreIROpcode::CastAny, *parse_cast_holder, &bad_cast_xsink);
+    ExceptionSink bad_cast_invoke_xsink;
+    bool bad_cast_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::CastAny, *parse_cast_holder,
+        &bad_cast_invoke_xsink);
+    QoreValue invoke_sim = QoreIRInterpreter::evalExpr(QoreIROpcode::InvokeSimError, QoreValue(1),
+        &invoke_sim_xsink);
+    bool invoke_simulated = QoreIRInterpreter::simulateInvoke(QoreIROpcode::InvokeSimError, QoreValue(1),
+        &invoke_simulate_xsink);
     bool exception_ok = div_zero_xsink && mod_zero_xsink && bad_unary_xsink && bad_binary_xsink
-        && bad_expr_xsink && bad_cast_xsink
+        && bad_expr_xsink && bad_cast_xsink && bad_cast_invoke_xsink && bad_cast_invoke
+        && invoke_sim_xsink && invoke_simulate_xsink && invoke_simulated
         && div_zero.isNullOrNothing() && mod_zero.isNullOrNothing()
         && bad_unary.isNullOrNothing() && bad_binary.isNullOrNothing()
-        && bad_expr.isNullOrNothing() && bad_cast.isNullOrNothing();
+        && bad_expr.isNullOrNothing() && bad_cast.isNullOrNothing()
+        && invoke_sim.isNullOrNothing();
     if (!exception_ok) {
         std::cerr << "Unary/binary IR interpreter exception smoke checks failed\n";
         return false;
@@ -874,6 +1175,9 @@ static bool runUnaryBinaryInterpreterSmoke() {
     bad_binary_xsink.clear();
     bad_expr_xsink.clear();
     bad_cast_xsink.clear();
+    bad_cast_invoke_xsink.clear();
+    invoke_sim_xsink.clear();
+    invoke_simulate_xsink.clear();
     return true;
 }
 
@@ -893,7 +1197,8 @@ static bool runExprInterpreterSmoke() {
     const char* src = "int sub ir_expr_call(int $i) { return $i + 1; }\n"
         "int sub ir_expr_call_int(int $i) { return $i; }\n"
         "int sub ir_expr_call_ref(int $i) { return $i + 2; }\n"
-        "class IrExprClass { constructor() {} int m(int $i) { return $i + 3; } static int sm(int $i) { return $i + 4; } }\n";
+        "class IrExprClass { constructor() {} int m(int $i) { return $i + 3; } static int sm(int $i)"
+        " { return $i + 4; } }\n";
     program->parse(src, "ir_smoke", &xsink);
     if (xsink) {
         std::cerr << "Expr interpreter smoke checks failed (parse)\n";
@@ -901,6 +1206,7 @@ static bool runExprInterpreterSmoke() {
     }
     QoreValue parsed_call;
     QoreValue parsed_call_ref;
+    QoreValue parsed_call_ref_bad;
     QoreValue parsed_static;
     QoreValue parsed_self;
     QoreValue parsed_cast;
@@ -932,6 +1238,25 @@ static bool runExprInterpreterSmoke() {
         QoreParseContext call_ref_context(static_cast<LocalVar*>(nullptr), program);
         if (parse_init_value(parsed_call_ref, call_ref_context)) {
             std::cerr << "Expr interpreter smoke checks failed (call ref parse init)\n";
+            return false;
+        }
+        ResolvedCallReferenceNode* cref_bad = fe_ref->makeCallReference(&call_loc);
+        if (!cref_bad) {
+            std::cerr << "Expr interpreter smoke checks failed (call ref bad create)\n";
+            return false;
+        }
+        QoreHashNode* bad_hash = new QoreHashNode(autoTypeInfo);
+        if (bad_hash->setKeyValue("k", QoreValue(1), &xsink)) {
+            bad_hash->deref(&xsink);
+            std::cerr << "Expr interpreter smoke checks failed (call ref bad hash)\n";
+            return false;
+        }
+        QoreParseListNode* call_ref_bad_args = new QoreParseListNode(&call_loc);
+        call_ref_bad_args->add(QoreValue(bad_hash), &call_loc);
+        parsed_call_ref_bad = QoreValue(new CallReferenceCallNode(&call_loc, QoreValue(cref_bad), call_ref_bad_args));
+        QoreParseContext call_ref_bad_context(static_cast<LocalVar*>(nullptr), program);
+        if (parse_init_value(parsed_call_ref_bad, call_ref_bad_context)) {
+            std::cerr << "Expr interpreter smoke checks failed (call ref bad parse init)\n";
             return false;
         }
         QoreParseListNode* static_args = new QoreParseListNode(&call_loc);
@@ -982,6 +1307,11 @@ static bool runExprInterpreterSmoke() {
             std::cerr << "Expr interpreter smoke checks failed (call eval)\n";
             return false;
         }
+        bool call_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::Call, *call_holder, &xsink);
+        if (xsink || call_invoke) {
+            std::cerr << "Expr interpreter smoke checks failed (call invoke)\n";
+            return false;
+        }
     }
     {
         ValueHolder call_ref_holder(parsed_call_ref, &xsink);
@@ -992,16 +1322,83 @@ static bool runExprInterpreterSmoke() {
         }
     }
     {
+        ExceptionSink bad_call_ref_xsink;
+        ValueHolder bad_call_ref_holder(parsed_call_ref_bad, &bad_call_ref_xsink);
+        bool bad_call_ref_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::CallIndirect,
+            *bad_call_ref_holder, &bad_call_ref_xsink);
+        if (!bad_call_ref_xsink || !bad_call_ref_invoke) {
+            std::cerr << "Expr interpreter smoke checks failed (call ref invoke)\n";
+            return false;
+        }
+        bad_call_ref_xsink.clear();
+    }
+    {
+        ExceptionSink regex_xsink;
+        SimpleRefHolder<QoreRegex> regex(new QoreRegex("a", 0, &regex_xsink));
+        if (regex_xsink) {
+            std::cerr << "Expr interpreter smoke checks failed (regex init)\n";
+            return false;
+        }
+        QoreProgramLocation regex_loc("ir_smoke", 1, 1);
+        QoreHashNode* bad_hash = new QoreHashNode(autoTypeInfo);
+        if (bad_hash->setKeyValue("k", QoreValue(1), &regex_xsink)) {
+            bad_hash->deref(&regex_xsink);
+            std::cerr << "Expr interpreter smoke checks failed (regex bad hash)\n";
+            return false;
+        }
+        QoreValue regex_expr(new QoreRegexMatchOperatorNode(&regex_loc, QoreValue(bad_hash), regex->refSelf()));
+        QoreParseContext regex_context(static_cast<LocalVar*>(nullptr), program);
+        if (parse_init_value(regex_expr, regex_context)) {
+            std::cerr << "Expr interpreter smoke checks failed (regex parse init)\n";
+            return false;
+        }
+        ExceptionSink regex_invoke_xsink;
+        ValueHolder regex_holder(regex_expr, &regex_invoke_xsink);
+        bool regex_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::RegexMatchAny, *regex_holder,
+            &regex_invoke_xsink);
+        if (!regex_invoke_xsink || !regex_invoke) {
+            std::cerr << "Expr interpreter smoke checks failed (regex invoke)\n";
+            return false;
+        }
+        regex_invoke_xsink.clear();
+        ExceptionSink regex_extract_xsink;
+        bool regex_extract_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::RegexExtractAny,
+            QoreValue(1), &regex_extract_xsink);
+        if (!regex_extract_xsink || !regex_extract_invoke) {
+            std::cerr << "Expr interpreter smoke checks failed (regex extract invoke)\n";
+            return false;
+        }
+        regex_extract_xsink.clear();
+        SimpleRefHolder<QoreRegexSubst> subst(new QoreRegexSubst("s/a/b/", 0, &regex_xsink));
+        if (regex_xsink) {
+            std::cerr << "Expr interpreter smoke checks failed (regex subst init)\n";
+            return false;
+        }
+        ExceptionSink regex_subst_xsink;
+        bool regex_subst_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::RegexSubstAny,
+            QoreValue(1), &regex_subst_xsink);
+        if (!regex_subst_xsink || !regex_subst_invoke) {
+            std::cerr << "Expr interpreter smoke checks failed (regex subst invoke)\n";
+            return false;
+        }
+        regex_subst_xsink.clear();
+    }
+    {
         ValueHolder static_holder(parsed_static, &xsink);
         QoreValue static_result = QoreIRInterpreter::evalExpr(QoreIROpcode::CallStatic, *static_holder, &xsink);
         if (xsink || static_result.getAsBigInt() != 5) {
             std::cerr << "Expr interpreter smoke checks failed (static call eval)\n";
             return false;
         }
+        bool static_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::CallStatic, *static_holder, &xsink);
+        if (xsink || static_invoke) {
+            std::cerr << "Expr interpreter smoke checks failed (static call invoke)\n";
+            return false;
+        }
     }
     {
-        QoreListNode* ctor_args = new QoreListNode(autoTypeInfo);
-        ReferenceHolder<QoreObject> obj(expr_class->execConstructor(ctor_args, &xsink), &xsink);
+        ReferenceHolder<QoreListNode> ctor_args(new QoreListNode(autoTypeInfo), &xsink);
+        ReferenceHolder<QoreObject> obj(expr_class->execConstructor(*ctor_args, &xsink), &xsink);
         if (xsink || !obj) {
             std::cerr << "Expr interpreter smoke checks failed (self call object)\n";
             return false;
@@ -1013,6 +1410,32 @@ static bool runExprInterpreterSmoke() {
             std::cerr << "Expr interpreter smoke checks failed (self call eval)\n";
             return false;
         }
+        bool self_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::CallMethod, *self_holder, &xsink);
+        if (xsink || self_invoke) {
+            std::cerr << "Expr interpreter smoke checks failed (self call invoke)\n";
+            return false;
+        }
+        QoreProgramLocation dot_loc("ir_smoke", 1, 1);
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* dot_method = new MethodCallNode(&dot_loc, strdup("m"), dot_args);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc, obj->refSelf(), dot_method));
+        QoreParseContext dot_context(static_cast<LocalVar*>(nullptr), program);
+        if (parse_init_value(dot_expr, dot_context)) {
+            std::cerr << "Expr interpreter smoke checks failed (dot eval parse init)\n";
+            return false;
+        }
+        ValueHolder dot_holder(dot_expr, &xsink);
+        QoreValue dot_result = QoreIRInterpreter::evalExpr(QoreIROpcode::DotEvalAny, *dot_holder, &xsink);
+        if (xsink || dot_result.getAsBigInt() != 4) {
+            std::cerr << "Expr interpreter smoke checks failed (dot eval)\n";
+            return false;
+        }
+        bool dot_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::DotEvalAny, *dot_holder, &xsink);
+        if (xsink || dot_invoke) {
+            std::cerr << "Expr interpreter smoke checks failed (dot eval invoke)\n";
+            return false;
+        }
     }
     {
         QoreProgramLocation call_loc("ir_smoke", 1, 1);
@@ -1021,7 +1444,7 @@ static bool runExprInterpreterSmoke() {
             std::cerr << "Expr interpreter smoke checks failed (bad call resolve)\n";
             return false;
         }
-        QoreListNode* call_args = new QoreListNode(autoTypeInfo);
+        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), &xsink);
         QoreHashNode* bad_hash = new QoreHashNode(autoTypeInfo);
         if (bad_hash->setKeyValue("k", QoreValue(1), &xsink)) {
             bad_hash->deref(&xsink);
@@ -1032,12 +1455,19 @@ static bool runExprInterpreterSmoke() {
             std::cerr << "Expr interpreter smoke checks failed (bad call args)\n";
             return false;
         }
-        QoreValue bad_call(new FunctionCallNode(&call_loc, fe, call_args, program));
+        QoreValue bad_call(new FunctionCallNode(&call_loc, fe, call_args.release(), program));
         ExceptionSink bad_call_xsink;
         ValueHolder bad_call_holder(bad_call, &bad_call_xsink);
         QoreIRInterpreter::evalExpr(QoreIROpcode::Call, *bad_call_holder, &bad_call_xsink);
         if (!bad_call_xsink) {
             std::cerr << "Expr interpreter smoke checks failed (bad call eval)\n";
+            return false;
+        }
+        bad_call_xsink.clear();
+        bool bad_call_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::Call, *bad_call_holder,
+            &bad_call_xsink);
+        if (!bad_call_xsink || !bad_call_invoke) {
+            std::cerr << "Expr interpreter smoke checks failed (bad call invoke)\n";
             return false;
         }
         bad_call_xsink.clear();
@@ -1063,6 +1493,504 @@ static bool runExprInterpreterSmoke() {
         bad_cast_xsink.clear();
     }
 
+    return true;
+}
+
+static bool runIRExecutorCleanupSmoke() {
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_unwind_cleanup");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        auto* normal = func.createBlock("normal");
+        auto* handler = func.createBlock("catch");
+        builder.setBlock(entry);
+        builder.createConstString("first");
+        builder.createConstString("second");
+        QoreValue invoke_expr(1);
+        auto* inv = builder.createInvoke(invoke_expr, {}, normal, handler);
+        inv->invoke_opcode = QoreIROpcode::InvokeSimError;
+        builder.setBlock(normal);
+        builder.createReturnNothing();
+        builder.setBlock(handler);
+        builder.createLandingPad();
+        builder.createCatchException();
+        builder.createReturnNothing();
+
+        QoreValue return_value;
+        std::vector<std::string> cleanup_log;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, &cleanup_log) || xsink) {
+            std::cerr << "IR executor cleanup checks failed (execute)\n";
+            return false;
+        }
+        if (!return_value.isNothing()) {
+            std::cerr << "IR executor cleanup checks failed (return)\n";
+            return false;
+        }
+        if (cleanup_log.size() < 2 || cleanup_log[0] != "second" || cleanup_log[1] != "first") {
+            std::cerr << "IR executor cleanup checks failed (order)\n";
+            return false;
+        }
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_catch_exception");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        auto* normal = func.createBlock("normal");
+        auto* handler = func.createBlock("catch");
+        builder.setBlock(entry);
+        QoreValue invoke_expr(1);
+        auto* inv = builder.createInvoke(invoke_expr, {}, normal, handler);
+        inv->invoke_opcode = QoreIROpcode::InvokeSimError;
+        builder.setBlock(normal);
+        builder.createReturnNothing();
+        builder.setBlock(handler);
+        builder.createLandingPad();
+        auto* catch_inst = builder.createCatchException();
+        builder.createReturn(catch_inst->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor catch checks failed (execute)\n";
+            return false;
+        }
+        if (return_value.getType() != NT_HASH) {
+            std::cerr << "IR executor catch checks failed (return type)\n";
+            return false;
+        }
+        return_value.discard(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_throw_cleanup");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* first = builder.createConstString("throw.first");
+        auto* second = builder.createConstString("throw.second");
+        (void)first;
+        builder.createThrow(second->result);
+        builder.createReturnNothing();
+
+        QoreValue return_value;
+        std::vector<std::string> cleanup_log;
+        if (QoreIRInterpreter::execute(func, return_value, &xsink, &cleanup_log) || !xsink) {
+            std::cerr << "IR executor throw checks failed (execute)\n";
+            return false;
+        }
+        if (cleanup_log.size() < 2 || cleanup_log[0] != "throw.second" || cleanup_log[1] != "throw.first") {
+            std::cerr << "IR executor throw checks failed (order)\n";
+            return false;
+        }
+        xsink.clear();
+    }
+    {
+        ExceptionSink xsink;
+        QoreException* ex = new QoreException("IR-EXEC-RETHROW", QoreValue(new QoreStringNode("rethrow")));
+        QoreException* old = catch_swap_exception(ex);
+        QoreIRFunction func("ir_exec_rethrow");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        builder.createRethrow();
+
+        QoreValue return_value;
+        if (QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || !xsink) {
+            std::cerr << "IR executor rethrow checks failed (execute)\n";
+            catch_swap_exception(old);
+            return false;
+        }
+        catch_swap_exception(old);
+        xsink.clear();
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_lvalue_store_load");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        Var* local_var = new Var(nullptr, "exec_lvalue");
+        local_var->setInitial(new QoreBigIntNode(3));
+        ValueHolder lvalue(QoreValue(new GlobalVarRefNode(nullptr, strdup("exec_lvalue"), local_var)), nullptr);
+        auto* cval = builder.createConstInt(12);
+        builder.createStoreLValue(*lvalue, cval->result);
+        auto* load = builder.createLoadLValue(*lvalue);
+        builder.createReturn(load->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor lvalue checks failed (execute)\n";
+            local_var->deref(&xsink);
+            return false;
+        }
+        if (return_value.getAsBigInt() != 12) {
+            std::cerr << "IR executor lvalue checks failed (result)\n";
+            local_var->deref(&xsink);
+            return false;
+        }
+        local_var->deref(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_store_load_local");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        LocalVar local("exec_local", bigIntTypeInfo);
+        auto* cval = builder.createConstInt(21);
+        builder.createStoreLocal(&local, cval->result);
+        auto* load = builder.createLoadLocal(&local);
+        builder.createReturn(load->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor local checks failed (execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != 21) {
+            std::cerr << "IR executor local checks failed (result)\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool runIRExecutorPhiSmoke() {
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_phi_true");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        auto* then_block = func.createBlock("then");
+        auto* else_block = func.createBlock("else");
+        auto* merge_block = func.createBlock("merge");
+        builder.setBlock(entry);
+        auto* cond = builder.createConstBool(true);
+        builder.createBranchIf(cond->result, then_block, else_block);
+        builder.setBlock(then_block);
+        auto* c1 = builder.createConstInt(1);
+        builder.createBranch(merge_block);
+        builder.setBlock(else_block);
+        auto* c2 = builder.createConstInt(2);
+        builder.createBranch(merge_block);
+        builder.setBlock(merge_block);
+        std::vector<QoreIRPhiIncoming> incoming{
+            {c1->result, then_block},
+            {c2->result, else_block},
+        };
+        auto* phi = builder.createPhi(incoming);
+        builder.createReturn(phi->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor phi checks failed (true execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != 1) {
+            std::cerr << "IR executor phi checks failed (true result)\n";
+            return false;
+        }
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_phi_false");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        auto* then_block = func.createBlock("then");
+        auto* else_block = func.createBlock("else");
+        auto* merge_block = func.createBlock("merge");
+        builder.setBlock(entry);
+        auto* cond = builder.createConstBool(false);
+        builder.createBranchIf(cond->result, then_block, else_block);
+        builder.setBlock(then_block);
+        auto* c1 = builder.createConstInt(3);
+        builder.createBranch(merge_block);
+        builder.setBlock(else_block);
+        auto* c2 = builder.createConstInt(4);
+        builder.createBranch(merge_block);
+        builder.setBlock(merge_block);
+        std::vector<QoreIRPhiIncoming> incoming{
+            {c1->result, then_block},
+            {c2->result, else_block},
+        };
+        auto* phi = builder.createPhi(incoming);
+        builder.createReturn(phi->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor phi checks failed (false execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != 4) {
+            std::cerr << "IR executor phi checks failed (false result)\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool runIRExecutorCallOperandsSmoke() {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm_helper(xsink);
+    if (xsink) {
+        std::cerr << "IR executor call-operand checks failed (program init)\n";
+        return false;
+    }
+    QoreProgram* program = *pgm_helper;
+    ProgramRuntimeExternalParseContextHelper parse_lock(program);
+    if (!parse_lock) {
+        std::cerr << "IR executor call-operand checks failed (parse lock)\n";
+        return false;
+    }
+    const char* src = "int sub ir_exec_add(int $a, int $b) { return $a + $b; }\n"
+        "int sub ir_exec_id(int $i) { return $i; }\n"
+        "class IrExecClass { constructor() {} int m(int $i) { return $i + 5; } static int sm(int $i)"
+        " { return $i + 6; } }\n";
+    program->parse(src, "ir_smoke", &xsink);
+    if (xsink) {
+        std::cerr << "IR executor call-operand checks failed (parse)\n";
+        return false;
+    }
+
+    QoreValue parsed_call;
+    QoreValue parsed_call_ref;
+    QoreValue parsed_static;
+    QoreValue parsed_self;
+    const QoreClass* exec_class = nullptr;
+    {
+        QoreProgramContextHelper program_context(program);
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(1), &call_loc);
+        call_args->add(QoreValue(2), &call_loc);
+        parsed_call = QoreValue(new FunctionCallNode(&call_loc, strdup("ir_exec_add"), call_args));
+        QoreParseContext call_context(static_cast<LocalVar*>(nullptr), program);
+        if (parse_init_value(parsed_call, call_context)) {
+            std::cerr << "IR executor call-operand checks failed (call parse init)\n";
+            return false;
+        }
+
+        const FunctionEntry* fe_ref = qore_root_ns_private::parseResolveFunctionEntry(&call_loc, "ir_exec_id");
+        if (!fe_ref) {
+            std::cerr << "IR executor call-operand checks failed (call ref resolve)\n";
+            return false;
+        }
+        ResolvedCallReferenceNode* cref = fe_ref->makeCallReference(&call_loc);
+        if (!cref) {
+            std::cerr << "IR executor call-operand checks failed (call ref create)\n";
+            return false;
+        }
+        QoreParseListNode* call_ref_args = new QoreParseListNode(&call_loc);
+        call_ref_args->add(QoreValue(1), &call_loc);
+        parsed_call_ref = QoreValue(new CallReferenceCallNode(&call_loc, QoreValue(cref), call_ref_args));
+        QoreParseContext call_ref_context(static_cast<LocalVar*>(nullptr), program);
+        if (parse_init_value(parsed_call_ref, call_ref_context)) {
+            std::cerr << "IR executor call-operand checks failed (call ref parse init)\n";
+            return false;
+        }
+
+        QoreParseListNode* static_args = new QoreParseListNode(&call_loc);
+        static_args->add(QoreValue(1), &call_loc);
+        parsed_static = QoreValue(new StaticMethodCallNode(&call_loc, new NamedScope(strdup("IrExecClass::sm")),
+            static_args));
+        QoreParseContext static_context(static_cast<LocalVar*>(nullptr), program);
+        if (parse_init_value(parsed_static, static_context)) {
+            std::cerr << "IR executor call-operand checks failed (static call parse init)\n";
+            return false;
+        }
+
+        exec_class = program->findClass("IrExecClass", &xsink);
+        if (xsink || !exec_class) {
+            std::cerr << "IR executor call-operand checks failed (class resolve)\n";
+            return false;
+        }
+        LocalVar self_var("self", exec_class->getTypeInfo());
+        self_var.parseAssigned();
+        QoreParseListNode* self_args = new QoreParseListNode(&call_loc);
+        self_args->add(QoreValue(1), &call_loc);
+        parsed_self = QoreValue(new SelfFunctionCallNode(&call_loc, strdup("m"), self_args));
+        QoreParseContext self_context(&self_var, program);
+        if (parse_init_value(parsed_self, self_context)) {
+            std::cerr << "IR executor call-operand checks failed (self call parse init)\n";
+            return false;
+        }
+    }
+
+    ProgramThreadCountContextHelper runtime_ctx(&xsink, program, true);
+    if (xsink) {
+        std::cerr << "IR executor call-operand checks failed (runtime context)\n";
+        return false;
+    }
+
+    ValueHolder call_holder(parsed_call, &xsink);
+    ValueHolder call_ref_holder(parsed_call_ref, &xsink);
+    ValueHolder static_holder(parsed_static, &xsink);
+    ValueHolder self_holder(parsed_self, &xsink);
+
+    {
+        QoreIRFunction func("ir_exec_call_operands");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* c1 = builder.createConstInt(10);
+        auto* c2 = builder.createConstInt(32);
+        auto* call_inst = builder.createExprOp(QoreIROpcode::Call, *call_holder, {c1->result, c2->result});
+        builder.createReturn(call_inst->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor call-operand checks failed (call execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != 42) {
+            std::cerr << "IR executor call-operand checks failed (call result)\n";
+            return false;
+        }
+    }
+    {
+        QoreIRFunction func("ir_exec_call_indirect_operands");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* c1 = builder.createConstInt(7);
+        auto* call_inst = builder.createExprOp(QoreIROpcode::CallIndirect, *call_ref_holder, {c1->result});
+        builder.createReturn(call_inst->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor call-operand checks failed (call indirect execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != 7) {
+            std::cerr << "IR executor call-operand checks failed (call indirect result)\n";
+            return false;
+        }
+    }
+    {
+        QoreIRFunction func("ir_exec_call_static_operands");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* c1 = builder.createConstInt(4);
+        auto* call_inst = builder.createExprOp(QoreIROpcode::CallStatic, *static_holder, {c1->result});
+        builder.createReturn(call_inst->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor call-operand checks failed (call static execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != 10) {
+            std::cerr << "IR executor call-operand checks failed (call static result)\n";
+            return false;
+        }
+    }
+    {
+        ReferenceHolder<QoreListNode> ctor_args(new QoreListNode(autoTypeInfo), &xsink);
+        ReferenceHolder<QoreObject> obj(exec_class->execConstructor(*ctor_args, &xsink), &xsink);
+        if (xsink || !obj) {
+            std::cerr << "IR executor call-operand checks failed (self object)\n";
+            return false;
+        }
+        ObjectSubstitutionHelper obj_ctx(*obj, qore_class_private::get(*exec_class));
+
+        QoreIRFunction func("ir_exec_call_method_operands");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* c1 = builder.createConstInt(3);
+        auto* call_inst = builder.createExprOp(QoreIROpcode::CallMethod, *self_holder, {c1->result});
+        builder.createReturn(call_inst->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor call-operand checks failed (call method execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != 8) {
+            std::cerr << "IR executor call-operand checks failed (call method result)\n";
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool runIRExecutorArgClosureSmoke() {
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_load_arg");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* idx = builder.createConstInt(1);
+        auto* load = entry->appendInstruction<QoreIRInstruction>(QoreIROpcode::LoadArg);
+        load->result = func.createValue();
+        load->operands.push_back(idx->result);
+        builder.createReturn(load->result);
+
+        QoreValue return_value;
+        std::vector<QoreValue> args;
+        args.emplace_back(11);
+        args.emplace_back(55);
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr, &args) || xsink) {
+            std::cerr << "IR executor arg checks failed (execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != 55) {
+            std::cerr << "IR executor arg checks failed (result)\n";
+            return false;
+        }
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_load_closure");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        LocalVar closure_var("exec_closure_idx", bigIntTypeInfo);
+        auto* idx = builder.createConstInt(1);
+        auto* load = entry->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::LoadClosure, &closure_var);
+        load->result = func.createValue();
+        load->operands.push_back(idx->result);
+        builder.createReturn(load->result);
+
+        QoreValue return_value;
+        std::vector<QoreValue> closure_vals;
+        closure_vals.emplace_back(100);
+        closure_vals.emplace_back(200);
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr, nullptr, &closure_vals) || xsink) {
+            std::cerr << "IR executor closure checks failed (execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != 200) {
+            std::cerr << "IR executor closure checks failed (result)\n";
+            return false;
+        }
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_closure_store_load");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        LocalVar closure_var("exec_closure", bigIntTypeInfo);
+        auto* cval = builder.createConstInt(77);
+        builder.createStoreClosure(&closure_var, cval->result);
+        auto* load = builder.createLoadClosure(&closure_var);
+        builder.createReturn(load->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor closure checks failed (execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != 77) {
+            std::cerr << "IR executor closure checks failed (result)\n";
+            return false;
+        }
+    }
     return true;
 }
 
@@ -1521,6 +2449,691 @@ int main() {
             QoreValue(new QoreLogicalNotOperatorNode(nullptr, QoreValue(0))))) {
         return 1;
     }
+    {
+        ExceptionSink xsink;
+        QoreProgramHelper pgm_helper(xsink);
+        if (xsink) {
+            std::cerr << "Failed to initialize program for statement lowering tests\n";
+            return 1;
+        }
+        QoreProgram* program = *pgm_helper;
+        QoreProgramContextHelper program_context(program);
+        ProgramRuntimeExternalParseContextHelper parse_lock(program);
+        const QoreProgramLocation* stmt_loc = getTestLocation();
+        if (!stmt_loc) {
+            std::cerr << "Failed to resolve test location for statement lowering\n";
+            return 1;
+        }
+        {
+            StatementBlock* if_body = new StatementBlock(1, 1);
+            if_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(1), QoreValue(2)))));
+            StatementBlock* else_body = new StatementBlock(1, 1);
+            else_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QoreMinusOperatorNode(nullptr, QoreValue(2), QoreValue(1)))));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new IfStatement(1, 1, QoreValue(true), if_body, else_body));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_if_else", root,
+                {QoreIROpcode::BrIf, QoreIROpcode::Br});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* if_body = new StatementBlock(1, 1);
+            if_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(3), QoreValue(4)))));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new IfStatement(1, 1, QoreValue(false), if_body));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_if_no_else", root,
+                {QoreIROpcode::BrIf, QoreIROpcode::Br});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            QoreValue cond(new QoreLogicalEqualsOperatorNode(nullptr, QoreValue(1), QoreValue(1)));
+            QoreParseContext parse_context(program);
+            if (parse_init_value(cond, parse_context)) {
+                std::cerr << "Parse init failed for statement condition analysis\n";
+                return 1;
+            }
+            StatementBlock* if_body = new StatementBlock(1, 1);
+            if_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(11), QoreValue(12)))));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new IfStatement(1, 1, cond, if_body));
+            QoreIRFunction func("ir_stmt_if_analysis_bool");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (analysis): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (analysis): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (functionHasOpcode(func, QoreIROpcode::ToBool)) {
+                std::cerr << "Statement condition analysis should avoid ToBool\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            LocalVar cond_var("bool_cond", boolTypeInfo);
+            QoreValue cond_ref(new VarRefNode(stmt_loc, strdup("bool_cond"), &cond_var, false));
+            StatementBlock* if_body = new StatementBlock(1, 1);
+            if_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(13), QoreValue(14)))));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new IfStatement(1, 1, cond_ref, if_body));
+            QoreIRFunction func("ir_stmt_if_bool_var");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (bool var): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (bool var): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!functionHasOpcode(func, QoreIROpcode::ToBool)) {
+                std::cerr << "Typed bool condition should retain ToBool when value may be NOTHING\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            StatementBlock* body = new StatementBlock(1, 1);
+            body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(5), QoreValue(6)))));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new WhileStatement(1, 1, QoreValue(1), body));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_while", root,
+                {QoreIROpcode::BrIf, QoreIROpcode::Br, QoreIROpcode::ToBool});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* body = new StatementBlock(1, 1);
+            body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(6), QoreValue(7)))));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new DoWhileStatement(1, 1, QoreValue(1), body));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_do_while", root,
+                {QoreIROpcode::BrIf, QoreIROpcode::Br, QoreIROpcode::ToBool});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* body = new StatementBlock(1, 1);
+            body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(7), QoreValue(8)))));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new ForStatement(1, 1,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(1), QoreValue(1))),
+                QoreValue(1),
+                QoreValue(new QoreMinusOperatorNode(nullptr, QoreValue(4), QoreValue(2))),
+                body));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_for", root,
+                {QoreIROpcode::BrIf, QoreIROpcode::Br, QoreIROpcode::ToBool});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            LocalVar foreach_var("foreach_var", bigIntTypeInfo);
+            QoreListNode* foreach_list = new QoreListNode(bigIntTypeInfo);
+            foreach_list->push(QoreValue(1), nullptr);
+            StatementBlock* body = new StatementBlock(1, 1);
+            body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(9), QoreValue(10)))));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new ForEachStatement(1, 1,
+                QoreValue(new VarRefNode(stmt_loc, strdup("foreach_var"), &foreach_var, false)),
+                QoreValue(foreach_list),
+                body));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_foreach", root,
+                {QoreIROpcode::Foreach});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* exit_body = new StatementBlock(1, 1);
+            exit_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(11), QoreValue(12)))));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new OnBlockExitStatement(1, 1, exit_body, OBE_Unconditional));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_on_block_exit", root,
+                {QoreIROpcode::OnBlockExit});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new DebugStatement(1, 1,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(13), QoreValue(14)))));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_debug", root,
+                {QoreIROpcode::Debug});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* debug_body = new StatementBlock(1, 1);
+            debug_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(15), QoreValue(16)))));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new DebugStatement(1, 1, debug_body));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_debug_block", root,
+                {QoreIROpcode::Debug});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            ExceptionSink exec_xsink;
+            QoreValue return_value;
+            DebugStatement* debug_stmt = new DebugStatement(1, 1, QoreValue(1));
+            int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Debug, debug_stmt, return_value, &exec_xsink);
+            delete debug_stmt;
+            if (rc != 0 || exec_xsink) {
+                std::cerr << "IR debug statement execution failed\n";
+                return 1;
+            }
+        }
+        {
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new ReturnStatement(1, 1, QoreValue(42)));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_return_value", root,
+                {QoreIROpcode::Return}, {QoreIROpcode::ReturnNothing});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new ReturnStatement(1, 1));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_return_nothing", root,
+                {QoreIROpcode::ReturnNothing}, {QoreIROpcode::Return});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new ReturnStatement(1, 1, QoreValue(5)));
+            root->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(9), QoreValue(10)))));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_early_return", root,
+                {QoreIROpcode::Return}, {QoreIROpcode::AddInt});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* body = new StatementBlock(1, 1);
+            body->addStatement(new ContinueStatement(1, 1));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new WhileStatement(1, 1, QoreValue(1), body));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_while_continue", root,
+                {QoreIROpcode::BrIf, QoreIROpcode::Br, QoreIROpcode::ToBool});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* body = new StatementBlock(1, 1);
+            body->addStatement(new BreakStatement(1, 1));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new WhileStatement(1, 1, QoreValue(1), body));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_while_break", root,
+                {QoreIROpcode::BrIf, QoreIROpcode::Br, QoreIROpcode::ToBool});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            ExceptionSink sw_xsink;
+            StatementBlock* case_one = new StatementBlock(1, 1);
+            case_one->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(1), QoreValue(1)))));
+            StatementBlock* case_gt = new StatementBlock(1, 1);
+            case_gt->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QoreMinusOperatorNode(nullptr, QoreValue(5), QoreValue(2)))));
+            StatementBlock* case_re = new StatementBlock(1, 1);
+            case_re->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(2), QoreValue(3)))));
+            StatementBlock* case_def = new StatementBlock(1, 1);
+            case_def->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QoreMinusOperatorNode(nullptr, QoreValue(9), QoreValue(4)))));
+            SimpleRefHolder<QoreRegex> regex(new QoreRegex("foo", 0, &sw_xsink));
+            if (sw_xsink || !regex) {
+                std::cerr << "Regex init failed for switch statement tests\n";
+                return 1;
+            }
+            CaseNode* first = new CaseNode(stmt_loc, QoreValue(1), case_one);
+            SwitchStatement* sw = new SwitchStatement(first);
+            sw->setSwitch(QoreValue(3));
+            sw->addCase(new CaseNodeWithOperator(stmt_loc, QoreValue(5), case_gt,
+                QoreLogicalGreaterThanOperatorNode::doGreaterThan));
+            sw->addCase(new CaseNodeWithOperator(stmt_loc, QoreValue(3), nullptr,
+                QoreLogicalEqualsOperatorNode::softEqual));
+            sw->addCase(new CaseNodeRegex(stmt_loc, regex->refSelf(), case_re));
+            sw->addCase(new CaseNodeNegRegex(stmt_loc, regex->refSelf(), nullptr));
+            sw->addCase(new CaseNode(stmt_loc, QoreValue(), case_def, true));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(sw);
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_switch", root,
+                {QoreIROpcode::BrIf, QoreIROpcode::Br, QoreIROpcode::EqHard, QoreIROpcode::GtInt,
+                    QoreIROpcode::EqInt, QoreIROpcode::RegexMatchAny, QoreIROpcode::Not});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            QoreParseListNode* try_call_args = new QoreParseListNode(stmt_loc);
+            try_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new FunctionCallNode(stmt_loc, strdup("ir_call"), try_call_args))));
+            try_body->addStatement(new ThrowStatement(1, 1, QoreValue(new QoreStringNode("err"))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_try_catch", root,
+                {QoreIROpcode::Invoke, QoreIROpcode::LandingPad, QoreIROpcode::CatchException, QoreIROpcode::Throw,
+                    QoreIROpcode::Rethrow});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* if_body = new StatementBlock(1, 1);
+            if_body->addStatement(new ExpressionStatement(stmt_loc, QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(1), QoreValue(2)))));
+            QoreParseListNode* cond_args = new QoreParseListNode(stmt_loc);
+            QoreValue cond_call(new FunctionCallNode(stmt_loc, strdup("ir_call"), cond_args));
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new IfStatement(1, 1, cond_call, if_body, nullptr));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_try_if_invoke", root,
+                {QoreIROpcode::Invoke, QoreIROpcode::BrIf, QoreIROpcode::LandingPad, QoreIROpcode::CatchException});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* while_body = new StatementBlock(1, 1);
+            while_body->addStatement(new BreakStatement(1, 1));
+            QoreParseListNode* cond_args = new QoreParseListNode(stmt_loc);
+            QoreValue cond_call(new FunctionCallNode(stmt_loc, strdup("ir_call"), cond_args));
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new WhileStatement(1, 1, cond_call, while_body));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_try_while_invoke", root,
+                {QoreIROpcode::Invoke, QoreIROpcode::BrIf, QoreIROpcode::Br, QoreIROpcode::LandingPad,
+                    QoreIROpcode::CatchException});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* for_body = new StatementBlock(1, 1);
+            for_body->addStatement(new BreakStatement(1, 1));
+            QoreParseListNode* cond_args = new QoreParseListNode(stmt_loc);
+            QoreValue cond_call(new FunctionCallNode(stmt_loc, strdup("ir_call"), cond_args));
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ForStatement(1, 1, QoreValue(), cond_call, QoreValue(), for_body));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_try_for_invoke", root,
+                {QoreIROpcode::Invoke, QoreIROpcode::BrIf, QoreIROpcode::Br, QoreIROpcode::LandingPad,
+                    QoreIROpcode::CatchException});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            ExceptionSink sw_xsink;
+            StatementBlock* case_body = new StatementBlock(1, 1);
+            case_body->addStatement(new BreakStatement(1, 1));
+            CaseNode* first = new CaseNode(stmt_loc, QoreValue(1), case_body);
+            SwitchStatement* sw = new SwitchStatement(first);
+            QoreParseListNode* cond_args = new QoreParseListNode(stmt_loc);
+            QoreValue cond_call(new FunctionCallNode(stmt_loc, strdup("ir_call"), cond_args));
+            sw->setSwitch(cond_call);
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(sw);
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_try_switch_invoke", root,
+                {QoreIROpcode::Invoke, QoreIROpcode::BrIf, QoreIROpcode::Br, QoreIROpcode::LandingPad,
+                    QoreIROpcode::CatchException});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* case_eq = new StatementBlock(1, 1);
+            case_eq->addStatement(new BreakStatement(1, 1));
+            StatementBlock* case_soft = new StatementBlock(1, 1);
+            case_soft->addStatement(new BreakStatement(1, 1));
+            StatementBlock* case_gt = new StatementBlock(1, 1);
+            case_gt->addStatement(new BreakStatement(1, 1));
+            CaseNode* first = new CaseNode(stmt_loc, QoreValue(1), case_eq);
+            SwitchStatement* sw = new SwitchStatement(first);
+            sw->setSwitch(QoreValue(3));
+            sw->addCase(new CaseNodeWithOperator(stmt_loc, QoreValue(2), case_soft,
+                QoreLogicalEqualsOperatorNode::softEqual));
+            sw->addCase(new CaseNodeWithOperator(stmt_loc, QoreValue(5), case_gt,
+                QoreLogicalGreaterThanOperatorNode::doGreaterThan));
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(sw);
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            QoreIRFunction func("ir_stmt_try_switch_case_invoke");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (ir_stmt_try_switch_case_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (ir_stmt_try_switch_case_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!functionHasInvokeOpcode(func, QoreIROpcode::EqHard)
+                    || !functionHasInvokeOpcode(func, QoreIROpcode::EqInt)
+                    || !functionHasInvokeOpcode(func, QoreIROpcode::GtInt)) {
+                std::cerr << "Expected invoke switch case comparison opcodes (ir_stmt_try_switch_case_invoke)\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            QoreParseListNode* ret_args = new QoreParseListNode(stmt_loc);
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new FunctionCallNode(stmt_loc, strdup("ir_call"), ret_args))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_try_return_invoke", root,
+                {QoreIROpcode::Invoke, QoreIROpcode::Return, QoreIROpcode::LandingPad, QoreIROpcode::CatchException});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* then_body = new StatementBlock(1, 1);
+            then_body->addStatement(new ExpressionStatement(stmt_loc, QoreValue(0)));
+            QoreValue lhs(new FunctionCallNode(stmt_loc, strdup("ir_call"), new QoreParseListNode(stmt_loc)));
+            QoreValue rhs(new FunctionCallNode(stmt_loc, strdup("ir_call"), new QoreParseListNode(stmt_loc)));
+            QoreValue cond(new QoreLogicalAndOperatorNode(nullptr, lhs, rhs));
+            IfStatement* if_stmt = new IfStatement(1, 1, cond, then_body, nullptr);
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(if_stmt);
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            QoreIRFunction func("ir_stmt_try_if_logical_invoke");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (ir_stmt_try_if_logical_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (shouldPrintIR()) {
+                QoreIRPrinter::print(func, std::cout);
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (ir_stmt_try_if_logical_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!functionHasInvokeOpcode(func, QoreIROpcode::ToBool)) {
+                std::cerr << "Expected invoke to.bool opcode (ir_stmt_try_if_logical_invoke)\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            LocalVar try_inc("try_inc", bigIntTypeInfo);
+            try_inc.parseAssigned();
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("try_inc"), &try_inc, false))))));
+            try_body->addStatement(new ExpressionStatement(stmt_loc, QoreValue(0)));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            QoreIRFunction func("ir_stmt_try_lvalue_invoke");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (ir_stmt_try_lvalue_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (shouldPrintIR()) {
+                QoreIRPrinter::print(func, std::cout);
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (ir_stmt_try_lvalue_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!functionHasOpcode(func, QoreIROpcode::Invoke)
+                    || !functionHasInvokeOpcode(func, QoreIROpcode::PreIncLValue)) {
+                std::cerr << "Expected invoke pre-inc lvalue opcode (ir_stmt_try_lvalue_invoke)\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            LocalVar try_list("try_list", listTypeInfo);
+            try_list.parseAssigned();
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            QoreValue list_ref(new VarRefNode(nullptr, strdup("try_list"), &try_list, false));
+            QoreValue index_ref(0);
+            QoreValue list_elem(new QoreSquareBracketsOperatorNode(nullptr, list_ref, index_ref));
+            try_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusEqualsOperatorNode(nullptr, list_elem, QoreValue(1)))));
+            try_body->addStatement(new ExpressionStatement(stmt_loc, QoreValue(0)));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            QoreIRFunction func("ir_stmt_try_lvalue_assign_invoke");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (ir_stmt_try_lvalue_assign_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (ir_stmt_try_lvalue_assign_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!functionHasOpcode(func, QoreIROpcode::Invoke)
+                    || !functionHasInvokeOpcode(func, QoreIROpcode::AddAssignLValue)) {
+                std::cerr << "Expected invoke add-assign lvalue opcode (ir_stmt_try_lvalue_assign_invoke)\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new RethrowStatement(1, 1, QoreValue(new QoreStringNode("boom"))));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_rethrow_args", root,
+                {QoreIROpcode::Throw});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new BreakStatement(1, 1));
+            QoreIRFunction func("ir_stmt_break_invalid");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Expected failure for break statement without target\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new ContinueStatement(1, 1));
+            QoreIRFunction func("ir_stmt_continue_invalid");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Expected failure for continue statement without target\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new ThreadExitStatement(stmt_loc));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_thread_exit", root,
+                {QoreIROpcode::ThreadExit});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        if (xsink) {
+            std::cerr << "Statement lowering tests raised an exception\n";
+            return 1;
+        }
+    }
     if (!lowerAndExpectOpcode("ir_eq_int",
             QoreValue(new QoreLogicalEqualsOperatorNode(nullptr, QoreValue(5), QoreValue(5))),
             QoreIROpcode::EqInt)) {
@@ -1665,6 +3278,20 @@ int main() {
             QoreIROpcode::ShrAssignAny)) {
         return 1;
     }
+    LocalVar date_shift_var("date_shift_var", dateTypeInfo);
+    date_shift_var.parseAssigned();
+    if (!parseExpectFailure("parse_shift_left_equals_date",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("date_shift_var"), &date_shift_var, false)),
+                QoreValue(1))))) {
+        return 1;
+    }
+    if (!parseExpectFailure("parse_shift_right_equals_date",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("date_shift_var"), &date_shift_var, false)),
+                QoreValue(1))))) {
+        return 1;
+    }
     LocalVar assign_local("assign_local", bigIntTypeInfo);
     LocalVar assign_closure("assign_closure", bigIntTypeInfo);
     Var* assign_global = new Var(nullptr, "assign_global");
@@ -1719,6 +3346,7 @@ int main() {
     }
     LocalVar list_var("list_var", autoTypeInfo);
     LocalVar hash_var("hash_var", autoTypeInfo);
+    LocalVar string_var("string_var", stringTypeInfo);
     if (!lowerAndExpectOpcode("ir_range",
             QoreValue(new QoreRangeOperatorNode(nullptr, QoreValue(1), QoreValue(3))),
             QoreIROpcode::RangeAny)) {
@@ -2704,6 +4332,94 @@ int main() {
                 QoreValue(1))))) {
         return 1;
     }
+    if (!lowerExpectFailure("ir_assign_lvalue_range_string",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(new QoreStringNode("x")))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_plus_equals_lvalue_range_string",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(new QoreStringNode("y")))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_minus_equals_lvalue_range_string",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(1))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_multiply_equals_lvalue_range_string",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(2))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_divide_equals_lvalue_range_string",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(2))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_modulo_equals_lvalue_range_string",
+            QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(2))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_and_equals_lvalue_range_string",
+            QoreValue(new QoreAndEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(1))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_or_equals_lvalue_range_string",
+            QoreValue(new QoreOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(1))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_xor_equals_lvalue_range_string",
+            QoreValue(new QoreXorEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(1))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_shift_left_equals_lvalue_range_string",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(1))))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_shift_right_equals_lvalue_range_string",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("string_var"), &string_var, false)),
+                    QoreValue(0), QoreValue(1))),
+                QoreValue(1))))) {
+        return 1;
+    }
     if (!lowerExpectFailure("ir_call_lower_fail",
             QoreValue(new FunctionCallNode(nullptr, strdup("ir_call"), nullptr)))) {
         return 1;
@@ -2717,6 +4433,18 @@ int main() {
         call_args->add(QoreValue(1), &call_loc);
         if (!lowerAndExpectOpcodeWithProgramSource("ir_call_with_args_lower",
                 call_lower_source,
+                QoreValue(new FunctionCallNode(&call_loc, strdup("ir_call"), call_args)),
+                QoreIROpcode::Call)) {
+            return 1;
+        }
+    }
+    {
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+            QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+            QoreValue(new QoreStringNode("k")))), &call_loc);
+        if (!lowerAndExpectOpcode("ir_call_with_deref_arg_lower",
                 QoreValue(new FunctionCallNode(&call_loc, strdup("ir_call"), call_args)),
                 QoreIROpcode::Call)) {
             return 1;
@@ -2745,10 +4473,48 @@ int main() {
     {
         QoreProgramLocation call_loc("ir_smoke", 1, 1);
         QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+            QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+            QoreValue(0))), &call_loc);
+        if (!lowerAndExpectOpcode("ir_self_call_with_deref_arg_lower",
+                QoreValue(new SelfFunctionCallNode(&call_loc, strdup("m"), call_args)),
+                QoreIROpcode::CallMethod)) {
+            return 1;
+        }
+    }
+    {
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+            QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+            QoreValue(new QoreStringNode("k")))), &call_loc);
+        if (!lowerAndExpectOpcode("ir_static_call_with_deref_arg_lower",
+                QoreValue(new StaticMethodCallNode(&call_loc, new NamedScope("IrCallClass"), call_args)),
+                QoreIROpcode::CallStatic)) {
+            return 1;
+        }
+    }
+    {
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
         call_args->add(QoreValue(1), &call_loc);
         if (!lowerAndExpectOpcode("ir_call_ref_with_args_lower",
                 QoreValue(new CallReferenceCallNode(&call_loc,
                     QoreValue(new VarRefNode(&call_loc, strdup("list_var"), &list_var, false)),
+                    call_args)),
+                QoreIROpcode::CallIndirect)) {
+            return 1;
+        }
+    }
+    {
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(1), &call_loc);
+        if (!lowerAndExpectOpcode("ir_call_ref_with_deref_callee_lower",
+                QoreValue(new CallReferenceCallNode(&call_loc,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                        QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false)),
+                        QoreValue(new QoreStringNode("cb")))),
                     call_args)),
                 QoreIROpcode::CallIndirect)) {
             return 1;
@@ -2766,6 +4532,19 @@ int main() {
             QoreValue(new CallReferenceCallNode(nullptr, QoreValue(1),
                 static_cast<QoreParseListNode*>(nullptr))))) {
         return 1;
+    }
+    {
+        const char* call_lower_source = "int sub ir_call(int $i) { return $i; }\n"
+            "int sub ir_call_ref(int $i) { return $i; }\n"
+            "class IrCallClass { int m(int $i) { return $i; } static int sm(int $i) { return $i; } }\n";
+        QoreProgramLocation call_loc("ir_smoke", 1, 1);
+        QoreParseListNode* call_args = new QoreParseListNode(&call_loc);
+        call_args->add(QoreValue(1), &call_loc);
+        if (!parseExpectFailureWithProgramSource("ir_call_ref_parse_fail_int",
+                call_lower_source,
+                QoreValue(new CallReferenceCallNode(&call_loc, QoreValue(1), call_args)))) {
+            return 1;
+        }
     }
     {
         QoreProgramLocation cast_loc("ir_smoke", 1, 1);
@@ -3186,9 +4965,23 @@ int main() {
             QoreIROpcode::BrIf)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodesWithParseInit("ir_null_coalescing_flow",
+            QoreValue(new QoreNullCoalescingOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(7))),
+            {QoreIROpcode::IsNullOrNothing, QoreIROpcode::BrIf, QoreIROpcode::Phi})) {
+        return 1;
+    }
     if (!lowerAndExpectOpcode("ir_value_coalescing",
             QoreValue(new QoreValueCoalescingOperatorNode(nullptr, QoreValue(false), QoreValue(9))),
             QoreIROpcode::BrIf)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodesWithParseInit("ir_value_coalescing_flow",
+            QoreValue(new QoreValueCoalescingOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(9))),
+            {QoreIROpcode::ToBool, QoreIROpcode::BrIf, QoreIROpcode::Phi})) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_ternary",
@@ -3196,20 +4989,514 @@ int main() {
             QoreIROpcode::BrIf)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodesWithParseInit("ir_ternary_flow",
+            QoreValue(new QoreQuestionMarkOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(1),
+                QoreValue(2))),
+            {QoreIROpcode::ToBool, QoreIROpcode::BrIf, QoreIROpcode::Phi})) {
+        return 1;
+    }
     if (!lowerAndExpectOpcode("ir_foldl",
             QoreValue(new QoreFoldlOperatorNode(nullptr, QoreValue(1), QoreValue(2))),
             QoreIROpcode::FoldlAny)) {
         return 1;
     }
-    if (!lowerAndExpectOpcode("ir_foldr",
-            QoreValue(new QoreFoldrOperatorNode(nullptr, QoreValue(1), QoreValue(2))),
-            QoreIROpcode::FoldrAny)) {
-        return 1;
+    {
+        ExceptionSink xsink;
+        QoreProgramHelper pgm_helper(xsink);
+        if (xsink) {
+            std::cerr << "Failed to initialize program for invoke lowering tests\n";
+            return 1;
+        }
+        QoreProgram* program = *pgm_helper;
+        QoreProgramContextHelper program_context(program);
+        ProgramRuntimeExternalParseContextHelper parse_lock(program);
+        QoreProgramLocation stmt_loc("ir_smoke", 1, 1);
+        const QoreProgramLocation* stmt_loc_ptr = &stmt_loc;
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreFoldlOperatorNode(nullptr, QoreValue(1), QoreValue(2)))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_foldl_invoke", root, QoreIROpcode::FoldlAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        if (!lowerAndExpectOpcode("ir_foldr",
+                QoreValue(new QoreFoldrOperatorNode(nullptr, QoreValue(1), QoreValue(2))),
+                QoreIROpcode::FoldrAny)) {
+            return 1;
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreFoldrOperatorNode(nullptr, QoreValue(1), QoreValue(2)))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_foldr_invoke", root, QoreIROpcode::FoldrAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        if (!lowerAndExpectOpcode("ir_map",
+                QoreValue(new QoreMapOperatorNode(nullptr, QoreValue(1), QoreValue(2))),
+                QoreIROpcode::MapAny)) {
+            return 1;
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreMapOperatorNode(nullptr, QoreValue(1), QoreValue(2)))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_map_invoke", root, QoreIROpcode::MapAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        if (!lowerAndExpectOpcode("ir_select",
+                QoreValue(new QoreSelectOperatorNode(nullptr, QoreValue(1), QoreValue(2))),
+                QoreIROpcode::SelectAny)) {
+            return 1;
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreSelectOperatorNode(nullptr, QoreValue(1), QoreValue(2)))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_select_invoke", root, QoreIROpcode::SelectAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        if (!lowerAndExpectOpcode("ir_map_select",
+                QoreValue(new QoreMapSelectOperatorNode(nullptr, QoreValue(1), QoreValue(2), QoreValue(3))),
+                QoreIROpcode::MapSelectAny)) {
+            return 1;
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreMapSelectOperatorNode(nullptr, QoreValue(1), QoreValue(2), QoreValue(3)))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_map_select_invoke", root,
+                QoreIROpcode::MapSelectAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        if (!lowerAndExpectOpcode("ir_hash_map",
+                QoreValue(new QoreHashMapOperatorNode(nullptr, QoreValue(1), QoreValue(2), QoreValue(3))),
+                QoreIROpcode::HashMapAny)) {
+            return 1;
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreHashMapOperatorNode(nullptr, QoreValue(1), QoreValue(2), QoreValue(3)))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_hash_map_invoke", root, QoreIROpcode::HashMapAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        if (!lowerAndExpectOpcode("ir_hash_map_select",
+                QoreValue(new QoreHashMapSelectOperatorNode(nullptr, QoreValue(1), QoreValue(2), QoreValue(3),
+                    QoreValue(4))),
+                QoreIROpcode::HashMapSelectAny)) {
+            return 1;
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreHashMapSelectOperatorNode(nullptr, QoreValue(1), QoreValue(2), QoreValue(3),
+                    QoreValue(4)))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_hash_map_select_invoke", root,
+                QoreIROpcode::HashMapSelectAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
     }
-    if (!lowerAndExpectOpcode("ir_map",
-            QoreValue(new QoreMapOperatorNode(nullptr, QoreValue(1), QoreValue(2))),
-            QoreIROpcode::MapAny)) {
-        return 1;
+    {
+        ExceptionSink xsink;
+        SimpleRefHolder<QoreRegex> regex(new QoreRegex("a", 0, &xsink));
+        if (xsink) {
+            std::cerr << "Failed to create regex for match\n";
+            return 1;
+        }
+        if (!lowerAndExpectOpcode("ir_regex_match",
+                QoreValue(new QoreRegexMatchOperatorNode(nullptr, QoreValue("a"), regex->refSelf())),
+                QoreIROpcode::RegexMatchAny)) {
+            return 1;
+        }
+        if (!lowerAndExpectOpcode("ir_regex_extract",
+                QoreValue(new QoreRegexExtractOperatorNode(nullptr, QoreValue("a"), regex->refSelf())),
+                QoreIROpcode::RegexExtractAny)) {
+            return 1;
+        }
+        SimpleRefHolder<QoreRegexSubst> subst(new QoreRegexSubst("s/a/b/", 0, &xsink));
+        if (xsink) {
+            std::cerr << "Failed to create regex subst\n";
+            return 1;
+        }
+        LocalVar regex_subst_var("regex_subst_var", stringTypeInfo);
+        regex_subst_var.parseAssigned();
+        if (!lowerAndExpectOpcode("ir_regex_subst",
+                QoreValue(new QoreRegexSubstOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("regex_subst_var"), &regex_subst_var, false)),
+                    subst->refSelf())),
+                QoreIROpcode::RegexSubstAny)) {
+            return 1;
+        }
+        if (!lowerAndExpectOpcode("ir_exists",
+                QoreValue(new QoreExistsOperatorNode(nullptr, QoreValue(1))),
+                QoreIROpcode::ExistsAny)) {
+            return 1;
+        }
+        if (!lowerAndExpectOpcode("ir_elements",
+                QoreValue(new QoreElementsOperatorNode(nullptr, QoreValue("abc"))),
+                QoreIROpcode::ElementsAny)) {
+            return 1;
+        }
+        {
+            ExceptionSink dot_xsink;
+            QoreProgramHelper pgm_helper(dot_xsink);
+            if (dot_xsink) {
+                std::cerr << "Failed to initialize QoreProgram (ir_dot_eval)\n";
+                return 1;
+            }
+            QoreProgram* program = *pgm_helper;
+            QoreProgramContextHelper program_context(program);
+            ProgramRuntimeExternalParseContextHelper parse_lock(program);
+            if (!parse_lock) {
+                std::cerr << "Failed to acquire parse lock (ir_dot_eval)\n";
+                return 1;
+            }
+            const char* dot_source = "class MyDot { int m() { return 7; } }\n";
+            program->parse(dot_source, "ir_smoke", &dot_xsink);
+            if (dot_xsink) {
+                std::cerr << "Failed to parse program source (ir_dot_eval)\n";
+                return 1;
+            }
+            const QoreClass* dot_class = program->findClass("MyDot", &dot_xsink);
+            if (dot_xsink || !dot_class) {
+                std::cerr << "Failed to resolve dot-eval class (ir_dot_eval)\n";
+                return 1;
+            }
+            LocalVar dot_obj_var("dot_obj", dot_class->getTypeInfo());
+            dot_obj_var.parseAssigned();
+            QoreParseContext parse_context(&dot_obj_var, program);
+            QoreProgramLocation dot_loc("ir_smoke", 1, 1);
+            QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+            MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("m"), dot_args);
+            QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+                QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj"), &dot_obj_var, false)),
+                method_call));
+            QoreValue parsed_expr(dot_expr);
+            if (parse_init_value(parsed_expr, parse_context)) {
+                std::cerr << "Parse init failed (ir_dot_eval)\n";
+                return 1;
+            }
+            ValueHolder expr_holder(parsed_expr, nullptr);
+            QoreIRFunction func("ir_dot_eval");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder, &parse_context);
+            std::string error;
+            QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+            if (!lowered.isValid()) {
+                std::cerr << "Lowering failed (ir_dot_eval): " << error << "\n";
+                return 1;
+            }
+            builder.createReturn(lowered);
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (ir_dot_eval): " << error << "\n";
+                return 1;
+            }
+            if (!functionHasOpcode(func, QoreIROpcode::DotEvalAny)) {
+                std::cerr << "Lowered function missing opcode (ir_dot_eval)\n";
+                return 1;
+            }
+        }
+    }
+    {
+        ExceptionSink xsink;
+        QoreProgramHelper pgm_helper(xsink);
+        if (xsink) {
+            std::cerr << "Failed to initialize program for invoke expr-op tests\n";
+            return 1;
+        }
+        QoreProgram* program = *pgm_helper;
+        QoreProgramContextHelper program_context(program);
+        ProgramRuntimeExternalParseContextHelper parse_lock(program);
+        QoreProgramLocation stmt_loc("ir_smoke", 1, 1);
+        const QoreProgramLocation* stmt_loc_ptr = &stmt_loc;
+
+        list_var.parseAssigned();
+        hash_var.parseAssigned();
+        string_var.parseAssigned();
+
+        SimpleRefHolder<QoreRegex> regex(new QoreRegex("a", 0, &xsink));
+        if (xsink) {
+            std::cerr << "Failed to create regex for invoke match\n";
+            return 1;
+        }
+        SimpleRefHolder<QoreRegexSubst> subst(new QoreRegexSubst("s/a/b/", 0, &xsink));
+        if (xsink) {
+            std::cerr << "Failed to create regex subst for invoke\n";
+            return 1;
+        }
+        LocalVar regex_subst_var("regex_subst_var_invoke", stringTypeInfo);
+        regex_subst_var.parseAssigned();
+
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreExtractOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                    QoreValue(0),
+                    QoreValue(1),
+                    QoreValue()))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_extract_invoke", root, QoreIROpcode::ExtractAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreRemoveOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false))))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_remove_invoke", root, QoreIROpcode::RemoveAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreKeysOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("hash_var"), &hash_var, false))))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_keys_invoke", root, QoreIROpcode::KeysAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreRegexMatchOperatorNode(nullptr, QoreValue("a"), regex->refSelf()))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_regex_match_invoke", root,
+                QoreIROpcode::RegexMatchAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreRegexExtractOperatorNode(nullptr, QoreValue("a"), regex->refSelf()))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_regex_extract_invoke", root,
+                QoreIROpcode::RegexExtractAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreRegexSubstOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("regex_subst_var_invoke"), &regex_subst_var, false)),
+                    subst->refSelf()))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_regex_subst_invoke", root,
+                QoreIROpcode::RegexSubstAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreExistsOperatorNode(nullptr, QoreValue(1)))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_exists_invoke", root, QoreIROpcode::ExistsAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreElementsOperatorNode(nullptr, QoreValue("abc")))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_elements_invoke", root,
+                QoreIROpcode::ElementsAny);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            const char* dot_source = "class MyDotInvoke { int m() { return 7; } }\n";
+            program->parse(dot_source, "ir_smoke", &xsink);
+            if (xsink) {
+                std::cerr << "Failed to parse program source (ir_dot_eval_invoke)\n";
+                return 1;
+            }
+            const QoreClass* dot_class = program->findClass("MyDotInvoke", &xsink);
+            if (xsink || !dot_class) {
+                std::cerr << "Failed to resolve dot-eval class (ir_dot_eval_invoke)\n";
+                return 1;
+            }
+            LocalVar dot_obj_var("dot_obj_invoke", dot_class->getTypeInfo());
+            dot_obj_var.parseAssigned();
+            QoreParseContext parse_context(&dot_obj_var, program);
+            QoreProgramLocation dot_loc("ir_smoke", 1, 1);
+            QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+            MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("m"), dot_args);
+            QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+                QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_invoke"), &dot_obj_var, false)),
+                method_call));
+            QoreValue parsed_expr(dot_expr);
+            if (parse_init_value(parsed_expr, parse_context)) {
+                std::cerr << "Parse init failed (ir_dot_eval_invoke)\n";
+                return 1;
+            }
+
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1, parsed_expr));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+
+            QoreIRFunction func("ir_dot_eval_invoke");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder, &parse_context);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (ir_dot_eval_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (ir_dot_eval_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!functionHasOpcode(func, QoreIROpcode::Invoke)
+                    || !functionHasInvokeOpcode(func, QoreIROpcode::DotEvalAny)) {
+                std::cerr << "Lowered function missing invoke opcode (ir_dot_eval_invoke)\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
     }
     if (!lowerAndExpectOpcode("ir_add_float",
             QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(1.5), QoreValue(2.25))),
@@ -3266,8 +5553,87 @@ int main() {
             QoreIROpcode::ConstDate)) {
         return 1;
     }
+    if (!lowerAndExpectOpcode("ir_add_date_date",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)),
+                QoreValue(new DateTimeNode(2020, 1, 3, 4, 5, 6, 7, false)))),
+            QoreIROpcode::AddAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_add_date_rel",
+            QoreValue(new QorePlusOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)),
+                QoreValue(new DateTimeNode(0, 0, 1, 2, 3, 4, 5, true)))),
+            QoreIROpcode::AddAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_sub_date_date",
+            QoreValue(new QoreMinusOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)),
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)))),
+            QoreIROpcode::SubAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_sub_date_rel",
+            QoreValue(new QoreMinusOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)),
+                QoreValue(new DateTimeNode(0, 0, 1, 2, 3, 4, 5, true)))),
+            QoreIROpcode::SubAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_eq_date_date",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)),
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)))),
+            QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_ne_date_date",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)),
+                QoreValue(new DateTimeNode(0, 0, 1, 2, 3, 4, 5, true)))),
+            QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_lt_date_date",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)),
+                QoreValue(new DateTimeNode(2020, 1, 3, 4, 5, 6, 7, false)))),
+            QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_le_date_date",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)),
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)))),
+            QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_gt_date_date",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 3, 4, 5, 6, 7, false)),
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)))),
+            QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_ge_date_date",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 3, 4, 5, 6, 7, false)),
+                QoreValue(new DateTimeNode(2020, 1, 3, 4, 5, 6, 7, false)))),
+            QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_cmp_date_date",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new DateTimeNode(2020, 1, 3, 4, 5, 6, 7, false)),
+                QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)))),
+            QoreIROpcode::CmpAny)) {
+        return 1;
+    }
     const QoreTypeInfo* analysis_list_int_type = qore_get_complex_list_type(bigIntTypeInfo);
+    const QoreTypeInfo* analysis_list_or_nothing_type = qore_get_complex_list_or_nothing_type(bigIntTypeInfo);
     const QoreTypeInfo* analysis_hash_int_type = qore_get_complex_hash_type(bigIntTypeInfo);
+    const QoreTypeInfo* analysis_hash_or_nothing_type = qore_get_complex_hash_or_nothing_type(bigIntTypeInfo);
     const QoreTypeInfo* analysis_range_type = qore_get_complex_list_type(bigIntTypeInfo);
     LocalVar analysis_int_left("analysis_int_left", bigIntTypeInfo);
     LocalVar analysis_int_right("analysis_int_right", bigIntTypeInfo);
@@ -3287,22 +5653,29 @@ int main() {
     analysis_date_right.parseAssigned();
     LocalVar analysis_list_left("analysis_list_left", analysis_list_int_type);
     LocalVar analysis_list_maybe_left("analysis_list_maybe_left", analysis_list_int_type);
+    LocalVar analysis_list_or_nothing("analysis_list_or_nothing", analysis_list_or_nothing_type);
     const QoreTypeInfo* analysis_keys_type = qore_get_complex_list_type(stringTypeInfo);
     LocalVar analysis_key_list_maybe("analysis_key_list_maybe", analysis_keys_type);
     LocalVar analysis_hash_left("analysis_hash_left", analysis_hash_int_type);
     LocalVar analysis_hash_maybe_left("analysis_hash_maybe_left", analysis_hash_int_type);
+    LocalVar analysis_hash_or_nothing("analysis_hash_or_nothing", analysis_hash_or_nothing_type);
     LocalVar analysis_object_left("analysis_object_left", objectTypeInfo);
     LocalVar analysis_object_maybe_left("analysis_object_maybe_left", objectTypeInfo);
     LocalVar analysis_object_right("analysis_object_right", objectTypeInfo);
     LocalVar analysis_object_maybe_right("analysis_object_maybe_right", objectTypeInfo);
     LocalVar analysis_string_right("analysis_string_right", stringTypeInfo);
     LocalVar analysis_string_maybe_right("analysis_string_maybe_right", stringTypeInfo);
+    LocalVar analysis_string_subst("analysis_string_subst", stringTypeInfo);
+    LocalVar analysis_string_subst_maybe("analysis_string_subst_maybe", stringTypeInfo);
     LocalVar analysis_binary_left("analysis_binary_left", binaryTypeInfo);
     LocalVar analysis_binary_maybe_left("analysis_binary_maybe_left", binaryTypeInfo);
     LocalVar analysis_binary_maybe_right("analysis_binary_maybe_right", binaryTypeInfo);
     analysis_list_left.parseAssigned();
+    analysis_list_or_nothing.parseAssigned();
     analysis_hash_left.parseAssigned();
+    analysis_hash_or_nothing.parseAssigned();
     analysis_string_right.parseAssigned();
+    analysis_string_subst.parseAssigned();
     analysis_binary_left.parseAssigned();
     analysis_object_left.parseAssigned();
     analysis_object_right.parseAssigned();
@@ -3354,6 +5727,79 @@ int main() {
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
             analysis_range_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_map_list_assigned",
+            QoreValue(new QoreMapOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            analysis_list_int_type, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_map_list_maybe",
+            QoreValue(new QoreMapOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            analysis_list_int_type, true, true, false)) {
+        return 1;
+    }
+    {
+        QoreParseContext map_context;
+        QoreValue map_expr(new QoreMapOperatorNode(nullptr, QoreValue(1),
+            QoreValue(new VarRefNode(nullptr, strdup("analysis_list_or_nothing"),
+                &analysis_list_or_nothing, false))));
+        if (parse_init_value(map_expr, map_context)) {
+            std::cerr << "Parse init failed (analysis_map_list_or_nothing)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(map_expr, nullptr);
+        const QoreParseAnalysis& analysis = map_context.analysis;
+        // Note: map + *list<T> yields no KnownTypeInfo in parse analysis (iterator not list/iterator at parse time).
+        if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+            std::cerr << "Parse analysis mismatch (analysis_map_list_or_nothing)\n";
+            return 1;
+        }
+    }
+    if (!expectParseAnalysisFlags("analysis_map_nothing_iter",
+            QoreValue(new QoreMapOperatorNode(nullptr, QoreValue(1), QoreValue())),
+            nothingTypeInfo, true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_foldl_list_assigned",
+            QoreValue(new QoreFoldlOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            bigIntTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_foldl_list_maybe",
+            QoreValue(new QoreFoldlOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            bigIntTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_foldl_nothing_iter",
+            QoreValue(new QoreFoldlOperatorNode(nullptr, QoreValue(1), QoreValue())),
+            nothingTypeInfo, true, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_foldr_list_assigned",
+            QoreValue(new QoreFoldrOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            bigIntTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_foldr_list_maybe",
+            QoreValue(new QoreFoldrOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            bigIntTypeInfo, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_foldr_nothing_iter",
+            QoreValue(new QoreFoldrOperatorNode(nullptr, QoreValue(1), QoreValue())),
+            nothingTypeInfo, true, false, true)) {
         return 1;
     }
     if (!expectParseAnalysisFlags("analysis_plus_date_maybe_left",
@@ -3563,6 +6009,14 @@ int main() {
             get_or_nothing_type_check(bigIntTypeInfo), true, false, true)) {
         return 1;
     }
+    if (!expectParseAnalysisFlags("analysis_hash_deref_or_nothing",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_or_nothing"),
+                    &analysis_hash_or_nothing, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            get_or_nothing_type_check(bigIntTypeInfo), true, false, true)) {
+        return 1;
+    }
     if (!expectParseAnalysisFlags("analysis_hash_deref_maybe",
             QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
@@ -3586,6 +6040,29 @@ int main() {
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
                     &analysis_string_maybe_right, false)))),
             get_or_nothing_type_check(bigIntTypeInfo), true, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_object_deref_assigned",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            nullptr, false, false, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_object_deref_maybe",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            nullptr, false, false, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_object_deref_maybe_key",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                    &analysis_string_maybe_right, false)))),
+            nullptr, false, false, false)) {
         return 1;
     }
     {
@@ -3632,6 +6109,25 @@ int main() {
             analysis_keys_type, true, true, false)) {
         return 1;
     }
+    {
+        LocalVar analysis_hash_unknown("analysis_hash_unknown", hashTypeInfo);
+        QoreParseContext keys_context(&analysis_hash_unknown);
+        QoreValue keys_expr(new QoreKeysOperatorNode(nullptr,
+            QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_unknown"), &analysis_hash_unknown, false))));
+        if (parse_init_value(keys_expr, keys_context)) {
+            std::cerr << "Parse init failed (analysis_keys_or_nothing)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(keys_expr, nullptr);
+        const QoreParseAnalysis& analysis = keys_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !QoreTypeInfo::equal(analysis.known_type, analysis_keys_type)) {
+            std::cerr << "Parse analysis mismatch (analysis_keys_or_nothing)\n";
+            return 1;
+        }
+    }
     if (!expectParseAnalysisFlags("analysis_keys_object_assigned",
             QoreValue(new QoreKeysOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)))),
@@ -3650,6 +6146,25 @@ int main() {
                     &analysis_int_unassigned, false)))),
             bigIntTypeInfo, true, false, false)) {
         return 1;
+    }
+    {
+        LocalVar analysis_remove_unknown("analysis_remove_unknown", bigIntTypeInfo);
+        QoreParseContext remove_context(&analysis_remove_unknown);
+        QoreValue remove_expr(new QoreRemoveOperatorNode(nullptr,
+            QoreValue(new VarRefNode(nullptr, strdup("analysis_remove_unknown"), &analysis_remove_unknown, false))));
+        if (parse_init_value(remove_expr, remove_context)) {
+            std::cerr << "Parse init failed (analysis_remove_or_nothing)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(remove_expr, nullptr);
+        const QoreParseAnalysis& analysis = remove_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !QoreTypeInfo::equal(analysis.known_type, bigIntTypeInfo)) {
+            std::cerr << "Parse analysis mismatch (analysis_remove_or_nothing)\n";
+            return 1;
+        }
     }
     if (!expectParseAnalysisFlagsWithProgram("analysis_cast_list_assigned",
             QoreValue(new QoreParseCastOperatorNode(nullptr,
@@ -3741,6 +6256,175 @@ int main() {
             QoreValue(new QoreImplicitArgumentNode(nullptr, 1)),
             nullptr, false, false, false)) {
         return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_exists_assigned",
+            QoreValue(new QoreExistsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+            boolTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_exists_maybe",
+            QoreValue(new QoreExistsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned_late"),
+                    &analysis_int_unassigned_late, false)))),
+            boolTypeInfo, true, true, false)) {
+        return 1;
+    }
+    {
+        LocalVar analysis_exists_unknown("analysis_exists_unknown", bigIntTypeInfo);
+        QoreParseContext exists_context(&analysis_exists_unknown);
+        QoreValue exists_expr(new QoreExistsOperatorNode(nullptr,
+            QoreValue(new VarRefNode(nullptr, strdup("analysis_exists_unknown"), &analysis_exists_unknown, false))));
+        if (parse_init_value(exists_expr, exists_context)) {
+            std::cerr << "Parse init failed (analysis_exists_or_nothing)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(exists_expr, nullptr);
+        const QoreParseAnalysis& analysis = exists_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !QoreTypeInfo::equal(analysis.known_type, boolTypeInfo)) {
+            std::cerr << "Parse analysis mismatch (analysis_exists_or_nothing)\n";
+            return 1;
+        }
+    }
+    if (!expectParseAnalysisFlags("analysis_elements_list_assigned",
+            QoreValue(new QoreElementsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            bigIntTypeInfo, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_elements_list_maybe",
+            QoreValue(new QoreElementsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            bigIntTypeInfo, true, true, false)) {
+        return 1;
+    }
+    {
+        LocalVar analysis_elements_unknown("analysis_elements_unknown", listTypeInfo);
+        QoreParseContext elements_context(&analysis_elements_unknown);
+        QoreValue elements_expr(new QoreElementsOperatorNode(nullptr,
+            QoreValue(new VarRefNode(nullptr, strdup("analysis_elements_unknown"), &analysis_elements_unknown, false))));
+        if (parse_init_value(elements_expr, elements_context)) {
+            std::cerr << "Parse init failed (analysis_elements_or_nothing)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(elements_expr, nullptr);
+        const QoreParseAnalysis& analysis = elements_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !QoreTypeInfo::equal(analysis.known_type, bigIntTypeInfo)) {
+            std::cerr << "Parse analysis mismatch (analysis_elements_or_nothing)\n";
+            return 1;
+        }
+    }
+    {
+        ExceptionSink xsink;
+        SimpleRefHolder<QoreRegex> regex(new QoreRegex("a", 0, &xsink));
+        if (xsink) {
+            std::cerr << "Failed to create regex for parse-analysis checks\n";
+            return 1;
+        }
+        if (!expectParseAnalysisFlags("analysis_regex_match_assigned",
+                QoreValue(new QoreRegexMatchOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"),
+                        &analysis_string_right, false)),
+                    regex->refSelf())),
+                boolTypeInfo, true, true, true)) {
+            return 1;
+        }
+        if (!expectParseAnalysisFlags("analysis_regex_match_maybe",
+                QoreValue(new QoreRegexMatchOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                        &analysis_string_maybe_right, false)),
+                    regex->refSelf())),
+                boolTypeInfo, true, true, false)) {
+            return 1;
+        }
+        const QoreTypeInfo* regex_extract_type = qore_get_complex_list_or_nothing_type(stringOrNothingTypeInfo);
+        if (!expectParseAnalysisFlags("analysis_regex_extract_assigned",
+                QoreValue(new QoreRegexExtractOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"),
+                        &analysis_string_right, false)),
+                    regex->refSelf())),
+                regex_extract_type, true, false, true)) {
+            return 1;
+        }
+        if (!expectParseAnalysisFlags("analysis_regex_extract_maybe",
+                QoreValue(new QoreRegexExtractOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                        &analysis_string_maybe_right, false)),
+                    regex->refSelf())),
+                regex_extract_type, true, false, false)) {
+            return 1;
+        }
+        {
+            QoreParseContext regex_context;
+            LocalVar analysis_regex_string("analysis_regex_string", stringTypeInfo);
+            analysis_regex_string.parseAssigned();
+            QoreValue regex_expr(new QoreRegexExtractOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_regex_string"), &analysis_regex_string, false)),
+                regex->refSelf()));
+            if (parse_init_value(regex_expr, regex_context)) {
+                std::cerr << "Parse init failed (analysis_regex_extract_or_nothing)\n";
+                return 1;
+            }
+            ValueHolder expr_holder(regex_expr, nullptr);
+            const QoreParseAnalysis& analysis = regex_context.analysis;
+            if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                || QoreTypeInfo::parseReturns(analysis.known_type, NT_NOTHING) == QTI_NOT_EQUAL) {
+                std::cerr << "Parse analysis mismatch (analysis_regex_extract_or_nothing)\n";
+                return 1;
+            }
+        }
+        SimpleRefHolder<QoreRegexSubst> subst(new QoreRegexSubst("s/a/b/", 0, &xsink));
+        if (xsink) {
+            std::cerr << "Failed to create regex subst for parse-analysis checks\n";
+            return 1;
+        }
+        if (!expectParseAnalysisFlags("analysis_regex_subst_assigned",
+                QoreValue(new QoreRegexSubstOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_subst"),
+                        &analysis_string_subst, false)),
+                    subst->refSelf())),
+                stringTypeInfo, true, false, true)) {
+            return 1;
+        }
+        if (!expectParseAnalysisFlags("analysis_regex_subst_maybe",
+                QoreValue(new QoreRegexSubstOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_subst_maybe"),
+                        &analysis_string_subst_maybe, false)),
+                    subst->refSelf())),
+                stringTypeInfo, true, false, false)) {
+            return 1;
+        }
+        {
+            QoreParseContext regex_context;
+            LocalVar analysis_regex_subst_string("analysis_regex_subst_string", stringTypeInfo);
+            analysis_regex_subst_string.parseAssigned();
+            QoreValue regex_expr(new QoreRegexSubstOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_regex_subst_string"),
+                    &analysis_regex_subst_string, false)),
+                subst->refSelf()));
+            if (parse_init_value(regex_expr, regex_context)) {
+                std::cerr << "Parse init failed (analysis_regex_subst_or_nothing)\n";
+                return 1;
+            }
+            ValueHolder expr_holder(regex_expr, nullptr);
+            const QoreParseAnalysis& analysis = regex_context.analysis;
+            if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                || !QoreTypeInfo::equal(analysis.known_type, stringTypeInfo)) {
+                std::cerr << "Parse analysis mismatch (analysis_regex_subst_or_nothing)\n";
+                return 1;
+            }
+        }
     }
     if (!expectParseAnalysisFlags("analysis_shift_list_assigned",
             QoreValue(new QoreShiftOperatorNode(nullptr,
@@ -4289,6 +6973,258 @@ int main() {
     }
 }
 {
+    const char* dot_source = "class IrDotObj { }\n"
+        "class IrDotClass { int m(int $i) { return $i + 1; } string ms(int $i) { return \"s\"; }"
+        " date md(int $i) { return 2005-01-05; } IrDotObj mo(int $i) { return new IrDotObj(); }"
+        " *int mn(int $i) { return NOTHING; } *string msn(int $i) { return NOTHING; }"
+        " *date mdn(int $i) { return NOTHING; } *IrDotObj mon(int $i) { return NOTHING; } }\n";
+    ExceptionSink xsink;
+    QoreProgramHelper pgm_helper(xsink);
+    if (xsink) {
+        std::cerr << "Failed to initialize QoreProgram (analysis_dot_eval)\n";
+        return 1;
+    }
+    QoreProgram* program = *pgm_helper;
+    QoreProgramContextHelper program_context(program);
+    ProgramRuntimeExternalParseContextHelper parse_lock(program);
+    if (!parse_lock) {
+        std::cerr << "Failed to acquire parse lock (analysis_dot_eval)\n";
+        return 1;
+    }
+    program->parse(dot_source, "ir_smoke", &xsink);
+    if (xsink) {
+        std::cerr << "Failed to parse program source (analysis_dot_eval)\n";
+        return 1;
+    }
+    const QoreClass* dot_class = program->findClass("IrDotClass", &xsink);
+    const QoreClass* dot_obj_class = program->findClass("IrDotObj", &xsink);
+    if (xsink || !dot_class || !dot_obj_class) {
+        std::cerr << "Failed to resolve dot-eval class (analysis_dot_eval)\n";
+        return 1;
+    }
+    QoreProgramLocation dot_loc("ir_smoke", 1, 1);
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("m"), dot_args);
+        LocalVar dot_obj("dot_obj", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_assigned)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !QoreTypeInfo::equal(analysis.known_type, bigIntTypeInfo)) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_assigned)\n";
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("m"), dot_args);
+        LocalVar dot_obj_maybe("dot_obj_maybe", dot_class->getTypeInfo());
+        QoreParseContext dot_context(&dot_obj_maybe, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_maybe"), &dot_obj_maybe, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_maybe)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !QoreTypeInfo::equal(analysis.known_type, bigIntTypeInfo)) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_maybe)\n";
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("ms"), dot_args);
+        LocalVar dot_obj("dot_obj_str", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_str"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_string)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !QoreTypeInfo::equal(analysis.known_type, stringTypeInfo)) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_string)\n";
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("md"), dot_args);
+        LocalVar dot_obj("dot_obj_date", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_date"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_date)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !QoreTypeInfo::equal(analysis.known_type, dateTypeInfo)) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_date)\n";
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("mo"), dot_args);
+        LocalVar dot_obj("dot_obj_obj", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_obj"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_object)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !QoreTypeInfo::equal(analysis.known_type, dot_obj_class->getTypeInfo())) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_object)\n";
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("mn"), dot_args);
+        LocalVar dot_obj("dot_obj_opt_int", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_opt_int"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_opt_int)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || QoreTypeInfo::parseReturns(analysis.known_type, NT_NOTHING) == QTI_NOT_EQUAL
+            || QoreTypeInfo::parseReturns(analysis.known_type, NT_INT) == QTI_NOT_EQUAL) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_opt_int)\n";
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("msn"), dot_args);
+        LocalVar dot_obj("dot_obj_opt_string", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_opt_string"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_opt_string)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || QoreTypeInfo::parseReturns(analysis.known_type, NT_NOTHING) == QTI_NOT_EQUAL
+            || QoreTypeInfo::parseReturns(analysis.known_type, NT_STRING) == QTI_NOT_EQUAL) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_opt_string)\n";
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("mdn"), dot_args);
+        LocalVar dot_obj("dot_obj_opt_date", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_opt_date"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_opt_date)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || QoreTypeInfo::parseReturns(analysis.known_type, NT_NOTHING) == QTI_NOT_EQUAL
+            || QoreTypeInfo::parseReturns(analysis.known_type, NT_DATE) == QTI_NOT_EQUAL) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_opt_date)\n";
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("mon"), dot_args);
+        LocalVar dot_obj("dot_obj_opt_object", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_opt_object"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_opt_object)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        const QoreClass* rc = QoreTypeInfo::getReturnClass(analysis.known_type);
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !rc || rc != dot_obj_class
+            || QoreTypeInfo::parseReturns(analysis.known_type, NT_NOTHING) == QTI_NOT_EQUAL) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_opt_object)\n";
+            return 1;
+        }
+    }
+}
+{
     ExceptionSink xsink;
     QoreProgramHelper pgm_helper(xsink);
     if (xsink) {
@@ -4793,12 +7729,40 @@ int main() {
             QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_parse_int_maybe_left",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_parse_int_maybe_right",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_int",
             QoreValue(new QoreBinaryOrOperatorNode(nullptr,
                 QoreValue(new QorePreIncrementOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
                 QoreValue(new QorePreIncrementOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_int_maybe_left",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_int_maybe_right",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
             QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
         return 1;
     }
@@ -4811,12 +7775,41 @@ int main() {
             QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_int_maybe_left",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_int_maybe_right",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_parse_mixed",
             QoreValue(new QoreBinaryAndOperatorNode(nullptr,
                 QoreValue(new QorePreIncrementOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
                 QoreValue(new QorePreIncrementOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_parse_mixed_maybe_left",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_parse_mixed_maybe_right",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
             QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
         return 1;
     }
@@ -4829,12 +7822,42 @@ int main() {
             QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_mixed_maybe_left",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_mixed_maybe_right",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_mixed",
             QoreValue(new QoreBinaryXorOperatorNode(nullptr,
                 QoreValue(new QorePreIncrementOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
                 QoreValue(new QorePreIncrementOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_mixed_maybe_left",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_mixed_maybe_right",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
             QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
         return 1;
     }
@@ -4970,6 +7993,13 @@ int main() {
             QoreIROpcode::UnaryMinusInt, QoreIROpcode::UnaryMinusFloat, QoreIROpcode::UnaryMinusAny)) {
         return 1;
     }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_minus_parse_int_maybe",
+            QoreValue(new QoreUnaryMinusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"),
+                    &analysis_int_maybe_left, false)))),
+            QoreIROpcode::UnaryMinusInt, QoreIROpcode::UnaryMinusFloat, QoreIROpcode::UnaryMinusAny)) {
+        return 1;
+    }
     if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_minus_parse_float",
             QoreValue(new QoreUnaryMinusOperatorNode(nullptr,
                 QoreValue(new QorePreIncrementOperatorNode(nullptr,
@@ -4977,10 +8007,134 @@ int main() {
             QoreIROpcode::UnaryMinusInt, QoreIROpcode::UnaryMinusFloat, QoreIROpcode::UnaryMinusAny)) {
         return 1;
     }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_minus_parse_float_maybe",
+            QoreValue(new QoreUnaryMinusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)))),
+            QoreIROpcode::UnaryMinusInt, QoreIROpcode::UnaryMinusFloat, QoreIROpcode::UnaryMinusAny)) {
+        return 1;
+    }
     if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_minus_parse_date",
             QoreValue(new QoreUnaryMinusOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)))),
             QoreIROpcode::UnaryMinusInt, QoreIROpcode::UnaryMinusFloat, QoreIROpcode::UnaryMinusAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_minus_parse_date_maybe",
+            QoreValue(new QoreUnaryMinusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)))),
+            QoreIROpcode::UnaryMinusInt, QoreIROpcode::UnaryMinusFloat, QoreIROpcode::UnaryMinusAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_plus_parse_int",
+            QoreValue(new QoreUnaryPlusOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))))),
+            QoreIROpcode::UnaryPlusAny, QoreIROpcode::UnaryPlusAny, QoreIROpcode::UnaryPlusAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_plus_parse_int_maybe",
+            QoreValue(new QoreUnaryPlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"),
+                    &analysis_int_maybe_left, false)))),
+            QoreIROpcode::UnaryPlusAny, QoreIROpcode::UnaryPlusAny, QoreIROpcode::UnaryPlusAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_plus_parse_float",
+            QoreValue(new QoreUnaryPlusOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))))),
+            QoreIROpcode::UnaryPlusAny, QoreIROpcode::UnaryPlusAny, QoreIROpcode::UnaryPlusAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_unary_plus_parse_float_maybe",
+            QoreValue(new QoreUnaryPlusOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)))),
+            QoreIROpcode::UnaryPlusAny, QoreIROpcode::UnaryPlusAny, QoreIROpcode::UnaryPlusAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_logical_not_parse_int",
+            QoreValue(new QoreLogicalNotOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))))),
+            QoreIROpcode::Not, QoreIROpcode::Not, QoreIROpcode::Not)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_logical_not_parse_int_maybe",
+            QoreValue(new QoreLogicalNotOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"),
+                    &analysis_int_maybe_left, false)))),
+            QoreIROpcode::Not, QoreIROpcode::Not, QoreIROpcode::Not)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_logical_not_parse_float",
+            QoreValue(new QoreLogicalNotOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))))),
+            QoreIROpcode::Not, QoreIROpcode::Not, QoreIROpcode::Not)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_logical_not_parse_float_maybe",
+            QoreValue(new QoreLogicalNotOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)))),
+            QoreIROpcode::Not, QoreIROpcode::Not, QoreIROpcode::Not)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_logical_not_parse_date",
+            QoreValue(new QoreLogicalNotOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)))),
+            QoreIROpcode::Not, QoreIROpcode::Not, QoreIROpcode::Not)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_logical_not_parse_date_maybe",
+            QoreValue(new QoreLogicalNotOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)))),
+            QoreIROpcode::Not, QoreIROpcode::Not, QoreIROpcode::Not)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_binary_not_parse_int",
+            QoreValue(new QoreBinaryNotOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_binary_not_parse_int_maybe",
+            QoreValue(new QoreBinaryNotOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"),
+                    &analysis_int_maybe_left, false)))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_binary_not_parse_float",
+            QoreValue(new QoreBinaryNotOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_binary_not_parse_float_maybe",
+            QoreValue(new QoreBinaryNotOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_binary_not_parse_date",
+            QoreValue(new QoreBinaryNotOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectUnaryOpcodeFromParseAnalysis("ir_binary_not_parse_date_maybe",
+            QoreValue(new QoreBinaryNotOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date",
@@ -5057,6 +8211,22 @@ int main() {
             QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_parse_date_maybe_left",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_and_parse_date_maybe_right",
+            QoreValue(new QoreBinaryAndOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::AndInt, QoreIROpcode::AndAny, QoreIROpcode::AndAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_date",
             QoreValue(new QoreBinaryOrOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
@@ -5064,10 +8234,42 @@ int main() {
             QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_date_maybe_left",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_or_parse_date_maybe_right",
+            QoreValue(new QoreBinaryOrOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::OrInt, QoreIROpcode::OrAny, QoreIROpcode::OrAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_date",
             QoreValue(new QoreBinaryXorOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_date_maybe_left",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_xor_parse_date_maybe_right",
+            QoreValue(new QoreBinaryXorOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
             QoreIROpcode::XorInt, QoreIROpcode::XorAny, QoreIROpcode::XorAny)) {
         return 1;
     }
@@ -5278,6 +8480,300 @@ int main() {
             QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_mixed_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_mixed_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_mixed_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_mixed_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_mixed_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_mixed_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_mixed_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_mixed_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_mixed_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_mixed_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_mixed_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_mixed_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_mixed_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_mixed_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_hash_assigned",
+            QoreValue(new QoreKeysOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::KeysAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_hash_maybe",
+            QoreValue(new QoreKeysOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::KeysAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_hash_deref_parse_maybe",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LoadLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_hash_deref_parse_maybe_key",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                    &analysis_string_maybe_right, false)))),
+            QoreIROpcode::LoadLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_object_deref_parse_maybe",
+            QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LoadLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_list_index_parse_maybe",
+            QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LoadLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_range_slice_parse_maybe",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::RangeSliceAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_object_assigned",
+            QoreValue(new QoreKeysOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)))),
+            QoreIROpcode::KeysAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_remove_parse_assigned",
+            QoreValue(new QoreRemoveOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+            QoreIROpcode::RemoveAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_remove_parse_maybe",
+            QoreValue(new QoreRemoveOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                    &analysis_int_unassigned, false)))),
+            QoreIROpcode::RemoveAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_exists_parse_assigned",
+            QoreValue(new QoreExistsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+            QoreIROpcode::ExistsAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_exists_parse_maybe",
+            QoreValue(new QoreExistsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned_late"),
+                    &analysis_int_unassigned_late, false)))),
+            QoreIROpcode::ExistsAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_exists_parse_hash",
+            QoreValue(new QoreExistsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::ExistsAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_elements_parse_assigned",
+            QoreValue(new QoreElementsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::ElementsAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_elements_parse_maybe",
+            QoreValue(new QoreElementsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::ElementsAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_elements_parse_string",
+            QoreValue(new QoreElementsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::ElementsAny)) {
+        return 1;
+    }
+    {
+        ExceptionSink regex_xsink;
+        SimpleRefHolder<QoreRegex> regex(new QoreRegex("a", 0, &regex_xsink));
+        if (regex_xsink) {
+            std::cerr << "Failed to create regex for parse opcode checks\n";
+            return 1;
+        }
+        if (!lowerAndExpectOpcodeWithParseInit("ir_regex_match_parse_assigned",
+                QoreValue(new QoreRegexMatchOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"),
+                        &analysis_string_right, false)),
+                    regex->refSelf())),
+                QoreIROpcode::RegexMatchAny)) {
+            return 1;
+        }
+        if (!lowerAndExpectOpcodeWithParseInit("ir_regex_match_parse_maybe",
+                QoreValue(new QoreRegexMatchOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                        &analysis_string_maybe_right, false)),
+                    regex->refSelf())),
+                QoreIROpcode::RegexMatchAny)) {
+            return 1;
+        }
+        if (!lowerAndExpectOpcodeWithParseInit("ir_regex_extract_parse_assigned",
+                QoreValue(new QoreRegexExtractOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"),
+                        &analysis_string_right, false)),
+                    regex->refSelf())),
+                QoreIROpcode::RegexExtractAny)) {
+            return 1;
+        }
+        if (!lowerAndExpectOpcodeWithParseInit("ir_regex_extract_parse_maybe",
+                QoreValue(new QoreRegexExtractOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                        &analysis_string_maybe_right, false)),
+                    regex->refSelf())),
+                QoreIROpcode::RegexExtractAny)) {
+            return 1;
+        }
+        SimpleRefHolder<QoreRegexSubst> subst(new QoreRegexSubst("s/a/b/", 0, &regex_xsink));
+        if (regex_xsink) {
+            std::cerr << "Failed to create regex subst for parse opcode checks\n";
+            return 1;
+        }
+        if (!lowerAndExpectOpcodeWithParseInit("ir_regex_subst_parse_assigned",
+                QoreValue(new QoreRegexSubstOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_subst"),
+                        &analysis_string_subst, false)),
+                    subst->refSelf())),
+                QoreIROpcode::RegexSubstAny)) {
+            return 1;
+        }
+        if (!lowerAndExpectOpcodeWithParseInit("ir_regex_subst_parse_maybe",
+                QoreValue(new QoreRegexSubstOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_subst_maybe"),
+                        &analysis_string_subst_maybe, false)),
+                    subst->refSelf())),
+                QoreIROpcode::RegexSubstAny)) {
+            return 1;
+        }
+    }
+    if (!lowerAndExpectOpcodeWithProgramSource("ir_cast_parse_list",
+            "",
+            QoreValue(new QoreParseCastOperatorNode(nullptr,
+                new QoreParseTypeInfo(strdup("list"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::CastAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithProgramSource("ir_cast_parse_hash",
+            "",
+            QoreValue(new QoreParseCastOperatorNode(nullptr,
+                new QoreParseTypeInfo(strdup("hash"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::CastAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object",
             QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
@@ -5308,6 +8804,144 @@ int main() {
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
             QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_string",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_string",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_string",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_string",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_string",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QorePreIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_string_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_string_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_string_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_string_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_string_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_string_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_date",
@@ -5363,6 +8997,6027 @@ int main() {
                 QoreValue(new QorePreIncrementOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_date_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_date_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_date_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_date_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_date_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_date_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_int",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_int",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_int",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_int",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_int",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_int",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_int",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_int_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_int_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_int_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_int_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_int_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_int_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_float",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_float",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_float",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_float",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_float",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_float",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_float",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_float_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_float_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_float_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_float_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_float_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_float_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_float_date",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_float_date",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_float_date",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_float_date",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_float_date",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_float_date",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_float_date",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_float_date_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_float_date_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_float_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_float_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_float_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_float_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_float_date_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_float_date_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_float_date_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_float_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_float_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_float_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_float_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_float_date_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_int",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_int",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_int",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_int",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_int",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_int",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_int",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_int_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_int_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_int_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_int_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_int_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_int_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
+                    &analysis_int_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_object",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_object",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_object",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_object",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_object",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_object",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_object",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_object_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_object_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_object_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_object_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_object_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_object_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_float",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_float",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_float",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_float",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_float",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_float",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_float",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_float_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_float_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_float_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_float_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_float_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_float_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"),
+                    &analysis_float_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_float_object",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_float_object",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_float_object",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_float_object",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_float_object",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_float_object",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_float_object",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_float_object_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_float_object_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_float_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_float_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_float_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_float_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_float_object_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_left"),
+                    &analysis_float_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_float_object_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_float_object_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_float_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_float_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_float_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_float_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_float_object_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_list",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_list",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_list",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_list",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_list",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_list",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_list",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_list_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_list_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_list_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_list_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_list_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_list_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_list_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_list_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_list_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_list_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_list_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_list_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_list_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_list_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_hash",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_hash",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_hash",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_hash",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_hash",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_hash",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_hash",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_hash_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_hash_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_hash_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_hash_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_hash_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_hash_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_hash_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_hash_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_hash_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_hash_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_hash_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_hash_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_hash_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_hash_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_binary",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_binary",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_binary",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_binary",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_binary",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_binary",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_binary",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_binary_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_binary_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_binary_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_binary_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_binary_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_binary_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_binary_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_binary_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_binary_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_binary_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_binary_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_binary_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_binary_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_binary_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_range",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_range",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_range",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_range",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_range",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_range",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_range",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_range_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_range_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_range_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_range_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_range_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_range_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_range_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_range_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_range_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_range_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_range_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_range_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_range_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_range_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_list",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_list",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_list",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_list",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_list",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_list",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_list",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_list_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_list_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_list_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_list_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_list_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_list_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_list_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_list_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_list_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_list_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_list_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_list_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_list_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_list_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_hash",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_hash",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_hash",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_hash",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_hash",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_hash",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_hash",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_hash_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_hash_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_hash_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_hash_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_hash_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_hash_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_hash_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_hash_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_hash_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_hash_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_hash_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_hash_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_hash_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_hash_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_binary",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_binary",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_binary",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_binary",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_binary",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_binary",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_binary",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_binary_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_binary_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_binary_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_binary_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_binary_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_binary_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_binary_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_binary_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_binary_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_binary_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_binary_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_binary_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_binary_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_binary_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_right"),
+                    &analysis_binary_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_range",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_range",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_range",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_range",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_range",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_range",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_range",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_range_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_range_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_range_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_range_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_range_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_range_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_range_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_range_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_range_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_range_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_range_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_range_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_range_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_range_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_date",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_date",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_date",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_date",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_date",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_date",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_date",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_date_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_date_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_date_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_date_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_date_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_date_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_object",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_object",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_object",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_object",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_object",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_object",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_object",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_object_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_object_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_object_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_object_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_object_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_object_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_date",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_date",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_date",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_date",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_date",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_date",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_date",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_date_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_date_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_date_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_date_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_date_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_date_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_object",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_object",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_object",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_object",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_object",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_object",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_object",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_object_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_object_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_object_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
+                    &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_object_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_object_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_object_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_date",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_date",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_date",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_date",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_date",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_date",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_date",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_date_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_date_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_date_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_date_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_date_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_date_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_object",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_object",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_object",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_object",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_object",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_object",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_object",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_object_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_object_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_object_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"),
+                    &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_object_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_object_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_object_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_date",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_date",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_date",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_date",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_date",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_date",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_date",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_date_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_date_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_date_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_date_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_date_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_date_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_object",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_object",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_object",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_object",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_object",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_object",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_object",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_object_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_object_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_object_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_object_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_object_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
+                        &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_right"),
+                    &analysis_object_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_object_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_object_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_object_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_object_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_object_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_int",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_int",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_int",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_int",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_int",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_int",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_int",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_int_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_int_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_int_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_int_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_int_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_int_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_float",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_float",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_float",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_float",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_float",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_float",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_float",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_float_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_float_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_float_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_float_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_float_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_float_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_string",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_string",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_string",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_string",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_string",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_string",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_string",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_string_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_string_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_string_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_list_string_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_list_string_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_list_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_list_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_list_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_list_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_list_string_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_int",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_int",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_int",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_int",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_int",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_int",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_int",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_int_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_int_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_int_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_int_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_int_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_int_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_float",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_float",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_float",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_float",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_float",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_float",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_float",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_float_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_float_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_float_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_float_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_float_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_float_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_string",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_string",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_string",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_string",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_string",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_string",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_string",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_string_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_string_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_string_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"), &analysis_hash_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_hash_string_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_hash_string_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_hash_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_hash_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_hash_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_hash_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_hash_string_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_int",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_int",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_int",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_int",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_int",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_int",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_int",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_int_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_int_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_int_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_int_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_int_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_int_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_float",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_float",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_float",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_float",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_float",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_float",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_float",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_float_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_float_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_float_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_float_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_float_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_float_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_string",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_string",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_string",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_string",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_string",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_string",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_string",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_string_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_string_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_string_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_maybe_left"), &analysis_binary_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_binary_string_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_binary_string_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_binary_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_binary_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_binary_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_binary_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_binary_string_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_int",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_int",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_int",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_int",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_int",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_int",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_int",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_int_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_int_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_int_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_int_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_int_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_int_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_int_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_int_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_int_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_float",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_float",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_float",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_float",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_float",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_float",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_float",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_float_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_float_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_float_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_float_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_float_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_float_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_float_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_float_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_float_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_float_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_maybe_right"), &analysis_float_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_string",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_string",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_string",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_string",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_string",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_string",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_string",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_string_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_string_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_string_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"), &analysis_int_unassigned, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_string_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_range_string_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_range_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_range_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_range_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_range_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_range_string_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new QoreRangeOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_float",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_int_float",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_float",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_int_float",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_int_float",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_int_float",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_float",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_int_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_int_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"), &analysis_int_maybe_right, false)))),
             QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
         return 1;
     }
@@ -5471,6 +15126,118 @@ int main() {
             QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_string_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_string_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_string_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_date_string_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_date_string_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_date_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_date_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_date_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_date_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_date_string_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_string",
             QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
@@ -5520,6 +15287,118 @@ int main() {
             QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_string_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_string_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_string_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_string_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_string_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_string_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_string_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_string_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_string_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_string_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_date",
             QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
@@ -5566,6 +15445,118 @@ int main() {
             QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_date_maybe_left",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_date_maybe_left",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_date_maybe_left",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_date_maybe_left",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_date_maybe_left",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_left"),
+                    &analysis_object_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object_date_maybe_right",
+            QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_object_date_maybe_right",
+            QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_object_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_le_parse_object_date_maybe_right",
+            QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_gt_parse_object_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ge_parse_object_date_maybe_right",
+            QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_cmp_parse_object_date_maybe_right",
+            QoreValue(new QoreLogicalComparisonOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_maybe_right"),
+                    &analysis_object_maybe_right, false)))),
             QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
         return 1;
     }
@@ -5823,10 +15814,36 @@ int main() {
             QoreIROpcode::NeHard)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_abs_eq_parse_mixed",
+            QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::EqHard)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_abs_ne_parse_mixed",
+            QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::NeHard)) {
+        return 1;
+    }
     if (!runUnaryBinaryInterpreterSmoke()) {
         return 1;
     }
     if (!runExprInterpreterSmoke()) {
+        return 1;
+    }
+    if (!runIRExecutorCleanupSmoke()) {
+        return 1;
+    }
+    if (!runIRExecutorPhiSmoke()) {
+        return 1;
+    }
+    if (!runIRExecutorCallOperandsSmoke()) {
+        return 1;
+    }
+    if (!runIRExecutorArgClosureSmoke()) {
         return 1;
     }
     if (!runRefcountOwnershipSmoke()) {

@@ -141,6 +141,18 @@ QoreIRInstruction* QoreIRBuilder::createTernaryOp(QoreIROpcode op, QoreIRValue f
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createQuaternaryOp(QoreIROpcode op, QoreIRValue first, QoreIRValue second,
+        QoreIRValue third, QoreIRValue fourth, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(op);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(first);
+    inst->operands.push_back(second);
+    inst->operands.push_back(third);
+    inst->operands.push_back(fourth);
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createUnaryOp(QoreIROpcode op, QoreIRValue value,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(op);
@@ -262,6 +274,15 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
     return inst;
 }
 
+QoreIRInvokeInstruction* QoreIRBuilder::createInvoke(const QoreValue& expr, const std::vector<QoreIRValue>& operands,
+        QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInvokeInstruction>(expr, normal_target, exception_target);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = operands;
+    return inst;
+}
+
 QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncoming>& incoming,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRPhiInstruction>();
@@ -304,6 +325,57 @@ QoreIRReturnInstruction* QoreIRBuilder::createReturn(QoreIRValue value, const Qo
 QoreIRReturnInstruction* QoreIRBuilder::createReturnNothing(const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRReturnInstruction>();
     inst->opcode = QoreIROpcode::ReturnNothing;
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createThrow(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::Throw);
+    inst->loc = loc;
+    inst->operands.push_back(value);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createRethrow(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::Rethrow);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ThreadExit);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createLandingPad(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::LandingPad);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createCatchException(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CatchException);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRForeachInstruction* QoreIRBuilder::createForeach(const ForEachStatement* stmt, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRForeachInstruction>(stmt);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIROnBlockExitInstruction* QoreIRBuilder::createOnBlockExit(const OnBlockExitStatement* stmt,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIROnBlockExitInstruction>(stmt);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRDebugInstruction* QoreIRBuilder::createDebug(const DebugStatement* stmt, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRDebugInstruction>(stmt);
     inst->loc = loc;
     return inst;
 }

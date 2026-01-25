@@ -34,8 +34,12 @@
 
 #include <qore/intern/QoreIR.h>
 
+#include <string>
+#include <vector>
+
 class ExceptionSink;
 class QoreValue;
+class AbstractStatement;
 
 class QoreIRInterpreter {
 public:
@@ -47,6 +51,8 @@ public:
             ExceptionSink* xsink);
     static QoreValue evalTernary(QoreIROpcode op, const QoreValue& first, const QoreValue& second,
             const QoreValue& third, ExceptionSink* xsink);
+    static QoreValue evalQuaternary(QoreIROpcode op, const QoreValue& first, const QoreValue& second,
+            const QoreValue& third, const QoreValue& fourth, ExceptionSink* xsink);
     static QoreValue evalLValueLoad(const QoreValue& lvalue, ExceptionSink* xsink);
     static QoreValue evalLValueStore(const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink);
     static QoreValue evalLValueUnary(QoreIROpcode op, const QoreValue& lvalue, ExceptionSink* xsink);
@@ -54,6 +60,12 @@ public:
             ExceptionSink* xsink);
     static QoreValue evalLValueTernary(QoreIROpcode op, const QoreValue& lvalue, const QoreValue& first,
             const QoreValue& second, const QoreValue& third, ExceptionSink* xsink);
+    static bool simulateInvoke(QoreIROpcode op, const QoreValue& expr, ExceptionSink* xsink);
+    static int execStatement(QoreIROpcode op, const AbstractStatement* stmt, QoreValue& return_value,
+            ExceptionSink* xsink);
+    static bool execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
+            std::vector<std::string>* cleanup_log = nullptr, const std::vector<QoreValue>* args = nullptr,
+            const std::vector<QoreValue>* closure = nullptr);
 };
 
 #endif

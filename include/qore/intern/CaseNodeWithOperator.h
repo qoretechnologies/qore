@@ -54,6 +54,10 @@ public:
     DLLLOCAL ~CaseNodeWithOperator() {}
 
     DLLLOCAL virtual bool matches(QoreValue lhs_value, ExceptionSink* xsink);
+
+    DLLLOCAL op_log_func_t getOpFunc() const {
+        return op_func;
+    }
 };
 
 #endif

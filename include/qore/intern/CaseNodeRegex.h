@@ -44,10 +44,16 @@ public:
     DLLLOCAL CaseNodeRegex(const QoreProgramLocation* loc, QoreRegex *m_re, StatementBlock *blk);
 
     DLLLOCAL virtual ~CaseNodeRegex() {
-        delete re;
+        if (re) {
+            re->deref();
+        }
     }
 
     DLLLOCAL virtual bool matches(QoreValue lhs_value, ExceptionSink* xsink);
+
+    DLLLOCAL QoreRegex* getRegex() const {
+        return re;
+    }
 
 protected:
     QoreRegex* re;

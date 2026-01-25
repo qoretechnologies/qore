@@ -74,6 +74,14 @@ public:
     DLLLOCAL void setSwitch(QoreValue s);
     DLLLOCAL void addCase(CaseNode* c);
 
+    DLLLOCAL QoreValue getSwitchExp() const {
+        return sexp;
+    }
+
+    DLLLOCAL const CaseNode* getCases() const {
+        return head;
+    }
+
     // fake it here and let it be checked at runtime
     DLLLOCAL virtual bool hasFinalReturn() const {
         return true;

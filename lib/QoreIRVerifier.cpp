@@ -37,12 +37,15 @@
 
 static bool isTerminator(QoreIROpcode op) {
     switch (op) {
+        case QoreIROpcode::Invoke:
         case QoreIROpcode::Br:
         case QoreIROpcode::BrIf:
         case QoreIROpcode::Return:
         case QoreIROpcode::ReturnNothing:
         case QoreIROpcode::Throw:
         case QoreIROpcode::Rethrow:
+        case QoreIROpcode::InvokeSimError:
+        case QoreIROpcode::ThreadExit:
             return true;
         default:
             return false;
@@ -133,12 +136,22 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldrAny:
         case QoreIROpcode::MapAny:
+        case QoreIROpcode::SelectAny:
+        case QoreIROpcode::MapSelectAny:
+        case QoreIROpcode::HashMapAny:
+        case QoreIROpcode::HashMapSelectAny:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeSliceAny:
         case QoreIROpcode::CastAny:
         case QoreIROpcode::ExtractAny:
         case QoreIROpcode::RemoveAny:
         case QoreIROpcode::KeysAny:
+        case QoreIROpcode::RegexMatchAny:
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::DotEvalAny:
         case QoreIROpcode::LoadLocal:
         case QoreIROpcode::LoadArg:
         case QoreIROpcode::LoadClosure:
@@ -176,6 +189,11 @@ static bool requiresResult(QoreIROpcode op) {
 
 static int expectedOperands(QoreIROpcode op) {
     switch (op) {
+        case QoreIROpcode::Foreach:
+        case QoreIROpcode::OnBlockExit:
+        case QoreIROpcode::ThreadExit:
+        case QoreIROpcode::Debug:
+            return 0;
         case QoreIROpcode::AddInt:
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::AddAny:
@@ -244,14 +262,26 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldrAny:
         case QoreIROpcode::MapAny:
+        case QoreIROpcode::SelectAny:
         case QoreIROpcode::RangeAny:
             return 2;
+        case QoreIROpcode::MapSelectAny:
+        case QoreIROpcode::HashMapAny:
+            return 3;
+        case QoreIROpcode::HashMapSelectAny:
+            return 4;
         case QoreIROpcode::CastAny:
             return 1;
         case QoreIROpcode::ExtractAny:
             return 4;
         case QoreIROpcode::RemoveAny:
         case QoreIROpcode::KeysAny:
+        case QoreIROpcode::RegexMatchAny:
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::DotEvalAny:
             return 1;
         case QoreIROpcode::ToBool:
         case QoreIROpcode::Not:
@@ -261,6 +291,9 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::UnaryMinusFloat:
         case QoreIROpcode::UnaryMinusAny:
             return 1;
+        case QoreIROpcode::LoadArg:
+        case QoreIROpcode::LoadClosure:
+            return -1;
         case QoreIROpcode::StoreLocal:
         case QoreIROpcode::StoreClosure:
         case QoreIROpcode::StoreGlobal:
@@ -278,6 +311,10 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::ShrAssignLValue:
         case QoreIROpcode::UnshiftLValue:
             return 1;
+        case QoreIROpcode::Throw:
+            return 1;
+        case QoreIROpcode::InvokeSimError:
+            return 0;
         case QoreIROpcode::RangeSliceAny:
         case QoreIROpcode::SpliceLValue:
             return 3;
@@ -301,7 +338,6 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
         error = "function has no basic blocks";
         return false;
     }
-    std::unordered_set<uint32_t> value_ids;
     std::unordered_set<const QoreIRBasicBlock*> block_set;
     for (const auto& block : func.blocks) {
         if (!block_set.insert(block.get()).second) {
@@ -318,6 +354,7 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
             return false;
         }
     }
+    std::unordered_set<uint32_t> value_ids;
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             if (requiresResult(inst->opcode)) {
@@ -333,9 +370,28 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 error = "unexpected result value";
                 return false;
             }
+        }
+    }
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::Invoke) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (!invoke_inst || !invoke_inst->normal_target
+                    || block_set.find(invoke_inst->normal_target) == block_set.end()
+                    || !invoke_inst->exception_target
+                    || block_set.find(invoke_inst->exception_target) == block_set.end()) {
+                    error = "invoke missing valid targets";
+                    return false;
+                }
+            }
             int expected = expectedOperands(inst->opcode);
             if (expected >= 0 && expected != static_cast<int>(inst->operands.size())) {
                 error = "unexpected operand count";
+                return false;
+            }
+            if ((inst->opcode == QoreIROpcode::LoadArg || inst->opcode == QoreIROpcode::LoadClosure)
+                    && inst->operands.size() > 1) {
+                error = "load.arg/load.closure only support zero or one operand";
                 return false;
             }
             for (const auto& op : inst->operands) {
@@ -442,14 +498,25 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::CallIndirect
                     || inst->opcode == QoreIROpcode::CallMethod
                     || inst->opcode == QoreIROpcode::CallStatic
-                    || inst->opcode == QoreIROpcode::Invoke
                     || inst->opcode == QoreIROpcode::CastAny
                     || inst->opcode == QoreIROpcode::ExtractAny
                     || inst->opcode == QoreIROpcode::RemoveAny
-                    || inst->opcode == QoreIROpcode::KeysAny) {
+                    || inst->opcode == QoreIROpcode::KeysAny
+                    || inst->opcode == QoreIROpcode::RegexMatchAny
+                    || inst->opcode == QoreIROpcode::RegexExtractAny
+                    || inst->opcode == QoreIROpcode::RegexSubstAny
+                    || inst->opcode == QoreIROpcode::ExistsAny
+                    || inst->opcode == QoreIROpcode::ElementsAny
+                    || inst->opcode == QoreIROpcode::DotEvalAny) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 if (!expr_inst || !expr_inst->expr.hasNode()) {
                     error = "expr instruction missing expr";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::Invoke) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (!invoke_inst || !invoke_inst->expr.hasNode()) {
+                    error = "invoke instruction missing expr";
                     return false;
                 }
             }

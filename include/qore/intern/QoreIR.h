@@ -43,6 +43,9 @@
 class QoreProgramLocation;
 class LocalVar;
 class Var;
+class ForEachStatement;
+class OnBlockExitStatement;
+class DebugStatement;
 
 enum class QoreIROpcode : uint16_t {
     ConstInt,
@@ -118,6 +121,16 @@ enum class QoreIROpcode : uint16_t {
     ExtractAny,
     RemoveAny,
     KeysAny,
+    RegexMatchAny,
+    RegexExtractAny,
+    RegexSubstAny,
+    ExistsAny,
+    ElementsAny,
+    DotEvalAny,
+    Foreach,
+    OnBlockExit,
+    ThreadExit,
+    Debug,
 
     EqInt,
     EqAny,
@@ -152,6 +165,10 @@ enum class QoreIROpcode : uint16_t {
     FoldlAny,
     FoldrAny,
     MapAny,
+    SelectAny,
+    MapSelectAny,
+    HashMapAny,
+    HashMapSelectAny,
     RangeAny,
     RangeSliceAny,
     CastAny,
@@ -181,6 +198,7 @@ enum class QoreIROpcode : uint16_t {
     CatchException,
     Rethrow,
     Throw,
+    InvokeSimError,
 
     Incref,
     Decref,
@@ -322,6 +340,53 @@ public:
     }
 
     QoreValue expr;
+};
+
+class QoreIRForeachInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRForeachInstruction(const ForEachStatement* n_stmt)
+            : QoreIRInstruction(QoreIROpcode::Foreach), stmt(n_stmt) {
+    }
+
+    const ForEachStatement* stmt = nullptr;
+};
+
+class QoreIROnBlockExitInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIROnBlockExitInstruction(const OnBlockExitStatement* n_stmt)
+            : QoreIRInstruction(QoreIROpcode::OnBlockExit), stmt(n_stmt) {
+    }
+
+    const OnBlockExitStatement* stmt = nullptr;
+};
+
+class QoreIRDebugInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRDebugInstruction(const DebugStatement* n_stmt)
+            : QoreIRInstruction(QoreIROpcode::Debug), stmt(n_stmt) {
+    }
+
+    const DebugStatement* stmt = nullptr;
+};
+
+class QoreIRInvokeInstruction : public QoreIRInstruction {
+public:
+    QoreIRInvokeInstruction(const QoreValue& n_expr, QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
+            : QoreIRInstruction(QoreIROpcode::Invoke),
+            expr(n_expr),
+            normal_target(n_normal),
+            exception_target(n_exception) {
+        expr.ref();
+    }
+
+    ~QoreIRInvokeInstruction() override {
+        expr.discard(nullptr);
+    }
+
+    QoreValue expr;
+    QoreIROpcode invoke_opcode = QoreIROpcode::Invoke;
+    QoreIRBasicBlock* normal_target = nullptr;
+    QoreIRBasicBlock* exception_target = nullptr;
 };
 
 class QoreIRBasicBlock {

@@ -33,6 +33,7 @@
 #define _QORE_INTERN_QOREIRLOWERING_H
 
 #include <string>
+#include <vector>
 
 #include <qore/intern/QoreIRBuilder.h>
 #include <qore/intern/QoreParseAnalysis.h>
@@ -42,12 +43,16 @@ class QoreParseListNode;
 class QoreListNode;
 class QoreValue;
 class VarRefNode;
+class AbstractStatement;
+class StatementBlock;
 
 class QoreIRLowering {
 public:
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr);
 
     QoreIRValue lowerExpression(const QoreValue& expr, std::string& error);
+    bool lowerStatement(const AbstractStatement* stmt, std::string& error);
+    bool lowerStatementBlock(const StatementBlock* block, std::string& error);
     void setParseContext(QoreParseContext* parse_context);
 
 private:
@@ -85,6 +90,7 @@ private:
     QoreIRValue lowerQuestionMark(const QoreValue& expr, std::string& error);
     QoreIRValue lowerUnaryPlus(const QoreValue& expr, std::string& error);
     QoreIRValue lowerUnaryMinus(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBinaryNot(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMultiplication(const QoreValue& expr, std::string& error);
     QoreIRValue lowerDivision(const QoreValue& expr, std::string& error);
     QoreIRValue lowerModulo(const QoreValue& expr, std::string& error);
@@ -105,9 +111,19 @@ private:
     QoreIRValue lowerExtract(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRemove(const QoreValue& expr, std::string& error);
     QoreIRValue lowerKeys(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerRegexMatch(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerRegexExtract(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerRegexSubst(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerExists(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerElements(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerDotEval(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFoldl(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFoldr(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMap(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerSelect(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerHashMap(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerHashMapSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerCast(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFunctionCall(const QoreValue& expr, std::string& error);
     QoreIRValue lowerCallReference(const QoreValue& expr, std::string& error);
@@ -122,10 +138,27 @@ private:
     bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context);
     bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
         std::vector<QoreIRValue>& lowered, std::string& error);
+    QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
+        const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left, QoreIRValue right,
+        const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue value,
+        const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue lowerConditionValue(const QoreValue& cond, std::string& error);
+    QoreIROpcode selectComparisonOpcode(const QoreValue& left, const QoreValue& right,
+        QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
     uint32_t block_counter = 0;
+
+    struct FlowTarget {
+        QoreIRBasicBlock* break_target = nullptr;
+        QoreIRBasicBlock* continue_target = nullptr;
+        bool is_switch = false;
+    };
+    std::vector<FlowTarget> flow_stack;
+    std::vector<QoreIRBasicBlock*> exception_stack;
 };
 
 #endif

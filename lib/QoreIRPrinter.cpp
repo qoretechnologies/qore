@@ -111,6 +111,16 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ExtractAny: return "extract.any";
         case QoreIROpcode::RemoveAny: return "remove.any";
         case QoreIROpcode::KeysAny: return "keys.any";
+        case QoreIROpcode::RegexMatchAny: return "regex.match.any";
+        case QoreIROpcode::RegexExtractAny: return "regex.extract.any";
+        case QoreIROpcode::RegexSubstAny: return "regex.subst.any";
+        case QoreIROpcode::ExistsAny: return "exists.any";
+        case QoreIROpcode::ElementsAny: return "elements.any";
+        case QoreIROpcode::DotEvalAny: return "dot.eval.any";
+        case QoreIROpcode::Foreach: return "foreach";
+        case QoreIROpcode::OnBlockExit: return "on.block.exit";
+        case QoreIROpcode::ThreadExit: return "thread.exit";
+        case QoreIROpcode::Debug: return "debug";
         case QoreIROpcode::EqInt: return "eq.int";
         case QoreIROpcode::EqAny: return "eq.any";
         case QoreIROpcode::NeInt: return "ne.int";
@@ -143,6 +153,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::FoldlAny: return "foldl.any";
         case QoreIROpcode::FoldrAny: return "foldr.any";
         case QoreIROpcode::MapAny: return "map.any";
+        case QoreIROpcode::SelectAny: return "select.any";
+        case QoreIROpcode::MapSelectAny: return "map.select.any";
+        case QoreIROpcode::HashMapAny: return "hash.map.any";
+        case QoreIROpcode::HashMapSelectAny: return "hash.map.select.any";
         case QoreIROpcode::RangeAny: return "range.any";
         case QoreIROpcode::RangeSliceAny: return "range.slice.any";
         case QoreIROpcode::CastAny: return "cast.any";
@@ -168,6 +182,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::CatchException: return "catch.exception";
         case QoreIROpcode::Rethrow: return "rethrow";
         case QoreIROpcode::Throw: return "throw";
+        case QoreIROpcode::InvokeSimError: return "invoke.sim.error";
         case QoreIROpcode::Incref: return "incref";
         case QoreIROpcode::Decref: return "decref";
         case QoreIROpcode::DecrefNoThrow: return "decref.nothrow";
@@ -204,6 +219,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
         out << block->name << ":\n";
         for (const auto& inst : block->instructions) {
             out << "  " << opcodeName(inst->opcode);
+            if (inst->opcode == QoreIROpcode::Invoke) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (invoke_inst && invoke_inst->invoke_opcode != QoreIROpcode::Invoke) {
+                    out << "." << opcodeName(invoke_inst->invoke_opcode);
+                }
+            }
             if (inst->opcode == QoreIROpcode::LoadLocal || inst->opcode == QoreIROpcode::StoreLocal
                     || inst->opcode == QoreIROpcode::LoadClosure || inst->opcode == QoreIROpcode::StoreClosure) {
                 auto* local_inst = dynamic_cast<const QoreIRLocalInstruction*>(inst.get());
@@ -237,13 +258,17 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::CallIndirect
                     || inst->opcode == QoreIROpcode::CallMethod
                     || inst->opcode == QoreIROpcode::CallStatic
-                    || inst->opcode == QoreIROpcode::Invoke
                     || inst->opcode == QoreIROpcode::CastAny
                     || inst->opcode == QoreIROpcode::ExtractAny
                     || inst->opcode == QoreIROpcode::RemoveAny
                     || inst->opcode == QoreIROpcode::KeysAny) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 if (expr_inst && expr_inst->expr.hasNode()) {
+                    out << " <expr>";
+                }
+            } else if (inst->opcode == QoreIROpcode::Invoke) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (invoke_inst && invoke_inst->expr.hasNode()) {
                     out << " <expr>";
                 }
             }
@@ -284,6 +309,16 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                     if (br->false_target) {
                         out << " else " << br->false_target->name;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::Invoke) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (invoke_inst) {
+                    if (invoke_inst->normal_target) {
+                        out << " then " << invoke_inst->normal_target->name;
+                    }
+                    if (invoke_inst->exception_target) {
+                        out << " else " << invoke_inst->exception_target->name;
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::Phi) {

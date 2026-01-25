@@ -76,9 +76,12 @@ QORE_VALGRIND=1 valgrind --leak-check=full --show-leak-kinds=all --error-exitcod
 If Valgrind headers are available, `test/ir/ir_smoke.cpp` also detects Valgrind via
 `RUNNING_ON_VALGRIND`; otherwise set `QORE_VALGRIND=1` to force signal handling off.
 
+Note: the IR smoke test includes statement-lowering coverage (if/else, while, for, returns) and
+expects a valid `QoreProgram` context when constructing statement nodes.
+
 To print IR dumps during the smoke test, set `QORE_IR_SMOKE_PRINT=1`.
 
-For Qore CLI scripts under Valgrind, disable signals with `qore -b`:
+For Qore CLI scripts under Valgrind, always disable signals with `qore -b`:
 
 ```
 valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 qore -b script.q

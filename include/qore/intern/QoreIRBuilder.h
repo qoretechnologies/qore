@@ -56,6 +56,8 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createTernaryOp(QoreIROpcode op, QoreIRValue first, QoreIRValue second, QoreIRValue third,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createQuaternaryOp(QoreIROpcode op, QoreIRValue first, QoreIRValue second, QoreIRValue third,
+        QoreIRValue fourth, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createUnaryOp(QoreIROpcode op, QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createLoadLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createStoreLocal(LocalVar* local, QoreIRValue value,
@@ -79,6 +81,9 @@ public:
         QoreIRValue second, QoreIRValue third, const QoreProgramLocation* loc = nullptr);
     QoreIRExprInstruction* createExprOp(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
+    QoreIRInvokeInstruction* createInvoke(const QoreValue& expr, const std::vector<QoreIRValue>& operands,
+        QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRPhiInstruction* createPhi(const std::vector<QoreIRPhiIncoming>& incoming,
         const QoreProgramLocation* loc = nullptr);
 
@@ -88,6 +93,15 @@ public:
 
     QoreIRReturnInstruction* createReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     QoreIRReturnInstruction* createReturnNothing(const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createThrow(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createRethrow(const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createThreadExit(const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createLandingPad(const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createCatchException(const QoreProgramLocation* loc = nullptr);
+    QoreIRForeachInstruction* createForeach(const ForEachStatement* stmt, const QoreProgramLocation* loc = nullptr);
+    QoreIROnBlockExitInstruction* createOnBlockExit(const OnBlockExitStatement* stmt,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRDebugInstruction* createDebug(const DebugStatement* stmt, const QoreProgramLocation* loc = nullptr);
 
 private:
     QoreIRFunction* func = nullptr;

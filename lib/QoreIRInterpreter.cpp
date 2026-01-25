@@ -8,9 +8,16 @@
 #include <qore/intern/QoreIRInterpreter.h>
 
 #include <cmath>
+#include <unordered_map>
 
 #include <qore/ExceptionSink.h>
 #include <qore/QoreValue.h>
+#include <qore/QoreStringNode.h>
+#include <qore/DateTimeNode.h>
+#include <qore/intern/AbstractStatement.h>
+#include <qore/intern/FunctionCallNode.h>
+#include <qore/intern/CallReferenceCallNode.h>
+#include <qore/intern/qore_thread_intern.h>
 #include <qore/intern/Variable.h>
 #include <qore/intern/QoreDivisionOperatorNode.h>
 #include <qore/intern/QoreBinaryAndOperatorNode.h>
@@ -32,6 +39,10 @@
 #include <qore/intern/QoreLogicalLessThanOperatorNode.h>
 #include <qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h>
 #include <qore/intern/QoreMapOperatorNode.h>
+#include <qore/intern/QoreSelectOperatorNode.h>
+#include <qore/intern/QoreMapSelectOperatorNode.h>
+#include <qore/intern/QoreHashMapOperatorNode.h>
+#include <qore/intern/QoreHashMapSelectOperatorNode.h>
 #include <qore/intern/QoreModuloOperatorNode.h>
 #include <qore/intern/QoreMinusOperatorNode.h>
 #include <qore/intern/QoreMultiplicationOperatorNode.h>
@@ -145,7 +156,19 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         case QoreIROpcode::ExtractAny:
         case QoreIROpcode::RemoveAny:
         case QoreIROpcode::KeysAny:
+        case QoreIROpcode::RegexMatchAny:
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::DotEvalAny:
             return evalExprNode(expr, xsink);
+        case QoreIROpcode::InvokeSimError: {
+            if (xsink) {
+                xsink->raiseException("IR-INVOKE-SIM-ERROR", "invoke simulated error");
+            }
+            return QoreValue();
+        }
         case QoreIROpcode::CastAny: {
             if (expr.hasNode()) {
                 auto* parse_cast = dynamic_cast<const QoreParseCastOperatorNode*>(expr.getInternalNode());
@@ -166,6 +189,1027 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         xsink->raiseException("IR-INTERPRETER-ERROR", "unsupported expression opcode");
     }
     return QoreValue();
+}
+
+bool QoreIRInterpreter::simulateInvoke(QoreIROpcode op, const QoreValue& expr, ExceptionSink* xsink) {
+    evalExpr(op, expr, xsink);
+    return xsink && *xsink;
+}
+
+int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* stmt, QoreValue& return_value,
+        ExceptionSink* xsink) {
+    switch (op) {
+        case QoreIROpcode::Debug:
+            if (!stmt) {
+                if (xsink) {
+                    xsink->raiseException("IR-INTERPRETER-ERROR", "debug statement requires a statement");
+                }
+                return -1;
+            }
+            return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
+        default:
+            break;
+    }
+    if (xsink) {
+        xsink->raiseException("IR-INTERPRETER-ERROR", "unsupported statement opcode");
+    }
+    return -1;
+}
+
+static QoreValue getIRValue(const std::unordered_map<uint32_t, QoreValue>& values, QoreIRValue id) {
+    if (!id.isValid()) {
+        return QoreValue();
+    }
+    auto it = values.find(id.id);
+    if (it == values.end()) {
+        return QoreValue();
+    }
+    return it->second;
+}
+
+static void removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
+    for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
+        if (*it == id) {
+            cleanup.erase(std::next(it).base());
+            return;
+        }
+    }
+}
+
+static void cleanupValues(const std::unordered_map<uint32_t, QoreValue>& values, std::vector<uint32_t>& cleanup,
+        ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log) {
+    for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
+        auto val_it = values.find(*it);
+        if (val_it == values.end()) {
+            continue;
+        }
+        QoreValue temp = val_it->second;
+        if (cleanup_log && temp.hasNode()) {
+            if (temp.getType() == NT_STRING) {
+                auto* str = temp.get<QoreStringNode>();
+                if (str) {
+                    cleanup_log->push_back(str->getBuffer());
+                }
+            } else {
+                cleanup_log->push_back(temp.getTypeName());
+            }
+        }
+        temp.discard(no_throw ? nullptr : xsink);
+    }
+    cleanup.clear();
+}
+
+static void cleanupStoredValues(std::unordered_map<const void*, QoreValue>& values, ExceptionSink* xsink) {
+    for (auto& entry : values) {
+        entry.second.discard(xsink);
+    }
+    values.clear();
+}
+
+static void storeValue(std::unordered_map<const void*, QoreValue>& values, const void* key, const QoreValue& value,
+        ExceptionSink* xsink) {
+    auto it = values.find(key);
+    if (it != values.end()) {
+        it->second.discard(xsink);
+    }
+    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+    values[key] = stored;
+}
+
+static QoreListNode* buildArgList(const std::unordered_map<uint32_t, QoreValue>& values,
+        const std::vector<QoreIRValue>& operands, size_t start_index, ExceptionSink* xsink) {
+    QoreListNode* args = new QoreListNode(autoTypeInfo);
+    for (size_t i = start_index; i < operands.size(); ++i) {
+        QoreValue val = getIRValue(values, operands[i]);
+        QoreValue stored = val.hasNode() ? val.refSelf() : val;
+        if (args->push(stored, xsink)) {
+            return args;
+        }
+    }
+    return args;
+}
+
+bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
+        std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
+        const std::vector<QoreValue>* closure) {
+    std::unordered_map<uint32_t, QoreValue> values;
+    std::vector<uint32_t> cleanup;
+    std::unordered_map<const void*, QoreValue> locals;
+    std::unordered_map<const void*, QoreValue> globals;
+    std::unordered_map<const void*, QoreValue> threadlocals;
+    std::unordered_map<const void*, QoreValue> closures;
+    if (func.blocks.empty()) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR", "function has no basic blocks");
+        }
+        return false;
+    }
+    QoreIRBasicBlock* block = func.blocks.front().get();
+    QoreIRBasicBlock* prev_block = nullptr;
+    size_t ip = 0;
+
+    while (block) {
+        if (ip >= block->instructions.size()) {
+            if (xsink) {
+                xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block");
+            }
+            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+            return false;
+        }
+        while (ip < block->instructions.size() && block->instructions[ip]->opcode == QoreIROpcode::Phi) {
+            auto* phi = dynamic_cast<QoreIRPhiInstruction*>(block->instructions[ip].get());
+            if (!phi) {
+                if (xsink) {
+                    xsink->raiseException("IR-EXEC-ERROR", "phi instruction cast failed");
+                }
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                return false;
+            }
+            if (!prev_block) {
+                if (xsink) {
+                    xsink->raiseException("IR-EXEC-ERROR", "phi has no predecessor");
+                }
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                return false;
+            }
+            QoreIRValue incoming_value;
+            bool found = false;
+            for (const auto& inc : phi->incoming) {
+                if (inc.block == prev_block) {
+                    incoming_value = inc.value;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                if (xsink) {
+                    xsink->raiseException("IR-EXEC-ERROR", "phi missing predecessor incoming");
+                }
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                return false;
+            }
+            QoreValue val = getIRValue(values, incoming_value);
+            QoreValue stored = val.hasNode() ? val.refSelf() : val;
+            values[phi->result.id] = stored;
+            if (stored.hasNode()) {
+                cleanup.push_back(phi->result.id);
+            }
+            ++ip;
+        }
+        if (ip >= block->instructions.size()) {
+            if (xsink) {
+                xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block after phi");
+            }
+            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+            cleanupStoredValues(locals, nullptr);
+            cleanupStoredValues(globals, nullptr);
+            cleanupStoredValues(threadlocals, nullptr);
+            cleanupStoredValues(closures, nullptr);
+            return false;
+        }
+        QoreIRInstruction* inst = block->instructions[ip].get();
+        switch (inst->opcode) {
+            case QoreIROpcode::ConstInt: {
+                auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
+                values[cinst->result.id] = QoreValue(cinst->constant.int_value);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ConstFloat: {
+                auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
+                values[cinst->result.id] = QoreValue(cinst->constant.float_value);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ConstBool: {
+                auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
+                values[cinst->result.id] = QoreValue(cinst->constant.bool_value);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ConstNothing: {
+                auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
+                values[cinst->result.id] = QoreValue();
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ConstString: {
+                auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
+                QoreStringNode* str = new QoreStringNode(cinst->constant.string_value);
+                values[cinst->result.id] = QoreValue(str);
+                cleanup.push_back(cinst->result.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ConstDate: {
+                auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
+                DateTimeNode* dt = new DateTimeNode(cinst->constant.date_microseconds, cinst->constant.date_is_relative);
+                values[cinst->result.id] = QoreValue(dt);
+                cleanup.push_back(cinst->result.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Incref: {
+                if (inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "incref missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreIRValue id = inst->operands.front();
+                QoreValue val = getIRValue(values, id);
+                val.ref();
+                cleanup.push_back(id.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Decref:
+            case QoreIROpcode::DecrefNoThrow: {
+                if (inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "decref missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreIRValue id = inst->operands.front();
+                removeCleanupEntry(cleanup, id.id);
+                QoreValue val = getIRValue(values, id);
+                QoreValue temp = val;
+                temp.discard(inst->opcode == QoreIROpcode::DecrefNoThrow ? nullptr : xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Invoke: {
+                auto* inv = dynamic_cast<QoreIRInvokeInstruction*>(inst);
+                if (!inv) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "invoke instruction cast failed");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue res = QoreIRInterpreter::evalExpr(inv->invoke_opcode, inv->expr, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    prev_block = block;
+                    block = inv->exception_target;
+                    ip = 0;
+                    break;
+                }
+                values[inv->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(inv->result.id);
+                }
+                prev_block = block;
+                block = inv->normal_target;
+                ip = 0;
+                break;
+            }
+            case QoreIROpcode::LandingPad:
+                ++ip;
+                break;
+            case QoreIROpcode::CatchException: {
+                if (!xsink || !*xsink) {
+                    values[inst->result.id] = QoreValue();
+                    ++ip;
+                    break;
+                }
+                QoreHashNode* info = xsink->getExceptionInfo();
+                values[inst->result.id] = QoreValue(info);
+                cleanup.push_back(inst->result.id);
+                xsink->clear();
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Br: {
+                auto* br = static_cast<QoreIRBranchInstruction*>(inst);
+                prev_block = block;
+                block = br->target;
+                ip = 0;
+                break;
+            }
+            case QoreIROpcode::BrIf: {
+                auto* br = static_cast<QoreIRBranchIfInstruction*>(inst);
+                QoreValue cond = getIRValue(values, br->condition);
+                prev_block = block;
+                block = cond.getAsBool() ? br->true_target : br->false_target;
+                ip = 0;
+                break;
+            }
+            case QoreIROpcode::LoadLocal: {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                auto it = locals.find(local_inst->local);
+                QoreValue val = it != locals.end() ? it->second : QoreValue();
+                QoreValue out = val.hasNode() ? val.refSelf() : val;
+                values[local_inst->result.id] = out;
+                if (out.hasNode()) {
+                    cleanup.push_back(local_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::LoadArg: {
+                int64 idx = 0;
+                if (!inst->operands.empty()) {
+                    QoreValue idx_val = getIRValue(values, inst->operands[0]);
+                    idx = idx_val.getAsBigInt();
+                }
+                QoreValue val;
+                if (args && idx >= 0 && static_cast<size_t>(idx) < args->size()) {
+                    val = (*args)[static_cast<size_t>(idx)];
+                }
+                QoreValue out = val.hasNode() ? val.refSelf() : val;
+                values[inst->result.id] = out;
+                if (out.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::LoadClosure: {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                QoreValue val;
+                if (!inst->operands.empty() && closure) {
+                    QoreValue idx_val = getIRValue(values, inst->operands[0]);
+                    int64 idx = idx_val.getAsBigInt();
+                    if (idx >= 0 && static_cast<size_t>(idx) < closure->size()) {
+                        val = (*closure)[static_cast<size_t>(idx)];
+                    }
+                } else {
+                    auto it = closures.find(local_inst->local);
+                    val = it != closures.end() ? it->second : QoreValue();
+                }
+                QoreValue out = val.hasNode() ? val.refSelf() : val;
+                values[local_inst->result.id] = out;
+                if (out.hasNode()) {
+                    cleanup.push_back(local_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::StoreLocal: {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                if (local_inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "store.local missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue val = getIRValue(values, local_inst->operands.front());
+                storeValue(locals, local_inst->local, val, xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::StoreClosure: {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                if (local_inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "store.closure missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue val = getIRValue(values, local_inst->operands.front());
+                storeValue(closures, local_inst->local, val, xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::LoadGlobal: {
+                auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
+                auto it = globals.find(var_inst->var);
+                QoreValue val = it != globals.end() ? it->second : QoreValue();
+                QoreValue out = val.hasNode() ? val.refSelf() : val;
+                values[var_inst->result.id] = out;
+                if (out.hasNode()) {
+                    cleanup.push_back(var_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::StoreGlobal: {
+                auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
+                if (var_inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "store.global missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue val = getIRValue(values, var_inst->operands.front());
+                storeValue(globals, var_inst->var, val, xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::LoadThreadLocal: {
+                auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
+                auto it = threadlocals.find(var_inst->var);
+                QoreValue val = it != threadlocals.end() ? it->second : QoreValue();
+                QoreValue out = val.hasNode() ? val.refSelf() : val;
+                values[var_inst->result.id] = out;
+                if (out.hasNode()) {
+                    cleanup.push_back(var_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::StoreThreadLocal: {
+                auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
+                if (var_inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "store.threadlocal missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue val = getIRValue(values, var_inst->operands.front());
+                storeValue(threadlocals, var_inst->var, val, xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ToBool:
+            case QoreIROpcode::Not:
+            case QoreIROpcode::IsNullOrNothing:
+            case QoreIROpcode::UnaryPlusAny:
+            case QoreIROpcode::UnaryMinusInt:
+            case QoreIROpcode::UnaryMinusFloat:
+            case QoreIROpcode::UnaryMinusAny: {
+                if (inst->operands.size() < 1) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "unary op missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue val = getIRValue(values, inst->operands[0]);
+                QoreValue res = QoreIRInterpreter::evalUnary(inst->opcode, val, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::AddInt:
+            case QoreIROpcode::AddFloat:
+            case QoreIROpcode::AddAny:
+            case QoreIROpcode::SubInt:
+            case QoreIROpcode::SubFloat:
+            case QoreIROpcode::SubAny:
+            case QoreIROpcode::MulInt:
+            case QoreIROpcode::MulFloat:
+            case QoreIROpcode::MulAny:
+            case QoreIROpcode::DivInt:
+            case QoreIROpcode::DivFloat:
+            case QoreIROpcode::DivAny:
+            case QoreIROpcode::ModInt:
+            case QoreIROpcode::ModAny:
+            case QoreIROpcode::AndInt:
+            case QoreIROpcode::AndAny:
+            case QoreIROpcode::OrInt:
+            case QoreIROpcode::OrAny:
+            case QoreIROpcode::XorInt:
+            case QoreIROpcode::XorAny:
+            case QoreIROpcode::ShlInt:
+            case QoreIROpcode::ShlAny:
+            case QoreIROpcode::ShrInt:
+            case QoreIROpcode::ShrAny:
+            case QoreIROpcode::ShlAssignInt:
+            case QoreIROpcode::ShlAssignAny:
+            case QoreIROpcode::ShrAssignInt:
+            case QoreIROpcode::ShrAssignAny:
+            case QoreIROpcode::AddAssignInt:
+            case QoreIROpcode::AddAssignAny:
+            case QoreIROpcode::SubAssignInt:
+            case QoreIROpcode::SubAssignAny:
+            case QoreIROpcode::MulAssignInt:
+            case QoreIROpcode::MulAssignAny:
+            case QoreIROpcode::DivAssignInt:
+            case QoreIROpcode::DivAssignAny:
+            case QoreIROpcode::ModAssignInt:
+            case QoreIROpcode::ModAssignAny:
+            case QoreIROpcode::AndAssignInt:
+            case QoreIROpcode::AndAssignAny:
+            case QoreIROpcode::OrAssignInt:
+            case QoreIROpcode::OrAssignAny:
+            case QoreIROpcode::XorAssignInt:
+            case QoreIROpcode::XorAssignAny:
+            case QoreIROpcode::RangeAny:
+            case QoreIROpcode::EqInt:
+            case QoreIROpcode::EqAny:
+            case QoreIROpcode::NeInt:
+            case QoreIROpcode::NeAny:
+            case QoreIROpcode::EqHard:
+            case QoreIROpcode::NeHard:
+            case QoreIROpcode::LtInt:
+            case QoreIROpcode::LtFloat:
+            case QoreIROpcode::LtAny:
+            case QoreIROpcode::LeInt:
+            case QoreIROpcode::LeFloat:
+            case QoreIROpcode::LeAny:
+            case QoreIROpcode::GtInt:
+            case QoreIROpcode::GtFloat:
+            case QoreIROpcode::GtAny:
+            case QoreIROpcode::GeInt:
+            case QoreIROpcode::GeFloat:
+            case QoreIROpcode::GeAny:
+            case QoreIROpcode::CmpInt:
+            case QoreIROpcode::CmpFloat:
+            case QoreIROpcode::CmpAny: {
+                if (inst->operands.size() < 2) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "binary op missing operands");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue left = getIRValue(values, inst->operands[0]);
+                QoreValue right = getIRValue(values, inst->operands[1]);
+                QoreValue res = QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::RangeSliceAny:
+            case QoreIROpcode::MapSelectAny:
+            case QoreIROpcode::HashMapAny: {
+                if (inst->operands.size() < 3) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "ternary op missing operands");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue first = getIRValue(values, inst->operands[0]);
+                QoreValue second = getIRValue(values, inst->operands[1]);
+                QoreValue third = getIRValue(values, inst->operands[2]);
+                QoreValue res = QoreIRInterpreter::evalTernary(inst->opcode, first, second, third, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::HashMapSelectAny: {
+                if (inst->operands.size() < 4) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "quaternary op missing operands");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue first = getIRValue(values, inst->operands[0]);
+                QoreValue second = getIRValue(values, inst->operands[1]);
+                QoreValue third = getIRValue(values, inst->operands[2]);
+                QoreValue fourth = getIRValue(values, inst->operands[3]);
+                QoreValue res = QoreIRInterpreter::evalQuaternary(inst->opcode, first, second, third, fourth, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::LoadLValue: {
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
+                QoreValue res = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[lval_inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(lval_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::StoreLValue: {
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
+                if (lval_inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "store.lvalue missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue val = getIRValue(values, lval_inst->operands[0]);
+                QoreValue res = QoreIRInterpreter::evalLValueStore(lval_inst->lvalue, val, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[lval_inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(lval_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::PreIncLValue:
+            case QoreIROpcode::PreDecLValue:
+            case QoreIROpcode::PostIncLValue:
+            case QoreIROpcode::PostDecLValue:
+            case QoreIROpcode::ShiftLValue:
+            case QoreIROpcode::UnshiftLValue: {
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
+                QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[lval_inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(lval_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::AddAssignLValue:
+            case QoreIROpcode::SubAssignLValue:
+            case QoreIROpcode::MulAssignLValue:
+            case QoreIROpcode::DivAssignLValue:
+            case QoreIROpcode::ModAssignLValue:
+            case QoreIROpcode::AndAssignLValue:
+            case QoreIROpcode::OrAssignLValue:
+            case QoreIROpcode::XorAssignLValue:
+            case QoreIROpcode::ShlAssignLValue:
+            case QoreIROpcode::ShrAssignLValue: {
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
+                if (lval_inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "lvalue binary op missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue right = getIRValue(values, lval_inst->operands[0]);
+                QoreValue res = QoreIRInterpreter::evalLValueBinary(inst->opcode, lval_inst->lvalue, right, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[lval_inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(lval_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::SpliceLValue: {
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
+                if (lval_inst->operands.size() < 3) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "lvalue ternary op missing operands");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue first = getIRValue(values, lval_inst->operands[0]);
+                QoreValue second = getIRValue(values, lval_inst->operands[1]);
+                QoreValue third = getIRValue(values, lval_inst->operands[2]);
+                QoreValue res = QoreIRInterpreter::evalLValueTernary(inst->opcode, lval_inst->lvalue, first, second,
+                    third, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[lval_inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(lval_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Call:
+            case QoreIROpcode::CallIndirect:
+            case QoreIROpcode::CallMethod:
+            case QoreIROpcode::CallStatic: {
+                auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                QoreValue res;
+                bool used_operands = false;
+                if (!expr_inst->operands.empty()) {
+                    const ParseNode* parse_node = nullptr;
+                    if (expr_inst->expr.hasNode()) {
+                        parse_node = dynamic_cast<const ParseNode*>(expr_inst->expr.getInternalNode());
+                    }
+                    const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
+                    QoreListNode* arg_list = buildArgList(values, expr_inst->operands, 0, xsink);
+                    if (xsink && *xsink) {
+                        if (arg_list) {
+                            arg_list->deref(xsink);
+                        }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, nullptr);
+                        cleanupStoredValues(globals, nullptr);
+                        cleanupStoredValues(threadlocals, nullptr);
+                        cleanupStoredValues(closures, nullptr);
+                        return false;
+                    }
+                    if (inst->opcode == QoreIROpcode::Call) {
+                        if (auto* call = dynamic_cast<const FunctionCallNode*>(expr_inst->expr.getInternalNode())) {
+                            QoreValue call_expr(new FunctionCallNode(*call, arg_list));
+                            ValueHolder call_holder(call_expr, nullptr);
+                            res = QoreIRInterpreter::evalExpr(inst->opcode, call_expr, xsink);
+                            used_operands = true;
+                        }
+                    } else if (inst->opcode == QoreIROpcode::CallMethod) {
+                        if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(expr_inst->expr.getInternalNode())) {
+                            QoreValue call_expr(new SelfFunctionCallNode(*call, arg_list));
+                            ValueHolder call_holder(call_expr, nullptr);
+                            res = QoreIRInterpreter::evalExpr(inst->opcode, call_expr, xsink);
+                            used_operands = true;
+                        }
+                    } else if (inst->opcode == QoreIROpcode::CallStatic) {
+                        if (auto* call = dynamic_cast<const StaticMethodCallNode*>(expr_inst->expr.getInternalNode())) {
+                            QoreValue call_expr(new StaticMethodCallNode(*call, arg_list));
+                            ValueHolder call_holder(call_expr, nullptr);
+                            res = QoreIRInterpreter::evalExpr(inst->opcode, call_expr, xsink);
+                            used_operands = true;
+                        }
+                    } else {
+                        if (auto* call = dynamic_cast<const CallReferenceCallNode*>(
+                            expr_inst->expr.getInternalNode())) {
+                            QoreValue exp = call->getExp();
+                            if (exp.hasNode()) {
+                                exp = exp.refSelf();
+                            }
+                            QoreValue call_expr(new CallReferenceCallNode(loc, exp, arg_list));
+                            ValueHolder call_holder(call_expr, nullptr);
+                            res = QoreIRInterpreter::evalExpr(inst->opcode, call_expr, xsink);
+                            used_operands = true;
+                        }
+                    }
+                    if (!used_operands && arg_list) {
+                        arg_list->deref(xsink);
+                    }
+                }
+                if (!used_operands) {
+                    res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[expr_inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(expr_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ExtractAny:
+            case QoreIROpcode::RemoveAny:
+            case QoreIROpcode::KeysAny:
+            case QoreIROpcode::RegexMatchAny:
+            case QoreIROpcode::RegexExtractAny:
+            case QoreIROpcode::RegexSubstAny:
+            case QoreIROpcode::ExistsAny:
+            case QoreIROpcode::ElementsAny:
+            case QoreIROpcode::DotEvalAny:
+            case QoreIROpcode::CastAny:
+            case QoreIROpcode::InvokeSimError: {
+                auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                QoreValue res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[expr_inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(expr_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Throw: {
+                if (inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "throw missing operand");
+                    }
+                } else if (xsink) {
+                    QoreValue arg = getIRValue(values, inst->operands[0]);
+                    QoreValue owned_arg = arg.hasNode() ? arg.refSelf() : arg;
+                    xsink->raiseExceptionArg("IR-EXEC-THROW", owned_arg, "throw");
+                }
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                return false;
+            }
+            case QoreIROpcode::Rethrow: {
+                if (!xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreException* ex = catch_get_exception();
+                if (!ex) {
+                    xsink->raiseException("IR-EXEC-ERROR", "rethrow without exception");
+                } else {
+                    xsink->raiseException(ex);
+                }
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                return false;
+            }
+            case QoreIROpcode::Return: {
+                auto* ret = static_cast<QoreIRReturnInstruction*>(inst);
+                if (ret->has_value) {
+                    QoreValue val = getIRValue(values, ret->value);
+                    removeCleanupEntry(cleanup, ret->value.id);
+                    if (val.hasNode()) {
+                        return_value = val.refSelf();
+                        auto it = values.find(ret->value.id);
+                        if (it != values.end()) {
+                            it->second.discard(xsink);
+                            values.erase(it);
+                        }
+                    } else {
+                        return_value = val;
+                    }
+                } else {
+                    return_value = QoreValue();
+                }
+                cleanupValues(values, cleanup, xsink, false, cleanup_log);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
+                return true;
+            }
+            case QoreIROpcode::ReturnNothing:
+                return_value = QoreValue();
+                cleanupValues(values, cleanup, xsink, false, cleanup_log);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
+                return true;
+            default:
+                if (xsink) {
+                    xsink->raiseException("IR-EXEC-ERROR", "unsupported opcode in executor");
+                }
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                return false;
+        }
+    }
+
+    if (xsink) {
+        xsink->raiseException("IR-EXEC-ERROR", "executor reached invalid state");
+    }
+    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+    cleanupStoredValues(locals, nullptr);
+    cleanupStoredValues(globals, nullptr);
+    cleanupStoredValues(threadlocals, nullptr);
+    cleanupStoredValues(closures, nullptr);
+    return false;
 }
 
 QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, ExceptionSink* xsink) {
@@ -391,6 +1435,11 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             ValueHolder node(QoreValue(new QoreMapOperatorNode(nullptr, left, right)), xsink);
             return node->eval(needs_deref, xsink);
         }
+        case QoreIROpcode::SelectAny: {
+            bool needs_deref = false;
+            ValueHolder node(QoreValue(new QoreSelectOperatorNode(nullptr, left, right)), xsink);
+            return node->eval(needs_deref, xsink);
+        }
         case QoreIROpcode::RangeAny: {
             bool needs_deref = false;
             ValueHolder node(QoreValue(new QoreRangeOperatorNode(nullptr, left, right)), xsink);
@@ -436,11 +1485,39 @@ QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first
                 xsink);
             return node->eval(needs_deref, xsink);
         }
+        case QoreIROpcode::MapSelectAny: {
+            bool needs_deref = false;
+            ValueHolder node(QoreValue(new QoreMapSelectOperatorNode(nullptr, first, second, third)), xsink);
+            return node->eval(needs_deref, xsink);
+        }
+        case QoreIROpcode::HashMapAny: {
+            bool needs_deref = false;
+            ValueHolder node(QoreValue(new QoreHashMapOperatorNode(nullptr, first, second, third)), xsink);
+            return node->eval(needs_deref, xsink);
+        }
         default:
             break;
     }
     if (xsink) {
         xsink->raiseException("IR-INTERPRETER-ERROR", "unsupported ternary opcode");
+    }
+    return QoreValue();
+}
+
+QoreValue QoreIRInterpreter::evalQuaternary(QoreIROpcode op, const QoreValue& first, const QoreValue& second,
+        const QoreValue& third, const QoreValue& fourth, ExceptionSink* xsink) {
+    switch (op) {
+        case QoreIROpcode::HashMapSelectAny: {
+            bool needs_deref = false;
+            ValueHolder node(QoreValue(new QoreHashMapSelectOperatorNode(nullptr, first, second, third, fourth)),
+                xsink);
+            return node->eval(needs_deref, xsink);
+        }
+        default:
+            break;
+    }
+    if (xsink) {
+        xsink->raiseException("IR-INTERPRETER-ERROR", "unsupported quaternary opcode");
     }
     return QoreValue();
 }

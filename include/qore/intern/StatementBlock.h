@@ -113,6 +113,8 @@ class qore_program_private_base;
 
 class StatementBlock : public AbstractStatement {
 public:
+    typedef safe_dslist<AbstractStatement*> statement_list_t;
+
     DLLLOCAL StatementBlock(int sline, int eline);
 
     // line numbers on statement blocks are set later
@@ -152,6 +154,10 @@ public:
         return lvars;
     }
 
+    DLLLOCAL const statement_list_t& getStatements() const {
+        return statement_list;
+    }
+
     DLLLOCAL virtual bool hasFinalReturn() const {
         if (statement_list.empty())
             return false;
@@ -170,7 +176,6 @@ public:
     }
 
 protected:
-    typedef safe_dslist<AbstractStatement*> statement_list_t;
     statement_list_t statement_list;
     block_list_t on_block_exit_list;
     LVList* lvars = nullptr;

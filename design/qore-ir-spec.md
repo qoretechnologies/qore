@@ -51,7 +51,36 @@
   - `invoke` creates an explicit unwind edge.
   - Cleanup blocks are explicit and have terminators.
 
-## 6. Instruction Set (Phase 1 Minimal)
+## 6. Call ABI (IR Interpreter + JIT)
+- Execution entry contract (logical IR ABI):
+  - Inputs: argument array, closure/env array, local slots, and `ExceptionSink*`.
+  - Output: `QoreValue` return value (or NOTHING for `return.nothing`).
+- Argument access:
+  - `load.arg` is index-based and reads from the incoming argument array.
+  - For variadic calls, the callee sees the already-materialized argument list per AST semantics.
+- Locals and closures:
+  - `load.local` / `store.local` use a LocalVar-backed slot; IR interpreter/JIT maps `LocalVar*` to a slot index.
+  - `load.closure` reads from the closure/env slots captured at call entry.
+  - No implicit aliasing: a LocalVar maps to exactly one slot for the duration of the call.
+- Exception propagation:
+  - Interpreter path sets `ExceptionSink` and returns NOTHING.
+  - JIT path throws the dedicated Qore exception type and relies on invoke/landingpad edges.
+- Suggested C ABI entry stub (for JIT glue):
+  - `extern "C" QoreValue qore_ir_entry(QoreValue* args, size_t nargs, QoreValue* closure, size_t nclosure,`
+    `QoreValue* locals, size_t nlocals, ExceptionSink* xsink);`
+  - Ownership: inputs are borrowed; return value is owned by the caller per normal QoreValue rules.
+
+### ABI Ownership Table (Phase 0)
+
+| Component | Representation | Ownership | Notes |
+| --- | --- | --- | --- |
+| args | `QoreValue* args`, `size_t nargs` | borrowed | Elements are read-only to the callee; callee must incref if it needs to retain beyond the call. |
+| closure/env | `QoreValue* closure`, `size_t nclosure` | borrowed | Capture slots behave like args; no implicit refcount changes on load. |
+| locals | `QoreValue* locals`, `size_t nlocals` | owned by frame | Frame owns local storage; stores follow Qore assignment semantics (incref as needed). |
+| ExceptionSink | `ExceptionSink* xsink` | borrowed | JIT must throw immediately when `xsink` is set; IR interpreter propagates and returns NOTHING. |
+| return | `QoreValue` | owned by caller | Caller must decref if refcounted; NOTHING is a valid return value. |
+
+## 7. Instruction Set (Phase 1 Minimal)
 - Constants: int/float/bool/nothing/string.
 - Arithmetic: add/sub/mul/div/mod (typed + any).
 - Comparisons: eq/ne/lt/le/gt/ge (typed + any).
@@ -61,7 +90,7 @@
 - Exceptions: invoke, landingpad, catch.exception, rethrow, throw.
 - Refcount ops: incref, decref, decref.nothrow.
 
-## 7. Exception and Unwind Semantics
+## 8. Exception and Unwind Semantics
 - JIT path uses real C++ exceptions with stack unwinding (modeled after qore-llvm).
 - AST/IR interpreter keep `ExceptionSink` for backwards compatibility.
 - JIT exception representation: a dedicated C++ exception type carrying the active Qore exception payload.
@@ -103,7 +132,7 @@ done:
     return.nothing
 ```
 
-## 8. Refcount Semantics
+## 9. Refcount Semantics
 - Ownership rules for each instruction class.
 - Each IR value is either owned or borrowed; lowering must declare ownership for all values it produces.
 - Required ordering relative to exceptions: any incref/decref sequence must be exception-safe and deterministic.
@@ -111,6 +140,19 @@ done:
 - `decref.nothrow` is only allowed in cleanup paths or other contexts where exceptions must not be raised.
 - Exception-safety requirement: no leaks or premature frees on normal or unwind paths.
 - Refcounted nodes returned from runtime helpers must define transfer semantics (owned vs borrowed) in the ABI.
+
+### Ownership Table (Phase 0)
+
+| Instruction class | Result ownership | Operand ownership | Notes |
+| --- | --- | --- | --- |
+| `const.int/float/bool/nothing` | immediate (no refcount) | n/a | No refcount operations required. |
+| `const.string/const.date` | owned | n/a | Returns a refcounted node with +1 ref for the result. |
+| `load.*` / `load.lvalue` | owned | borrowed | Loads return an owned value; if refcounted, result has +1 ref. |
+| `store.*` / `store.lvalue` | no result | borrowed | Store follows Qore assignment semantics (incref as needed); does not consume operand. |
+| `unary/binary/ternary/quaternary` | owned | borrowed | Typed ops yield immediates; `.any` ops use helpers that return owned values. |
+| `call/call.*` / `invoke` | owned | borrowed | Return value is owned; operands are borrowed unless explicitly `incref`'d by lowering. |
+| `phi` | inherited | borrowed | Result ownership matches incoming values; no implicit refcount ops. |
+| `incref/decref/decref.nothrow` | no result | owned by context | Explicit refcount ops; `decref.nothrow` only in cleanup/unwind paths. |
 
 ### Example: temporary lifetime with unwind cleanup
 
@@ -126,7 +168,7 @@ IR cleanup rules:
 - If `maybe_throw` unwinds, cleanup runs `decref.nothrow %a`.
 - If normal path continues, explicit `decref %a` consumes the cleanup entry.
 
-## 9. Runtime ABI (NRT-Style)
+## 10. Runtime ABI (NRT-Style)
 - C ABI wrapper signatures for runtime helpers; no C++ name mangling.
 - QoreValue passing/returning conventions:
   - POD layout, passed by value where possible.
@@ -152,7 +194,7 @@ extern "C" void qore_rt_incref(QoreValue v);
 extern "C" void qore_rt_decref(QoreValue v);
 ```
 
-## 10. Deoptimization and State Mapping
+## 11. Deoptimization and State Mapping
 - State snapshot format: locals, live SSA temps, program counter (block + instr index), exception state.
 - Live value map: IR values mapped to interpreter slots or temporary stack entries.
 - Legal deopt points: any instruction boundary with a defined state map.
@@ -171,7 +213,7 @@ deopt_state {
 }
 ```
 
-## 11. AST to IR Lowering Rules (Phase 1)
+## 12. AST to IR Lowering Rules (Phase 1)
 - Coverage list (Phase 1 minimum):
   - Constants: int/float/bool/string/nothing.
   - Variables: local references and assignments.
@@ -184,14 +226,14 @@ deopt_state {
 - Unhandled constructs: function-level fallback to AST interpreter (no mixed-mode in v1).
 - Type info preservation: use `QoreTypeInfo*` where available to emit typed ops; otherwise emit `.any` ops.
 
-## 12. IR Interpreter Contract
+## 13. IR Interpreter Contract
 - Execution model: block-level instruction pointer, exception checks after any op that can throw.
 - Block semantics: instructions execute in order until a terminator; terminators update the current block/ip.
 - Consistency with AST interpreter: identical refcount behavior and exception propagation.
 - Cleanup behavior: interpreter must honor cleanup lists on normal and unwind paths.
 - Runtime calls: `.any` ops must dispatch through runtime helpers with `ExceptionSink`.
 
-## 13. Verifier Requirements
+## 14. Verifier Requirements
 - SSA dominance rules and phi correctness.
 - Terminator placement and block structure.
 - Type consistency (typed ops with typed inputs).

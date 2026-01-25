@@ -31,12 +31,18 @@
 #include <qore/intern/QoreQuestionMarkOperatorNode.h>
 #include <qore/intern/QoreDivisionOperatorNode.h>
 #include <qore/intern/QoreFoldlOperatorNode.h>
+#include <qore/intern/QoreSelectOperatorNode.h>
+#include <qore/intern/QoreMapSelectOperatorNode.h>
+#include <qore/intern/QoreHashMapOperatorNode.h>
+#include <qore/intern/QoreHashMapSelectOperatorNode.h>
 #include <qore/intern/QoreAssignmentOperatorNode.h>
 #include <qore/intern/QoreBinaryAndOperatorNode.h>
 #include <qore/intern/QoreBinaryOrOperatorNode.h>
+#include <qore/intern/QoreBinaryNotOperatorNode.h>
 #include <qore/intern/QoreBinaryXorOperatorNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
 #include <qore/intern/QoreMapOperatorNode.h>
+#include <qore/intern/QoreBinaryLValueOperatorNode.h>
 #include <qore/intern/QorePlusEqualsOperatorNode.h>
 #include <qore/intern/QoreMinusEqualsOperatorNode.h>
 #include <qore/intern/QoreMultiplyEqualsOperatorNode.h>
@@ -63,6 +69,55 @@
 #include <qore/intern/QoreExtractOperatorNode.h>
 #include <qore/intern/QoreRemoveOperatorNode.h>
 #include <qore/intern/QoreKeysOperatorNode.h>
+#include <qore/intern/QoreRegexMatchOperatorNode.h>
+#include <qore/intern/QoreRegexExtractOperatorNode.h>
+#include <qore/intern/QoreRegexSubstOperatorNode.h>
+#include <qore/intern/QoreExistsOperatorNode.h>
+#include <qore/intern/QoreElementsOperatorNode.h>
+#include <qore/intern/QoreDotEvalOperatorNode.h>
+#include <qore/intern/ExpressionStatement.h>
+#include <qore/intern/ForStatement.h>
+#include <qore/intern/IfStatement.h>
+#include <qore/intern/ReturnStatement.h>
+#include <qore/intern/DoWhileStatement.h>
+#include <qore/intern/StatementBlock.h>
+#include <qore/intern/WhileStatement.h>
+#include <qore/intern/BreakStatement.h>
+#include <qore/intern/ContinueStatement.h>
+#include <qore/intern/SwitchStatement.h>
+#include <qore/intern/CaseNodeWithOperator.h>
+#include <qore/intern/CaseNodeRegex.h>
+#include <qore/intern/TryStatement.h>
+#include <qore/intern/ThrowStatement.h>
+#include <qore/intern/RethrowStatement.h>
+#include <qore/intern/ForEachStatement.h>
+#include <qore/intern/ThreadExitStatement.h>
+#include <qore/intern/OnBlockExitStatement.h>
+#include <qore/intern/DebugStatement.h>
+#include <qore/intern/QoreOperatorNode.h>
+
+static bool isTerminatorOpcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::Br:
+        case QoreIROpcode::BrIf:
+        case QoreIROpcode::Invoke:
+        case QoreIROpcode::Return:
+        case QoreIROpcode::ReturnNothing:
+        case QoreIROpcode::Throw:
+        case QoreIROpcode::Rethrow:
+        case QoreIROpcode::ThreadExit:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool blockHasTerminator(const QoreIRBasicBlock* block) {
+    if (!block || block->instructions.empty()) {
+        return false;
+    }
+    return isTerminatorOpcode(block->instructions.back()->opcode);
+}
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
 #include <qore/intern/FunctionCallNode.h>
@@ -80,6 +135,719 @@ void QoreIRLowering::setParseContext(QoreParseContext* n_parse_context) {
     parse_context = n_parse_context;
 }
 
+QoreIRValue QoreIRLowering::lowerConditionValue(const QoreValue& cond, std::string& error) {
+    QoreIRValue lowered = lowerExpression(cond, error);
+    if (!lowered.isValid()) {
+        return QoreIRValue();
+    }
+    if (cond.isBool()) {
+        return lowered;
+    }
+    QoreParseAnalysis analysis;
+    if (getAnalysis(cond, analysis)) {
+        if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            && analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            && QoreTypeInfo::isType(analysis.known_type, NT_BOOLEAN)) {
+            return lowered;
+        }
+    }
+    return lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, cond, lowered, nullptr, error);
+}
+
+bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& error) {
+    if (!stmt) {
+        error = "null statement for IR lowering";
+        return false;
+    }
+    if (!ensureBuilderContext(error)) {
+        return false;
+    }
+
+    if (auto* block = dynamic_cast<const StatementBlock*>(stmt)) {
+        return lowerStatementBlock(block, error);
+    }
+    if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
+        QoreValue expr = expr_stmt->getExpression();
+        if (expr) {
+            if (!exception_stack.empty()) {
+                QoreIRBasicBlock* handler = exception_stack.back();
+                const AbstractQoreNode* node = expr.getInternalNode();
+                if (node) {
+                    std::vector<QoreIRValue> operands;
+                    const QoreProgramLocation* loc = nullptr;
+                    bool invoked = false;
+                    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+                        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
+                            return false;
+                        }
+                        loc = call->loc;
+                        invoked = true;
+                    } else if (auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
+                        QoreIRValue callee = lowerExpression(call->getExp(), error);
+                        if (!callee.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(callee);
+                        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
+                            return false;
+                        }
+                        loc = call->loc;
+                        invoked = true;
+                    } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+                        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
+                            return false;
+                        }
+                        loc = call->loc;
+                        invoked = true;
+                    } else if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+                        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
+                            return false;
+                        }
+                        loc = call->loc;
+                        invoked = true;
+                    } else if (auto* cast = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+                        const QoreSingleExpressionOperatorNode<>* cast_node = cast;
+                        QoreIRValue value = lowerExpression(cast_node->getExp(), error);
+                        if (!value.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(value);
+                        loc = cast_node->loc;
+                        invoked = true;
+                    } else if (auto* parse_cast = dynamic_cast<const QoreParseCastOperatorNode*>(node)) {
+                        const QoreSingleExpressionOperatorNode<>* cast_node = parse_cast;
+                        QoreIRValue value = lowerExpression(cast_node->getExp(), error);
+                        if (!value.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(value);
+                        loc = cast_node->loc;
+                        invoked = true;
+                    } else if (auto* extract = dynamic_cast<const QoreExtractOperatorNode*>(node)) {
+                        QoreIRValue lvalue = lowerExpression(extract->getLValue(), error);
+                        if (!lvalue.isValid()) {
+                            return false;
+                        }
+                        QoreIRValue offset = lowerExpression(extract->getOffset(), error);
+                        if (!offset.isValid()) {
+                            return false;
+                        }
+                        QoreIRValue length = extract->getLength().isNothing()
+                            ? builder.createConstNothing(extract->loc)->result
+                            : lowerExpression(extract->getLength(), error);
+                        if (!length.isValid()) {
+                            return false;
+                        }
+                        QoreIRValue replacement = extract->getNewValue().isNothing()
+                            ? builder.createConstNothing(extract->loc)->result
+                            : lowerExpression(extract->getNewValue(), error);
+                        if (!replacement.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(lvalue);
+                        operands.push_back(offset);
+                        operands.push_back(length);
+                        operands.push_back(replacement);
+                        loc = extract->loc;
+                        invoked = true;
+                    } else if (auto* remove = dynamic_cast<const QoreRemoveOperatorNode*>(node)) {
+                        QoreIRValue operand = lowerExpression(remove->getExp(), error);
+                        if (!operand.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(operand);
+                        loc = remove->loc;
+                        invoked = true;
+                    } else if (auto* keys = dynamic_cast<const QoreKeysOperatorNode*>(node)) {
+                        QoreIRValue operand = lowerExpression(keys->getExp(), error);
+                        if (!operand.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(operand);
+                        loc = keys->loc;
+                        invoked = true;
+                    } else if (auto* regex = dynamic_cast<const QoreRegexMatchOperatorNode*>(node)) {
+                        QoreIRValue operand = lowerExpression(regex->getExp(), error);
+                        if (!operand.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(operand);
+                        loc = regex->loc;
+                        invoked = true;
+                    } else if (auto* regex = dynamic_cast<const QoreRegexExtractOperatorNode*>(node)) {
+                        QoreIRValue operand = lowerExpression(regex->getExp(), error);
+                        if (!operand.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(operand);
+                        loc = regex->loc;
+                        invoked = true;
+                    } else if (auto* regex = dynamic_cast<const QoreRegexSubstOperatorNode*>(node)) {
+                        QoreIRValue operand = lowerExpression(regex->getExp(), error);
+                        if (!operand.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(operand);
+                        loc = regex->loc;
+                        invoked = true;
+                    } else if (auto* exists = dynamic_cast<const QoreExistsOperatorNode*>(node)) {
+                        QoreIRValue operand = lowerExpression(exists->getExp(), error);
+                        if (!operand.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(operand);
+                        loc = exists->loc;
+                        invoked = true;
+                    } else if (auto* elements = dynamic_cast<const QoreElementsOperatorNode*>(node)) {
+                        QoreIRValue operand = lowerExpression(elements->getExp(), error);
+                        if (!operand.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(operand);
+                        loc = elements->loc;
+                        invoked = true;
+                    } else if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+                        QoreIRValue operand = lowerExpression(dot->getExpression(), error);
+                        if (!operand.isValid()) {
+                            return false;
+                        }
+                        operands.push_back(operand);
+                        loc = dot->loc;
+                        invoked = true;
+                    } else {
+                        if (auto* ternary = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+                            QoreIRValue cond = lowerExpression(ternary->get(0), error);
+                            if (!cond.isValid()) {
+                                return false;
+                            }
+                            QoreIRValue left = lowerExpression(ternary->get(1), error);
+                            if (!left.isValid()) {
+                                return false;
+                            }
+                            QoreIRValue right = lowerExpression(ternary->get(2), error);
+                            if (!right.isValid()) {
+                                return false;
+                            }
+                            operands.push_back(cond);
+                            operands.push_back(left);
+                            operands.push_back(right);
+                            loc = ternary->loc;
+                            invoked = true;
+                        } else if (auto* binary = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+                            QoreIRValue left = lowerExpression(binary->getLeft(), error);
+                            if (!left.isValid()) {
+                                return false;
+                            }
+                            QoreIRValue right = lowerExpression(binary->getRight(), error);
+                            if (!right.isValid()) {
+                                return false;
+                            }
+                            operands.push_back(left);
+                            operands.push_back(right);
+                            loc = binary->loc;
+                            invoked = true;
+                        } else if (auto* unary = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
+                            QoreIRValue value = lowerExpression(unary->getExp(), error);
+                            if (!value.isValid()) {
+                                return false;
+                            }
+                            operands.push_back(value);
+                            loc = unary->loc;
+                            invoked = true;
+                        }
+                    }
+                    if (invoked) {
+                        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                        if (!normal_block) {
+                            error = "IR builder failed to create invoke continuation block";
+                            return false;
+                        }
+                        builder.createInvoke(expr, operands, normal_block, handler, loc);
+                        builder.setBlock(normal_block);
+                        return true;
+                    }
+                }
+            }
+            QoreIRValue lowered = lowerExpression(expr, error);
+            if (!lowered.isValid()) {
+                return false;
+            }
+        }
+        return true;
+    }
+    if (auto* ret_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
+        QoreValue expr = ret_stmt->getExpression();
+        if (!expr || expr.isNothing()) {
+            builder.createReturnNothing();
+            return true;
+        }
+        QoreIRValue lowered = lowerExpression(expr, error);
+        if (!lowered.isValid()) {
+            return false;
+        }
+        builder.createReturn(lowered);
+        return true;
+    }
+    if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
+        QoreIRValue cond = lowerConditionValue(if_stmt->getCond(), error);
+        if (!cond.isValid()) {
+            return false;
+        }
+        QoreIRBasicBlock* then_block = createBlock("if.then");
+        QoreIRBasicBlock* merge_block = createBlock("if.merge");
+        QoreIRBasicBlock* else_block = if_stmt->getElseCode() ? createBlock("if.else") : merge_block;
+        if (!then_block || !merge_block || !else_block) {
+            error = "IR builder failed to create blocks for if";
+            return false;
+        }
+        builder.createBranchIf(cond, then_block, else_block);
+
+        builder.setBlock(then_block);
+        if (!lowerStatementBlock(if_stmt->getIfCode(), error)) {
+            return false;
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(merge_block);
+        }
+
+        if (if_stmt->getElseCode()) {
+            builder.setBlock(else_block);
+            if (!lowerStatementBlock(if_stmt->getElseCode(), error)) {
+                return false;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createBranch(merge_block);
+            }
+        }
+
+        builder.setBlock(merge_block);
+        return true;
+    }
+    if (auto* do_stmt = dynamic_cast<const DoWhileStatement*>(stmt)) {
+        QoreIRBasicBlock* body_block = createBlock("do.body");
+        QoreIRBasicBlock* cond_block = createBlock("do.cond");
+        QoreIRBasicBlock* exit_block = createBlock("do.exit");
+        if (!body_block || !cond_block || !exit_block) {
+            error = "IR builder failed to create blocks for do-while";
+            return false;
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(body_block);
+        }
+
+        builder.setBlock(body_block);
+        flow_stack.push_back({exit_block, cond_block, false});
+        if (!lowerStatementBlock(do_stmt->getCode(), error)) {
+            flow_stack.pop_back();
+            return false;
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(cond_block);
+        }
+        flow_stack.pop_back();
+
+        builder.setBlock(cond_block);
+        QoreIRValue cond = lowerConditionValue(do_stmt->getCond(), error);
+        if (!cond.isValid()) {
+            return false;
+        }
+        builder.createBranchIf(cond, body_block, exit_block);
+
+        builder.setBlock(exit_block);
+        return true;
+    }
+    if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
+        QoreIRBasicBlock* cond_block = createBlock("while.cond");
+        QoreIRBasicBlock* body_block = createBlock("while.body");
+        QoreIRBasicBlock* exit_block = createBlock("while.exit");
+        if (!cond_block || !body_block || !exit_block) {
+            error = "IR builder failed to create blocks for while";
+            return false;
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(cond_block);
+        }
+
+        builder.setBlock(cond_block);
+        QoreIRValue cond = lowerConditionValue(while_stmt->getCond(), error);
+        if (!cond.isValid()) {
+            return false;
+        }
+        builder.createBranchIf(cond, body_block, exit_block);
+
+        builder.setBlock(body_block);
+        flow_stack.push_back({exit_block, cond_block, false});
+        if (!lowerStatementBlock(while_stmt->getCode(), error)) {
+            flow_stack.pop_back();
+            return false;
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(cond_block);
+        }
+        flow_stack.pop_back();
+
+        builder.setBlock(exit_block);
+        return true;
+    }
+    if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
+        QoreIRBasicBlock* cond_block = createBlock("for.cond");
+        QoreIRBasicBlock* body_block = createBlock("for.body");
+        QoreIRBasicBlock* iter_block = createBlock("for.iter");
+        QoreIRBasicBlock* exit_block = createBlock("for.exit");
+        if (!cond_block || !body_block || !iter_block || !exit_block) {
+            error = "IR builder failed to create blocks for for";
+            return false;
+        }
+        QoreValue init = for_stmt->getAssignment();
+        if (init && !init.isNothing()) {
+            QoreIRValue lowered = lowerExpression(init, error);
+            if (!lowered.isValid()) {
+                return false;
+            }
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(cond_block);
+        }
+
+        builder.setBlock(cond_block);
+        QoreValue cond_expr = for_stmt->getCond();
+        QoreIRValue cond_value;
+        if (!cond_expr || cond_expr.isNothing()) {
+            cond_value = builder.createConstBool(true)->result;
+        } else {
+            cond_value = lowerConditionValue(cond_expr, error);
+            if (!cond_value.isValid()) {
+                return false;
+            }
+        }
+        builder.createBranchIf(cond_value, body_block, exit_block);
+
+        builder.setBlock(body_block);
+        flow_stack.push_back({exit_block, iter_block, false});
+        if (!lowerStatementBlock(for_stmt->getCode(), error)) {
+            flow_stack.pop_back();
+            return false;
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(iter_block);
+        }
+        flow_stack.pop_back();
+
+        builder.setBlock(iter_block);
+        QoreValue iter_expr = for_stmt->getIterator();
+        if (iter_expr && !iter_expr.isNothing()) {
+            QoreIRValue lowered = lowerExpression(iter_expr, error);
+            if (!lowered.isValid()) {
+                return false;
+            }
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(cond_block);
+        }
+
+        builder.setBlock(exit_block);
+        return true;
+    }
+    if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
+        builder.createForeach(foreach_stmt, stmt->loc);
+        return true;
+    }
+    if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
+        builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
+        return true;
+    }
+    if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
+        builder.createDebug(debug_stmt, stmt->loc);
+        return true;
+    }
+    if (auto* thread_exit_stmt = dynamic_cast<const ThreadExitStatement*>(stmt)) {
+        builder.createThreadExit(thread_exit_stmt->loc);
+        return true;
+    }
+    if (auto* break_stmt = dynamic_cast<const BreakStatement*>(stmt)) {
+        QoreIRBasicBlock* target = nullptr;
+        for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
+            if (it->break_target) {
+                target = it->break_target;
+                break;
+            }
+        }
+        if (!target) {
+            error = "break statement has no active target for IR lowering";
+            return false;
+        }
+        builder.createBranch(target);
+        return true;
+    }
+    if (auto* cont_stmt = dynamic_cast<const ContinueStatement*>(stmt)) {
+        QoreIRBasicBlock* target = nullptr;
+        for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
+            if (it->continue_target) {
+                target = it->continue_target;
+                break;
+            }
+        }
+        if (!target) {
+            error = "continue statement has no active target for IR lowering";
+            return false;
+        }
+        builder.createBranch(target);
+        return true;
+    }
+    if (auto* switch_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
+        QoreValue switch_expr = switch_stmt->getSwitchExp();
+        QoreIRValue switch_val = lowerExpression(switch_expr, error);
+        if (!switch_val.isValid()) {
+            return false;
+        }
+
+        QoreIRBasicBlock* match_block = createBlock("switch.match");
+        QoreIRBasicBlock* end_block = createBlock("switch.end");
+        if (!match_block || !end_block) {
+            error = "IR builder failed to create blocks for switch";
+            return false;
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(match_block);
+        }
+
+        struct CaseInfo {
+            const CaseNode* node = nullptr;
+            QoreIRBasicBlock* block = nullptr;
+        };
+        std::vector<CaseInfo> cases;
+        const CaseNode* def_case = nullptr;
+        for (const CaseNode* cur = switch_stmt->getCases(); cur; cur = cur->next) {
+            QoreIRBasicBlock* case_block = createBlock("switch.case");
+            if (!case_block) {
+                error = "IR builder failed to create switch case block";
+                return false;
+            }
+            cases.push_back({cur, case_block});
+            if (cur->isDefault()) {
+                def_case = cur;
+            }
+        }
+
+        builder.setBlock(match_block);
+        QoreIRBasicBlock* check_block = match_block;
+        QoreIRBasicBlock* default_block = nullptr;
+        for (size_t i = 0; i < cases.size(); ++i) {
+            const CaseNode* node = cases[i].node;
+            if (node->isDefault()) {
+                default_block = cases[i].block;
+                continue;
+            }
+
+            builder.setBlock(check_block);
+            QoreIRBasicBlock* next_check = createBlock("switch.check");
+            if (!next_check) {
+                error = "IR builder failed to create switch check block";
+                return false;
+            }
+
+            QoreIRValue match_value;
+            if (auto* regex_case = dynamic_cast<const CaseNodeRegex*>(node)) {
+                QoreRegex* regex = regex_case->getRegex();
+                if (!regex) {
+                    error = "switch regex case missing regex";
+                    return false;
+                }
+                QoreValue regex_expr(new QoreRegexMatchOperatorNode(node->loc, QoreValue(), regex->refSelf()));
+                ValueHolder regex_holder(regex_expr, nullptr);
+                std::vector<QoreIRValue> operands{switch_val};
+                match_value = lowerExprOpOrInvoke(QoreIROpcode::RegexMatchAny, regex_expr, operands, node->loc, error);
+                if (!match_value.isValid()) {
+                    return false;
+                }
+                if (dynamic_cast<const CaseNodeNegRegex*>(regex_case)) {
+                    match_value = builder.createUnaryOp(QoreIROpcode::Not, match_value)->result;
+                }
+            } else if (auto* op_case = dynamic_cast<const CaseNodeWithOperator*>(node)) {
+                QoreIRValue case_val = lowerExpression(node->val, error);
+                if (!case_val.isValid()) {
+                    return false;
+                }
+                op_log_func_t op_func = op_case->getOpFunc();
+                QoreIROpcode cmp_op = QoreIROpcode::EqAny;
+                QoreValue cmp_expr;
+                if (op_func == QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals) {
+                    cmp_op = selectComparisonOpcode(switch_expr, node->val, QoreIROpcode::GeInt,
+                        QoreIROpcode::GeFloat, QoreIROpcode::GeAny);
+                    cmp_expr = QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(node->loc,
+                        switch_expr.refSelf(), node->val.refSelf()));
+                } else if (op_func == QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals) {
+                    cmp_op = selectComparisonOpcode(switch_expr, node->val, QoreIROpcode::LeInt,
+                        QoreIROpcode::LeFloat, QoreIROpcode::LeAny);
+                    cmp_expr = QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(node->loc,
+                        switch_expr.refSelf(), node->val.refSelf()));
+                } else if (op_func == QoreLogicalLessThanOperatorNode::doLessThan) {
+                    cmp_op = selectComparisonOpcode(switch_expr, node->val, QoreIROpcode::LtInt,
+                        QoreIROpcode::LtFloat, QoreIROpcode::LtAny);
+                    cmp_expr = QoreValue(new QoreLogicalLessThanOperatorNode(node->loc, switch_expr.refSelf(),
+                        node->val.refSelf()));
+                } else if (op_func == QoreLogicalGreaterThanOperatorNode::doGreaterThan) {
+                    cmp_op = selectComparisonOpcode(switch_expr, node->val, QoreIROpcode::GtInt,
+                        QoreIROpcode::GtFloat, QoreIROpcode::GtAny);
+                    cmp_expr = QoreValue(new QoreLogicalGreaterThanOperatorNode(node->loc, switch_expr.refSelf(),
+                        node->val.refSelf()));
+                } else if (op_func == QoreLogicalEqualsOperatorNode::softEqual) {
+                    cmp_op = selectComparisonOpcode(switch_expr, node->val, QoreIROpcode::EqInt,
+                        QoreIROpcode::EqAny, QoreIROpcode::EqAny);
+                    cmp_expr = QoreValue(new QoreLogicalEqualsOperatorNode(node->loc, switch_expr.refSelf(),
+                        node->val.refSelf()));
+                } else {
+                    error = "unsupported switch case operator for IR lowering";
+                    return false;
+                }
+                ValueHolder cmp_holder(cmp_expr, nullptr);
+                match_value = lowerBinaryOpOrInvoke(cmp_op, cmp_expr, switch_val, case_val, node->loc, error);
+                if (!match_value.isValid()) {
+                    return false;
+                }
+            } else {
+                QoreIRValue case_val = lowerExpression(node->val, error);
+                if (!case_val.isValid()) {
+                    return false;
+                }
+                QoreValue cmp_expr(new QoreLogicalAbsoluteEqualsOperatorNode(node->loc, switch_expr.refSelf(),
+                    node->val.refSelf()));
+                ValueHolder cmp_holder(cmp_expr, nullptr);
+                match_value = lowerBinaryOpOrInvoke(QoreIROpcode::EqHard, cmp_expr, switch_val, case_val, node->loc,
+                    error);
+                if (!match_value.isValid()) {
+                    return false;
+                }
+            }
+
+            builder.createBranchIf(match_value, cases[i].block, next_check);
+            check_block = next_check;
+        }
+
+        builder.setBlock(check_block);
+        if (!default_block && def_case) {
+            for (const auto& info : cases) {
+                if (info.node == def_case) {
+                    default_block = info.block;
+                    break;
+                }
+            }
+        }
+        if (default_block) {
+            builder.createBranch(default_block);
+        } else {
+            builder.createBranch(end_block);
+        }
+
+        flow_stack.push_back({end_block, nullptr, true});
+        for (size_t i = 0; i < cases.size(); ++i) {
+            builder.setBlock(cases[i].block);
+            if (cases[i].node->code) {
+                if (!lowerStatementBlock(cases[i].node->code, error)) {
+                    flow_stack.pop_back();
+                    return false;
+                }
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                if (i + 1 < cases.size()) {
+                    builder.createBranch(cases[i + 1].block);
+                } else {
+                    builder.createBranch(end_block);
+                }
+            }
+        }
+        flow_stack.pop_back();
+
+        builder.setBlock(end_block);
+        return true;
+    }
+    if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
+        QoreIRBasicBlock* try_block = createBlock("try.body");
+        QoreIRBasicBlock* catch_block = createBlock("try.catch");
+        QoreIRBasicBlock* merge_block = createBlock("try.merge");
+        if (!try_block || !catch_block || !merge_block) {
+            error = "IR builder failed to create blocks for try";
+            return false;
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(try_block);
+        }
+
+        builder.setBlock(try_block);
+        exception_stack.push_back(catch_block);
+        if (try_stmt->getTryBlock() && !lowerStatementBlock(try_stmt->getTryBlock(), error)) {
+            exception_stack.pop_back();
+            return false;
+        }
+        exception_stack.pop_back();
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(merge_block);
+        }
+
+        builder.setBlock(catch_block);
+        builder.createLandingPad(stmt->loc);
+        QoreIRInstruction* catch_inst = builder.createCatchException(stmt->loc);
+        if (LocalVar* catch_var = try_stmt->getCatchVar()) {
+            builder.createStoreLocal(catch_var, catch_inst->result, stmt->loc);
+        }
+        if (try_stmt->getCatchBlock() && !lowerStatementBlock(try_stmt->getCatchBlock(), error)) {
+            return false;
+        }
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(merge_block);
+        }
+
+        builder.setBlock(merge_block);
+        return true;
+    }
+    if (auto* throw_stmt = dynamic_cast<const ThrowStatement*>(stmt)) {
+        QoreIRValue value = lowerExpression(throw_stmt->getArgs(), error);
+        if (!value.isValid()) {
+            return false;
+        }
+        builder.createThrow(value, stmt->loc);
+        return true;
+    }
+    if (auto* rethrow_stmt = dynamic_cast<const RethrowStatement*>(stmt)) {
+        QoreValue args = rethrow_stmt->getArgs();
+        if (args && !args.isNothing()) {
+            QoreIRValue value = lowerExpression(args, error);
+            if (!value.isValid()) {
+                return false;
+            }
+            builder.createThrow(value, stmt->loc);
+        } else {
+            builder.createRethrow(stmt->loc);
+        }
+        return true;
+    }
+
+    error = "unsupported statement for IR lowering";
+    return false;
+}
+
+bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::string& error) {
+    if (!block) {
+        error = "null statement block for IR lowering";
+        return false;
+    }
+    if (!ensureBuilderContext(error)) {
+        return false;
+    }
+    for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
+        if (!*it) {
+            continue;
+        }
+        if (!lowerStatement(*it, error)) {
+            return false;
+        }
+        if (blockHasTerminator(builder.getBlock())) {
+            break;
+        }
+    }
+    return true;
+}
+
 static bool isIntConstant(const QoreValue& value) {
     return value.isInt();
 }
@@ -88,9 +856,42 @@ static bool isFloatConstant(const QoreValue& value) {
     return value.isFloat();
 }
 
+QoreIROpcode QoreIRLowering::selectComparisonOpcode(const QoreValue& left, const QoreValue& right,
+        QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op) {
+    if (isIntConstant(left) && isIntConstant(right)) {
+        return int_op;
+    }
+    if (isFloatConstant(left) && isFloatConstant(right)) {
+        return float_op;
+    }
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    if (parse_context && getAnalysis(left, left_analysis) && getAnalysis(right, right_analysis)) {
+        if (isNeverNothingInt(left_analysis) && isNeverNothingInt(right_analysis)) {
+            return int_op;
+        }
+        if (isNeverNothingFloat(left_analysis) && isNeverNothingFloat(right_analysis)) {
+            return float_op;
+        }
+    }
+    return any_op;
+}
+
 static bool isRangeLValue(const QoreValue& value) {
     const AbstractQoreNode* node = value.getInternalNode();
     return node && dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node);
+}
+
+static bool isInvokeLValueNode(const AbstractQoreNode* node) {
+    return dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)
+        || dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)
+        || dynamic_cast<const QorePreIncrementOperatorNode*>(node)
+        || dynamic_cast<const QorePostIncrementOperatorNode*>(node)
+        || dynamic_cast<const QorePreDecrementOperatorNode*>(node)
+        || dynamic_cast<const QorePostDecrementOperatorNode*>(node)
+        || dynamic_cast<const QoreShiftOperatorNode*>(node)
+        || dynamic_cast<const QoreUnshiftOperatorNode*>(node)
+        || dynamic_cast<const QoreSpliceOperatorNode*>(node);
 }
 
 QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& error) {
@@ -209,6 +1010,10 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (result.isValid() || !error.empty()) {
         return result;
     }
+    result = lowerBinaryNot(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
     result = lowerMultiplication(expr, error);
     if (result.isValid() || !error.empty()) {
         return result;
@@ -289,6 +1094,30 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (result.isValid() || !error.empty()) {
         return result;
     }
+    result = lowerRegexExtract(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
+    result = lowerRegexMatch(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
+    result = lowerRegexSubst(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
+    result = lowerExists(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
+    result = lowerElements(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
+    result = lowerDotEval(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
     result = lowerFoldr(expr, error);
     if (result.isValid() || !error.empty()) {
         return result;
@@ -298,6 +1127,22 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return result;
     }
     result = lowerMap(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
+    result = lowerSelect(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
+    result = lowerMapSelect(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
+    result = lowerHashMap(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
+    result = lowerHashMapSelect(expr, error);
     if (result.isValid() || !error.empty()) {
         return result;
     }
@@ -559,7 +1404,19 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             error = "unsupported lvalue range for assignment IR lowering";
             return QoreIRValue();
         }
-        builder.createStoreLValue(assign->getLeft(), right, assign->loc);
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, assign->loc);
+            inst->invoke_opcode = QoreIROpcode::StoreLValue;
+            builder.setBlock(normal_block);
+        } else {
+            builder.createStoreLValue(assign->getLeft(), right, assign->loc);
+        }
     } else {
         error = "unsupported lvalue for assignment IR lowering";
         return QoreIRValue();
@@ -588,6 +1445,18 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             error = "unsupported lvalue range for plus-equals IR lowering";
             return QoreIRValue();
         }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+            inst->invoke_opcode = QoreIROpcode::AddAssignLValue;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
         return builder.createLValueBinaryOp(QoreIROpcode::AddAssignLValue, op->getLeft(), right, op->loc)->result;
     }
     QoreIRValue left_value = loadVarRef(left_var, error, "plus-equals");
@@ -604,7 +1473,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::AddAssignInt;
     }
-    QoreIRValue result = builder.createBinaryOp(opcode, left_value, right)->result;
+    QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
     if (!storeVarRef(left_var, result, error, "plus-equals")) {
         return QoreIRValue();
     }
@@ -632,6 +1504,18 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
             error = "unsupported lvalue range for minus-equals IR lowering";
             return QoreIRValue();
         }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+            inst->invoke_opcode = QoreIROpcode::SubAssignLValue;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
         return builder.createLValueBinaryOp(QoreIROpcode::SubAssignLValue, op->getLeft(), right, op->loc)->result;
     }
     QoreIRValue left_value = loadVarRef(left_var, error, "minus-equals");
@@ -648,7 +1532,10 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::SubAssignInt;
     }
-    QoreIRValue result = builder.createBinaryOp(opcode, left_value, right)->result;
+    QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
     if (!storeVarRef(left_var, result, error, "minus-equals")) {
         return QoreIRValue();
     }
@@ -676,6 +1563,18 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
             error = "unsupported lvalue range for multiply-equals IR lowering";
             return QoreIRValue();
         }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+            inst->invoke_opcode = QoreIROpcode::MulAssignLValue;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
         return builder.createLValueBinaryOp(QoreIROpcode::MulAssignLValue, op->getLeft(), right, op->loc)->result;
     }
     QoreIRValue left_value = loadVarRef(left_var, error, "multiply-equals");
@@ -692,7 +1591,10 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::MulAssignInt;
     }
-    QoreIRValue result = builder.createBinaryOp(opcode, left_value, right)->result;
+    QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
     if (!storeVarRef(left_var, result, error, "multiply-equals")) {
         return QoreIRValue();
     }
@@ -720,6 +1622,18 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
             error = "unsupported lvalue range for divide-equals IR lowering";
             return QoreIRValue();
         }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+            inst->invoke_opcode = QoreIROpcode::DivAssignLValue;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
         return builder.createLValueBinaryOp(QoreIROpcode::DivAssignLValue, op->getLeft(), right, op->loc)->result;
     }
     QoreIRValue left_value = loadVarRef(left_var, error, "divide-equals");
@@ -736,7 +1650,10 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::DivAssignInt;
     }
-    QoreIRValue result = builder.createBinaryOp(opcode, left_value, right)->result;
+    QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
     if (!storeVarRef(left_var, result, error, "divide-equals")) {
         return QoreIRValue();
     }
@@ -764,6 +1681,18 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
             error = "unsupported lvalue range for modulo-equals IR lowering";
             return QoreIRValue();
         }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+            inst->invoke_opcode = QoreIROpcode::ModAssignLValue;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
         return builder.createLValueBinaryOp(QoreIROpcode::ModAssignLValue, op->getLeft(), right, op->loc)->result;
     }
     QoreIRValue left_value = loadVarRef(left_var, error, "modulo-equals");
@@ -780,7 +1709,10 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::ModAssignInt;
     }
-    QoreIRValue result = builder.createBinaryOp(opcode, left_value, right)->result;
+    QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
     if (!storeVarRef(left_var, result, error, "modulo-equals")) {
         return QoreIRValue();
     }
@@ -808,6 +1740,18 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
             error = "unsupported lvalue range for and-equals IR lowering";
             return QoreIRValue();
         }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+            inst->invoke_opcode = QoreIROpcode::AndAssignLValue;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
         return builder.createLValueBinaryOp(QoreIROpcode::AndAssignLValue, op->getLeft(), right, op->loc)->result;
     }
     QoreIRValue left_value = loadVarRef(left_var, error, "and-equals");
@@ -824,7 +1768,10 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::AndAssignInt;
     }
-    QoreIRValue result = builder.createBinaryOp(opcode, left_value, right)->result;
+    QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
     if (!storeVarRef(left_var, result, error, "and-equals")) {
         return QoreIRValue();
     }
@@ -852,6 +1799,18 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
             error = "unsupported lvalue range for or-equals IR lowering";
             return QoreIRValue();
         }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+            inst->invoke_opcode = QoreIROpcode::OrAssignLValue;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
         return builder.createLValueBinaryOp(QoreIROpcode::OrAssignLValue, op->getLeft(), right, op->loc)->result;
     }
     QoreIRValue left_value = loadVarRef(left_var, error, "or-equals");
@@ -868,7 +1827,10 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::OrAssignInt;
     }
-    QoreIRValue result = builder.createBinaryOp(opcode, left_value, right)->result;
+    QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
     if (!storeVarRef(left_var, result, error, "or-equals")) {
         return QoreIRValue();
     }
@@ -896,6 +1858,18 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
             error = "unsupported lvalue range for xor-equals IR lowering";
             return QoreIRValue();
         }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+            inst->invoke_opcode = QoreIROpcode::XorAssignLValue;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
         return builder.createLValueBinaryOp(QoreIROpcode::XorAssignLValue, op->getLeft(), right, op->loc)->result;
     }
     QoreIRValue left_value = loadVarRef(left_var, error, "xor-equals");
@@ -912,7 +1886,10 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::XorAssignInt;
     }
-    QoreIRValue result = builder.createBinaryOp(opcode, left_value, right)->result;
+    QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
     if (!storeVarRef(left_var, result, error, "xor-equals")) {
         return QoreIRValue();
     }
@@ -934,6 +1911,18 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         error = "unsupported lvalue range for pre-increment IR lowering";
         return QoreIRValue();
     }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::PreIncLValue;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
     return builder.createLValueUnaryOp(QoreIROpcode::PreIncLValue, lvexp, op->loc)->result;
 }
 
@@ -951,6 +1940,18 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
     if (isRangeLValue(lvexp)) {
         error = "unsupported lvalue range for post-increment IR lowering";
         return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::PostIncLValue;
+        builder.setBlock(normal_block);
+        return inst->result;
     }
     return builder.createLValueUnaryOp(QoreIROpcode::PostIncLValue, lvexp, op->loc)->result;
 }
@@ -970,6 +1971,18 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         error = "unsupported lvalue range for pre-decrement IR lowering";
         return QoreIRValue();
     }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::PreDecLValue;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
     return builder.createLValueUnaryOp(QoreIROpcode::PreDecLValue, lvexp, op->loc)->result;
 }
 
@@ -987,6 +2000,18 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
     if (isRangeLValue(lvexp)) {
         error = "unsupported lvalue range for post-decrement IR lowering";
         return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::PostDecLValue;
+        builder.setBlock(normal_block);
+        return inst->result;
     }
     return builder.createLValueUnaryOp(QoreIROpcode::PostDecLValue, lvexp, op->loc)->result;
 }
@@ -1024,7 +2049,7 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
             }
         }
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, plus->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerMinus(const QoreValue& expr, std::string& error) {
@@ -1060,7 +2085,7 @@ QoreIRValue QoreIRLowering::lowerMinus(const QoreValue& expr, std::string& error
             }
         }
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, minus->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalEquals(const QoreValue& expr, std::string& error) {
@@ -1087,7 +2112,7 @@ QoreIRValue QoreIRLowering::lowerLogicalEquals(const QoreValue& expr, std::strin
         && isNeverNothingInt(right_analysis)) {
         op = QoreIROpcode::EqInt;
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, eq->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalNotEquals(const QoreValue& expr, std::string& error) {
@@ -1114,7 +2139,7 @@ QoreIRValue QoreIRLowering::lowerLogicalNotEquals(const QoreValue& expr, std::st
         && isNeverNothingInt(right_analysis)) {
         op = QoreIROpcode::NeInt;
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, ne->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalAbsoluteEquals(const QoreValue& expr, std::string& error) {
@@ -1132,7 +2157,7 @@ QoreIRValue QoreIRLowering::lowerLogicalAbsoluteEquals(const QoreValue& expr, st
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    return builder.createBinaryOp(QoreIROpcode::EqHard, left, right)->result;
+    return lowerBinaryOpOrInvoke(QoreIROpcode::EqHard, expr, left, right, eq->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalAbsoluteNotEquals(const QoreValue& expr, std::string& error) {
@@ -1150,7 +2175,7 @@ QoreIRValue QoreIRLowering::lowerLogicalAbsoluteNotEquals(const QoreValue& expr,
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    return builder.createBinaryOp(QoreIROpcode::NeHard, left, right)->result;
+    return lowerBinaryOpOrInvoke(QoreIROpcode::NeHard, expr, left, right, ne->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalLessThan(const QoreValue& expr, std::string& error) {
@@ -1179,7 +2204,7 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThan(const QoreValue& expr, std::str
             op = QoreIROpcode::LtFloat;
         }
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, lt->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalLessThanOrEquals(const QoreValue& expr, std::string& error) {
@@ -1208,7 +2233,7 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThanOrEquals(const QoreValue& expr, 
             op = QoreIROpcode::LeFloat;
         }
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, le->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalGreaterThan(const QoreValue& expr, std::string& error) {
@@ -1237,7 +2262,7 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThan(const QoreValue& expr, std::
             op = QoreIROpcode::GtFloat;
         }
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, gt->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalGreaterThanOrEquals(const QoreValue& expr, std::string& error) {
@@ -1266,7 +2291,7 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThanOrEquals(const QoreValue& exp
             op = QoreIROpcode::GeFloat;
         }
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, ge->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalComparison(const QoreValue& expr, std::string& error) {
@@ -1295,7 +2320,7 @@ QoreIRValue QoreIRLowering::lowerLogicalComparison(const QoreValue& expr, std::s
             op = QoreIROpcode::CmpFloat;
         }
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, cmp->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerUnaryPlus(const QoreValue& expr, std::string& error) {
@@ -1312,7 +2337,7 @@ QoreIRValue QoreIRLowering::lowerUnaryPlus(const QoreValue& expr, std::string& e
     if (!value.isValid()) {
         return QoreIRValue();
     }
-    return builder.createUnaryOp(QoreIROpcode::UnaryPlusAny, value)->result;
+    return lowerUnaryOpOrInvoke(QoreIROpcode::UnaryPlusAny, expr, value, plus->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerUnaryMinus(const QoreValue& expr, std::string& error) {
@@ -1338,7 +2363,32 @@ QoreIRValue QoreIRLowering::lowerUnaryMinus(const QoreValue& expr, std::string& 
             op = QoreIROpcode::UnaryMinusFloat;
         }
     }
-    return builder.createUnaryOp(op, value)->result;
+    return lowerUnaryOpOrInvoke(op, expr, value, minus->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerBinaryNot(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* binary_not = dynamic_cast<const QoreBinaryNotOperatorNode*>(node);
+    if (!binary_not) {
+        return QoreIRValue();
+    }
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    QoreIRValue value = lowerExpression(binary_not->getExp(), error);
+    if (!value.isValid()) {
+        return QoreIRValue();
+    }
+
+    QoreIROpcode op = QoreIROpcode::XorAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(binary_not->getExp(), analysis) && isNeverNothingInt(analysis)) {
+        op = QoreIROpcode::XorInt;
+    }
+
+    QoreIRValue all_bits = builder.createConstInt(-1, binary_not->loc)->result;
+    return lowerBinaryOpOrInvoke(op, expr, value, all_bits, binary_not->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerMultiplication(const QoreValue& expr, std::string& error) {
@@ -1367,7 +2417,7 @@ QoreIRValue QoreIRLowering::lowerMultiplication(const QoreValue& expr, std::stri
             op = QoreIROpcode::MulFloat;
         }
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, mul->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerDivision(const QoreValue& expr, std::string& error) {
@@ -1396,7 +2446,7 @@ QoreIRValue QoreIRLowering::lowerDivision(const QoreValue& expr, std::string& er
             op = QoreIROpcode::DivFloat;
         }
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, div->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerModulo(const QoreValue& expr, std::string& error) {
@@ -1423,7 +2473,7 @@ QoreIRValue QoreIRLowering::lowerModulo(const QoreValue& expr, std::string& erro
         && isNeverNothingInt(right_analysis)) {
         op = QoreIROpcode::ModInt;
     }
-    return builder.createBinaryOp(op, left, right)->result;
+    return lowerBinaryOpOrInvoke(op, expr, left, right, mod->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerBinaryAnd(const QoreValue& expr, std::string& error) {
@@ -1451,7 +2501,7 @@ QoreIRValue QoreIRLowering::lowerBinaryAnd(const QoreValue& expr, std::string& e
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::AndInt;
     }
-    return builder.createBinaryOp(opcode, left, right)->result;
+    return lowerBinaryOpOrInvoke(opcode, expr, left, right, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerBinaryOr(const QoreValue& expr, std::string& error) {
@@ -1479,7 +2529,7 @@ QoreIRValue QoreIRLowering::lowerBinaryOr(const QoreValue& expr, std::string& er
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::OrInt;
     }
-    return builder.createBinaryOp(opcode, left, right)->result;
+    return lowerBinaryOpOrInvoke(opcode, expr, left, right, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerBinaryXor(const QoreValue& expr, std::string& error) {
@@ -1507,7 +2557,7 @@ QoreIRValue QoreIRLowering::lowerBinaryXor(const QoreValue& expr, std::string& e
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::XorInt;
     }
-    return builder.createBinaryOp(opcode, left, right)->result;
+    return lowerBinaryOpOrInvoke(opcode, expr, left, right, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerShiftLeft(const QoreValue& expr, std::string& error) {
@@ -1535,7 +2585,7 @@ QoreIRValue QoreIRLowering::lowerShiftLeft(const QoreValue& expr, std::string& e
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::ShlInt;
     }
-    return builder.createBinaryOp(opcode, left, right)->result;
+    return lowerBinaryOpOrInvoke(opcode, expr, left, right, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerShiftRight(const QoreValue& expr, std::string& error) {
@@ -1563,7 +2613,7 @@ QoreIRValue QoreIRLowering::lowerShiftRight(const QoreValue& expr, std::string& 
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::ShrInt;
     }
-    return builder.createBinaryOp(opcode, left, right)->result;
+    return lowerBinaryOpOrInvoke(opcode, expr, left, right, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::string& error) {
@@ -1588,6 +2638,18 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
             error = "unsupported lvalue range for shift-left-assign IR lowering";
             return QoreIRValue();
         }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+            inst->invoke_opcode = QoreIROpcode::ShlAssignLValue;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
         return builder.createLValueBinaryOp(QoreIROpcode::ShlAssignLValue, op->getLeft(), right, op->loc)->result;
     }
     QoreIRValue left_value = loadVarRef(left_var, error, "shift-left-assign");
@@ -1604,7 +2666,10 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::ShlAssignInt;
     }
-    QoreIRValue result = builder.createBinaryOp(opcode, left_value, right)->result;
+    QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
     if (!storeVarRef(left_var, result, error, "shift-left-assign")) {
         return QoreIRValue();
     }
@@ -1633,6 +2698,18 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
             error = "unsupported lvalue range for shift-right-assign IR lowering";
             return QoreIRValue();
         }
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+            inst->invoke_opcode = QoreIROpcode::ShrAssignLValue;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
         return builder.createLValueBinaryOp(QoreIROpcode::ShrAssignLValue, op->getLeft(), right, op->loc)->result;
     }
     QoreIRValue left_value = loadVarRef(left_var, error, "shift-right-assign");
@@ -1649,7 +2726,10 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::ShrAssignInt;
     }
-    QoreIRValue result = builder.createBinaryOp(opcode, left_value, right)->result;
+    QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
     if (!storeVarRef(left_var, result, error, "shift-right-assign")) {
         return QoreIRValue();
     }
@@ -1670,6 +2750,18 @@ QoreIRValue QoreIRLowering::lowerRange(const QoreValue& expr, std::string& error
     QoreIRValue right = lowerExpression(op->getRight(), error);
     if (!right.isValid()) {
         return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::RangeAny;
+        builder.setBlock(normal_block);
+        return inst->result;
     }
     return builder.createBinaryOp(QoreIROpcode::RangeAny, left, right, op->loc)->result;
 }
@@ -1693,6 +2785,18 @@ QoreIRValue QoreIRLowering::lowerSquareBracketsRange(const QoreValue& expr, std:
     if (!end.isValid()) {
         return QoreIRValue();
     }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {seq, start, end}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::RangeSliceAny;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
     return builder.createTernaryOp(QoreIROpcode::RangeSliceAny, seq, start, end, op->loc)->result;
 }
 
@@ -1711,6 +2815,18 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
         error = "unsupported lvalue range for square brackets IR lowering";
         return QoreIRValue();
     }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::LoadLValue;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
     return builder.createLoadLValue(lvalue, op->loc)->result;
 }
 
@@ -1724,6 +2840,18 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
     if (!lvalue.hasNode()) {
         error = "unsupported lvalue for hash dereference IR lowering";
         return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::LoadLValue;
+        builder.setBlock(normal_block);
+        return inst->result;
     }
     return builder.createLoadLValue(lvalue, op->loc)->result;
 }
@@ -1742,6 +2870,18 @@ QoreIRValue QoreIRLowering::lowerShift(const QoreValue& expr, std::string& error
     if (isRangeLValue(lvalue)) {
         error = "unsupported lvalue range for shift IR lowering";
         return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::ShiftLValue;
+        builder.setBlock(normal_block);
+        return inst->result;
     }
     return builder.createLValueUnaryOp(QoreIROpcode::ShiftLValue, lvalue, op->loc)->result;
 }
@@ -1764,6 +2904,18 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
     QoreIRValue right = lowerExpression(op->getRight(), error);
     if (!right.isValid()) {
         return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::UnshiftLValue;
+        builder.setBlock(normal_block);
+        return inst->result;
     }
     return builder.createLValueBinaryOp(QoreIROpcode::UnshiftLValue, lvalue, right, op->loc)->result;
 }
@@ -1794,6 +2946,18 @@ QoreIRValue QoreIRLowering::lowerSplice(const QoreValue& expr, std::string& erro
     QoreIRValue replacement = lowerExpression(op->getNewValue(), error);
     if (!replacement.isValid()) {
         return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {offset, length, replacement}, normal_block, handler, op->loc);
+        inst->invoke_opcode = QoreIROpcode::SpliceLValue;
+        builder.setBlock(normal_block);
+        return inst->result;
     }
     return builder.createLValueTernaryOp(QoreIROpcode::SpliceLValue, lvalue, offset, length, replacement,
         op->loc)->result;
@@ -1826,7 +2990,7 @@ QoreIRValue QoreIRLowering::lowerExtract(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{lvalue, offset, length, replacement};
-    return builder.createExprOp(QoreIROpcode::ExtractAny, expr, operands, op->loc)->result;
+    return lowerExprOpOrInvoke(QoreIROpcode::ExtractAny, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& error) {
@@ -1840,7 +3004,7 @@ QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& erro
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return builder.createExprOp(QoreIROpcode::RemoveAny, expr, operands, op->loc)->result;
+    return lowerExprOpOrInvoke(QoreIROpcode::RemoveAny, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerKeys(const QoreValue& expr, std::string& error) {
@@ -1854,7 +3018,91 @@ QoreIRValue QoreIRLowering::lowerKeys(const QoreValue& expr, std::string& error)
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return builder.createExprOp(QoreIROpcode::KeysAny, expr, operands, op->loc)->result;
+    return lowerExprOpOrInvoke(QoreIROpcode::KeysAny, expr, operands, op->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerRegexMatch(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreRegexMatchOperatorNode*>(node);
+    if (!op) {
+        return QoreIRValue();
+    }
+    QoreIRValue operand = lowerExpression(op->getExp(), error);
+    if (!operand.isValid()) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> operands{operand};
+    return lowerExprOpOrInvoke(QoreIROpcode::RegexMatchAny, expr, operands, op->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerRegexExtract(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreRegexExtractOperatorNode*>(node);
+    if (!op) {
+        return QoreIRValue();
+    }
+    QoreIRValue operand = lowerExpression(op->getExp(), error);
+    if (!operand.isValid()) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> operands{operand};
+    return lowerExprOpOrInvoke(QoreIROpcode::RegexExtractAny, expr, operands, op->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerRegexSubst(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreRegexSubstOperatorNode*>(node);
+    if (!op) {
+        return QoreIRValue();
+    }
+    QoreIRValue operand = lowerExpression(op->getExp(), error);
+    if (!operand.isValid()) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> operands{operand};
+    return lowerExprOpOrInvoke(QoreIROpcode::RegexSubstAny, expr, operands, op->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreExistsOperatorNode*>(node);
+    if (!op) {
+        return QoreIRValue();
+    }
+    QoreIRValue operand = lowerExpression(op->getExp(), error);
+    if (!operand.isValid()) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> operands{operand};
+    return lowerExprOpOrInvoke(QoreIROpcode::ExistsAny, expr, operands, op->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerElements(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreElementsOperatorNode*>(node);
+    if (!op) {
+        return QoreIRValue();
+    }
+    QoreIRValue operand = lowerExpression(op->getExp(), error);
+    if (!operand.isValid()) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> operands{operand};
+    return lowerExprOpOrInvoke(QoreIROpcode::ElementsAny, expr, operands, op->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreDotEvalOperatorNode*>(node);
+    if (!op) {
+        return QoreIRValue();
+    }
+    QoreIRValue operand = lowerExpression(op->getExpression(), error);
+    if (!operand.isValid()) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> operands{operand};
+    return lowerExprOpOrInvoke(QoreIROpcode::DotEvalAny, expr, operands, op->loc, error);
 }
 
 bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
@@ -1883,6 +3131,57 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
     return true;
 }
 
+QoreIRValue QoreIRLowering::lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr,
+        const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc, std::string& error) {
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, operands, normal_block, handler, loc);
+        inst->invoke_opcode = op;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
+    return builder.createExprOp(op, expr, operands, loc)->result;
+}
+
+QoreIRValue QoreIRLowering::lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left,
+        QoreIRValue right, const QoreProgramLocation* loc, std::string& error) {
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, loc);
+        inst->invoke_opcode = op;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
+    return builder.createBinaryOp(op, left, right, loc)->result;
+}
+
+QoreIRValue QoreIRLowering::lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue value,
+        const QoreProgramLocation* loc, std::string& error) {
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {value}, normal_block, handler, loc);
+        inst->invoke_opcode = op;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
+    return builder.createUnaryOp(op, value, loc)->result;
+}
+
 QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* cast = dynamic_cast<const QoreCastOperatorNode*>(node);
@@ -1899,7 +3198,7 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
     }
     std::vector<QoreIRValue> operands;
     operands.push_back(value);
-    return builder.createExprOp(QoreIROpcode::CastAny, expr, operands, cast_node->loc)->result;
+    return lowerExprOpOrInvoke(QoreIROpcode::CastAny, expr, operands, cast_node->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string& error) {
@@ -1912,7 +3211,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
-    return builder.createExprOp(QoreIROpcode::Call, expr, operands, call->loc)->result;
+    return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::string& error) {
@@ -1930,7 +3229,7 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
-    return builder.createExprOp(QoreIROpcode::CallIndirect, expr, operands, call->loc)->result;
+    return lowerExprOpOrInvoke(QoreIROpcode::CallIndirect, expr, operands, call->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
@@ -1943,7 +3242,7 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
-    return builder.createExprOp(QoreIROpcode::CallMethod, expr, operands, call->loc)->result;
+    return lowerExprOpOrInvoke(QoreIROpcode::CallMethod, expr, operands, call->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& error) {
@@ -1956,7 +3255,7 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
-    return builder.createExprOp(QoreIROpcode::CallStatic, expr, operands, call->loc)->result;
+    return lowerExprOpOrInvoke(QoreIROpcode::CallStatic, expr, operands, call->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error) {
@@ -1977,6 +3276,18 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
     if (!right.isValid()) {
         return QoreIRValue();
     }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, foldl->loc);
+        inst->invoke_opcode = QoreIROpcode::FoldlAny;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
     return builder.createBinaryOp(QoreIROpcode::FoldlAny, left, right)->result;
 }
 
@@ -1994,6 +3305,18 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
     QoreIRValue right = lowerExpression(foldr->getRight(), error);
     if (!right.isValid()) {
         return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, foldr->loc);
+        inst->invoke_opcode = QoreIROpcode::FoldrAny;
+        builder.setBlock(normal_block);
+        return inst->result;
     }
     return builder.createBinaryOp(QoreIROpcode::FoldrAny, left, right)->result;
 }
@@ -2013,7 +3336,156 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
     if (!right.isValid()) {
         return QoreIRValue();
     }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, map->loc);
+        inst->invoke_opcode = QoreIROpcode::MapAny;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
     return builder.createBinaryOp(QoreIROpcode::MapAny, left, right)->result;
+}
+
+QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* select = dynamic_cast<const QoreSelectOperatorNode*>(node);
+    if (!select) {
+        return QoreIRValue();
+    }
+
+    QoreIRValue left = lowerExpression(select->getLeft(), error);
+    if (!left.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue right = lowerExpression(select->getRight(), error);
+    if (!right.isValid()) {
+        return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, select->loc);
+        inst->invoke_opcode = QoreIROpcode::SelectAny;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
+    return builder.createBinaryOp(QoreIROpcode::SelectAny, left, right)->result;
+}
+
+QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* map_select = dynamic_cast<const QoreMapSelectOperatorNode*>(node);
+    if (!map_select) {
+        return QoreIRValue();
+    }
+
+    QoreIRValue first = lowerExpression(map_select->get(0), error);
+    if (!first.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue second = lowerExpression(map_select->get(1), error);
+    if (!second.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue third = lowerExpression(map_select->get(2), error);
+    if (!third.isValid()) {
+        return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {first, second, third}, normal_block, handler, map_select->loc);
+        inst->invoke_opcode = QoreIROpcode::MapSelectAny;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
+    return builder.createTernaryOp(QoreIROpcode::MapSelectAny, first, second, third)->result;
+}
+
+QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* map = dynamic_cast<const QoreHashMapOperatorNode*>(node);
+    if (!map) {
+        return QoreIRValue();
+    }
+
+    QoreIRValue first = lowerExpression(map->get(0), error);
+    if (!first.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue second = lowerExpression(map->get(1), error);
+    if (!second.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue third = lowerExpression(map->get(2), error);
+    if (!third.isValid()) {
+        return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {first, second, third}, normal_block, handler, map->loc);
+        inst->invoke_opcode = QoreIROpcode::HashMapAny;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
+    return builder.createTernaryOp(QoreIROpcode::HashMapAny, first, second, third)->result;
+}
+
+QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* map_select = dynamic_cast<const QoreHashMapSelectOperatorNode*>(node);
+    if (!map_select) {
+        return QoreIRValue();
+    }
+
+    QoreIRValue first = lowerExpression(map_select->get(0), error);
+    if (!first.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue second = lowerExpression(map_select->get(1), error);
+    if (!second.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue third = lowerExpression(map_select->get(2), error);
+    if (!third.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRValue fourth = lowerExpression(map_select->get(3), error);
+    if (!fourth.isValid()) {
+        return QoreIRValue();
+    }
+    if (!exception_stack.empty()) {
+        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create invoke continuation block";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* handler = exception_stack.back();
+        auto* inst = builder.createInvoke(expr, {first, second, third, fourth}, normal_block, handler,
+            map_select->loc);
+        inst->invoke_opcode = QoreIROpcode::HashMapSelectAny;
+        builder.setBlock(normal_block);
+        return inst->result;
+    }
+    return builder.createQuaternaryOp(QoreIROpcode::HashMapSelectAny, first, second, third, fourth)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& error) {
@@ -2029,12 +3501,16 @@ QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
 
-    QoreIRBasicBlock* left_block = builder.getBlock();
     QoreIRValue left_value = lowerExpression(and_node->getLeft(), error);
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
-    QoreIRValue left_bool = builder.createUnaryOp(QoreIROpcode::ToBool, left_value)->result;
+    QoreIRValue left_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, and_node->getLeft(), left_value,
+        and_node->loc, error);
+    if (!left_bool.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRBasicBlock* left_block = builder.getBlock();
     QoreIRValue false_value = builder.createConstBool(false)->result;
 
     QoreIRBasicBlock* rhs_block = createBlock("and.rhs");
@@ -2050,13 +3526,18 @@ QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& 
     if (!right_value.isValid()) {
         return QoreIRValue();
     }
-    QoreIRValue right_bool = builder.createUnaryOp(QoreIROpcode::ToBool, right_value)->result;
+    QoreIRValue right_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, and_node->getRight(), right_value,
+        and_node->loc, error);
+    if (!right_bool.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
     builder.setBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {false_value, left_block},
-        {right_bool, rhs_block},
+        {right_bool, rhs_exit_block},
     };
     return builder.createPhi(incoming)->result;
 }
@@ -2071,12 +3552,16 @@ QoreIRValue QoreIRLowering::lowerLogicalOr(const QoreValue& expr, std::string& e
         return QoreIRValue();
     }
 
-    QoreIRBasicBlock* left_block = builder.getBlock();
     QoreIRValue left_value = lowerExpression(or_node->getLeft(), error);
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
-    QoreIRValue left_bool = builder.createUnaryOp(QoreIROpcode::ToBool, left_value)->result;
+    QoreIRValue left_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, or_node->getLeft(), left_value,
+        or_node->loc, error);
+    if (!left_bool.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRBasicBlock* left_block = builder.getBlock();
     QoreIRValue true_value = builder.createConstBool(true)->result;
 
     QoreIRBasicBlock* rhs_block = createBlock("or.rhs");
@@ -2092,13 +3577,18 @@ QoreIRValue QoreIRLowering::lowerLogicalOr(const QoreValue& expr, std::string& e
     if (!right_value.isValid()) {
         return QoreIRValue();
     }
-    QoreIRValue right_bool = builder.createUnaryOp(QoreIROpcode::ToBool, right_value)->result;
+    QoreIRValue right_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, or_node->getRight(), right_value,
+        or_node->loc, error);
+    if (!right_bool.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
     builder.setBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {true_value, left_block},
-        {right_bool, rhs_block},
+        {right_bool, rhs_exit_block},
     };
     return builder.createPhi(incoming)->result;
 }
@@ -2117,7 +3607,11 @@ QoreIRValue QoreIRLowering::lowerLogicalNot(const QoreValue& expr, std::string& 
     if (!value.isValid()) {
         return QoreIRValue();
     }
-    QoreIRValue bool_value = builder.createUnaryOp(QoreIROpcode::ToBool, value)->result;
+    QoreIRValue bool_value = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, not_node->getExp(), value,
+        not_node->loc, error);
+    if (!bool_value.isValid()) {
+        return QoreIRValue();
+    }
     return builder.createUnaryOp(QoreIROpcode::Not, bool_value)->result;
 }
 
@@ -2131,12 +3625,12 @@ QoreIRValue QoreIRLowering::lowerNullCoalescing(const QoreValue& expr, std::stri
         return QoreIRValue();
     }
 
-    QoreIRBasicBlock* left_block = builder.getBlock();
     QoreIRValue left_value = lowerExpression(coalesce->getLeft(), error);
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
     QoreIRValue is_null = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, left_value)->result;
+    QoreIRBasicBlock* left_block = builder.getBlock();
 
     QoreIRBasicBlock* rhs_block = createBlock("coalesce.null.rhs");
     QoreIRBasicBlock* merge_block = createBlock("coalesce.null.merge");
@@ -2151,12 +3645,13 @@ QoreIRValue QoreIRLowering::lowerNullCoalescing(const QoreValue& expr, std::stri
     if (!right_value.isValid()) {
         return QoreIRValue();
     }
+    QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
     builder.setBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {left_value, left_block},
-        {right_value, rhs_block},
+        {right_value, rhs_exit_block},
     };
     return builder.createPhi(incoming)->result;
 }
@@ -2171,12 +3666,16 @@ QoreIRValue QoreIRLowering::lowerValueCoalescing(const QoreValue& expr, std::str
         return QoreIRValue();
     }
 
-    QoreIRBasicBlock* left_block = builder.getBlock();
     QoreIRValue left_value = lowerExpression(coalesce->getLeft(), error);
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
-    QoreIRValue left_bool = builder.createUnaryOp(QoreIROpcode::ToBool, left_value)->result;
+    QoreIRValue left_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, coalesce->getLeft(), left_value,
+        coalesce->loc, error);
+    if (!left_bool.isValid()) {
+        return QoreIRValue();
+    }
+    QoreIRBasicBlock* left_block = builder.getBlock();
 
     QoreIRBasicBlock* rhs_block = createBlock("coalesce.value.rhs");
     QoreIRBasicBlock* merge_block = createBlock("coalesce.value.merge");
@@ -2191,12 +3690,13 @@ QoreIRValue QoreIRLowering::lowerValueCoalescing(const QoreValue& expr, std::str
     if (!right_value.isValid()) {
         return QoreIRValue();
     }
+    QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
     builder.setBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {left_value, left_block},
-        {right_value, rhs_block},
+        {right_value, rhs_exit_block},
     };
     return builder.createPhi(incoming)->result;
 }
@@ -2215,7 +3715,11 @@ QoreIRValue QoreIRLowering::lowerQuestionMark(const QoreValue& expr, std::string
     if (!cond_value.isValid()) {
         return QoreIRValue();
     }
-    QoreIRValue cond_bool = builder.createUnaryOp(QoreIROpcode::ToBool, cond_value)->result;
+    QoreIRValue cond_bool = lowerUnaryOpOrInvoke(QoreIROpcode::ToBool, ternary->get(0), cond_value,
+        ternary->loc, error);
+    if (!cond_bool.isValid()) {
+        return QoreIRValue();
+    }
 
     QoreIRBasicBlock* left_block = createBlock("ternary.then");
     QoreIRBasicBlock* right_block = createBlock("ternary.else");
@@ -2231,6 +3735,7 @@ QoreIRValue QoreIRLowering::lowerQuestionMark(const QoreValue& expr, std::string
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
+    QoreIRBasicBlock* left_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
     builder.setBlock(right_block);
@@ -2238,12 +3743,13 @@ QoreIRValue QoreIRLowering::lowerQuestionMark(const QoreValue& expr, std::string
     if (!right_value.isValid()) {
         return QoreIRValue();
     }
+    QoreIRBasicBlock* right_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
     builder.setBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
-        {left_value, left_block},
-        {right_value, right_block},
+        {left_value, left_exit_block},
+        {right_value, right_exit_block},
     };
     return builder.createPhi(incoming)->result;
 }
