@@ -44,6 +44,7 @@ module EdifactUtil {
         # register the data provider factories
         DataProvider::registerFactory(new EdifactReadDataProviderFactory());
         DataProvider::registerFactory(new EdifactWriteDataProviderFactory());
+        DataProvider::registerFactory(new EdifactSchemaDataProviderFactory());
 
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
@@ -102,6 +103,50 @@ module EdifactUtil {
                 }
             ),
         });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EdifactUtil::AppName,
+            "path": "/",
+            "action": "schema",
+            "subtype": "edifactschema",
+            "display_name": "Load EDIFACT Schema",
+            "short_desc": "Load EDIFACT directory schema from cache or flat files",
+            "desc": "Load EDIFACT directory schema from cache or flat files",
+            "action_code": DPAT_FIND,
+            "cls": "EdifactUtil::EdifactSchemaDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                EdifactSchemaDataProvider::ConstructorOptions{"release",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                EdifactSchemaDataProvider::ConstructorOptions - ("release",), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EdifactUtil::AppName,
+            "path": "/",
+            "action": "schema-summary",
+            "subtype": "edifactschema",
+            "display_name": "Schema Summary",
+            "short_desc": "Load EDIFACT schema summary only",
+            "desc": "Load EDIFACT schema summary only",
+            "action_code": DPAT_FIND,
+            "cls": "EdifactUtil::EdifactSchemaSummaryDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                EdifactSchemaDataProvider::ConstructorOptions{"release",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                EdifactSchemaDataProvider::ConstructorOptions - ("release",), {
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 
@@ -139,6 +184,14 @@ module EdifactUtil {
     - @ref EdifactUtil::EdifactDelimiters "EdifactDelimiters": Handles UNA segment parsing and
       delimiter configuration
 
+    <b>Directory Schema Support</b>
+    - @ref EdifactUtil::EdifactSchema "EdifactSchema": EDIFACT directory schema container
+    - @ref EdifactUtil::EdifactDirectoryLoader "EdifactDirectoryLoader": Loads directory flat files
+    - @ref EdifactUtil::EdifactDirectoryCache "EdifactDirectoryCache": On-disk schema cache
+    - @ref EdifactUtil::EdifactSchemaRegistry "EdifactSchemaRegistry": Registry for loaded schemas
+    - <i>Note:</i> The internal EdifactUtil source files use numeric prefixes (01/02/03) to
+      enforce load order for directory schema components.
+
     <b>Iterators (Reading)</b>
     - @ref EdifactUtil::EdifactAbstractIterator "EdifactAbstractIterator": Base iterator class
     - @ref EdifactUtil::EdifactIterator "EdifactIterator": Stream-based iterator
@@ -154,6 +207,7 @@ module EdifactUtil {
     <b>DataProvider Integration</b>
     - @ref EdifactUtil::EdifactReadDataProvider "EdifactReadDataProvider": Data provider for reading
     - @ref EdifactUtil::EdifactWriteDataProvider "EdifactWriteDataProvider": Data provider for writing
+    - @ref EdifactUtil::EdifactSchemaDataProvider "EdifactSchemaDataProvider": Data provider for loading schemas
 
     @section edifactutil_structure EDIFACT Message Structure
 
@@ -318,6 +372,43 @@ string edifact_output = w.getData();
     The module integrates with the Qore DataProvider framework, enabling use in data pipelines
     and integration workflows.
 
+    Schema loading is available as a DataProvider action (\c edifactschema), which accepts
+    \c release, \c dir, and cache-related options (including \c skip_cache_read) for use with
+    \c qdp.
+
+    @par qdp Example: Load a Schema via App Action
+    @verbatim qdp '@Edifact/schema{release=D01B,dir=/path/to/edifact/D01B,skip_cache_read=true}' search {}
+    @endverbatim
+
+    @par qdp Example: Summary Listing Only
+    @verbatim qdp '@Edifact/schema-summary{release=D01B,dir=/path/to/edifact/D01B}' search {}
+    @endverbatim
+
+    @par qdp Example: Cache Only (fail on miss)
+    @verbatim qdp '@Edifact/schema{release=D01B,cache_only=true}' search {}
+    @endverbatim
+
+    @par qdp Example: Use Custom Cache Directory
+    @verbatim qdp '@Edifact/schema{release=D01B,dir=/path/to/edifact/D01B,cache_dir=/tmp/edifact-cache}' search {}
+    @endverbatim
+
+    @par qdp Example: Search Schema Metadata with DPQL
+    @verbatim qdp '@Edifact/schema{release=D01B,dir=/path/to/edifact/D01B}' search '@counts.messages > 0'
+    @endverbatim
+
+    @par qdp Example: Show Schema Keys
+    @verbatim qdp '@Edifact/schema{release=D01B,dir=/path/to/edifact/D01B}' search '{}' -q
+    @endverbatim
+
+    @section edifactutil_fixture_gen Fixture Generator
+
+    The repository includes a helper script for creating minimal EDIFACT directory fixtures
+    for tests. The script lives at \c tools/edifact-fixture-gen.qr.
+
+    @par Example: Generate a Fixture Set
+    @verbatim qore tools/edifact-fixture-gen.qr --release D11A --message IFTMIN --code 610 --desc "Transport instruction message"
+    @endverbatim
+
     @code{.py}
 %requires EdifactUtil
 %requires DataProvider
@@ -346,10 +437,152 @@ while (i.next()) {
     |\c INVOIC|Invoice|Commercial invoice
     |\c DESADV|Despatch Advice|Shipment notification
     |\c RECADV|Receiving Advice|Goods receipt confirmation
+    |\c REMADV|Remittance Advice|Payment remittance details
     |\c PRICAT|Price/Sales Catalogue|Product and pricing information
     |\c IFTMIN|Instruction Message|Transport booking request
-    |\c CUSCAR|Customs Cargo Report|Customs declaration
-    |\c EDIFACT|Healthcare|Claims, remittances, eligibility
+    |\c IFTSTA|Transport Status Report|Shipment status update
+    |\c CODECO|Container Gate-in/Gate-out|Terminal gate movement report
+    |\c COPARN|Container Announcement|Container announcement
+    |\c COPRAR|Container Discharge/Loading|Container discharge/load order
+    |\c COARRI|Container Discharge/Loading Report|Container arrival/departure report
+    |\c MSCONS|Metered Services Consumption|Utility consumption report
+    |\c UTILMD|Utility Master Data|Utility master data message
+    |\c UTILTS|Utility Time Series|Utility time series message
+    |\c CONTRL|Control Message|Syntax/acknowledgement control message
+    |\c APERAK|Application Error/Ack|Application error and acknowledgement
+    |\c MEDREQ|Medical Service Request|Healthcare request message
+    |\c MEDRPT|Medical Service Report|Healthcare report message
+    |\c MEDADV|Medical Service Advice|Healthcare advice message
+
+    @section edifactutil_arch Architecture Overview
+
+    EDIFACT support is layered so parsing/writing can work without directory schemas, while
+    schema-aware workflows can be enabled when directory flat files are available.
+
+    - \c EdifactBase / \c EdifactDelimiters: core parsing utilities and UNA delimiter handling
+    - Readers/Writers: \c EdifactReader parses messages, \c EdifactWriter generates interchanges
+    - Schema support: \c EdifactDirectoryLoader loads flat-file directories into \c EdifactSchema
+    - Cache/registry: \c EdifactDirectoryCache persists schemas, \c EdifactSchemaRegistry loads releases
+    - DataProvider: \c EdifactRead/Write/Schema data providers expose the module via \c qdp
+
+    @section edifactutil_usage Usage Examples
+
+    @subsection edifactutil_usage_parse Parse EDIFACT data
+
+    @code{.py}
+%requires EdifactUtil
+
+string edi = "UNA:+.? 'UNB+UNOA:1+SENDER+RECEIVER+240101:1200+1'";
+EdifactReader r(edi);
+list<hash<auto>> messages = r.readAll();
+    @endcode
+
+    @subsection edifactutil_usage_write Generate EDIFACT data
+
+    @code{.py}
+%requires EdifactUtil
+
+EdifactWriter w((
+    "sender_id": "SENDER",
+    "recipient_id": "RECEIVER",
+    "control_reference": "REF001",
+));
+
+w.addMessage((
+    "message_reference": "1",
+    "message_type": "ORDERS",
+    "message_version": "D",
+    "message_release": "01B",
+    "segments": (
+        ("BGM", ("220", "PO-123")),
+        ("DTM", (("137", "20240101", "102"),)),
+    ),
+));
+
+string out = w.getText();
+    @endcode
+
+    @subsection edifactutil_usage_schema Load a schema from a directory release
+
+    @code{.py}
+%requires EdifactUtil
+
+string release_dir = "/path/to/edifact/D21A";
+list<string> cache_warnings = ();
+
+EdifactSchema schema = EdifactSchemaRegistry::loadRelease("D21A", (
+    "dir": release_dir,
+    "skip_cache_read": True,
+    "loader_opts": ("strict": True),
+    "cache_error": "warn",
+    "cache_warnings": \cache_warnings,
+));
+    @endcode
+
+    @subsection edifactutil_usage_qdp DataProvider usage
+
+    @verbatim
+qdp '@Edifact/read{path=/tmp/in.edi}' search {}
+qdp '@Edifact/write{path=/tmp/out.edi}' create ("messages": $data)
+qdp '@Edifact/schema{release=D21A,dir=/path/to/edifact/D21A,skip_cache_read=true,cache_error=warn}' search {}
+    @endverbatim
+
+    When \c cache_error is \c "warn", the schema data provider includes any cache load warnings
+    in the \c cache_warnings field of the returned record.
+
+    @section edifactutil_directory Directory Schema Cache
+
+    EDIFACT directory data is not shipped with this module. Instead, directory flat files
+    can be loaded and cached locally. Set \c QORE_EDIFACT_DIRCACHE to override the cache
+    location; the default is \c "~/.qore/edifact".
+
+    Cached schemas are stored as Qore value strings with quoted hash keys for reliable
+    round-tripping. Cache load failures are treated as cache misses so directory loading
+    can rebuild a fresh cache (unless \c cache_only is set). Use \c cache_error and
+    \c cache_warnings to control and observe parse/type errors from cache loads.
+
+    Options for \c EdifactSchemaRegistry::loadRelease():
+
+    - \c dir: directory containing flat files for the release
+    - \c reload: ignore the in-memory registry and reload
+    - \c skip_cache_read: do not read from the on-disk cache
+    - \c cache_only: load only from cache (throws on cache miss)
+    - \c cache_error: how to handle cache parse/type errors (one of \c "ignore", \c "warn", \c "error"; default: \c "warn")
+        - \c "ignore": treat as cache miss without warnings
+    - \c "warn": treat as cache miss and append warnings to \c cache_warnings (if provided); otherwise
+      emit a warning via \c warn()
+        - \c "error": throw \c EDIFACT-CACHE-ERROR on cache parse/type errors
+    - \c cache_warnings: optional list reference (use \c \\cache_warnings) to receive warning strings when
+      \c cache_error is \c "warn"
+    - \c loader_opts: options passed to \c EdifactDirectoryLoader
+        - \c strict: validate EDMD content strictly (segment table header, indentation, structure)
+        - wrapped segment-table continuation lines are ignored
+
+    @code{.py}
+%requires EdifactUtil
+
+# Load from a local directory of flat files (EDMD/EDSD/EDCD/EDED/EDCL)
+auto schema = EdifactSchemaRegistry::loadRelease("D01B", (
+    "dir": "/path/to/edifact/D01B",
+    "skip_cache_read": True,
+    "loader_opts": ("strict": True),
+));
+    @endcode
+
+    For a CLI example, see \c examples/edifact-schema-load.qr, which exposes the same options.
+
+    @subsection edifactutil_directory_strict Strict EDMD Validation
+
+    When \c loader_opts.strict is set, EDMD parsing enforces additional structural checks to catch
+    malformed directory data early. In strict mode, the loader throws \c EDIFACT-EDMD-ERROR if:
+
+    - the segment table header ("Pos Tag Name") is missing
+    - tab indentation is used in the segment table
+    - a segment group has no children
+    - a segment entry is missing a name
+
+    Use strict mode for validation pipelines or CI to ensure directory sources are clean and
+    consistent before caching or distribution.
 
     @section edifactutil_relnotes Release Notes
 
@@ -361,6 +594,12 @@ while (i.next()) {
     - service segment filtering option
     - DataProvider integration for read and write operations
     - support for file, stream, and string I/O
+    - directory flat-file loader (EDMD/EDSD/EDCD/EDED/UNCL/EDCL) with strict validation mode
+    - on-disk schema cache with deterministic serialization and cache error handling
+    - schema registry with cache-only and skip-cache-read options
+    - schema data provider and schema summary action support
+    - CLI example for schema loading with cache controls
+    - fixture generator/validator scripts and expanded release fixtures
 */
 
 #! The EdifactUtil namespace contains all the definitions in the EdifactUtil module
@@ -534,6 +773,339 @@ public namespace EdifactUtil {
         <AllowedValueInfo>{"value": EdifactEncoding::ISO_8859_5, "desc": "ISO 8859-5 (Cyrillic)"},
         <AllowedValueInfo>{"value": EdifactEncoding::ISO_8859_9, "desc": "ISO 8859-9 (Turkish)"},
     );
+
+    #! EDIFACT directory element definition
+    public hashdecl EdifactElementDef {
+        string id;
+        string name;
+        string type;
+        int min_length;
+        int max_length;
+        *string desc;
+    }
+
+    #! EDIFACT composite component definition
+    public hashdecl EdifactComponentDef {
+        string id;
+        string status;
+        int min;
+        int max;
+        *string desc;
+    }
+
+    #! EDIFACT composite definition
+    public hashdecl EdifactCompositeDef {
+        string id;
+        string name;
+        list<hash<EdifactComponentDef>> components;
+        *string desc;
+    }
+
+    #! EDIFACT segment element definition
+    public hashdecl EdifactSegmentElementDef {
+        string id;
+        string status;
+        int min;
+        int max;
+        bool composite;
+        *string desc;
+    }
+
+    #! EDIFACT segment definition
+    public hashdecl EdifactSegmentDef {
+        string tag;
+        string name;
+        list<hash<EdifactSegmentElementDef>> segment_elements;
+        *string desc;
+    }
+
+    #! EDIFACT message structure node
+    public hashdecl EdifactMessageNode {
+        string kind;
+        string id;
+        *string pos;
+        *string name;
+        string status;
+        int min;
+        int max;
+        list<hash<EdifactMessageNode>> children;
+    }
+
+    #! EDIFACT message definition
+    public hashdecl EdifactMessageDef {
+        string type;
+        string name;
+        string version;
+        string release;
+        list<hash<EdifactMessageNode>> structure;
+        *list<hash<auto>> segment_index;
+        *string function;
+        *list<string> notes;
+    }
+
+    string sub edifact_to_string(auto v) {
+        if (v === NOTHING) {
+            return "";
+        }
+        return string(v);
+    }
+
+    int sub edifact_to_int(auto v) {
+        if (v === NOTHING) {
+            return 0;
+        }
+        return int(v);
+    }
+
+    hash<EdifactElementDef> sub normalizeElementDef(hash val, string key) {
+        return <EdifactElementDef>{
+            "id": edifact_to_string(val.id ?? key),
+            "name": val.name ?? "",
+            "type": val.type ?? "",
+            "min_length": edifact_to_int(val.min_length),
+            "max_length": edifact_to_int(val.max_length),
+            "desc": val.desc,
+        };
+    }
+
+    list<hash<EdifactComponentDef>> sub normalizeComponentDefs(*list comps) {
+        list<hash<EdifactComponentDef>> out = ();
+        if (!comps) {
+            return out;
+        }
+        foreach auto c in (comps) {
+            hash comp = cast<hash>(c);
+            out += <EdifactComponentDef>{
+                "id": edifact_to_string(comp.id),
+                "status": comp.status ?? "C",
+                "min": edifact_to_int(comp.min),
+                "max": edifact_to_int(comp.max),
+                "desc": comp.desc,
+            };
+        }
+        return out;
+    }
+
+    hash<EdifactCompositeDef> sub normalizeCompositeDef(hash val, string key) {
+        return <EdifactCompositeDef>{
+            "id": edifact_to_string(val.id ?? key),
+            "name": val.name ?? "",
+            "components": normalizeComponentDefs(val.components),
+            "desc": val.desc,
+        };
+    }
+
+    list<hash<EdifactSegmentElementDef>> sub normalizeSegmentElementDefs(*list elems) {
+        list<hash<EdifactSegmentElementDef>> out = ();
+        if (!elems) {
+            return out;
+        }
+        foreach auto e in (elems) {
+            hash el = cast<hash>(e);
+            out += <EdifactSegmentElementDef>{
+                "id": edifact_to_string(el.id),
+                "status": el.status ?? "C",
+                "min": edifact_to_int(el.min),
+                "max": edifact_to_int(el.max),
+                "composite": el.composite ?? False,
+                "desc": el.desc,
+            };
+        }
+        return out;
+    }
+
+    hash<EdifactSegmentDef> sub normalizeSegmentDef(hash val, string key) {
+        return <EdifactSegmentDef>{
+            "tag": edifact_to_string(val.tag ?? key),
+            "name": val.name ?? "",
+            "segment_elements": normalizeSegmentElementDefs(val.segment_elements),
+            "desc": val.desc,
+        };
+    }
+
+    hash<EdifactMessageNode> sub normalizeMessageNode(hash val) {
+        list<hash<EdifactMessageNode>> children = ();
+        if (val.children) {
+            foreach auto c in (val.children) {
+                children += normalizeMessageNode(cast<hash>(c));
+            }
+        }
+        return <EdifactMessageNode>{
+            "kind": edifact_to_string(val.kind),
+            "id": edifact_to_string(val.id),
+            "pos": val.pos ? edifact_to_string(val.pos) : NOTHING,
+            "name": val.name ? edifact_to_string(val.name) : NOTHING,
+            "status": val.status ?? "C",
+            "min": edifact_to_int(val.min),
+            "max": edifact_to_int(val.max),
+            "children": children,
+        };
+    }
+
+    hash<EdifactMessageDef> sub normalizeMessageDef(hash val, string key) {
+        list<hash<EdifactMessageNode>> structure = ();
+        if (val.structure) {
+            foreach auto node in (val.structure) {
+                structure += normalizeMessageNode(cast<hash>(node));
+            }
+        }
+        *list<string> notes;
+        if (val.notes) {
+            if (val.notes.typeCode() == NT_LIST) {
+                notes = val.notes;
+            } else {
+                notes = (edifact_to_string(val.notes),);
+            }
+        }
+        return <EdifactMessageDef>{
+            "type": edifact_to_string(val.type ?? key),
+            "name": val.name ?? "",
+            "version": edifact_to_string(val.version),
+            "release": edifact_to_string(val.release),
+            "structure": structure,
+            "segment_index": val.segment_index,
+            "function": val.function,
+            "notes": notes,
+        };
+    }
+
+    #! EDIFACT schema metadata
+    public hashdecl EdifactSchemaMeta {
+        *string source;
+        *string release;
+        *string source_dir;
+        *string raw_storage;
+        bool parsed;
+        *hash<string, string> parsed_files;
+    }
+
+    #! EDIFACT schema raw data container
+    public hashdecl EdifactSchemaRaw {
+        *hash<string, string> files;
+    }
+
+    #! EDIFACT schema code lists
+    public hashdecl EdifactSchemaCodelists {
+        *hash<auto> uncl;
+        *hash<auto> edcl;
+    }
+
+    #! EDIFACT schema data hash format for serialization
+    public hashdecl EdifactSchemaData {
+        *string release;
+        *hash<EdifactSchemaMeta> meta;
+        *hash<EdifactSchemaRaw> raw;
+        *hash<string, hash<EdifactElementDef>> element_defs;
+        *hash<string, hash<EdifactCompositeDef>> composite_defs;
+        *hash<string, hash<EdifactSegmentDef>> segment_defs;
+        *hash<string, hash<EdifactMessageDef>> message_defs;
+        *hash<EdifactSchemaCodelists> codelists;
+    }
+
+    #! EDIFACT directory schema container
+    public class EdifactSchema {
+        public {
+            string release;
+            hash<EdifactSchemaMeta> meta;
+            hash<EdifactSchemaRaw> raw;
+            hash<string, hash<EdifactElementDef>> element_defs;
+            hash<string, hash<EdifactCompositeDef>> composite_defs;
+            hash<string, hash<EdifactSegmentDef>> segment_defs;
+            hash<string, hash<EdifactMessageDef>> message_defs;
+            hash<EdifactSchemaCodelists> codelists;
+        }
+
+        constructor(string release) {
+            initEmpty(release);
+        }
+
+        constructor(hash data) {
+            release = data.release ?? "";
+            if (data.meta) {
+                meta = cast<hash<EdifactSchemaMeta>>(data.meta);
+            } else {
+                meta = <EdifactSchemaMeta>{"parsed": False};
+            }
+            if (data.raw) {
+                raw = cast<hash<EdifactSchemaRaw>>(data.raw);
+            } else {
+                raw = <EdifactSchemaRaw>{"files": {}};
+            }
+
+            element_defs = new hash<string, hash<EdifactElementDef>>();
+            if (data.element_defs) {
+                foreach string key in (keys data.element_defs) {
+                    element_defs{key} = normalizeElementDef(cast<hash>(data.element_defs{key}), key);
+                }
+            }
+            composite_defs = new hash<string, hash<EdifactCompositeDef>>();
+            if (data.composite_defs) {
+                foreach string key in (keys data.composite_defs) {
+                    composite_defs{key} = normalizeCompositeDef(cast<hash>(data.composite_defs{key}), key);
+                }
+            }
+            segment_defs = new hash<string, hash<EdifactSegmentDef>>();
+            if (data.segment_defs) {
+                foreach string key in (keys data.segment_defs) {
+                    segment_defs{key} = normalizeSegmentDef(cast<hash>(data.segment_defs{key}), key);
+                }
+            }
+            message_defs = new hash<string, hash<EdifactMessageDef>>();
+            if (data.message_defs) {
+                foreach string key in (keys data.message_defs) {
+                    message_defs{key} = normalizeMessageDef(cast<hash>(data.message_defs{key}), key);
+                }
+            }
+            if (data.codelists) {
+                codelists = cast<hash<EdifactSchemaCodelists>>(data.codelists);
+            } else {
+                codelists = <EdifactSchemaCodelists>{"uncl": {}, "edcl": {}};
+            }
+
+            foreach hash<EdifactMessageDef> msg in (message_defs.iterator()) {
+                if (!msg.segment_index) {
+                    msg.segment_index = ();
+                }
+            }
+            if (!release && meta.release) {
+                release = meta.release;
+            }
+            if (!meta.release && release) {
+                meta.release = release;
+            }
+        }
+
+        private initEmpty(string release) {
+            self.release = release;
+            meta = <EdifactSchemaMeta>{
+                "source": "",
+                "release": release,
+                "source_dir": "",
+                "raw_storage": "",
+                "parsed": False,
+                "parsed_files": {},
+            };
+            raw = <EdifactSchemaRaw>{"files": {}};
+            element_defs = new hash<string, hash<EdifactElementDef>>();
+            composite_defs = new hash<string, hash<EdifactCompositeDef>>();
+            segment_defs = new hash<string, hash<EdifactSegmentDef>>();
+            message_defs = new hash<string, hash<EdifactMessageDef>>();
+            codelists = <EdifactSchemaCodelists>{"uncl": {}, "edcl": {}};
+        }
+
+        hash<EdifactSchemaData> toHash() {
+            return <EdifactSchemaData>{
+                "release": release,
+                "meta": meta,
+                "raw": raw,
+                "element_defs": element_defs,
+                "composite_defs": composite_defs,
+                "segment_defs": segment_defs,
+                "message_defs": message_defs,
+                "codelists": codelists,
+            };
+        }
+    }
 }
 
 #! Private namespace for internal definitions

@@ -1,0 +1,7 @@
+1.   Data element directory
+
+     1001  Document name code                                      [C]
+
+     Desc: Code specifying the document name.
+
+     Repr: an..3

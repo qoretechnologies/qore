@@ -1,0 +1,15 @@
+                              UN/EDIFACT
+
+                UNITED NATIONS STANDARD MESSAGE (UNSM)
+
+                        Bad message
+
+                                           Message Type : BADMSG
+                                           Version      : D
+                                           Release      : 10Y
+                                           Contr. Agency: UN
+
+4.2    Segment index (alphabetical sequence by tag)
+
+BGM BEGINNING OF MESSAGE
+DTM DATE/TIME/PERIOD

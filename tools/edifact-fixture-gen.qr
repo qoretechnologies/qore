@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# @file edifact-fixture-gen.qr EDIFACT fixture generator
+
+/*  edifact-fixture-gen.qr Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+
+# load dependencies
+%requires Util
+%requires FileLocationHandler
+
+sub usage() {
+    printf(
+"usage: %s --release REL --message MSG --code CODE [options]\n\n"
+"Options:\n"
+"  --outdir DIR         output root (default: ./examples/test/qlib/EdifactUtil/fixtures)\n"
+"  --desc TEXT          message title/description\n"
+"  -h,--help            show this help\n",
+        get_script_name());
+    exit(1);
+}
+
+const Opts = (
+    "release": "release,r=s",
+    "message": "message,m=s",
+    "code": "code,c=s",
+    "outdir": "outdir,o=s",
+    "desc": "desc,d=s",
+    "help": "help,h",
+);
+
+sub write_file(string path, string contents) {
+    FileLocationHandler::writeFileToLocation(path, contents);
+}
+
+sub process() {
+    GetOpt g(Opts);
+    hash o = g.parse3(\ARGV);
+    if (o.help || !o.release || !o.message || !o.code) {
+        usage();
+    }
+
+    string outdir = o.outdir ?? "examples/test/qlib/EdifactUtil/fixtures";
+    string rel = o.release;
+    string msg = o.message;
+    string code = o.code;
+    string desc = o.desc ?? "Message fixture";
+
+    string base = outdir + "/" + rel;
+    mkdir(base, 0700, True);
+    mkdir(base + "/EDMD", 0700, True);
+
+    write_file(base + "/EDED." + rel.substr(1), sprintf(
+"1.   Data element directory\n\n"
+"     1001  Document name code                                      [C]\n\n"
+"     Desc: Code specifying the document name.\n\n"
+"     Repr: an..3\n"));
+
+    write_file(base + "/EDCD." + rel.substr(1), sprintf(
+"2.   Composite data element directory\n\n"
+"     C002  DOCUMENT/MESSAGE NAME\n\n"
+"     Desc: Identification of a type of document/message by code or name.\n\n"
+"010  1001 DOCUMENT NAME CODE                       C  an..3\n"
+"020  1131 CODE LIST IDENTIFICATION CODE            C  an..3\n"));
+
+    write_file(base + "/EDSD." + rel.substr(1), sprintf(
+"2.   Segment specifications\n\n"
+"       BGM  BEGINNING OF MESSAGE\n\n"
+"       Function: To indicate the type and function of a message.\n\n"
+"010    C002 DOCUMENT/MESSAGE NAME                     C    1\n"
+"020    1004 DOCUMENT IDENTIFIER                       C    1 an..35\n"));
+
+    write_file(base + "/UNCL." + rel.substr(1), sprintf(
+"CHAPTER 6 Code list\n\n"
+"     1001  Document name code                                      [C]\n\n"
+"     Desc: Code specifying the document name.\n\n"
+"     Repr: an..3\n\n"
+"     %s     %s\n", code, desc));
+
+    write_file(base + "/EDMD/" + msg + "_" + rel.substr(0, 1) + "." + rel.substr(1), sprintf(
+"                              UN/EDIFACT\n\n"
+"                UNITED NATIONS STANDARD MESSAGE (UNSM)\n\n"
+"                        %s\n\n"
+"                                           Message Type : %s\n"
+"                                           Version      : %s\n"
+"                                           Release      : %s\n"
+"                                           Contr. Agency: UN\n\n"
+"Function: %s message.\n"
+"Note: Fixture note for %s.\n\n"
+"4.1    Segment clarification\n\n"
+"0010   UNH, Message header\n"
+"0020   BGM, Beginning of message\n"
+"0030   DTM, Date/time/period\n"
+"0040       Segment group 1:  RFF-DTM\n"
+"0050           RFF, Reference\n"
+"0060           DTM, Date/time/period\n"
+"0070           Segment group 2 NAD-CTA-COM\n"
+"0080               NAD, Name and address\n"
+"0090               CTA, Contact information\n"
+"0100               COM, Communication contact\n\n"
+"4.2    Segment index (alphabetical sequence by tag)\n\n"
+"BGM BEGINNING OF MESSAGE\n"
+"COM COMMUNICATION CONTACT\n"
+"CTA CONTACT INFORMATION\n"
+"DTM DATE/TIME/PERIOD\n"
+"NAD NAME AND ADDRESS\n"
+"RFF REFERENCE\n"
+"UNH MESSAGE HEADER\n\n"
+"4.3.1  Segment table\n\n"
+"Pos    Tag Name                                      S   R\n\n"
+"0010   UNH Message header                            M   1\n"
+"0020   BGM Beginning of message                      M   1\n"
+"0030   DTM Date/time/period                          C   5\n"
+"0040       Segment group 1                            C   5\n"
+"0050   RFF Reference                                 M   1\n"
+"0060   DTM Date/time/period                          C   5\n"
+"0070       Segment group 2 NAD-CTA-COM                 C   5\n"
+"0080   NAD Name and address                           M   1\n"
+"0090   CTA Contact information                        C   2\n"
+"0100   COM Communication contact                      C   5\n",
+        desc, msg, rel.substr(0, 1), rel.substr(1), desc, msg));
+
+    printf("Wrote fixtures to %s\n", base);
+}
+
+process();

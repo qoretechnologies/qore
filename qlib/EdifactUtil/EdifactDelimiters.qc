@@ -176,9 +176,11 @@ EdifactDelimiters delim(<EdifactDelimiterInfo>{
             una_present = True;
 
             @debug {
-                printf("EdifactDelimiters::parseUna(): comp=%y elem=%y dec=%y rel=%y term=%y\n",
-                    component_separator, element_separator, decimal_notation,
-                    release_character, segment_terminator);
+                if (getenv("QORE_EDIFACT_DEBUG")) {
+                    printf("EdifactDelimiters::parseUna(): comp=%y elem=%y dec=%y rel=%y term=%y\n",
+                        component_separator, element_separator, decimal_notation,
+                        release_character, segment_terminator);
+                }
             }
 
             validateDelimiters();
@@ -212,14 +214,14 @@ string una = delim.generateUna();  # "UNA:+.? '"
         }
 
         #! Checks if the given character is a special delimiter character
-        /** @param char the character to check
+        /** @param ch the character to check
             @return True if the character is a delimiter
         */
-        bool isDelimiter(string char) {
-            return char == component_separator
-                || char == element_separator
-                || char == release_character
-                || char == segment_terminator;
+        bool isDelimiter(string ch) {
+            return ch == component_separator
+                || ch == element_separator
+                || ch == release_character
+                || ch == segment_terminator;
         }
 
         #! Escapes special characters in a value using the release character

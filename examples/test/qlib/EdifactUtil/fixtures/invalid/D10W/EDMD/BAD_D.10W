@@ -1,0 +1,17 @@
+                              UN/EDIFACT
+
+                UNITED NATIONS STANDARD MESSAGE (UNSM)
+
+                        Bad message
+
+                                           Message Type : NOGRP
+                                           Version      : D
+                                           Release      : 10W
+                                           Contr. Agency: UN
+
+4.3.1  Segment table
+
+Pos    Tag Name                                      S   R
+
+0010   UNH Message header                            M   1
+0020       Segment group 1 RFF-DTM                   C   5

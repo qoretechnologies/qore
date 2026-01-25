@@ -1101,6 +1101,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	examples/test \
 	examples/HelloWorld.qr \
 	examples/clisrv.qr \
+	examples/edifact-schema-load.qr \
 	examples/email.qr \
 	examples/exp.qr \
 	examples/getch.qr \

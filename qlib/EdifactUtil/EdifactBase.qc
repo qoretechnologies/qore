@@ -171,7 +171,11 @@ hash<EdifactSegment> seg = base.parseSegment("BGM+220+PO12345+9");
                 throw "EDIFACT-PARSE-ERROR", sprintf("invalid segment tag: %y (must be 3 uppercase letters)", tag);
             }
 
-            @debug(printf("EdifactBase::parseSegment(): tag=%y len=%d\n", tag, segment_str.size()));
+            @debug {
+                if (getenv("QORE_EDIFACT_DEBUG")) {
+                    printf("EdifactBase::parseSegment(): tag=%y len=%d\n", tag, segment_str.size());
+                }
+            }
 
             # Rest of the segment after tag
             string data = segment_str.substr(3);
@@ -218,10 +222,10 @@ hash<EdifactSegment> seg = base.parseSegment("BGM+220+PO12345+9");
 
         #! Checks if a string contains an unescaped occurrence of a character
         /** @param str the string to check
-            @param char the character to look for
+            @param ch the character to look for
             @return True if the string contains an unescaped occurrence
         */
-        bool containsUnescaped(string str, string char) {
+        bool containsUnescaped(string str, string ch) {
             bool escaped = False;
             for (int i = 0; i < str.size(); i++) {
                 string c = str[i];
@@ -233,7 +237,7 @@ hash<EdifactSegment> seg = base.parseSegment("BGM+220+PO12345+9");
                     escaped = True;
                     continue;
                 }
-                if (c == char) {
+                if (c == ch) {
                     return True;
                 }
             }

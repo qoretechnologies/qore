@@ -1,0 +1,15 @@
+2.   Composite data element directory
+
+     C002  DOCUMENT/MESSAGE NAME
+
+     Desc: Identification of a type of document/message by code or name.
+
+010  1001 DOCUMENT NAME CODE                       C  an..3
+020  1131 CODE LIST IDENTIFICATION CODE            C  an..3
+
+     C506  REFERENCE
+
+     Desc: Identification of a reference.
+
+010  1153 REFERENCE QUALIFIER                      M  an..3
+020  1154 REFERENCE IDENTIFIER                     C  an..35
