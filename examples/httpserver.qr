@@ -1,9 +1,9 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-# @file httpserver.q example program using the HttpServer module
+# @file httpserver.qr example program using the HttpServer module
 
-/*  httpserver.q Copyright 2012 - 2023 David Nichols
+/*  httpserver.qr Copyright 2012 - 2023 David Nichols
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,13 +33,15 @@
     SIGINT which is handled like other signals)
 */
 
-%modern
 
 # execute the httpServer class as the application object
 %exec-class httpServer
 
 # use the HttpServer module
 %requires HttpServer >= 0.3.3
+
+# use the Logger module
+%requires Logger
 
 # use the Mime module
 %requires Mime >= 1.0
@@ -105,14 +107,19 @@ class httpServer {
         ExampleFileHandler fh(opt.dir);
 
         try {
+            Logger logger("httpserver", LoggerLevel::getLevelInfo());
+            logger.addAppender(new StdoutAppender());
+
             # create the HttpServer object and add the example file handler
-            hs = new HttpServer(\log(), \errorLog());
+            hs = new HttpServer(<HttpServerOptionInfo>{
+                "logger": logger,
+            });
             hs.setHandler("example-handler", "", MimeTypeHtml, fh);
             hs.setDefaultHandler("example-handler", fh);
 
             # start a listener on each bind address
             foreach *string listener in (opt.bind) {
-                foreach my hash h in (hs.addListeners(listener)) {
+                foreach hash h in (hs.addListeners(listener)) {
                     log("TID %d: HTTP listener %s started on %s", hs.getListenerTID(h.id), listener, h.address_desc);
                 }
             }

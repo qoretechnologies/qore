@@ -26,7 +26,6 @@
     when a handler returns without sending a response.
 */
 
-%modern
 
 %requires HttpServerAsyncIo
 %requires HttpServer

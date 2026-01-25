@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class PipeTest
+
+class PipeTest inherits QUnit::Test {
+    public {}
+
+    constructor() : Test("Pipe Test", "1.0") {
+        addTestCase("pipeShortBinaryTest", \pipeShortBinaryTest());
+        addTestCase("pipeTimeoutTest", \pipeTimeoutTest());
+        addTestCase("pipeBlockingTest", \pipeBlockingTest());
+
+        set_return_value(main());
+    }
+
+    pipeShortBinaryTest() {
+        hash<PipeInfo> info = File::getPipe();
+        ReadOnlyFile r = info.read;
+        File w = info.write;
+
+        w.write("abcdef");
+        *binary b1 = r.readShortBinary(1, 1000);
+        testAssertionValue('ReadOnlyFile::readShortBinary() first chunk size', b1.size(), 1);
+
+        *binary b2 = r.readShortBinary(10, 1000);
+        testAssertionValue('ReadOnlyFile::readShortBinary() second chunk size', b2.size(), 5);
+        testAssertionValue('ReadOnlyFile::readShortBinary() combined value', b1 + b2, binary("abcdef"));
+    }
+
+    pipeTimeoutTest() {
+        hash<PipeInfo> info = File::getPipe();
+        ReadOnlyFile r = info.read;
+
+        assertThrows("FILE-READ-TIMEOUT", \r.readShortBinary(), list(1, 0));
+        assertThrows("FILE-READ-TIMEOUT", \r.readShortBinary(), list(-1, 0));
+    }
+
+    pipeBlockingTest() {
+        hash<PipeInfo> info = File::getPipe();
+        ReadOnlyFile r = info.read;
+        File w = info.write;
+
+        date start = now_us();
+        background sub() {
+            usleep(50ms);
+            w.write("hi");
+        }();
+        *binary b = r.readShortBinary(10, 1000);
+        testAssertionValue('ReadOnlyFile::readShortBinary() blocking value', b, binary("hi"));
+        date elapsed = now_us() - start;
+        testAssertionValue('ReadOnlyFile::readShortBinary() blocking duration', elapsed >= 30ms, True);
+    }
+}

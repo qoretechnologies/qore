@@ -1,7 +1,6 @@
 #!/usr/bin/env qore
 
 # program being debugged
-%new-style
 
 class TestClass {
     public {
@@ -27,12 +26,11 @@ sub log(string fmt) {
 
 our string globalString = 'global string';
 our any globalAny;
-
-my hash localHash;
+our hash localHash;
 
 our int globalInt = 1;    # to test stepping blocks of declarations
 
-my int localInt = 99;
+our int localInt = 99;
 
 any sub func(string s, int i) {
     string localString = sprintf("%s-%d", s, i);
@@ -68,5 +66,4 @@ nothing sub main() {
 }
 
 main();
-
 

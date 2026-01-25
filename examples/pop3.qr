@@ -1,8 +1,8 @@
 #!/usr/bin/env qore
 
-# @file pop3.q example program using the Pop3Client module
+# @file pop3.qr example program using the Pop3Client module
 
-/*  pop3.q Copyright 2012 - 2026 David Nichols
+/*  pop3.qr Copyright 2012 - 2026 David Nichols
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,6 @@
     * 2012-06-23 v1.0: simple example program using the Pop3Client user module to retrieve emails from the command line from a POP3 server
 */
 
-%modern
 
 %exec-class pop3
 
@@ -36,6 +35,7 @@
 %requires Mime >= 1.0
 %requires Util
 %requires ConnectionProvider
+%requires Logger
 
 class pop3 {
     private {
@@ -90,7 +90,13 @@ class pop3 {
         }
 
         try {
-            Pop3Client pop3(url, \log(), opt.verbose ? \log() : NOTHING);
+            hash<auto> pop3_opts = {};
+            Logger pop3_logger("pop3", LoggerLevel::getLevelInfo());
+            if (opt.verbose) {
+                pop3_logger.addAppender(new StdoutAppender());
+                pop3_opts.logger = pop3_logger;
+            }
+            Pop3Client pop3(url, pop3_opts);
             if (opt.noquit)
                 pop3.noquit(True);
             if (opt.starttls)

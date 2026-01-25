@@ -7,9 +7,9 @@
 class HelloWorld
 {
     constructor() {
-        background $.output("Hello, world!");
+        background self.output("Hello, world!");
     }
-    private output($arg) {
-        printf("%s\n", $arg);
+    private output(string arg) {
+        printf("%s\n", arg);
     }
 }

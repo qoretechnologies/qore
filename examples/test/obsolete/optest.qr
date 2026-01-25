@@ -1,7 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%modern
 %no-child-restrictions
 
 %requires qore >= 0.7.2

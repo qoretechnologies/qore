@@ -22,7 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
 
 # allow child Program objects to have more liberal restrictions than the parent
 %no-child-restrictions

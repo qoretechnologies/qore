@@ -1,4 +1,5 @@
 #!/usr/bin/env qore
+
 # 
 # this file gives examples of how class inheritance in qore works
 #
@@ -48,25 +49,28 @@
 
 # require global variables to be declared with "our" before use
 %require-our
-%enable-all-warnings
 
 # Base1 will be a base class
 class Base1 {
     # declare some private members
-    private $.base1, $.x;
+    private {
+        string base1;
+        string x;
+        string a;
+    }
 
-    constructor($a) {
-        printf("Base1::constructor(%n)\n", $a);
-        $.a = $a;
+    constructor(string a) {
+        printf("Base1::constructor(%n)\n", a);
+        self.a = a;
     }
 
     destructor() {
-        printf("Base1::destructor() (%n)\n", $.a);
+        printf("Base1::destructor() (%n)\n", self.a);
     }
 
     copy() {
-        printf("Base1::copy() (%n)\n", $.a);
-        $.a = $.a + "-copy";
+        printf("Base1::copy() (%n)\n", self.a);
+        self.a = self.a + "-copy";
     }
 
     hello() {
@@ -78,13 +82,13 @@ class Base1 {
         # derived class
 
         # to avoid a warning about the unknown method, we use the cast<> operator        
-        printf("Base1 hello (%n, derived class %n)\n", $.a, cast<Mid>($self).subclass());
+        printf("Base1 hello (%n, derived class %n)\n", self.a, cast<Mid::Mid>(self).subclass());
     }
 
     # note that "Base1" here is just a regular method, the constructor
     # is always named "constructor"
-    Base1($a) {
-        printf("Base1::Base1() (%n) %n\n", $.a, $a);
+    Base1(string a) {
+        printf("Base1::Base1() (%n) %n\n", self.a, a);
     }
 
     # "static" functions are not associated with an object; they are
@@ -98,27 +102,31 @@ class Base1 {
 # Base2 is a base class
 class Base2 {
     # declare some private members
-    private $.base2, $.y;
+    private {
+        string base2;
+        string y;
+        string b;
+    }
 
-    constructor($a) {
-        printf("Base2::constructor(%n)\n", $a);
-        $.b = $a;
+    constructor(string a) {
+        printf("Base2::constructor(%n)\n", a);
+        self.b = a;
     }
     copy() {
-        printf("Base2::copy() (%n)\n", $.b);
-        $.b = $.b + "-copy"; 
+        printf("Base2::copy() (%n)\n", self.b);
+        self.b = self.b + "-copy"; 
     }
     destructor() {
-        printf("Base2::destructor() (%n)\n", $.b);
+        printf("Base2::destructor() (%n)\n", self.b);
     }
     hello() {
-        printf("Base2 hello (%n)\n", $.b);
+        printf("Base2 hello (%n)\n", self.b);
     }
 
     # note that "Base2" here is just a regular method, the constructor
     # is always named "constructor"
-    Base2($a) {
-        printf("Base2::Base2() (%n) %n\n", $.b, $a);
+    Base2(string a) {
+        printf("Base2::Base2() (%n) %n\n", self.b, a);
     }
 }
 
@@ -128,89 +136,97 @@ namespace Mid;
 class Mid::Mid inherits Base1, Base2
 {
     # declare some private members
-    private $.mid, $.z;
+    private {
+        string mid;
+        string z;
+        string m;
+    }
 
-    constructor($m) : Base1("Mid->Base1-" + $m), Base2("Mid->Base2-" + $m) {
-        printf("Mid::constructor(%n)\n", $m);
-        $.m = $m;
+    constructor(string m) : Base1("Mid->Base1-" + m), Base2("Mid->Base2-" + m) {
+        printf("Mid::constructor(%n)\n", m);
+        self.m = m;
     }
     copy() {
-        printf("Mid::copy() (%n)\n", $.m);
-        $.m = $.m + "-copy";
+        printf("Mid::copy() (%n)\n", self.m);
+        self.m = self.m + "-copy";
     }
     destructor() {
-        printf("Mid::destructor() (%n)\n", $.m);
+        printf("Mid::destructor() (%n)\n", self.m);
     }
     hello() {
-        Base1::$.hello();
-        Base2::$.hello();
-        printf("Mid hello (%n)\n", $.m);
+        Base1::hello();
+        Base2::hello();
+        printf("Mid hello (%n)\n", self.m);
     }
-    subclass() {
+    string subclass() {
         return "Mid";
     }
     # note that "Mid" here is just a regular method, the constructor
     # is always named "constructor"
-    Mid($a) {
-        $.Base1("Mid");
-        $.Base2("Mid");
-        printf("Mid::Mid() (%n) %n\n", $.m, $a);
+    Mid(string a) {
+        self.Base1("Mid");
+        self.Base2("Mid");
+        printf("Mid::Mid() (%n) %n\n", self.m, a);
     }
 }
 
 # class Final is a subclass of Mid, Base1, and Base2 (even though
 # Base1 and Base2 are already subclasses of Mid)
-# private members of this class: $.base1, $.base2, $.x, $.y, $.z
-class Final inherits Mid::Mid, Base1, Base2;
+# private members of this class: self.base1, self.base2, self.x, self.y, self.z
+class Final inherits Mid::Mid, Base1, Base2 {
+    private {
+        string f;
+    }
+}
 
-Final::constructor($a) : Mid("Final->Mid-" + $a), Base1("Final->Base1-" + $a) {
-    printf("Final::constructor(%n)\n", $a);
-    $.f = $a;
+Final::constructor(string a) : Mid("Final->Mid-" + a), Base1("Final->Base1-" + a) {
+    printf("Final::constructor(%n)\n", a);
+    self.f = a;
 }
 
 Final::copy() {
-    printf("Final::copy() (%n)\n", $.f);
-    $.f = $.f + "-copy";
+    printf("Final::copy() (%n)\n", self.f);
+    self.f = self.f + "-copy";
 }
 
 Final::destructor() {
-    printf("Final::destructor() (%n)\n", $.f);
+    printf("Final::destructor() (%n)\n", self.f);
 }
 
-Final::subclass() {
+string Final::subclass() {
     return "Final";
 }
 
 Final::hello() {
     # here we make a copy of ourselves and print out the result
-    my $x = $.copy();
-    printf("x=%N\n", $x);
+    auto x = self.copy();
+    printf("x=%N\n", x);
 
-    Mid::$.hello();
-    Base1::$.hello();
-    Base2::$.hello();
-    $.Base1("Final");
-    $.Base2("Final");
-    $.Mid("Final");
+    Mid::hello();
+    Base1::hello();
+    Base2::hello();
+    self.Base1("Final");
+    self.Base2("Final");
+    self.Mid("Final");
     printf("Final hello\n");
 }
 
 # test constructors
 #$m = new Mid("Mid");
 #thread_exit;
-our $a = new Final("Final");
+our Final a = new Final("Final");
 # execute a subclass method
-$a.hello();
+a.hello();
 # test that base class methods are available in the subclass
-$a.Base1("top");
-$a.Base2("top");
-$a.Mid("top");
+a.Base1("top");
+a.Base2("top");
+a.Mid("top");
 
 # objects are always references (unless explicitly copied), so $b and $a will represent the same object after the following assignment
-our $b = $a;
+our Final b = a;
 
 # however, we can make an explicit copy
-our $c = $a.copy();
+our Final c = a.copy();
 
-our $x = new Final("hi");
+our Final x = new Final("hi");
 # execute destructors as objects go out of scope

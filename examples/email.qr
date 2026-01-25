@@ -1,9 +1,9 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-# @file email.q example program using the SmtpClient module
+# @file email.qr example program using the SmtpClient module
 
-/*  email.q Copyright 2012 - 2023 Qore Technologies, s.r.o.
+/*  email.qr Copyright 2012 - 2023 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -28,7 +28,6 @@
     * 1.0: simple example program using the SmtpClient user module to send emails from the command line
 */
 
-%modern
 
 %exec-class mail
 

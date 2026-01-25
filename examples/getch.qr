@@ -11,43 +11,42 @@
 %requires qore >= 0.8.3
 
 # enable all warnings
-%enable-all-warnings
 
 sub main() {
-    my TermIOS $t();
+    TermIOS t();
     # get current terminal attributes for stdin
-    stdin.getTerminalAttributes($t);
+    stdin.getTerminalAttributes(t);
 
     # save a copy
-    my TermIOS $orig = $t.copy();
+    TermIOS orig = t.copy();
 
     # restore terminal attributes on exit
     on_exit
-        stdin.setTerminalAttributes(TCSADRAIN, $orig);
+        stdin.setTerminalAttributes(TCSADRAIN, orig);
 
     # get local flags
-    my int $lflag = $t.getLFlag();
+    int lflag = t.getLFlag();
 
     # disable canonical input mode (= turn on "raw" mode)
-    $lflag &= ~ICANON;
+    lflag &= ~ICANON;
 
     # turn off echo mode
-    $lflag &= ~ECHO;
+    lflag &= ~ECHO;
 
     # do not check for special input characters (INTR, QUIT, and SUSP)
-    $lflag &= ~ISIG;
+    lflag &= ~ISIG;
 
     # set the new local flags
-    $t.setLFlag($lflag);
+    t.setLFlag(lflag);
 
     # set minimum characters to return on a read
-    $t.setCC(VMIN, 1);
+    t.setCC(VMIN, 1);
 
     # set character input timer in 0.1 second increments (= no timer)
-    $t.setCC(VTIME, 0);
+    t.setCC(VTIME, 0);
 
     # make these terminal attributes active
-    stdin.setTerminalAttributes(TCSADRAIN, $t);
+    stdin.setTerminalAttributes(TCSADRAIN, t);
 
     # print a message
     stdout.printf("Press any key: ");
@@ -61,10 +60,10 @@ sub main() {
     }
 
     # read the character input
-    my string $c = stdin.read(1);
+    string c = stdin.read(1);
 
     # output the character read
-    stdout.printf(" GOT: ASCII 0x%02x (%d) '%s'\n", ord($c), ord($c), $c);
+    stdout.printf(" GOT: ASCII 0x%02x (%d) '%s'\n", ord(c), ord(c), c);
 }
 
 main();

@@ -1,8 +1,9 @@
 #!/usr/bin/env qore
+
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #
 # Comprehensive memory test for HTTP/2 support
-# Run with: valgrind --leak-check=full --show-leak-kinds=all qore valgrind_test.q
+# Run with: valgrind --leak-check=full --show-leak-kinds=all qore valgrind_test.qr
 #
 # Copyright (C) 2025 Qore Technologies, s.r.o.
 #
@@ -16,9 +17,6 @@
 # The above copyright notice and this permission notice shall be included in
 # all copies or substantial portions of the Software.
 
-%new-style
-%strict-args
-%require-types
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/Logger.qm

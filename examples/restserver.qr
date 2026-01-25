@@ -1,9 +1,9 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-# @file restserver.q example program using the RestHandler and HttpServer modules
+# @file restserver.qr example program using the RestHandler and HttpServer modules
 
-/*  restserver.q Copyright (C) 2013 - 2023 David Nichols
+/*  restserver.qr Copyright (C) 2013 - 2023 David Nichols
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -73,7 +73,6 @@
     {'name': 'subdir', 'mode': 0755}
 */
 
-%modern
 
 # execute the restServer class as the application object
 %exec-class restServer
@@ -83,6 +82,9 @@
 
 # use the HttpServer module
 %requires HttpServer >= 0.3.11
+
+# use the Logger module
+%requires Logger
 
 # use the HttpServerUtil module
 %requires HttpServerUtil >= 0.3.11
@@ -338,14 +340,19 @@ class restServer {
 	ExampleRestHandler rh(auth, opt.dir, opt.verbose);
 
         try {
+            Logger logger("restserver", LoggerLevel::getLevelInfo());
+            logger.addAppender(new StdoutAppender());
+
 	    # create the HttpServer object and add the RestHandler
-            hs = new HttpServer(\log(), \errorLog());
+            hs = new HttpServer(<HttpServerOptionInfo>{
+                "logger": logger,
+            });
 	    hs.setHandler("example-rest-handler", "", "*", rh);
             hs.setDefaultHandler("example-rest-handler", rh);
 
             # start a listener on each bind address
             foreach *string listener in (opt.bind) {
-                foreach my hash h in (hs.addListeners(listener)) {
+                foreach hash h in (hs.addListeners(listener)) {
                     log("TID %d: HTTP listener %s started on %s", hs.getListenerTID(h.id), listener, h.address_desc);
                 }
             }

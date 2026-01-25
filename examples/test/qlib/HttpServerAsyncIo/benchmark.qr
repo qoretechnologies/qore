@@ -1,7 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%modern
 %disable-warning unreferenced-variable
 
 %requires ../../../../qlib/HttpServerAsyncIo
