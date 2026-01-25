@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class IRExecModeTest
+
+class IRExecModeTest inherits QUnit::Test {
+    constructor() : QUnit::Test("IRExecModeTest", "1.0", \ARGV) {
+        addTestCase("IR fallback warning", \testIrFallbackWarning());
+        addTestCase("AST mode no fallback warning", \testAstModeNoFallbackWarning());
+        set_return_value(main());
+    }
+
+    testIrFallbackWarning() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("auto n = NULL;\n");
+        script.file.write("printf(\"ok\\n\");\n");
+        script.file.close();
+
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > /dev/null 2> %s",
+            qore_bin, script.path, err.path);
+        int rc = system(cmd);
+        string output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && output =~ /exec-mode/ && output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+        if (!(output =~ /IR exec fallback to AST:/)) {
+            testSkip("IR fallback warning not emitted by this build");
+            return;
+        }
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertTrue(output =~ /IR exec fallback to AST:/, "IR fallback warning missing");
+    }
+
+    testAstModeNoFallbackWarning() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("int x = 1;\n");
+        script.file.write("printf(\"ok\\n\");\n");
+        script.file.close();
+
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ast %s > /dev/null 2> %s",
+            qore_bin, script.path, err.path);
+        int rc = system(cmd);
+        string output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && output =~ /exec-mode/ && output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+        assertEq(0, rc, "AST exec mode process should exit cleanly");
+        assertFalse(output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+    }
+}

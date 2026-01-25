@@ -51,6 +51,8 @@ public:
     QoreIRConstInstruction* createConstString(const std::string& value, const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstDate(int64_t microseconds, bool is_relative,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createMakeList(const std::vector<QoreIRValue>& values,
+        const QoreProgramLocation* loc = nullptr);
 
     QoreIRInstruction* createBinaryOp(QoreIROpcode op, QoreIRValue lhs, QoreIRValue rhs,
         const QoreProgramLocation* loc = nullptr);
@@ -93,11 +95,20 @@ public:
 
     QoreIRReturnInstruction* createReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     QoreIRReturnInstruction* createReturnNothing(const QoreProgramLocation* loc = nullptr);
-    QoreIRInstruction* createThrow(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    QoreIRThrowInstruction* createThrow(QoreIRValue value, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createRethrow(const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createThreadExit(const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createLandingPad(const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCatchException(const QoreProgramLocation* loc = nullptr);
+    QoreIRGuardInstruction* createGuardInt(QoreIRValue value, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRGuardInstruction* createGuardFloat(QoreIRValue value, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRGuardInstruction* createGuardType(QoreIRValue value, const QoreTypeInfo* type,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc = nullptr);
+    QoreIRGuardInstruction* createGuardNotNothing(QoreIRValue value, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRForeachInstruction* createForeach(const ForEachStatement* stmt, const QoreProgramLocation* loc = nullptr);
     QoreIROnBlockExitInstruction* createOnBlockExit(const OnBlockExitStatement* stmt,
         const QoreProgramLocation* loc = nullptr);

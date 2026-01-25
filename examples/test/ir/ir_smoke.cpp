@@ -70,6 +70,7 @@
 #include <qore/intern/QoreMapSelectOperatorNode.h>
 #include <qore/intern/QoreHashMapOperatorNode.h>
 #include <qore/intern/QoreHashMapSelectOperatorNode.h>
+#include <qore/intern/qore_thread_intern.h>
 #include <qore/intern/QoreMinusOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
 #include <qore/intern/QoreShiftLeftOperatorNode.h>
@@ -944,6 +945,51 @@ static QoreListNode* makeIntList(const std::initializer_list<int64_t>& values, E
     return list;
 }
 
+static bool runConstRefcountInterpreterSmoke() {
+    ExceptionSink xsink;
+    QoreIRFunction func("ir_const_refcount_smoke");
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    auto* c_int = builder.createConstInt(7);
+    builder.createConstFloat(1.25);
+    builder.createConstBool(true);
+    builder.createConstNothing();
+    auto* c_string = builder.createConstString("const");
+    auto* c_date = builder.createConstDate(1700000, false);
+
+    auto* incref_string = entry->appendInstruction<QoreIRInstruction>(QoreIROpcode::Incref);
+    incref_string->operands.push_back(c_string->result);
+    auto* decref_string = entry->appendInstruction<QoreIRInstruction>(QoreIROpcode::Decref);
+    decref_string->operands.push_back(c_string->result);
+
+    auto* incref_date = entry->appendInstruction<QoreIRInstruction>(QoreIROpcode::Incref);
+    incref_date->operands.push_back(c_date->result);
+    auto* decref_date = entry->appendInstruction<QoreIRInstruction>(QoreIROpcode::DecrefNoThrow);
+    decref_date->operands.push_back(c_date->result);
+
+    builder.createBinaryOp(QoreIROpcode::AddInt, c_int->result, c_int->result);
+    builder.createReturn(c_int->result);
+
+    std::string error;
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (ir_const_refcount_smoke): " << error << "\n";
+        return false;
+    }
+
+    QoreValue return_value;
+    if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+        std::cerr << "IR exec failed (ir_const_refcount_smoke)\n";
+        return false;
+    }
+    if (return_value.getAsBigInt() != 7) {
+        std::cerr << "IR const/refcount smoke returned unexpected result\n";
+        return false;
+    }
+    return true;
+}
+
 static bool runUnaryBinaryInterpreterSmoke() {
     QoreValue bool_true = QoreIRInterpreter::evalUnary(QoreIROpcode::ToBool, QoreValue(1), nullptr);
     QoreValue bool_false = QoreIRInterpreter::evalUnary(QoreIROpcode::ToBool, QoreValue(0), nullptr);
@@ -957,7 +1003,7 @@ static bool runUnaryBinaryInterpreterSmoke() {
     QoreValue diff_int = QoreIRInterpreter::evalBinary(QoreIROpcode::SubInt, QoreValue(5), QoreValue(3), nullptr);
     ValueHolder add_any_left(QoreValue(new QoreStringNode("2")), nullptr);
     ValueHolder add_any_holder(
-        QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, add_any_left->refSelf(), QoreValue(3), &add_xsink),
+        QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, *add_any_left, QoreValue(3), &add_xsink),
         &add_xsink);
     ValueHolder sub_any_holder(
         QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, QoreValue(7), QoreValue(4), &sub_xsink),
@@ -1004,24 +1050,24 @@ static bool runUnaryBinaryInterpreterSmoke() {
     QoreValue ne_hard = QoreIRInterpreter::evalBinary(QoreIROpcode::NeHard, QoreValue(5), QoreValue(6), nullptr);
     ValueHolder and_any_left(QoreValue(new QoreStringNode("5")), nullptr);
     ValueHolder and_any_right(QoreValue(new QoreStringNode("3")), nullptr);
-    QoreValue and_any = QoreIRInterpreter::evalBinary(QoreIROpcode::AndAny, and_any_left->refSelf(),
-        and_any_right->refSelf(), &any_xsink);
+    QoreValue and_any = QoreIRInterpreter::evalBinary(QoreIROpcode::AndAny, *and_any_left,
+        *and_any_right, &any_xsink);
     ValueHolder or_any_left(QoreValue(new QoreStringNode("5")), nullptr);
     ValueHolder or_any_right(QoreValue(new QoreStringNode("3")), nullptr);
-    QoreValue or_any = QoreIRInterpreter::evalBinary(QoreIROpcode::OrAny, or_any_left->refSelf(),
-        or_any_right->refSelf(), &any_xsink);
+    QoreValue or_any = QoreIRInterpreter::evalBinary(QoreIROpcode::OrAny, *or_any_left,
+        *or_any_right, &any_xsink);
     ValueHolder xor_any_left(QoreValue(new QoreStringNode("5")), nullptr);
     ValueHolder xor_any_right(QoreValue(new QoreStringNode("3")), nullptr);
-    QoreValue xor_any = QoreIRInterpreter::evalBinary(QoreIROpcode::XorAny, xor_any_left->refSelf(),
-        xor_any_right->refSelf(), &any_xsink);
+    QoreValue xor_any = QoreIRInterpreter::evalBinary(QoreIROpcode::XorAny, *xor_any_left,
+        *xor_any_right, &any_xsink);
     ValueHolder shl_any_left(QoreValue(new QoreStringNode("3")), nullptr);
     ValueHolder shl_any_right(QoreValue(new QoreStringNode("1")), nullptr);
-    QoreValue shl_any = QoreIRInterpreter::evalBinary(QoreIROpcode::ShlAny, shl_any_left->refSelf(),
-        shl_any_right->refSelf(), &any_xsink);
+    QoreValue shl_any = QoreIRInterpreter::evalBinary(QoreIROpcode::ShlAny, *shl_any_left,
+        *shl_any_right, &any_xsink);
     ValueHolder shr_any_left(QoreValue(new QoreStringNode("12")), nullptr);
     ValueHolder shr_any_right(QoreValue(new QoreStringNode("2")), nullptr);
-    QoreValue shr_any = QoreIRInterpreter::evalBinary(QoreIROpcode::ShrAny, shr_any_left->refSelf(),
-        shr_any_right->refSelf(), &any_xsink);
+    QoreValue shr_any = QoreIRInterpreter::evalBinary(QoreIROpcode::ShrAny, *shr_any_left,
+        *shr_any_right, &any_xsink);
     QoreValue lt_float = QoreIRInterpreter::evalBinary(QoreIROpcode::LtFloat, QoreValue(1.5), QoreValue(2.25),
         nullptr);
     QoreValue le_float = QoreIRInterpreter::evalBinary(QoreIROpcode::LeFloat, QoreValue(2.25), QoreValue(2.25),
@@ -1093,21 +1139,21 @@ static bool runUnaryBinaryInterpreterSmoke() {
     ExceptionSink date_xsink;
     ValueHolder date_abs(QoreValue(new DateTimeNode(2020, 1, 2, 3, 4, 5, 6, false)), &date_xsink);
     ValueHolder date_rel(QoreValue(new DateTimeNode(0, 0, 1, 0, 0, 0, 0, true)), &date_xsink);
-    ValueHolder date_add(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, date_abs->refSelf(),
-        date_rel->refSelf(), &date_xsink), &date_xsink);
-    ValueHolder date_sub(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, date_abs->refSelf(),
-        date_rel->refSelf(), &date_xsink), &date_xsink);
-    ValueHolder date_diff(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, date_abs->refSelf(),
-        date_abs->refSelf(), &date_xsink), &date_xsink);
-    ValueHolder date_add_abs(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, date_abs->refSelf(),
-        date_abs->refSelf(), &date_xsink), &date_xsink);
-    ValueHolder date_add_rel(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, date_rel->refSelf(),
-        date_rel->refSelf(), &date_xsink), &date_xsink);
-    ValueHolder date_sub_rel(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, date_rel->refSelf(),
-        date_rel->refSelf(), &date_xsink), &date_xsink);
-    ValueHolder date_add_nothing(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, date_abs->refSelf(),
+    ValueHolder date_add(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, *date_abs,
+        *date_rel, &date_xsink), &date_xsink);
+    ValueHolder date_sub(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, *date_abs,
+        *date_rel, &date_xsink), &date_xsink);
+    ValueHolder date_diff(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, *date_abs,
+        *date_abs, &date_xsink), &date_xsink);
+    ValueHolder date_add_abs(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, *date_abs,
+        *date_abs, &date_xsink), &date_xsink);
+    ValueHolder date_add_rel(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, *date_rel,
+        *date_rel, &date_xsink), &date_xsink);
+    ValueHolder date_sub_rel(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, *date_rel,
+        *date_rel, &date_xsink), &date_xsink);
+    ValueHolder date_add_nothing(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny, *date_abs,
         QoreValue(), &date_xsink), &date_xsink);
-    ValueHolder date_sub_nothing(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, date_abs->refSelf(),
+    ValueHolder date_sub_nothing(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, *date_abs,
         QoreValue(), &date_xsink), &date_xsink);
     QoreValue date_eq = QoreIRInterpreter::evalBinary(QoreIROpcode::EqAny, *date_abs,
         *date_abs, &date_xsink);
@@ -1570,7 +1616,7 @@ static bool runIRExecutorCleanupSmoke() {
         auto* first = builder.createConstString("throw.first");
         auto* second = builder.createConstString("throw.second");
         (void)first;
-        builder.createThrow(second->result);
+        builder.createThrow(second->result, nullptr);
         builder.createReturnNothing();
 
         QoreValue return_value;
@@ -1989,6 +2035,625 @@ static bool runIRExecutorArgClosureSmoke() {
         if (return_value.getAsBigInt() != 77) {
             std::cerr << "IR executor closure checks failed (result)\n";
             return false;
+        }
+    }
+    return true;
+}
+
+static bool runIRExecutorDateSmoke() {
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_date_add");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        DateTime left_dt(2020, 1, 2, 3, 4, 5, 6, false);
+        DateTime right_dt(0, 0, 1, 2, 3, 4, 5, true);
+        auto* left = builder.createConstDate(left_dt.getEpochMicrosecondsUTC(), false);
+        auto* right = builder.createConstDate(right_dt.getRelativeMicroseconds(), true);
+        auto* add = builder.createBinaryOp(QoreIROpcode::AddAny, left->result, right->result);
+        builder.createReturn(add->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor date add checks failed (execute)\n";
+            return false;
+        }
+        if (return_value.getType() != NT_DATE) {
+            std::cerr << "IR executor date add checks failed (return type)\n";
+            return false;
+        }
+        return_value.discard(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_date_sub");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        DateTime left_dt(2020, 1, 2, 3, 4, 5, 6, false);
+        DateTime right_dt(2020, 1, 2, 3, 4, 5, 6, false);
+        auto* left = builder.createConstDate(left_dt.getEpochMicrosecondsUTC(), false);
+        auto* right = builder.createConstDate(right_dt.getEpochMicrosecondsUTC(), false);
+        auto* sub = builder.createBinaryOp(QoreIROpcode::SubAny, left->result, right->result);
+        builder.createReturn(sub->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor date sub checks failed (execute)\n";
+            return false;
+        }
+        if (return_value.getType() != NT_DATE) {
+            std::cerr << "IR executor date sub checks failed (return type)\n";
+            return false;
+        }
+        return_value.discard(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_date_cmp");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        DateTime left_dt(2020, 1, 2, 3, 4, 5, 6, false);
+        DateTime right_dt(2020, 1, 3, 3, 4, 5, 6, false);
+        auto* left = builder.createConstDate(left_dt.getEpochMicrosecondsUTC(), false);
+        auto* right = builder.createConstDate(right_dt.getEpochMicrosecondsUTC(), false);
+        auto* cmp = builder.createBinaryOp(QoreIROpcode::CmpAny, left->result, right->result);
+        builder.createReturn(cmp->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor date cmp checks failed (execute)\n";
+            return false;
+        }
+        if (return_value.getAsBigInt() != -1) {
+            std::cerr << "IR executor date cmp checks failed (return)\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool runIRExecutorContainerSmoke() {
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_range_slice");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* idx = builder.createConstInt(0);
+        auto* list_val = builder.createUnaryOp(QoreIROpcode::LoadArg, idx->result);
+        auto* start = builder.createConstInt(1);
+        auto* end = builder.createConstInt(2);
+        auto* slice = builder.createTernaryOp(QoreIROpcode::RangeSliceAny, list_val->result, start->result,
+            end->result);
+        builder.createReturn(slice->result);
+
+        QoreListNode* list = new QoreListNode(autoTypeInfo);
+        list->push(QoreValue(10), &xsink);
+        list->push(QoreValue(20), &xsink);
+        list->push(QoreValue(30), &xsink);
+        std::vector<QoreValue> args{QoreValue(list)};
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr, &args, nullptr) || xsink) {
+            std::cerr << "IR executor range slice checks failed (execute)\n";
+            list->deref(&xsink);
+            return false;
+        }
+        if (return_value.getType() != NT_LIST) {
+            std::cerr << "IR executor range slice checks failed (type)\n";
+            list->deref(&xsink);
+            return false;
+        }
+        QoreListNode* out = return_value.get<QoreListNode>();
+        if (!out || out->size() != 2
+            || out->retrieveEntry(0).getAsBigInt() != 20
+            || out->retrieveEntry(1).getAsBigInt() != 30) {
+            std::cerr << "IR executor range slice checks failed (values)\n";
+            return_value.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        return_value.discard(&xsink);
+        list->deref(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_map");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* idx0 = builder.createConstInt(0);
+        auto* idx1 = builder.createConstInt(1);
+        auto* map_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx0->result);
+        auto* iter_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx1->result);
+        auto* map = builder.createBinaryOp(QoreIROpcode::MapAny, map_expr->result, iter_expr->result);
+        builder.createReturn(map->result);
+
+        QoreListNode* list = new QoreListNode(autoTypeInfo);
+        list->push(QoreValue(1), &xsink);
+        list->push(QoreValue(2), &xsink);
+        QoreValue implicit_arg(new QoreImplicitArgumentNode(nullptr, 1));
+        std::vector<QoreValue> args{implicit_arg, QoreValue(list)};
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr, &args, nullptr) || xsink) {
+            std::cerr << "IR executor map checks failed (execute)\n";
+            implicit_arg.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        if (return_value.getType() != NT_LIST || return_value.get<const QoreListNode>()->size() != 2) {
+            std::cerr << "IR executor map checks failed (result)\n";
+            return_value.discard(&xsink);
+            implicit_arg.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        return_value.discard(&xsink);
+        implicit_arg.discard(&xsink);
+        list->deref(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_select");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* idx0 = builder.createConstInt(0);
+        auto* idx1 = builder.createConstInt(1);
+        auto* iter_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx0->result);
+        auto* cond_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx1->result);
+        auto* sel = builder.createBinaryOp(QoreIROpcode::SelectAny, iter_expr->result, cond_expr->result);
+        builder.createReturn(sel->result);
+
+        QoreListNode* list = new QoreListNode(autoTypeInfo);
+        list->push(QoreValue(0), &xsink);
+        list->push(QoreValue(1), &xsink);
+        list->push(QoreValue(2), &xsink);
+        QoreValue implicit_arg(new QoreImplicitArgumentNode(nullptr, 1));
+        std::vector<QoreValue> args{QoreValue(list), implicit_arg};
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr, &args, nullptr) || xsink) {
+            std::cerr << "IR executor select checks failed (execute)\n";
+            implicit_arg.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        QoreListNode* out = return_value.get<QoreListNode>();
+        if (!out || out->size() != 2
+            || out->retrieveEntry(0).getAsBigInt() != 1
+            || out->retrieveEntry(1).getAsBigInt() != 2) {
+            std::cerr << "IR executor select checks failed (result)\n";
+            return_value.discard(&xsink);
+            implicit_arg.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        return_value.discard(&xsink);
+        implicit_arg.discard(&xsink);
+        list->deref(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_map_select");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* idx0 = builder.createConstInt(0);
+        auto* idx1 = builder.createConstInt(1);
+        auto* idx2 = builder.createConstInt(2);
+        auto* map_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx0->result);
+        auto* iter_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx1->result);
+        auto* sel_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx2->result);
+        auto* map_sel = builder.createTernaryOp(QoreIROpcode::MapSelectAny, map_expr->result, iter_expr->result,
+            sel_expr->result);
+        builder.createReturn(map_sel->result);
+
+        QoreListNode* list = new QoreListNode(autoTypeInfo);
+        list->push(QoreValue(1), &xsink);
+        list->push(QoreValue(2), &xsink);
+        QoreValue implicit_arg(new QoreImplicitArgumentNode(nullptr, 1));
+        std::vector<QoreValue> args{implicit_arg, QoreValue(list), QoreValue(1)};
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr, &args, nullptr) || xsink) {
+            std::cerr << "IR executor map select checks failed (execute)\n";
+            implicit_arg.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        if (return_value.getType() != NT_LIST || return_value.get<const QoreListNode>()->size() != 2) {
+            std::cerr << "IR executor map select checks failed (result)\n";
+            return_value.discard(&xsink);
+            implicit_arg.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        return_value.discard(&xsink);
+        implicit_arg.discard(&xsink);
+        list->deref(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_hash_map");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* idx0 = builder.createConstInt(0);
+        auto* idx1 = builder.createConstInt(1);
+        auto* idx2 = builder.createConstInt(2);
+        auto* key_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx0->result);
+        auto* val_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx1->result);
+        auto* iter_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx2->result);
+        auto* hmap = builder.createTernaryOp(QoreIROpcode::HashMapAny, key_expr->result, val_expr->result,
+            iter_expr->result);
+        builder.createReturn(hmap->result);
+
+        QoreListNode* list = new QoreListNode(autoTypeInfo);
+        list->push(QoreValue(1), &xsink);
+        list->push(QoreValue(2), &xsink);
+        QoreValue implicit_key(new QoreImplicitArgumentNode(nullptr, 1));
+        QoreValue implicit_val(new QoreImplicitArgumentNode(nullptr, 1));
+        std::vector<QoreValue> args{implicit_key, implicit_val, QoreValue(list)};
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr, &args, nullptr) || xsink) {
+            std::cerr << "IR executor hash map checks failed (execute)\n";
+            implicit_key.discard(&xsink);
+            implicit_val.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        if (return_value.getType() != NT_HASH || return_value.get<const QoreHashNode>()->size() != 2) {
+            std::cerr << "IR executor hash map checks failed (result)\n";
+            return_value.discard(&xsink);
+            implicit_key.discard(&xsink);
+            implicit_val.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        return_value.discard(&xsink);
+        implicit_key.discard(&xsink);
+        implicit_val.discard(&xsink);
+        list->deref(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_hash_map_select");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* idx0 = builder.createConstInt(0);
+        auto* idx1 = builder.createConstInt(1);
+        auto* idx2 = builder.createConstInt(2);
+        auto* idx3 = builder.createConstInt(3);
+        auto* key_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx0->result);
+        auto* val_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx1->result);
+        auto* iter_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx2->result);
+        auto* sel_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx3->result);
+        auto* hmap = builder.createQuaternaryOp(QoreIROpcode::HashMapSelectAny, key_expr->result, val_expr->result,
+            iter_expr->result, sel_expr->result);
+        builder.createReturn(hmap->result);
+
+        QoreListNode* list = new QoreListNode(autoTypeInfo);
+        list->push(QoreValue(1), &xsink);
+        list->push(QoreValue(2), &xsink);
+        QoreValue implicit_key(new QoreImplicitArgumentNode(nullptr, 1));
+        QoreValue implicit_val(new QoreImplicitArgumentNode(nullptr, 1));
+        std::vector<QoreValue> args{implicit_key, implicit_val, QoreValue(list), QoreValue(1)};
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr, &args, nullptr) || xsink) {
+            std::cerr << "IR executor hash map select checks failed (execute)\n";
+            implicit_key.discard(&xsink);
+            implicit_val.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        if (return_value.getType() != NT_HASH || return_value.get<const QoreHashNode>()->size() != 2) {
+            std::cerr << "IR executor hash map select checks failed (result)\n";
+            return_value.discard(&xsink);
+            implicit_key.discard(&xsink);
+            implicit_val.discard(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        return_value.discard(&xsink);
+        implicit_key.discard(&xsink);
+        implicit_val.discard(&xsink);
+        list->deref(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_keys_elements");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        QoreHashNode* hash = new QoreHashNode(autoTypeInfo);
+        hash->setKeyValue("a", QoreValue(1), &xsink);
+        hash->setKeyValue("b", QoreValue(2), &xsink);
+        QoreValue keys_expr(new QoreKeysOperatorNode(nullptr, QoreValue(hash->refSelf())));
+        auto* keys = builder.createExprOp(QoreIROpcode::KeysAny, keys_expr, {});
+        QoreListNode* list = new QoreListNode(autoTypeInfo);
+        list->push(QoreValue(1), &xsink);
+        list->push(QoreValue(2), &xsink);
+        QoreValue elements_expr(new QoreElementsOperatorNode(nullptr, QoreValue(list->refSelf())));
+        auto* elems = builder.createExprOp(QoreIROpcode::ElementsAny, elements_expr, {});
+        builder.createReturn(elems->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor keys/elements checks failed (execute)\n";
+            hash->deref(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        if (return_value.getAsBigInt() != 2) {
+            std::cerr << "IR executor elements checks failed (result)\n";
+            hash->deref(&xsink);
+            list->deref(&xsink);
+            return false;
+        }
+        return_value.discard(&xsink);
+        keys_expr.discard(&xsink);
+        elements_expr.discard(&xsink);
+        hash->deref(&xsink);
+        list->deref(&xsink);
+    }
+    return true;
+}
+
+class StatementBlockTestHelper : public StatementBlock {
+public:
+    using StatementBlock::StatementBlock;
+
+    bool hasOnBlockExit() const {
+        return !on_block_exit_list.empty();
+    }
+
+    block_list_t::iterator onBlockExitEnd() {
+        return on_block_exit_list.end();
+    }
+};
+
+class OnBlockExitStackGuard {
+public:
+    explicit OnBlockExitStackGuard(StatementBlockTestHelper& block) : active(false) {
+        if (block.hasOnBlockExit()) {
+            pushBlock(block.onBlockExitEnd());
+            active = true;
+        }
+    }
+
+    ~OnBlockExitStackGuard() {
+        if (active) {
+            popBlock();
+        }
+    }
+
+private:
+    bool active;
+};
+
+class LocalVarInstantiator {
+public:
+    LocalVarInstantiator(LocalVar& var, int64 parse_options, ExceptionSink* xsink)
+            : var(var), xsink(xsink), active(true) {
+        var.instantiate(parse_options);
+    }
+
+    ~LocalVarInstantiator() {
+        if (active) {
+            var.uninstantiate(xsink);
+        }
+    }
+
+    void release() {
+        active = false;
+    }
+
+private:
+    LocalVar& var;
+    ExceptionSink* xsink;
+    bool active;
+};
+
+static bool runIRExecutorRefcountExitSmoke() {
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_refcount_return");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        builder.createConstString("return.first");
+        builder.createConstString("return.second");
+        builder.createReturnNothing();
+
+        QoreValue return_value;
+        std::vector<std::string> cleanup_log;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, &cleanup_log) || xsink) {
+            std::cerr << "IR executor refcount checks failed (return execute)\n";
+            return false;
+        }
+        if (!return_value.isNothing()) {
+            std::cerr << "IR executor refcount checks failed (return value)\n";
+            return false;
+        }
+        if (cleanup_log.size() < 2 || cleanup_log[0] != "return.second" || cleanup_log[1] != "return.first") {
+            std::cerr << "IR executor refcount checks failed (return cleanup)\n";
+            return false;
+        }
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_refcount_return_value");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* keep = builder.createConstString("return.keep");
+        builder.createConstString("return.drop");
+        builder.createReturn(keep->result);
+
+        QoreValue return_value;
+        std::vector<std::string> cleanup_log;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, &cleanup_log) || xsink) {
+            std::cerr << "IR executor refcount checks failed (return value execute)\n";
+            return false;
+        }
+        if (return_value.getType() != NT_STRING || strcmp(return_value.get<QoreStringNode>()->getBuffer(),
+            "return.keep")) {
+            std::cerr << "IR executor refcount checks failed (return value content)\n";
+            return_value.discard(&xsink);
+            return false;
+        }
+        if (cleanup_log.size() < 1 || cleanup_log[0] != "return.drop") {
+            std::cerr << "IR executor refcount checks failed (return value cleanup)\n";
+            return_value.discard(&xsink);
+            return false;
+        }
+        return_value.discard(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_refcount_throw");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        builder.createConstString("throw.first");
+        auto* second = builder.createConstString("throw.second");
+        builder.createThrow(second->result, nullptr);
+
+        QoreValue return_value;
+        std::vector<std::string> cleanup_log;
+        if (QoreIRInterpreter::execute(func, return_value, &xsink, &cleanup_log) || !xsink) {
+            std::cerr << "IR executor refcount checks failed (throw execute)\n";
+            return false;
+        }
+        if (cleanup_log.size() < 2 || cleanup_log[0] != "throw.second" || cleanup_log[1] != "throw.first") {
+            std::cerr << "IR executor refcount checks failed (throw cleanup)\n";
+            xsink.clear();
+            return false;
+        }
+        xsink.clear();
+    }
+    return true;
+}
+
+static bool runIRExecutorStatementSmoke() {
+    {
+        ExceptionSink xsink;
+        QoreProgramHelper pgm_helper(xsink);
+        if (xsink) {
+            std::cerr << "IR executor statement checks failed (program init)\n";
+            return false;
+        }
+        QoreProgram* program = *pgm_helper;
+        ProgramThreadCountContextHelper thread_ctx(&xsink, program, true);
+        if (xsink) {
+            std::cerr << "IR executor statement checks failed (thread context)\n";
+            return false;
+        }
+        ProgramRuntimeExternalParseContextHelper parse_lock(program);
+        if (!parse_lock) {
+            std::cerr << "IR executor statement checks failed (parse lock)\n";
+            return false;
+        }
+        const QoreProgramLocation* stmt_loc = get_runtime_location();
+        {
+            QoreIRFunction func("ir_exec_debug_stmt");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            DebugStatement* debug_stmt = new DebugStatement(1, 1,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(2), QoreValue(3))));
+            builder.createDebug(debug_stmt);
+            builder.createReturnNothing();
+
+            QoreValue return_value;
+            if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+                std::cerr << "IR executor statement checks failed (debug execute)\n";
+                delete debug_stmt;
+                return false;
+            }
+            if (!return_value.isNothing()) {
+                std::cerr << "IR executor statement checks failed (debug return)\n";
+                delete debug_stmt;
+                return false;
+            }
+            delete debug_stmt;
+        }
+        {
+            LocalVar foreach_var("foreach_var_exec", bigIntTypeInfo);
+            LocalVarInstantiator foreach_guard(foreach_var, program->getParseOptions64(), &xsink);
+            QoreListNode* foreach_list = new QoreListNode(bigIntTypeInfo);
+            foreach_list->push(QoreValue(1), nullptr);
+            StatementBlock* body = new StatementBlock(1, 1);
+            body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(9), QoreValue(10)))));
+            ForEachStatement* foreach_stmt = new ForEachStatement(1, 1,
+                QoreValue(new VarRefNode(stmt_loc, strdup("foreach_var_exec"), &foreach_var, false)),
+                QoreValue(foreach_list),
+                body);
+
+            QoreIRFunction func("ir_exec_foreach_stmt");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            builder.createForeach(foreach_stmt);
+            builder.createReturnNothing();
+
+            QoreValue return_value;
+            if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+                std::cerr << "IR executor statement checks failed (foreach execute)\n";
+                delete foreach_stmt;
+                return false;
+            }
+            if (!return_value.isNothing()) {
+                std::cerr << "IR executor statement checks failed (foreach return)\n";
+                delete foreach_stmt;
+                return false;
+            }
+            delete foreach_stmt;
+        }
+        {
+            StatementBlockTestHelper root(1, 1);
+            StatementBlock* exit_body = new StatementBlock(1, 1);
+            exit_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(11), QoreValue(12)))));
+            OnBlockExitStatement* obe_stmt = new OnBlockExitStatement(1, 1, exit_body, OBE_Unconditional);
+            root.addStatement(obe_stmt);
+            OnBlockExitStackGuard guard(root);
+
+            QoreIRFunction func("ir_exec_on_block_exit_stmt");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            builder.createOnBlockExit(obe_stmt);
+            builder.createReturnNothing();
+
+            QoreValue return_value;
+            if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+                std::cerr << "IR executor statement checks failed (on-block-exit execute)\n";
+                return false;
+            }
+            if (!return_value.isNothing()) {
+                std::cerr << "IR executor statement checks failed (on-block-exit return)\n";
+                return false;
+            }
+        }
+        {
+            QoreIRFunction func("ir_exec_thread_exit");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            builder.createThreadExit();
+            builder.createReturnNothing();
+
+            QoreValue return_value;
+            if (QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || !xsink.isThreadExit()) {
+                std::cerr << "IR executor statement checks failed (thread exit)\n";
+                xsink.clear();
+                return false;
+            }
+            xsink.clear();
         }
     }
     return true;
@@ -15828,6 +16493,9 @@ int main() {
             QoreIROpcode::NeHard)) {
         return 1;
     }
+    if (!runConstRefcountInterpreterSmoke()) {
+        return 1;
+    }
     if (!runUnaryBinaryInterpreterSmoke()) {
         return 1;
     }
@@ -15844,6 +16512,18 @@ int main() {
         return 1;
     }
     if (!runIRExecutorArgClosureSmoke()) {
+        return 1;
+    }
+    if (!runIRExecutorDateSmoke()) {
+        return 1;
+    }
+    if (!runIRExecutorContainerSmoke()) {
+        return 1;
+    }
+    if (!runIRExecutorRefcountExitSmoke()) {
+        return 1;
+    }
+    if (!runIRExecutorStatementSmoke()) {
         return 1;
     }
     if (!runRefcountOwnershipSmoke()) {
@@ -16954,8 +17634,8 @@ int main() {
     ValueHolder foldl_expr(QoreValue(new QorePlusOperatorNode(&loc,
         QoreValue(new QoreImplicitArgumentNode(&loc, 1)),
         QoreValue(new QoreImplicitArgumentNode(&loc, 2)))), nullptr);
-    QoreValue foldl_result = QoreIRInterpreter::evalBinary(QoreIROpcode::FoldlAny, foldl_expr->refSelf(),
-        list_val.refSelf(), &xsink);
+    QoreValue foldl_result = QoreIRInterpreter::evalBinary(QoreIROpcode::FoldlAny, *foldl_expr,
+        list_val, &xsink);
     if (xsink || foldl_result.getAsBigInt() != 6) {
         std::cerr << "Foldl IR interpreter smoke checks failed\n";
         return 1;
@@ -16964,8 +17644,8 @@ int main() {
     ValueHolder foldr_expr(QoreValue(new QorePlusOperatorNode(&loc,
         QoreValue(new QoreImplicitArgumentNode(&loc, 1)),
         QoreValue(new QoreImplicitArgumentNode(&loc, 2)))), nullptr);
-    QoreValue foldr_result = QoreIRInterpreter::evalBinary(QoreIROpcode::FoldrAny, foldr_expr->refSelf(),
-        list_val.refSelf(), &xsink);
+    QoreValue foldr_result = QoreIRInterpreter::evalBinary(QoreIROpcode::FoldrAny, *foldr_expr,
+        list_val, &xsink);
     if (xsink || foldr_result.getAsBigInt() != 6) {
         std::cerr << "Foldr IR interpreter smoke checks failed\n";
         return 1;
@@ -16975,7 +17655,7 @@ int main() {
         QoreValue(new QoreImplicitArgumentNode(&loc, 1)),
         QoreValue(1))), nullptr);
     ValueHolder map_result_holder(
-        QoreIRInterpreter::evalBinary(QoreIROpcode::MapAny, map_expr->refSelf(), list_val.refSelf(), &xsink), nullptr);
+        QoreIRInterpreter::evalBinary(QoreIROpcode::MapAny, *map_expr, list_val, &xsink), nullptr);
     const QoreListNode* map_list = map_result_holder->get<const QoreListNode>();
     if (xsink || !map_list || map_list->size() != 3
         || map_list->getEntryAsInt(0) != 2

@@ -1971,6 +1971,14 @@ int QoreProgram::parseRollback(ExceptionSink* xsink) {
     return priv->parseRollback(xsink);
 }
 
+void QoreProgram::setExecMode(qore_exec_mode_t mode) {
+    priv->exec_mode = mode;
+}
+
+qore_exec_mode_t QoreProgram::getExecMode() const {
+    return priv->exec_mode;
+}
+
 void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
     // find class
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*priv->RootNS, classname);

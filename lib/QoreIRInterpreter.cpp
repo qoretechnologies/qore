@@ -19,6 +19,7 @@
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/qore_thread_intern.h>
 #include <qore/intern/Variable.h>
+#include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/QoreDivisionOperatorNode.h>
 #include <qore/intern/QoreBinaryAndOperatorNode.h>
 #include <qore/intern/QoreBinaryOrOperatorNode.h>
@@ -38,6 +39,25 @@
 #include <qore/intern/QoreLogicalGreaterThanOrEqualsOperatorNode.h>
 #include <qore/intern/QoreLogicalLessThanOperatorNode.h>
 #include <qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h>
+#include <qore/intern/QoreIR.h>
+
+static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const QoreTypeInfo* type_info) {
+    switch (opcode) {
+        case QoreIROpcode::GuardInt:
+            return value.isInt();
+        case QoreIROpcode::GuardFloat:
+            return value.isFloat();
+        case QoreIROpcode::GuardType:
+            if (!type_info) {
+                return true;
+            }
+            return QoreTypeInfo::isType(type_info, value.getType());
+        case QoreIROpcode::GuardNotNothing:
+            return !value.isNothing();
+        default:
+            return true;
+    }
+}
 #include <qore/intern/QoreMapOperatorNode.h>
 #include <qore/intern/QoreSelectOperatorNode.h>
 #include <qore/intern/QoreMapSelectOperatorNode.h>
@@ -63,6 +83,8 @@
 #include <qore/intern/QoreUnaryMinusOperatorNode.h>
 #include <qore/intern/QoreUnaryPlusOperatorNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
+#include <qore/intern/LocalVar.h>
+#include <qore/intern/VarRefNode.h>
 
 static QoreValue evalExprNode(const QoreValue& expr, ExceptionSink* xsink) {
     if (!expr.hasNode()) {
@@ -274,6 +296,35 @@ static void storeValue(std::unordered_map<const void*, QoreValue>& values, const
     }
     QoreValue stored = value.hasNode() ? value.refSelf() : value;
     values[key] = stored;
+}
+
+static void assignLocalVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
+    if (!var) {
+        return;
+    }
+    LValueHelper helper(xsink);
+    if (var->getLValue(helper, false, true)) {
+        return;
+    }
+    helper.assign(value);
+}
+
+static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>& locals,
+        const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink) {
+    if (!lvalue.hasNode()) {
+        return;
+    }
+    const AbstractQoreNode* node = lvalue.getInternalNode();
+    const VarRefNode* var_ref = dynamic_cast<const VarRefNode*>(node);
+    if (!var_ref) {
+        return;
+    }
+    qore_var_t type = var_ref->getType();
+    if ((type == VT_LOCAL || type == VT_LOCAL_TS) && var_ref->ref.id) {
+        QoreValue stored = value.hasNode() ? value.refSelf() : value;
+        storeValue(locals, var_ref->ref.id, stored, nullptr);
+        assignLocalVarValue(var_ref->ref.id, stored, xsink);
+    }
 }
 
 static QoreListNode* buildArgList(const std::unordered_map<uint32_t, QoreValue>& values,
@@ -525,7 +576,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::LoadLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 auto it = locals.find(local_inst->local);
-                QoreValue val = it != locals.end() ? it->second : QoreValue();
+                QoreValue val;
+                if (it != locals.end()) {
+                    val = it->second;
+                } else if (local_inst->local) {
+                    bool needs_deref = true;
+                    val = local_inst->local->eval(needs_deref, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, nullptr);
+                        cleanupStoredValues(globals, nullptr);
+                        cleanupStoredValues(threadlocals, nullptr);
+                        cleanupStoredValues(closures, nullptr);
+                        return false;
+                    }
+                    storeValue(locals, local_inst->local, val, nullptr);
+                }
                 QoreValue out = val.hasNode() ? val.refSelf() : val;
                 values[local_inst->result.id] = out;
                 if (out.hasNode()) {
@@ -588,6 +654,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 QoreValue val = getIRValue(values, local_inst->operands.front());
                 storeValue(locals, local_inst->local, val, xsink);
+                assignLocalVarValue(local_inst->local, val, xsink);
                 ++ip;
                 break;
             }
@@ -666,6 +733,37 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 QoreValue val = getIRValue(values, var_inst->operands.front());
                 storeValue(threadlocals, var_inst->var, val, xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::GuardInt:
+            case QoreIROpcode::GuardFloat:
+            case QoreIROpcode::GuardType:
+            case QoreIROpcode::GuardNotNothing: {
+                auto* guard_inst = static_cast<QoreIRGuardInstruction*>(inst);
+                if (guard_inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "guard missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue value = getIRValue(values, guard_inst->operands.front());
+                if (!guardPredicate(inst->opcode, value, guard_inst->type_info)) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-GUARD-FAIL", "type guard failed");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
                 ++ip;
                 break;
             }
@@ -879,6 +977,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
+                updateLocalVarFromLvalue(locals, lval_inst->lvalue, res, xsink);
                 ++ip;
                 break;
             }
@@ -909,6 +1008,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
+                updateLocalVarFromLvalue(locals, lval_inst->lvalue, res, xsink);
                 ++ip;
                 break;
             }
@@ -928,10 +1028,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                values[lval_inst->result.id] = res;
-                if (res.hasNode()) {
+                QoreValue updated = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[lval_inst->result.id] = updated;
+                if (updated.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
+                updateLocalVarFromLvalue(locals, lval_inst->lvalue, updated, xsink);
                 ++ip;
                 break;
             }
@@ -971,6 +1081,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
+                updateLocalVarFromLvalue(locals, lval_inst->lvalue, res, xsink);
                 ++ip;
                 break;
             }
@@ -1004,6 +1115,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
+                updateLocalVarFromLvalue(locals, lval_inst->lvalue, res, xsink);
                 ++ip;
                 break;
             }

@@ -142,6 +142,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::HashMapSelectAny:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeSliceAny:
+        case QoreIROpcode::MakeList:
         case QoreIROpcode::CastAny:
         case QoreIROpcode::ExtractAny:
         case QoreIROpcode::RemoveAny:
@@ -290,6 +291,13 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::UnaryMinusInt:
         case QoreIROpcode::UnaryMinusFloat:
         case QoreIROpcode::UnaryMinusAny:
+        case QoreIROpcode::Incref:
+        case QoreIROpcode::Decref:
+        case QoreIROpcode::DecrefNoThrow:
+        case QoreIROpcode::GuardInt:
+        case QoreIROpcode::GuardFloat:
+        case QoreIROpcode::GuardType:
+        case QoreIROpcode::GuardNotNothing:
             return 1;
         case QoreIROpcode::LoadArg:
         case QoreIROpcode::LoadClosure:
@@ -320,6 +328,8 @@ static int expectedOperands(QoreIROpcode op) {
             return 3;
         case QoreIROpcode::ShiftLValue:
             return 0;
+        case QoreIROpcode::MakeList:
+            return -1;
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:

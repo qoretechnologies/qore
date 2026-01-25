@@ -178,6 +178,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::CallMethod: return "call.method";
         case QoreIROpcode::CallStatic: return "call.static";
         case QoreIROpcode::Invoke: return "invoke";
+        case QoreIROpcode::GuardInt: return "guard.int";
+        case QoreIROpcode::GuardFloat: return "guard.float";
+        case QoreIROpcode::GuardType: return "guard.type";
+        case QoreIROpcode::GuardNotNothing: return "guard.not-nothing";
         case QoreIROpcode::LandingPad: return "landingpad";
         case QoreIROpcode::CatchException: return "catch.exception";
         case QoreIROpcode::Rethrow: return "rethrow";

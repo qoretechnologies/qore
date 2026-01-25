@@ -45,6 +45,8 @@ class QoreValue;
 class VarRefNode;
 class AbstractStatement;
 class StatementBlock;
+class QoreTypeInfo;
+class QoreTypeInfo;
 
 class QoreIRLowering {
 public:
@@ -129,9 +131,15 @@ private:
     QoreIRValue lowerCallReference(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSelfCall(const QoreValue& expr, std::string& error);
     QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
     bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis);
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
+    bool analysisIndicatesInt(const QoreParseAnalysis& analysis) const;
+    bool analysisIndicatesFloat(const QoreParseAnalysis& analysis) const;
+    const QoreTypeInfo* selectAnalysisType(const QoreParseAnalysis& analysis) const;
+    QoreIROpcode selectNumericOpcode(const QoreValue& left, const QoreValue& right,
+        QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
     bool ensureBuilderContext(std::string& error) const;
     QoreIRBasicBlock* createBlock(const std::string& prefix);
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context);

@@ -432,6 +432,9 @@ public:
         expression_mode : 1
         ;
 
+    qore_exec_mode_t exec_mode = QEM_AST;
+    bool ir_fallback_warned = false;
+
     typedef std::set<q_exp_t> q_exp_set_t;
     q_exp_set_t exp_set;
     q_exp_t new_expression = nullptr;

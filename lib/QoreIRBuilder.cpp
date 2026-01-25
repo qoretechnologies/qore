@@ -120,6 +120,15 @@ QoreIRConstInstruction* QoreIRBuilder::createConstDate(int64_t microseconds, boo
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createMakeList(const std::vector<QoreIRValue>& values,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::MakeList);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = values;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createBinaryOp(QoreIROpcode op, QoreIRValue lhs, QoreIRValue rhs,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(op);
@@ -329,10 +338,12 @@ QoreIRReturnInstruction* QoreIRBuilder::createReturnNothing(const QoreProgramLoc
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createThrow(QoreIRValue value, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::Throw);
+QoreIRThrowInstruction* QoreIRBuilder::createThrow(QoreIRValue value, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRThrowInstruction>();
     inst->loc = loc;
     inst->operands.push_back(value);
+    inst->exception_target = exception_target;
     return inst;
 }
 
@@ -358,6 +369,43 @@ QoreIRInstruction* QoreIRBuilder::createCatchException(const QoreProgramLocation
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CatchException);
     inst->loc = loc;
     inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRGuardInstruction* QoreIRBuilder::createGuardInt(QoreIRValue value, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRGuardInstruction>(QoreIROpcode::GuardInt);
+    inst->loc = loc;
+    inst->operands.push_back(value);
+    inst->deopt_target = exception_target;
+    return inst;
+}
+
+QoreIRGuardInstruction* QoreIRBuilder::createGuardFloat(QoreIRValue value, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRGuardInstruction>(QoreIROpcode::GuardFloat);
+    inst->loc = loc;
+    inst->operands.push_back(value);
+    inst->deopt_target = exception_target;
+    return inst;
+}
+
+QoreIRGuardInstruction* QoreIRBuilder::createGuardType(QoreIRValue value, const QoreTypeInfo* type,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRGuardInstruction>(QoreIROpcode::GuardType);
+    inst->loc = loc;
+    inst->operands.push_back(value);
+    inst->type_info = type;
+    inst->deopt_target = exception_target;
+    return inst;
+}
+
+QoreIRGuardInstruction* QoreIRBuilder::createGuardNotNothing(QoreIRValue value, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRGuardInstruction>(QoreIROpcode::GuardNotNothing);
+    inst->loc = loc;
+    inst->operands.push_back(value);
+    inst->deopt_target = exception_target;
     return inst;
 }
 

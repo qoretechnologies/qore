@@ -22,12 +22,12 @@ Decision constraints:
 
 ## Phase 0: IR Design & Spec (tight checklist)
 
-- [~] Define IR value model: QoreValue tag semantics, NOTHING, and explicit "maybe-NOTHING" analysis.
-- [~] Define exception model: explicit exception edges for all potentially throwing ops; invoke/landingpad semantics.
-- [~] Define refcount ops in IR (incref/decref/try_decref) and lifetime rules under exceptions.
-- [~] Define control-flow IR (blocks, terminators, phi, unreachable, rethrow).
-- [~] Define typed vs dynamic op variants (e.g., add.int/add.any) and guard strategy.
-- [~] Define lvalue/rvalue semantics in IR (load/store, element/field ops, op-assign).
+- [x] Define IR value model: QoreValue tag semantics, NOTHING, and explicit "maybe-NOTHING" analysis.
+- [x] Define exception model: explicit exception edges for all potentially throwing ops; invoke/landingpad semantics.
+- [x] Define refcount ops in IR (incref/decref/try_decref) and lifetime rules under exceptions.
+- [x] Define control-flow IR (blocks, terminators, phi, unreachable, rethrow).
+- [x] Define typed vs dynamic op variants (e.g., add.int/add.any) and guard strategy.
+- [x] Define lvalue/rvalue semantics in IR (load/store, element/field ops, op-assign).
 - [x] Define call ABI for IR interpreter and JIT (args, locals, closure/env).
 - [x] Define parse-analysis propagation interface (QoreParseContext use) and dataflow expectations.
 - [x] Write IR specification doc with examples and invariants.
@@ -62,11 +62,11 @@ Deliverables:
 
 ## Phase 2: IR Interpreter
 
-- [~] Execute all IR ops (including invoke with exception paths).
-- [ ] Validate refcount behavior at all exits (normal and exceptional).
-- [ ] Add `--exec-mode=ir` or equivalent runtime switch.
+- [x] Execute all IR ops (including invoke with exception paths).
+- [x] Validate refcount behavior at all exits (normal and exceptional).
+- [x] Add `--exec-mode=ir` or equivalent runtime switch.
 - [ ] Ensure all existing tests pass under IR.
-- [ ] Add IR smoke tests and coverage tests for operators and lvalues.
+- [x] Add IR smoke tests and coverage tests for operators and lvalues (including const/refcount ops).
 
 ---
 
@@ -82,8 +82,11 @@ Deliverables:
 - [~] IR interpreter: add tests for `invoke.sim.error`, `call`/`call.indirect`/`dot.eval` invoke paths, and unwind cleanup paths.
   - [x] invoke.sim.error + call/dot.eval invoke coverage.
   - [x] Unwind cleanup tests via minimal IR executor with cleanup list + catch.exception coverage.
+- [x] IR interpreter: execute statement opcodes (foreach/on-block-exit/debug/thread-exit); add thread-exit executor smoke test.
 - [x] Docs: add a short note on running IR smoke under valgrind with `qore -b`.
 - [~] Statement lowering: do-while, foreach, on-block-exit, thread-exit, debug covered.
+- [x] IR exec-mode smoke test for control-flow without fallback warnings.
+- [x] IR opcode coverage includes const and refcount operations.
 
 ---
 

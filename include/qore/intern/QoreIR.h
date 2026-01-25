@@ -46,6 +46,7 @@ class Var;
 class ForEachStatement;
 class OnBlockExitStatement;
 class DebugStatement;
+class QoreTypeInfo;
 
 enum class QoreIROpcode : uint16_t {
     ConstInt,
@@ -54,6 +55,7 @@ enum class QoreIROpcode : uint16_t {
     ConstNothing,
     ConstString,
     ConstDate,
+    MakeList,
 
     AddInt,
     AddFloat,
@@ -194,6 +196,11 @@ enum class QoreIROpcode : uint16_t {
     CallStatic,
     Invoke,
 
+    GuardInt,
+    GuardFloat,
+    GuardType,
+    GuardNotNothing,
+
     LandingPad,
     CatchException,
     Rethrow,
@@ -290,6 +297,15 @@ public:
     std::vector<QoreIRPhiIncoming> incoming;
 };
 
+class QoreIRGuardInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRGuardInstruction(QoreIROpcode op) : QoreIRInstruction(op) {
+    }
+
+    QoreIRBasicBlock* deopt_target = nullptr;
+    const QoreTypeInfo* type_info = nullptr;
+};
+
 class QoreIRReturnInstruction : public QoreIRInstruction {
 public:
     QoreIRReturnInstruction() : QoreIRInstruction(QoreIROpcode::ReturnNothing) {
@@ -297,6 +313,14 @@ public:
 
     bool has_value = false;
     QoreIRValue value{};
+};
+
+class QoreIRThrowInstruction : public QoreIRInstruction {
+public:
+    QoreIRThrowInstruction() : QoreIRInstruction(QoreIROpcode::Throw) {
+    }
+
+    QoreIRBasicBlock* exception_target = nullptr;
 };
 
 class QoreIRLocalInstruction : public QoreIRInstruction {

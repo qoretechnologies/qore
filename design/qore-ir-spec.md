@@ -265,3 +265,18 @@ Run:
 - Exception model details: sink threading vs implicit state.
 - Value tag encoding: bit layout for JIT compatibility.
 - Deopt granularity: instruction-level vs block-level.
+
+## 16. Parser Analysis Integration
+- The lowering pipeline relies on `QoreParseContext` to track metadata such as whether a declared local is "definitively assigned" or may still represent `NOTHING`. This information should be threaded through the parser so the IR visitor can emit typed guards when the parser indicates a value is definitely an `int`, `float`, etc., and otherwise emit `.any` guards.  
+- Locals declared with hard types (e.g., `int i;`) must be treated as unassigned/`NOTHING` until an assignment occurs; the parse context must distinguish between:
+  - `definitely assigned`: can emit optimized, type-specialized `store.local`/`load.local` without extra `NOTHING` guards.
+  - `maybe NOTHING`: lowering must insert guards before type-specialized uses or fall back to `.any` instructions.
+- The visitor API should expose helpers such as `bool isLocalDefinitelyAssigned(LocalVar* slot)` and `TypeInfo* guaranteedType(LocalVar* slot)` so lowering does not keep external maps.
+- Parser-provided analysis should also indicate when expressions can `throw` so the lowering can decide whether to emit `invoke` versus a simple `call` instruction.
+
+## 17. Immediate Next Steps
+- Finalize this spec by codifying the SSA semantics, exception edges, reference-count ops, guard rules, and parser data requirements (per Phase 0 checklist) before broader lowering work begins.
+- Ship the IR headers (`QoreIR.h`, `QoreIRBuilder.h`, `QoreIRPrinter.h`, `QoreIRVerifier.h`) with concrete enumerations of typed instructions, guard conventions, landing pads, and cleanup semantics.
+- Start the AST→IR lowering visitor focused on priority operator families, ensuring exception-producing expressions compile to `invoke` plus cleanup, and adjust parser analysis plumbing to provide definitively-assigned metadata.
+- Stabilize the interpreter by finishing `StoreLocal` lowering, handling pre-/post- increments, adding the exec-mode smoke test with try/catch, and validating the smoke path under `qore -b` + Valgrind to prove refcount safety.
+- After each milestone, revisit this spec/plan to capture new constraints (parser needs, valgrind findings, etc.) before progressing further.

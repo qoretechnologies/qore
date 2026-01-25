@@ -62,6 +62,7 @@ static cl_mod_list_t cl_mod_list;
 static int64 parse_options = PO_DEFAULT;
 static int warnings = QP_WARN_DEFAULT;
 static int qore_lib_options = QLO_NONE;
+static qore_exec_mode_t exec_mode = QEM_AST;
 
 // lock options
 static bool lock_options = false;
@@ -152,6 +153,7 @@ static const char helpstr[] =
    "  -c, --charset=arg            sets default character set encoding\n"
    "  -D, --define=arg             sets the value of a parse define\n"
    "  -e, --exec=arg               execute program given on command-line\n"
+   "      --exec-mode=arg          execution mode: ast (default) or ir\n"
    "  -g, --disable-gc             disable the garbage collector\n"
    "  -h, --help                   shows this help text and exit\n"
    "  -i, --list-warnings          list all warnings and quit\n"
@@ -628,6 +630,23 @@ static void set_exec(const char* arg) {
     cl_pgm = arg;
 }
 
+static void set_exec_mode(const char* arg) {
+    if (!arg || !*arg) {
+        printe("error: --exec-mode requires a value (ast or ir)\n");
+        opt_errors++;
+        return;
+    }
+    if (!strcasecmp(arg, "ast")) {
+        exec_mode = QEM_AST;
+        return;
+    }
+    if (!strcasecmp(arg, "ir")) {
+        exec_mode = QEM_IR;
+        return;
+    }
+    printe("error: invalid --exec-mode value '%s' (use ast or ir)\n", arg);
+    opt_errors++;
+}
 static void disable_gc(const char* arg) {
     qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
@@ -665,6 +684,7 @@ static struct opt_struct_s {
    { 'B', "show-built-options",    ARG_NONE, show_build_options },
    { 'c', "charset",               ARG_MAND, set_charset },
    { 'e', "exec",                  ARG_MAND, set_exec },
+   { '\0', "exec-mode",            ARG_MAND, set_exec_mode },
    { 'g', "disable-gc",            ARG_NONE, disable_gc },
    { 'h', "help",                  ARG_NONE, do_help },
    { 'i', "list-warnings",         ARG_NONE, list_warnings },
@@ -960,6 +980,7 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
    {
       QoreProgramHelper qpgm(parse_options, xsink);
       bool mod_errs = false;
+      qpgm->setExecMode(exec_mode);
 
       // set parse defines
       qpgm->parseCmdLineDefines(xsink, wsink, warnings, defmap);
