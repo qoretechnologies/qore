@@ -1,0 +1,25 @@
+1.   Data element directory
+
+     1001  Document name code                                      [C]
+
+     Desc: Code specifying the document name.
+
+     Repr: an..3
+
+     1004  Document identifier
+
+     Desc: Reference number identifying a document.
+
+     Repr: an..35
+
+     1153  Reference qualifier
+
+     Desc: Code giving specific meaning to a reference segment or data element.
+
+     Repr: an..3
+
+     1154  Reference identifier
+
+     Desc: Identification number of a reference.
+
+     Repr: an..35

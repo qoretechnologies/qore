@@ -177,23 +177,7 @@ w.writeInterchangeTrailer();
 
             Subclasses must implement this method to write to their specific output destination.
         */
-        abstract private writeOutput(string data);
-
-        #! Writes the UNA segment if configured
-        /** This is called automatically by writeInterchangeHeader() if write_una is True.
-            Can also be called explicitly.
-        */
-        writeUna() {
-            if (m_una_written) {
-                return;
-            }
-            string una = delimiters.generateUna();
-            writeOutput(una);
-            if (m_line_break) {
-                writeOutput("\n");
-            }
-            m_una_written = True;
-        }
+        abstract private nothing writeOutput(string data);
 
         #! Writes an interchange header (UNB segment)
         /** @param info interchange header information
@@ -257,6 +241,23 @@ w.writeInterchangeHeader(<EdifactInterchangeInfo>{
             m_control_reference = info.control_reference;
             m_interchange_started = True;
             m_message_count = 0;
+        }
+
+        /** Writes the UNA segment if configured.
+
+            This is called automatically by writeInterchangeHeader() if write_una is True.
+            Can also be called explicitly.
+        */
+        nothing writeUna() {
+            if (m_una_written) {
+                return;
+            }
+            string una = delimiters.generateUna();
+            writeOutput(una);
+            if (m_line_break) {
+                writeOutput("\n");
+            }
+            m_una_written = True;
         }
 
         #! Writes an interchange trailer (UNZ segment)

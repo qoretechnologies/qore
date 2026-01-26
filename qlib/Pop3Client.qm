@@ -59,7 +59,7 @@ module Pop3Client {
     The %Pop3Client module provides the Pop3Client class for retrieving emails from a
     <a href="http://en.wikipedia.org/wiki/Post_Office_Protocol">POP3</a> server, with or without TLS/SSL encryption.
 
-    To use this module, use \c "%requires Pop3Client" in your code.  See examples/pop3.q for an example program using
+    To use this module, use \c "%requires Pop3Client" in your code.  See examples/pop3.qr for an example program using
     this module.
 
     All the public symbols in the module are defined in the Pop3Client namespace.
@@ -165,7 +165,7 @@ if (!h) {
 #! the main namespace for the Pop3Client module
 /** To use this module, use \c "%requires Pop3Client" in your code.
 
-    See examples/pop3.q for an example program using this module
+    See examples/pop3.qr for an example program using this module
 
     All the public symbols in the module are defined in this namespace
 */

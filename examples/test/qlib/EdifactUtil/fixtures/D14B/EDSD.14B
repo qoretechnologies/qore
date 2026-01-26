@@ -1,0 +1,8 @@
+2.   Segment specifications
+
+       BGM  BEGINNING OF MESSAGE
+
+       Function: To indicate the type and function of a message.
+
+010    C002 DOCUMENT/MESSAGE NAME                     C    1
+020    1004 DOCUMENT IDENTIFIER                       C    1 an..35

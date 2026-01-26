@@ -1,0 +1,43 @@
+PART 5    UNITED NATIONS DIRECTORIES FOR ELECTRONIC DATA INTERCHANGE
+          FOR ADMINISTRATION, COMMERCE AND TRANSPORT
+
+CHAPTER 6 Code list
+
+1.   Code list UNCL
+
+     Change indicators
+
+     a plus sign (+)    for an addition
+     an asterisk (*)    for an addition/subtraction/change to an entry
+                        for a particular data element
+     a hash sign (#)    for changes to names
+     a vertical bar (|) for changes to text for descriptions,
+                        notes and functions
+     a letter X (X)     for marked for deletion
+
+     Usage indicators
+
+     [B] = used in batch messages only
+     [I] = used in interactive messages only
+     [C] = common usage in both batch and interactive messages
+
+     1001  Document name code                                      [C]
+
+     Desc: Code specifying the document name.
+
+     Repr: an..3
+
+     1     Certificate of analysis
+              Certificate providing the values of an analysis.
+
+     2     Certificate of conformity
+              Certificate certifying the conformity to predefined
+              definitions.
+
+     1153  Reference qualifier                                    [C]
+
+     Desc: Code giving specific meaning to a reference segment or data element.
+
+     Repr: an..3
+
+     9     Original reference

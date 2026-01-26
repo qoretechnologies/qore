@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -391,18 +391,6 @@ public:
 
     //! initializes during parsing
     DLLLOCAL virtual int parseInit(QoreValue& val, QoreParseContext& parse_context);
-
-    DLLLOCAL QoreHashNode(bool ne);
-    DLLLOCAL void clear(ExceptionSink* xsink, bool reverse = false);
-
-    //! sets "needs_eval" to false and "value" to true
-    DLLLOCAL void clearNeedsEval();
-
-    //! sets "needs_eval" to true and "value" to false
-    DLLLOCAL void setNeedsEval();
-
-    // returns a new hash consisting of just the members of value_list
-    DLLLOCAL QoreHashNode* getSlice(const QoreListNode* value_list, ExceptionSink* xsink) const;
 
 protected:
     //! private implementation of the class

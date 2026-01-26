@@ -6,6 +6,7 @@
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/Logger.qm
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ConnectionProvider

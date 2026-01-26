@@ -65,7 +65,7 @@ module HttpServer {
     \c "async_mode" key in @ref HttpServerOptionInfo and see the @ref httpserverasyncio_intro "HttpServerAsyncIo"
     module for additional details.
 
-    To use this module, use \c "%requires HttpServer" in your code.  See examples/httpserver.q for an example program
+    To use this module, use \c "%requires HttpServer" in your code.  See examples/httpserver.qr for an example program
     using this module
 
     All the public symbols in the module are defined in the HttpServer namespace.
@@ -380,7 +380,7 @@ log("started listener on %s", lh.desc);
 #! the main namespace for the HttpServer module
 /** To use this module, use \c "%requires HttpServer" in your code.
 
-    See examples/httpserver.q for an example program using this module
+    See examples/httpserver.qr for an example program using this module
 
     All the public symbols in the module are defined in this namespace
  */

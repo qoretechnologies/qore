@@ -1,0 +1,19 @@
+                              UN/EDIFACT
+
+                UNITED NATIONS STANDARD MESSAGE (UNSM)
+
+                        Bad message
+
+                                           Message Type : NONAME
+                                           Version      : D
+                                           Release      : 10V
+                                           Contr. Agency: UN
+
+4.1    Segment clarification
+
+0010   UNH, 
+0020   BGM, 
+0030   DTM, 
+0040       Segment group 1:  RFF-DTM
+0050           RFF, 
+0060           DTM, 

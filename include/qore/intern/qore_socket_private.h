@@ -32,6 +32,7 @@
 #ifndef _QORE_QORE_SOCKET_PRIVATE_H
 #define _QORE_QORE_SOCKET_PRIVATE_H
 
+#include "qore/intern/qore_string_private.h"
 #include "qore/AbstractPollState.h"
 #include "qore/QoreSocket.h"
 #include "qore/InputStream.h"
@@ -4527,7 +4528,7 @@ struct qore_socket_private {
     DLLLOCAL void setSslErrorString(QoreStringNode* err_str) {
         if (ssl_err_str) {
             ssl_err_str->concat("; ");
-            ssl_err_str->concat(err_str);
+            qore_string_private::get(ssl_err_str)->concat(err_str);
             err_str->deref();
         } else {
             ssl_err_str = err_str;

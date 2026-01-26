@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/qore_program_private.h"
@@ -305,10 +306,6 @@ QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typ
 
 QoreListNode::QoreListNode() : AbstractQoreNode(NT_LIST, true, false), priv(new qore_list_private) {
    //printd(5, "QoreListNode::QoreListNode() 1 this=%p ne=%d v=%d\n", this, needs_eval_flag, value);
-}
-
-QoreListNode::QoreListNode(bool i) : AbstractQoreNode(NT_LIST, !i, i), priv(new qore_list_private) {
-   //printd(5, "QoreListNode::QoreListNode() 2 this=%p ne=%d v=%d\n", this, needs_eval_flag, value);
 }
 
 QoreListNode::QoreListNode(const QoreTypeInfo* valueTypeInfo) : QoreListNode() {
@@ -1086,7 +1083,7 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
     }
 
     if (!size()) {
-        str.concat(&EmptyListString);
+        qore_string_private::get(str)->concat(&EmptyListString);
         return 0;
     }
     str.concat("list: (");
@@ -1263,22 +1260,6 @@ bool ConstListIterator::first() const {
 
 void ConstListIterator::reset() {
     pos = -1;
-}
-
-bool QoreListNode::isFinalized() const {
-    return priv->finalized;
-}
-
-void QoreListNode::setFinalized() {
-    priv->finalized = true;
-}
-
-bool QoreListNode::isVariableList() const {
-    return priv->vlist;
-}
-
-void QoreListNode::setVariableList() {
-    priv->vlist = true;
 }
 
 QoreListNode* QoreListNode::listRefSelf() const {

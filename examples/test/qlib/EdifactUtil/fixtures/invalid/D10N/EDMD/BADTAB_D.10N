@@ -1,0 +1,22 @@
+                              UN/EDIFACT
+
+                UNITED NATIONS STANDARD MESSAGE (UNSM)
+
+                        Bad tab fixture
+
+                                           Message Type : BADTAB
+                                           Version      : D
+                                           Release      : 10N
+                                           Contr. Agency: UN
+
+4.1    Segment clarification
+
+0010   UNH, Message header
+0020   BGM, Beginning of message
+
+4.3.1  Segment table
+
+Pos    Tag Name                                      S   R
+
+0010	UNH Message header                            M   1
+0020   BGM Beginning of message                      M   1

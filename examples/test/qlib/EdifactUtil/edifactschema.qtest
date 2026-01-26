@@ -1,0 +1,625 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/EdifactUtil
+
+%exec-class EdifactSchemaTest
+
+public class EdifactSchemaTest inherits QUnit::Test {
+    constructor() : Test("EdifactSchemaTest", "1.0") {
+        addTestCase("Schema loader fixture", \schemaLoaderFixtureTest());
+        addTestCase("Schema loader raw storage", \schemaLoaderRawStorageTest());
+        addTestCase("Schema loader cache behavior", \schemaLoaderCacheBehaviorTest());
+        addTestCase("Schema loader strict edge fixtures", \schemaLoaderStrictEdgeFixtureTest());
+        addTestCase("Schema loader invalid fixtures", \schemaLoaderInvalidFixtureTest());
+        addTestCase("Schema loader golden fixtures validation", \schemaLoaderGoldenFixturesValidationTest());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    private *hash<EdifactMessageNode> findGroup(list<hash<EdifactMessageNode>> nodes, string id) {
+        foreach hash<EdifactMessageNode> n in (nodes) {
+            if (n.kind == "group" && n.id == id) {
+                return n;
+            }
+        }
+        return NOTHING;
+    }
+
+    private *hash<EdifactMessageNode> findNode(list<hash<EdifactMessageNode>> nodes, string kind, string id) {
+        foreach hash<EdifactMessageNode> n in (nodes) {
+            if (n.kind == kind && n.id == id) {
+                return n;
+            }
+            if (n.children.size()) {
+                *hash<EdifactMessageNode> found = findNode(n.children, kind, id);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+        return NOTHING;
+    }
+
+    schemaLoaderFixtureTest() {
+        string fixtures_root = normalize_dir(dirname(get_script_path())) + DirSep + "fixtures" + DirSep;
+
+        string base_cache_dir = FsUtil::make_tmp_dir("edifactcache");
+        string cache_dir = base_cache_dir + DirSep + "cache";
+        mkdir(cache_dir, 0700, True);
+        setenv("QORE_EDIFACT_DIRCACHE", cache_dir);
+        on_exit unsetenv("QORE_EDIFACT_DIRCACHE");
+        on_exit FsUtil::remove_tree(base_cache_dir);
+
+        list<hash<auto>> releases = (
+            {"release": "D01B", "message": "ORDERS", "code": "1", "code_desc": "Document name code"},
+            {"release": "D01B", "message": "INVOIC", "code": "1", "code_desc": "Document name code"},
+            {"release": "D01B", "message": "DESADV", "code": "1", "code_desc": "Document name code"},
+            {"release": "D01B", "message": "ORDRSP", "code": "1", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "INVOIC", "code": "1", "code_desc": "Document name code"},
+            {"release": "D97A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D98A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D99A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D00A", "message": "ORDRSP", "code": "29", "code_desc": "Document name code"},
+            {"release": "D02A", "message": "IFTMIN", "code": "610", "code_desc": "Document name code"},
+            {"release": "D04A", "message": "IFTSTA", "code": "25", "code_desc": "Document name code"},
+            {"release": "D05A", "message": "PAYMUL", "code": "9", "code_desc": "Document name code"},
+            {"release": "D06A", "message": "REMADV", "code": "481", "code_desc": "Document name code"},
+            {"release": "D08A", "message": "UTILMD", "code": "442", "code_desc": "Document name code"},
+            {"release": "D09A", "message": "UTILTS", "code": "445", "code_desc": "Document name code"},
+            {"release": "D11A", "message": "PRICAT", "code": "9", "code_desc": "Document name code"},
+            {"release": "D12A", "message": "DELFOR", "code": "83", "code_desc": "Document name code"},
+            {"release": "D13B", "message": "INVRPT", "code": "35", "code_desc": "Document name code"},
+            {"release": "D14A", "message": "SLSRPT", "code": "73", "code_desc": "Document name code"},
+            {"release": "D15A", "message": "MSCONS", "code": "353", "code_desc": "Document name code"},
+            {"release": "D16B", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D17A", "message": "PRODAT", "code": "711", "code_desc": "Document name code"},
+            {"release": "D18A", "message": "MEDREQ", "code": "452", "code_desc": "Document name code"},
+            {"release": "D19B", "message": "MEDRPT", "code": "455", "code_desc": "Document name code"},
+            {"release": "D20A", "message": "MEDADV", "code": "453", "code_desc": "Document name code"},
+            {"release": "D21B", "message": "COPARN", "code": "34", "code_desc": "Document name code"},
+            {"release": "D21B", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D21B", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D22B", "message": "COPRAR", "code": "36", "code_desc": "Document name code"},
+            {"release": "D22B", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D22B", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D23B", "message": "CODECO", "code": "34", "code_desc": "Document name code"},
+            {"release": "D23B", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D23B", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D07A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D20B", "message": "IFTMIN", "code": "610", "code_desc": "Document name code"},
+            {"release": "D20B", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D20B", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D03A", "message": "PRICAT", "code": "9", "code_desc": "Document name code"},
+            {"release": "D14B", "message": "UTILMD", "code": "442", "code_desc": "Document name code"},
+            {"release": "D22A", "message": "MEDREQ", "code": "452", "code_desc": "Document name code"},
+            {"release": "D23A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D23A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D23A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D23A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D23A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D24A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D24A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D24A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D24A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D24A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D25A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D25A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D25A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D25A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D25A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D26A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D26A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D26A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D26A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D26A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "PAYMUL", "code": "9", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "PRICAT", "code": "9", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "DELFOR", "code": "83", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D10E", "message": "EDGEP", "code": "9", "code_desc": "Document name code"},
+            {"release": "D18B", "message": "ORDRSP", "code": "29", "code_desc": "Document name code"},
+            {"release": "D16A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D19A", "message": "REMADV", "code": "481", "code_desc": "Document name code"},
+            {"release": "D17B", "message": "IFTSTA", "code": "25", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D15B", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D13A", "message": "UTILTS", "code": "445", "code_desc": "Document name code"},
+            {"release": "D23A", "message": "RECADV", "code": "122", "code_desc": "Document name code"},
+            {"release": "D24A", "message": "IFTMBF", "code": "620", "code_desc": "Document name code"},
+            {"release": "D25A", "message": "COPARN", "code": "34", "code_desc": "Document name code"},
+            {"release": "D26A", "message": "COPRAR", "code": "36", "code_desc": "Document name code"},
+            {"release": "D27A", "message": "CODECO", "code": "34", "code_desc": "Document name code"},
+            {"release": "D27A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D27A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D27A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D27A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D27A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D28A", "message": "COARRI", "code": "270", "code_desc": "Document name code"},
+            {"release": "D28A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D28A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D28A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D28A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D28A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D29A", "message": "TPFREP", "code": "310", "code_desc": "Document name code"},
+            {"release": "D29A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D29A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D29A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D29A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D29A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D30A", "message": "PRODAT", "code": "711", "code_desc": "Document name code"},
+            {"release": "D30A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D30A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D30A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D30A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D30A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D31A", "message": "INVRPT", "code": "35", "code_desc": "Document name code"},
+            {"release": "D31A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D31A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D31A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D31A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D31A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D32A", "message": "SLSRPT", "code": "73", "code_desc": "Document name code"},
+            {"release": "D32A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D32A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D32A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D32A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D32A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D33A", "message": "MSCONS", "code": "353", "code_desc": "Document name code"},
+            {"release": "D33A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D33A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D33A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D33A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D33A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D34A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D34A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D34A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D34A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D34A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D35A", "message": "MEDRPT", "code": "455", "code_desc": "Document name code"},
+            {"release": "D35A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D35A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D35A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D35A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D35A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D36A", "message": "MEDADV", "code": "453", "code_desc": "Document name code"},
+            {"release": "D36A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D36A", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D36A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D36A", "message": "CONTRL", "code": "1", "code_desc": "Document name code"},
+            {"release": "D36A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "RECADV", "code": "122", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "IFTMBF", "code": "620", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "COPARN", "code": "34", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "COPRAR", "code": "36", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "CODECO", "code": "34", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "COARRI", "code": "270", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "TPFREP", "code": "310", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "PRODAT", "code": "711", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "INVRPT", "code": "35", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "SLSRPT", "code": "73", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "MSCONS", "code": "353", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "MEDRPT", "code": "455", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "MEDADV", "code": "453", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D96A", "message": "REMADV", "code": "481", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "RECADV", "code": "122", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "IFTMBF", "code": "620", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "COPARN", "code": "34", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "COPRAR", "code": "36", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "CODECO", "code": "34", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "COARRI", "code": "270", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "TPFREP", "code": "310", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "PRODAT", "code": "711", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "INVRPT", "code": "35", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "SLSRPT", "code": "73", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "MSCONS", "code": "353", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "MEDRPT", "code": "455", "code_desc": "Document name code"},
+            {"release": "D21A", "message": "MEDADV", "code": "453", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "RECADV", "code": "122", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "IFTMBF", "code": "620", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "COPARN", "code": "34", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "COPRAR", "code": "36", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "CODECO", "code": "34", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "COARRI", "code": "270", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "TPFREP", "code": "310", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "PRODAT", "code": "711", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "INVRPT", "code": "35", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "SLSRPT", "code": "73", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "MSCONS", "code": "353", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "APERAK", "code": "27", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "MEDRPT", "code": "455", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "MEDADV", "code": "453", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "ORDERS", "code": "220", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "ORDRSP", "code": "29", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "DESADV", "code": "351", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "INVOIC", "code": "380", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "REMADV", "code": "481", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "IFTMIN", "code": "610", "code_desc": "Document name code"},
+            {"release": "D10B", "message": "IFTSTA", "code": "25", "code_desc": "Document name code"},
+        );
+
+        foreach hash<auto> info in (releases) {
+            string base_path = fixtures_root + info.release + DirSep;
+            EdifactSchema schema = EdifactSchemaRegistry::loadRelease(info.release, (
+                "dir": base_path,
+                "skip_cache_read": True,
+                "reload": True,
+            ));
+
+            assertEq(info.release, schema.release);
+            assertTrue(exists schema.element_defs{"1001"});
+            assertEq(info.code_desc, schema.element_defs{"1001"}.name);
+            assertEq("an", schema.element_defs{"1001"}.type);
+            assertEq(3, schema.element_defs{"1001"}.max_length);
+            if (info.release == "D01B") {
+                assertTrue(exists schema.element_defs{"1004"});
+                assertEq(35, schema.element_defs{"1004"}.max_length);
+            }
+
+            assertTrue(exists schema.composite_defs{"C002"});
+            assertEq(2, schema.composite_defs{"C002"}.components.size());
+            assertEq("1001", schema.composite_defs{"C002"}.components[0].id);
+            if (info.release == "D01B") {
+                assertTrue(exists schema.composite_defs{"C506"});
+                assertEq(2, schema.composite_defs{"C506"}.components.size());
+                assertEq("1153", schema.composite_defs{"C506"}.components[0].id);
+            }
+
+            assertTrue(exists schema.segment_defs{"BGM"});
+            assertEq(2, schema.segment_defs{"BGM"}.segment_elements.size());
+            assertTrue(schema.segment_defs{"BGM"}.segment_elements[0].composite);
+
+            assertTrue(exists schema.message_defs{info.message});
+            auto msg = schema.message_defs{info.message};
+            assertEq(info.message, msg.type);
+            assertEq("D", msg.version);
+            assertEq(info.release.substr(1), msg.release);
+            assertTrue(msg.structure.size() > 0);
+            if (info.release == "D03A" || info.release == "D14B" || info.release == "D22A") {
+                assertTrue(exists msg.segment_index);
+                assertTrue(msg.segment_index.size() >= 4);
+                assertEq("BGM", msg.segment_index[0].tag);
+            }
+            if (info.release == "D01B" && info.message == "ORDERS") {
+                assertTrue(exists msg.function);
+                assertTrue(msg.function.find("purchase order") != -1);
+                assertTrue(msg.notes.size() >= 1);
+            } else {
+                assertTrue(exists msg.function);
+                assertTrue(msg.function.size() > 0);
+                assertTrue(msg.notes.size() >= 1);
+            }
+
+            *hash<EdifactMessageNode> sg1 = findGroup(msg.structure, "SG1");
+            assertTrue(exists sg1);
+            if (info.release == "D10B" && info.message == "ORDRSP") {
+                assertEq("M", sg1.status);
+            } else {
+                assertEq("C", sg1.status);
+            }
+            if (info.release == "D21A" && info.message == "ORDERS") {
+                assertEq(-1, sg1.max);
+            } else if (info.release == "D10B" && info.message == "RECADV") {
+                assertEq(1, sg1.max);
+            } else if (info.release == "D10B" && info.message == "ORDRSP") {
+                assertEq(1, sg1.min);
+                assertEq(1, sg1.max);
+            } else {
+                assertEq(5, sg1.max);
+            }
+            assertTrue(sg1.children.size() >= 2);
+            assertTrue(exists sg1.name);
+            assertTrue(sg1.name.size() > 0);
+
+            *hash<EdifactMessageNode> unh = findNode(msg.structure, "segment", "UNH");
+            assertTrue(exists unh);
+            assertEq("Message header", unh.name);
+
+            if (info.release == "D01B" || info.release == "D20B"
+                || info.release == "D21A" || info.release == "D15B"
+                || info.release == "D13A" || info.release == "D23A"
+                || info.release == "D24A" || info.release == "D25A"
+                || info.release == "D26A" || info.release == "D27A"
+                || info.release == "D28A" || info.release == "D29A"
+                || info.release == "D30A" || info.release == "D31A"
+                || info.release == "D32A" || info.release == "D33A"
+                || info.release == "D34A" || info.release == "D35A"
+                || info.release == "D36A"
+                || info.release == "D97A" || info.release == "D98A"
+                || info.release == "D99A" || info.release == "D00A"
+                || info.release == "D02A" || info.release == "D04A"
+                || info.release == "D05A" || info.release == "D06A"
+                || info.release == "D08A" || info.release == "D09A"
+                || info.release == "D11A" || info.release == "D12A"
+                || info.release == "D13B" || info.release == "D14A"
+                || info.release == "D15A" || info.release == "D16B"
+                || info.release == "D17A" || info.release == "D18A"
+                || info.release == "D19B" || info.release == "D20A"
+                || info.release == "D21B" || info.release == "D22B"
+                || info.release == "D23B"
+                || (info.release == "D10B" && info.message != "PAYMUL")) {
+                *hash<EdifactMessageNode> sg2 = findNode(sg1.children, "group", "SG2");
+                assertTrue(exists sg2);
+                assertEq("C", sg2.status);
+                assertTrue(exists sg2.name);
+                assertTrue(sg2.name.size() > 0);
+                if (info.release == "D10B" && info.message == "RECADV") {
+                    assertEq(2, sg2.max);
+                } else if (info.release == "D30A" && info.message == "PRODAT") {
+                    assertEq(2, sg2.max);
+                } else if (info.release == "D10B" && info.message == "IFTMIN") {
+                    assertEq(-1, sg2.max);
+                }
+
+                if ((info.release == "D10B" && info.message == "RECADV")
+                    || (info.release == "D30A" && info.message == "PRODAT")) {
+                    *hash<EdifactMessageNode> sg3 = findNode(sg2.children, "group", "SG3");
+                    assertTrue(exists sg3);
+                    assertEq("C", sg3.status);
+                    assertEq(99, sg3.max);
+                    assertTrue(exists sg3.name);
+                    assertTrue(sg3.name.size() > 0);
+
+                    *hash<EdifactMessageNode> sg4 = findNode(sg3.children, "group", "SG4");
+                    assertTrue(exists sg4);
+                    assertEq("C", sg4.status);
+                    assertEq(2, sg4.max);
+                    assertTrue(exists sg4.name);
+                    assertTrue(sg4.name.size() > 0);
+                } else if (info.release == "D10B" && info.message == "ORDERS") {
+                    *hash<EdifactMessageNode> sg3 = findNode(sg2.children, "group", "SG3");
+                    assertTrue(exists sg3);
+                }
+            }
+            if (info.release == "D20B") {
+                assertEq("RFF-DTM", sg1.name);
+            }
+
+            assertTrue(exists schema.codelists.uncl{"1001"});
+            assertTrue(exists schema.codelists.uncl{"1001"}.codes{info.code});
+            if (info.release == "D01B") {
+                assertTrue(exists schema.codelists.uncl{"1153"});
+                assertTrue(exists schema.codelists.uncl{"1153"}.codes{"9"});
+            }
+
+            if (info.release == "D20B") {
+                assertTrue(exists schema.codelists.edcl{"1001"});
+                assertTrue(exists schema.codelists.edcl{"1001"}.codes{info.code});
+            }
+        }
+    }
+
+    schemaLoaderRawStorageTest() {
+        string fixtures_root = normalize_dir(dirname(get_script_path())) + DirSep + "fixtures" + DirSep;
+
+        string base_cache_dir = FsUtil::make_tmp_dir("edifactcache");
+        string cache_dir = base_cache_dir + DirSep + "cache";
+        mkdir(cache_dir, 0700, True);
+        setenv("QORE_EDIFACT_DIRCACHE", cache_dir);
+        on_exit unsetenv("QORE_EDIFACT_DIRCACHE");
+        on_exit FsUtil::remove_tree(base_cache_dir);
+
+        string base_path = fixtures_root + "D21A" + DirSep;
+        list<string> raw_files = ("EDED.21A", "EDCD.21A", "EDSD.21A", "UNCL.21A");
+        EdifactSchema contents_schema = EdifactSchemaRegistry::loadRelease("D21A", (
+            "dir": base_path,
+            "skip_cache_read": True,
+            "reload": True,
+            "loader_opts": (
+                "raw_storage": "contents",
+                "files": raw_files,
+                "parse": False,
+            ),
+        ));
+
+        assertEq("contents", contents_schema.meta.raw_storage);
+        assertTrue(exists contents_schema.raw.files{"EDED.21A"});
+        assertTrue(contents_schema.raw.files{"EDED.21A"}.find("Data element directory") != -1);
+
+        EdifactSchema paths_schema = EdifactSchemaRegistry::loadRelease("D21A", (
+            "dir": base_path,
+            "skip_cache_read": True,
+            "reload": True,
+            "loader_opts": (
+                "raw_storage": "paths",
+                "files": raw_files,
+                "parse": False,
+            ),
+        ));
+
+        assertEq("paths", paths_schema.meta.raw_storage);
+        assertTrue(exists paths_schema.raw.files{"EDED.21A"});
+        assertTrue(paths_schema.raw.files{"EDED.21A"}.rfind("EDED.21A") != -1);
+
+        assertThrows("EDIFACT-DIR-ERROR", "invalid raw_storage option",
+            sub() {
+                EdifactSchemaRegistry::loadRelease("D21A", (
+                    "dir": base_path,
+                    "skip_cache_read": True,
+                    "reload": True,
+                    "loader_opts": (
+                        "raw_storage": "nope",
+                        "files": raw_files,
+                        "parse": False,
+                    ),
+                ));
+            }
+        );
+    }
+
+    schemaLoaderCacheBehaviorTest() {
+        string fixtures_root = normalize_dir(dirname(get_script_path())) + DirSep + "fixtures" + DirSep;
+
+        string base_cache_dir = FsUtil::make_tmp_dir("edifactcache");
+        string cache_dir = base_cache_dir + DirSep + "cache";
+        mkdir(cache_dir, 0700, True);
+        setenv("QORE_EDIFACT_DIRCACHE", cache_dir);
+        on_exit unsetenv("QORE_EDIFACT_DIRCACHE");
+        on_exit FsUtil::remove_tree(base_cache_dir);
+
+        list<string> cache_warnings = ();
+        assertThrows("EDIFACT-CACHE-MISS", "no cached schema",
+            sub() {
+                EdifactSchemaRegistry::loadRelease("D99Z", (
+                    "cache_only": True,
+                    "skip_cache_read": True,
+                    "reload": True,
+                    "cache_error": "warn",
+                    "cache_warnings": \cache_warnings,
+                ));
+            }
+        );
+        assertEq(0, cache_warnings.size());
+
+        string base_path = fixtures_root + "D21A" + DirSep;
+        EdifactSchema fresh = EdifactSchemaRegistry::loadRelease("D21A", (
+            "dir": base_path,
+            "skip_cache_read": True,
+            "reload": True,
+        ));
+        assertEq("D21A", fresh.release);
+
+        EdifactSchema cached = EdifactSchemaRegistry::loadRelease("D21A", (
+            "cache_only": True,
+            "reload": True,
+            "cache_error": "warn",
+            "cache_warnings": \cache_warnings,
+        ));
+        assertEq("D21A", cached.release);
+        assertTrue(exists cached.message_defs{"ORDERS"});
+
+        # corrupt cached schema and ensure warning is reported
+        string cache_file = cache_dir + DirSep + "UN" + DirSep + "EDIFACT" + DirSep + "D21A" + DirSep + "schema.qv";
+        FileLocationHandler::writeFileToLocation(cache_file, "{bad=cache");
+        assertThrows("EDIFACT-CACHE-MISS", "no cached schema",
+            sub() {
+                EdifactSchemaRegistry::loadRelease("D21A", (
+                    "cache_only": True,
+                    "reload": True,
+                    "cache_error": "warn",
+                    "cache_warnings": \cache_warnings,
+                ));
+            }
+        );
+        assertTrue(cache_warnings.size() >= 1);
+    }
+
+    schemaLoaderStrictEdgeFixtureTest() {
+        string fixtures_root = normalize_dir(dirname(get_script_path())) + DirSep + "fixtures" + DirSep;
+
+        string base_cache_dir = FsUtil::make_tmp_dir("edifactcache");
+        string cache_dir = base_cache_dir + DirSep + "cache";
+        mkdir(cache_dir, 0700, True);
+        setenv("QORE_EDIFACT_DIRCACHE", cache_dir);
+        on_exit unsetenv("QORE_EDIFACT_DIRCACHE");
+        on_exit FsUtil::remove_tree(base_cache_dir);
+
+        list<hash<auto>> cases = (
+            {"release": "D10B", "message": "CONTRL"},
+            {"release": "D10E", "message": "EDGEP"},
+            {"release": "D21A", "message": "CONTRL"},
+            {"release": "D24A", "message": "CONTRL"},
+        );
+
+        foreach hash<auto> info in (cases) {
+            string base_path = fixtures_root + info.release + DirSep;
+            EdifactSchema schema = EdifactSchemaRegistry::loadRelease(info.release, (
+                "dir": base_path,
+                "skip_cache_read": True,
+                "reload": True,
+                "loader_opts": ("strict": True),
+            ));
+
+            assertTrue(exists schema.message_defs{info.message});
+            auto msg = schema.message_defs{info.message};
+            assertEq(info.message, msg.type);
+            assertTrue(msg.structure.size() > 0);
+        }
+    }
+
+    schemaLoaderInvalidFixtureTest() {
+        string fixtures_root = normalize_dir(dirname(get_script_path())) + DirSep + "fixtures" + DirSep;
+        string invalid_root = fixtures_root + "invalid" + DirSep;
+
+        list<hash<auto>> bad = (
+            {"release": "D10X", "message": "BAD", "error": "missing Message Type header"},
+            {"release": "D10Y", "message": "BADMSG", "error": "no segment structure found"},
+            {"release": "D10Z", "message": "BADPOS", "error": "no segment structure found"},
+            {"release": "D10H", "message": "NOHDR", "error": "missing segment table header"},
+            {"release": "D10T", "message": "TABIND", "error": "tab indentation not allowed"},
+            {"release": "D10M", "message": "BADHDR", "error": "missing segment table header"},
+            {"release": "D10N", "message": "BADTAB", "error": "tab indentation not allowed"},
+            {"release": "D10P", "message": "BADTABH", "error": "tab indentation not allowed"},
+            {"release": "D10Q", "message": "BADGRP", "error": "group .* has no children"},
+            {"release": "D10W", "message": "NOGRP", "error": "group .* has no children"},
+            {"release": "D10V", "message": "NONAME", "error": "segment .* missing name"},
+        );
+
+        foreach hash<auto> info in (bad) {
+            string base_path = invalid_root + info.release + DirSep;
+            assertThrows("EDIFACT-EDMD-ERROR", info.error,
+                sub() {
+                    EdifactSchemaRegistry::loadRelease(info.release, (
+                        "dir": base_path,
+                        "skip_cache_read": True,
+                        "reload": True,
+                        "loader_opts": ("strict": True),
+                    ));
+                }
+            );
+        }
+    }
+
+    schemaLoaderGoldenFixturesValidationTest() {
+        string root = normalize_dir(dirname(get_script_path()) + DirSep + "../../../..");
+        string validator = root + DirSep + "tools" + DirSep + "edifact-fixture-validate.qr";
+        string fixtures_root = root + DirSep + "examples/test/qlib/EdifactUtil/fixtures";
+        string qore_bin = root + DirSep + "build/qore";
+        if (FsUtil::path_exists(root + DirSep + "build-ci/qore")) {
+            qore_bin = root + DirSep + "build-ci/qore";
+        }
+
+        list<string> golden_releases = ("D01B", "D10B", "D20B", "D21B", "D23A", "D25A");
+        string releases_arg = golden_releases.join(",");
+        string cmd = sprintf("%s %s --quiet --dir=%y --releases=%y > /dev/null 2>&1",
+            qore_bin, validator, fixtures_root, releases_arg);
+        int rc = system(cmd);
+        assertEq(0, rc);
+
+        list<hash<auto>> golden_messages = (
+            {"release": "D01B", "messages": ("ORDERS", "INVOIC", "DESADV")},
+            {"release": "D10B", "messages": ("CONTRL", "APERAK")},
+            {"release": "D20B", "messages": ("CONTRL", "APERAK")},
+            {"release": "D21B", "messages": ("CONTRL", "APERAK")},
+            {"release": "D23A", "messages": ("ORDERS", "INVOIC", "DESADV", "CONTRL", "APERAK")},
+            {"release": "D25A", "messages": ("ORDERS", "INVOIC", "DESADV", "CONTRL", "APERAK")},
+        );
+
+        foreach hash<auto> info in (golden_messages) {
+            string base_path = fixtures_root + DirSep + info.release + DirSep;
+            EdifactSchema schema = EdifactSchemaRegistry::loadRelease(info.release, (
+                "dir": base_path,
+                "skip_cache_read": True,
+                "reload": True,
+                "loader_opts": ("strict": True),
+            ));
+            foreach string msg in (info.messages) {
+                assertTrue(exists schema.message_defs{msg});
+            }
+        }
+    }
+}

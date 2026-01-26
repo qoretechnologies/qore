@@ -418,8 +418,10 @@ public hashdecl DataProviderActionInfo {
     #! Describes the output data of the action and how the output type relates to it
     string output_data_type;
 
-    #! Optional context required to display this action
-    *string requires_action_context;
+    #! If True, indicates the action can only be added when adding in the given action context
+    /** This implies that the action also defines an \c action_context value.
+    */
+    *bool requires_action_context;
 
     #! Optional context set by this action for child actions
     *string action_context;

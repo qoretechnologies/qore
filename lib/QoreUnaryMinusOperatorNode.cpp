@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
 
@@ -41,7 +42,7 @@ QoreString *QoreUnaryMinusOperatorNode::getAsString(bool& del, int foff, Excepti
 }
 
 int QoreUnaryMinusOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    str.concat(&unaryminus_str);
+    qore_string_private::get(str)->concat(&unaryminus_str);
     return 0;
 }
 

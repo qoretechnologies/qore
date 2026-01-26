@@ -51,7 +51,7 @@ module TelnetClient {
 
     The %TelnetClient module provides a telnet client class for communicating with a server using the telnet protocol
 
-    To use this module, use \c "%requires TelnetClient" in your code.  See examples/telnet.q for an example program using this module.
+    To use this module, use \c "%requires TelnetClient" in your code.  See examples/telnet.qr for an example program using this module.
 
     All the public symbols in the module are defined in the TelnetClient namespace
 

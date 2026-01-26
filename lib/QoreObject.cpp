@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -84,6 +84,30 @@ qore_object_private::~qore_object_private() {
     // release weak reference
     if (pgm) {
         pgm->depDeref();
+    }
+}
+
+void qore_object_private::cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm) {
+    if (privateData) {
+        printd(5, "qore_object_private::cleanup() this: %p privateData: %p\n", this, privateData);
+        privateData->derefAll(xsink);
+        delete privateData;
+#ifdef DEBUG
+        privateData = nullptr;
+#endif
+    }
+
+    if (td) {
+        qore_hash_private::clear(*td, xsink, true);
+        td->deref(xsink);
+    }
+
+    if (cdm) {
+        for (auto& i : *cdm) {
+            qore_hash_private::clear(*i.second, xsink, true);
+            i.second->deref(xsink);
+        }
+        delete cdm;
     }
 }
 
@@ -187,7 +211,7 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
         }
     }
 
-    ReferenceHolder<QoreHashNode> rv(data->getSlice(*nl, xsink), xsink);
+    ReferenceHolder<QoreHashNode> rv(qore_hash_private::get(data)->getSlice(*nl, xsink), xsink);
     if (*xsink)
         return nullptr;
     // get internal members for each internal class

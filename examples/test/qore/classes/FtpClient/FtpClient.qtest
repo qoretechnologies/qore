@@ -206,8 +206,12 @@ class FtpTest inherits QUnit::Test {
             assertTrue(ex.err == "SOCKET-TIMEOUT" || ex.err == "FTP-RECEIVE-ERROR");
         }
 
+        # reconnect after timeout to ensure clean FTP protocol state
+        fc.disconnect();
         fc.setTimeout(60s);
         serv.setBroken("stor", 0);
+        assertNothing(fc.connect());
+        fc.setModePASV();
         assertNothing(fc.put(local_path));
 
         assertNothing(fc.get(local_path, local_path));
@@ -226,9 +230,13 @@ class FtpTest inherits QUnit::Test {
             assertTrue(err == "SOCKET-TIMEOUT" || err == "FTP-RECEIVE-ERROR");
         }
 
+        # reconnect after timeout to ensure clean FTP protocol state
+        fc.disconnect();
         fc.setTimeout(60s);
         serv.setBroken("retr", 0);
         serv.setGetEmpty();
+        assertNothing(fc.connect());
+        fc.setModePASV();
         assertNothing(fc.get(local_path, local_path));
         assertEq("", ReadOnlyFile::readTextFile(local_path));
         assertEq("", fc.getAsString(local_path));
@@ -316,8 +324,12 @@ class FtpTest inherits QUnit::Test {
             assertTrue(ex.err == "SOCKET-TIMEOUT" || ex.err == "FTP-RECEIVE-ERROR");
         }
 
+        # reconnect after timeout to ensure clean FTP protocol state
+        fc.disconnect();
         fc.setTimeout(60s);
         serv.setBroken("stor", 0);
+        fc.setNetworkFamily(AF_INET);
+        assertNothing(fc.connect());
         assertNothing(fc.put(local_path));
 
         assertNothing(fc.get(local_path, local_path));
@@ -336,9 +348,13 @@ class FtpTest inherits QUnit::Test {
             assertTrue(err == "SOCKET-TIMEOUT" || err == "FTP-RECEIVE-ERROR");
         }
 
+        # reconnect after timeout to ensure clean FTP protocol state
+        fc.disconnect();
         fc.setTimeout(60s);
         serv.setBroken("retr", 0);
         serv.setGetEmpty();
+        fc.setNetworkFamily(AF_INET);
+        assertNothing(fc.connect());
         assertNothing(fc.get(local_path, local_path));
         assertEq("", ReadOnlyFile::readTextFile(local_path));
         assertEq("", fc.getAsString(local_path));

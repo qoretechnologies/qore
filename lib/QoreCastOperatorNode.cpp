@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/typed_hash_decl_private.h"
@@ -45,7 +46,7 @@ QoreString* QoreParseCastOperatorNode::getAsString(bool& del, int foff, Exceptio
 }
 
 int QoreParseCastOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    str.concat(&cast_str);
+    qore_string_private::get(str)->concat(&cast_str);
     return 0;
 }
 

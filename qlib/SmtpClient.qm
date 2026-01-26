@@ -101,7 +101,7 @@ module SmtpClient {
     The %SmtpClient module provides a set of classes that can be used for easy communication with SMTP servers for
     sending emails, with or without TLS/SSL encryption.
 
-    To use this module, use \c "%requires SmtpClient" in your code.  See examples/email.q for an example program using
+    To use this module, use \c "%requires SmtpClient" in your code.  See examples/email.qr for an example program using
     this module
 
     All the public symbols in the module are defined in the SmtpClient namespace

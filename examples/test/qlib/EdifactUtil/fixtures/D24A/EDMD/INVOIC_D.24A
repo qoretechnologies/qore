@@ -1,0 +1,51 @@
+                              UN/EDIFACT
+
+                UNITED NATIONS STANDARD MESSAGE (UNSM)
+
+                        Invoice
+
+                                           Message Type : INVOIC
+                                           Version      : D
+                                           Release      : 24A
+                                           Contr. Agency: UN
+
+Function: Invoice message.
+Note: Fixture note for INVOIC.
+
+4.1    Segment clarification
+
+0010   UNH, Message header
+0020   BGM, Beginning of message
+0030   DTM, Date/time/period
+0040       Segment group 1:  RFF-DTM
+0050           RFF, Reference
+0060           DTM, Date/time/period
+0070           Segment group 2 NAD-CTA-COM
+0080               NAD, Name and address
+0090               CTA, Contact information
+0100               COM, Communication contact
+
+4.2    Segment index (alphabetical sequence by tag)
+
+BGM BEGINNING OF MESSAGE
+COM COMMUNICATION CONTACT
+CTA CONTACT INFORMATION
+DTM DATE/TIME/PERIOD
+NAD NAME AND ADDRESS
+RFF REFERENCE
+UNH MESSAGE HEADER
+
+4.3.1  Segment table
+
+Pos    Tag Name                                      S   R
+
+0010   UNH Message header                            M   1
+0020   BGM Beginning of message                      M   1
+0030   DTM Date/time/period                          C   5
+0040       Segment group 1                            C   5
+0050   RFF Reference                                 M   1
+0060   DTM Date/time/period                          C   5
+0070       Segment group 2 NAD-CTA-COM                 C   5
+0080   NAD Name and address                           M   1
+0090   CTA Contact information                        C   2
+0100   COM Communication contact                      C   5

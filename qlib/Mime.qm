@@ -1921,15 +1921,34 @@ hash: (2 members)
                 throw "PART-ERROR", "empty content type argument passed";
             }
 
-            if (mime_data.typeCode() == NT_STRING && content_type !~ /charset=/ && disp == "inline") {
+            if (mime_data.typeCode() == NT_STRING && content_type !~ /charset=/ && disp == "inline"
+                    && !exists hdr."Content-Disposition") {
                 content_type += sprintf("; charset=%s", get_encoding(mime_data));
-            } else if (content_type !~ /charset=/ && disp == "attachment"
-                && exists hdr."Content-Disposition") {
-                content_type += sprintf('; name=%y', hdr."Content-Disposition");
-                disp = sprintf('%s; filename=%y', disp, hdr."Content-Disposition");
+            } else if (exists hdr."Content-Disposition") {
+                # Handle filename parameter for both inline and attachment dispositions
+                # Check for RFC 2231 encoded filename first
+                if (exists hdr."Content-Disposition-Encoded") {
+                    # RFC 2231 encoded filename for non-ASCII characters
+                    string encoded_name = hdr."Content-Disposition-Encoded";
+                    if (content_type !~ /name=/) {
+                        content_type += sprintf("; name*=%s", encoded_name);
+                    }
+                    disp = sprintf("%s; filename*=%s", disp, encoded_name);
+                } else {
+                    # Simple ASCII filename
+                    string filename = hdr."Content-Disposition";
+                    if (content_type !~ /name=/) {
+                        content_type += sprintf('; name=%y', filename);
+                    }
+                    disp = sprintf('%s; filename=%y', disp, filename);
+                }
             }
 
-            addPartIntern(mime_encode_transfer_data(mime_data, enc), hdr + {
+            # Remove internal headers before adding to part
+            hash<auto> part_hdr = hdr
+                ? hdr - ("Content-Disposition", "Content-Disposition-Encoded")
+                : {};
+            addPartIntern(mime_encode_transfer_data(mime_data, enc), part_hdr + {
                  "Content-Type": content_type,
                  "Content-Disposition": disp,
                  "Content-Transfer-Encoding": enc,

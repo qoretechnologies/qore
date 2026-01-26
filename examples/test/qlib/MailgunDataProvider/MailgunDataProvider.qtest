@@ -1,0 +1,797 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  MailgunDataProvider.qtest Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/MailgunRestClient.qm
+%requires ../../../../qlib/MailgunDataProvider
+
+%exec-class MailgunDataProviderTest
+
+public class MailgunDataProviderTest inherits QUnit::Test {
+    private {
+        #! Mailgun REST client for integration tests
+        *MailgunRestClient::MailgunRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "region": "r,region=s",
+            "domain": "d,domain=s",
+            "list": "l,list=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test domain for integration tests
+        *string testDomain;
+
+        #! Test mailing list for integration tests
+        *string testMailingList;
+    }
+
+    constructor() : Test("MailgunDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require MAILGUN_API_KEY environment variable or -k option)
+        addTestCase("integration tests", \integrationTests());
+
+        # Webhook trigger tests (require MAILGUN_API_KEY and webhook infrastructure)
+        addTestCase("webhook trigger tests", \webhookTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Mailgun client for integration tests
+    private setupConnection() {
+        *string apikey = m_options.apikey ?? ENV.MAILGUN_API_KEY;
+        if (!apikey) {
+            if (m_options.verbose) {
+                printf("No API key provided (use -k option or MAILGUN_API_KEY env var)\n");
+            }
+            return;
+        }
+        hash<auto> opts = {"apikey": apikey};
+        if (m_options.region) {
+            opts.api_region = m_options.region;
+        }
+        if (m_options.domain) {
+            opts.api_domain = m_options.domain;
+            testDomain = m_options.domain;
+        }
+        if (m_options.list) {
+            testMailingList = m_options.list;
+        }
+        client = new MailgunRestClient::MailgunRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        # Test creating provider with fake credentials
+        MailgunDataProvider::MailgunDataProvider prov({"apikey": "fake-key-for-testing"});
+        assertEq("mailgun", prov.getName());
+        assertEq("Mailgun data provider for email sending and management", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("mailgun");
+        assertEq("mailgun", factory.getInfo().name);
+        assertEq("Mailgun data provider factory", factory.getInfo().desc);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("apikey"));
+        assertTrue(factoryOpts.hasKey("mailgunrestclient"));
+        assertTrue(factoryOpts.hasKey("api_domain"));
+        assertTrue(factoryOpts.hasKey("api_region"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        MailgunDataProvider::MailgunDataProvider prov({"apikey": "x"});
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertEq("MailgunDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("apikey"));
+        assertTrue(info.constructor_options.hasKey("mailgunrestclient"));
+        assertTrue(info.constructor_options.hasKey("api_domain"));
+        assertTrue(info.constructor_options.hasKey("api_region"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        MailgunDataProvider::MailgunDataProvider prov({"apikey": "x"});
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+        assertTrue(children.contains("domains"));
+        assertTrue(children.contains("send-email"));
+        assertTrue(children.contains("validate-email"));
+        assertTrue(children.contains("make-api-call"));
+        assertTrue(children.contains("add-mailing-list-member"));
+        assertTrue(children.contains("get-mailing-list-member"));
+        assertTrue(children.contains("delete-mailing-list-member"));
+        assertTrue(children.contains("list-mailing-list-members"));
+        assertTrue(children.contains("create-route"));
+        assertTrue(children.contains("events"));
+
+        # Check domains child provider
+        AbstractDataProvider domains = prov.getChildProvider("domains");
+        assertEq("domains", domains.getName());
+        hash<DataProviderInfo> domainsInfo = domains.getInfo();
+        assertTrue(domainsInfo.supports_read);
+        assertTrue(domainsInfo.supports_native_search);
+        assertTrue(domainsInfo.has_record);
+
+        # Check send-email child provider
+        AbstractDataProvider sendEmail = prov.getChildProvider("send-email");
+        assertEq("send-email", sendEmail.getName());
+        hash<DataProviderInfo> sendEmailInfo = sendEmail.getInfo();
+        assertTrue(sendEmailInfo.supports_request);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check events child providers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("clicked"));
+        assertTrue(eventChildren.contains("delivered"));
+        assertTrue(eventChildren.contains("opened"));
+        assertTrue(eventChildren.contains("permanent_fail"));
+        assertTrue(eventChildren.contains("temporary_fail"));
+        assertTrue(eventChildren.contains("complained"));
+        assertTrue(eventChildren.contains("unsubscribed"));
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test domain data type
+        MailgunDataProvider::MailgunDomainDataType domainType();
+        hash<string, AbstractDataField> domainFields = domainType.getFields();
+        assertTrue(domainFields.hasKey("name"));
+        assertTrue(domainFields.hasKey("state"));
+        assertTrue(domainFields.hasKey("created_at"));
+        assertTrue(domainFields.hasKey("type"));
+
+        # Test mailing list member data type
+        MailgunDataProvider::MailgunMailingListMemberDataType memberType();
+        hash<string, AbstractDataField> memberFields = memberType.getFields();
+        assertTrue(memberFields.hasKey("address"));
+        assertTrue(memberFields.hasKey("name"));
+        assertTrue(memberFields.hasKey("subscribed"));
+        assertTrue(memberFields.hasKey("vars"));
+
+        # Test route data type
+        MailgunDataProvider::MailgunRouteDataType routeType();
+        hash<string, AbstractDataField> routeFields = routeType.getFields();
+        assertTrue(routeFields.hasKey("id"));
+        assertTrue(routeFields.hasKey("priority"));
+        assertTrue(routeFields.hasKey("description"));
+        assertTrue(routeFields.hasKey("expression"));
+        assertTrue(routeFields.hasKey("actions"));
+
+        # Test send email response data type
+        MailgunDataProvider::MailgunSendEmailResponseDataType responseType();
+        hash<string, AbstractDataField> responseFields = responseType.getFields();
+        assertTrue(responseFields.hasKey("id"));
+        assertTrue(responseFields.hasKey("message"));
+
+        # Test event data types
+        MailgunDataProvider::MailgunClickedEventDataType clickedType();
+        hash<string, AbstractDataField> clickedFields = clickedType.getFields();
+        assertTrue(clickedFields.hasKey("event"));
+        assertTrue(clickedFields.hasKey("timestamp"));
+        assertTrue(clickedFields.hasKey("recipient"));
+        assertTrue(clickedFields.hasKey("message"));
+        assertTrue(clickedFields.hasKey("url"));
+
+        MailgunDataProvider::MailgunDeliveredEventDataType deliveredType();
+        hash<string, AbstractDataField> deliveredFields = deliveredType.getFields();
+        assertTrue(deliveredFields.hasKey("event"));
+        assertTrue(deliveredFields.hasKey("timestamp"));
+        assertTrue(deliveredFields.hasKey("recipient"));
+        assertTrue(deliveredFields.hasKey("message"));
+
+        MailgunDataProvider::MailgunPermanentFailEventDataType failType();
+        hash<string, AbstractDataField> failFields = failType.getFields();
+        assertTrue(failFields.hasKey("event"));
+        assertTrue(failFields.hasKey("recipient"));
+        assertTrue(failFields.hasKey("delivery-status"));
+        assertTrue(failFields.hasKey("reason"));
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        MailgunDataProvider::MailgunDataProvider prov({"apikey": "invalid-key"});
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid child in events provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            events.getChildProviderEx("invalid-event-type");
+        });
+    }
+
+    #! Corner case tests - edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+        # Test with different API regions
+        # Note: URL includes credentials since Mailgun uses HTTP Basic Auth
+        # Note: Base URL does not include /v3 - version is added per-endpoint to support both v3 and v4 APIs
+        MailgunRestClient::MailgunRestClient clientUS({"apikey": "x", "api_region": "US"});
+        assertTrue(clientUS.getURL() =~ /api\.mailgun\.net$/);
+
+        MailgunRestClient::MailgunRestClient clientEU({"apikey": "x", "api_region": "EU"});
+        assertTrue(clientEU.getURL() =~ /api\.eu\.mailgun\.net$/);
+
+        # Test default region
+        MailgunRestClient::MailgunRestClient clientDefault({"apikey": "x"});
+        assertTrue(clientDefault.getURL() =~ /api\.mailgun\.net$/);
+
+        # Test invalid region throws error
+        assertThrows("MAILGUN-ERROR", sub() {
+            new MailgunRestClient::MailgunRestClient({"apikey": "x", "api_region": "INVALID"});
+        });
+
+        # Test missing apikey throws error
+        assertThrows("MAILGUN-ERROR", sub() {
+            new MailgunRestClient::MailgunRestClient({});
+        });
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("mailgun");
+        assertEq("Mailgun REST Connection", scheme.display_name);
+        assertTrue(scheme.options.hasKey("apikey"));
+        assertTrue(scheme.options.hasKey("api_region"));
+        assertTrue(scheme.options.hasKey("api_domain"));
+        assertTrue(scheme.options."apikey".sensitive);
+
+        # Check API region allowed values
+        assertTrue(scheme.options.api_region.allowed_values.size() == 2);
+
+        # Verify connection can create data provider
+        MailgunRestClient::MailgunRestConnection conn("test", "test connection",
+            "mailgun://api.mailgun.net", {}, {"apikey": "x"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("Mailgun", conn.getAppName());
+        assertEq("mailgun", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Get all actions for the Mailgun app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            MailgunDataProvider::AppName);
+        assertTrue(actions.size() > 0);
+
+        # Verify email actions
+        list<string> actionNames = map $1.action, actions;
+        assertTrue(actionNames.contains("send-email"));
+        assertTrue(actionNames.contains("validate-email"));
+        assertTrue(actionNames.contains("make-api-call"));
+
+        # Verify mailing list actions
+        assertTrue(actionNames.contains("add-mailing-list-member"));
+        assertTrue(actionNames.contains("get-mailing-list-member"));
+        assertTrue(actionNames.contains("delete-mailing-list-member"));
+        assertTrue(actionNames.contains("list-mailing-list-members"));
+
+        # Verify route and domain actions
+        assertTrue(actionNames.contains("create-route"));
+        assertTrue(actionNames.contains("list-domains"));
+
+        # Verify trigger actions
+        assertTrue(actionNames.contains("clicked"));
+        assertTrue(actionNames.contains("delivered"));
+        assertTrue(actionNames.contains("opened"));
+        assertTrue(actionNames.contains("permanent_fail"));
+        assertTrue(actionNames.contains("temporary_fail"));
+        assertTrue(actionNames.contains("complained"));
+        assertTrue(actionNames.contains("unsubscribed"));
+
+        # Verify mailing list actions have ref_data for mailing_lists
+        *hash<DataProviderActionInfo> addMemberAction = DataProviderActionCatalog::getAppAction(
+            MailgunDataProvider::AppName, "add-mailing-list-member");
+        assertTrue(exists addMemberAction, "add-mailing-list-member action should exist");
+        assertTrue(addMemberAction.options.list_address.ref_data == "mailing_lists");
+
+        # Verify event actions have correct action_code
+        *hash<DataProviderActionInfo> clickedAction = DataProviderActionCatalog::getAppAction(
+            MailgunDataProvider::AppName, "clicked");
+        assertTrue(exists clickedAction, "clicked action should exist");
+        assertEq(DPAT_EVENT, clickedAction.action_code);
+    }
+
+    #! Integration tests - require MAILGUN_API_KEY
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Mailgun credentials provided (use -k option or MAILGUN_API_KEY env var)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test domains provider
+        testDomainsProvider();
+
+        # Test reference data
+        testReferenceData();
+
+        # Test mailing list operations (if we have a mailing list)
+        if (testMailingList) {
+            testMailingListOperations();
+        }
+
+        # Test mailing list member data integrity
+        if (testMailingList) {
+            testMailingListMemberDataIntegrity();
+        }
+    }
+
+    #! Test API connectivity
+    private testApiConnectivity() {
+        # Test that we can connect to the API
+        hash<auto> response = client.get("/v3/domains");
+        assertTrue(response.body.hasKey("items") || response.body.hasKey("total_count"));
+        if (m_options.verbose) {
+            printf("Connected to Mailgun API successfully\n");
+        }
+    }
+
+    #! Test domains provider
+    private testDomainsProvider() {
+        MailgunDataProvider::MailgunDataProvider prov(client);
+
+        # Get domains
+        AbstractDataProvider domainsProvider = prov.getChildProvider("domains");
+        list<hash<auto>> domains = map $1, domainsProvider.searchRecords();
+
+        if (m_options.verbose) {
+            printf("Found %d domains\n", domains.size());
+        }
+
+        # Store first domain for further tests if not specified
+        if (!testDomain && domains.size() > 0) {
+            testDomain = domains[0].name;
+            if (m_options.verbose) {
+                printf("Using domain: %s (state: %s)\n", domains[0].name, domains[0].state ?? "N/A");
+            }
+        }
+    }
+
+    #! Test reference data
+    private testReferenceData() {
+        MailgunDataProvider::MailgunDataProvider prov(client);
+
+        # Test domains reference data
+        *list<hash<AllowedValueInfo>> domains = prov.getReferenceData("domains");
+        if (domains) {
+            assertTrue(domains.size() > 0);
+            assertTrue(domains[0].display_name.val());
+            assertTrue(domains[0].value.val());
+            if (m_options.verbose) {
+                printf("Reference data: %d domains available\n", domains.size());
+            }
+        }
+
+        # Test mailing lists reference data
+        *list<hash<AllowedValueInfo>> lists = prov.getReferenceData("mailing_lists");
+        if (lists && lists.size() > 0) {
+            assertTrue(lists[0].display_name.val());
+            assertTrue(lists[0].value.val());
+            if (m_options.verbose) {
+                printf("Reference data: %d mailing lists available\n", lists.size());
+            }
+            # Use first mailing list if not specified
+            if (!testMailingList) {
+                testMailingList = lists[0].value;
+            }
+        }
+    }
+
+    #! Test mailing list operations
+    private testMailingListOperations() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Mailing List Operations ---\n");
+        }
+
+        MailgunDataProvider::MailgunDataProvider prov(client);
+
+        # Test listing mailing list members
+        AbstractDataProvider listMembersProvider = prov.getChildProvider("list-mailing-list-members");
+        try {
+            AbstractDataProviderRecordIterator membersIter = listMembersProvider.searchRecords(
+                NOTHING, {"list_address": testMailingList, "limit": 5});
+            int count = 0;
+            while (membersIter.next()) {
+                count++;
+                hash<auto> member = membersIter.getValue();
+                assertTrue(member.hasKey("address"));
+                if (m_options.verbose && count == 1) {
+                    printf("First member: %s (%s)\n", member.address, member.name ?? "N/A");
+                }
+            }
+            if (m_options.verbose) {
+                printf("Found %d members (limited to 5)\n", count);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("List members failed: %s\n", ex.desc);
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Mailing List Operations tests completed ---\n");
+        }
+    }
+
+    #! Test mailing list member data integrity - verifies data actually persists
+    /** CRITICAL: This test verifies that mailing list member data is correctly saved and retrievable.
+        This catches issues like:
+        - Wrong Content-Type (JSON vs form-encoded)
+        - Silent API acceptance without data persistence
+        - Incorrect field handling
+
+        The test adds a member with known values, retrieves it, and verifies the values match.
+    */
+    private testMailingListMemberDataIntegrity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Mailing List Member Data Integrity ---\n");
+        }
+
+        MailgunDataProvider::MailgunDataProvider prov(client);
+
+        # Generate unique test email
+        string testEmail = sprintf("test_%s_%d@example.com",
+            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+        string testName = "Test User " + rand() % 10000;
+
+        # Test 1: Add mailing list member
+        if (m_options.verbose) {
+            printf("\nTest 1: Add member to mailing list...\n");
+        }
+
+        AbstractDataProvider addMemberProvider = prov.getChildProvider("add-mailing-list-member");
+        hash<auto> addRequest = {
+            "list_address": testMailingList,
+            "address": testEmail,
+            "name": testName,
+            "subscribed": True,
+        };
+
+        try {
+            auto addResult = addMemberProvider.doRequest(addRequest);
+            if (m_options.verbose) {
+                printf("  Add result: %y\n", addResult);
+            }
+            assertTrue(addResult.address == testEmail || addResult.member.address == testEmail,
+                "Member should be created with correct email");
+
+            # Verify the data was actually saved by fetching it back
+            AbstractDataProvider getMemberProvider = prov.getChildProvider("get-mailing-list-member");
+            hash<auto> getRequest = {
+                "list_address": testMailingList,
+                "member_address": testEmail,
+            };
+
+            auto fetchedMember = getMemberProvider.doRequest(getRequest);
+            if (m_options.verbose) {
+                printf("  Fetched member: %y\n", fetchedMember);
+            }
+
+            assertEq(testEmail, fetchedMember.address, "Member email should match");
+            assertEq(testName, fetchedMember.name, "Member name should match");
+            assertTrue(fetchedMember.subscribed, "Member should be subscribed");
+
+            if (m_options.verbose) {
+                printf("  Data integrity verified: member saved and retrieved correctly\n");
+            }
+
+            # Cleanup: delete the test member
+            AbstractDataProvider deleteMemberProvider = prov.getChildProvider("delete-mailing-list-member");
+            hash<auto> deleteRequest = {
+                "list_address": testMailingList,
+                "member_address": testEmail,
+            };
+
+            try {
+                deleteMemberProvider.doRequest(deleteRequest);
+                if (m_options.verbose) {
+                    printf("\nCleaned up test member: %s\n", testEmail);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Cleanup failed: %s\n", ex.desc);
+                }
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  Add member failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Mailing List Member Data Integrity tests completed ---\n");
+        }
+    }
+
+    #! Webhook trigger tests - require MAILGUN_API_KEY and webhook infrastructure
+    webhookTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Mailgun credentials provided");
+            return;
+        }
+
+        if (!testDomain) {
+            testSkip("No domain available for webhook tests");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Webhook Trigger Registration/Deregistration ---\n");
+        }
+
+        # ============================================
+        # Test Clicked Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting MailgunClickedEventDataProvider...\n");
+        }
+
+        # Test event provider instantiation
+        MailgunDataProvider::MailgunClickedEventDataProvider eventProv(client, testDomain, {});
+        assertEq("clicked", eventProv.getName());
+
+        # Verify provider metadata
+        assertTrue(eventProv.getInfo().supports_observable);
+
+        # Test event types
+        hash<string, hash<DataProviderMessageInfo>> eventTypes = eventProv.getEventTypes();
+        assertTrue(eventTypes.hasKey("clicked"));
+        assertTrue(eventTypes{"clicked"}.desc.val());
+
+        # Test example event data
+        auto exampleData = eventProv.getExampleEventData("clicked");
+        assertTrue(exampleData.event.val());
+        assertTrue(exampleData.hasKey("recipient"));
+        assertTrue(exampleData.hasKey("url"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys eventTypes);
+            printf("  Example data has keys: %y\n", keys exampleData);
+        }
+
+        # ============================================
+        # Test Delivered Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting MailgunDeliveredEventDataProvider...\n");
+        }
+
+        MailgunDataProvider::MailgunDeliveredEventDataProvider deliveredProv(client, testDomain, {});
+        assertEq("delivered", deliveredProv.getName());
+        assertTrue(deliveredProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> deliveredEventTypes = deliveredProv.getEventTypes();
+        assertTrue(deliveredEventTypes.hasKey("delivered"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys deliveredEventTypes);
+        }
+
+        # ============================================
+        # Test Permanent Fail Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting MailgunPermanentFailEventDataProvider...\n");
+        }
+
+        MailgunDataProvider::MailgunPermanentFailEventDataProvider failProv(client, testDomain, {});
+        assertEq("permanent_fail", failProv.getName());
+        assertTrue(failProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> failEventTypes = failProv.getEventTypes();
+        assertTrue(failEventTypes.hasKey("permanent_fail"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys failEventTypes);
+        }
+
+        # ============================================
+        # Test Webhook Registration/Deregistration with Mock
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting webhook registration lifecycle...\n");
+        }
+
+        # Track webhooks created/deleted
+        list<hash<auto>> created_webhooks = ();
+        list<string> deleted_webhook_ids = ();
+        int webhook_counter = 0;
+
+        code mockCreate = hash<auto> sub (hash<auto> config) {
+            webhook_counter++;
+            string url = sprintf("https://test-webhook-%d.example.com/webhook", webhook_counter);
+            hash<auto> ctx = {
+                "id": webhook_counter,
+                "config": config,
+            };
+            created_webhooks += {"url": url, "ctx": ctx};
+            return {"url": url, "ctx": ctx};
+        };
+
+        code mockDelete = sub (hash<auto> info) {
+            deleted_webhook_ids += info.ctx.id.toString();
+        };
+
+        # Only register if not already registered (avoid conflicts with Qorus environment)
+        bool registered_mock = False;
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            DataProvider::DataProviderWebhook::registerWebhookApis(mockCreate, mockDelete);
+            registered_mock = True;
+        }
+
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            if (m_options.verbose) {
+                printf("Webhook infrastructure not available, skipping registration tests\n");
+            }
+        } else {
+            # Create a test observer
+            TestObserver observer();
+
+            # Create event provider and register observer
+            MailgunDataProvider::MailgunClickedEventDataProvider testEventProv(client, testDomain, {});
+            testEventProv.registerObserver(observer);
+
+            int webhooksCreatedBefore = created_webhooks.size();
+
+            # Signal that observers are ready - this should trigger webhook creation
+            try {
+                testEventProv.observersReady();
+
+                if (registered_mock) {
+                    # Verify webhook was created (via mock)
+                    assertTrue(created_webhooks.size() > webhooksCreatedBefore,
+                        "Webhook should be created when observers are ready");
+                    if (m_options.verbose) {
+                        printf("  Mock webhook created: %y\n", created_webhooks[created_webhooks.size() - 1].url);
+                    }
+                }
+
+                # Stop events - this should trigger webhook deletion
+                testEventProv.stopEvents();
+
+                if (registered_mock) {
+                    # Verify webhook was deleted (via mock)
+                    assertTrue(deleted_webhook_ids.size() > 0,
+                        "Webhook should be deleted when events are stopped");
+                    if (m_options.verbose) {
+                        printf("  Mock webhook deleted: %y\n", deleted_webhook_ids[deleted_webhook_ids.size() - 1]);
+                    }
+                }
+
+                if (m_options.verbose) {
+                    printf("  Webhook lifecycle test passed\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # This might fail if Mailgun API rejects the webhook URL
+                if (m_options.verbose) {
+                    printf("  Webhook registration failed (expected in test environment): %s\n", ex.desc);
+                }
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Webhook Trigger tests completed ---\n");
+        }
+    }
+}
+
+#! Test observer for webhook events
+class TestObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data) {
+        events += {"event_id": event_id, "data": data};
+    }
+}

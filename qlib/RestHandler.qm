@@ -67,7 +67,7 @@ module RestHandler {
     - @ref RestHandler::RestHandler "RestHandler": this class can be used to plug in to the %Qore
       <a href="../../HttpServer/html/index.html">HttpServer</a> to expose REST services
 
-    see example file \c "restserver.q" in the examples directory for an example of using this module to implement REST
+    see example file \c "restserver.qr" in the examples directory for an example of using this module to implement REST
     services.
 
     @section restserialization Data Serialization Support

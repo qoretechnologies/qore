@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 
 QoreString QoreExistsOperatorNode::Exists_str("exists operator expression");
@@ -40,7 +41,7 @@ QoreString *QoreExistsOperatorNode::getAsString(bool& del, int foff, ExceptionSi
 }
 
 int QoreExistsOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    str.concat(&Exists_str);
+    qore_string_private::get(str)->concat(&Exists_str);
     return 0;
 }
 

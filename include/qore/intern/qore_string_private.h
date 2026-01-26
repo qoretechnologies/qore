@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,9 @@
 #define QORE_QORE_STRING_PRIVATE_H
 
 #include <vector>
+
+class QoreRegexBase;
+class QoreRegexSubst;
 
 #define MAX_INT_STRING_LEN     48
 #define MAX_BIGINT_STRING_LEN  48
@@ -546,6 +549,13 @@ public:
         }
     }
 
+    // concatenate QoreString without encoding conversion
+    DLLLOCAL void concat(const QoreString* str) {
+        if (str) {
+            concat(str->priv);
+        }
+    }
+
     DLLLOCAL void concat(const char *str) {
         // if it's not a null string
         if (str) {
@@ -623,7 +633,62 @@ public:
         return 0;
     }
 
+    DLLLOCAL int vsnprintf(size_t size, const char* fmt, va_list args) {
+        // ensure minimum space is free
+        if ((allocated - len) < (unsigned)size) {
+            allocated += (size + STR_CLASS_EXTRA);
+            // resize buffer
+            buf = (char*)realloc(buf, allocated * sizeof(char));
+        }
+        // copy formatted string to buffer
+        int i = ::vsnprintf(buf + len, size, fmt, args);
+        len += i;
+        return i;
+    }
+
+    DLLLOCAL int snprintf(size_t size, const char* fmt, ...) {
+        va_list args;
+        va_start(args, fmt);
+        int i = vsnprintf(size, fmt, args);
+        va_end(args);
+        return i;
+    }
+
     DLLLOCAL void concatUTF8FromUnicode(unsigned code);
+
+    // writes a new qore_string_private with the characters reversed from this string
+    // assumes the encoding is the same and the target length is 0
+    DLLLOCAL void concat_reverse(qore_string_private& targ) const {
+        assert(targ.getEncoding() == getEncoding());
+        assert(!targ.len);
+
+        targ.check_char(len);
+        if (getEncoding()->isMultiByte()) {
+            char* p = buf;
+            char* targ_end = targ.buf + len;
+            char* end = buf + len;
+            while (p < end) {
+                bool invalid;
+                int bl = getEncoding()->getByteLen(p, end, 1, invalid);
+                if (invalid) {
+                    bl = 1;
+                }
+                targ_end -= bl;
+                if (targ_end < targ.buf) {
+                    break;
+                }
+                strncpy(targ_end, p, bl);
+                p += bl;
+            }
+        } else {
+            for (size_t i = 0; i < len; ++i) {
+                targ.buf[i] = buf[len - i - 1];
+            }
+        }
+
+        targ.buf[len] = '\0';
+        targ.len = len;
+    }
 
     DLLLOCAL int concatUnicode(unsigned code, ExceptionSink *xsink) {
         assert(xsink);
@@ -726,6 +791,15 @@ public:
         return str.priv;
     }
 
+    DLLLOCAL static qore_string_private* get(QoreString* str) {
+        return str ? str->priv : nullptr;
+    }
+
+    DLLLOCAL static void adopt(QoreString& str, qore_string_private* p) {
+        delete str.priv;
+        str.priv = p;
+    }
+
     DLLLOCAL static int getHex(const char*& p) {
         if (*p == '%' && isxdigit(*(p + 1)) && isxdigit(*(p + 2))) {
             char x[3] = { *(p + 1), *(p + 2), '\0' };
@@ -766,7 +840,9 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
     }
 
     p->allocated = p->len + 1;
-    return new T(p);
+    T* rv = new T();
+    qore_string_private::adopt(*rv, p);
+    return rv;
 }
 
 #endif

@@ -9,7 +9,7 @@
 
 class RecursiveDependencyTest inherits QUnit::Test {
     private {
-        const Scripts = ("recursive-load.q", "recursive-load-dir.q");
+        const Scripts = ("recursive-load.qr", "recursive-load-dir.qr");
     }
 
     constructor() : Test("Recursive dependency test", "1.0") {
@@ -23,11 +23,10 @@ class RecursiveDependencyTest inherits QUnit::Test {
 
         string dir = get_script_dir();
         foreach string script in (Scripts) {
-            string loc = dir + DirSep + script;
-            string str = backquote("qore " + loc + " 2>&1");
+            string cmd = sprintf("cd %y && qore %y 2>&1", dir, script);
+            string str = backquote(cmd);
             on_error printf("str: %y\n", str);
-            assertRegex($# ? "LOAD-MODULE-ERROR" : "", str, script);
+            assertEq("", str, script);
         }
     }
 }
-

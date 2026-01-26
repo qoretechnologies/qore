@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -423,22 +423,6 @@ public:
         @since %Qore 2.0
     */
     DLLEXPORT bool weakDeref();
-
-    // needed only while parsing
-    //! this function is not exported in the qore library
-    DLLLOCAL QoreListNode(bool i);
-
-    //! this function is not exported in the qore library
-    DLLLOCAL bool isFinalized() const;
-
-    //! this function is not exported in the qore library
-    DLLLOCAL void setFinalized();
-
-    //! this function is not exported in the qore library
-    DLLLOCAL bool isVariableList() const;
-
-    //! this function is not exported in the qore library
-    DLLLOCAL void setVariableList();
 
     //! for initialization of lists in the parse tree at parse time (always returns "this")
     DLLLOCAL virtual int parseInit(QoreValue& val, QoreParseContext& parse_context);

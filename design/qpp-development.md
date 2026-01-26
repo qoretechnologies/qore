@@ -213,6 +213,119 @@ Notes:
 - When used in QPP method signatures, enum parameters are passed to C++ as the enum's base type
   (`int64`, `const QoreStringNode*`, `double`, or `const QoreNumberNode*`).
 
+#### Using Enums in Hashdecl Fields
+
+When a hashdecl field references an enum type using `enum<EnumName>` or `*enum<EnumName>`, the
+generated C++ code calls `enumPointer->getTypeInfo()`. This requires:
+
+1. **Global enum pointer**: Declare and define a global `QoreEnumDecl*` pointer:
+   ```cpp
+   // In header file (e.g., yaml-module.h):
+   DLLLOCAL extern QoreEnumDecl* enumMyEnumType;
+
+   // In source file (e.g., yaml-module.cpp):
+   QoreEnumDecl* enumMyEnumType = nullptr;
+   ```
+
+2. **Initialization order**: Initialize enums **before** hashdecls that reference them:
+   ```cpp
+   // In module init function:
+   enumMyEnumType = init_enum_MyEnumType(ns);      // Initialize enum first
+   hashdeclMyHashDecl = init_hashdecl_MyHashDecl(ns);  // Then hashdecl
+   ```
+
+3. **Hashdecl field syntax**: Use typed enum references in hashdecl fields:
+   ```cpp
+   hashdecl MyEvent {
+       //! Required enum field
+       enum<MyEnumType> type;
+
+       //! Optional enum field
+       *enum<MyEnumType> style;
+   }
+   ```
+
+Example from the YAML module:
+```cpp
+// Enum definitions
+enum Qore::YAML::YamlSaxEventType : int {
+    StreamStart = 1,
+    Scalar = 6,
+    // ...
+};
+
+enum Qore::YAML::YamlScalarStyle : string {
+    Plain = "plain",
+    Literal = "literal",
+    // ...
+};
+
+// Hashdecl using enum types
+hashdecl YamlSaxEvent {
+    enum<YamlSaxEventType> type;      // Required int enum
+    *enum<YamlScalarStyle> style;     // Optional string enum
+}
+```
+
+### Typed Code Types
+
+QPP supports typed code types (`code<ReturnType(ParamTypes...)>`) for function/closure parameters and return
+types. This enables type-safe callbacks and higher-order functions.
+
+#### Basic Usage
+
+```cpp
+//! Applies a transformation function to each element
+list<auto> ClassName::map(list<auto> input, code<auto(auto)> transformer) {
+    // transformer is guaranteed to accept one argument and return a value
+    QoreListNode* result = new QoreListNode(autoTypeInfo);
+    // ...
+}
+
+//! Returns a typed closure
+code<int(int)> ClassName::getMultiplier(int factor) {
+    // Return type ensures the closure signature matches
+}
+```
+
+#### Complex Type Parameters
+
+Typed code types fully support complex nested types:
+
+```cpp
+// Code with complex parameter types
+nothing ClassName::processData(code<int(hash<string, int>)> processor) {
+    // processor takes a hash<string, int> and returns int
+}
+
+// Code with complex return types
+code<hash<string, list<int>>()> ClassName::getDataFactory() {
+    // Returns a closure that produces hash<string, list<int>>
+}
+
+// Deeply nested types
+nothing ClassName::transform(code<list<hash<string, int>>(list<string>, int)> transformer) {
+    // transformer: (list<string>, int) -> list<hash<string, int>>
+}
+```
+
+#### Or-Nothing Code Types
+
+Use `*code<...>` for optional typed code parameters:
+
+```cpp
+nothing ClassName::setCallback(*code<nothing(string)> callback) {
+    // callback can be NOTHING or a closure matching the signature
+}
+```
+
+#### Notes
+
+- The return type in `code<ReturnType(...)>` can be any valid Qore type including `nothing`
+- Parameter types support all complex types: `hash<K,V>`, `list<T>`, `softlist<T>`, etc.
+- Varargs are supported: `code<int(string, ...)>` for closures accepting variable arguments
+- Type checking happens at parse time; incompatible closures will cause parse errors
+
 ## Class Creation Checklist
 
 1. [ ] Create `lib/QC_ClassName.qpp`

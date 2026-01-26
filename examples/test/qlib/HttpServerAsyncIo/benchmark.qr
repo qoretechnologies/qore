@@ -1,0 +1,177 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%disable-warning unreferenced-variable
+
+%requires ../../../../qlib/HttpServerAsyncIo
+
+%exec-class Benchmark
+
+class Benchmark {
+    constructor() {
+        printf("=== HttpServerAsyncIo Performance Benchmark ===\n\n");
+
+        # Test 1: Async accept + header read
+        testAsyncAcceptHeader();
+
+        # Test 2: Sync accept + header read (apples-to-apples comparison)
+        testSyncAcceptHeader();
+
+        # Test 3: HttpIdlePollOperation latency
+        testIdlePollOperation();
+
+        printf("=== Benchmark Complete ===\n");
+    }
+
+    private testAsyncAcceptHeader() {
+        printf("Test 1: ASYNC accept + header read (HttpAcceptPollOperation)\n");
+
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        list<float> latencies = ();
+        int iterations = 100;
+
+        for (int i = 0; i < iterations; ++i) {
+            # Connect client first, then measure server-side accept+header
+            Counter ready(1);
+            background sub() {
+                Socket client();
+                client.connect("localhost:" + port);
+                ready.dec();
+                client.send("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                sleep(50ms);
+                client.close();
+            }();
+
+            ready.waitForZero();
+            sleep(1ms);  # Ensure data is in flight
+
+            # Now measure server-side async accept + header read
+            date start = now_us();
+            HttpAcceptPollOperation op(server, False);
+
+            while (!op.goalReached()) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (info) {
+                    Socket::poll((info,), 100ms);
+                }
+            }
+            date end = now_us();
+
+            float latency_ms = (end - start).durationMicroseconds() / 1000.0;
+            latencies += latency_ms;
+
+            # Clean up
+            Socket accepted = op.getSocket();
+            accepted.close();
+        }
+
+        server.close();
+        printStats(latencies, iterations);
+    }
+
+    private testSyncAcceptHeader() {
+        printf("Test 2: SYNC accept + header read (blocking)\n");
+
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        list<float> latencies = ();
+        int iterations = 100;
+
+        for (int i = 0; i < iterations; ++i) {
+            # Connect client first
+            Counter ready(1);
+            background sub() {
+                Socket client();
+                client.connect("localhost:" + port);
+                ready.dec();
+                client.send("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                sleep(50ms);
+                client.close();
+            }();
+
+            ready.waitForZero();
+            sleep(1ms);  # Ensure data is in flight
+
+            # Now measure server-side sync accept + header read
+            date start = now_us();
+            Socket accepted = server.accept(1s);
+            hash<auto> hdr = accepted.readHTTPHeader(1s);
+            date end = now_us();
+
+            float latency_ms = (end - start).durationMicroseconds() / 1000.0;
+            latencies += latency_ms;
+
+            accepted.close();
+        }
+
+        server.close();
+        printStats(latencies, iterations);
+    }
+
+    private testIdlePollOperation() {
+        printf("Test 3: HttpIdlePollOperation data detection latency\n");
+
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        list<float> latencies = ();
+        int iterations = 100;
+
+        for (int i = 0; i < iterations; ++i) {
+            Socket client();
+            client.connect("localhost:" + port);
+            Socket accepted = server.accept(100ms);
+
+            # Create idle poll operation
+            HttpIdlePollOperation op(accepted, 5s);
+
+            # Send data from client and measure detection time
+            date start = now_us();
+            client.send("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+
+            while (!op.goalReached()) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (info) {
+                    Socket::poll((info,), 10ms);
+                }
+            }
+
+            date end = now_us();
+            float latency_ms = (end - start).durationMicroseconds() / 1000.0;
+            latencies += latency_ms;
+
+            client.close();
+            accepted.close();
+        }
+
+        server.close();
+        printStats(latencies, iterations);
+    }
+
+    private printStats(list<float> latencies, int iterations) {
+        float sum = 0;
+        float min_lat = latencies[0];
+        float max_lat = latencies[0];
+        foreach float lat in (latencies) {
+            sum += lat;
+            if (lat < min_lat) min_lat = lat;
+            if (lat > max_lat) max_lat = lat;
+        }
+        float avg = sum / iterations;
+
+        printf("  Iterations: %d\n", iterations);
+        printf("  Avg latency: %.3f ms\n", avg);
+        printf("  Min latency: %.3f ms\n", min_lat);
+        printf("  Max latency: %.3f ms\n", max_lat);
+        printf("\n");
+    }
+}

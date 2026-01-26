@@ -34,6 +34,7 @@
 #define _QORE_QORETYPEINFO_H
 
 #include <map>
+#include "qore/intern/qore_string_private.h"
 #include <vector>
 #include <utility>
 #include <functional>
@@ -1789,7 +1790,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1846,7 +1847,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1914,7 +1915,7 @@ protected:
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1980,7 +1981,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2081,7 +2082,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2190,7 +2191,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2216,7 +2217,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2243,7 +2244,7 @@ protected:
     QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2278,7 +2279,7 @@ protected:
     QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2330,7 +2331,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -4189,7 +4190,7 @@ protected:
     bool orNothing;  //!< true if this union type accepts NOTHING
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -4282,7 +4283,7 @@ protected:
     QoreString pname;                //!< path name for type
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     DLLLOCAL virtual bool canConvertToScalarImpl() const {

@@ -37,7 +37,7 @@
 # enables all warnings
 
 module MailMessage {
-    version = "1.6";
+    version = "1.5";
     desc = "defines the MailMessage class and supporting definitions";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -75,7 +75,7 @@ msg.addTO("My Best Friend <you@friend.com>");
 
     @section mailmessage_relnotes MailMessage Release Notes
 
-    @subsection mailmessage_v1_6 MailMessage 1.6
+    @subsection mailmessage_v1_5 MailMessage 1.5
     - Enhanced attachment handling:
       - Added RFC 2231 filename encoding for non-ASCII filenames
       - Added RFC 2231 filename decoding for incoming messages
@@ -88,8 +88,6 @@ msg.addTO("My Best Friend <you@friend.com>");
     - Added \c content_id field to @ref MailMessage::PartInfo "PartInfo" hashdecl
     - Improved filename validation and sanitization
       (<a href="https://github.com/qoretechnologies/qore/issues/5164">issue 5164</a>)
-
-    @subsection mailmessage_v1_5 MailMessage 1.5
     - Added multipart type detection and helper methods:
       - @ref MailMessage::Message::isMultipart() "Message::isMultipart()": returns @ref True if the message is multipart
       - @ref MailMessage::Message::getMultipartType() "Message::getMultipartType()": returns the multipart subtype
@@ -254,7 +252,7 @@ public hashdecl MailMessageInfo {
 */
 #/@{
 #! Content transfer encoding for email messages and attachments
-/** @since MailMessage 1.6
+/** @since MailMessage 1.5
 */
 public enum ContentEncoding : string {
     #! Default encoding: uses @ref QuotedPrintable for text data, @ref Base64 for binary data
@@ -291,7 +289,7 @@ string encoded = encode_mime_filename("文档.pdf");
     - <a href="https://tools.ietf.org/html/rfc2231">RFC 2231</a>
     - decode_mime_filename()
 
-    @since MailMessage 1.6
+    @since MailMessage 1.5
 */
 public string sub encode_mime_filename(string filename) {
     # Check if filename needs encoding (contains non-ASCII or special characters)
@@ -335,7 +333,7 @@ string decoded = decode_mime_filename("utf-8''%E6%96%87%E6%A1%A3.pdf");
     - <a href="https://tools.ietf.org/html/rfc2231">RFC 2231</a>
     - encode_mime_filename()
 
-    @since MailMessage 1.6
+    @since MailMessage 1.5
 */
 public string sub decode_mime_filename(string filename) {
     # Check for RFC 2231 encoding: charset'language'encoded-value
@@ -390,18 +388,19 @@ public string sub decode_mime_filename(string filename) {
     - Leading/trailing whitespace
     - Leading dots (to prevent hidden files)
 
-    @since MailMessage 1.6
+    @since MailMessage 1.5
 */
 public string sub sanitize_filename(string filename) {
-    # Remove control characters (0x00-0x1f and 0x7f) and path separators
-    # Work with binary to handle embedded nulls that might truncate strings
-    binary bin = filename.toBinary();
+    # Remove control characters, path separators, and other unsafe characters
+    # Work at the character level to preserve UTF-8 multibyte sequences
     string result = "";
-    for (int i = 0; i < bin.size(); i++) {
-        int c = bin[i];
-        # Skip control characters (0x00-0x1f), DEL (0x7f), and path separators (/ = 0x2f, \ = 0x5c)
-        if (c >= 0x20 && c != 0x7f && c != 0x2f && c != 0x5c) {
-            result += chr(c);
+    int len = filename.length();
+    for (int i = 0; i < len; i++) {
+        string ch = filename[i];
+        int c = ord(ch);
+        # Skip control characters (0x00-0x1f), DEL (0x7f), and path separators (/ and \)
+        if (c >= 0x20 && c != 0x7f && ch != "/" && ch != "\\") {
+            result += ch;
         }
     }
     # Trim whitespace
@@ -865,20 +864,27 @@ public class Message {
 
         #printf("DBG: got part: pcte: %y pct: %y pcd: %y body: %d bytes: %y\n", pcte, pct, pcd, p.body.size(), p.body);
 
-        # if not an attachment, then set as the msg body
-        if (pcd !~ /attachment/i) {
-            if (!body) {
-                body = p.body;
-            } else {
-                parts += new Part(pn.val() ? pn : "", pct, p.body, pcte, p.hdr);
-            }
-        } else {
+        # Determine if this is an attachment:
+        # - Content-Disposition: attachment
+        # - Content-Disposition: inline with a filename (inline attachment)
+        # - Content-Disposition: inline with Content-ID (inline attachment)
+        bool is_attachment = (pcd =~ /attachment/i);
+        bool is_inline_attachment = !is_attachment && (pcd =~ /inline/i) && (pn.val() || cid.val());
+
+        if (is_attachment || is_inline_attachment) {
             # generate a name for the part if no filename is available
             if (!pn) {
                 pn = "unnamed-attachment-" + $#;
             }
 
-            attachments += new Attachment(pn, pct, p.body, pcte, p.hdr, cid);
+            attachments += new Attachment(pn, pct, p.body, pcte, p.hdr, cid, is_inline_attachment);
+        } else {
+            # Not an attachment - set as message body or add to parts
+            if (!body) {
+                body = p.body;
+            } else {
+                parts += new Part(pn.val() ? pn : "", pct, p.body, pcte, p.hdr);
+            }
         }
 
         map processPart($1), p.part;
@@ -1242,7 +1248,7 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
         @throw INVALID-ENCODING the encoding given cannot be used with data given
 
-        @since MailMessage 1.6
+        @since MailMessage 1.5
     */
     attachInline(string name, string mime, data att, string content_id, string enc = ContentEncoding::Base64, *hash<auto> hdr) {
         attachments += new MailMessage::Attachment(name, mime, att, enc, hdr, content_id);
@@ -1602,7 +1608,7 @@ public class Part {
     #! returns the size of the Part data in bytes
     /** @return the size of the part data in bytes
 
-        @since MailMessage 1.6
+        @since MailMessage 1.5
     */
     int getSize() {
         return part_data.size();
@@ -1621,7 +1627,7 @@ public class Part {
     #! returns the Content-ID if set
     /** @return the Content-ID without angle brackets, or @ref nothing if not set
 
-        @since MailMessage 1.6
+        @since MailMessage 1.5
     */
     *string getContentId() {
         return content_id;
@@ -1683,13 +1689,17 @@ public class Attachment inherits Part {
 
         @note If \a cid is provided, the attachment will be treated as an inline attachment
 
-        @since MailMessage 1.6: added \a cid parameter
+        @since MailMessage 1.5: added \a cid parameter
+        @since MailMessage 1.5: added \a is_inline parameter
     */
-    constructor(string name, string mime, data part_data, string enc = ContentEncoding::Base64, *hash<auto> hdr, *string cid)
+    constructor(string name, string mime, data part_data, string enc = ContentEncoding::Base64, *hash<auto> hdr,
+            *string cid, bool is_inline = False)
             : Part(sanitize_filename(name), mime, part_data, enc, hdr) {
         self.enc = Message::checkEncoding(part_data, enc);
         if (cid.val()) {
             content_id = cid;
+            inline_attachment = True;
+        } else if (is_inline) {
             inline_attachment = True;
         }
     }
@@ -1697,7 +1707,7 @@ public class Attachment inherits Part {
     #! Returns @ref True if this is an inline attachment
     /** @return @ref True if the attachment has a Content-ID and is meant to be displayed inline
 
-        @since MailMessage 1.6
+        @since MailMessage 1.5
     */
     bool isInline() {
         return inline_attachment;

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 
 void qore_number_private::getAsString(QoreString& str, bool round, int base) const {
@@ -340,7 +341,7 @@ int qore_number_private::formatNumberStringIntern(QoreString& num, int prec, con
 
         if (prec > 0) {
             // add decimal point
-            num.concat(&dsep);
+            qore_string_private::get(num)->concat(&dsep);
             // add zeros for significant digits
             num.addch('0', prec);
         }

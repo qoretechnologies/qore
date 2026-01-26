@@ -47,6 +47,7 @@
 #include "qore/intern/ql_compression.h"
 
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QoreLibIntern.h"
@@ -399,7 +400,7 @@ static const QoreStringNode* get_string_header_node(ExceptionSink* xsink, QoreHa
         n = l->retrieveEntry(i);
         assert(n.getType() == NT_STRING);
         rv->concat(',');
-        rv->concat(n.get<const QoreStringNode>());
+        qore_string_private::get(rv)->concat(n.get<const QoreStringNode>());
     }
     // dereference old list and save reference to return value in header hash
     h.setKeyValue(header, rv, xsink);
@@ -3338,7 +3339,7 @@ int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
                                 }
                                 QoreValue lv = l->retrieveEntry(i);
                                 if (lv.getType() == NT_STRING) {
-                                    joined->concat(lv.get<const QoreStringNode>());
+                                    qore_string_private::get(joined)->concat(lv.get<const QoreStringNode>());
                                 }
                             }
                             h2_headers[key] = joined->c_str();

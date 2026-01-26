@@ -54,7 +54,7 @@ class BackquoteTest inherits QUnit::Test {
         }
 
         int rc = 0;
-        string out = backquote("command_should_not_exist_12345", \rc);
+        string out = backquote("command_should_not_exist_12345 2>/dev/null", \rc);
         assertEq("", out, "backquote should return empty output on command not found");
         assertEq(127, rc, "backquote should return 127 for command not found");
     }

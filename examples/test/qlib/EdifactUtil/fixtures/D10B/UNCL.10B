@@ -1,0 +1,31 @@
+CHAPTER 6 Code list
+
+     1001  Document name code                                      [C]
+
+     Desc: Code specifying the document name.
+
+     Repr: an..3
+
+     9     "Payment order"
+     83     "Delivery schedule"
+     122     "Receiving advice"
+     620     "Booking request"
+     34     "Container announcement"
+     36     "Container discharge/loading order"
+     270     "Container discharge/loading report"
+     310     "Transport pricing report"
+     711     "Product data"
+     35     "Inventory report"
+     73     "Sales data report"
+     353     "Metered services consumption report"
+     27     "Application error and acknowledgement"
+     455     "Medical service report"
+     453     "Medical service advice"
+     220     "Purchase order"
+     29     "Order response"
+     351     "Despatch advice"
+     380     "Invoice"
+     1     "Control message"
+     481     "Remittance advice"
+     610     "Transport instruction"
+     25     "Transport status"

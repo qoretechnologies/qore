@@ -282,6 +282,12 @@ nothing exec(string command) [dom=EXTERNAL_PROCESS,PROCESS] {
 
     @return the exit code of the process executed
 
+    @par Process group behavior:
+    - With a @ref Qore::SandboxManager "SandboxManager" attached, the child process is started in a new process group so
+      that @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" can terminate the entire process group.
+    - Without a SandboxManager, the child stays in the current process group, so terminal signals (for example, Ctrl-C)
+      are delivered to both the parent and child as usual.
+
     @par Example:
     @code{.py}
 int rc = system("ls -l");
@@ -292,6 +298,7 @@ int rc = system("ls -l");
     - @ref backquote_operator "the backquote operator"
  */
 int system(string command) [dom=EXTERNAL_PROCESS] {
+    const bool use_pgroup = runtime_get_sandbox_manager() != nullptr;
 #ifdef __linux__
     auto pidfd_open = [](pid_t target_pid) -> int {
 #ifdef SYS_pidfd_open
@@ -302,11 +309,11 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
     };
 #endif
 
-    auto wait_for_process = [&xsink
+    auto wait_for_process = [&xsink, use_pgroup
 #ifdef __linux__
         , &pidfd_open
 #endif
-    ](pid_t pid) -> int {
+    ](pid_t pid, bool pgroup_ok) -> int {
         int status = 0;
 #ifdef __linux__
         int pidfd = pidfd_open(pid);
@@ -314,7 +321,7 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
             while (true) {
                 if (qore_check_io_interrupt(xsink, "process wait")) {
                     // Use SIGKILL to enforce immediate termination on interrupt.
-                    kill(-pid, SIGKILL);
+                    kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
                     waitpid(pid, &status, 0);
                     close(pidfd);
                     return -1;
@@ -352,7 +359,7 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
             // check for sandbox interrupt
             if (qore_check_io_interrupt(xsink, "process wait")) {
                 // Use SIGKILL to enforce immediate termination on interrupt.
-                kill(-pid, SIGKILL);
+                kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
                 waitpid(pid, &status, 0);
                 return -1;
             }
@@ -383,11 +390,15 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
 
 #if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
     pid_t spawn_pid = -1;
+    bool spawn_pgroup_ok = false;
     int spawn_rc = 0;
     posix_spawnattr_t attr;
     spawn_rc = posix_spawnattr_init(&attr);
     if (spawn_rc == 0) {
-        short flags = static_cast<short>(POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF);
+        short flags = static_cast<short>(POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF);
+        if (use_pgroup) {
+            flags |= POSIX_SPAWN_SETPGROUP;
+        }
         spawn_rc = posix_spawnattr_setflags(&attr, flags);
 
         if (spawn_rc == 0) {
@@ -402,7 +413,7 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
             sigaddset(&def, SIGQUIT);
             spawn_rc = posix_spawnattr_setsigdefault(&attr, &def);
         }
-        if (spawn_rc == 0) {
+        if (spawn_rc == 0 && use_pgroup) {
             spawn_rc = posix_spawnattr_setpgroup(&attr, 0);
         }
 
@@ -413,14 +424,22 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
         posix_spawnattr_destroy(&attr);
     }
     if (spawn_rc == 0) {
-        return wait_for_process(spawn_pid);
+        if (use_pgroup) {
+            if (setpgid(spawn_pid, spawn_pid) == 0 || errno == EACCES) {
+                spawn_pgroup_ok = true;
+            }
+        }
+        return wait_for_process(spawn_pid, spawn_pgroup_ok);
     }
 #endif
 #if defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
     // on platforms with fork(2) and signal handling, we need to fork, enable all signals, then execl()
     pid_t pid;
+    bool pgroup_ok = false;
     if (!(pid = fork())) {
-        setpgid(0, 0);
+        if (use_pgroup) {
+            setpgid(0, 0);
+        }
 
         sigset_t empty;
         sigemptyset(&empty);
@@ -438,16 +457,12 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
     if (pid == -1) {
         return -1;
     }
-    if (setpgid(pid, pid) == -1) {
-#ifdef EACCES
-        if (errno != EACCES) {
-            // Ignore unexpected errors to preserve existing behavior.
-        }
-#endif
+    if (use_pgroup && (setpgid(pid, pid) == 0 || errno == EACCES)) {
+        pgroup_ok = true;
     }
 
     // wait for child to exit with interrupt checking
-    return wait_for_process(pid);
+    return wait_for_process(pid, pgroup_ok);
 #elif defined(HAVE_SYSTEM)
     return system(command->c_str());
 #else

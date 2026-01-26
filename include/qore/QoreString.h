@@ -1087,22 +1087,9 @@ public:
     */
     DLLEXPORT size_t removeBytes(size_t len);
 
-    // concatenates a qorestring without converting encodings - internal only
-    DLLLOCAL void concat(const QoreString* str);
-
-    // private constructor
-    DLLLOCAL QoreString(struct qore_string_private* p);
-
 protected:
     //! the private implementation of QoreString
     struct qore_string_private* priv = nullptr;
-
-    // writes a new QoreString with the characters reversed of the "this" QoreString
-    // assumes the encoding is the same and the length is 0
-    DLLLOCAL void concat_reverse(QoreString* targ) const;
-
-    DLLLOCAL int snprintf(size_t size, const char* fmt, ...);
-    DLLLOCAL int vsnprintf(size_t size, const char* fmt, va_list args);
 };
 
 DLLEXPORT QoreString* checkEncoding(const QoreString* str, const QoreEncoding* enc, ExceptionSink* xsink);

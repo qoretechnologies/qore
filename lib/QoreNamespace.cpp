@@ -807,9 +807,10 @@ QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, int64 po, con
     }
 }
 
-void QoreNamespaceList::resolveCopy() {
-    for (nsmap_t::iterator i = nsmap.begin(), e = nsmap.end(); i != e; ++i)
-        i->second->priv->classList.resolveCopy();
+void QoreNamespaceList::resolveExternalParentHashDeclsRecursive(qore_root_ns_private* root) {
+    for (auto& i : nsmap) {
+        i.second->priv->resolveExternalParentHashDeclsRecursive(root);
+    }
 }
 
 int QoreNamespaceList::parseInitGlobalVars() {
@@ -1651,6 +1652,23 @@ const QoreEnumDecl* qore_root_ns_private::parseFindScopedEnumIntern(const NamedS
     return nullptr;
 }
 
+TypedefEntry* qore_root_ns_private::parseFindScopedTypedefIntern(const NamedScope& nscope, unsigned& matched) {
+    assert(nscope.size() > 1);
+
+    // iterate all namespaces with the initial name and look for the match
+    {
+        NamespaceMapIterator nmi(nsmap, nscope[0]);
+        while (nmi.next()) {
+            TypedefEntry* td;
+            if ((td = nmi.get()->parseMatchScopedTypedef(nscope, matched))) {
+                return td;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
 const QoreEnumDecl* qore_root_ns_private::parseFindEnum(const QoreProgramLocation* loc, const NamedScope& nscope) {
     const QoreEnumDecl* ed;
     // if there is no namespace specified, then just find enum
@@ -1684,23 +1702,6 @@ const QoreEnumDecl* qore_root_ns_private::parseFindEnum(const QoreProgramLocatio
     }
 
     return ed;
-}
-
-TypedefEntry* qore_root_ns_private::parseFindScopedTypedefIntern(const NamedScope& nscope, unsigned& matched) {
-    assert(nscope.size() > 1);
-
-    // iterate all namespaces with the initial name and look for the match
-    {
-        NamespaceMapIterator nmi(nsmap, nscope[0]);
-        while (nmi.next()) {
-            TypedefEntry* td;
-            if ((td = nmi.get()->parseMatchScopedTypedef(nscope, matched))) {
-                return td;
-            }
-        }
-    }
-
-    return nullptr;
 }
 
 const QoreClass* qore_root_ns_private::runtimeFindScopedClassWithMethod(const NamedScope& scname) const {
@@ -3426,8 +3427,7 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 }
 
 void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
-    //printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s' mns: '%s' mns.enumList.empty: %d\n",
-    //    this, name.c_str(), mns.name.c_str(), mns.enumList.empty());
+    printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s'\n", this, name.c_str());
 
     // merge in source constants
     constant.mergeUserPublic(mns.constant);
