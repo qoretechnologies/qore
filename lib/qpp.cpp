@@ -1097,6 +1097,10 @@ int parse_params_and_flags(const char* fileName, unsigned &lineNumber, strmap_t&
             ++angle_depth;
         } else if (c == '>') {
             --angle_depth;
+            if (angle_depth < 0) {
+                error("%s:%d: unmatched '>' in parameter list for %s()\n", fileName, lineNumber, dn.c_str());
+                return -1;
+            }
         } else if (c == '(' && angle_depth == 0) {
             ++paren_depth;
         } else if (c == ')' && angle_depth == 0) {
@@ -1182,10 +1186,16 @@ int parse_params_and_flags(const char* fileName, unsigned &lineNumber, strmap_t&
                         ++angle_depth;
                     } else if (c == '>') {
                         --angle_depth;
+                        if (angle_depth < 0) {
+                            angle_depth = 0;
+                        }
                     } else if (c == '(') {
                         ++paren_depth;
                     } else if (c == ')') {
                         --paren_depth;
+                        if (paren_depth < 0) {
+                            paren_depth = 0;
+                        }
                     } else if (c == ' ' && angle_depth == 0 && paren_depth == 0) {
                         i = j;
                         break;

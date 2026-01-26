@@ -1196,7 +1196,7 @@ if (errors) {
             return v;
         }
         # strip YAML header (e.g., "%YAML 1.2\n--- " or "%YAML 1.2\n---\n") for inline rendering
-        return regex_subst(trim(make_yaml(v)), "^%YAML [0-9.]+\\n---[ \\n]", "");
+        return regex_subst(trim(make_yaml(v)), "^%YAML [0-9.]+\\n---\\s*", "");
 %else
         throw "MISSING-YAML", "Missing YAML module";
 %endif
