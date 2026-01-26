@@ -156,7 +156,7 @@ list<auto> sort(list<auto> l, string func) [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-code sort_func = int sub (hash l, hash r) { return l.id <=> r.id; };
+code<int(auto, auto)> sort_func = int sub (hash l, hash r) { return l.id <=> r.id; };
 list<auto> nl = sort(l, sort_func);
     @endcode
 
@@ -172,11 +172,31 @@ list<auto> nl = sort(l, sort_func);
     @ref sort_stable()
 
     @see
-    - sortStable(list, code)
-    - sortDescendingStable(list, code)
-    - sortDescending(list, code)
+    - sort_stable(list, code)
+    - sort_descending_stable(list, code)
+    - sort_descending(list, code)
+
+    @since %Qore 2.1 for typed code parameter
 */
-list<auto> sort(list<auto> l, code f) [flags=RET_VALUE_ONLY] {
+list<auto> sort(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
+   return l->sort(f, xsink);
+}
+
+//! Performs an unstable sort in ascending order and returns the new list
+/** Accepts a @ref call_reference "call reference" or a @ref closure "closure" to use to sort complex data types or to
+    give a special sort order
+
+    @param l the list to sort
+    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    type in the list; the code must return -1, 0, or 1 if the first is less than the second, if the first and second
+    are equal, or if the first is greater than the second, respectively
+
+    @return the sorted list
+
+    @deprecated use the typed code variant sort(list, code<int(auto, auto)>) instead; untyped code variants were
+    deprecated in %Qore 2.1
+*/
+list<auto> sort(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED] {
    return l->sort(f, xsink);
 }
 
@@ -334,7 +354,7 @@ list<auto> sort_descending(list<auto> l, string func) [flags=CONSTANT] {
 
     @par Example:
     @code{.py}
-code sort_func = int sub (hash l, hash r) { return l.id <=> r.id; };
+code<int(auto, auto)> sort_func = int sub (hash l, hash r) { return l.id <=> r.id; };
 list<auto> nl = sort_descending(l, sort_func);
     @endcode
 
@@ -351,12 +371,31 @@ list<auto> nl = sort_descending(l, sort_func);
 
     @see
     - sort_stable(list, code)
-    - sort_descendingStable(list, code)
+    - sort_descending_stable(list, code)
     - sort(list, code)
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortDescending()
+    @since %Qore 2.1 for typed code parameter
 */
-list<auto> sort_descending(list<auto> l, code f) [flags=RET_VALUE_ONLY] {
+list<auto> sort_descending(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
+   return l->sortDescending(f, xsink);
+}
+
+//! Performs an unstable sort in descending order and returns the new list
+/** Accepts a @ref call_reference "call reference" or a @ref closure "closure" to use to sort complex data types or to
+    give a special sort order
+
+    @param l the list to sort
+    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    type in the list; the code must return -1, 0, or 1 if the first is less than the second, if the first and second
+    are equal, or if the first is greater than the second, respectively
+
+    @return the sorted list
+
+    @deprecated use the typed code variant sort_descending(list, code<int(auto, auto)>) instead; untyped code variants
+    were deprecated in %Qore 2.1
+*/
+list<auto> sort_descending(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED] {
    return l->sortDescending(f, xsink);
 }
 
@@ -500,7 +539,7 @@ list<auto> sort_stable(list<auto> l, string func) [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-code sort_func = int sub (hash<auto> l, hash<auto> r) { return l.id <=> r.id; };
+code<int(auto, auto)> sort_func = int sub (hash<auto> l, hash<auto> r) { return l.id <=> r.id; };
 list<auto> nl = sort_stable(l, sort_func);
     @endcode
 
@@ -512,13 +551,32 @@ list<auto> nl = sort_stable(l, sort_func);
     @return the sorted list
 
     @see
-    - sort(list, string)
-    - sort_descending(list, string)
-    - sort_descending_stable(list, string)
+    - sort(list, code)
+    - sort_descending(list, code)
+    - sort_descending_stable(list, code)
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortStable()
+    @since %Qore 2.1 for typed code parameter
 */
-list<auto> sort_stable(list<auto> l, code f) [flags=RET_VALUE_ONLY] {
+list<auto> sort_stable(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
+   return l->sortStable(f, xsink);
+}
+
+//! Performs a stable sort in ascending order and returns the new list
+/** Accepts a @ref call_reference "call reference" or a @ref closure "closure" to use to sort complex data types or to
+    give a special sort order
+
+    @param l the list to sort
+    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    type in the list; the code must return -1, 0, or 1 if the first is less than the second, if the first and second
+    are equal, or if the first is greater than the second, respectively
+
+    @return the sorted list
+
+    @deprecated use the typed code variant sort_stable(list, code<int(auto, auto)>) instead; untyped code variants
+    were deprecated in %Qore 2.1
+*/
+list<auto> sort_stable(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED] {
    return l->sortStable(f, xsink);
 }
 
@@ -672,7 +730,7 @@ list<auto> sort_descending_stable(list<auto> l, string func) [flags=RET_VALUE_ON
 
     @par Example:
     @code{.py}
-code sort_func = int sub (hash l, hash r) { return l.id <=> r.id; };
+code<int(auto, auto)> sort_func = int sub (hash l, hash r) { return l.id <=> r.id; };
 list<auto> nl = sort_descending_stable(l, sort_func);
     @endcode
 
@@ -685,12 +743,31 @@ list<auto> nl = sort_descending_stable(l, sort_func);
 
     @see
     - sort_stable(list, code)
-    - sort_descending_stable(list, code)
+    - sort_descending(list, code)
     - sort(list, code)
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortDescendingStable()
+    @since %Qore 2.1 for typed code parameter
 */
-list<auto> sort_descending_stable(list<auto> l, code f) [flags=RET_VALUE_ONLY] {
+list<auto> sort_descending_stable(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
+   return l->sortDescendingStable(f, xsink);
+}
+
+//! Performs a stable sort in descending order and returns the new list
+/** Accepts a @ref call_reference "call reference" or a @ref closure "closure" to use to sort complex data types or to
+    give a special sort order
+
+    @param l the list to sort
+    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    type in the list; the code must return -1, 0, or 1 if the first is less than the second, if the first and second
+    are equal, or if the first is greater than the second, respectively
+
+    @return the sorted list
+
+    @deprecated use the typed code variant sort_descending_stable(list, code<int(auto, auto)>) instead; untyped code
+    variants were deprecated in %Qore 2.1
+*/
+list<auto> sort_descending_stable(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED] {
    return l->sortDescendingStable(f, xsink);
 }
 
@@ -734,27 +811,48 @@ auto min(list<auto> l, string func) [flags=RET_VALUE_ONLY] {
    return !fr ? QoreValue() : l->min(*fr, xsink);
 }
 
-//! Returns the minumum value in a list
+//! Returns the minimum value in a list
 /** Accepts a @ref call_reference "call reference" or a @ref closure "closure" to use to compare complex data types or
     to give a special sort order
 
     @par Example:
     @code{.py}
-code sort_func = int sub (hash l, hash r) { return l.id <=> r.id; };
-auto v = min(l, sort_func);
+code<int(auto, auto)> cmp_func = int sub (hash l, hash r) { return l.id <=> r.id; };
+auto v = min(l, cmp_func);
     @endcode
 
-    @param l the list to sort
+    @param l the list to process
     @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
     type in the list; the @ref call_reference "call reference" or a @ref closure "closure" must return -1, 0, or 1 if
     the first is less than the second, if the first and second are equal, or if the first is greater than the second,
     respectively
 
-    @return the minumum value in a list
+    @return the minimum value in a list
 
     @see max(list, code)
+
+    @since %Qore 2.1 for typed code parameter
 */
-auto min(list<auto> l, code f) [flags=RET_VALUE_ONLY] {
+auto min(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
+   return l->min(f, xsink);
+}
+
+//! Returns the minimum value in a list
+/** Accepts a @ref call_reference "call reference" or a @ref closure "closure" to use to compare complex data types or
+    to give a special sort order
+
+    @param l the list to process
+    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    type in the list; the @ref call_reference "call reference" or a @ref closure "closure" must return -1, 0, or 1 if
+    the first is less than the second, if the first and second are equal, or if the first is greater than the second,
+    respectively
+
+    @return the minimum value in a list
+
+    @deprecated use the typed code variant min(list, code<int(auto, auto)>) instead; untyped code variants were
+    deprecated in %Qore 2.1
+*/
+auto min(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED] {
    return l->min(f, xsink);
 }
 
@@ -822,11 +920,11 @@ auto max(list<auto> l, string func) [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-code sort_func = int sub (hash l, hash r) { return l.id <=> r.id; };
-auto v = max(l, sort_func);
+code<int(auto, auto)> cmp_func = int sub (hash l, hash r) { return l.id <=> r.id; };
+auto v = max(l, cmp_func);
     @endcode
 
-    @param l the list to sort
+    @param l the list to process
     @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
     type in the list; the @ref call_reference "call reference" or a @ref closure "closure" must return -1, 0, or 1 if
     the first is less than the second, if the first and second are equal, or if the first is greater than the second,
@@ -835,8 +933,29 @@ auto v = max(l, sort_func);
     @return the maximum value in a list
 
     @see min(list, code)
+
+    @since %Qore 2.1 for typed code parameter
 */
-auto max(list<auto> l, code f) [flags=RET_VALUE_ONLY] {
+auto max(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
+   return l->max(f, xsink);
+}
+
+//! Returns the maximum value in a list
+/** Accepts a @ref call_reference "call reference" or a @ref closure "closure" to use to compare complex data types or
+    to give a special sort order
+
+    @param l the list to process
+    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    type in the list; the @ref call_reference "call reference" or a @ref closure "closure" must return -1, 0, or 1 if
+    the first is less than the second, if the first and second are equal, or if the first is greater than the second,
+    respectively
+
+    @return the maximum value in a list
+
+    @deprecated use the typed code variant max(list, code<int(auto, auto)>) instead; untyped code variants were
+    deprecated in %Qore 2.1
+*/
+auto max(list<auto> l, code f) [flags=RET_VALUE_ONLY,DEPRECATED] {
    return l->max(f, xsink);
 }
 
