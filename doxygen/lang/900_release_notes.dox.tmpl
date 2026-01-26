@@ -494,6 +494,16 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - webhook-based event triggers for delivery, opens, clicks, bounces, complaints, and unsubscribes
       - action catalog integration with sensible default actions
       - connection support with \c mailgun:// URL scheme
+    - @ref zohobooksrestclientintro "ZohoBooksRestClient" module
+      - new module providing a REST client for Zoho Books' accounting API
+      - supports OAuth2 authentication with regional endpoint support (.com, .eu, .in, .com.au, .ca, .sa, .jp)
+      - provides ZohoBooksRestConnection for connection management with \c zohobooks:// URL scheme
+    - @ref zohobooksdataproviderintro "ZohoBooksDataProvider" module
+      - new module providing a data provider API for Zoho Books accounting and invoicing
+      - full CRUD support for invoices, bills, contacts, expenses, items, estimates, sales orders, and purchase orders
+      - polling-based event triggers for new invoices, bills, payments, customers, vendors, expenses, and more
+      - action catalog integration with reference data support for organizations, customers, vendors, and items
+      - connection support with \c zohobooks:// URL scheme
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
