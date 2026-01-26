@@ -849,8 +849,15 @@ static int get_string_list(strlist_t& l, const std::string& str, char separator 
                 element += ',';
                 while (true) {
                     if (++sep == str.size()) {
-                        error("unbalanced angle brackets in '%s'\n", element.c_str());
-                        return -1;
+                        // Reached end of string - check if brackets are balanced
+                        if (ac) {
+                            error("unbalanced angle brackets in '%s'\n", element.c_str());
+                            return -1;
+                        }
+                        // Brackets are balanced, this is the last element
+                        // The element includes the comma and everything after it as part of the type
+                        l.push_back(element);
+                        return 0;
                     }
                     char c = str[sep];
                     element += c;
@@ -862,7 +869,7 @@ static int get_string_list(strlist_t& l, const std::string& str, char separator 
                             return -1;
                         }
                         --ac;
-                    } else if (c == ',') {
+                    } else if (c == ',' && ac == 0) {
                         element.pop_back();
                         break;
                     }
@@ -1079,7 +1086,27 @@ int parse_properties(const char* fileName, unsigned lineNumber, std::string& pro
 
 int parse_params_and_flags(const char* fileName, unsigned &lineNumber, strmap_t& flags, paramlist_t& params,
         attr_t& attr, std::string& sc, size_t p, const std::string& dn, bool abstract = false) {
-    size_t i = sc.find(')', p);
+    // Find the closing ')' that matches the opening '(' at position p-1
+    // Must handle nested parens and angle brackets in complex types like code<int(string, int)>
+    size_t i = std::string::npos;
+    int paren_depth = 1;  // We're already inside the opening paren
+    int angle_depth = 0;
+    for (size_t j = p; j < sc.size(); ++j) {
+        char c = sc[j];
+        if (c == '<') {
+            ++angle_depth;
+        } else if (c == '>') {
+            --angle_depth;
+        } else if (c == '(' && angle_depth == 0) {
+            ++paren_depth;
+        } else if (c == ')' && angle_depth == 0) {
+            --paren_depth;
+            if (paren_depth == 0) {
+                i = j;
+                break;
+            }
+        }
+    }
     if (i == std::string::npos) {
         error("%s:%d: premature EOL reading parameters for %s()\n", fileName, lineNumber, dn.c_str());
         return -1;
@@ -1122,7 +1149,11 @@ int parse_params_and_flags(const char* fileName, unsigned &lineNumber, strmap_t&
         trim(pstr);
         if (!pstr.empty()) {
             strlist_t pl;
-            get_string_list(pl, pstr);
+            if (get_string_list(pl, pstr, ',', true)) {
+                error("%s:%d: %s(): error parsing parameter list '%s'\n", fileName, lineNumber, dn.c_str(),
+                    pstr.c_str());
+                return -1;
+            }
 
             for (unsigned xi = 0; xi < pl.size(); ++xi) {
                 trim(pl[xi]);
@@ -1140,7 +1171,26 @@ int parse_params_and_flags(const char* fileName, unsigned &lineNumber, strmap_t&
                     pl[xi].erase(0, 7);
                 }
 
-                i = pl[xi].find(' ');
+                // Find space between type and parameter name, respecting nested brackets/parens
+                // Types like code<int(hash<string, int>)> have spaces inside them
+                i = std::string::npos;
+                int angle_depth = 0;
+                int paren_depth = 0;
+                for (size_t j = 0; j < pl[xi].size(); ++j) {
+                    char c = pl[xi][j];
+                    if (c == '<') {
+                        ++angle_depth;
+                    } else if (c == '>') {
+                        --angle_depth;
+                    } else if (c == '(') {
+                        ++paren_depth;
+                    } else if (c == ')') {
+                        --paren_depth;
+                    } else if (c == ' ' && angle_depth == 0 && paren_depth == 0) {
+                        i = j;
+                        break;
+                    }
+                }
                 if (i == std::string::npos) {
                     error("%s:%d: %s(): cannot find type for parameter '%s'\n", fileName, lineNumber, dn.c_str(),
                         pl[xi].c_str());
@@ -1368,13 +1418,8 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
                 }
             }
         } else if (!qt.compare(on ? 1 : 0, 5, "list<")) {
-            // extract subtype name
+            // extract subtype name - supports nested complex types like list<hash<string, int>>
             std::string subtype = qt.substr((on ? 6 : 5), qt.size() - (on ? 7 : 6));
-
-            if (subtype.find(',') != std::string::npos) {
-                log(LL_CRITICAL, "unsupported complex list type found: '%s'\n", qt.c_str());
-                assert(false);
-            }
 
             std::string subtype_qt;
             get_qore_type(subtype, subtype_qt);
@@ -1390,13 +1435,8 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             }
             log(LL_DEBUG, "registering complex list return type '%s': '%s'\n", qt.c_str(), qc.c_str());
         } else if (!qt.compare(on ? 1 : 0, 9, "softlist<")) {
-            // extract subtype name
+            // extract subtype name - supports nested complex types like softlist<hash<string, int>>
             std::string subtype = qt.substr((on ? 10 : 9), qt.size() - (on ? 11 : 10));
-
-            if (subtype.find(',') != std::string::npos) {
-                log(LL_CRITICAL, "unsupported complex softlist type found: '%s'\n", qt.c_str());
-                assert(false);
-            }
 
             std::string subtype_qt;
             get_qore_type(subtype, subtype_qt);
@@ -1413,13 +1453,8 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             }
             log(LL_DEBUG, "registering complex softlist return type '%s': '%s'\n", qt.c_str(), qc.c_str());
         } else if (!qt.compare(on ? 1 : 0, 10, "reference<")) {
-            // extract subtype name
+            // extract subtype name - supports nested complex types like reference<hash<string, int>>
             std::string subtype = qt.substr((on ? 11 : 10), qt.size() - (on ? 12 : 11));
-
-            if (subtype.find(',') != std::string::npos) {
-                log(LL_CRITICAL, "unsupported complex reference type found: '%s'\n", qt.c_str());
-                assert(false);
-            }
 
             std::string subtype_qt;
             get_qore_type(subtype, subtype_qt);
@@ -2814,12 +2849,12 @@ protected:
                 if (p != std::string::npos)
                     cn.append((*i).type, p + 2, -1);
                 else {
-                    size_t j = (*i).type.find_first_of("<>*");
+                    size_t j = (*i).type.find_first_of("<>*(),: ");
                     if (j != std::string::npos) {
                         std::string ptype = (*i).type;
                         while (j != std::string::npos) {
                             ptype.replace(j, 1, "_");
-                            j = ptype.find_first_of("<>*");
+                            j = ptype.find_first_of("<>*(),: ");
                         }
                         cn = ptype;
                     }
