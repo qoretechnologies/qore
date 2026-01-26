@@ -46,9 +46,8 @@ class QoreEnumOrNothingTypeInfo;
 // Internal representation of an enum member
 class qore_enum_member_private {
 public:
+    //! Creates a new enum member; takes ownership of the value (caller must pass an already-referenced value)
     DLLLOCAL qore_enum_member_private(const char* n, QoreValue v) : name(n), val(v) {
-        // reference the value if needed
-        val.ref();
     }
 
     DLLLOCAL qore_enum_member_private(const qore_enum_member_private& old) : name(old.name), val(old.val) {

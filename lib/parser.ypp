@@ -347,13 +347,12 @@ public:
         if (m) {
             for (auto& member : m->members) {
                 if (member->has_value) {
-                    // Take the value from the member and pass to parseAddMember
-                    // parseAddMember will ref the value internally, so we discard our reference after
+                    // Transfer ownership of the value to parseAddMember
                     QoreValue val = member->value;
-                    member->value = QoreValue();  // Clear without discarding - we're transferring our reference
+                    member->value = QoreValue();  // Clear without discarding - we're transferring ownership
                     member->has_value = false;    // Mark as no longer having value
                     priv->parseAddMember(member->name, val);
-                    val.discard(nullptr);  // Discard our reference; parseAddMember has added its own
+                    // Don't discard - ownership was transferred to parseAddMember
                 } else {
                     // Auto-value not yet supported - need to compute next value based on base type
                     parse_error(*loc, "enum member '%s' must have an explicit value", member->name);
