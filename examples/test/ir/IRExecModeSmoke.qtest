@@ -27,6 +27,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR exists smoke", \testIrExistsSmoke());
         addTestCase("IR nested exception smoke", \testIrNestedExceptionSmoke());
         addTestCase("IR date shift smoke", \testIrDateShiftSmoke());
+        addTestCase("IR date guard smoke", \testIrDateGuardSmoke());
         addTestCase("IR hash range smoke", \testIrHashRangeSmoke());
         addTestCase("IR regex smoke", \testIrRegexSmoke());
         addTestCase("IR maybe-NOTHING guard smoke", \testIrMaybeNothingGuardSmoke());
@@ -735,6 +736,41 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("dateshift:20260101063000,20260101043000\n",
             stdout_output, "Unexpected IR date shift output");
+    }
+
+    testIrDateGuardSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("date value = date(\"2026-01-01T00:00:00Z\");\n");
+        script.file.write("delete value;\n");
+        script.file.write("value = date(\"2026-02-01T00:00:00Z\");\n");
+        script.file.write("value += 1h;\n");
+        script.file.write("printf(\"dateguard:%s\\n\", value.toString());\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("dateguard:20260201010000\n", stdout_output, "Unexpected IR date guard output");
     }
 
     testIrHashRangeSmoke() {
