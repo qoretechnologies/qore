@@ -31,6 +31,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("accessor evaluation tests", \accessorEvalTests());
         addTestCase("value expression tests", \valueExpressionTests());
         addTestCase("completion tests", \completionTests());
+        addTestCase("schema-aware key completion tests", \schemaAwareKeyCompletionTests());
         addTestCase("static API tests", \staticApiTests());
         addTestCase("validation tests", \validationTests());
         addTestCase("stress tests", \stressTests());
@@ -711,6 +712,253 @@ public class DpqlTest inherits QUnit::Test {
             assertTrue(keyword_items.size() > 0);
         }
 
+    }
+
+    schemaAwareKeyCompletionTests() {
+        # Test key completions for simple hash field
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+                        "email": new QoreDataField("email", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{', 8, fields);
+            assertEq(3, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("name", labels));
+            assertTrue(inlist("age", labels));
+            assertTrue(inlist("email", labels));
+            # Verify completion item properties
+            hash<DpqlCompletionItem> name_item = (select items, $1.label == "name")[0];
+            assertEq("field", name_item.kind);
+            assertEq("name", name_item.insert_text);
+            assertTrue(name_item.documentation.find("string") >= 0);  # Should mention type
+        }
+
+        # Test key completions with prefix filtering
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+                        "address": new QoreDataField("address", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{na', 10, fields);
+            assertEq(1, items.size());
+            assertEq("name", items[0].label);
+        }
+
+        # Test key completions after prefix 'a' matches multiple
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+                        "address": new QoreDataField("address", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{a', 9, fields);
+            assertEq(2, items.size());  # age and address
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("age", labels));
+            assertTrue(inlist("address", labels));
+        }
+
+        # Test prefix matches nothing
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{xyz', 11, fields);
+            assertEq(0, items.size());
+        }
+
+        # Test case-insensitive prefix filtering
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "Name": new QoreDataField("Name", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "AGE": new QoreDataField("AGE", NOTHING, AbstractDataProviderType::get(IntType)),
+                    })),
+            };
+            # Lowercase prefix should match uppercase keys
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{na', 10, fields);
+            assertEq(1, items.size());
+            assertEq("Name", items[0].label);
+        }
+
+        # Test nested accessor: @data[0]{
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new ListDataType(new HashDataType(NOTHING, {
+                        "id": new QoreDataField("id", NOTHING, AbstractDataProviderType::get(IntType)),
+                        "value": new QoreDataField("value", NOTHING, AbstractDataProviderType::get(StringType)),
+                    }))),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data[0]{', 9, fields);
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("id", labels));
+            assertTrue(inlist("value", labels));
+        }
+
+        # Test slice accessor: @data[0..2]{
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new ListDataType(new HashDataType(NOTHING, {
+                        "id": new QoreDataField("id", NOTHING, AbstractDataProviderType::get(IntType)),
+                    }))),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data[0..2]{', 12, fields);
+            assertEq(1, items.size());
+            assertEq("id", items[0].label);
+        }
+
+        # Test chained key accessor: @data{user}{
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "user": new QoreDataField("user", NOTHING,
+                            new HashDataType(NOTHING, {
+                                "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                                "email": new QoreDataField("email", NOTHING, AbstractDataProviderType::get(StringType)),
+                            })),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{user}{', 12, fields);
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("name", labels));
+            assertTrue(inlist("email", labels));
+        }
+
+        # Test no completions for untyped hash
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING, AbstractDataProviderType::get(AutoHashType)),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{', 6, fields);
+            assertEq(0, items.size());
+        }
+
+        # Test no completions for non-existent field
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@nonexistent{', 13, fields);
+            assertEq(0, items.size());
+        }
+
+        # Test no completions for non-hash type (string field)
+        {
+            hash<string, AbstractDataField> fields = {
+                "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name{', 6, fields);
+            assertEq(0, items.size());
+        }
+
+        # Test quoted field name: @"my field"{
+        {
+            hash<string, AbstractDataField> fields = {
+                "my field": new QoreDataField("my field", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "value": new QoreDataField("value", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@"my field"{', 12, fields);
+            assertEq(1, items.size());
+            assertEq("value", items[0].label);
+        }
+
+        # Test key that needs quoting in insert_text
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "my key": new QoreDataField("my key", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "123num": new QoreDataField("123num", NOTHING, AbstractDataProviderType::get(IntType)),
+                        "normal": new QoreDataField("normal", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{', 8, fields);
+            assertEq(3, items.size());
+            hash<DpqlCompletionItem> spaced_key = (select items, $1.label == "my key")[0];
+            hash<DpqlCompletionItem> num_key = (select items, $1.label == "123num")[0];
+            hash<DpqlCompletionItem> normal_key = (select items, $1.label == "normal")[0];
+            # Keys with spaces or starting with digits should have quoted insert_text
+            assertEq('"my key"', spaced_key.insert_text);
+            assertEq('"123num"', num_key.insert_text);
+            assertEq("normal", normal_key.insert_text);
+        }
+
+        # Test deeply nested: @data[0]{users}[1]{
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new ListDataType(new HashDataType(NOTHING, {
+                        "users": new QoreDataField("users", NOTHING,
+                            new ListDataType(new HashDataType(NOTHING, {
+                                "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                                "role": new QoreDataField("role", NOTHING, AbstractDataProviderType::get(StringType)),
+                            }))),
+                    }))),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data[0]{users}[1]{', 19, fields);
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("name", labels));
+            assertTrue(inlist("role", labels));
+        }
+
+        # Test multiple keys in prior accessor: @data{a,b}{ - cannot determine single type
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "a": new QoreDataField("a", NOTHING,
+                            new HashDataType(NOTHING, {
+                                "x": new QoreDataField("x", NOTHING, AbstractDataProviderType::get(IntType)),
+                            })),
+                        "b": new QoreDataField("b", NOTHING,
+                            new HashDataType(NOTHING, {
+                                "y": new QoreDataField("y", NOTHING, AbstractDataProviderType::get(IntType)),
+                            })),
+                    })),
+            };
+            # With multiple keys, we can't determine a single type, so suggest from parent type
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{a,b}{', 11, fields);
+            # Should suggest keys from the data hash (a and b)
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("a", labels));
+            assertTrue(inlist("b", labels));
+        }
+
+        # Test empty fields hash
+        {
+            hash<string, AbstractDataField> fields = {};
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{', 8, fields);
+            assertEq(0, items.size());
+        }
     }
 
     staticApiTests() {

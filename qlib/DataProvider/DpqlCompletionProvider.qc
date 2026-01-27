@@ -231,8 +231,16 @@ public class DpqlCompletionProvider {
 
             case DPQL_CTX_IN_KEY:
                 # Inside key accessor - suggest keys from schema if available
-                # TODO: When field type info is available from the record schema,
-                # extract hash keys and suggest them here for schema-aware completions
+                if (analysis.field_path) {
+                    *AbstractDataField base_field = ctx.fields{analysis.field_path.field_name};
+                    if (base_field) {
+                        *AbstractDataProviderType target_type = traverseTypeWithAccessors(
+                            base_field.getType(), analysis.field_path.accessors);
+                        if (target_type) {
+                            items += getKeyCompletions(target_type, analysis.prefix);
+                        }
+                    }
+                }
                 break;
 
             case DPQL_CTX_AFTER_ACCESSOR:
@@ -270,8 +278,9 @@ public class DpqlCompletionProvider {
         }
 
         # Find the start of the current token
+        # Include brackets and braces as token delimiters
         int token_start = position;
-        while (token_start > 0 && before[token_start - 1] !~ /[\s(),]/) {
+        while (token_start > 0 && before[token_start - 1] !~ /[\s(),\[\]{}]/) {
             --token_start;
         }
 
@@ -309,9 +318,11 @@ public class DpqlCompletionProvider {
 
         # Check if we're inside a key accessor {...} (after field ref context)
         if (checkInBraces(before)) {
+            *hash<auto> field_path = extractFieldPath(before);
             return {
                 "ctx": DPQL_CTX_IN_KEY,
                 "prefix": prefix,
+                "field_path": field_path,
             };
         }
 
@@ -592,6 +603,291 @@ public class DpqlCompletionProvider {
         foreach hash<auto> sugg in (IndexSuggestions) {
             if (!prefix || index(sugg.label.lwr(), lwr_prefix) == 0) {
                 items += cast<hash<DpqlCompletionItem>>(sugg);
+            }
+        }
+
+        return items;
+    }
+
+    #! Extracts field path from text ending before/inside an opening brace
+    /** @param text the text up to cursor position
+        @return hash with "field_name" and "accessors" list, or NOTHING if not a valid path
+    */
+    private *hash<auto> extractFieldPath(string text) {
+        # Find the last @ that starts a field reference
+        int at_pos = -1;
+        bool in_string = False;
+        bool escaped = False;
+        string quote_char;
+
+        for (int i = text.size() - 1; i >= 0; --i) {
+            string c = text[i];
+            # When scanning backwards, we handle strings differently
+            # Just look for @ not inside a string
+            if (c == "@" && !in_string) {
+                at_pos = i;
+                break;
+            }
+            # Track string state (simplified backwards scan)
+            if ((c == '"' || c == "'") && (i == 0 || text[i-1] != "\\")) {
+                if (in_string && c == quote_char) {
+                    in_string = False;
+                } else if (!in_string) {
+                    in_string = True;
+                    quote_char = c;
+                }
+            }
+        }
+
+        if (at_pos < 0) {
+            return NOTHING;
+        }
+
+        # Extract field name starting at at_pos
+        int pos = at_pos + 1;  # Skip @
+        if (pos >= text.size()) {
+            return NOTHING;
+        }
+
+        string field_name;
+        if (text[pos] == '"') {
+            # Quoted field name
+            ++pos;  # Skip opening quote
+            int start = pos;
+            while (pos < text.size() && text[pos] != '"') {
+                if (text[pos] == "\\" && pos + 1 < text.size()) {
+                    pos += 2;
+                } else {
+                    ++pos;
+                }
+            }
+            field_name = substr(text, start, pos - start);
+            ++pos;  # Skip closing quote
+        } else {
+            # Unquoted field name (can include dots for nested access)
+            int start = pos;
+            while (pos < text.size() && text[pos] =~ /[a-zA-Z0-9_.]/) {
+                ++pos;
+            }
+            field_name = substr(text, start, pos - start);
+        }
+
+        if (!field_name) {
+            return NOTHING;
+        }
+
+        # Parse accessor chain from pos to end of text
+        list<hash<auto>> accessors = ();
+
+        while (pos < text.size()) {
+            string c = text[pos];
+
+            if (c == "[") {
+                # Index/slice accessor
+                ++pos;
+                int bracket_start = pos;
+                int depth = 1;
+                while (pos < text.size() && depth > 0) {
+                    if (text[pos] == "[") ++depth;
+                    else if (text[pos] == "]") --depth;
+                    ++pos;
+                }
+                # Only add accessor if it was properly closed
+                if (depth == 0) {
+                    # We've consumed the closing ], so content is bracket_start to pos-1
+                    string content = substr(text, bracket_start, pos - 1 - bracket_start);
+                    # Simplified: treat as INDEX for type traversal
+                    accessors += {"type": DPQL_ACCESSOR_INDEX, "content": content};
+                }
+                # If not closed, we're still inside this accessor - stop parsing
+                else {
+                    break;
+                }
+            } else if (c == "{") {
+                # Key accessor
+                ++pos;
+                int brace_start = pos;
+                int depth = 1;
+                while (pos < text.size() && depth > 0) {
+                    if (text[pos] == "{") ++depth;
+                    else if (text[pos] == "}") --depth;
+                    ++pos;
+                }
+                # Only add accessor if it was properly closed
+                if (depth == 0) {
+                    # Extract keys from content
+                    string content = substr(text, brace_start, pos - 1 - brace_start);
+                    list<string> key_list = parseKeyList(content);
+                    accessors += {"type": DPQL_ACCESSOR_KEY, "key_list": key_list};
+                }
+                # If not closed, we're still inside this accessor - stop parsing
+                else {
+                    break;
+                }
+            } else if (c == ".") {
+                # Dot accessor - next identifier becomes a key accessor
+                ++pos;
+                int start = pos;
+                while (pos < text.size() && text[pos] =~ /[a-zA-Z0-9_]/) {
+                    ++pos;
+                }
+                if (pos > start) {
+                    string key = substr(text, start, pos - start);
+                    accessors += {"type": DPQL_ACCESSOR_KEY, "key_list": (key,)};
+                }
+            } else {
+                # Unknown character, stop parsing
+                break;
+            }
+        }
+
+        return {
+            "field_name": field_name,
+            "accessors": accessors,
+        };
+    }
+
+    #! Parses a comma-separated list of keys from accessor content
+    private list<string> parseKeyList(string content) {
+        list<string> key_list = ();
+        string trimmed = trim(content);
+        if (!trimmed) {
+            return key_list;
+        }
+
+        # Simple parsing: split by comma, handling quoted strings
+        int pos = 0;
+        while (pos < trimmed.size()) {
+            # Skip whitespace
+            while (pos < trimmed.size() && trimmed[pos] =~ /\s/) {
+                ++pos;
+            }
+            if (pos >= trimmed.size()) break;
+
+            string key;
+            if (trimmed[pos] == '"') {
+                # Quoted key
+                ++pos;
+                int start = pos;
+                while (pos < trimmed.size() && trimmed[pos] != '"') {
+                    if (trimmed[pos] == "\\" && pos + 1 < trimmed.size()) {
+                        pos += 2;
+                    } else {
+                        ++pos;
+                    }
+                }
+                key = substr(trimmed, start, pos - start);
+                if (pos < trimmed.size()) ++pos;  # Skip closing quote
+            } else {
+                # Unquoted key
+                int start = pos;
+                while (pos < trimmed.size() && trimmed[pos] !~ /[\s,]/) {
+                    ++pos;
+                }
+                key = substr(trimmed, start, pos - start);
+            }
+
+            if (key) {
+                key_list += key;
+            }
+
+            # Skip to next key (past comma)
+            while (pos < trimmed.size() && trimmed[pos] =~ /[\s,]/) {
+                ++pos;
+            }
+        }
+
+        return key_list;
+    }
+
+    #! Traverses type through accessor chain to get the final type
+    /** @param base_type the starting field type
+        @param accessors list of accessor specifications
+        @return the resulting type after all accessors, or NOTHING if path is invalid
+    */
+    private *AbstractDataProviderType traverseTypeWithAccessors(
+            AbstractDataProviderType base_type,
+            list<hash<auto>> accessors) {
+
+        AbstractDataProviderType current = base_type;
+
+        foreach hash<auto> acc in (accessors) {
+            switch (acc.type) {
+                case DPQL_ACCESSOR_INDEX:
+                case DPQL_ACCESSOR_SLICE:
+                    # List index/slice access: get element type
+                    *AbstractDataProviderType elem = current.getElementType();
+                    if (!elem) {
+                        return NOTHING;  # Not a list type
+                    }
+                    current = elem;
+                    break;
+
+                case DPQL_ACCESSOR_KEY:
+                    # Key access: get the field's type for single key
+                    if (acc.key_list && acc.key_list.size() == 1) {
+                        *AbstractDataField field = current.getField(acc.key_list[0]);
+                        if (!field) {
+                            return NOTHING;  # Field doesn't exist
+                        }
+                        current = field.getType();
+                    }
+                    # Multiple keys: result is still a hash type (subset)
+                    # We keep current type for key suggestions
+                    break;
+            }
+        }
+
+        return current;
+    }
+
+    #! Gets key completions for a hash type
+    /** @param type the type to get keys from
+        @param prefix filter prefix for matching
+        @return list of completion items for valid keys
+    */
+    private list<hash<DpqlCompletionItem>> getKeyCompletions(
+            AbstractDataProviderType type,
+            string prefix) {
+
+        list<hash<DpqlCompletionItem>> items = ();
+
+        # Check if type has fields (is a hash-like type)
+        *hash<string, AbstractDataField> type_fields = type.getFields();
+        if (!type_fields) {
+            return items;
+        }
+
+        string lwr_prefix = prefix.lwr();
+
+        foreach string key_name in (keys type_fields) {
+            if (!prefix || index(key_name.lwr(), lwr_prefix) == 0) {
+                AbstractDataField field = type_fields{key_name};
+
+                # Determine if key needs quoting
+                string insert_text;
+                if (key_name =~ /[^a-zA-Z0-9_]/ || key_name =~ /^[0-9]/) {
+                    insert_text = '"' + replace(key_name, '"', '\\"') + '"';
+                } else {
+                    insert_text = key_name;
+                }
+
+                # Build documentation with type info
+                *string doc = field.getDescription();
+                string type_name = field.getType().getName();
+                if (doc) {
+                    doc += sprintf(" (%s)", type_name);
+                } else {
+                    doc = sprintf("Type: %s", type_name);
+                }
+
+                items += <DpqlCompletionItem>{
+                    "label": key_name,
+                    "kind": "field",
+                    "insert_text": insert_text,
+                    "documentation": doc,
+                    "sort_priority": 10,
+                };
             }
         }
 
