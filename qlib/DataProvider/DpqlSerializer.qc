@@ -154,6 +154,11 @@ public class DpqlSerializer {
                 result = serializeRegexOp(exp.args);
                 break;
 
+            case DP_EXPR_VALUE:
+                # Value expression - just serialize the argument (field reference)
+                result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY);
+                break;
+
             default:
                 # Unknown operator - treat as function call
                 result = serializeFunctionCall(op, exp.args);
@@ -288,18 +293,87 @@ public class DpqlSerializer {
         }
     }
 
-    #! Serializes a field reference
+    #! Serializes a field reference with optional accessor chain
     private string serializeFieldRef(hash<auto> ref) {
         string field = ref.field;
+        string result;
 
         # Check if field name needs quoting
         if (field =~ /[^a-zA-Z0-9_.]/ || field =~ /^[0-9]/) {
             # Escape special characters
             field = replace(replace(field, "\\", "\\\\"), '"', '\\"');
-            return '@"' + field + '"';
+            result = '@"' + field + '"';
+        } else {
+            result = "@" + field;
         }
 
-        return "@" + field;
+        # Serialize accessor chain if present
+        if (ref.accessors) {
+            foreach hash<DataProviderFieldAccessor> acc in (ref.accessors) {
+                result += serializeAccessor(acc);
+            }
+        }
+
+        return result;
+    }
+
+    #! Serializes a single accessor
+    private string serializeAccessor(hash<DataProviderFieldAccessor> acc) {
+        switch (acc.type) {
+            case DPQL_ACCESSOR_INDEX:
+                return "[" + string(acc.value) + "]";
+
+            case DPQL_ACCESSOR_SLICE:
+                return "[" + serializeSliceItems(acc.value) + "]";
+
+            case DPQL_ACCESSOR_KEY:
+                return "{" + serializeKeyList(acc.value) + "}";
+
+            default:
+                return "";
+        }
+    }
+
+    #! Serializes slice items (indices and ranges)
+    private string serializeSliceItems(list<auto> items) {
+        list<string> parts = ();
+        foreach auto item in (items) {
+            if (item.typeCode() == NT_HASH && (item.hasKey("start") || item.hasKey("end"))) {
+                # Range spec
+                parts += serializeRange(item);
+            } else {
+                # Single index
+                parts += string(item);
+            }
+        }
+        return parts.join(",");
+    }
+
+    #! Serializes a range: start..end, ..end, start..
+    private string serializeRange(hash<auto> range) {
+        string result = "";
+        if (exists range.start) {
+            result += string(range.start);
+        }
+        result += "..";
+        if (exists range.end) {
+            result += string(range.end);
+        }
+        return result;
+    }
+
+    #! Serializes key list for key accessor
+    private string serializeKeyList(list<string> key_list) {
+        list<string> parts = ();
+        foreach string key in (key_list) {
+            # Check if key needs quoting
+            if (key =~ /[^a-zA-Z0-9_]/ || key =~ /^[0-9]/) {
+                parts += serializeString(key);
+            } else {
+                parts += key;
+            }
+        }
+        return parts.join(", ");
     }
 
     #! Serializes a literal value

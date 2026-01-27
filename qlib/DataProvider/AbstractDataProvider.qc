@@ -669,10 +669,48 @@ public hashdecl DataProviderExpressionInfo {
     *bool return_type_first_arg;
 }
 
+#! Range specification for DPQL slice accessors
+/** Represents a range with optional start and end bounds.
+    Either start or end (or both) must be present.
+    Both bounds are inclusive (Qore-style).
+
+    @since DataProvider 3.4
+*/
+public hashdecl DataProviderRangeSpec {
+    #! Start index of the range (NOTHING for open start, e.g., \c [..5])
+    *int start;
+    #! End index of the range (NOTHING for open end, e.g., \c [2..])
+    *int end;
+}
+
+#! Field accessor specification for DPQL
+/** Represents a single accessor operation (index, slice, or key access).
+
+    @since DataProvider 3.4
+*/
+public hashdecl DataProviderFieldAccessor {
+    #! Accessor type (one of the DPQL_ACCESSOR_* constants)
+    int type;
+    #! Accessor value
+    /** - For \c DPQL_ACCESSOR_INDEX: \c int (single index)
+        - For \c DPQL_ACCESSOR_SLICE: \c list<int|hash<DataProviderRangeSpec>> (indices and/or ranges)
+        - For \c DPQL_ACCESSOR_KEY: \c list<string> (key names)
+    */
+    auto value;
+}
+
 #! Data provider field reference
 public hashdecl DataProviderFieldReference {
     #! The name of the field being referenced
     string field;
+
+    #! Optional accessor chain for sophisticated data access
+    /** A list of accessors applied in sequence, e.g., \c \@items[0]{name} would have two accessors:
+        an index accessor and a key accessor.
+
+        @since DataProvider 3.4
+    */
+    *list<hash<DataProviderFieldAccessor>> accessors;
 }
 
 #! Data provider expression
@@ -1527,6 +1565,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                         opts = foldl $1 | $2, (map RegexOpts{$1}, options);
                     }
                     return regex(str, pattern, opts);
+                },
+            },
+            DP_EXPR_VALUE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_EXPR_VALUE,
+                    "display_name": "value",
+                    "short_desc": "Evaluates and returns a field reference value",
+                    "desc": "Evaluates the given field reference (with optional accessors) and returns its value. "
+                        "This allows field references to be used as standalone expressions.",
+                    "symbol": "",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
                 },
             },
         };
@@ -4371,12 +4425,150 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 }
                 rv = new_rv;
             }
+            # Apply accessor chain if present
+            if (val.accessors) {
+                rv = AbstractDataProvider::applyAccessorChain(rv, val.accessors, val.field);
+            }
             return rv;
         }
         if (val instanceof hash<DataProviderExpression>) {
             return AbstractDataProvider::evalGenericExpression(rec, val);
         }
         return val;
+    }
+
+    #! Applies an accessor chain to a value
+    /** @param value the value to access
+        @param accessors the list of accessors to apply
+        @param field_name the original field name for error messages
+
+        @return the accessed value
+
+        @since DataProvider 3.4
+    */
+    static auto applyAccessorChain(auto value, list<hash<DataProviderFieldAccessor>> accessors, string field_name) {
+        auto rv = value;
+        foreach hash<DataProviderFieldAccessor> acc in (accessors) {
+            rv = AbstractDataProvider::applySingleAccessor(rv, acc, field_name);
+        }
+        return rv;
+    }
+
+    #! Applies a single accessor to a value
+    /** @param value the value to access
+        @param acc the accessor to apply
+        @param field_name the original field name for error messages
+
+        @return the accessed value
+
+        @since DataProvider 3.4
+    */
+    static auto applySingleAccessor(auto value, hash<DataProviderFieldAccessor> acc, string field_name) {
+        switch (acc.type) {
+            case DPQL_ACCESSOR_INDEX:
+                return AbstractDataProvider::applyIndexAccessor(value, acc.value, field_name);
+            case DPQL_ACCESSOR_SLICE:
+                return AbstractDataProvider::applySliceAccessor(value, acc.value, field_name);
+            case DPQL_ACCESSOR_KEY:
+                return AbstractDataProvider::applyKeyAccessor(value, acc.value, field_name);
+            default:
+                throw "INVALID-OPERATION", sprintf("unknown accessor type %d in field reference %y",
+                    acc.type, field_name);
+        }
+    }
+
+    #! Applies an index accessor to a value
+    /** @param value the value to access (must be a list)
+        @param index the index to access (supports negative indices)
+        @param field_name the original field name for error messages
+
+        @return the accessed element, or NOTHING if out of bounds
+
+        @since DataProvider 3.4
+    */
+    static auto applyIndexAccessor(auto value, int index, string field_name) {
+        if (value.typeCode() != NT_LIST) {
+            throw "INVALID-OPERATION", sprintf("index accessor [%d] applied to non-list value of type %y "
+                "in field reference %y", index, value.fullType(), field_name);
+        }
+        int len = value.size();
+        # Normalize negative index
+        int idx = index >= 0 ? index : len + index;
+        # Return NOTHING for out-of-bounds (graceful)
+        if (idx < 0 || idx >= len) {
+            return NOTHING;
+        }
+        return value[idx];
+    }
+
+    #! Applies a slice accessor to a value
+    /** @param value the value to access (must be a list)
+        @param items the slice specification (indices and/or ranges)
+        @param field_name the original field name for error messages
+
+        @return the sliced list
+
+        @since DataProvider 3.4
+    */
+    static auto applySliceAccessor(auto value, list<auto> items, string field_name) {
+        if (value.typeCode() != NT_LIST) {
+            throw "INVALID-OPERATION", sprintf("slice accessor applied to non-list value of type %y "
+                "in field reference %y", value.fullType(), field_name);
+        }
+        int len = value.size();
+        list<auto> result = ();
+
+        foreach auto item in (items) {
+            if (item.typeCode() == NT_HASH) {
+                # Range specification
+                hash<auto> range = item;
+                int start = exists range.start ? (range.start >= 0 ? range.start : len + range.start) : 0;
+                int end = exists range.end ? (range.end >= 0 ? range.end : len + range.end) : len - 1;
+                # Clamp to valid range
+                if (start < 0) start = 0;
+                if (end >= len) end = len - 1;
+                # Inclusive range
+                for (int i = start; i <= end; ++i) {
+                    result += value[i];
+                }
+            } else {
+                # Single index
+                int idx = item >= 0 ? item : len + item;
+                if (idx >= 0 && idx < len) {
+                    result += value[idx];
+                }
+            }
+        }
+
+        return result;
+    }
+
+    #! Applies a key accessor to a value
+    /** @param value the value to access (must be a hash)
+        @param keys the keys to access
+        @param field_name the original field name for error messages
+
+        @return for a single key, the value; for multiple keys, a hash subset
+
+        @since DataProvider 3.4
+    */
+    static auto applyKeyAccessor(auto value, list<string> key_list, string field_name) {
+        if (value.typeCode() != NT_HASH && value.typeCode() != NT_OBJECT) {
+            throw "INVALID-OPERATION", sprintf("key accessor applied to non-hash value of type %y "
+                "in field reference %y", value.fullType(), field_name);
+        }
+        if (key_list.size() == 1) {
+            # Single key: return value directly
+            return value{key_list[0]};
+        }
+        # Multiple keys: return hash subset
+        hash<auto> result = {};
+        foreach string key in (key_list) {
+            if (value.hasKey(key)) {
+                result{key} = value{key};
+            }
+        }
+        return result;
     }
 
     #! Evaluates the given expression with the generic internal implementation and returns the result

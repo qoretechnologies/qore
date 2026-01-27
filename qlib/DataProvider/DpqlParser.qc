@@ -131,12 +131,22 @@ public class DpqlParser {
         try {
             skipWhitespace();
             if (!atEnd()) {
-                exp = parseOrExpr();
+                auto parsed = parseOrExpr();
                 skipWhitespace();
                 if (!atEnd()) {
                     hash<DpqlTokenInfo> tok = peek();
                     addError(sprintf("Unexpected token '%s' after expression", tok.value),
                         "DPQL-E001", tok);
+                }
+                # Wrap non-expression results (field references, bare values) in a value expression
+                # This only happens at the top level, not for nested expressions or function args
+                if (parsed instanceof hash<DataProviderExpression>) {
+                    exp = parsed;
+                } else {
+                    exp = <DataProviderExpression>{
+                        "exp": DP_EXPR_VALUE,
+                        "args": (parsed,),
+                    };
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -634,7 +644,7 @@ public class DpqlParser {
         }
     }
 
-    #! Parses a field reference
+    #! Parses a field reference with optional accessor chain
     private hash<DataProviderFieldReference> parseFieldRef() {
         hash<DpqlTokenInfo> tok = nextToken();
         string value = tok.value;
@@ -657,9 +667,283 @@ public class DpqlParser {
             throw "DPQL-PARSE-ERROR", "Invalid field reference";
         }
 
+        # Parse optional accessor chain
+        *list<hash<DataProviderFieldAccessor>> accessors = parseAccessorChain();
+
         return <DataProviderFieldReference>{
             "field": field_name,
+            "accessors": accessors,
         };
+    }
+
+    #! Parses accessor chain: [...], {...}, .identifier
+    private *list<hash<DataProviderFieldAccessor>> parseAccessorChain() {
+        list<hash<DataProviderFieldAccessor>> accessors = ();
+
+        while (!atEnd()) {
+            # Don't skip whitespace - accessors must be adjacent or separated only by whitespace
+            # that we intentionally allow for readability
+            skipWhitespace();
+            if (atEnd()) {
+                break;
+            }
+
+            hash<DpqlTokenInfo> tok = peek();
+
+            if (tok.type == DPQL_TOK_LBRACKET) {
+                # Index or slice accessor: [...]
+                accessors += parseIndexAccessor();
+            } else if (tok.type == DPQL_TOK_LBRACE) {
+                # Key accessor: {...}
+                accessors += parseKeyAccessor();
+            } else if (tok.type == DPQL_TOK_DOT) {
+                # Member access after accessor: .identifier
+                nextToken();  # consume .
+                skipWhitespace();
+                if (atEnd()) {
+                    addError("Expected identifier after '.'", "DPQL-E020", tok);
+                    throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
+                }
+                hash<DpqlTokenInfo> id_tok = peek();
+                if (id_tok.type != DPQL_TOK_IDENTIFIER && id_tok.type != DPQL_TOK_FIELD) {
+                    addError("Expected identifier after '.'", "DPQL-E020", id_tok);
+                    throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
+                }
+                string member_name;
+                if (id_tok.type == DPQL_TOK_FIELD) {
+                    # Handle @field after dot - strip the @
+                    member_name = substr(id_tok.value, 1);
+                } else {
+                    member_name = id_tok.value;
+                }
+                nextToken();  # consume identifier
+                # Member access is a single-key accessor
+                accessors += <DataProviderFieldAccessor>{
+                    "type": DPQL_ACCESSOR_KEY,
+                    "value": (member_name,),
+                };
+            } else {
+                # No more accessors
+                break;
+            }
+        }
+
+        return accessors ? accessors : NOTHING;
+    }
+
+    #! Parses index accessor: [n], [n..m], [n,m,p], [n..m,p], [2..], [..5]
+    private hash<DataProviderFieldAccessor> parseIndexAccessor() {
+        hash<DpqlTokenInfo> lbracket = nextToken();  # consume [
+        skipWhitespace();
+
+        list<auto> items = ();
+        bool first = True;
+        bool closed = False;
+
+        while (True) {
+            skipWhitespace();
+            hash<DpqlTokenInfo> tok = peek();
+
+            # Check for EOF - unclosed accessor
+            if (tok.type == DPQL_TOK_EOF) {
+                break;
+            }
+
+            if (tok.type == DPQL_TOK_RBRACKET) {
+                nextToken();  # consume ]
+                closed = True;
+                break;
+            }
+
+            if (!first) {
+                if (tok.type != DPQL_TOK_COMMA) {
+                    addError("Expected ',' or ']' in index accessor", "DPQL-E022", tok);
+                    throw "DPQL-PARSE-ERROR", "Expected ',' or ']'";
+                }
+                nextToken();  # consume ,
+                skipWhitespace();
+                tok = peek();
+                # Check for EOF after comma
+                if (tok.type == DPQL_TOK_EOF) {
+                    break;
+                }
+            }
+            first = False;
+
+            # Parse index item: int or range
+            items += parseIndexItem();
+        }
+
+        if (!closed) {
+            addError("Unclosed index accessor, expected ']'", "DPQL-E022", lbracket);
+            throw "DPQL-PARSE-ERROR", "Unclosed index accessor";
+        }
+
+        if (!items) {
+            addError("Empty index accessor is not allowed", "DPQL-E022", lbracket);
+            throw "DPQL-PARSE-ERROR", "Empty index accessor";
+        }
+
+        # Determine accessor type: INDEX (single int) or SLICE (multiple or range)
+        if (items.size() == 1 && items[0].typeCode() == NT_INT) {
+            return <DataProviderFieldAccessor>{
+                "type": DPQL_ACCESSOR_INDEX,
+                "value": items[0],
+            };
+        }
+
+        return <DataProviderFieldAccessor>{
+            "type": DPQL_ACCESSOR_SLICE,
+            "value": items,
+        };
+    }
+
+    #! Parses a single index item: integer or range
+    private auto parseIndexItem() {
+        skipWhitespace();
+        hash<DpqlTokenInfo> tok = peek();
+
+        # Check for open-start range: ..n
+        if (tok.type == DPQL_TOK_RANGE) {
+            nextToken();  # consume ..
+            skipWhitespace();
+            tok = peek();
+            if (tok.type == DPQL_TOK_RBRACKET || tok.type == DPQL_TOK_COMMA) {
+                # [..] alone is not allowed
+                addError("Range must have at least one bound; '[..]' is not supported", "DPQL-E021", tok);
+                throw "DPQL-PARSE-ERROR", "Range must have at least one bound";
+            }
+            int end_idx = parseInteger();
+            return <DataProviderRangeSpec>{
+                "end": end_idx,
+            };
+        }
+
+        # Parse first integer
+        int start_idx = parseInteger();
+
+        # Check for range continuation: n..m or n..
+        skipWhitespace();
+        tok = peek();
+        if (tok.type == DPQL_TOK_RANGE) {
+            nextToken();  # consume ..
+            skipWhitespace();
+            tok = peek();
+            # Check for open-end range: n..
+            if (tok.type == DPQL_TOK_RBRACKET || tok.type == DPQL_TOK_COMMA) {
+                return <DataProviderRangeSpec>{
+                    "start": start_idx,
+                };
+            }
+            # Full range: n..m
+            int end_idx = parseInteger();
+            return <DataProviderRangeSpec>{
+                "start": start_idx,
+                "end": end_idx,
+            };
+        }
+
+        # Single integer
+        return start_idx;
+    }
+
+    #! Parses an integer, errors if float
+    private int parseInteger() {
+        hash<DpqlTokenInfo> tok = peek();
+        if (tok.type != DPQL_TOK_NUMBER) {
+            addError("Expected integer in index", "DPQL-E022", tok);
+            throw "DPQL-PARSE-ERROR", "Expected integer in index";
+        }
+        nextToken();  # consume number
+
+        string value = tok.value;
+        # Check for float
+        if (index(value, ".") >= 0) {
+            addError("Index must be integer, not float", "DPQL-E023", tok);
+            throw "DPQL-PARSE-ERROR", "Index must be integer, not float";
+        }
+        return value.toInt();
+    }
+
+    #! Parses key accessor: {key}, {"key"}, {key1, key2}
+    private hash<DataProviderFieldAccessor> parseKeyAccessor() {
+        hash<DpqlTokenInfo> lbrace = nextToken();  # consume {
+        skipWhitespace();
+
+        list<string> key_list = ();
+        bool first = True;
+        bool closed = False;
+
+        while (True) {
+            skipWhitespace();
+            hash<DpqlTokenInfo> tok = peek();
+
+            # Check for EOF - unclosed accessor
+            if (tok.type == DPQL_TOK_EOF) {
+                break;
+            }
+
+            if (tok.type == DPQL_TOK_RBRACE) {
+                nextToken();  # consume }
+                closed = True;
+                break;
+            }
+
+            if (!first) {
+                if (tok.type != DPQL_TOK_COMMA) {
+                    addError("Expected ',' or '}' in key accessor", "DPQL-E024", tok);
+                    throw "DPQL-PARSE-ERROR", "Expected ',' or '}'";
+                }
+                nextToken();  # consume ,
+                skipWhitespace();
+                tok = peek();
+                # Check for EOF after comma
+                if (tok.type == DPQL_TOK_EOF) {
+                    break;
+                }
+            }
+            first = False;
+
+            key_list += parseKeyName();
+        }
+
+        if (!closed) {
+            addError("Unclosed key accessor, expected '}'", "DPQL-E024", lbrace);
+            throw "DPQL-PARSE-ERROR", "Unclosed key accessor";
+        }
+
+        if (!key_list) {
+            addError("Empty key accessor is not allowed", "DPQL-E024", lbrace);
+            throw "DPQL-PARSE-ERROR", "Empty key accessor";
+        }
+
+        return <DataProviderFieldAccessor>{
+            "type": DPQL_ACCESSOR_KEY,
+            "value": key_list,
+        };
+    }
+
+    #! Parses a key name: identifier or string literal
+    private string parseKeyName() {
+        hash<DpqlTokenInfo> tok = peek();
+
+        if (tok.type == DPQL_TOK_STRING) {
+            return parseStringLiteral();
+        }
+
+        if (tok.type == DPQL_TOK_IDENTIFIER) {
+            nextToken();
+            return tok.value;
+        }
+
+        if (tok.type == DPQL_TOK_NUMBER) {
+            # Allow numeric keys
+            nextToken();
+            return tok.value;
+        }
+
+        addError("Expected key name in key accessor", "DPQL-E024", tok);
+        throw "DPQL-PARSE-ERROR", "Expected key name";
     }
 
     #! Parses a string literal

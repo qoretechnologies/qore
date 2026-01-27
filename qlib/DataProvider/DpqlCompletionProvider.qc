@@ -63,6 +63,9 @@ const DPQL_CTX_AFTER_VALUE = "after_value";  # After a value
 const DPQL_CTX_IN_FIELD = "in_field";        # Inside a field reference (after @)
 const DPQL_CTX_IN_STRING = "in_string";      # Inside a string
 const DPQL_CTX_IN_PAREN = "in_paren";        # Inside parentheses
+const DPQL_CTX_IN_INDEX = "in_index";        # Inside index accessor [...]
+const DPQL_CTX_IN_KEY = "in_key";            # Inside key accessor {...}
+const DPQL_CTX_AFTER_ACCESSOR = "after_acc"; # After ] or } - can add more accessors
 
 #! Completion provider for DPQL expressions
 /** This class provides context-aware code completion for DPQL query expressions.
@@ -127,6 +130,26 @@ public class DpqlCompletionProvider {
             {"label": "and", "kind": "keyword", "insert_text": "and ",
                 "documentation": "Used in 'between X and Y'", "sort_priority": 53},
         );
+
+        #! Accessor completions
+        const AccessorCompletions = (
+            {"label": "[", "kind": "operator", "insert_text": "[",
+                "documentation": "Index accessor: [0], [-1], [0..3]", "sort_priority": 5},
+            {"label": "{", "kind": "operator", "insert_text": "{",
+                "documentation": "Key accessor: {key}, {a, b, c}", "sort_priority": 6},
+            {"label": ".", "kind": "operator", "insert_text": ".",
+                "documentation": "Member access", "sort_priority": 7},
+        );
+
+        #! Index accessor suggestions
+        const IndexSuggestions = (
+            {"label": "0", "kind": "value", "insert_text": "0",
+                "documentation": "First element", "sort_priority": 1},
+            {"label": "-1", "kind": "value", "insert_text": "-1",
+                "documentation": "Last element", "sort_priority": 2},
+            {"label": "..", "kind": "operator", "insert_text": "..",
+                "documentation": "Range operator (inclusive)", "sort_priority": 3},
+        );
     }
 
     #! Creates a completion provider with optional expression map
@@ -187,7 +210,8 @@ public class DpqlCompletionProvider {
                 break;
 
             case DPQL_CTX_AFTER_FIELD:
-                # After field, suggest comparison operators
+                # After field, suggest accessors and comparison operators
+                items += getAccessorCompletions(analysis.prefix);
                 items += getOperatorCompletions(analysis.prefix, True);
                 break;
 
@@ -198,6 +222,23 @@ public class DpqlCompletionProvider {
 
             case DPQL_CTX_IN_STRING:
                 # Inside string - no completions
+                break;
+
+            case DPQL_CTX_IN_INDEX:
+                # Inside index accessor - suggest integers and range operator
+                items += getIndexCompletions(analysis.prefix);
+                break;
+
+            case DPQL_CTX_IN_KEY:
+                # Inside key accessor - suggest keys from schema if available
+                # TODO: When field type info is available from the record schema,
+                # extract hash keys and suggest them here for schema-aware completions
+                break;
+
+            case DPQL_CTX_AFTER_ACCESSOR:
+                # After ] or } - can add more accessors or operators
+                items += getAccessorCompletions(analysis.prefix);
+                items += getOperatorCompletions(analysis.prefix, True);
                 break;
         }
 
@@ -258,6 +299,30 @@ public class DpqlCompletionProvider {
         # Check the last non-whitespace character/token
         *string last_char = trimmed.size() > 0 ? trimmed[trimmed.size() - 1] : NOTHING;
 
+        # Check if we're inside an index accessor [...]
+        if (checkInBrackets(before)) {
+            return {
+                "ctx": DPQL_CTX_IN_INDEX,
+                "prefix": prefix,
+            };
+        }
+
+        # Check if we're inside a key accessor {...} (after field ref context)
+        if (checkInBraces(before)) {
+            return {
+                "ctx": DPQL_CTX_IN_KEY,
+                "prefix": prefix,
+            };
+        }
+
+        # After closing bracket or brace - can add more accessors
+        if (last_char == "]" || last_char == "}") {
+            return {
+                "ctx": DPQL_CTX_AFTER_ACCESSOR,
+                "prefix": prefix,
+            };
+        }
+
         # After opening paren
         if (last_char == "(") {
             return {
@@ -303,6 +368,83 @@ public class DpqlCompletionProvider {
             "ctx": DPQL_CTX_START,
             "prefix": prefix,
         };
+    }
+
+    #! Checks if position is inside brackets [...] (for index accessor)
+    private bool checkInBrackets(string text) {
+        int depth = 0;
+        bool in_string = False;
+        bool escaped = False;
+        string quote_char;
+
+        for (int i = 0; i < text.size(); ++i) {
+            string c = text[i];
+            if (escaped) {
+                escaped = False;
+                continue;
+            }
+            if (in_string) {
+                if (c == "\\") {
+                    escaped = True;
+                } else if (c == quote_char) {
+                    in_string = False;
+                }
+                continue;
+            }
+            if (c == '"' || c == "'") {
+                in_string = True;
+                quote_char = c;
+                continue;
+            }
+            if (c == "[") {
+                ++depth;
+            } else if (c == "]") {
+                --depth;
+            }
+        }
+        return depth > 0;
+    }
+
+    #! Checks if position is inside braces {...} (for key accessor)
+    private bool checkInBraces(string text) {
+        int depth = 0;
+        bool in_string = False;
+        bool escaped = False;
+        string quote_char;
+        # Only count braces that appear after @ (field context)
+        bool in_field_context = False;
+
+        for (int i = 0; i < text.size(); ++i) {
+            string c = text[i];
+            if (escaped) {
+                escaped = False;
+                continue;
+            }
+            if (in_string) {
+                if (c == "\\") {
+                    escaped = True;
+                } else if (c == quote_char) {
+                    in_string = False;
+                }
+                continue;
+            }
+            if (c == '"' || c == "'") {
+                in_string = True;
+                quote_char = c;
+                continue;
+            }
+            if (c == "@") {
+                in_field_context = True;
+            } else if (c == "{" && in_field_context) {
+                ++depth;
+            } else if (c == "}" && depth > 0) {
+                --depth;
+            } else if (c =~ /[=<>!&|]/) {
+                # Operators end field context
+                in_field_context = False;
+            }
+        }
+        return depth > 0;
     }
 
     #! Checks if position is inside a string literal
@@ -422,6 +564,34 @@ public class DpqlCompletionProvider {
                         "sort_priority": 40,
                     };
                 }
+            }
+        }
+
+        return items;
+    }
+
+    #! Gets accessor completions for after a field reference
+    private list<hash<DpqlCompletionItem>> getAccessorCompletions(string prefix) {
+        list<hash<DpqlCompletionItem>> items = ();
+        string lwr_prefix = prefix.lwr();
+
+        foreach hash<auto> acc in (AccessorCompletions) {
+            if (!prefix || index(acc.label.lwr(), lwr_prefix) == 0) {
+                items += cast<hash<DpqlCompletionItem>>(acc);
+            }
+        }
+
+        return items;
+    }
+
+    #! Gets index accessor completions
+    private list<hash<DpqlCompletionItem>> getIndexCompletions(string prefix) {
+        list<hash<DpqlCompletionItem>> items = ();
+        string lwr_prefix = prefix.lwr();
+
+        foreach hash<auto> sugg in (IndexSuggestions) {
+            if (!prefix || index(sugg.label.lwr(), lwr_prefix) == 0) {
+                items += cast<hash<DpqlCompletionItem>>(sugg);
             }
         }
 
