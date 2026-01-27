@@ -22,6 +22,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR hash/list smoke", \testIrHashListSmoke());
         addTestCase("IR hash map select smoke", \testIrHashMapSelectSmoke());
         addTestCase("IR range slice smoke", \testIrRangeSliceSmoke());
+        addTestCase("IR range guard smoke", \testIrRangeGuardSmoke());
         addTestCase("IR throw/rethrow smoke", \testIrThrowRethrowSmoke());
         addTestCase("IR range foreach smoke", \testIrRangeForeachSmoke());
         addTestCase("IR exists smoke", \testIrExistsSmoke());
@@ -551,6 +552,42 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("slice:20,30 range:2\n", stdout_output, "Unexpected IR range slice output");
+    }
+
+    testIrRangeGuardSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("int idx = 1;\n");
+        script.file.write("delete idx;\n");
+        script.file.write("idx = 2;\n");
+        script.file.write("list nums = (10, 20, 30, 40);\n");
+        script.file.write("int value = nums[idx];\n");
+        script.file.write("printf(\"rangeguard:%d\\n\", value);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("rangeguard:30\n", stdout_output, "Unexpected IR range guard output");
     }
 
     testIrThrowRethrowSmoke() {
