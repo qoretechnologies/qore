@@ -66,7 +66,16 @@ public:
    }
 
    DLLLOCAL size_t iconv(char **inbuf, size_t *inavail, char **outbuf, size_t *outavail) {
+      if (c == (iconv_t)-1) {
+         errno = EINVAL;
+         return (size_t)-1;
+      }
       return iconv_adapter(::iconv, c, inbuf, inavail, outbuf, outavail);
+   }
+
+   //! Returns true if the iconv handle is valid
+   DLLLOCAL bool isValid() const {
+      return c != (iconv_t)-1;
    }
 
    void reportIllegalSequence(size_t offset, ExceptionSink *xsink) {
