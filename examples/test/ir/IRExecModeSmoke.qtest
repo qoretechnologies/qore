@@ -31,6 +31,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR regex smoke", \testIrRegexSmoke());
         addTestCase("IR maybe-NOTHING guard smoke", \testIrMaybeNothingGuardSmoke());
         addTestCase("IR delete guard smoke", \testIrDeleteGuardSmoke());
+        addTestCase("IR remove guard smoke", \testIrRemoveGuardSmoke());
         set_return_value(main());
     }
 
@@ -223,6 +224,40 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("delete:2\n", stdout_output, "Unexpected IR delete guard output");
+    }
+
+    testIrRemoveGuardSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("int value = 3;\n");
+        script.file.write("remove value;\n");
+        script.file.write("value += 4;\n");
+        script.file.write("printf(\"remove:%d\\n\", value);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("remove:4\n", stdout_output, "Unexpected IR remove guard output");
     }
 
     testIrFoldMapSmoke() {
