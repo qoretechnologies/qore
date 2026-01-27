@@ -87,6 +87,20 @@ For Qore CLI scripts under Valgrind, always disable signals with `qore -b`:
 valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 qore -b script.q
 ```
 
+### Exec-mode smoke coverage
+
+The exec-mode smoke tests in `examples/test/ir/IRExecMode.qtest` and
+`examples/test/ir/IRExecModeSmoke.qtest` exercise `--exec-mode=ir` with fallback
+warnings, structured control flow, try/catch unwinding, and maybe-NOTHING tests.
+Run them under Valgrind the same way you run other CLI scripts:
+
+```
+QORE_VALGRIND=1 valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
+    ./build/qore -b examples/test/ir/IRExecMode.qtest
+QORE_VALGRIND=1 valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
+    ./build/qore -b examples/test/ir/IRExecModeSmoke.qtest
+```
+
 
 ## History
 

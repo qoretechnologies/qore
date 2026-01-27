@@ -51,6 +51,13 @@
   - `invoke` creates an explicit unwind edge.
   - Cleanup blocks are explicit and have terminators.
 
+## 5a. Parser Analysis & Guard Semantics
+- `QoreParseContext` is threaded through parsing so every node can note whether a declared local or expression is definitely assigned, still `NOTHING`, or has a statically known type. The context exposes helpers like `isLocalDefinitelyAssigned(LocalVar*)`, `guaranteedType(LocalVar*)`, and expression-level answers (`analysisIndicatesInt/Float`).
+- Typed locals (e.g., `int i;`) begin life as `NOTHING` until the first assignment. Any operation that assumes a non-`NOTHING` payload must either insert a `GuardNotNothing` targeting the current exception unwind block or fall back to the `.any` variant that already accepts `NOTHING`.
+- The lowering visitor consults `selectAnalysisType` and `needsNotNothingGuard` so every use site respects the parse analysis and keeps typed operations exception-safe. `GuardNotNothing` is a first-class opcode in `QoreIROpcode` so the interpreter/JIT can rely on it when deoptimization or fallback is required.
+- `QoreIRVerifier` enforces that typed instructions acting on `NOTHING`-capable locals either follow a guard or are replaced by `.any` opcodes, preventing silent semantic gaps between AST and IR interpretations.
+- Parse analysis also informs exception-awareness (whether an expression can throw) so lowering can emit `invoke`, landing pads, and cleanup sequences that mirror the AST interpreter’s behavior.
+
 ## 6. Call ABI (IR Interpreter + JIT)
 - Execution entry contract (logical IR ABI):
   - Inputs: argument array, closure/env array, local slots, and `ExceptionSink*`.
@@ -267,16 +274,16 @@ Run:
 - Deopt granularity: instruction-level vs block-level.
 
 ## 16. Parser Analysis Integration
-- The lowering pipeline relies on `QoreParseContext` to track metadata such as whether a declared local is "definitively assigned" or may still represent `NOTHING`. This information should be threaded through the parser so the IR visitor can emit typed guards when the parser indicates a value is definitely an `int`, `float`, etc., and otherwise emit `.any` guards.  
-- Locals declared with hard types (e.g., `int i;`) must be treated as unassigned/`NOTHING` until an assignment occurs; the parse context must distinguish between:
-  - `definitely assigned`: can emit optimized, type-specialized `store.local`/`load.local` without extra `NOTHING` guards.
-  - `maybe NOTHING`: lowering must insert guards before type-specialized uses or fall back to `.any` instructions.
-- The visitor API should expose helpers such as `bool isLocalDefinitelyAssigned(LocalVar* slot)` and `TypeInfo* guaranteedType(LocalVar* slot)` so lowering does not keep external maps.
-- Parser-provided analysis should also indicate when expressions can `throw` so the lowering can decide whether to emit `invoke` versus a simple `call` instruction.
+- The lowering pipeline relies on `QoreParseContext` to carry metadata such as whether a declared local is "definitively assigned" or may still represent `NOTHING`. Every parser node and visitor must pass the context along so the IR visitor can query it directly, avoiding ad-hoc external maps.
+- Typed locals (e.g., `int i;`) start their lifetime as `NOTHING` until assigned. The parse context must record:
+  - `definitely assigned`: lowering can emit optimized `store.local/load.local` plus typed operations without additional guards.
+  - `maybe NOTHING`: lowering must either insert a `GuardNotNothing` (or similar guard) before using the local in a typed operation, or fall back to the `.any` variant where `NOTHING` is allowed.
+- The API should surface helpers such as `bool isLocalDefinitelyAssigned(LocalVar* slot)` and `QoreTypeInfo* guaranteedType(LocalVar* slot)` so lowering decides whether to emit typed instructions or generic fallbacks while keeping the context-bound contract.
+- Parser analysis should also propagate metadata about whether an expression can throw, enabling lowering to emit `invoke` with explicit unwind/cleanup paths when necessary. This ensures exception-safe refcount handling (e.g., `decref.nothrow` in unwinds) and keeps the IR interpreter/JIT behavior faithful to the AST path.
 
 ## 17. Immediate Next Steps
-- Finalize this spec by codifying the SSA semantics, exception edges, reference-count ops, guard rules, and parser data requirements (per Phase 0 checklist) before broader lowering work begins.
-- Ship the IR headers (`QoreIR.h`, `QoreIRBuilder.h`, `QoreIRPrinter.h`, `QoreIRVerifier.h`) with concrete enumerations of typed instructions, guard conventions, landing pads, and cleanup semantics.
-- Start the AST→IR lowering visitor focused on priority operator families, ensuring exception-producing expressions compile to `invoke` plus cleanup, and adjust parser analysis plumbing to provide definitively-assigned metadata.
-- Stabilize the interpreter by finishing `StoreLocal` lowering, handling pre-/post- increments, adding the exec-mode smoke test with try/catch, and validating the smoke path under `qore -b` + Valgrind to prove refcount safety.
-- After each milestone, revisit this spec/plan to capture new constraints (parser needs, valgrind findings, etc.) before progressing further.
+- Finalize this spec by codifying the SSA semantics, exception edges, reference-count ops, guard rules, and parser-analysis helper requirements (per the Phase 0 checklist) so downstream passes share a stable contract.
+- Ship the IR headers (`QoreIR.h`, `QoreIRBuilder.h`, `QoreIRPrinter.h`, `QoreIRVerifier.h`) with concrete enumerations of typed instructions, guard conventions, landing pads, cleanup semantics, and ownership annotations.
+- Start the AST→IR lowering visitor focused on priority operator families (arithmetic, comparisons, logical, foldl/foldr/map, throw/try/catch, date/shift variants), ensuring exception-producing expressions lower to `invoke` plus cleanup and parser context metadata drives guard placement for typed locals.
+- Stabilize the interpreter by finishing `StoreLocal` lowering, handling pre-/post- increments/decrements through the new invocation paths, expanding op/lvalue lowering/test coverage (hash/list/object/range/date), adding the exec-mode smoke test (`examples/test/ir/IRExecMode*.qtest`) that exercises real try/catch, and validating it under `qore -b` + Valgrind for refcount/exception safety.
+- After each milestone revisit the spec/plan (and the `/tmp/qore-jit.md` checklist) so parser needs, guard coverage, and valgrind findings can refine our roadmap before moving to the next phase.

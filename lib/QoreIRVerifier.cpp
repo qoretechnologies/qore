@@ -134,14 +134,26 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::UnaryMinusFloat:
         case QoreIROpcode::UnaryMinusAny:
         case QoreIROpcode::FoldlAny:
+        case QoreIROpcode::FoldlInt:
+        case QoreIROpcode::FoldlFloat:
         case QoreIROpcode::FoldrAny:
+        case QoreIROpcode::FoldrInt:
+        case QoreIROpcode::FoldrFloat:
         case QoreIROpcode::MapAny:
+        case QoreIROpcode::MapInt:
+        case QoreIROpcode::MapFloat:
         case QoreIROpcode::SelectAny:
+        case QoreIROpcode::SelectInt:
+        case QoreIROpcode::SelectFloat:
         case QoreIROpcode::MapSelectAny:
         case QoreIROpcode::HashMapAny:
         case QoreIROpcode::HashMapSelectAny:
         case QoreIROpcode::RangeAny:
+        case QoreIROpcode::RangeInt:
+        case QoreIROpcode::RangeFloat:
         case QoreIROpcode::RangeSliceAny:
+        case QoreIROpcode::RangeSliceInt:
+        case QoreIROpcode::RangeSliceFloat:
         case QoreIROpcode::MakeList:
         case QoreIROpcode::CastAny:
         case QoreIROpcode::ExtractAny:
@@ -261,10 +273,20 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::CmpFloat:
         case QoreIROpcode::CmpAny:
         case QoreIROpcode::FoldlAny:
+        case QoreIROpcode::FoldlInt:
+        case QoreIROpcode::FoldlFloat:
         case QoreIROpcode::FoldrAny:
+        case QoreIROpcode::FoldrInt:
+        case QoreIROpcode::FoldrFloat:
         case QoreIROpcode::MapAny:
+        case QoreIROpcode::MapInt:
+        case QoreIROpcode::MapFloat:
         case QoreIROpcode::SelectAny:
+        case QoreIROpcode::SelectInt:
+        case QoreIROpcode::SelectFloat:
         case QoreIROpcode::RangeAny:
+        case QoreIROpcode::RangeInt:
+        case QoreIROpcode::RangeFloat:
             return 2;
         case QoreIROpcode::MapSelectAny:
         case QoreIROpcode::HashMapAny:
@@ -324,6 +346,8 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::InvokeSimError:
             return 0;
         case QoreIROpcode::RangeSliceAny:
+        case QoreIROpcode::RangeSliceInt:
+        case QoreIROpcode::RangeSliceFloat:
         case QoreIROpcode::SpliceLValue:
             return 3;
         case QoreIROpcode::ShiftLValue:

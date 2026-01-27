@@ -33,6 +33,10 @@ option(QORE_BUILD_IR_SMOKE
        "Build the Qore IR smoke test executable"
        OFF)
 
+option(WITH_JIT
+       "Enable LLVM-based JIT compilation"
+       OFF)
+
 STRING(LENGTH ${VERSION_MINOR} MINOR_LEN)
 if (${MINOR_LEN} EQUAL 1)
     set(VERSION_FORMATTED_MINOR 0${VERSION_MINOR})
@@ -71,6 +75,19 @@ include_directories(BEFORE ${CMAKE_BINARY_DIR})
 set(CMAKE_CXX_FLAGS "-I${CMAKE_SOURCE_DIR}/include")
 
 find_package(Java)
+
+if (WITH_JIT)
+    find_package(LLVM 16 REQUIRED CONFIG)
+    include(AddLLVM)
+    llvm_map_components_to_libnames(LLVM_LIBS
+        Core
+        OrcJIT
+        Native
+        Support
+    )
+    add_definitions(-DQORE_JIT_ENABLED)
+    include_directories(${LLVM_INCLUDE_DIRS})
+endif()
 
 if (DEFINED ENV{DOXYGEN_EXECUTABLE})
     set(DOXYGEN_EXECUTABLE $ENV{DOXYGEN_EXECUTABLE})

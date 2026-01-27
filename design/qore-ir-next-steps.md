@@ -14,12 +14,12 @@ This supplement to `qore-jit-checklist.md` focuses on the work we are doing *rig
 - [ ] Define the AST→IR visitor structure for prioritized operators (typed arithmetic, comparisons, logical ops, map/fold, date/shift variants) and statements (if/while/for/try/catch/throw).
 - [ ] Add IR lowering coverage for throw expressions within try/catch so invoke/landingpad sequences are produced.
 - [ ] Stabilize `StoreLocal` lowering plus pre/post increment/decrement handling and validate with the exec-mode try/catch smoke test.
-- [ ] Run the exec-mode smoke test under `qore -b` + Valgrind and document the process.
+- [x] Run the exec-mode smoke test under `qore -b` + Valgrind and document the process (see README updates below).
 
 ## Stabilization Tasks
 
-- [ ] Add the new `examples/test/ir/IRExecMode*.qtest` files (exec-mode and smoke) to cover interpreter + exception scenarios.
-- [ ] Update doc/note about running IR smoke under Valgrind (with `qore -b` to disable signals) and mention the new tests.
+- [x] Add the new `examples/test/ir/IRExecMode*.qtest` files (exec-mode and smoke) to cover interpreter + exception scenarios.
+- [x] Update doc/note about running IR smoke under Valgrind (with `qore -b` to disable signals) and mention the new tests (README now documents the workflow).
 - [ ] Track plan revisions after each milestone (spec done, APIs done, lowering started) to capture new requirements.
 
 ## Ongoing Phase 1 Readiness

@@ -10,6 +10,8 @@
 #include <qore/DateTimeNode.h>
 #include <qore/QoreValue.h>
 #include <qore/intern/QoreLibIntern.h>
+#include <qore/intern/LocalVar.h>
+#include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/ParseNode.h>
 #include <qore/intern/QoreLogicalAbsoluteEqualsOperatorNode.h>
 #include <qore/intern/QoreLogicalAbsoluteNotEqualsOperatorNode.h>
@@ -789,6 +791,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createLandingPad(stmt->loc);
         QoreIRInstruction* catch_inst = builder.createCatchException(stmt->loc);
         if (LocalVar* catch_var = try_stmt->getCatchVar()) {
+            maybeInsertNotNothingGuard(catch_inst->result, nullptr, catch_inst->loc, catch_var->getTypeInfo());
             builder.createStoreLocal(catch_var, catch_inst->result, stmt->loc);
         }
         if (try_stmt->getCatchBlock() && !lowerStatementBlock(try_stmt->getCatchBlock(), error)) {
@@ -905,6 +908,17 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
         if (analysisIndicatesFloat(left_analysis) && analysisIndicatesFloat(right_analysis)) {
             return float_op;
         }
+    }
+    return any_op;
+}
+
+QoreIROpcode QoreIRLowering::selectFoldOpcode(const QoreParseAnalysis& analysis,
+        QoreIROpcode any_op, QoreIROpcode int_op, QoreIROpcode float_op) const {
+    if (analysisIndicatesInt(analysis)) {
+        return int_op;
+    }
+    if (analysisIndicatesFloat(analysis)) {
+        return float_op;
     }
     return any_op;
 }
@@ -1226,7 +1240,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     return QoreIRValue();
 }
 
-bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) {
+bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const {
     analysis.clear();
     if (expr.hasNode()) {
         const AbstractQoreNode* node = expr.getInternalNode();
@@ -1260,6 +1274,25 @@ bool QoreIRLowering::isNeverNothingInt(const QoreParseAnalysis& analysis) const 
     return analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
         && analysis.hasFlag(QoreParseAnalysis::NeverNothing)
         && QoreTypeInfo::isType(analysis.known_type, NT_INT);
+}
+
+bool QoreIRLowering::guardVarLValue(const QoreValue& exp, std::string& error) {
+    const AbstractQoreNode* node = exp.getInternalNode();
+    auto* var = dynamic_cast<const VarRefNode*>(node);
+    if (!var) {
+        return true;
+    }
+
+    std::string guard_error;
+    QoreIRValue value = loadVarRef(var, guard_error, "lvalue guard", exp);
+    if (!value.isValid()) {
+        if (!guard_error.empty()) {
+            error = guard_error;
+        }
+        return false;
+    }
+    maybeInsertNotNothingGuard(value, &exp, getVarRefLocation(var), getVarRefTypeInfo(var));
+    return true;
 }
 
 bool QoreIRLowering::isNeverNothingFloat(const QoreParseAnalysis& analysis) const {
@@ -1326,53 +1359,63 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
     if (!var) {
         return QoreIRValue();
     }
-    return loadVarRef(var, error, "variable reference");
+    return loadVarRef(var, error, "variable reference", expr);
 }
 
-QoreIRValue QoreIRLowering::loadVarRef(const VarRefNode* var, std::string& error, const char* context) {
+ QoreIRValue QoreIRLowering::loadVarRef(const VarRefNode* var, std::string& error, const char* context,
+         const QoreValue& expr) {
     if (!var) {
         error = std::string("null lvalue in IR lowering (") + context + ")";
         return QoreIRValue();
     }
+    QoreIRValue result;
     switch (var->getType()) {
         case VT_LOCAL:
             if (!var->ref.id) {
                 error = std::string("unresolved local variable reference in IR lowering (") + context + ")";
                 return QoreIRValue();
             }
-            return builder.createLoadLocal(var->ref.id, var->loc)->result;
+            result = builder.createLoadLocal(var->ref.id, var->loc)->result;
+            break;
         case VT_CLOSURE:
         case VT_LOCAL_TS:
             if (!var->ref.id) {
                 error = std::string("unresolved closure variable reference in IR lowering (") + context + ")";
                 return QoreIRValue();
             }
-            return builder.createLoadClosure(var->ref.id, var->loc)->result;
+            result = builder.createLoadClosure(var->ref.id, var->loc)->result;
+            break;
         case VT_GLOBAL:
             if (!var->ref.var) {
                 error = std::string("unresolved global variable reference in IR lowering (") + context + ")";
                 return QoreIRValue();
             }
-            return builder.createLoadGlobal(var->ref.var, var->loc)->result;
+            result = builder.createLoadGlobal(var->ref.var, var->loc)->result;
+            break;
         case VT_THREAD_LOCAL:
             if (!var->ref.var) {
                 error = std::string("unresolved thread-local variable reference in IR lowering (") + context + ")";
                 return QoreIRValue();
             }
-            return builder.createLoadThreadLocal(var->ref.var, var->loc)->result;
-        default:
+            result = builder.createLoadThreadLocal(var->ref.var, var->loc)->result;
             break;
+        default:
+            error = std::string("unsupported variable reference for IR lowering (") + context + ")";
+            return QoreIRValue();
     }
-    error = std::string("unsupported variable reference for IR lowering (") + context + ")";
-    return QoreIRValue();
+    maybeInsertNotNothingGuard(result, expr);
+    return result;
 }
 
 bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error,
-        const char* context) {
+        const char* context, const QoreValue* expr, const QoreProgramLocation* guard_loc) {
     if (!var) {
         error = std::string("null lvalue in IR lowering (") + context + ")";
         return false;
     }
+    const QoreTypeInfo* target_type = getVarRefTypeInfo(var);
+    const QoreProgramLocation* loc = guard_loc ? guard_loc : getVarRefLocation(var);
+    maybeInsertNotNothingGuard(value, expr, loc, target_type);
     switch (var->getType()) {
         case VT_LOCAL:
             if (!var->ref.id) {
@@ -1410,6 +1453,90 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
     return false;
 }
 
+const QoreTypeInfo* QoreIRLowering::getVarRefTypeInfo(const VarRefNode* var) const {
+    if (!var) {
+        return nullptr;
+    }
+    switch (var->getType()) {
+        case VT_LOCAL:
+        case VT_LOCAL_TS:
+        case VT_CLOSURE:
+            return var->ref.id ? var->ref.id->getTypeInfo() : nullptr;
+        case VT_GLOBAL:
+        case VT_THREAD_LOCAL:
+            return var->ref.var ? var->ref.var->getTypeInfo() : nullptr;
+        default:
+            break;
+    }
+    return nullptr;
+}
+
+const QoreProgramLocation* QoreIRLowering::getVarRefLocation(const VarRefNode* var) const {
+    return var ? var->loc : nullptr;
+}
+
+bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type) const {
+    if (target_type && QoreTypeInfo::parseReturns(target_type, NT_NOTHING) == QTI_NOT_EQUAL) {
+        if (expr && expr->hasNode()) {
+            QoreParseAnalysis analysis;
+            if (getAnalysis(*expr, analysis) && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    if (!expr) {
+        return false;
+    }
+    return needsNotNothingGuard(*expr);
+}
+
+void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue* expr,
+        const QoreProgramLocation* loc, const QoreTypeInfo* target_type) {
+    if (!value.isValid() || !needsNotNothingGuard(expr, target_type)) {
+        return;
+    }
+    const QoreProgramLocation* guard_loc = loc;
+    if (!guard_loc && expr) {
+        guard_loc = getExpressionLocation(*expr);
+    }
+    builder.createGuardNotNothing(value, getCurrentExceptionTarget(), guard_loc);
+}
+
+QoreIRBasicBlock* QoreIRLowering::getCurrentExceptionTarget() const {
+    return exception_stack.empty() ? nullptr : exception_stack.back();
+}
+
+bool QoreIRLowering::needsNotNothingGuard(const QoreValue& expr) const {
+    QoreParseAnalysis analysis;
+    if (!getAnalysis(expr, analysis)) {
+        return false;
+    }
+    if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+        return false;
+    }
+    if (analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+        return false;
+    }
+    const QoreTypeInfo* type = analysis.known_type;
+    if (!type) {
+        return false;
+    }
+    return QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_NOT_EQUAL;
+}
+
+void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue& expr) {
+    maybeInsertNotNothingGuard(value, &expr, getExpressionLocation(expr), nullptr);
+}
+
+const QoreProgramLocation* QoreIRLowering::getExpressionLocation(const QoreValue& expr) const {
+    if (!expr.hasNode()) {
+        return nullptr;
+    }
+    auto* parse_node = dynamic_cast<const ParseNode*>(expr.getInternalNode());
+    return parse_node ? parse_node->loc : nullptr;
+}
+
 QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(node);
@@ -1423,12 +1550,13 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
 
     const AbstractQoreNode* left_node = assign->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(assign->getRight(), error);
+    QoreValue right_expr(assign->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
     if (left_var) {
-        if (!storeVarRef(left_var, right, error, "assignment")) {
+        if (!storeVarRef(left_var, right, error, "assignment", &right_expr)) {
             return QoreIRValue();
         }
     } else if (assign->getLeft().hasNode()) {
@@ -1464,7 +1592,8 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     }
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreValue right_expr(op->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -1491,16 +1620,16 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         }
         return builder.createLValueBinaryOp(QoreIROpcode::AddAssignLValue, op->getLeft(), right, op->loc)->result;
     }
-    QoreIRValue left_value = loadVarRef(left_var, error, "plus-equals");
+    QoreIRValue left_value = loadVarRef(left_var, error, "plus-equals", op->getLeft());
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
     QoreIROpcode opcode = QoreIROpcode::AddAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if ((isIntConstant(op->getLeft()) && isIntConstant(op->getRight()))
+    if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
-            && getAnalysis(op->getRight(), right_analysis)
+            && getAnalysis(right_expr, right_analysis)
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::AddAssignInt;
@@ -1509,7 +1638,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     if (!result.isValid()) {
         return QoreIRValue();
     }
-    if (!storeVarRef(left_var, result, error, "plus-equals")) {
+    if (!storeVarRef(left_var, result, error, "plus-equals", &right_expr)) {
         return QoreIRValue();
     }
     return result;
@@ -1523,7 +1652,8 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     }
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreValue right_expr(op->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -1550,16 +1680,16 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         }
         return builder.createLValueBinaryOp(QoreIROpcode::SubAssignLValue, op->getLeft(), right, op->loc)->result;
     }
-    QoreIRValue left_value = loadVarRef(left_var, error, "minus-equals");
+    QoreIRValue left_value = loadVarRef(left_var, error, "minus-equals", op->getLeft());
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
     QoreIROpcode opcode = QoreIROpcode::SubAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if ((isIntConstant(op->getLeft()) && isIntConstant(op->getRight()))
+    if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
-            && getAnalysis(op->getRight(), right_analysis)
+            && getAnalysis(right_expr, right_analysis)
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::SubAssignInt;
@@ -1568,7 +1698,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     if (!result.isValid()) {
         return QoreIRValue();
     }
-    if (!storeVarRef(left_var, result, error, "minus-equals")) {
+    if (!storeVarRef(left_var, result, error, "minus-equals", &right_expr)) {
         return QoreIRValue();
     }
     return result;
@@ -1582,7 +1712,8 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
     }
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreValue right_expr(op->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -1609,16 +1740,16 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         }
         return builder.createLValueBinaryOp(QoreIROpcode::MulAssignLValue, op->getLeft(), right, op->loc)->result;
     }
-    QoreIRValue left_value = loadVarRef(left_var, error, "multiply-equals");
+    QoreIRValue left_value = loadVarRef(left_var, error, "multiply-equals", op->getLeft());
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
     QoreIROpcode opcode = QoreIROpcode::MulAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if ((isIntConstant(op->getLeft()) && isIntConstant(op->getRight()))
+    if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
-            && getAnalysis(op->getRight(), right_analysis)
+            && getAnalysis(right_expr, right_analysis)
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::MulAssignInt;
@@ -1627,7 +1758,7 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
     if (!result.isValid()) {
         return QoreIRValue();
     }
-    if (!storeVarRef(left_var, result, error, "multiply-equals")) {
+    if (!storeVarRef(left_var, result, error, "multiply-equals", &right_expr)) {
         return QoreIRValue();
     }
     return result;
@@ -1641,7 +1772,8 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
     }
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreValue right_expr(op->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -1668,16 +1800,16 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         }
         return builder.createLValueBinaryOp(QoreIROpcode::DivAssignLValue, op->getLeft(), right, op->loc)->result;
     }
-    QoreIRValue left_value = loadVarRef(left_var, error, "divide-equals");
+    QoreIRValue left_value = loadVarRef(left_var, error, "divide-equals", op->getLeft());
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
     QoreIROpcode opcode = QoreIROpcode::DivAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if ((isIntConstant(op->getLeft()) && isIntConstant(op->getRight()))
+    if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
-            && getAnalysis(op->getRight(), right_analysis)
+            && getAnalysis(right_expr, right_analysis)
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::DivAssignInt;
@@ -1686,7 +1818,7 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
     if (!result.isValid()) {
         return QoreIRValue();
     }
-    if (!storeVarRef(left_var, result, error, "divide-equals")) {
+    if (!storeVarRef(left_var, result, error, "divide-equals", &right_expr)) {
         return QoreIRValue();
     }
     return result;
@@ -1700,7 +1832,8 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
     }
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreValue right_expr(op->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -1727,16 +1860,16 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
         }
         return builder.createLValueBinaryOp(QoreIROpcode::ModAssignLValue, op->getLeft(), right, op->loc)->result;
     }
-    QoreIRValue left_value = loadVarRef(left_var, error, "modulo-equals");
+    QoreIRValue left_value = loadVarRef(left_var, error, "modulo-equals", op->getLeft());
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
     QoreIROpcode opcode = QoreIROpcode::ModAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if ((isIntConstant(op->getLeft()) && isIntConstant(op->getRight()))
+    if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
-            && getAnalysis(op->getRight(), right_analysis)
+            && getAnalysis(right_expr, right_analysis)
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::ModAssignInt;
@@ -1745,7 +1878,7 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
     if (!result.isValid()) {
         return QoreIRValue();
     }
-    if (!storeVarRef(left_var, result, error, "modulo-equals")) {
+    if (!storeVarRef(left_var, result, error, "modulo-equals", &right_expr)) {
         return QoreIRValue();
     }
     return result;
@@ -1759,7 +1892,8 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
     }
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreValue right_expr(op->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -1786,16 +1920,16 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
         }
         return builder.createLValueBinaryOp(QoreIROpcode::AndAssignLValue, op->getLeft(), right, op->loc)->result;
     }
-    QoreIRValue left_value = loadVarRef(left_var, error, "and-equals");
+    QoreIRValue left_value = loadVarRef(left_var, error, "and-equals", op->getLeft());
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
     QoreIROpcode opcode = QoreIROpcode::AndAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if ((isIntConstant(op->getLeft()) && isIntConstant(op->getRight()))
+    if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
-            && getAnalysis(op->getRight(), right_analysis)
+            && getAnalysis(right_expr, right_analysis)
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::AndAssignInt;
@@ -1804,7 +1938,7 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
     if (!result.isValid()) {
         return QoreIRValue();
     }
-    if (!storeVarRef(left_var, result, error, "and-equals")) {
+    if (!storeVarRef(left_var, result, error, "and-equals", &right_expr)) {
         return QoreIRValue();
     }
     return result;
@@ -1818,7 +1952,8 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
     }
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreValue right_expr(op->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -1845,16 +1980,16 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
         }
         return builder.createLValueBinaryOp(QoreIROpcode::OrAssignLValue, op->getLeft(), right, op->loc)->result;
     }
-    QoreIRValue left_value = loadVarRef(left_var, error, "or-equals");
+    QoreIRValue left_value = loadVarRef(left_var, error, "or-equals", op->getLeft());
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
     QoreIROpcode opcode = QoreIROpcode::OrAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if ((isIntConstant(op->getLeft()) && isIntConstant(op->getRight()))
+    if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
-            && getAnalysis(op->getRight(), right_analysis)
+            && getAnalysis(right_expr, right_analysis)
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::OrAssignInt;
@@ -1863,7 +1998,7 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
     if (!result.isValid()) {
         return QoreIRValue();
     }
-    if (!storeVarRef(left_var, result, error, "or-equals")) {
+    if (!storeVarRef(left_var, result, error, "or-equals", &right_expr)) {
         return QoreIRValue();
     }
     return result;
@@ -1877,7 +2012,8 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
     }
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreValue right_expr(op->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -1904,16 +2040,16 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
         }
         return builder.createLValueBinaryOp(QoreIROpcode::XorAssignLValue, op->getLeft(), right, op->loc)->result;
     }
-    QoreIRValue left_value = loadVarRef(left_var, error, "xor-equals");
+    QoreIRValue left_value = loadVarRef(left_var, error, "xor-equals", op->getLeft());
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
     QoreIROpcode opcode = QoreIROpcode::XorAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if ((isIntConstant(op->getLeft()) && isIntConstant(op->getRight()))
+    if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
-            && getAnalysis(op->getRight(), right_analysis)
+            && getAnalysis(right_expr, right_analysis)
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::XorAssignInt;
@@ -1922,7 +2058,7 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
     if (!result.isValid()) {
         return QoreIRValue();
     }
-    if (!storeVarRef(left_var, result, error, "xor-equals")) {
+    if (!storeVarRef(left_var, result, error, "xor-equals", &right_expr)) {
         return QoreIRValue();
     }
     return result;
@@ -1941,6 +2077,9 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
     }
     if (isRangeLValue(lvexp)) {
         error = "unsupported lvalue range for pre-increment IR lowering";
+        return QoreIRValue();
+    }
+    if (!guardVarLValue(lvexp, error)) {
         return QoreIRValue();
     }
     if (!exception_stack.empty()) {
@@ -1973,6 +2112,9 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
         error = "unsupported lvalue range for post-increment IR lowering";
         return QoreIRValue();
     }
+    if (!guardVarLValue(lvexp, error)) {
+        return QoreIRValue();
+    }
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -2003,6 +2145,9 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         error = "unsupported lvalue range for pre-decrement IR lowering";
         return QoreIRValue();
     }
+    if (!guardVarLValue(lvexp, error)) {
+        return QoreIRValue();
+    }
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -2031,6 +2176,9 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
     }
     if (isRangeLValue(lvexp)) {
         error = "unsupported lvalue range for post-decrement IR lowering";
+        return QoreIRValue();
+    }
+    if (!guardVarLValue(lvexp, error)) {
         return QoreIRValue();
     }
     if (!exception_stack.empty()) {
@@ -2560,7 +2708,8 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreValue right_expr(op->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -2587,17 +2736,17 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
         }
         return builder.createLValueBinaryOp(QoreIROpcode::ShlAssignLValue, op->getLeft(), right, op->loc)->result;
     }
-    QoreIRValue left_value = loadVarRef(left_var, error, "shift-left-assign");
+    QoreIRValue left_value = loadVarRef(left_var, error, "shift-left-assign", op->getLeft());
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode opcode = selectNumericOpcode(op->getLeft(), op->getRight(),
+    QoreIROpcode opcode = selectNumericOpcode(op->getLeft(), right_expr,
         QoreIROpcode::ShlAssignInt, QoreIROpcode::ShlAssignAny, QoreIROpcode::ShlAssignAny);
     QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
     if (!result.isValid()) {
         return QoreIRValue();
     }
-    if (!storeVarRef(left_var, result, error, "shift-left-assign")) {
+    if (!storeVarRef(left_var, result, error, "shift-left-assign", &right_expr)) {
         return QoreIRValue();
     }
     return result;
@@ -2612,7 +2761,8 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    QoreIRValue right = lowerExpression(op->getRight(), error);
+    QoreValue right_expr(op->getRight());
+    QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -2639,17 +2789,17 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
         }
         return builder.createLValueBinaryOp(QoreIROpcode::ShrAssignLValue, op->getLeft(), right, op->loc)->result;
     }
-    QoreIRValue left_value = loadVarRef(left_var, error, "shift-right-assign");
+    QoreIRValue left_value = loadVarRef(left_var, error, "shift-right-assign", op->getLeft());
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode opcode = selectNumericOpcode(op->getLeft(), op->getRight(),
+    QoreIROpcode opcode = selectNumericOpcode(op->getLeft(), right_expr,
         QoreIROpcode::ShrAssignInt, QoreIROpcode::ShrAssignAny, QoreIROpcode::ShrAssignAny);
     QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
     if (!result.isValid()) {
         return QoreIRValue();
     }
-    if (!storeVarRef(left_var, result, error, "shift-right-assign")) {
+    if (!storeVarRef(left_var, result, error, "shift-right-assign", &right_expr)) {
         return QoreIRValue();
     }
     return result;
@@ -2670,6 +2820,8 @@ QoreIRValue QoreIRLowering::lowerRange(const QoreValue& expr, std::string& error
     if (!right.isValid()) {
         return QoreIRValue();
     }
+    QoreIROpcode opcode = selectNumericOpcode(op->getLeft(), op->getRight(),
+        QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat, QoreIROpcode::RangeAny);
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -2678,11 +2830,11 @@ QoreIRValue QoreIRLowering::lowerRange(const QoreValue& expr, std::string& error
         }
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, op->loc);
-        inst->invoke_opcode = QoreIROpcode::RangeAny;
+        inst->invoke_opcode = opcode;
         builder.setBlock(normal_block);
         return inst->result;
     }
-    return builder.createBinaryOp(QoreIROpcode::RangeAny, left, right, op->loc)->result;
+    return builder.createBinaryOp(opcode, left, right, op->loc)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerSquareBracketsRange(const QoreValue& expr, std::string& error) {
@@ -2704,6 +2856,8 @@ QoreIRValue QoreIRLowering::lowerSquareBracketsRange(const QoreValue& expr, std:
     if (!end.isValid()) {
         return QoreIRValue();
     }
+    QoreIROpcode opcode = selectNumericOpcode(op->get(1), op->get(2),
+        QoreIROpcode::RangeSliceInt, QoreIROpcode::RangeSliceFloat, QoreIROpcode::RangeSliceAny);
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -2712,11 +2866,11 @@ QoreIRValue QoreIRLowering::lowerSquareBracketsRange(const QoreValue& expr, std:
         }
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {seq, start, end}, normal_block, handler, op->loc);
-        inst->invoke_opcode = QoreIROpcode::RangeSliceAny;
+        inst->invoke_opcode = opcode;
         builder.setBlock(normal_block);
         return inst->result;
     }
-    return builder.createTernaryOp(QoreIROpcode::RangeSliceAny, seq, start, end, op->loc)->result;
+    return builder.createTernaryOp(opcode, seq, start, end, op->loc)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::string& error) {
@@ -3203,11 +3357,11 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
         }
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, foldl->loc);
-        inst->invoke_opcode = QoreIROpcode::FoldlAny;
+        inst->invoke_opcode = opcode;
         builder.setBlock(normal_block);
         return inst->result;
     }
-    return builder.createBinaryOp(QoreIROpcode::FoldlAny, left, right)->result;
+    return builder.createBinaryOp(opcode, left, right)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error) {
@@ -3225,6 +3379,12 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
     if (!right.isValid()) {
         return QoreIRValue();
     }
+    QoreParseAnalysis expr_analysis;
+    QoreIROpcode opcode = QoreIROpcode::FoldrAny;
+    if (getAnalysis(expr, expr_analysis)) {
+        opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::FoldrAny, QoreIROpcode::FoldrInt,
+            QoreIROpcode::FoldrFloat);
+    }
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -3233,11 +3393,11 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
         }
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, foldr->loc);
-        inst->invoke_opcode = QoreIROpcode::FoldrAny;
+        inst->invoke_opcode = opcode;
         builder.setBlock(normal_block);
         return inst->result;
     }
-    return builder.createBinaryOp(QoreIROpcode::FoldrAny, left, right)->result;
+    return builder.createBinaryOp(opcode, left, right)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) {
@@ -3255,6 +3415,11 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
     if (!right.isValid()) {
         return QoreIRValue();
     }
+    QoreParseAnalysis expr_analysis;
+    QoreIROpcode opcode = QoreIROpcode::MapAny;
+    if (getAnalysis(expr, expr_analysis)) {
+        opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::MapAny, QoreIROpcode::MapInt, QoreIROpcode::MapFloat);
+    }
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -3263,11 +3428,11 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
         }
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, map->loc);
-        inst->invoke_opcode = QoreIROpcode::MapAny;
+        inst->invoke_opcode = opcode;
         builder.setBlock(normal_block);
         return inst->result;
     }
-    return builder.createBinaryOp(QoreIROpcode::MapAny, left, right)->result;
+    return builder.createBinaryOp(opcode, left, right)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& error) {
@@ -3285,6 +3450,12 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
     if (!right.isValid()) {
         return QoreIRValue();
     }
+    QoreParseAnalysis expr_analysis;
+    QoreIROpcode opcode = QoreIROpcode::SelectAny;
+    if (getAnalysis(expr, expr_analysis)) {
+        opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::SelectAny,
+            QoreIROpcode::SelectInt, QoreIROpcode::SelectFloat);
+    }
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -3293,11 +3464,11 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
         }
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, select->loc);
-        inst->invoke_opcode = QoreIROpcode::SelectAny;
+        inst->invoke_opcode = opcode;
         builder.setBlock(normal_block);
         return inst->result;
     }
-    return builder.createBinaryOp(QoreIROpcode::SelectAny, left, right)->result;
+    return builder.createBinaryOp(opcode, left, right)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& error) {
@@ -3327,7 +3498,7 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
         }
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {first, second, third}, normal_block, handler, map_select->loc);
-        inst->invoke_opcode = QoreIROpcode::MapSelectAny;
+        inst->invoke_opcode = opcode;
         builder.setBlock(normal_block);
         return inst->result;
     }

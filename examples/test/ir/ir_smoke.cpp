@@ -424,6 +424,40 @@ static bool lowerAndExpectOpcodesWithParseInit(const char* name, QoreValue expr,
     return true;
 }
 
+static bool lowerAndExpectGuard(const char* name, QoreValue expr) {
+    QoreParseContext parse_context;
+    QoreValue parsed_expr(expr);
+    if (parse_init_value(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    if (!functionHasOpcode(func, QoreIROpcode::GuardNotNothing)) {
+        std::cerr << "Lowered function missing GuardNotNothing (" << name << ")\n";
+        return false;
+    }
+    return true;
+}
+
 static bool lowerAndExpectOpcodeWithProgramSource(const char* name, const char* source, QoreValue expr,
         QoreIROpcode opcode) {
     ExceptionSink xsink;
@@ -3742,6 +3776,174 @@ int main() {
             }
             delete root;
         }
+
+        {
+            LocalVar try_post_inc("try_post_inc", bigIntTypeInfo);
+            try_post_inc.parseAssigned();
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePostIncrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("try_post_inc"), &try_post_inc, false))))));
+            try_body->addStatement(new ExpressionStatement(stmt_loc, QoreValue(0)));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            QoreIRFunction func("ir_stmt_try_post_inc_invoke");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (ir_stmt_try_post_inc_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (ir_stmt_try_post_inc_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!functionHasOpcode(func, QoreIROpcode::Invoke) ||
+                    !functionHasInvokeOpcode(func, QoreIROpcode::PostIncLValue)) {
+                std::cerr << "Expected invoke post-inc lvalue opcode (ir_stmt_try_post_inc_invoke)\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            LocalVar try_pre_dec("try_pre_dec", bigIntTypeInfo);
+            try_pre_dec.parseAssigned();
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePreDecrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("try_pre_dec"), &try_pre_dec, false))))));
+            try_body->addStatement(new ExpressionStatement(stmt_loc, QoreValue(0)));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            QoreIRFunction func("ir_stmt_try_pre_dec_invoke");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (ir_stmt_try_pre_dec_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (ir_stmt_try_pre_dec_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!functionHasOpcode(func, QoreIROpcode::Invoke) ||
+                    !functionHasInvokeOpcode(func, QoreIROpcode::PreDecLValue)) {
+                std::cerr << "Expected invoke pre-dec lvalue opcode (ir_stmt_try_pre_dec_invoke)\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            LocalVar try_post_dec("try_post_dec", bigIntTypeInfo);
+            try_post_dec.parseAssigned();
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePostDecrementOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("try_post_dec"), &try_post_dec, false))))));
+            try_body->addStatement(new ExpressionStatement(stmt_loc, QoreValue(0)));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            QoreIRFunction func("ir_stmt_try_post_dec_invoke");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (ir_stmt_try_post_dec_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (ir_stmt_try_post_dec_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!functionHasOpcode(func, QoreIROpcode::Invoke) ||
+                    !functionHasInvokeOpcode(func, QoreIROpcode::PostDecLValue)) {
+                std::cerr << "Expected invoke post-dec lvalue opcode (ir_stmt_try_post_dec_invoke)\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
+        {
+            LocalVar try_hash("try_hash", hashTypeInfo);
+            try_hash.parseAssigned();
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            QoreValue hash_ref(new VarRefNode(nullptr, strdup("try_hash"), &try_hash, false));
+            QoreValue hash_key(new QoreStringNode("key"));
+            try_body->addStatement(new ExpressionStatement(stmt_loc,
+                QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                    QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr, hash_ref, hash_key)),
+                    QoreValue(1)))));
+            try_body->addStatement(new ExpressionStatement(stmt_loc, QoreValue(0)));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            QoreIRFunction func("ir_stmt_try_hash_add_assign_invoke");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+            QoreIRLowering lowering(builder);
+            std::string error;
+            if (!lowering.lowerStatementBlock(root, error)) {
+                std::cerr << "Statement lowering failed (ir_stmt_try_hash_add_assign_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createReturnNothing();
+            }
+            if (!QoreIRVerifier::verify(func, error)) {
+                std::cerr << "IR verify failed (ir_stmt_try_hash_add_assign_invoke): " << error << "\n";
+                delete root;
+                return 1;
+            }
+            if (!functionHasOpcode(func, QoreIROpcode::Invoke)
+                    || !functionHasInvokeOpcode(func, QoreIROpcode::AddAssignLValue)) {
+                std::cerr << "Expected invoke hash add-assign lvalue opcode (ir_stmt_try_hash_add_assign_invoke)\n";
+                delete root;
+                return 1;
+            }
+            delete root;
+        }
         {
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(new RethrowStatement(1, 1, QoreValue(new QoreStringNode("boom"))));
@@ -3981,11 +4183,11 @@ int main() {
             QoreIROpcode::LoadThreadLocal)) {
         return 1;
     }
-    if (!lowerAndExpectOpcode("ir_assign_local",
+    if (!lowerAndExpectOpcodesWithParseInit("ir_assign_local",
             QoreValue(new QoreAssignmentOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
                 QoreValue(10))),
-            QoreIROpcode::StoreLocal)) {
+            {QoreIROpcode::GuardNotNothing, QoreIROpcode::StoreLocal})) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_assign_closure",
@@ -4007,6 +4209,18 @@ int main() {
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
                 QoreValue(13))),
             QoreIROpcode::StoreThreadLocal)) {
+        return 1;
+    }
+    if (!lowerAndExpectGuard("ir_guard_plus_equals_local",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(1))))) {
+        return 1;
+    }
+    if (!lowerAndExpectGuard("ir_guard_shift_left_equals_local",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(1))))) {
         return 1;
     }
     LocalVar list_var("list_var", autoTypeInfo);

@@ -898,6 +898,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 break;
             }
             case QoreIROpcode::RangeSliceAny:
+            case QoreIROpcode::RangeSliceInt:
+            case QoreIROpcode::RangeSliceFloat:
             case QoreIROpcode::MapSelectAny:
             case QoreIROpcode::HashMapAny: {
                 if (inst->operands.size() < 3) {
@@ -1229,6 +1231,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 break;
             }
             case QoreIROpcode::Throw: {
+                auto* throw_inst = static_cast<QoreIRThrowInstruction*>(inst);
                 if (inst->operands.empty()) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "throw missing operand");
@@ -1239,6 +1242,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     xsink->raiseExceptionArg("IR-EXEC-THROW", owned_arg, "throw");
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                if (throw_inst->exception_target) {
+                    prev_block = block;
+                    block = throw_inst->exception_target;
+                    ip = 0;
+                    break;
+                }
                 cleanupStoredValues(locals, nullptr);
                 cleanupStoredValues(globals, nullptr);
                 cleanupStoredValues(threadlocals, nullptr);
@@ -1532,27 +1541,41 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             ValueHolder node(QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr, left, right)), xsink);
             return node->eval(needs_deref, xsink);
         }
-        case QoreIROpcode::FoldlAny: {
+        case QoreIROpcode::FoldlAny:
+        case QoreIROpcode::FoldlInt:
+        case QoreIROpcode::FoldlFloat: {
             bool needs_deref = false;
             ValueHolder node(QoreValue(new QoreFoldlOperatorNode(nullptr, left, right)), xsink);
             return node->eval(needs_deref, xsink);
         }
-        case QoreIROpcode::FoldrAny: {
+        case QoreIROpcode::FoldrAny:
+        case QoreIROpcode::FoldrInt:
+        case QoreIROpcode::FoldrFloat: {
             bool needs_deref = false;
             ValueHolder node(QoreValue(new QoreFoldrOperatorNode(nullptr, left, right)), xsink);
             return node->eval(needs_deref, xsink);
         }
-        case QoreIROpcode::MapAny: {
+        case QoreIROpcode::MapAny:
+        case QoreIROpcode::MapInt:
+        case QoreIROpcode::MapFloat: {
             bool needs_deref = false;
             ValueHolder node(QoreValue(new QoreMapOperatorNode(nullptr, left, right)), xsink);
             return node->eval(needs_deref, xsink);
         }
-        case QoreIROpcode::SelectAny: {
+        case QoreIROpcode::SelectAny:
+        case QoreIROpcode::SelectInt:
+        case QoreIROpcode::SelectFloat: {
             bool needs_deref = false;
             ValueHolder node(QoreValue(new QoreSelectOperatorNode(nullptr, left, right)), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::RangeAny: {
+            bool needs_deref = false;
+            ValueHolder node(QoreValue(new QoreRangeOperatorNode(nullptr, left, right)), xsink);
+            return node->eval(needs_deref, xsink);
+        }
+        case QoreIROpcode::RangeInt:
+        case QoreIROpcode::RangeFloat: {
             bool needs_deref = false;
             ValueHolder node(QoreValue(new QoreRangeOperatorNode(nullptr, left, right)), xsink);
             return node->eval(needs_deref, xsink);
@@ -1591,7 +1614,9 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
 QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first, const QoreValue& second,
         const QoreValue& third, ExceptionSink* xsink) {
     switch (op) {
-        case QoreIROpcode::RangeSliceAny: {
+        case QoreIROpcode::RangeSliceAny:
+        case QoreIROpcode::RangeSliceInt:
+        case QoreIROpcode::RangeSliceFloat: {
             bool needs_deref = false;
             ValueHolder node(QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr, first, second, third)),
                 xsink);

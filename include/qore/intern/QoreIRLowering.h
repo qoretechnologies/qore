@@ -132,7 +132,8 @@ private:
     QoreIRValue lowerSelfCall(const QoreValue& expr, std::string& error);
     QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
     QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
-    bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis);
+    bool guardVarLValue(const QoreValue& exp, std::string& error);
+    bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
     bool analysisIndicatesInt(const QoreParseAnalysis& analysis) const;
@@ -140,10 +141,14 @@ private:
     const QoreTypeInfo* selectAnalysisType(const QoreParseAnalysis& analysis) const;
     QoreIROpcode selectNumericOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
+    QoreIROpcode selectFoldOpcode(const QoreParseAnalysis& analysis,
+        QoreIROpcode any_op, QoreIROpcode int_op, QoreIROpcode float_op) const;
     bool ensureBuilderContext(std::string& error) const;
     QoreIRBasicBlock* createBlock(const std::string& prefix);
-    QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context);
-    bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context);
+    QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
+        const QoreValue& expr);
+    bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context,
+        const QoreValue* expr = nullptr, const QoreProgramLocation* guard_loc = nullptr);
     bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
         std::vector<QoreIRValue>& lowered, std::string& error);
     QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
@@ -155,6 +160,16 @@ private:
     QoreIRValue lowerConditionValue(const QoreValue& cond, std::string& error);
     QoreIROpcode selectComparisonOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
+
+    QoreIRBasicBlock* getCurrentExceptionTarget() const;
+    bool needsNotNothingGuard(const QoreValue& expr) const;
+    bool needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type) const;
+    void maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue& expr);
+    void maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue* expr,
+        const QoreProgramLocation* loc, const QoreTypeInfo* target_type);
+    const QoreProgramLocation* getExpressionLocation(const QoreValue& expr) const;
+    const QoreTypeInfo* getVarRefTypeInfo(const VarRefNode* var) const;
+    const QoreProgramLocation* getVarRefLocation(const VarRefNode* var) const;
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
