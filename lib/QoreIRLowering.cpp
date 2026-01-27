@@ -70,6 +70,7 @@
 #include <qore/intern/QoreValueCoalescingOperatorNode.h>
 #include <qore/intern/QoreExtractOperatorNode.h>
 #include <qore/intern/QoreRemoveOperatorNode.h>
+#include <qore/intern/QoreDeleteOperatorNode.h>
 #include <qore/intern/QoreKeysOperatorNode.h>
 #include <qore/intern/QoreRegexMatchOperatorNode.h>
 #include <qore/intern/QoreRegexExtractOperatorNode.h>
@@ -1140,6 +1141,10 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (result.isValid() || !error.empty()) {
         return result;
     }
+    result = lowerDelete(expr, error);
+    if (result.isValid() || !error.empty()) {
+        return result;
+    }
     result = lowerKeys(expr, error);
     if (result.isValid() || !error.empty()) {
         return result;
@@ -1313,6 +1318,15 @@ void QoreIRLowering::markLocalAssignmentFromExpression(const QoreValue& exp) {
         return;
     }
     parse_context->markLocalAssignment(local, true, local->parseGetTypeInfo());
+}
+
+void QoreIRLowering::markLocalUnassignmentFromExpression(const QoreValue& exp) {
+    if (!parse_context || !exp.hasNode()) {
+        return;
+    }
+    if (LocalVar* local = getLocalVarFromValue(exp)) {
+        parse_context->markLocalAssignment(local, false, nullptr);
+    }
 }
 
 bool QoreIRLowering::expressionCanThrow(const QoreValue& expr) const {
@@ -3165,7 +3179,28 @@ QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& erro
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::RemoveAny, expr, operands, op->loc, error);
+    QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::RemoveAny, expr, operands, op->loc, error);
+    markLocalUnassignmentFromExpression(op->getExp());
+    return result;
+}
+
+QoreIRValue QoreIRLowering::lowerDelete(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreDeleteOperatorNode*>(node);
+    if (!op) {
+        return QoreIRValue();
+    }
+    QoreIRValue operand = lowerExpression(op->getExp(), error);
+    if (!operand.isValid()) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> operands{operand};
+    QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::RemoveAny, expr, operands, op->loc, error);
+    markLocalUnassignmentFromExpression(op->getExp());
+    if (!result.isValid()) {
+        return result;
+    }
+    return builder.createConstNothing(op->loc)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerKeys(const QoreValue& expr, std::string& error) {

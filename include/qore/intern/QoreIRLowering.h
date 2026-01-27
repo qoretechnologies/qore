@@ -112,6 +112,7 @@ private:
     QoreIRValue lowerSplice(const QoreValue& expr, std::string& error);
     QoreIRValue lowerExtract(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRemove(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerDelete(const QoreValue& expr, std::string& error);
     QoreIRValue lowerKeys(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRegexMatch(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRegexExtract(const QoreValue& expr, std::string& error);
@@ -164,6 +165,7 @@ private:
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
     bool expressionCanThrow(const QoreValue& expr) const;
     void markLocalAssignmentFromExpression(const QoreValue& exp);
+    void markLocalUnassignmentFromExpression(const QoreValue& exp);
 
     QoreIRBasicBlock* getCurrentExceptionTarget() const;
     bool needsNotNothingGuard(const QoreValue& expr) const;
