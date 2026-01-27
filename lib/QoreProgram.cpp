@@ -59,8 +59,8 @@ extern bool threads_initialized;
 
 ParseOptionMaps pomaps;
 
-// Callback for releasing Type refs before program data is cleared (issue #4816)
-// This allows the reflection module to break reference cycles
+// Optional callback invoked before program data is cleared (issue #4816)
+// Can be used by modules to perform cleanup before namespace data is freed
 static qore_program_cleanup_callback_t program_cleanup_callback = nullptr;
 
 void qore_register_program_cleanup_callback(qore_program_cleanup_callback_t callback) {
@@ -691,8 +691,7 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
 
-        // issue #4816: call cleanup callback to break reference cycles
-        // (e.g., reflection Type objects that hold strong refs to source_pgm)
+        // call optional cleanup callback before clearing namespace data
         if (program_cleanup_callback) {
             program_cleanup_callback(pgm);
         }

@@ -83,10 +83,10 @@ public class ImplicitModuleTransaction {
 
     #! Adds a rollback closure to be executed if there is an active exception in module initialization
     static add(code rb_code) {
-        if (!rb) {
-            rb = new ImplicitModuleTransaction();
+        if (!Priv::rb) {
+            Priv::rb = new ImplicitModuleTransaction();
         }
-        rb.addRollback(rb_code);
+        Priv::rb.addRollback(rb_code);
     }
 
     #! Adds a rollback closure to be executed if there is an active exception in module initialization

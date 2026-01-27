@@ -34,13 +34,6 @@
 #include "QC_AbstractReflectionFunction.h"
 
 #include <memory>
-#include <set>
-#include <map>
-
-// Global registry for tracking QoreType objects by source program (issue #4816)
-// This allows us to break reference cycles during program destruction
-static QoreThreadLock type_registry_lock;
-static std::map<QoreProgram*, std::set<QoreType*>> type_registry;
 
 void QoreType::setContainer(QoreObject* obj) {
     container = obj;
@@ -58,12 +51,6 @@ void QoreType::setContainer(QoreObject* obj) {
             strong_ref = true;
         }
         ref_held = true;
-
-        // Register in the global registry (only for strong refs, which need cycle breaking)
-        if (strong_ref) {
-            AutoLocker al(type_registry_lock);
-            type_registry[source_pgm].insert(this);
-        }
     }
 }
 
@@ -71,22 +58,9 @@ void QoreType::releaseSourceRef() {
     if (ref_held && source_pgm) {
         ref_held = false;
         if (strong_ref) {
-            // Deregister from the global registry
-            {
-                AutoLocker al(type_registry_lock);
-                auto it = type_registry.find(source_pgm);
-                if (it != type_registry.end()) {
-                    it->second.erase(this);
-                    if (it->second.empty()) {
-                        type_registry.erase(it);
-                    }
-                }
-            }
-            // Release the strong reference
             ExceptionSink xsink;
             source_pgm->deref(&xsink);
         } else {
-            // Release the weak reference
             source_pgm->depDeref();
         }
     }
@@ -95,57 +69,11 @@ void QoreType::releaseSourceRef() {
 QoreType::~QoreType() {
     if (ref_held && source_pgm) {
         if (strong_ref) {
-            // Deregister from the global registry
-            {
-                AutoLocker al(type_registry_lock);
-                auto it = type_registry.find(source_pgm);
-                if (it != type_registry.end()) {
-                    it->second.erase(this);
-                    if (it->second.empty()) {
-                        type_registry.erase(it);
-                    }
-                }
-            }
-            // Release the strong reference
             ExceptionSink xsink;
             source_pgm->deref(&xsink);
         } else {
-            // Release the weak reference
             source_pgm->depDeref();
         }
-    }
-}
-
-// Called before program data is cleared to break reference cycles (issue #4816)
-// For Types stored in the same program as source_pgm, we release the strong ref
-// since they create a cycle: program -> globals -> Type -> QoreType -> program.
-// For Types that escaped to foreign modules, we keep the strong ref so their
-// type data remains valid.
-void qore_release_local_type_refs(QoreProgram* pgm) {
-    // First, collect the types to process while holding the lock
-    std::vector<QoreType*> types_to_release;
-    {
-        AutoLocker al(type_registry_lock);
-        auto it = type_registry.find(pgm);
-        if (it == type_registry.end()) {
-            return;
-        }
-
-        for (QoreType* t : it->second) {
-            // Check if the container's program matches the source program
-            // If they match, the Type is stored in the same program's globals,
-            // creating a cycle that needs to be broken
-            // If they differ, the Type escaped to a foreign program and needs
-            // the strong ref to keep source_pgm's type data alive
-            if (t->container && t->container->getProgram() == pgm) {
-                types_to_release.push_back(t);
-            }
-        }
-    }
-
-    // Release refs outside the lock to avoid potential deadlocks
-    for (QoreType* t : types_to_release) {
-        t->releaseSourceRef();
     }
 }
 

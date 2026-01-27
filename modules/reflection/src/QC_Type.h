@@ -98,15 +98,4 @@ DLLLOCAL QoreClass* initTypeClass(QoreNamespace& ns);
 */
 DLLLOCAL QoreObject* get_type_object(const QoreTypeInfo* t, QoreProgram* source_pgm = nullptr);
 
-//! Releases strong refs to source_pgm for Type objects that are stored locally (issue #4816)
-/** Called before program data is cleared to break reference cycles.
-    For Types stored in the same program (container ref count == 1), we release
-    the strong ref since they will be destroyed anyway when globals are cleared.
-    For Types that escaped to foreign modules (ref count > 1), we keep the strong
-    ref so their type data remains valid.
-
-    @param pgm the program being destroyed
-*/
-DLLEXPORT void qore_release_local_type_refs(QoreProgram* pgm);
-
 #endif

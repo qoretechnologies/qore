@@ -52,7 +52,7 @@ When a Type object is stored in the same program that owns the type data:
 When a Type object escapes to a foreign program (e.g., registered in DataProvider):
 - Use strong ref (`ref`) to keep the source program's type data alive
 - Without this, the type data would be freed while the Type object still exists
-- A cleanup callback breaks cycles before program data is cleared
+- The strong ref keeps the source program alive until the Type is destroyed
 
 ### Detection Logic
 The storage location is determined by comparing the containing object's program with the source program:
@@ -72,9 +72,7 @@ if (container->getProgram() == source_pgm) {
 
 1. **`modules/reflection/src/QC_Type.h`** - Class definition with reference fields
 2. **`modules/reflection/src/QC_Type.qpp`** - Reference management implementation
-3. **`lib/QoreProgram.cpp`** - Cleanup callback mechanism
-4. **`lib/ModuleManager.cpp`** - Module destruction changes
-5. **`modules/reflection/src/reflection-module.cpp`** - Callback registration
+3. **`lib/ModuleManager.cpp`** - Module destruction changes
 
 ### QoreType Class
 
@@ -83,37 +81,14 @@ class QoreType : public AbstractPrivateData {
 public:
     const QoreTypeInfo* typeInfo;   // pointer to type data
     QoreProgram* source_pgm;        // program that owns the type
-    QoreObject* container;          // back-pointer for cycle detection
+    QoreObject* container;          // back-pointer for storage location detection
     bool ref_held;                  // whether we hold a ref
     bool strong_ref;                // strong (true) or weak (false)
 
     void setContainer(QoreObject* obj);  // called after wrapping in QoreObject
-    void releaseSourceRef();              // release ref (for cycle breaking)
+    void releaseSourceRef();              // release ref
 };
 ```
-
-### Global Registry
-
-A registry tracks Type objects with strong refs by source program:
-```cpp
-static std::map<QoreProgram*, std::set<QoreType*>> type_registry;
-```
-
-This enables efficient lookup during program destruction.
-
-### Cleanup Callback
-
-Before program data is cleared, a callback breaks cycles:
-```cpp
-void qore_release_local_type_refs(QoreProgram* pgm) {
-    // Find Type objects that:
-    // 1. Have a strong ref to pgm
-    // 2. Are stored in pgm's globals (container->getProgram() == pgm)
-    // Release their strong refs to break the cycle
-}
-```
-
-**Important:** This only releases refs for Types stored in the same program. Types that escaped to foreign programs keep their strong refs, ensuring type data remains valid.
 
 ### Module Destruction
 
@@ -125,17 +100,17 @@ pgm->waitForTerminationAndDeref(&xsink);  // data freed before deref returns
 To:
 ```cpp
 pgm->waitForTermination();
-pgm->deref(&xsink);  // triggers clear(), which calls cleanup callback
+pgm->deref(&xsink);  // cross-program strong refs keep data alive if needed
 ```
 
-This ensures the cleanup callback runs before type data is freed.
+This allows cross-program Type objects to keep the source program's data alive via their strong refs.
 
 ## Lifecycle
 
 ### Type Creation
 1. `QoreType` constructed with `typeInfo` and `source_pgm`
 2. `QoreObject` wrapper created
-3. `setContainer()` called to acquire appropriate ref and register if strong
+3. `setContainer()` called to acquire appropriate ref based on storage location
 
 ### Type Access
 - Normal operation - `typeInfo` is always valid because:
@@ -144,15 +119,24 @@ This ensures the cleanup callback runs before type data is freed.
 
 ### Program Destruction
 1. Program's `deref()` called
-2. `waitForTerminationAndClear()` called internally
-3. Cleanup callback releases strong refs for same-program Types
-4. Program data cleared (namespace data, etc.)
-5. Globals cleared (destroys same-program Type objects)
-6. Cross-program Types (if any) keep source program alive until they're destroyed
+2. If no strong refs exist (no cross-program Types), program data is cleared
+3. Globals cleared (destroys same-program Type objects, which release weak refs)
+4. If cross-program Types exist, their strong refs keep source program alive
+5. When those Types are later destroyed (e.g., foreign program unloads), they release strong refs
+6. Source program can then be freed
 
 ### Type Destruction
-1. Destructor removes from registry (if strong ref)
-2. Releases ref (`deref` for strong, `depDeref` for weak)
+1. Destructor releases ref (`deref` for strong, `depDeref` for weak)
+
+## Why This Works
+
+The key insight is that **no cleanup callback is needed**:
+
+- **Same-program Types** use weak refs, so they don't create cycles. When the program is destroyed, its globals are cleared, destroying these Types. Their weak refs are released in their destructors.
+
+- **Cross-program Types** use strong refs, which keep the source program alive. When the foreign program that holds these Types is destroyed (or the Types are otherwise released), the strong refs are released, allowing the source program to be freed.
+
+The hybrid strategy naturally handles both cases without requiring any special cleanup logic.
 
 ## Testing
 

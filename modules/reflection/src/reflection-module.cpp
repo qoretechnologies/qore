@@ -87,9 +87,6 @@ const TypedHashDecl* hashdeclClassAccessInfo,
     * hashdeclMethodAccessInfo;
 
 QoreStringNode* reflection_module_init() {
-    // issue #4816: register callback to break Type reference cycles during program destruction
-    qore_register_program_cleanup_callback(qore_release_local_type_refs);
-
     // pre-initialize reflection classes
     preinitAbstractVariantClass();
     preinitFunctionVariantClass();
