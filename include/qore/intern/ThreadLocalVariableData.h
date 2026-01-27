@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,6 +32,9 @@
 #ifndef _QORE_INTERN_THREADLOCALVARIABLEDATA_H
 #define _QORE_INTERN_THREADLOCALVARIABLEDATA_H
 
+#include <utility>
+#include <vector>
+
 class ThreadLocalVariableData : public ThreadLocalData<LocalVarValue> {
 public:
     // clears and marks all variables as finalized on the stack
@@ -39,6 +42,19 @@ public:
         ThreadLocalVariableData::iterator i(curr);
         while (i.next()) {
             sdh.deref(i.get().finalize());
+        }
+    }
+
+    //! Collects values with declaration order for sorted finalization (issue #5168)
+    DLLLOCAL void collectForFinalize(std::vector<std::pair<uint64_t, QoreValue>>& ordered_values) {
+        ThreadLocalVariableData::iterator i(curr);
+        while (i.next()) {
+            LocalVarValue& var = i.get();
+            uint64_t order = var.getDeclOrder();
+            QoreValue val = var.finalize();
+            if (val) {
+                ordered_values.push_back(std::make_pair(order, val));
+            }
         }
     }
 

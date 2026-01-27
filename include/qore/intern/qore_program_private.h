@@ -56,6 +56,7 @@ extern QoreHashNode* ENV;
 // Forward declaration to avoid circular includes
 class QoreSandboxManager;
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdarg>
 #include <map>
@@ -126,6 +127,9 @@ public:
     // number of top-level local variables instantiated (for REPL mode)
     unsigned inst_count = 0;
 
+    // declaration order counter for proper destruction order (issue #5168)
+    uint64_t var_order_counter = 0;
+
     DLLLOCAL ThreadLocalProgramData() : tz_set(false), inst(false), inst_count(0) {
         printd(5, "ThreadLocalProgramData::ThreadLocalProgramData() this: %p\n", this);
     }
@@ -136,9 +140,36 @@ public:
         assert(cvstack.empty());
     }
 
+    //! Returns the next declaration order value
+    DLLLOCAL uint64_t getNextVarOrder() {
+        return ++var_order_counter;
+    }
+
+    //! Finalizes variables in reverse declaration order (issue #5168)
+    /** Collects values from both lvstack and cvstack, sorts by declaration order,
+        and finalizes in reverse order to ensure proper destruction semantics.
+    */
     DLLLOCAL void finalize(SafeDerefHelper& sdh) {
-        lvstack.finalize(sdh);
-        cvstack.finalize(sdh);
+        // Collect all values with their declaration order
+        typedef std::pair<uint64_t, QoreValue> OrderedValue;
+        std::vector<OrderedValue> ordered_values;
+
+        // Collect from lvstack
+        lvstack.collectForFinalize(ordered_values);
+
+        // Collect from cvstack
+        cvstack.collectForFinalize(ordered_values);
+
+        // Sort by declaration order in descending order (reverse declaration order)
+        std::sort(ordered_values.begin(), ordered_values.end(),
+            [](const OrderedValue& a, const OrderedValue& b) {
+                return a.first > b.first;  // descending order = reverse declaration order
+            });
+
+        // Finalize in sorted order
+        for (auto& ov : ordered_values) {
+            sdh.deref(ov.second);
+        }
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {
