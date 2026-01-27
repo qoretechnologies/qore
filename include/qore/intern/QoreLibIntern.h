@@ -201,6 +201,43 @@ struct QoreParseContext {
         pflag |= flags;
         return rv;
     }
+
+    DLLLOCAL bool isLocalDefinitelyAssigned(LocalVar* local) const;
+
+    DLLLOCAL bool needsGuardForLocal(LocalVar* local) const;
+
+    DLLLOCAL const QoreTypeInfo* guaranteedType(LocalVar* local) const;
+
+    DLLLOCAL void markLocalAssignment(LocalVar* local, bool assigned, const QoreTypeInfo* type = nullptr);
+
+    DLLLOCAL bool expressionCanThrow() const {
+        return !analysis.neverThrows();
+    }
+
+    DLLLOCAL void markExpressionNeverThrows() {
+        analysis.setFlag(QoreParseAnalysis::NeverThrows);
+    }
+
+    DLLLOCAL void markExpressionMayThrow() {
+        analysis.flags &= ~QoreParseAnalysis::NeverThrows;
+    }
+
+    DLLLOCAL bool isExpressionDefinitelyAssigned() const {
+        return analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+
+    DLLLOCAL const QoreTypeInfo* expressionAnalysisType() const {
+        return analysis.known_type ? analysis.known_type : analysis.narrowed_type;
+    }
+
+    DLLLOCAL void markExpressionType(const QoreTypeInfo* typeInfo) {
+        analysis.known_type = typeInfo;
+        if (typeInfo) {
+            analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        } else {
+            analysis.flags &= ~QoreParseAnalysis::KnownTypeInfo;
+        }
+    }
 };
 
 class QoreParseContextFlagHelper {

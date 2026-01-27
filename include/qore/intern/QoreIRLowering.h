@@ -149,6 +149,8 @@ private:
         const QoreValue& expr);
     bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context,
         const QoreValue* expr = nullptr, const QoreProgramLocation* guard_loc = nullptr);
+    LocalVar* getLocalVarFromValue(const QoreValue& expr) const;
+    const QoreTypeInfo* getGuaranteedTypeForValue(const QoreValue* expr, const QoreTypeInfo* fallback) const;
     bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
         std::vector<QoreIRValue>& lowered, std::string& error);
     QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
@@ -160,6 +162,8 @@ private:
     QoreIRValue lowerConditionValue(const QoreValue& cond, std::string& error);
     QoreIROpcode selectComparisonOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
+    bool expressionCanThrow(const QoreValue& expr) const;
+    void markLocalAssignmentFromExpression(const QoreValue& exp);
 
     QoreIRBasicBlock* getCurrentExceptionTarget() const;
     bool needsNotNothingGuard(const QoreValue& expr) const;

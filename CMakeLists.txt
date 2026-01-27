@@ -717,6 +717,7 @@ set(LIBQORE_CPP_SRC
     lib/SwitchStatement.cpp
     lib/Variable.cpp
     lib/support.cpp
+    lib/QoreParseContext.cpp
     lib/QoreType.cpp
     lib/ModuleManager.cpp
     lib/QoreException.cpp
@@ -1001,7 +1002,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/WeakReferenceNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/WeakHashReferenceNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/WeakListReferenceNode.cpp\"
-#include \"${CMAKE_SOURCE_DIR}/lib/support.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/support.cpp\"\n#include \"${CMAKE_SOURCE_DIR}/lib/QoreParseContext.cpp\"
 #ifdef HAVE_SIGNAL_HANDLING
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSignal.cpp\"
 #endif

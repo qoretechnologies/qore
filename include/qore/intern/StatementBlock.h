@@ -38,6 +38,8 @@
 
 #include <set>
 #include <vector>
+
+#include "qore/intern/LocalVar.h"
 #include <typeinfo>
 
 // all definitions in this file are private to the library and subject to change

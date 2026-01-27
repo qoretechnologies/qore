@@ -42,6 +42,7 @@ struct QoreParseAnalysis {
         DefinitelyAssigned = 1 << 0,
         NeverNothing = 1 << 1,
         KnownTypeInfo = 1 << 2,
+        NeverThrows = 1 << 3,
     };
 
     uint32_t flags = None;
@@ -60,6 +61,10 @@ struct QoreParseAnalysis {
 
     bool hasFlag(Flags f) const {
         return (flags & f) != 0;
+    }
+
+    bool neverThrows() const {
+        return hasFlag(NeverThrows);
     }
 };
 

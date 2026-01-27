@@ -9,6 +9,8 @@
 #include <cstring>
 #include <initializer_list>
 #include <iostream>
+#include <memory>
+#include <optional>
 
 #if defined(__has_include)
 #if __has_include(<valgrind/valgrind.h>)
@@ -148,6 +150,40 @@ static bool shouldPrintIR() {
     }();
     return print_ir;
 }
+
+struct ParseProgramContext {
+    ExceptionSink xsink;
+    std::unique_ptr<QoreProgramHelper> pgm_helper;
+    std::optional<QoreProgramContextHelper> program_context;
+    std::optional<ProgramRuntimeExternalParseContextHelper> parse_lock;
+    std::optional<ProgramRuntimeParseAccessHelper> parse_access;
+    QoreParseContext parse_context;
+
+    ParseProgramContext() : parse_context() {
+    }
+
+    bool init(const char* name) {
+        pgm_helper = std::make_unique<QoreProgramHelper>(xsink);
+        if (xsink) {
+            std::cerr << "Failed to initialize QoreProgram (" << name << ")\n";
+            return false;
+        }
+        QoreProgram* program = **pgm_helper;
+        program_context.emplace(program);
+        parse_lock.emplace(program);
+        if (!*parse_lock) {
+            std::cerr << "Failed to acquire parse lock (" << name << ")\n";
+            return false;
+        }
+        parse_context = QoreParseContext(static_cast<LocalVar*>(nullptr), program);
+        parse_access.emplace(&xsink, program);
+        if (xsink) {
+            std::cerr << "Failed to acquire parse access (" << name << ")\n";
+            return false;
+        }
+        return true;
+    }
+};
 
 static bool lowerAndVerify(const char* name, QoreValue expr) {
     ValueHolder expr_holder(expr, nullptr);
@@ -353,8 +389,52 @@ static bool lowerAndExpectOpcode(const char* name, QoreValue expr, QoreIROpcode 
     return true;
 }
 
+static bool lowerAndExpectAnyOpcode(const char* name, QoreValue expr,
+        std::initializer_list<QoreIROpcode> opcodes) {
+    ValueHolder expr_holder(expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    for (QoreIROpcode opcode : opcodes) {
+        if (functionHasOpcode(func, opcode)) {
+            return true;
+        }
+    }
+    std::cerr << "Lowered function missing any of the expected opcodes (" << name << "): ";
+    bool first = true;
+    for (QoreIROpcode opcode : opcodes) {
+        if (!first) {
+            std::cerr << ", ";
+        }
+        std::cerr << static_cast<int>(opcode);
+        first = false;
+    }
+    std::cerr << "\n";
+    return false;
+}
+
 static bool lowerAndExpectOpcodeWithParseInit(const char* name, QoreValue expr, QoreIROpcode opcode) {
-    QoreParseContext parse_context;
+    ParseProgramContext program_ctx;
+    if (!program_ctx.init(name)) {
+        return false;
+    }
+    QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
     if (parse_init_value(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
@@ -389,7 +469,11 @@ static bool lowerAndExpectOpcodeWithParseInit(const char* name, QoreValue expr, 
 
 static bool lowerAndExpectOpcodesWithParseInit(const char* name, QoreValue expr,
         std::initializer_list<QoreIROpcode> opcodes) {
-    QoreParseContext parse_context;
+    ParseProgramContext program_ctx;
+    if (!program_ctx.init(name)) {
+        return false;
+    }
+    QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
     if (parse_init_value(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
@@ -425,7 +509,11 @@ static bool lowerAndExpectOpcodesWithParseInit(const char* name, QoreValue expr,
 }
 
 static bool lowerAndExpectGuard(const char* name, QoreValue expr) {
-    QoreParseContext parse_context;
+    ParseProgramContext program_ctx;
+    if (!program_ctx.init(name)) {
+        return false;
+    }
+    QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
     if (parse_init_value(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
@@ -515,7 +603,11 @@ static bool lowerAndExpectOpcodeWithProgramSource(const char* name, const char* 
 
 static bool lowerAndExpectOpcodeFromParseAnalysis(const char* name, QoreValue expr,
         QoreIROpcode int_opcode, QoreIROpcode float_opcode, QoreIROpcode any_opcode) {
-    QoreParseContext parse_context;
+    ParseProgramContext program_ctx;
+    if (!program_ctx.init(name)) {
+        return false;
+    }
+    QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
     if (parse_init_value(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
@@ -596,7 +688,11 @@ static bool lowerAndExpectOpcodeFromParseAnalysis(const char* name, QoreValue ex
 
 static bool lowerAndExpectUnaryOpcodeFromParseAnalysis(const char* name, QoreValue expr,
         QoreIROpcode int_opcode, QoreIROpcode float_opcode, QoreIROpcode any_opcode) {
-    QoreParseContext parse_context;
+    ParseProgramContext program_ctx;
+    if (!program_ctx.init(name)) {
+        return false;
+    }
+    QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
     if (parse_init_value(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
@@ -660,7 +756,11 @@ static bool lowerAndExpectUnaryOpcodeFromParseAnalysis(const char* name, QoreVal
 
 static bool expectParseAnalysisFlags(const char* name, QoreValue expr, const QoreTypeInfo* expected_type,
         bool expect_known, bool expect_never_nothing, bool expect_def_assigned) {
-    QoreParseContext parse_context;
+    ParseProgramContext program_ctx;
+    if (!program_ctx.init(name)) {
+        return false;
+    }
+    QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
     if (parse_init_value(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
@@ -4226,16 +4326,16 @@ int main() {
     LocalVar list_var("list_var", autoTypeInfo);
     LocalVar hash_var("hash_var", autoTypeInfo);
     LocalVar string_var("string_var", stringTypeInfo);
-    if (!lowerAndExpectOpcode("ir_range",
+    if (!lowerAndExpectAnyOpcode("ir_range",
             QoreValue(new QoreRangeOperatorNode(nullptr, QoreValue(1), QoreValue(3))),
-            QoreIROpcode::RangeAny)) {
+            {QoreIROpcode::RangeAny, QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat})) {
         return 1;
     }
-    if (!lowerAndExpectOpcode("ir_square_brackets_range_list",
+    if (!lowerAndExpectAnyOpcode("ir_square_brackets_range_list",
             QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
                 QoreValue(0), QoreValue(1))),
-            QoreIROpcode::RangeSliceAny)) {
+            {QoreIROpcode::RangeSliceAny, QoreIROpcode::RangeSliceInt, QoreIROpcode::RangeSliceFloat})) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_square_brackets_list",

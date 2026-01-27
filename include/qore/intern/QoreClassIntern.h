@@ -38,6 +38,8 @@
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/qore_var_rwlock_priv.h"
 #include "qore/intern/VRMutex.h"
+#include "qore/QoreProgram.h"
+#include "qore/intern/LocalVar.h"
 #include "qore/vector_map"
 #include "qore/vector_set"
 
