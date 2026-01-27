@@ -255,7 +255,11 @@ Type AbstractConstant::getType() [flags=RET_VALUE_ONLY] {
     }
 
     // the class ptr must be valid
-    return new QoreObject(QC_TYPE, c->pgm, new QoreType(c->ce->getTypeInfo()));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(c->ce->getTypeInfo(), c->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, c->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns the value of the constant

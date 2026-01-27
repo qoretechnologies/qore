@@ -34,9 +34,126 @@
 #include "QC_AbstractReflectionFunction.h"
 
 #include <memory>
+#include <set>
+#include <map>
 
-QoreObject* get_type_object(const QoreTypeInfo* t) {
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(t));
+// Global registry for tracking QoreType objects by source program (issue #4816)
+// This allows us to break reference cycles during program destruction
+static QoreThreadLock type_registry_lock;
+static std::map<QoreProgram*, std::set<QoreType*>> type_registry;
+
+void QoreType::setContainer(QoreObject* obj) {
+    container = obj;
+    if (source_pgm) {
+        // Determine reference type based on whether this is same-program or cross-program storage
+        // Same-program: use weak ref to avoid cycles (Type will be destroyed with program anyway)
+        // Cross-program: use strong ref to keep source_pgm's type data alive
+        if (obj->getProgram() == source_pgm) {
+            // Same program - use weak ref to avoid cycle
+            source_pgm->depRef();
+            strong_ref = false;
+        } else {
+            // Different program - use strong ref to keep data alive
+            source_pgm->ref();
+            strong_ref = true;
+        }
+        ref_held = true;
+
+        // Register in the global registry (only for strong refs, which need cycle breaking)
+        if (strong_ref) {
+            AutoLocker al(type_registry_lock);
+            type_registry[source_pgm].insert(this);
+        }
+    }
+}
+
+void QoreType::releaseSourceRef() {
+    if (ref_held && source_pgm) {
+        ref_held = false;
+        if (strong_ref) {
+            // Deregister from the global registry
+            {
+                AutoLocker al(type_registry_lock);
+                auto it = type_registry.find(source_pgm);
+                if (it != type_registry.end()) {
+                    it->second.erase(this);
+                    if (it->second.empty()) {
+                        type_registry.erase(it);
+                    }
+                }
+            }
+            // Release the strong reference
+            ExceptionSink xsink;
+            source_pgm->deref(&xsink);
+        } else {
+            // Release the weak reference
+            source_pgm->depDeref();
+        }
+    }
+}
+
+QoreType::~QoreType() {
+    if (ref_held && source_pgm) {
+        if (strong_ref) {
+            // Deregister from the global registry
+            {
+                AutoLocker al(type_registry_lock);
+                auto it = type_registry.find(source_pgm);
+                if (it != type_registry.end()) {
+                    it->second.erase(this);
+                    if (it->second.empty()) {
+                        type_registry.erase(it);
+                    }
+                }
+            }
+            // Release the strong reference
+            ExceptionSink xsink;
+            source_pgm->deref(&xsink);
+        } else {
+            // Release the weak reference
+            source_pgm->depDeref();
+        }
+    }
+}
+
+// Called before program data is cleared to break reference cycles (issue #4816)
+// For Types stored in the same program as source_pgm, we release the strong ref
+// since they create a cycle: program -> globals -> Type -> QoreType -> program.
+// For Types that escaped to foreign modules, we keep the strong ref so their
+// type data remains valid.
+void qore_release_local_type_refs(QoreProgram* pgm) {
+    // First, collect the types to process while holding the lock
+    std::vector<QoreType*> types_to_release;
+    {
+        AutoLocker al(type_registry_lock);
+        auto it = type_registry.find(pgm);
+        if (it == type_registry.end()) {
+            return;
+        }
+
+        for (QoreType* t : it->second) {
+            // Check if the container's program matches the source program
+            // If they match, the Type is stored in the same program's globals,
+            // creating a cycle that needs to be broken
+            // If they differ, the Type escaped to a foreign program and needs
+            // the strong ref to keep source_pgm's type data alive
+            if (t->container && t->container->getProgram() == pgm) {
+                types_to_release.push_back(t);
+            }
+        }
+    }
+
+    // Release refs outside the lock to avoid potential deadlocks
+    for (QoreType* t : types_to_release) {
+        t->releaseSourceRef();
+    }
+}
+
+QoreObject* get_type_object(const QoreTypeInfo* t, QoreProgram* source_pgm) {
+    QoreType* qt = new QoreType(t, source_pgm);
+    QoreObject* obj = new QoreObject(QC_TYPE, getProgram(), qt);
+    qt->setContainer(obj);
+    return obj;
 }
 
 static QoreHashNode* Type_serializer(const QoreObject& self, const QoreType& t, QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -60,7 +177,11 @@ static void Type_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreD
             return;
         }
         assert(type);
-        self.setPrivate(CID_TYPE, new QoreType(type));
+        // Deserialized types don't have a source program reference since they come from
+        // serialized data. The type info is rebuilt from the string representation.
+        QoreType* qt = new QoreType(type);
+        self.setPrivate(CID_TYPE, qt);
+        qt->setContainer(&self);
         return;
     }
 
@@ -422,7 +543,11 @@ Type::constructor(string typestr) {
         return;
     }
     assert(type);
-    self->setPrivate(CID_TYPE, new QoreType(type));
+    // keep the current program alive while the Type object exists,
+    // as the type may reference user-defined types from this program (issue #4816)
+    QoreType* qt = new QoreType(type, getProgram());
+    self->setPrivate(CID_TYPE, qt);
+    qt->setContainer(self);
 }
 
 //! returns the type's name
@@ -687,7 +812,8 @@ Type Type::getBaseType() [flags=CONSTANT] {
     if (*xsink) {
         return QoreValue();
     }
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(type));
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    return get_type_object(type, t->source_pgm);
 }
 
 //! Returns the "or nothing" type for the current type; if the type is already an "or nothing" type (i.e. it already accepts @ref nothing), then the same type is returned
@@ -703,7 +829,8 @@ auto v = t.getOrNothingType();
     - getBaseType()
 */
 Type Type::getOrNothingType() [flags=CONSTANT] {
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(qore_get_or_nothing_type(t->typeInfo)));
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    return get_type_object(qore_get_or_nothing_type(t->typeInfo), t->source_pgm);
 }
 
 //! Returns the mandatory (i.e. not "or nothing") type for the current type
@@ -721,7 +848,8 @@ auto v = t.getMandatoryType();
     - getBaseType()
 */
 Type Type::getMandatoryType() [flags=CONSTANT] {
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(qore_get_value_type(t->typeInfo)));
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    return get_type_object(qore_get_value_type(t->typeInfo), t->source_pgm);
 }
 
 //! Returns the element type for complex list and hash types, if any, otherwise returns @ref nothing
@@ -739,7 +867,8 @@ Type Type::getMandatoryType() [flags=CONSTANT] {
     if (!element_type) {
         return QoreValue();
     }
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(element_type));
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    return get_type_object(element_type, t->source_pgm);
 }
 
 //! Returns the TypedHash for the type, if the type specifies a typed hash
@@ -803,7 +932,8 @@ bool Type::isTypedCode() [flags=CONSTANT] {
     if (!rt) {
         return QoreValue();
     }
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(rt));
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    return get_type_object(rt, t->source_pgm);
 }
 
 //! Returns a list of parameter types for typed code types, or @ref nothing if not a typed code type
@@ -822,8 +952,9 @@ bool Type::isTypedCode() [flags=CONSTANT] {
         return QoreValue();
     }
     ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_TYPE->getTypeInfo()), xsink);
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
     for (const QoreTypeInfo* ti : *params) {
-        rv->push(new QoreObject(QC_TYPE, getProgram(), new QoreType(ti)), xsink);
+        rv->push(get_type_object(ti, t->source_pgm), xsink);
     }
     return rv.release();
 }
@@ -872,8 +1003,9 @@ bool Type::isUnion() [flags=CONSTANT] {
         return QoreValue();
     }
     ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_TYPE->getTypeInfo()), xsink);
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
     for (const QoreTypeInfo* ti : *members) {
-        rv->push(new QoreObject(QC_TYPE, getProgram(), new QoreType(ti)), xsink);
+        rv->push(get_type_object(ti, t->source_pgm), xsink);
     }
     return rv.release();
 }
@@ -903,7 +1035,7 @@ Type t = Type::getType(v);
     @return the type object for the value
 */
 static Type Type::getType(auto v) [flags=CONSTANT] {
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(v.getFullTypeInfo()));
+    return get_type_object(v.getFullTypeInfo());
 }
 
 //! Returns the "or nothing" type object for the value
@@ -915,6 +1047,5 @@ Type t = Type::getOrNothingType(v);
     @return the "or nothing" type object for the value
 */
 static Type Type::getOrNothingType(auto v) [flags=CONSTANT] {
-    // the class ptr must be valid
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(get_or_nothing_type_check(v.getFullTypeInfo())));
+    return get_type_object(get_or_nothing_type_check(v.getFullTypeInfo()));
 }

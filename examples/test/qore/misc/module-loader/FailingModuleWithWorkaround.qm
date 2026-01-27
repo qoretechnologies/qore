@@ -1,0 +1,102 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# FailingModuleWithWorkaround.qm - demonstrates the ImplicitModuleTransaction workaround for issue #4816
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ./ForeignRegistry.qm
+%requires reflection
+
+module FailingModuleWithWorkaround {
+    version = "1.0";
+    desc = "Test module that fails during init but uses ImplicitModuleTransaction workaround";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Step 1: Register our hashdecl type in the foreign module
+        # This creates a reference to TestDataType2 in ForeignRegistry
+        Reflection::Type t = new Reflection::Type("hash<FailingModuleWithWorkaround::TestDataType2>");
+        ForeignRegistry::Registry::registerType("failing-module-workaround/test-data", t);
+
+        # WORKAROUND: Add rollback action to deregister the type if init fails
+        ImplicitModuleTransaction::add(sub () {
+            ForeignRegistry::Registry::deregisterType("failing-module-workaround/test-data");
+        });
+
+        # Step 2: Register a factory closure that references our module's code
+        ForeignRegistry::Registry::registerFactory("failing-factory-workaround",
+            hash<TestDataType2> sub () { return FailingModuleWithWorkaround::createTestData2(); });
+
+        # WORKAROUND: Add rollback action to deregister the factory if init fails
+        ImplicitModuleTransaction::add(sub () {
+            ForeignRegistry::Registry::deregisterFactory("failing-factory-workaround");
+        });
+
+        # Step 3: Throw an exception - this causes the module load to fail
+        # With the workaround, the rollback actions will be executed, cleaning up the dirty data
+        throw "INIT-ERROR", "intentional failure during module initialization";
+    };
+}
+
+#! Public namespace for the failing module with workaround
+public namespace FailingModuleWithWorkaround {
+    #! This hashdecl will be deleted when the module load fails
+    public hashdecl TestDataType2 {
+        #! A test field
+        string name;
+        #! Another test field
+        int value;
+    }
+
+    #! Factory function that will be registered
+    public hash<TestDataType2> sub createTestData2() {
+        return <TestDataType2>{
+            "name": "test2",
+            "value": 100,
+        };
+    }
+}
+
+#! Implements the ImplicitModuleTransaction pattern (simplified version for testing)
+#! In production, use DataProvider::ImplicitModuleTransaction
+public class ImplicitModuleTransaction {
+    public {}
+
+    private {
+        list<code> rollback();
+    }
+
+    #! Executes all rollback code if there is an active exception in module initialization
+    destructor() {
+        if (active_exception()) {
+            # execute all rollback actions in reverse order
+            for (int i = rollback.size() - 1; i >= 0; --i) {
+                rollback[i]();
+            }
+        }
+    }
+
+    #! Adds a rollback closure to be executed if there is an active exception in module initialization
+    static add(code rb_code) {
+        if (!rb) {
+            rb = new ImplicitModuleTransaction();
+        }
+        rb.addRollback(rb_code);
+    }
+
+    #! Adds a rollback closure to be executed if there is an active exception in module initialization
+    private addRollback(code rb_code) {
+        rollback += rb_code;
+    }
+}
+
+#! Private definitions
+namespace Priv {
+    # Holds and optionally executes rollback code
+    thread_local ImplicitModuleTransaction rb;
+}

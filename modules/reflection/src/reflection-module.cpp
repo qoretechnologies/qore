@@ -4,7 +4,7 @@
 
     Qore reflection module
 
-    Copyright (C) 2017 - 2024 Qore Technologies s.r.o.
+    Copyright (C) 2017 - 2026 Qore Technologies s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -87,6 +87,9 @@ const TypedHashDecl* hashdeclClassAccessInfo,
     * hashdeclMethodAccessInfo;
 
 QoreStringNode* reflection_module_init() {
+    // issue #4816: register callback to break Type reference cycles during program destruction
+    qore_register_program_cleanup_callback(qore_release_local_type_refs);
+
     // pre-initialize reflection classes
     preinitAbstractVariantClass();
     preinitFunctionVariantClass();

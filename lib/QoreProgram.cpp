@@ -5,7 +5,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -58,6 +58,20 @@ extern bool threads_initialized;
 #include <map>
 
 ParseOptionMaps pomaps;
+
+// Callback for releasing Type refs before program data is cleared (issue #4816)
+// This allows the reflection module to break reference cycles
+static qore_program_cleanup_callback_t program_cleanup_callback = nullptr;
+
+void qore_register_program_cleanup_callback(qore_program_cleanup_callback_t callback) {
+    program_cleanup_callback = callback;
+}
+
+void qore_call_program_cleanup_callback(QoreProgram* pgm) {
+    if (program_cleanup_callback) {
+        program_cleanup_callback(pgm);
+    }
+}
 
 // note the number and order of the warnings has to correspond to those in QoreProgram.h
 static const char* qore_warnings_l[] = {
@@ -676,6 +690,12 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
+
+        // issue #4816: call cleanup callback to break reference cycles
+        // (e.g., reflection Type objects that hold strong refs to source_pgm)
+        if (program_cleanup_callback) {
+            program_cleanup_callback(pgm);
+        }
 
         // delete all global variables, etc
         clearNamespaceData(xsink);

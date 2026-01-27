@@ -122,6 +122,30 @@ struct QoreBreakpointList_t : public bkp_list_t {
     DLLEXPORT ~QoreBreakpointList_t();
 };
 
+//! Callback type for program cleanup (called before namespace data is cleared)
+/** Used by the reflection module to break reference cycles for Type objects (issue #4816)
+    @param pgm the program being destroyed
+
+    @since %Qore 2.3
+*/
+typedef void (*qore_program_cleanup_callback_t)(QoreProgram* pgm);
+
+//! Registers a callback to be called before program namespace data is cleared
+/** @param callback the callback function to register
+
+    @since %Qore 2.3
+*/
+DLLEXPORT void qore_register_program_cleanup_callback(qore_program_cleanup_callback_t callback);
+
+//! Calls the registered program cleanup callback for the given program
+/** This should be called before dereferencing a program to break potential reference cycles.
+
+    @param pgm the program to clean up
+
+    @since %Qore 2.3
+*/
+DLLEXPORT void qore_call_program_cleanup_callback(QoreProgram* pgm);
+
 //! supports parsing and executing Qore-language code, reference counted, dynamically-allocated only
 /** This class implements a transaction and thread-safe container for qore-language code
     This class implements two-layered reference counting to address problems with circular references.
