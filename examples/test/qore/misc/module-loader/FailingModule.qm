@@ -1,0 +1,64 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# FailingModule.qm - demonstrates issue #4816 - module that fails after registering data
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ./ForeignRegistry.qm
+%requires reflection
+
+module FailingModule {
+    version = "1.0";
+    desc = "Test module that fails during init after registering data";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Step 1: Register our hashdecl type in the foreign module
+        # This creates a reference to TestDataType in ForeignRegistry
+        Reflection::Type t = new Reflection::Type("hash<FailingModule::TestDataType>");
+        ForeignRegistry::Registry::registerType("failing-module/test-data", t);
+
+        # Step 2: Register a factory closure that references our module's code
+        ForeignRegistry::Registry::registerFactory("failing-factory", hash<TestDataType> sub () { return FailingModule::createTestData(); });
+
+        # Step 3: Throw an exception - this causes the module load to fail
+        # When this happens, our QoreProgram is deleted along with TestDataType
+        # But ForeignRegistry still has references to our deleted types!
+        throw "INIT-ERROR", "intentional failure during module initialization";
+    };
+}
+
+#! Public namespace for the failing module
+public namespace FailingModule {
+    #! This hashdecl will be deleted when the module load fails
+    /** When ForeignRegistry tries to access the Type object referencing this hashdecl
+        after the module is deleted, it causes a crash because the memory is freed
+    */
+    public hashdecl TestDataType {
+        #! A test field
+        string name;
+        #! Another test field
+        int value;
+        #! A nested type reference
+        *hash<TestNestedType> nested;
+    }
+
+    #! Nested hashdecl to make the example more realistic
+    public hashdecl TestNestedType {
+        #! Nested field
+        string description;
+    }
+
+    #! Factory function that will be registered
+    public hash<TestDataType> sub createTestData() {
+        return <TestDataType>{
+            "name": "test",
+            "value": 42,
+        };
+    }
+}

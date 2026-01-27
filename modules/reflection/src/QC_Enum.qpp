@@ -250,7 +250,11 @@ Type Enum::getType() [flags=RET_VALUE_ONLY] {
     }
 
     // the enum ptr must be valid
-    return new QoreObject(QC_TYPE, e->pgm, new QoreType(e->ed->getTypeInfo()));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(e->ed->getTypeInfo(), e->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, e->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns the "or nothing" type object for this enum
@@ -273,7 +277,11 @@ Type Enum::getOrNothingType() [flags=RET_VALUE_ONLY] {
     }
 
     // the enum ptr must be valid
-    return new QoreObject(QC_TYPE, e->pgm, new QoreType(e->ed->getTypeInfo(true)));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(e->ed->getTypeInfo(true), e->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, e->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns the base type of the enum (e.g., int, string)
@@ -294,7 +302,11 @@ Type Enum::getBaseType() [flags=RET_VALUE_ONLY] {
     }
 
     // the enum ptr must be valid
-    return new QoreObject(QC_TYPE, e->pgm, new QoreType(e->ed->getBaseTypeInfo()));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(e->ed->getBaseTypeInfo(), e->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, e->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns the namespace for the enum
