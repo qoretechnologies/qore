@@ -571,7 +571,12 @@ public class DpqlTokenizer {
 
         # Identifier (function names, keywords)
         if (c =~ /[a-zA-Z_]/) {
-            in_field_ref_context = False;
+            # Only reset field-ref context if NOT in an accessor chain (i.e., not after a dot)
+            # This allows expressions like "@data[0].user.name" to keep context across "user"
+            string prev = prevNonWhitespaceChar();
+            if (prev != ".") {
+                in_field_ref_context = False;
+            }
             return scanIdentifier();
         }
 

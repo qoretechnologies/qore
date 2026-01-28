@@ -330,7 +330,7 @@ public class DpqlSerializer {
                 return "{" + serializeKeyList(acc.value) + "}";
 
             default:
-                return "";
+                throw "DPQL-SERIALIZE-ERROR", sprintf("Unknown accessor type: %y", acc.type);
         }
     }
 

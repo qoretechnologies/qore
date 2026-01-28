@@ -661,7 +661,8 @@ public class DpqlCompletionProvider {
                     ++pos;
                 }
             }
-            field_name = substr(text, start, pos - start);
+            # Unescape the field name to match actual field names in schema
+            field_name = unescapeString(substr(text, start, pos - start));
             ++pos;  # Skip closing quote
         } else {
             # Unquoted field name (can include dots for nested access)
@@ -766,7 +767,7 @@ public class DpqlCompletionProvider {
 
             string key;
             if (trimmed[pos] == '"') {
-                # Quoted key
+                # Quoted key - extract and unescape
                 ++pos;
                 int start = pos;
                 while (pos < trimmed.size() && trimmed[pos] != '"') {
@@ -776,7 +777,8 @@ public class DpqlCompletionProvider {
                         ++pos;
                     }
                 }
-                key = substr(trimmed, start, pos - start);
+                # Unescape the key to match actual field names in schema
+                key = unescapeString(substr(trimmed, start, pos - start));
                 if (pos < trimmed.size()) ++pos;  # Skip closing quote
             } else {
                 # Unquoted key
@@ -892,6 +894,35 @@ public class DpqlCompletionProvider {
         }
 
         return items;
+    }
+
+    #! Unescapes DPQL escape sequences in a quoted string
+    /** Handles \\, \", \', \n, \r, \t
+        @param s the escaped string content (without surrounding quotes)
+        @return the unescaped string
+    */
+    private string unescapeString(string s) {
+        string result = "";
+        int i = 0;
+        while (i < s.size()) {
+            if (s[i] == "\\" && i + 1 < s.size()) {
+                string next = s[i + 1];
+                switch (next) {
+                    case "n": result += "\n"; break;
+                    case "r": result += "\r"; break;
+                    case "t": result += "\t"; break;
+                    case "\\": result += "\\"; break;
+                    case '"': result += '"'; break;
+                    case "'": result += "'"; break;
+                    default: result += next; break;
+                }
+                i += 2;
+            } else {
+                result += s[i];
+                ++i;
+            }
+        }
+        return result;
     }
 }
 

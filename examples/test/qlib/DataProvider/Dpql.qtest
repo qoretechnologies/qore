@@ -953,6 +953,24 @@ public class DpqlTest inherits QUnit::Test {
             assertTrue(inlist("b", labels));
         }
 
+        # Test field name with escaped quote: @"field\"name"{
+        {
+            # Field name with a literal quote in it
+            string field_name = "field\"name";
+            hash<string, AbstractDataField> fields = {
+                field_name: new QoreDataField(field_name, NOTHING,
+                    new HashDataType(NOTHING, {
+                        "inner": new QoreDataField("inner", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            # The DPQL expression: @"field\"name"{
+            # In double-quoted string, backslash and quote need escaping
+            string dpql = "@\"field\\\"name\"{";
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(dpql, dpql.size(), fields);
+            assertEq(1, items.size());
+            assertEq("inner", items[0].label);
+        }
+
         # Test empty fields hash
         {
             hash<string, AbstractDataField> fields = {};
