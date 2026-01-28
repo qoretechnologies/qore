@@ -318,7 +318,7 @@ public class DpqlSerializer {
         return result;
     }
 
-    #! Serializes a single accessor
+    #! Serializes a single accessor (type-safe version)
     private string serializeAccessor(hash<DataProviderFieldAccessor> acc) {
         switch (acc.type) {
             case DPQL_ACCESSOR_INDEX:
@@ -332,6 +332,21 @@ public class DpqlSerializer {
 
             default:
                 throw "DPQL-SERIALIZE-ERROR", sprintf("Unknown accessor type: %y", acc.type);
+        }
+    }
+
+    #! Serializes a single accessor from untyped data (e.g., JSON-deserialized)
+    /** Attempts to cast the hash to DataProviderFieldAccessor with proper error reporting
+    */
+    private string serializeAccessor(hash<auto> acc) {
+        try {
+            return serializeAccessor(cast<hash<DataProviderFieldAccessor>>(acc));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "RUNTIME-CAST-ERROR") {
+                throw "DPQL-SERIALIZE-ERROR", sprintf("Invalid accessor hash: expected keys 'type' and 'value', "
+                    "got: %y", keys acc);
+            }
+            rethrow;
         }
     }
 
@@ -350,8 +365,8 @@ public class DpqlSerializer {
         return parts.join(",");
     }
 
-    #! Serializes a range: start..end, ..end, start..
-    private string serializeRange(hash<auto> range) {
+    #! Serializes a range: start..end, ..end, start.. (type-safe version)
+    private string serializeRange(hash<DataProviderRangeSpec> range) {
         string result = "";
         if (exists range.start) {
             result += string(range.start);
@@ -363,7 +378,20 @@ public class DpqlSerializer {
         return result;
     }
 
-    #! Serializes key list for key accessor
+    #! Serializes a range from untyped data (e.g., JSON-deserialized)
+    private string serializeRange(hash<auto> range) {
+        try {
+            return serializeRange(cast<hash<DataProviderRangeSpec>>(range));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "RUNTIME-CAST-ERROR") {
+                throw "DPQL-SERIALIZE-ERROR", sprintf("Invalid range spec: expected keys 'start' and/or 'end', "
+                    "got: %y", keys range);
+            }
+            rethrow;
+        }
+    }
+
+    #! Serializes key list for key accessor (type-safe version)
     private string serializeKeyList(list<string> key_list) {
         list<string> parts = ();
         foreach string key in (key_list) {
@@ -372,6 +400,21 @@ public class DpqlSerializer {
                 parts += serializeString(key);
             } else {
                 parts += key;
+            }
+        }
+        return parts.join(", ");
+    }
+
+    #! Serializes key list from untyped data (e.g., JSON-deserialized)
+    private string serializeKeyList(list<auto> key_list) {
+        list<string> parts = ();
+        foreach auto key in (key_list) {
+            string skey = string(key);
+            # Check if key needs quoting
+            if (skey =~ /[^a-zA-Z0-9_]/ || skey =~ /^[0-9]/) {
+                parts += serializeString(skey);
+            } else {
+                parts += skey;
             }
         }
         return parts.join(", ");
