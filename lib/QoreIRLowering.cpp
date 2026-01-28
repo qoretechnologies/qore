@@ -3614,9 +3614,22 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
     if (!value.isValid()) {
         return QoreIRValue();
     }
+    QoreIROpcode opcode = QoreIROpcode::CastAny;
+    if (cast) {
+        if (dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
+            opcode = QoreIROpcode::CastList;
+        } else if (dynamic_cast<const QoreComplexHashCastOperatorNode*>(node)
+                || dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
+            opcode = QoreIROpcode::CastHash;
+        } else if (dynamic_cast<const QoreEnumCastOperatorNode*>(node)) {
+            opcode = QoreIROpcode::CastEnum;
+        } else if (dynamic_cast<const QoreClassCastOperatorNode*>(node)) {
+            opcode = QoreIROpcode::CastObject;
+        }
+    }
     std::vector<QoreIRValue> operands;
     operands.push_back(value);
-    return lowerExprOpOrInvoke(QoreIROpcode::CastAny, expr, operands, cast_node->loc, error);
+    return lowerExprOpOrInvoke(opcode, expr, operands, cast_node->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string& error) {

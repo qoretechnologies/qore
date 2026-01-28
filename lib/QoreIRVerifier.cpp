@@ -157,6 +157,10 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RangeSliceFloat:
         case QoreIROpcode::MakeList:
         case QoreIROpcode::CastAny:
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum:
         case QoreIROpcode::ExtractAny:
         case QoreIROpcode::RemoveAny:
         case QoreIROpcode::KeysAny:
@@ -296,6 +300,10 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::HashMapSelectAny:
             return 4;
         case QoreIROpcode::CastAny:
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum:
             return 1;
         case QoreIROpcode::ExtractAny:
             return 4;
@@ -536,6 +544,10 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::CallMethod
                     || inst->opcode == QoreIROpcode::CallStatic
                     || inst->opcode == QoreIROpcode::CastAny
+                    || inst->opcode == QoreIROpcode::CastList
+                    || inst->opcode == QoreIROpcode::CastHash
+                    || inst->opcode == QoreIROpcode::CastObject
+                    || inst->opcode == QoreIROpcode::CastEnum
                     || inst->opcode == QoreIROpcode::ExtractAny
                     || inst->opcode == QoreIROpcode::RemoveAny
                     || inst->opcode == QoreIROpcode::KeysAny

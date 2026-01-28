@@ -9827,7 +9827,14 @@ int main() {
             QoreValue(new QoreParseCastOperatorNode(nullptr,
                 new QoreParseTypeInfo(strdup("list"), false),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
-            QoreIROpcode::CastAny)) {
+            QoreIROpcode::CastList)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_cast_list_typed",
+            QoreValue(new QoreParseCastOperatorNode(nullptr,
+                new QoreParseTypeInfo(strdup("list"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::CastList)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithProgramSource("ir_cast_parse_hash",
@@ -9835,7 +9842,14 @@ int main() {
             QoreValue(new QoreParseCastOperatorNode(nullptr,
                 new QoreParseTypeInfo(strdup("hash"), false),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
-            QoreIROpcode::CastAny)) {
+            QoreIROpcode::CastHash)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_cast_hash_typed",
+            QoreValue(new QoreParseCastOperatorNode(nullptr,
+                new QoreParseTypeInfo(strdup("hash"), false),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::CastHash)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_object",

@@ -188,6 +188,10 @@ enum class QoreIROpcode : uint16_t {
     RangeSliceInt,
     RangeSliceFloat,
     CastAny,
+    CastList,
+    CastHash,
+    CastObject,
+    CastEnum,
 
     Br,
     BrIf,

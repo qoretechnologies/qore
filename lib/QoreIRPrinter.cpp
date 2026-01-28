@@ -174,6 +174,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::RangeSliceInt: return "range.slice.int";
         case QoreIROpcode::RangeSliceFloat: return "range.slice.float";
         case QoreIROpcode::CastAny: return "cast.any";
+        case QoreIROpcode::CastList: return "cast.list";
+        case QoreIROpcode::CastHash: return "cast.hash";
+        case QoreIROpcode::CastObject: return "cast.object";
+        case QoreIROpcode::CastEnum: return "cast.enum";
         case QoreIROpcode::Br: return "br";
         case QoreIROpcode::BrIf: return "br.if";
         case QoreIROpcode::Return: return "return";

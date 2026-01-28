@@ -190,6 +190,10 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum:
             return evalExprNode(expr, xsink);
         case QoreIROpcode::InvokeSimError: {
             if (xsink) {
@@ -1346,6 +1350,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::ElementsAny:
             case QoreIROpcode::DotEvalAny:
             case QoreIROpcode::CastAny:
+            case QoreIROpcode::CastList:
+            case QoreIROpcode::CastHash:
+            case QoreIROpcode::CastObject:
+            case QoreIROpcode::CastEnum:
             case QoreIROpcode::InvokeSimError: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 QoreValue res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
