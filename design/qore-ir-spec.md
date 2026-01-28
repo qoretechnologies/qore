@@ -349,16 +349,15 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
      * **Status (2026-01-28):** exec-mode smoke tests added for list shift/unshift/splice + lvalue shift-assign; Valgrind baseline recorded.
    - **Residual `.any` fallbacks (Phase‑1b backlog)**
      * Track helper-only ops that currently have **only** `.any` opcodes: `ExtractAny`, `RemoveAny`, `KeysAny`,
-       `RegexExtractAny`, `RegexSubstAny`, `ExistsAny`, `ElementsAny`, `DotEvalAny`, `MapSelectAny`, `HashMapAny`,
-       `HashMapSelectAny`.
+       `RegexExtractAny`, `RegexSubstAny`, `DotEvalAny`, `MapSelectAny`, `HashMapAny`, `HashMapSelectAny`.
      * Track operators where typed coverage is partial: `UnaryPlusAny` (no typed), `ModInt/ModAny` (no float),
        `And/Or/Xor` (int/any only), `Eq/Ne` (int/any only), `Cmp` (int/float/any but no string-specialized op).
      * **Phase‑1 decision:** keep these helper ops as `.any` endpoints for now; rely on exec‑mode smoke tests to
        ensure they execute in IR without fallback. Revisit for Phase‑1b/Phase‑2 typed opcode work.
      * Add exec‑mode IR smoke tests for any new typed opcodes so fallback warnings are never emitted.
-     * **Status (2026-01-28):** helper ops smoke test added; `RegexMatchBool` opcode introduced and lowering now
-       emits it; typed cast opcodes (`CastList`, `CastHash`, `CastObject`, `CastEnum`) added for resolved cast nodes;
-       Valgrind baseline recorded.
+     * **Status (2026-01-28):** helper ops smoke test added; `RegexMatchBool`, `ExistsBool`, and `ElementsInt`
+       opcodes introduced and lowering now emits them; typed cast opcodes (`CastList`, `CastHash`, `CastObject`,
+       `CastEnum`) added for resolved cast nodes; Valgrind baseline recorded.
    - **Range/date + container tests**
      * Extend `examples/test/ir/IRExecMode*.qtest` with cases that explicitly validate the guard policy and exception handling for each operator family.
      * After each family is widened, rerun `qore -b --exec-mode=ir` under Valgrind and capture the clean heap baseline so we know no new refcount leaks or unwinding regressions slipped in.

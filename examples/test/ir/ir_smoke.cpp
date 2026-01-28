@@ -6258,12 +6258,12 @@ int main() {
         }
         if (!lowerAndExpectOpcode("ir_exists",
                 QoreValue(new QoreExistsOperatorNode(nullptr, QoreValue(1))),
-                QoreIROpcode::ExistsAny)) {
+                QoreIROpcode::ExistsBool)) {
             return 1;
         }
         if (!lowerAndExpectOpcode("ir_elements",
                 QoreValue(new QoreElementsOperatorNode(nullptr, QoreValue("abc"))),
-                QoreIROpcode::ElementsAny)) {
+                QoreIROpcode::ElementsInt)) {
             return 1;
         }
         {
@@ -6475,7 +6475,7 @@ int main() {
                 stmt_loc_ptr);
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(try_stmt);
-            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_exists_invoke", root, QoreIROpcode::ExistsAny);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_exists_invoke", root, QoreIROpcode::ExistsBool);
             delete root;
             if (!ok) {
                 return 1;
@@ -6492,7 +6492,7 @@ int main() {
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(try_stmt);
             bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_elements_invoke", root,
-                QoreIROpcode::ElementsAny);
+                QoreIROpcode::ElementsInt);
             delete root;
             if (!ok) {
                 return 1;
@@ -9726,39 +9726,39 @@ int main() {
     if (!lowerAndExpectOpcodeWithParseInit("ir_exists_parse_assigned",
             QoreValue(new QoreExistsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)))),
-            QoreIROpcode::ExistsAny)) {
+            QoreIROpcode::ExistsBool)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_exists_parse_maybe",
             QoreValue(new QoreExistsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned_late"),
                     &analysis_int_unassigned_late, false)))),
-            QoreIROpcode::ExistsAny)) {
+            QoreIROpcode::ExistsBool)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_exists_parse_hash",
             QoreValue(new QoreExistsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
-            QoreIROpcode::ExistsAny)) {
+            QoreIROpcode::ExistsBool)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_elements_parse_assigned",
             QoreValue(new QoreElementsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
-            QoreIROpcode::ElementsAny)) {
+            QoreIROpcode::ElementsInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_elements_parse_maybe",
             QoreValue(new QoreElementsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
                     &analysis_list_maybe_left, false)))),
-            QoreIROpcode::ElementsAny)) {
+            QoreIROpcode::ElementsInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_elements_parse_string",
             QoreValue(new QoreElementsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
-            QoreIROpcode::ElementsAny)) {
+            QoreIROpcode::ElementsInt)) {
         return 1;
     }
     {

@@ -3477,7 +3477,7 @@ QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& erro
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::ExistsAny, expr, operands, op->loc, error);
+    return lowerExprOpOrInvoke(QoreIROpcode::ExistsBool, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerElements(const QoreValue& expr, std::string& error) {
@@ -3491,7 +3491,7 @@ QoreIRValue QoreIRLowering::lowerElements(const QoreValue& expr, std::string& er
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::ElementsAny, expr, operands, op->loc, error);
+    return lowerExprOpOrInvoke(QoreIROpcode::ElementsInt, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& error) {

@@ -169,7 +169,9 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RegexExtractAny:
         case QoreIROpcode::RegexSubstAny:
         case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
         case QoreIROpcode::DotEvalAny:
         case QoreIROpcode::LoadLocal:
         case QoreIROpcode::LoadArg:
@@ -314,7 +316,9 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RegexExtractAny:
         case QoreIROpcode::RegexSubstAny:
         case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
         case QoreIROpcode::DotEvalAny:
             return 1;
         case QoreIROpcode::ToBool:
@@ -556,7 +560,9 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::RegexExtractAny
                     || inst->opcode == QoreIROpcode::RegexSubstAny
                     || inst->opcode == QoreIROpcode::ExistsAny
+                    || inst->opcode == QoreIROpcode::ExistsBool
                     || inst->opcode == QoreIROpcode::ElementsAny
+                    || inst->opcode == QoreIROpcode::ElementsInt
                     || inst->opcode == QoreIROpcode::DotEvalAny) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 if (!expr_inst || !expr_inst->expr.hasNode()) {

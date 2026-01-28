@@ -117,7 +117,9 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::RegexExtractAny: return "regex.extract.any";
         case QoreIROpcode::RegexSubstAny: return "regex.subst.any";
         case QoreIROpcode::ExistsAny: return "exists.any";
+        case QoreIROpcode::ExistsBool: return "exists.bool";
         case QoreIROpcode::ElementsAny: return "elements.any";
+        case QoreIROpcode::ElementsInt: return "elements.int";
         case QoreIROpcode::DotEvalAny: return "dot.eval.any";
         case QoreIROpcode::Foreach: return "foreach";
         case QoreIROpcode::OnBlockExit: return "on.block.exit";
