@@ -157,6 +157,7 @@ struct ParseProgramContext {
     std::optional<QoreProgramContextHelper> program_context;
     std::optional<ProgramRuntimeExternalParseContextHelper> parse_lock;
     std::optional<ProgramRuntimeParseAccessHelper> parse_access;
+    std::unique_ptr<ParseExceptionSink> parse_exception_sink;
     QoreParseContext parse_context;
 
     ParseProgramContext() : parse_context() {
@@ -176,6 +177,7 @@ struct ParseProgramContext {
             return false;
         }
         parse_context = QoreParseContext(static_cast<LocalVar*>(nullptr), program);
+        parse_exception_sink = std::make_unique<ParseExceptionSink>();
         parse_access.emplace(&xsink, program);
         if (xsink) {
             std::cerr << "Failed to acquire parse access (" << name << ")\n";
@@ -184,6 +186,31 @@ struct ParseProgramContext {
         return true;
     }
 };
+
+static int parse_init_value_with_program(QoreValue& val, QoreParseContext& parse_context) {
+    QoreProgram* program = parse_context.pgm ? parse_context.pgm : getProgram();
+    if (!program) {
+        return parse_init_value(val, parse_context);
+    }
+
+    const ParseNode* parse_node = nullptr;
+    if (val.hasNode()) {
+        parse_node = dynamic_cast<const ParseNode*>(val.getInternalNode());
+    }
+    // Avoid enabling parse exceptions for nodes without source locations; some tests
+    // intentionally construct nodes with nullptr loc and expect parse failure paths.
+    std::optional<PreParseHelper> pph;
+    if (!parse_node || parse_node->loc) {
+        pph.emplace(qore_program_private::get(*program));
+    }
+    int rc = parse_init_value(val, parse_context);
+    if (ExceptionSink* psink = program->getParseExceptionSink()) {
+        if (*psink) {
+            psink->clear();
+        }
+    }
+    return rc;
+}
 
 static bool lowerAndVerify(const char* name, QoreValue expr) {
     ValueHolder expr_holder(expr, nullptr);
@@ -436,7 +463,7 @@ static bool lowerAndExpectOpcodeWithParseInit(const char* name, QoreValue expr, 
     }
     QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
         return false;
     }
@@ -475,7 +502,7 @@ static bool lowerAndExpectOpcodesWithParseInit(const char* name, QoreValue expr,
     }
     QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
         return false;
     }
@@ -515,7 +542,7 @@ static bool lowerAndExpectGuard(const char* name, QoreValue expr) {
     }
     QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
         return false;
     }
@@ -570,7 +597,7 @@ static bool lowerAndExpectOpcodeWithProgramSource(const char* name, const char* 
     }
     QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
     QoreValue parsed_expr(expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
         return false;
     }
@@ -608,9 +635,21 @@ static bool lowerAndExpectOpcodeFromParseAnalysis(const char* name, QoreValue ex
         return false;
     }
     QoreParseContext& parse_context = program_ctx.parse_context;
+    ParseExceptionSink xsink;
     QoreValue parsed_expr(expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
-        std::cerr << "Parse init failed (" << name << ")\n";
+    int init_err = 0;
+    try {
+        init_err = parse_init_value_with_program(parsed_expr, parse_context);
+    } catch (...) {
+        std::cerr << "Parse init exception (" << name << ")\n";
+        return false;
+    }
+    if (init_err || **xsink) {
+        std::cerr << "Parse init failed (" << name << ")"
+            << " err=" << init_err
+            << " type=" << parsed_expr.getTypeName()
+            << " hasNode=" << (parsed_expr.hasNode() ? "true" : "false")
+            << "\n";
         return false;
     }
     const AbstractQoreNode* node = parsed_expr.getInternalNode();
@@ -644,19 +683,53 @@ static bool lowerAndExpectOpcodeFromParseAnalysis(const char* name, QoreValue ex
         std::cerr << "Parse analysis missing type info (" << name << ")\n";
         return false;
     }
-    bool left_int = left_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+    bool left_int = left_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
         && QoreTypeInfo::isType(left_analysis.known_type, NT_INT);
-    bool right_int = right_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+    bool right_int = right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
         && QoreTypeInfo::isType(right_analysis.known_type, NT_INT);
-    bool left_float = left_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+    bool left_float = left_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
         && QoreTypeInfo::isType(left_analysis.known_type, NT_FLOAT);
-    bool right_float = right_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+    bool right_float = right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
         && QoreTypeInfo::isType(right_analysis.known_type, NT_FLOAT);
+    bool left_never_nothing = left_analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+    bool right_never_nothing = right_analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+
+    bool prefer_never_nothing = false;
+    bool compare_int_only = false;
+    if (dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
+        prefer_never_nothing = true;
+        compare_int_only = true;
+    } else if (dynamic_cast<const QorePlusEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreMinusEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreMultiplyEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreDivideEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreModuloEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreAndEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreOrEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreXorEqualsOperatorNode*>(node)) {
+        prefer_never_nothing = true;
+    } else if (dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)
+        || dynamic_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)
+        || dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreLogicalComparisonOperatorNode*>(node)) {
+        prefer_never_nothing = true;
+    }
     QoreIROpcode expected = any_opcode;
-    if (left_int && right_int) {
-        expected = int_opcode;
-    } else if (left_float && right_float) {
-        expected = float_opcode;
+    if (prefer_never_nothing) {
+        if (left_int && right_int && left_never_nothing && right_never_nothing) {
+            expected = int_opcode;
+        } else if (!compare_int_only
+            && left_float && right_float && left_never_nothing && right_never_nothing) {
+            expected = float_opcode;
+        }
+    } else {
+        if (left_int && right_int) {
+            expected = int_opcode;
+        } else if (left_float && right_float) {
+            expected = float_opcode;
+        }
     }
 
     ValueHolder expr_holder(parsed_expr, nullptr);
@@ -694,7 +767,7 @@ static bool lowerAndExpectUnaryOpcodeFromParseAnalysis(const char* name, QoreVal
     }
     QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
         return false;
     }
@@ -762,7 +835,7 @@ static bool expectParseAnalysisFlags(const char* name, QoreValue expr, const Qor
     }
     QoreParseContext& parse_context = program_ctx.parse_context;
     QoreValue parsed_expr(expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
         return false;
     }
@@ -815,7 +888,7 @@ static bool expectParseAnalysisFlagsWithProgram(const char* name, QoreValue expr
     }
     QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
     QoreValue parsed_expr(expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
         return false;
     }
@@ -870,7 +943,7 @@ static bool expectParseAnalysisFlagsWithProgramSource(const char* name, const ch
     }
     QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
     QoreValue parsed_expr(expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
         return false;
     }
@@ -926,7 +999,7 @@ static bool expectParseAnalysisFlagsWithProgramSourceAndClassType(const char* na
     }
     QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
     QoreValue parsed_expr(expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (" << name << ")\n";
         return false;
     }
@@ -1012,7 +1085,7 @@ static bool parseExpectFailure(const char* name, QoreValue expr) {
     }
     QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
     QoreValue parsed_expr(expr);
-    int rc = parse_init_value(parsed_expr, parse_context);
+    int rc = parse_init_value_with_program(parsed_expr, parse_context);
     ValueHolder expr_holder(parsed_expr, nullptr);
     if (ExceptionSink* psink = program->getParseExceptionSink()) {
         if (*psink) {
@@ -1054,7 +1127,7 @@ static bool parseExpectFailureWithProgramSource(const char* name, const char* so
     }
     QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
     QoreValue parsed_expr(expr);
-    int rc = parse_init_value(parsed_expr, parse_context);
+    int rc = parse_init_value_with_program(parsed_expr, parse_context);
     ValueHolder expr_holder(parsed_expr, nullptr);
     if (ExceptionSink* psink = program->getParseExceptionSink()) {
         if (*psink) {
@@ -1398,7 +1471,7 @@ static bool runExprInterpreterSmoke() {
         call_args->add(QoreValue(2), &call_loc);
         parsed_call = QoreValue(new FunctionCallNode(&call_loc, strdup("ir_expr_call"), call_args));
         QoreParseContext call_context(static_cast<LocalVar*>(nullptr), program);
-        if (parse_init_value(parsed_call, call_context)) {
+        if (parse_init_value_with_program(parsed_call, call_context)) {
             std::cerr << "Expr interpreter smoke checks failed (call parse init)\n";
             return false;
         }
@@ -1416,7 +1489,7 @@ static bool runExprInterpreterSmoke() {
         call_ref_args->add(QoreValue(1), &call_loc);
         parsed_call_ref = QoreValue(new CallReferenceCallNode(&call_loc, QoreValue(cref), call_ref_args));
         QoreParseContext call_ref_context(static_cast<LocalVar*>(nullptr), program);
-        if (parse_init_value(parsed_call_ref, call_ref_context)) {
+        if (parse_init_value_with_program(parsed_call_ref, call_ref_context)) {
             std::cerr << "Expr interpreter smoke checks failed (call ref parse init)\n";
             return false;
         }
@@ -1435,7 +1508,7 @@ static bool runExprInterpreterSmoke() {
         call_ref_bad_args->add(QoreValue(bad_hash), &call_loc);
         parsed_call_ref_bad = QoreValue(new CallReferenceCallNode(&call_loc, QoreValue(cref_bad), call_ref_bad_args));
         QoreParseContext call_ref_bad_context(static_cast<LocalVar*>(nullptr), program);
-        if (parse_init_value(parsed_call_ref_bad, call_ref_bad_context)) {
+        if (parse_init_value_with_program(parsed_call_ref_bad, call_ref_bad_context)) {
             std::cerr << "Expr interpreter smoke checks failed (call ref bad parse init)\n";
             return false;
         }
@@ -1444,7 +1517,7 @@ static bool runExprInterpreterSmoke() {
         parsed_static = QoreValue(new StaticMethodCallNode(&call_loc, new NamedScope(strdup("IrExprClass::sm")),
             static_args));
         QoreParseContext static_context(static_cast<LocalVar*>(nullptr), program);
-        if (parse_init_value(parsed_static, static_context)) {
+        if (parse_init_value_with_program(parsed_static, static_context)) {
             std::cerr << "Expr interpreter smoke checks failed (static call parse init)\n";
             return false;
         }
@@ -1459,7 +1532,7 @@ static bool runExprInterpreterSmoke() {
         self_args->add(QoreValue(1), &call_loc);
         parsed_self = QoreValue(new SelfFunctionCallNode(&call_loc, strdup("m"), self_args));
         QoreParseContext self_context(&self_var, program);
-        if (parse_init_value(parsed_self, self_context)) {
+        if (parse_init_value_with_program(parsed_self, self_context)) {
             std::cerr << "Expr interpreter smoke checks failed (self call parse init)\n";
             return false;
         }
@@ -1468,7 +1541,7 @@ static bool runExprInterpreterSmoke() {
         parsed_cast = QoreValue(new QoreParseCastOperatorNode(&cast_loc,
             new QoreParseTypeInfo(strdup("hash"), false), QoreValue(new QoreParseHashNode(&cast_loc, true))));
         QoreParseContext cast_context(static_cast<LocalVar*>(nullptr), program);
-        if (parse_init_value(parsed_cast, cast_context)) {
+        if (parse_init_value_with_program(parsed_cast, cast_context)) {
             std::cerr << "Expr interpreter smoke checks failed (cast parse init)\n";
             return false;
         }
@@ -1528,7 +1601,7 @@ static bool runExprInterpreterSmoke() {
         }
         QoreValue regex_expr(new QoreRegexMatchOperatorNode(&regex_loc, QoreValue(bad_hash), regex->refSelf()));
         QoreParseContext regex_context(static_cast<LocalVar*>(nullptr), program);
-        if (parse_init_value(regex_expr, regex_context)) {
+        if (parse_init_value_with_program(regex_expr, regex_context)) {
             std::cerr << "Expr interpreter smoke checks failed (regex parse init)\n";
             return false;
         }
@@ -1601,7 +1674,7 @@ static bool runExprInterpreterSmoke() {
         MethodCallNode* dot_method = new MethodCallNode(&dot_loc, strdup("m"), dot_args);
         QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc, obj->refSelf(), dot_method));
         QoreParseContext dot_context(static_cast<LocalVar*>(nullptr), program);
-        if (parse_init_value(dot_expr, dot_context)) {
+        if (parse_init_value_with_program(dot_expr, dot_context)) {
             std::cerr << "Expr interpreter smoke checks failed (dot eval parse init)\n";
             return false;
         }
@@ -1677,6 +1750,18 @@ static bool runExprInterpreterSmoke() {
 }
 
 static bool runIRExecutorCleanupSmoke() {
+    ExceptionSink runtime_xsink;
+    QoreProgramHelper pgm_helper(runtime_xsink);
+    if (runtime_xsink) {
+        std::cerr << "IR executor cleanup checks failed (program init)\n";
+        return false;
+    }
+    QoreProgram* program = *pgm_helper;
+    ProgramThreadCountContextHelper runtime_ctx(&runtime_xsink, program, true);
+    if (runtime_xsink) {
+        std::cerr << "IR executor cleanup checks failed (runtime context)\n";
+        return false;
+    }
     {
         ExceptionSink xsink;
         QoreIRFunction func("ir_exec_unwind_cleanup");
@@ -1946,7 +2031,7 @@ static bool runIRExecutorCallOperandsSmoke() {
         call_args->add(QoreValue(2), &call_loc);
         parsed_call = QoreValue(new FunctionCallNode(&call_loc, strdup("ir_exec_add"), call_args));
         QoreParseContext call_context(static_cast<LocalVar*>(nullptr), program);
-        if (parse_init_value(parsed_call, call_context)) {
+        if (parse_init_value_with_program(parsed_call, call_context)) {
             std::cerr << "IR executor call-operand checks failed (call parse init)\n";
             return false;
         }
@@ -1965,7 +2050,7 @@ static bool runIRExecutorCallOperandsSmoke() {
         call_ref_args->add(QoreValue(1), &call_loc);
         parsed_call_ref = QoreValue(new CallReferenceCallNode(&call_loc, QoreValue(cref), call_ref_args));
         QoreParseContext call_ref_context(static_cast<LocalVar*>(nullptr), program);
-        if (parse_init_value(parsed_call_ref, call_ref_context)) {
+        if (parse_init_value_with_program(parsed_call_ref, call_ref_context)) {
             std::cerr << "IR executor call-operand checks failed (call ref parse init)\n";
             return false;
         }
@@ -1975,7 +2060,7 @@ static bool runIRExecutorCallOperandsSmoke() {
         parsed_static = QoreValue(new StaticMethodCallNode(&call_loc, new NamedScope(strdup("IrExecClass::sm")),
             static_args));
         QoreParseContext static_context(static_cast<LocalVar*>(nullptr), program);
-        if (parse_init_value(parsed_static, static_context)) {
+        if (parse_init_value_with_program(parsed_static, static_context)) {
             std::cerr << "IR executor call-operand checks failed (static call parse init)\n";
             return false;
         }
@@ -1991,7 +2076,7 @@ static bool runIRExecutorCallOperandsSmoke() {
         self_args->add(QoreValue(1), &call_loc);
         parsed_self = QoreValue(new SelfFunctionCallNode(&call_loc, strdup("m"), self_args));
         QoreParseContext self_context(&self_var, program);
-        if (parse_init_value(parsed_self, self_context)) {
+        if (parse_init_value_with_program(parsed_self, self_context)) {
             std::cerr << "IR executor call-operand checks failed (self call parse init)\n";
             return false;
         }
@@ -3295,7 +3380,7 @@ int main() {
         {
             QoreValue cond(new QoreLogicalEqualsOperatorNode(nullptr, QoreValue(1), QoreValue(1)));
             QoreParseContext parse_context(program);
-            if (parse_init_value(cond, parse_context)) {
+            if (parse_init_value_with_program(cond, parse_context)) {
                 std::cerr << "Parse init failed for statement condition analysis\n";
                 return 1;
             }
@@ -6216,7 +6301,7 @@ int main() {
                 QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj"), &dot_obj_var, false)),
                 method_call));
             QoreValue parsed_expr(dot_expr);
-            if (parse_init_value(parsed_expr, parse_context)) {
+            if (parse_init_value_with_program(parsed_expr, parse_context)) {
                 std::cerr << "Parse init failed (ir_dot_eval)\n";
                 return 1;
             }
@@ -6435,7 +6520,7 @@ int main() {
                 QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_invoke"), &dot_obj_var, false)),
                 method_call));
             QoreValue parsed_expr(dot_expr);
-            if (parse_init_value(parsed_expr, parse_context)) {
+            if (parse_init_value_with_program(parsed_expr, parse_context)) {
                 std::cerr << "Parse init failed (ir_dot_eval_invoke)\n";
                 return 1;
             }
@@ -6726,7 +6811,7 @@ int main() {
         QoreValue map_expr(new QoreMapOperatorNode(nullptr, QoreValue(1),
             QoreValue(new VarRefNode(nullptr, strdup("analysis_list_or_nothing"),
                 &analysis_list_or_nothing, false))));
-        if (parse_init_value(map_expr, map_context)) {
+        if (parse_init_value_with_program(map_expr, map_context)) {
             std::cerr << "Parse init failed (analysis_map_list_or_nothing)\n";
             return 1;
         }
@@ -7093,7 +7178,7 @@ int main() {
         QoreParseContext keys_context(&analysis_hash_unknown);
         QoreValue keys_expr(new QoreKeysOperatorNode(nullptr,
             QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_unknown"), &analysis_hash_unknown, false))));
-        if (parse_init_value(keys_expr, keys_context)) {
+        if (parse_init_value_with_program(keys_expr, keys_context)) {
             std::cerr << "Parse init failed (analysis_keys_or_nothing)\n";
             return 1;
         }
@@ -7131,7 +7216,7 @@ int main() {
         QoreParseContext remove_context(&analysis_remove_unknown);
         QoreValue remove_expr(new QoreRemoveOperatorNode(nullptr,
             QoreValue(new VarRefNode(nullptr, strdup("analysis_remove_unknown"), &analysis_remove_unknown, false))));
-        if (parse_init_value(remove_expr, remove_context)) {
+        if (parse_init_value_with_program(remove_expr, remove_context)) {
             std::cerr << "Parse init failed (analysis_remove_or_nothing)\n";
             return 1;
         }
@@ -7254,7 +7339,7 @@ int main() {
         QoreParseContext exists_context(&analysis_exists_unknown);
         QoreValue exists_expr(new QoreExistsOperatorNode(nullptr,
             QoreValue(new VarRefNode(nullptr, strdup("analysis_exists_unknown"), &analysis_exists_unknown, false))));
-        if (parse_init_value(exists_expr, exists_context)) {
+        if (parse_init_value_with_program(exists_expr, exists_context)) {
             std::cerr << "Parse init failed (analysis_exists_or_nothing)\n";
             return 1;
         }
@@ -7286,7 +7371,7 @@ int main() {
         QoreParseContext elements_context(&analysis_elements_unknown);
         QoreValue elements_expr(new QoreElementsOperatorNode(nullptr,
             QoreValue(new VarRefNode(nullptr, strdup("analysis_elements_unknown"), &analysis_elements_unknown, false))));
-        if (parse_init_value(elements_expr, elements_context)) {
+        if (parse_init_value_with_program(elements_expr, elements_context)) {
             std::cerr << "Parse init failed (analysis_elements_or_nothing)\n";
             return 1;
         }
@@ -7347,7 +7432,7 @@ int main() {
             QoreValue regex_expr(new QoreRegexExtractOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_regex_string"), &analysis_regex_string, false)),
                 regex->refSelf()));
-            if (parse_init_value(regex_expr, regex_context)) {
+            if (parse_init_value_with_program(regex_expr, regex_context)) {
                 std::cerr << "Parse init failed (analysis_regex_extract_or_nothing)\n";
                 return 1;
             }
@@ -7390,7 +7475,7 @@ int main() {
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_regex_subst_string"),
                     &analysis_regex_subst_string, false)),
                 subst->refSelf()));
-            if (parse_init_value(regex_expr, regex_context)) {
+            if (parse_init_value_with_program(regex_expr, regex_context)) {
                 std::cerr << "Parse init failed (analysis_regex_subst_or_nothing)\n";
                 return 1;
             }
@@ -7992,7 +8077,7 @@ int main() {
         QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
             QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj"), &dot_obj, false)), method_call));
         QoreValue parsed_expr(dot_expr);
-        if (parse_init_value(parsed_expr, dot_context)) {
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
             std::cerr << "Parse init failed (analysis_dot_eval_assigned)\n";
             return 1;
         }
@@ -8015,7 +8100,7 @@ int main() {
         QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
             QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_maybe"), &dot_obj_maybe, false)), method_call));
         QoreValue parsed_expr(dot_expr);
-        if (parse_init_value(parsed_expr, dot_context)) {
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
             std::cerr << "Parse init failed (analysis_dot_eval_maybe)\n";
             return 1;
         }
@@ -8039,7 +8124,7 @@ int main() {
         QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
             QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_str"), &dot_obj, false)), method_call));
         QoreValue parsed_expr(dot_expr);
-        if (parse_init_value(parsed_expr, dot_context)) {
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
             std::cerr << "Parse init failed (analysis_dot_eval_string)\n";
             return 1;
         }
@@ -8063,7 +8148,7 @@ int main() {
         QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
             QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_date"), &dot_obj, false)), method_call));
         QoreValue parsed_expr(dot_expr);
-        if (parse_init_value(parsed_expr, dot_context)) {
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
             std::cerr << "Parse init failed (analysis_dot_eval_date)\n";
             return 1;
         }
@@ -8087,7 +8172,7 @@ int main() {
         QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
             QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_obj"), &dot_obj, false)), method_call));
         QoreValue parsed_expr(dot_expr);
-        if (parse_init_value(parsed_expr, dot_context)) {
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
             std::cerr << "Parse init failed (analysis_dot_eval_object)\n";
             return 1;
         }
@@ -8111,7 +8196,7 @@ int main() {
         QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
             QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_opt_int"), &dot_obj, false)), method_call));
         QoreValue parsed_expr(dot_expr);
-        if (parse_init_value(parsed_expr, dot_context)) {
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
             std::cerr << "Parse init failed (analysis_dot_eval_opt_int)\n";
             return 1;
         }
@@ -8136,7 +8221,7 @@ int main() {
         QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
             QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_opt_string"), &dot_obj, false)), method_call));
         QoreValue parsed_expr(dot_expr);
-        if (parse_init_value(parsed_expr, dot_context)) {
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
             std::cerr << "Parse init failed (analysis_dot_eval_opt_string)\n";
             return 1;
         }
@@ -8161,7 +8246,7 @@ int main() {
         QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
             QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_opt_date"), &dot_obj, false)), method_call));
         QoreValue parsed_expr(dot_expr);
-        if (parse_init_value(parsed_expr, dot_context)) {
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
             std::cerr << "Parse init failed (analysis_dot_eval_opt_date)\n";
             return 1;
         }
@@ -8186,7 +8271,7 @@ int main() {
         QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
             QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_opt_object"), &dot_obj, false)), method_call));
         QoreValue parsed_expr(dot_expr);
-        if (parse_init_value(parsed_expr, dot_context)) {
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
             std::cerr << "Parse init failed (analysis_dot_eval_opt_object)\n";
             return 1;
         }
@@ -8229,7 +8314,7 @@ int main() {
     QoreValue call_expr(new FunctionCallNode(&call_loc, strdup("ir_call"), call_args));
     QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
     QoreValue parsed_expr(call_expr);
-    if (parse_init_value(parsed_expr, parse_context)) {
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
         std::cerr << "Parse init failed (analysis_call_parse_node)\n";
         return 1;
     }
@@ -8252,7 +8337,7 @@ int main() {
         QoreValue(new VarRefNode(&call_loc, strdup("analysis_list_left"), &analysis_list_left, false))));
     QoreValue parsed_cast(cast_expr);
     QoreParseContext cast_context(static_cast<LocalVar*>(nullptr), program);
-    if (parse_init_value(parsed_cast, cast_context)) {
+    if (parse_init_value_with_program(parsed_cast, cast_context)) {
         std::cerr << "Parse init failed (analysis_cast_parse_node)\n";
         return 1;
     }
@@ -8307,7 +8392,7 @@ int main() {
         QoreValue call_expr(new CallReferenceCallNode(&call_loc, QoreValue(cref), call_args));
         QoreParseContext parse_context(static_cast<LocalVar*>(nullptr), program);
         QoreValue parsed_expr(call_expr);
-        if (parse_init_value(parsed_expr, parse_context)) {
+        if (parse_init_value_with_program(parsed_expr, parse_context)) {
             std::cerr << "Parse init failed (analysis_call_reference)\n";
             return 1;
         }
@@ -8329,7 +8414,7 @@ int main() {
         }
         QoreValue call_expr_maybe(new CallReferenceCallNode(&call_loc, QoreValue(cref_maybe), call_args_maybe));
         QoreValue parsed_expr_maybe(call_expr_maybe);
-        if (parse_init_value(parsed_expr_maybe, parse_context)) {
+        if (parse_init_value_with_program(parsed_expr_maybe, parse_context)) {
             std::cerr << "Parse init failed (analysis_call_reference_maybe)\n";
             return 1;
         }
@@ -8381,7 +8466,7 @@ int main() {
             QoreValue self_expr(new SelfFunctionCallNode(&call_loc, strdup("m"), self_args));
             QoreParseContext self_context(&self_var, program);
             QoreValue parsed_expr(self_expr);
-            if (parse_init_value(parsed_expr, self_context)) {
+            if (parse_init_value_with_program(parsed_expr, self_context)) {
                 std::cerr << "Parse init failed (analysis_self_call)\n";
                 return 1;
             }
@@ -8402,7 +8487,7 @@ int main() {
             QoreValue self_expr(new SelfFunctionCallNode(&call_loc, strdup("m"), self_args));
             QoreParseContext self_context(&self_var, program);
             QoreValue parsed_expr(self_expr);
-            if (parse_init_value(parsed_expr, self_context)) {
+            if (parse_init_value_with_program(parsed_expr, self_context)) {
                 std::cerr << "Parse init failed (analysis_self_call_maybe)\n";
                 return 1;
             }
@@ -8424,7 +8509,7 @@ int main() {
                 new StaticMethodCallNode(&call_loc, new NamedScope(strdup("IrCallClass::sm")), static_args));
             QoreParseContext static_context(static_cast<LocalVar*>(nullptr), program);
             QoreValue parsed_expr(static_expr);
-            if (parse_init_value(parsed_expr, static_context)) {
+            if (parse_init_value_with_program(parsed_expr, static_context)) {
                 std::cerr << "Parse init failed (analysis_static_call)\n";
                 return 1;
             }
@@ -8446,7 +8531,7 @@ int main() {
                 new StaticMethodCallNode(&call_loc, new NamedScope(strdup("IrCallClass::sm")), static_args));
             QoreParseContext static_context(static_cast<LocalVar*>(nullptr), program);
             QoreValue parsed_expr(static_expr);
-            if (parse_init_value(parsed_expr, static_context)) {
+            if (parse_init_value_with_program(parsed_expr, static_context)) {
                 std::cerr << "Parse init failed (analysis_static_call_maybe)\n";
                 return 1;
             }
@@ -8467,7 +8552,7 @@ int main() {
             QoreValue new_expr(new ScopedObjectCallNode(&call_loc, new_klass, new_args));
             QoreParseContext new_context(static_cast<LocalVar*>(nullptr), program);
             QoreValue parsed_expr(new_expr);
-            if (parse_init_value(parsed_expr, new_context)) {
+            if (parse_init_value_with_program(parsed_expr, new_context)) {
                 std::cerr << "Parse init failed (analysis_new_call)\n";
                 return 1;
             }
@@ -8488,7 +8573,7 @@ int main() {
             QoreValue new_expr(new ScopedObjectCallNode(&call_loc, new_klass, new_args));
             QoreParseContext new_context(static_cast<LocalVar*>(nullptr), program);
             QoreValue parsed_expr(new_expr);
-            if (parse_init_value(parsed_expr, new_context)) {
+            if (parse_init_value_with_program(parsed_expr, new_context)) {
                 std::cerr << "Parse init failed (analysis_new_call_maybe)\n";
                 return 1;
             }

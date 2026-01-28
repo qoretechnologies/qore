@@ -48,6 +48,7 @@ public:
     QoreIRConstInstruction* createConstFloat(double value, const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstBool(bool value, const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstNothing(const QoreProgramLocation* loc = nullptr);
+    QoreIRConstInstruction* createConstNull(const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstString(const std::string& value, const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstDate(int64_t microseconds, bool is_relative,
         const QoreProgramLocation* loc = nullptr);

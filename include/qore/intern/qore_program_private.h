@@ -1703,9 +1703,14 @@ public:
 
         QoreStringNodeHolder d(desc);
         if (!requires_exception) {
+            ExceptionSink* sink = parseSink ? parseSink : pendingParseSink;
+            if (!sink) {
+                pendingParseSink = new ExceptionSink;
+                sink = pendingParseSink;
+            }
             if ((only_first_except && !exceptions_raised) || !only_first_except) {
                 QoreException *ne = new ParseException(loc, err, d.release());
-                parseSink->raiseException(ne);
+                sink->raiseException(ne);
             }
             exceptions_raised++;
         }

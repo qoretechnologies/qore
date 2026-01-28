@@ -58,6 +58,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::ConstFloat:
         case QoreIROpcode::ConstBool:
         case QoreIROpcode::ConstNothing:
+        case QoreIROpcode::ConstNull:
         case QoreIROpcode::ConstString:
         case QoreIROpcode::ConstDate:
         case QoreIROpcode::AddInt:

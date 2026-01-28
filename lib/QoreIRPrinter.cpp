@@ -43,6 +43,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ConstFloat: return "const.float";
         case QoreIROpcode::ConstBool: return "const.bool";
         case QoreIROpcode::ConstNothing: return "const.nothing";
+        case QoreIROpcode::ConstNull: return "const.null";
         case QoreIROpcode::ConstString: return "const.string";
         case QoreIROpcode::ConstDate: return "const.date";
         case QoreIROpcode::AddInt: return "add.int";
@@ -220,6 +221,9 @@ static void printConstant(const QoreIRConstInstruction& inst, std::ostream& out)
         case QoreIRConstant::Kind::Nothing:
             out << "nothing";
             break;
+        case QoreIRConstant::Kind::Null:
+            out << "null";
+            break;
         case QoreIRConstant::Kind::String:
             out << "\"" << inst.constant.string_value << "\"";
             break;
@@ -304,6 +308,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::ConstFloat
                     || inst->opcode == QoreIROpcode::ConstBool
                     || inst->opcode == QoreIROpcode::ConstNothing
+                    || inst->opcode == QoreIROpcode::ConstNull
                     || inst->opcode == QoreIROpcode::ConstString
                     || inst->opcode == QoreIROpcode::ConstDate) {
                 auto* cinst = dynamic_cast<const QoreIRConstInstruction*>(inst.get());

@@ -8,15 +8,20 @@
 #include <qore/intern/QoreIRInterpreter.h>
 
 #include <cmath>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <qore/ExceptionSink.h>
 #include <qore/QoreValue.h>
 #include <qore/QoreStringNode.h>
 #include <qore/DateTimeNode.h>
 #include <qore/intern/AbstractStatement.h>
+#include <qore/intern/DebugStatement.h>
+#include <qore/intern/ForEachStatement.h>
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
+#include <qore/intern/OnBlockExitStatement.h>
 #include <qore/intern/qore_thread_intern.h>
 #include <qore/intern/Variable.h>
 #include <qore/intern/QoreTypeInfo.h>
@@ -93,7 +98,7 @@ static QoreValue evalExprNode(const QoreValue& expr, ExceptionSink* xsink) {
         }
         return QoreValue();
     }
-    bool needs_deref = false;
+    bool needs_deref = true;
     ValueHolder node(expr.refSelf(), xsink);
     if (xsink && *xsink) {
         return QoreValue();
@@ -298,6 +303,23 @@ static void storeValue(std::unordered_map<const void*, QoreValue>& values, const
     values[key] = stored;
 }
 
+static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const LocalVar*>& locals) {
+    if (!var) {
+        return;
+    }
+    if (locals.insert(var).second) {
+        var->instantiate(0);
+    }
+}
+
+static void cleanupInstantiatedLocals(const std::unordered_set<const LocalVar*>& locals, ExceptionSink* xsink) {
+    for (auto* var : locals) {
+        if (var) {
+            var->uninstantiate(xsink);
+        }
+    }
+}
+
 static void assignLocalVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
     if (!var) {
         return;
@@ -310,7 +332,8 @@ static void assignLocalVarValue(LocalVar* var, const QoreValue& value, Exception
 }
 
 static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>& locals,
-        const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink) {
+        std::unordered_set<const LocalVar*>& instantiated_locals, const QoreValue& lvalue,
+        const QoreValue& value, ExceptionSink* xsink) {
     if (!lvalue.hasNode()) {
         return;
     }
@@ -321,6 +344,7 @@ static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>&
     }
     qore_var_t type = var_ref->getType();
     if ((type == VT_LOCAL || type == VT_LOCAL_TS) && var_ref->ref.id) {
+        ensureLocalInstantiated(var_ref->ref.id, instantiated_locals);
         QoreValue stored = value.hasNode() ? value.refSelf() : value;
         storeValue(locals, var_ref->ref.id, stored, nullptr);
         assignLocalVarValue(var_ref->ref.id, stored, xsink);
@@ -346,9 +370,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     std::unordered_map<uint32_t, QoreValue> values;
     std::vector<uint32_t> cleanup;
     std::unordered_map<const void*, QoreValue> locals;
+    std::unordered_set<const LocalVar*> instantiated_locals;
     std::unordered_map<const void*, QoreValue> globals;
     std::unordered_map<const void*, QoreValue> threadlocals;
     std::unordered_map<const void*, QoreValue> closures;
+    struct LocalInstantiationCleanup {
+        std::unordered_set<const LocalVar*>& locals;
+        ExceptionSink* xsink;
+        ~LocalInstantiationCleanup() {
+            cleanupInstantiatedLocals(locals, xsink);
+        }
+    } local_cleanup{instantiated_locals, xsink};
     if (func.blocks.empty()) {
         if (xsink) {
             xsink->raiseException("IR-EXEC-ERROR", "function has no basic blocks");
@@ -453,6 +485,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::ConstNothing: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
                 values[cinst->result.id] = QoreValue();
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ConstNull: {
+                auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
+                values[cinst->result.id] = QoreValue::makeNull();
                 ++ip;
                 break;
             }
@@ -575,6 +613,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             case QoreIROpcode::LoadLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                ensureLocalInstantiated(local_inst->local, instantiated_locals);
                 auto it = locals.find(local_inst->local);
                 QoreValue val;
                 if (it != locals.end()) {
@@ -652,6 +691,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
+                ensureLocalInstantiated(local_inst->local, instantiated_locals);
                 QoreValue val = getIRValue(values, local_inst->operands.front());
                 storeValue(locals, local_inst->local, val, xsink);
                 assignLocalVarValue(local_inst->local, val, xsink);
@@ -736,6 +776,84 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ++ip;
                 break;
             }
+            case QoreIROpcode::Debug: {
+                auto* debug_inst = static_cast<QoreIRDebugInstruction*>(inst);
+                QoreValue stmt_return;
+                int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Debug, debug_inst->stmt,
+                    stmt_return, xsink);
+                if (rc || (xsink && *xsink)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Foreach: {
+                auto* foreach_inst = static_cast<QoreIRForeachInstruction*>(inst);
+                if (!foreach_inst->stmt) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "foreach requires a statement");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue stmt_return;
+                int rc = const_cast<ForEachStatement*>(foreach_inst->stmt)->exec(stmt_return, xsink);
+                if (rc || (xsink && *xsink)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::OnBlockExit: {
+                auto* obe_inst = static_cast<QoreIROnBlockExitInstruction*>(inst);
+                if (!obe_inst->stmt) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "on-block-exit requires a statement");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue stmt_return;
+                int rc = const_cast<OnBlockExitStatement*>(obe_inst->stmt)->exec(stmt_return, xsink);
+                if (rc || (xsink && *xsink)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ThreadExit:
+                if (xsink) {
+                    xsink->raiseThreadExit();
+                }
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                return false;
             case QoreIROpcode::GuardInt:
             case QoreIROpcode::GuardFloat:
             case QoreIROpcode::GuardType:
@@ -846,7 +964,21 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::OrAssignAny:
             case QoreIROpcode::XorAssignInt:
             case QoreIROpcode::XorAssignAny:
+            case QoreIROpcode::FoldlAny:
+            case QoreIROpcode::FoldlInt:
+            case QoreIROpcode::FoldlFloat:
+            case QoreIROpcode::FoldrAny:
+            case QoreIROpcode::FoldrInt:
+            case QoreIROpcode::FoldrFloat:
+            case QoreIROpcode::MapAny:
+            case QoreIROpcode::MapInt:
+            case QoreIROpcode::MapFloat:
+            case QoreIROpcode::SelectAny:
+            case QoreIROpcode::SelectInt:
+            case QoreIROpcode::SelectFloat:
             case QoreIROpcode::RangeAny:
+            case QoreIROpcode::RangeInt:
+            case QoreIROpcode::RangeFloat:
             case QoreIROpcode::EqInt:
             case QoreIROpcode::EqAny:
             case QoreIROpcode::NeInt:
@@ -979,7 +1111,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, lval_inst->lvalue, res, xsink);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink);
                 ++ip;
                 break;
             }
@@ -1010,7 +1142,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, lval_inst->lvalue, res, xsink);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink);
                 ++ip;
                 break;
             }
@@ -1043,7 +1175,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (updated.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, lval_inst->lvalue, updated, xsink);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, updated, xsink);
                 ++ip;
                 break;
             }
@@ -1083,7 +1215,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, lval_inst->lvalue, res, xsink);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink);
                 ++ip;
                 break;
             }
@@ -1117,7 +1249,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, lval_inst->lvalue, res, xsink);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink);
                 ++ip;
                 break;
             }
@@ -1311,7 +1443,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 return true;
             default:
                 if (xsink) {
-                    xsink->raiseException("IR-EXEC-ERROR", "unsupported opcode in executor");
+                    std::string msg = "unsupported opcode in executor: ";
+                    msg += std::to_string(static_cast<int>(inst->opcode));
+                    xsink->raiseException("IR-EXEC-ERROR", msg.c_str());
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupStoredValues(locals, nullptr);
@@ -1342,7 +1476,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
         case QoreIROpcode::IsNullOrNothing:
             return QoreValue(value.isNullOrNothing());
         case QoreIROpcode::UnaryPlusAny: {
-            bool needs_deref = false;
+            bool needs_deref = true;
             QoreUnaryPlusOperatorNode node(nullptr, value);
             return node.eval(needs_deref, xsink);
         }
@@ -1351,7 +1485,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
         case QoreIROpcode::UnaryMinusFloat:
             return QoreValue(-value.getAsFloat());
         case QoreIROpcode::UnaryMinusAny: {
-            bool needs_deref = false;
+            bool needs_deref = true;
             QoreUnaryMinusOperatorNode node(nullptr, value);
             return node.eval(needs_deref, xsink);
         }
@@ -1372,8 +1506,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::AddFloat:
             return QoreValue(left.getAsFloat() + right.getAsFloat());
         case QoreIROpcode::AddAny: {
-            bool needs_deref = false;
-            QorePlusOperatorNode node(nullptr, left, right);
+            bool needs_deref = true;
+            QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return node.eval(needs_deref, xsink);
         }
         case QoreIROpcode::SubInt:
@@ -1381,8 +1515,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::SubFloat:
             return QoreValue(left.getAsFloat() - right.getAsFloat());
         case QoreIROpcode::SubAny: {
-            bool needs_deref = false;
-            QoreMinusOperatorNode node(nullptr, left, right);
+            bool needs_deref = true;
+            QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return node.eval(needs_deref, xsink);
         }
         case QoreIROpcode::MulInt:
@@ -1390,8 +1524,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::MulFloat:
             return QoreValue(left.getAsFloat() * right.getAsFloat());
         case QoreIROpcode::MulAny: {
-            bool needs_deref = false;
-            QoreMultiplicationOperatorNode node(nullptr, left, right);
+            bool needs_deref = true;
+            QoreMultiplicationOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return node.eval(needs_deref, xsink);
         }
         case QoreIROpcode::DivInt: {
@@ -1430,43 +1564,43 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::AndInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
         case QoreIROpcode::AndAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::OrInt:
             return QoreValue(left.getAsBigInt() | right.getAsBigInt());
         case QoreIROpcode::OrAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::XorInt:
             return QoreValue(left.getAsBigInt() ^ right.getAsBigInt());
         case QoreIROpcode::XorAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::AddAssignInt:
             return QoreValue(left.getAsBigInt() + right.getAsBigInt());
         case QoreIROpcode::AddAssignAny: {
-            bool needs_deref = false;
-            QorePlusOperatorNode node(nullptr, left, right);
+            bool needs_deref = true;
+            QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return node.eval(needs_deref, xsink);
         }
         case QoreIROpcode::SubAssignInt:
             return QoreValue(left.getAsBigInt() - right.getAsBigInt());
         case QoreIROpcode::SubAssignAny: {
-            bool needs_deref = false;
-            QoreMinusOperatorNode node(nullptr, left, right);
+            bool needs_deref = true;
+            QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return node.eval(needs_deref, xsink);
         }
         case QoreIROpcode::MulAssignInt:
             return QoreValue(left.getAsBigInt() * right.getAsBigInt());
         case QoreIROpcode::MulAssignAny: {
-            bool needs_deref = false;
-            QoreMultiplicationOperatorNode node(nullptr, left, right);
+            bool needs_deref = true;
+            QoreMultiplicationOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return node.eval(needs_deref, xsink);
         }
         case QoreIROpcode::DivAssignInt: {
@@ -1495,89 +1629,89 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::AndAssignInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
         case QoreIROpcode::AndAssignAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::OrAssignInt:
             return QoreValue(left.getAsBigInt() | right.getAsBigInt());
         case QoreIROpcode::OrAssignAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::XorAssignInt:
             return QoreValue(left.getAsBigInt() ^ right.getAsBigInt());
         case QoreIROpcode::XorAssignAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::ShlInt:
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
         case QoreIROpcode::ShlAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreShiftLeftOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreShiftLeftOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::ShrInt:
             return QoreValue(left.getAsBigInt() >> right.getAsBigInt());
         case QoreIROpcode::ShrAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreShiftRightOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreShiftRightOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::ShlAssignInt:
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
         case QoreIROpcode::ShlAssignAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::ShrAssignInt:
             return QoreValue(left.getAsBigInt() >> right.getAsBigInt());
         case QoreIROpcode::ShrAssignAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldlInt:
         case QoreIROpcode::FoldlFloat: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreFoldlOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreFoldlOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::FoldrAny:
         case QoreIROpcode::FoldrInt:
         case QoreIROpcode::FoldrFloat: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreFoldrOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreFoldrOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreMapOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreMapOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::SelectAny:
         case QoreIROpcode::SelectInt:
         case QoreIROpcode::SelectFloat: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreSelectOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreSelectOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::RangeAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreRangeOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreRangeOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreRangeOperatorNode(nullptr, left, right)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreRangeOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::EqInt:
@@ -1617,19 +1751,21 @@ QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first
         case QoreIROpcode::RangeSliceAny:
         case QoreIROpcode::RangeSliceInt:
         case QoreIROpcode::RangeSliceFloat: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr, first, second, third)),
-                xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                first.refSelf(), second.refSelf(), third.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::MapSelectAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreMapSelectOperatorNode(nullptr, first, second, third)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreMapSelectOperatorNode(nullptr,
+                first.refSelf(), second.refSelf(), third.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::HashMapAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreHashMapOperatorNode(nullptr, first, second, third)), xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreHashMapOperatorNode(nullptr,
+                first.refSelf(), second.refSelf(), third.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         default:
@@ -1645,9 +1781,9 @@ QoreValue QoreIRInterpreter::evalQuaternary(QoreIROpcode op, const QoreValue& fi
         const QoreValue& third, const QoreValue& fourth, ExceptionSink* xsink) {
     switch (op) {
         case QoreIROpcode::HashMapSelectAny: {
-            bool needs_deref = false;
-            ValueHolder node(QoreValue(new QoreHashMapSelectOperatorNode(nullptr, first, second, third, fourth)),
-                xsink);
+            bool needs_deref = true;
+            ValueHolder node(QoreValue(new QoreHashMapSelectOperatorNode(nullptr,
+                first.refSelf(), second.refSelf(), third.refSelf(), fourth.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         default:
@@ -1679,7 +1815,7 @@ QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const Qore
 }
 
 QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& lvalue, ExceptionSink* xsink) {
-    bool needs_deref = false;
+    bool needs_deref = true;
     QoreValue lvalue_ref = lvalue.refSelf();
     switch (op) {
         case QoreIROpcode::PreIncLValue: {
@@ -1713,51 +1849,51 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
 
 QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& lvalue, const QoreValue& right,
         ExceptionSink* xsink) {
-    bool needs_deref = false;
+    bool needs_deref = true;
     QoreValue lvalue_ref = lvalue.refSelf();
     switch (op) {
         case QoreIROpcode::AddAssignLValue: {
-            ValueHolder node(QoreValue(new QorePlusEqualsOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QorePlusEqualsOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::SubAssignLValue: {
-            ValueHolder node(QoreValue(new QoreMinusEqualsOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QoreMinusEqualsOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::MulAssignLValue: {
-            ValueHolder node(QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::DivAssignLValue: {
-            ValueHolder node(QoreValue(new QoreDivideEqualsOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QoreDivideEqualsOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::ModAssignLValue: {
-            ValueHolder node(QoreValue(new QoreModuloEqualsOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QoreModuloEqualsOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::AndAssignLValue: {
-            ValueHolder node(QoreValue(new QoreAndEqualsOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QoreAndEqualsOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::OrAssignLValue: {
-            ValueHolder node(QoreValue(new QoreOrEqualsOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QoreOrEqualsOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::XorAssignLValue: {
-            ValueHolder node(QoreValue(new QoreXorEqualsOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QoreXorEqualsOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::ShlAssignLValue: {
-            ValueHolder node(QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::ShrAssignLValue: {
-            ValueHolder node(QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::UnshiftLValue: {
-            ValueHolder node(QoreValue(new QoreUnshiftOperatorNode(nullptr, lvalue_ref, right)), xsink);
+            ValueHolder node(QoreValue(new QoreUnshiftOperatorNode(nullptr, lvalue_ref, right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         default:
@@ -1771,11 +1907,12 @@ QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& 
 
 QoreValue QoreIRInterpreter::evalLValueTernary(QoreIROpcode op, const QoreValue& lvalue, const QoreValue& first,
         const QoreValue& second, const QoreValue& third, ExceptionSink* xsink) {
-    bool needs_deref = false;
+    bool needs_deref = true;
     QoreValue lvalue_ref = lvalue.refSelf();
     switch (op) {
         case QoreIROpcode::SpliceLValue: {
-            ValueHolder node(QoreValue(new QoreSpliceOperatorNode(nullptr, lvalue_ref, first, second, third)), xsink);
+            ValueHolder node(QoreValue(new QoreSpliceOperatorNode(nullptr, lvalue_ref,
+                first.refSelf(), second.refSelf(), third.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
         default:

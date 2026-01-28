@@ -139,6 +139,8 @@ private:
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
     bool analysisIndicatesInt(const QoreParseAnalysis& analysis) const;
     bool analysisIndicatesFloat(const QoreParseAnalysis& analysis) const;
+    bool guaranteedIntType(const QoreValue* expr) const;
+    bool guaranteedFloatType(const QoreValue* expr) const;
     const QoreTypeInfo* selectAnalysisType(const QoreParseAnalysis& analysis) const;
     QoreIROpcode selectNumericOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);

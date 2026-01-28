@@ -97,6 +97,15 @@ QoreIRConstInstruction* QoreIRBuilder::createConstNothing(const QoreProgramLocat
     return inst;
 }
 
+QoreIRConstInstruction* QoreIRBuilder::createConstNull(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    inst->opcode = QoreIROpcode::ConstNull;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->constant.kind = QoreIRConstant::Kind::Null;
+    return inst;
+}
+
 QoreIRConstInstruction* QoreIRBuilder::createConstString(const std::string& value,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRConstInstruction>();

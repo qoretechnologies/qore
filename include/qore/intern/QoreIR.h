@@ -53,6 +53,7 @@ enum class QoreIROpcode : uint16_t {
     ConstFloat,
     ConstBool,
     ConstNothing,
+    ConstNull,
     ConstString,
     ConstDate,
     MakeList,
@@ -240,7 +241,8 @@ struct QoreIRConstant {
         Int,
         Float,
         Bool,
-        Nothing,
+    Nothing,
+    Null,
         String,
         Date,
     };

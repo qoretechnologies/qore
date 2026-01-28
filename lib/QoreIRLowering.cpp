@@ -13,6 +13,7 @@
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/ParseNode.h>
+#include <qore/QoreType.h>
 #include <qore/intern/QoreLogicalAbsoluteEqualsOperatorNode.h>
 #include <qore/intern/QoreLogicalAbsoluteNotEqualsOperatorNode.h>
 #include <qore/intern/QoreLogicalAndOperatorNode.h>
@@ -885,15 +886,53 @@ const QoreTypeInfo* QoreIRLowering::selectAnalysisType(const QoreParseAnalysis& 
 bool QoreIRLowering::analysisIndicatesInt(const QoreParseAnalysis& analysis) const {
     const QoreTypeInfo* type = selectAnalysisType(analysis);
     return type && QoreTypeInfo::isType(type, NT_INT)
-        && (analysis.hasFlag(QoreParseAnalysis::NeverNothing)
-            || analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo);
 }
 
 bool QoreIRLowering::analysisIndicatesFloat(const QoreParseAnalysis& analysis) const {
     const QoreTypeInfo* type = selectAnalysisType(analysis);
     return type && QoreTypeInfo::isType(type, NT_FLOAT)
-        && (analysis.hasFlag(QoreParseAnalysis::NeverNothing)
-            || analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo);
+}
+
+bool QoreIRLowering::guaranteedIntType(const QoreValue* expr) const {
+    if (!expr) {
+        return false;
+    }
+    const QoreTypeInfo* type = getGuaranteedTypeForValue(expr, nullptr);
+    if (!type || !QoreTypeInfo::isType(type, NT_INT)) {
+        return false;
+    }
+    if (QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_IDENT) {
+        return false;
+    }
+    if (expr->hasNode()) {
+        QoreParseAnalysis analysis;
+        if (getAnalysis(*expr, analysis) && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            return true;
+        }
+    }
+    return true;
+}
+
+bool QoreIRLowering::guaranteedFloatType(const QoreValue* expr) const {
+    if (!expr) {
+        return false;
+    }
+    const QoreTypeInfo* type = getGuaranteedTypeForValue(expr, nullptr);
+    if (!type || !QoreTypeInfo::isType(type, NT_FLOAT)) {
+        return false;
+    }
+    if (QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_IDENT) {
+        return false;
+    }
+    if (expr->hasNode()) {
+        QoreParseAnalysis analysis;
+        if (getAnalysis(*expr, analysis) && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            return true;
+        }
+    }
+    return true;
 }
 
 QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const QoreValue& right,
@@ -906,6 +945,12 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
     }
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
+    if (guaranteedIntType(&left) && guaranteedIntType(&right)) {
+        return int_op;
+    }
+    if (guaranteedFloatType(&left) && guaranteedFloatType(&right)) {
+        return float_op;
+    }
     if (parse_context && getAnalysis(left, left_analysis) && getAnalysis(right, right_analysis)) {
         if (analysisIndicatesInt(left_analysis) && analysisIndicatesInt(right_analysis)) {
             return int_op;
@@ -913,6 +958,19 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
         if (analysisIndicatesFloat(left_analysis) && analysisIndicatesFloat(right_analysis)) {
             return float_op;
         }
+        const QoreTypeInfo* left_known = selectAnalysisType(left_analysis);
+        const QoreTypeInfo* right_known = selectAnalysisType(right_analysis);
+        if (left_known && right_known && QoreTypeInfo::isType(left_known, NT_INT)
+                && QoreTypeInfo::isType(right_known, NT_INT)) {
+            return int_op;
+        }
+        if (left_known && right_known && QoreTypeInfo::isType(left_known, NT_FLOAT)
+                && QoreTypeInfo::isType(right_known, NT_FLOAT)) {
+            return float_op;
+        }
+    }
+    if (guaranteedIntType(&left) && guaranteedIntType(&right)) {
+        return int_op;
     }
     return any_op;
 }
@@ -1271,7 +1329,15 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
         const QoreTypeInfo* saved_type = parse_context->typeInfo;
         parse_context->typeInfo = nullptr;
         QoreValue temp(expr);
-        parse_init_value(temp, *parse_context);
+        try {
+            if (parse_init_value(temp, *parse_context)) {
+                parse_context->typeInfo = saved_type;
+                return false;
+            }
+        } catch (...) {
+            parse_context->typeInfo = saved_type;
+            return false;
+        }
         analysis = parse_context->analysis;
         parse_context->typeInfo = saved_type;
         return true;
@@ -1392,8 +1458,7 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
         return builder.createConstDate(micros, is_relative)->result;
     }
     if (expr.isNull()) {
-        error = "null constant lowering not implemented";
-        return QoreIRValue();
+        return builder.createConstNull()->result;
     }
     return QoreIRValue();
 }
@@ -1553,8 +1618,17 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
     const QoreTypeInfo* type = getGuaranteedTypeForValue(expr, target_type);
     if (type && QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_NOT_EQUAL) {
         if (expr && expr->hasNode()) {
+            if (LocalVar* local = getLocalVarFromValue(*expr)) {
+                return parse_context ? parse_context->needsGuardForLocal(local) : true;
+            }
             QoreParseAnalysis analysis;
-            if (getAnalysis(*expr, analysis) && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            bool got_analysis = false;
+            try {
+                got_analysis = getAnalysis(*expr, analysis);
+            } catch (...) {
+                return true;
+            }
+            if (got_analysis && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
                 return false;
             }
         }
@@ -1586,8 +1660,19 @@ QoreIRBasicBlock* QoreIRLowering::getCurrentExceptionTarget() const {
 }
 
 bool QoreIRLowering::needsNotNothingGuard(const QoreValue& expr) const {
+    if (parse_context) {
+        if (LocalVar* local = getLocalVarFromValue(expr)) {
+            return parse_context->needsGuardForLocal(local);
+        }
+    }
     QoreParseAnalysis analysis;
-    if (getAnalysis(expr, analysis)) {
+    bool got_analysis = false;
+    try {
+        got_analysis = getAnalysis(expr, analysis);
+    } catch (...) {
+        return true;
+    }
+    if (got_analysis) {
         if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                 && !analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
             if (analysis.known_type && QoreTypeInfo::parseReturns(analysis.known_type, NT_NOTHING) == QTI_NOT_EQUAL) {
@@ -2910,8 +2995,17 @@ QoreIRValue QoreIRLowering::lowerRange(const QoreValue& expr, std::string& error
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode opcode = selectNumericOpcode(op->getLeft(), op->getRight(),
-        QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat, QoreIROpcode::RangeAny);
+    maybeInsertNotNothingGuard(left, op->getLeft());
+    maybeInsertNotNothingGuard(right, op->getRight());
+    QoreIROpcode opcode = QoreIROpcode::RangeAny;
+    QoreParseAnalysis expr_analysis;
+    if (getAnalysis(expr, expr_analysis)) {
+        opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::RangeAny,
+            QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat);
+    } else {
+        opcode = selectNumericOpcode(op->getLeft(), op->getRight(),
+            QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat, QoreIROpcode::RangeAny);
+    }
     QoreIRValue result;
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
@@ -2950,8 +3044,17 @@ QoreIRValue QoreIRLowering::lowerSquareBracketsRange(const QoreValue& expr, std:
     if (!end.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode opcode = selectNumericOpcode(op->get(1), op->get(2),
-        QoreIROpcode::RangeSliceInt, QoreIROpcode::RangeSliceFloat, QoreIROpcode::RangeSliceAny);
+    maybeInsertNotNothingGuard(start, op->get(1));
+    maybeInsertNotNothingGuard(end, op->get(2));
+    QoreIROpcode opcode = QoreIROpcode::RangeSliceAny;
+    QoreParseAnalysis expr_analysis;
+    if (getAnalysis(expr, expr_analysis)) {
+        opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::RangeSliceAny,
+            QoreIROpcode::RangeSliceInt, QoreIROpcode::RangeSliceFloat);
+    } else {
+        opcode = selectNumericOpcode(op->get(1), op->get(2),
+            QoreIROpcode::RangeSliceInt, QoreIROpcode::RangeSliceFloat, QoreIROpcode::RangeSliceAny);
+    }
     QoreIRValue result;
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");

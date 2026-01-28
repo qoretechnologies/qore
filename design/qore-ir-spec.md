@@ -222,7 +222,7 @@ deopt_state {
 
 ## 12. AST to IR Lowering Rules (Phase 1)
 - Coverage list (Phase 1 minimum):
-  - Constants: int/float/bool/string/nothing.
+- Constants: int/float/bool/string/nothing/null.
   - Variables: local references and assignments.
   - Arithmetic and comparisons for numeric types.
   - Logical operators with short-circuit control flow.
@@ -274,19 +274,17 @@ Run:
 - Deopt granularity: instruction-level vs block-level.
 
 ## 16. Parser Analysis Integration
-- The lowering pipeline relies on `QoreParseContext` to carry metadata such as whether a declared local is "definitively assigned" or may still represent `NOTHING`. Every parser node and visitor must pass the context along so the IR visitor can query it directly, avoiding ad-hoc external maps.
-- Typed locals (e.g., `int i;`) start their lifetime as `NOTHING` until assigned. The parse context must record:
-  - `definitely assigned`: lowering can emit optimized `store.local/load.local` plus typed operations without additional guards.
-  - `maybe NOTHING`: lowering must either insert a `GuardNotNothing` (or similar guard) before using the local in a typed operation, or fall back to the `.any` variant where `NOTHING` is allowed.
-- The API should surface helpers such as `bool isLocalDefinitelyAssigned(LocalVar* slot)` and `QoreTypeInfo* guaranteedType(LocalVar* slot)` so lowering decides whether to emit typed instructions or generic fallbacks while keeping the context-bound contract.
-- Parser analysis should also propagate metadata about whether an expression can throw, enabling lowering to emit `invoke` with explicit unwind/cleanup paths when necessary. This ensures exception-safe refcount handling (e.g., `decref.nothrow` in unwinds) and keeps the IR interpreter/JIT behavior faithful to the AST path.
+- The lowering pipeline relies on `QoreParseContext` to carry metadata such as whether a declared local is "definitively assigned" or may still represent `NOTHING`. `QoreIRLowering` receives the context through its constructor or `setParseContext()` and passes it to every expression visitor so the IR emission can consult the context directly instead of building ad-hoc maps of analysis results.
+- Typed locals (e.g., `int i;`) begin life as `NOTHING`; parse analysis tracks their state so typed operations either insert `GuardNotNothing` (using `needsGuardForLocal` / `maybeInsertNotNothingGuard`) or switch to `.any` instruction variants. The visitor keeps the context current by invoking `markLocalAssignmentFromExpression()` and `markLocalUnassignmentFromExpression()` around assignment-like expressions, so actions such as `remove`, `delete`, or catch-bound reassignments are reflected in the guard decisions.
+- The context exposes helpers such as `isLocalDefinitelyAssigned`, `guaranteedType`, and `expressionAnalysisType`, enabling lowering to choose typed arithmetic/comparison opcodes, container access paths, or fall back to runtime helpers when the type is ambiguous. These helpers are defined alongside `QoreParseContextLvarHelper`, `QoreParseContextFlagHelper`, and the `analysis` member so parser passes can preserve and restore the right analysis flags across nodes and scopes.
+- Parser analysis also tracks exception behavior. `QoreParseContext::expressionCanThrow()` (and `QoreIRLowering::expressionCanThrow()` which reads it) indicates whether a node may unwind, so lowering emits `invoke` instructions only when needed and wires landing pads/cleanup blocks that run `decref.nothrow` and rethrow exactly as the AST interpreter would.
 
 ## 17. Immediate Next Steps
-- Finalize this spec by codifying the SSA semantics, exception edges, reference-count ops, guard rules, and parser-analysis helper requirements (per the Phase 0 checklist) so downstream passes share a stable contract.
+- Finalize this spec by codifying the SSA semantics, exception edges, reference-count ops, guard rules, and parser-analysis helper requirements (per the Phase 0 checklist) so downstream passes share a stable contract and the `/tmp/qore-jit.md` checklist remains the single source of outstanding decisions.
 - Ship the IR headers (`QoreIR.h`, `QoreIRBuilder.h`, `QoreIRPrinter.h`, `QoreIRVerifier.h`) with concrete enumerations of typed instructions, guard conventions, landing pads, cleanup semantics, and ownership annotations.
-- Start the AST→IR lowering visitor focused on priority operator families (arithmetic, comparisons, logical, foldl/foldr/map, throw/try/catch, date/shift variants), ensuring exception-producing expressions lower to `invoke` plus cleanup and parser context metadata drives guard placement for typed locals.
-- Stabilize the interpreter by finishing `StoreLocal` lowering, handling pre-/post- increments/decrements through the new invocation paths, expanding op/lvalue lowering/test coverage (hash/list/object/range/date), adding the exec-mode smoke test (`examples/test/ir/IRExecMode*.qtest`) that exercises real try/catch, and validating it under `qore -b` + Valgrind for refcount/exception safety.
-- After each milestone revisit the spec/plan (and the `/tmp/qore-jit.md` checklist) so parser needs, guard coverage, and valgrind findings can refine our roadmap before moving to the next phase.
+- Continue the AST→IR lowering work for the priority operator families (arithmetic, comparisons, logical, foldl/foldr/map, throw/try/catch, date/shift variants) while threading the parse context so exception-producing expressions lower through `invoke`/landingpad and typed guards respect `maybe NOTHING` locals.
+- Steady the interpreter by finishing `StoreLocal` lowering, stabilizing pre-/post- increment/decrement lowering, expanding op/lvalue lowering coverage (hash/list/object/range/date) plus the map/fold families, and keep growing the exec-mode IR tests so every new operator is exercised.
+- Keep rerunning the exec-mode smoke suite (the new `examples/test/ir/IRExecMode*.qtest` collection) under `qore -b`/Valgrind (`--leak-check=full --show-leak-kinds=definite,indirect,possible`) after each round of changes; capture the clean-heap baseline so regressions in refcounting or exception handling are visible.
 
 ## 18. Phase 0 Deliverables
 - **Lock down the spec**: confirm the SSA shape, guard semantics, exception-linkage rules, and refcount operation contracts so all later passes reference a stable document.
@@ -300,22 +298,22 @@ The lowering visitor must consume parse analysis data directly from `QoreParseCo
 
 | Hook / Query | Purpose | Status |
 | --- | --- | --- |
-| `bool isLocalDefinitelyAssigned(LocalVar* local)` | Guards typed locals (int, date, hash, etc.) so lowering emits `GuardNotNothing` or `.any` variants only when necessary. | **missing** – parse context helpers exist internally, but no public accessor suitable for IR lowering yet. |
-| `bool needsGuardForLocal(LocalVar* local)` / `bool isLocalMaybeNothing(LocalVar* local)` | Fast-path for locals affected by `remove`, `delete`, or uninitialized declarations so guard placement is precise. | **missing** – requires tracking per-scope resets and is not surfaced today. |
-| `QoreTypeInfo* guaranteedType(LocalVar* local)` | Drives typed lowering (e.g., `add.int`, `list.size`) when the parse-time type of a local is known. | **partial** – functionality exists but needs better coverage for containers, date types, and new keywords. |
-| `bool canExpressionThrow(const AbstractQoreNode* node)` | Lets lowering choose between `call` and `invoke` so cleanup/refcounts are handled correctly on unwind. | **missing** – flag helpers feel ad-hoc; a unified query is needed. |
-| `QoreTypeInfo* expressionAnalysisType(const AbstractQoreNode* node)` | Enables typed lowering when the expression result type is statically known (e.g., `foldl` with `int` accumulator). | **work in progress** – helpers exist, but the IR visitor needs a single API to consume them. |
-| `void markLocalAssigned(LocalVar* local, bool definite, QoreTypeInfo* type)` | Allows parser nodes to update the context during conditionals/loops so the later lowering pass reads accurate state instead of duplicating analysis. | **partial** – `QoreParseContextLvarHelper` assists, but we must document and stabilize this API for direct lowering consumption. |
-| `bool isExpressionDefinitelyAssigned(const AbstractQoreNode* node)` | Helps lowering skip redundant guards for expressions guaranteed to produce values (literal constants, `this`, etc.). | **missing** – not currently part of the parse context API. |
+| `bool isLocalDefinitelyAssigned(LocalVar* local)` | Guards typed locals (int, date, hash, etc.) so lowering emits `GuardNotNothing` or `.any` variants only when necessary. | **available** – `QoreParseContext::isLocalDefinitelyAssigned` exposes `LocalVar::isAssigned()` via `QoreLibIntern.h` and is already consumed by the lowering pass. |
+| `bool needsGuardForLocal(LocalVar* local)` / `bool isLocalMaybeNothing(LocalVar* local)` | Fast-path for locals affected by `remove`, `delete`, or uninitialized declarations so guard placement is precise. | **available** – `QoreParseContext::needsGuardForLocal` is public and the lowering visitor calls `maybeInsertNotNothingGuard` when it reports `true`. |
+| `QoreTypeInfo* guaranteedType(LocalVar* local)` | Drives typed lowering (e.g., `add.int`, `list.size`) when the parse-time type of a local is known. | **available** – `guaranteedType` returns `local->parseGetTypeInfo()` and feeds `selectAnalysisType`/typed opcode selection. |
+| `bool canExpressionThrow(const AbstractQoreNode* node)` | Lets lowering choose between `call` and `invoke` so cleanup/refcounts are handled correctly on unwind. | **available** – `QoreParseContext::expressionCanThrow` (and the visitor helper `expressionCanThrow`) read `QoreParseAnalysis::NeverThrows` from `parse_context.analysis`. |
+| `QoreTypeInfo* expressionAnalysisType(const AbstractQoreNode* node)` | Enables typed lowering when the expression result type is statically known (e.g., `foldl` with `int` accumulator). | **available** – `QoreParseContext::expressionAnalysisType`, `ParseNode::getParseAnalysis`, and `selectAnalysisType` now deliver typed hints to the lowering logic. |
+| `void markLocalAssigned(LocalVar* local, bool definite, QoreTypeInfo* type)` | Allows parser nodes to update the context during conditionals/loops so the later lowering pass reads accurate state instead of duplicating analysis. | **available** – `QoreParseContext::markLocalAssignment`, `markLocalAssignmentFromExpression`, and `markLocalUnassignmentFromExpression` keep the analysis flags aligned with the AST changes. |
+| `bool isExpressionDefinitelyAssigned(const AbstractQoreNode* node)` | Helps lowering skip redundant guards for expressions guaranteed to produce values (literal constants, `this`, etc.). | **available** – `QoreParseContext::isExpressionDefinitelyAssigned` reads the `DefinitelyAssigned` flag that parser visitors maintain. |
 
 Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and stale state, and it lets the IR lowering visitor remain deterministic about guard insertion and exception modeling. Section 5a laid out the behavioral requirements; this inventory now calls out the concrete hooks we still need to finish Phase 0.
 
 ## 20. Tightened Phase 0 Checklist
 
-1. **Unlock the parse-context APIs for lowering**
-   - Add and document `QoreParseContext::needsGuardForLocal(LocalVar*)`, `ExpressionAnalysis::canThrow()`, and the `guaranteedType` accessor so the lowering visitor can consult definitive assignment/type guarantees without extra maps.
-   - Ensure the new parse context hooks are declared near the top of the appropriate header (resolve the include-order failure noted during the earlier build so the file compiles cleanly when included from `QoreProgram`/`AbstractQoreNode` headers).
-   - Wire the helpers into the parser pass so every node forwards the context, keeping the API contract stable for Phase 1 lowering.
+1. **Document and verify the parse-context APIs for lowering**
+   - Capture the `needsGuardForLocal`, `guaranteedType`, `markLocalAssignment` family, and `expressionCanThrow` helpers in the spec so downstream lowering developers know how to consult `QoreParseContext` instead of building duplicate analysis maps.
+   - Double-check the include-order / header visibility (e.g., `QoreLibIntern.h`) so lowering files can include the context helpers without build breaks.
+   - Walk through the parser passes and helpers (e.g., `QoreParseContextLvarHelper`, `QoreIRLowering::markLocalAssignmentFromExpression`) to confirm the context is forwarded through every branch/try/catch node before emitting `GuardNotNothing`/`invoke`.
 
 2. **Define `GuardNotNothing` usage policy**
    - Document in the spec which typed instructions require `GuardNotNothing` versus `.any` fallbacks when the parse context reports `maybe NOTHING`.
@@ -331,3 +329,20 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
    - Update `design/qore-jit-checklist.md` to reflect these Phase 0 checkpoints and mention the Valgrind/`qore -b` smoke test expectation.
    - Run the expanded exec-mode IR smoke suite and record the first clean `valgrind --leak-check=full qore -b ...` result to serve as the Phase 0 regression baseline.
    - Add a paragraph summarizing the current build/test status and any TODOs (e.g., “needs include fix in QoreParseContext.h before lowering can include the new helper,” “valgrind uncovered handler leaks in GuardNotNothing cleanup”) so the next turn can pick up smoothly.
+5. **Phase‑1 operator family checklist (execute sequentially)**
+   - **Range & date helpers**
+     * Emit `RangeInt`/`RangeFloat` when parse analysis confirms the bounds, with `RangeAny` as the conservative fallback.
+     * Guard typed operands (locals or temporaries) before constructing the range so `GuardNotNothing` preserves semantics when `int`/`date` locals are unassigned.
+     * Confirm exception lowering for `lowerRange`, `lowerSquareBracketsRange`, and the associated lvalue helpers uses `invoke` + landing pads consistently.
+   - **Hash/List dereference & mutation**
+     * Lower `hash`, `list`, and `object` access/mutation through the dedicated lvalue opcode set (`LoadLValue`, `StoreLValue`, `Pre/Post Inc/Dec`, shift/add assignments).
+     * Apply `GuardNotNothing` before each container access when the parse context reports `maybe NOTHING`, ensuring typed container lvalues never interact with uninitialized locals.
+     * Add smoke-test coverage for nested container operations plus the guarded operators, including both success and exception flows.
+   - **Shift/assign families**
+     * Finish lowering for `shift`, `unshift`, `splice`, and all shift-assign operators so typed cases map to `ShlAssignInt`/`ShrAssignInt` while untyped falls back to `.any`.
+     * Guard the lvalue before mutation when it comes from a typed local to prevent operating on `NOTHING` values.
+     * Expand exec-mode IR tests to touch these operators individually under normal execution and simulated errors.
+   - **Range/date + container tests**
+     * Extend `examples/test/ir/IRExecMode*.qtest` with cases that explicitly validate the guard policy and exception handling for each operator family.
+     * After each family is widened, rerun `qore -b --exec-mode=ir` under Valgrind and capture the clean heap baseline so we know no new refcount leaks or unwinding regressions slipped in.
+     * Keep updating this checklist so automation scripts can track the next family and whether its smoke tests/Valgrind results exist.
