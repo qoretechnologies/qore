@@ -329,6 +329,8 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
    - Update `design/qore-jit-checklist.md` to reflect these Phase 0 checkpoints and mention the Valgrind/`qore -b` smoke test expectation.
    - Run the expanded exec-mode IR smoke suite and record the first clean `valgrind --leak-check=full qore -b ...` result to serve as the Phase 0 regression baseline.
    - Add a paragraph summarizing the current build/test status and any TODOs (e.g., “needs include fix in QoreParseContext.h before lowering can include the new helper,” “valgrind uncovered handler leaks in GuardNotNothing cleanup”) so the next turn can pick up smoothly.
+
+   **Current status (2026-01-28)**: `qore-ir-smoke` passes under Valgrind with **0 errors** and only expected “still reachable” allocations (mpfr/gmp init + dynamic loader). The exec‑mode IR smoke suite now covers cast/cast‑lvalue, dot‑eval call refs, regex extract/no‑match + subst, typed maybe‑NOTHING guards, range slice with maybe‑NOTHING bounds, op‑assign with maybe‑NOTHING lvalues, ternary mixed types, unary maybe‑NOTHING, and hash/list mixed ops. Re‑run and re‑record this baseline after any further lowering changes.
 5. **Phase‑1 operator family checklist (execute sequentially)**
    - **Range & date helpers**
      * Emit `RangeInt`/`RangeFloat` when parse analysis confirms the bounds, with `RangeAny` as the conservative fallback.
