@@ -50,6 +50,9 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR regex extract no-match smoke", \testIrRegexExtractNoMatchSmoke());
         addTestCase("IR cast failure smoke", \testIrCastFailureSmoke());
         addTestCase("IR remove missing key smoke", \testIrRemoveMissingKeySmoke());
+        addTestCase("IR typed maybe-NOTHING guard smoke", \testIrTypedMaybeNothingGuardSmoke());
+        addTestCase("IR typed compare maybe-NOTHING smoke", \testIrTypedCompareMaybeNothingSmoke());
+        addTestCase("IR map/select maybe-NOTHING smoke", \testIrMapSelectMaybeNothingSmoke());
         addTestCase("IR maybe-NOTHING guard smoke", \testIrMaybeNothingGuardSmoke());
         addTestCase("IR delete guard smoke", \testIrDeleteGuardSmoke());
         addTestCase("IR hash op-assign smoke", \testIrHashOpAssignSmoke());
@@ -1690,5 +1693,112 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("remove:ok\n", stdout_output, "Unexpected IR remove missing key output");
+    }
+
+    testIrTypedMaybeNothingGuardSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("int i;\n");
+        script.file.write("remove i;\n");
+        script.file.write("try {\n");
+        script.file.write("    int x = i;\n");
+        script.file.write("    printf(\"typed-maybe:bad:%d\\n\", x);\n");
+        script.file.write("} catch (ex) {\n");
+        script.file.write("    printf(\"typed-maybe:caught\\n\");\n");
+        script.file.write("}\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("typed-maybe:caught\n", stdout_output, "Unexpected IR typed maybe-NOTHING output");
+    }
+
+    testIrTypedCompareMaybeNothingSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("float f;\n");
+        script.file.write("date d;\n");
+        script.file.write("bool b1 = (f < 1.0);\n");
+        script.file.write("bool b2 = (d < now());\n");
+        script.file.write("printf(\"typed-compare:%d:%d\\n\", b1 ? 1 : 0, b2 ? 1 : 0);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("typed-compare:1:1\n", stdout_output,
+            "Unexpected IR typed compare maybe-NOTHING output");
+    }
+
+    testIrMapSelectMaybeNothingSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("*list nums;\n");
+        script.file.write("*list res = map (($1, nums, $1 > 0));\n");
+        script.file.write("printf(\"mapmaybe:%s\\n\", res == NOTHING ? \"nothing\" : \"bad\");\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("mapmaybe:nothing\n", stdout_output, "Unexpected IR map/select maybe-NOTHING output");
     }
 }
