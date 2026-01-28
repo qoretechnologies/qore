@@ -4554,10 +4554,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     static auto applyKeyAccessor(auto value, list<string> key_list, string field_name) {
         # Handle list values by mapping key accessor over each element
+        # Use push to preserve nesting (avoid flattening nested lists)
         if (value.typeCode() == NT_LIST) {
             list<auto> result = ();
             foreach auto elem in (value) {
-                result += applyKeyAccessor(elem, key_list, field_name);
+                push result, applyKeyAccessor(elem, key_list, field_name);
             }
             return result;
         }

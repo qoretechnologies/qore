@@ -952,50 +952,8 @@ public class DpqlParser {
         string value = tok.value;
 
         # Remove quotes and process escapes
-        string quote = value[0];
         string content = substr(value, 1, value.size() - 2);
-
-        # Process escape sequences
-        string result = "";
-        int i = 0;
-        while (i < content.size()) {
-            if (content[i] == "\\") {
-                if (i + 1 < content.size()) {
-                    string next = content[i + 1];
-                    switch (next) {
-                        case "n":
-                            result += "\n";
-                            break;
-                        case "r":
-                            result += "\r";
-                            break;
-                        case "t":
-                            result += "\t";
-                            break;
-                        case "\\":
-                            result += "\\";
-                            break;
-                        case "'":
-                            result += "'";
-                            break;
-                        case '"':
-                            result += '"';
-                            break;
-                        default:
-                            result += next;
-                    }
-                    i += 2;
-                } else {
-                    result += "\\";
-                    ++i;
-                }
-            } else {
-                result += content[i];
-                ++i;
-            }
-        }
-
-        return result;
+        return unescapeString(content);
     }
 
     #! Unescapes a string by processing escape sequences

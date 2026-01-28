@@ -2168,6 +2168,21 @@ public class DpqlTest inherits QUnit::Test {
             auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
             assertEq(("Alice", "Bob"), result);
         }
+
+        # Test key accessor on nested lists preserves nesting (doesn't flatten)
+        {
+            hash<auto> rec = {
+                "groups": (
+                    ({"name": "Alice"}, {"name": "Bob"}),
+                    ({"name": "Charlie"}, {"name": "Dave"}),
+                ),
+            };
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@groups{name}');
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            # Result should be nested: (("Alice", "Bob"), ("Charlie", "Dave"))
+            # Not flattened: ("Alice", "Bob", "Charlie", "Dave")
+            assertEq((("Alice", "Bob"), ("Charlie", "Dave")), result);
+        }
     }
 
     valueExpressionTests() {
