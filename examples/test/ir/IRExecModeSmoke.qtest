@@ -39,6 +39,9 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR throw/rethrow smoke", \testIrThrowRethrowSmoke());
         addTestCase("IR rethrow outside catch smoke", \testIrRethrowOutsideCatchSmoke());
         addTestCase("IR guard mismatch smoke", \testIrGuardMismatchSmoke());
+        addTestCase("IR ternary mixed smoke", \testIrTernaryMixedSmoke());
+        addTestCase("IR unary maybe-NOTHING smoke", \testIrUnaryMaybeNothingSmoke());
+        addTestCase("IR object/hash/list op smoke", \testIrObjectHashListOpSmoke());
         addTestCase("IR range foreach smoke", \testIrRangeForeachSmoke());
         addTestCase("IR exists smoke", \testIrExistsSmoke());
         addTestCase("IR collection ops smoke", \testIrCollectionOpsSmoke());
@@ -1375,6 +1378,108 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("guard:caught\n", stdout_output, "Unexpected IR guard mismatch output");
+    }
+
+    testIrTernaryMixedSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("int x = 1;\n");
+        script.file.write("string s = (x == 1 ? \"ok\" : x);\n");
+        script.file.write("int y = (x == 2 ? 5 : 7);\n");
+        script.file.write("printf(\"ternary:%s:%d\\n\", s, y);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("ternary:ok:7\n", stdout_output, "Unexpected IR ternary output");
+    }
+
+    testIrUnaryMaybeNothingSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("int i;\n");
+        script.file.write("remove i;\n");
+        script.file.write("int x = -i;\n");
+        script.file.write("printf(\"unary:%d\\n\", x);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("unary:0\n", stdout_output, "Unexpected IR unary maybe-NOTHING output");
+    }
+
+    testIrObjectHashListOpSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("hash h = (\"a\": 1, \"b\": 2);\n");
+        script.file.write("list l = (3, 4);\n");
+        script.file.write("auto m = h + l;\n");
+        script.file.write("printf(\"collop:%d:%s\\n\", m.size(), m.type());\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("collop:3:list\n", stdout_output, "Unexpected IR object/hash/list op output");
     }
 
     testIrRangeForeachSmoke() {
