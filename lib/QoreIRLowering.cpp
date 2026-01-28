@@ -662,7 +662,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 QoreValue regex_expr(new QoreRegexMatchOperatorNode(node->loc, QoreValue(), regex->refSelf()));
                 ValueHolder regex_holder(regex_expr, nullptr);
                 std::vector<QoreIRValue> operands{switch_val};
-                match_value = lowerExprOpOrInvoke(QoreIROpcode::RegexMatchAny, regex_expr, operands, node->loc, error);
+                match_value = lowerExprOpOrInvoke(QoreIROpcode::RegexMatchBool, regex_expr, operands, node->loc, error);
                 if (!match_value.isValid()) {
                     return false;
                 }
@@ -3435,7 +3435,7 @@ QoreIRValue QoreIRLowering::lowerRegexMatch(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::RegexMatchAny, expr, operands, op->loc, error);
+    return lowerExprOpOrInvoke(QoreIROpcode::RegexMatchBool, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerRegexExtract(const QoreValue& expr, std::string& error) {

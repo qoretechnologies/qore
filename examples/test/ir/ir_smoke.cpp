@@ -1607,7 +1607,7 @@ static bool runExprInterpreterSmoke() {
         }
         ExceptionSink regex_invoke_xsink;
         ValueHolder regex_holder(regex_expr, &regex_invoke_xsink);
-        bool regex_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::RegexMatchAny, *regex_holder,
+        bool regex_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::RegexMatchBool, *regex_holder,
             &regex_invoke_xsink);
         if (!regex_invoke_xsink || !regex_invoke) {
             std::cerr << "Expr interpreter smoke checks failed (regex invoke)\n";
@@ -3648,7 +3648,7 @@ int main() {
             root->addStatement(sw);
             bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_switch", root,
                 {QoreIROpcode::BrIf, QoreIROpcode::Br, QoreIROpcode::EqHard, QoreIROpcode::GtInt,
-                    QoreIROpcode::EqInt, QoreIROpcode::RegexMatchAny, QoreIROpcode::Not});
+                    QoreIROpcode::EqInt, QoreIROpcode::RegexMatchBool, QoreIROpcode::Not});
             delete root;
             if (!ok) {
                 return 1;
@@ -6234,7 +6234,7 @@ int main() {
         }
         if (!lowerAndExpectOpcode("ir_regex_match",
                 QoreValue(new QoreRegexMatchOperatorNode(nullptr, QoreValue("a"), regex->refSelf())),
-                QoreIROpcode::RegexMatchAny)) {
+                QoreIROpcode::RegexMatchBool)) {
             return 1;
         }
         if (!lowerAndExpectOpcode("ir_regex_extract",
@@ -6423,7 +6423,7 @@ int main() {
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(try_stmt);
             bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_regex_match_invoke", root,
-                QoreIROpcode::RegexMatchAny);
+                QoreIROpcode::RegexMatchBool);
             delete root;
             if (!ok) {
                 return 1;
@@ -9773,7 +9773,7 @@ int main() {
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"),
                         &analysis_string_right, false)),
                     regex->refSelf())),
-                QoreIROpcode::RegexMatchAny)) {
+                QoreIROpcode::RegexMatchBool)) {
             return 1;
         }
         if (!lowerAndExpectOpcodeWithParseInit("ir_regex_match_parse_maybe",
@@ -9781,7 +9781,7 @@ int main() {
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
                         &analysis_string_maybe_right, false)),
                     regex->refSelf())),
-                QoreIROpcode::RegexMatchAny)) {
+                QoreIROpcode::RegexMatchBool)) {
             return 1;
         }
         if (!lowerAndExpectOpcodeWithParseInit("ir_regex_extract_parse_assigned",

@@ -125,6 +125,7 @@ enum class QoreIROpcode : uint16_t {
     RemoveAny,
     KeysAny,
     RegexMatchAny,
+    RegexMatchBool,
     RegexExtractAny,
     RegexSubstAny,
     ExistsAny,
