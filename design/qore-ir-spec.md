@@ -336,15 +336,19 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
      * Emit `RangeInt`/`RangeFloat` when parse analysis confirms the bounds, with `RangeAny` as the conservative fallback.
      * Guard typed operands (locals or temporaries) before constructing the range so `GuardNotNothing` preserves semantics when `int`/`date` locals are unassigned.
      * Confirm exception lowering for `lowerRange`, `lowerSquareBracketsRange`, and the associated lvalue helpers uses `invoke` + landing pads consistently.
+     * **Status (2026-01-28):** guard inserts added for range slice inputs; date shift operator and range-slice maybe-NOTHING smoke coverage added; Valgrind baseline recorded.
    - **Hash/List dereference & mutation**
      * Lower `hash`, `list`, and `object` access/mutation through the dedicated lvalue opcode set (`LoadLValue`, `StoreLValue`, `Pre/Post Inc/Dec`, shift/add assignments).
      * Apply `GuardNotNothing` before each container access when the parse context reports `maybe NOTHING`, ensuring typed container lvalues never interact with uninitialized locals.
      * Add smoke-test coverage for nested container operations plus the guarded operators, including both success and exception flows.
+     * **Status (2026-01-28):** base-lvalue guards added for lvalue ops; container guard + nested deref smoke tests added; Valgrind baseline recorded.
    - **Shift/assign families**
      * Finish lowering for `shift`, `unshift`, `splice`, and all shift-assign operators so typed cases map to `ShlAssignInt`/`ShrAssignInt` while untyped falls back to `.any`.
      * Guard the lvalue before mutation when it comes from a typed local to prevent operating on `NOTHING` values.
      * Expand exec-mode IR tests to touch these operators individually under normal execution and simulated errors.
+     * **Status (2026-01-28):** exec-mode smoke tests added for list shift/unshift/splice + lvalue shift-assign; Valgrind baseline recorded.
    - **Range/date + container tests**
      * Extend `examples/test/ir/IRExecMode*.qtest` with cases that explicitly validate the guard policy and exception handling for each operator family.
      * After each family is widened, rerun `qore -b --exec-mode=ir` under Valgrind and capture the clean heap baseline so we know no new refcount leaks or unwinding regressions slipped in.
      * Keep updating this checklist so automation scripts can track the next family and whether its smoke tests/Valgrind results exist.
+     * **Status (2026-01-28):** exec-mode IR smoke suite extended through shift/unshift/splice + lvalue shift-assign; Valgrind baseline recorded after each family (range/date, container, shift).

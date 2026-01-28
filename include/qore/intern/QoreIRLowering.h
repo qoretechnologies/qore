@@ -134,6 +134,7 @@ private:
     QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
     QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
     bool guardVarLValue(const QoreValue& exp, std::string& error);
+    bool guardLValueBase(const QoreValue& exp, std::string& error);
     bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;

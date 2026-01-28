@@ -991,6 +991,53 @@ static bool isRangeLValue(const QoreValue& value) {
     return node && dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node);
 }
 
+static const QoreValue* getLValueBaseValue(const QoreValue& value) {
+    const AbstractQoreNode* node = value.getInternalNode();
+    if (!node) {
+        return nullptr;
+    }
+    if (dynamic_cast<const VarRefNode*>(node)) {
+        return &value;
+    }
+    if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        return getLValueBaseValue(op->get(0));
+    }
+    if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getLValue());
+    }
+    if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
+        return getLValueBaseValue(op->getExp());
+    }
+    return nullptr;
+}
+
 static bool isInvokeLValueNode(const AbstractQoreNode* node) {
     return dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)
         || dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)
@@ -1370,6 +1417,14 @@ bool QoreIRLowering::guardVarLValue(const QoreValue& exp, std::string& error) {
     return true;
 }
 
+bool QoreIRLowering::guardLValueBase(const QoreValue& exp, std::string& error) {
+    const QoreValue* base = getLValueBaseValue(exp);
+    if (!base) {
+        return true;
+    }
+    return guardVarLValue(*base, error);
+}
+
 void QoreIRLowering::markLocalAssignmentFromExpression(const QoreValue& exp) {
     if (!parse_context || !exp.hasNode()) {
         return;
@@ -1727,6 +1782,9 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             error = "unsupported lvalue range for assignment IR lowering";
             return QoreIRValue();
         }
+        if (!guardLValueBase(assign->getLeft(), error)) {
+            return QoreIRValue();
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -1767,6 +1825,9 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         }
         if (isRangeLValue(op->getLeft())) {
             error = "unsupported lvalue range for plus-equals IR lowering";
+            return QoreIRValue();
+        }
+        if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
         if (!exception_stack.empty()) {
@@ -1829,6 +1890,9 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
             error = "unsupported lvalue range for minus-equals IR lowering";
             return QoreIRValue();
         }
+        if (!guardLValueBase(op->getLeft(), error)) {
+            return QoreIRValue();
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -1887,6 +1951,9 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         }
         if (isRangeLValue(op->getLeft())) {
             error = "unsupported lvalue range for multiply-equals IR lowering";
+            return QoreIRValue();
+        }
+        if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
         if (!exception_stack.empty()) {
@@ -1949,6 +2016,9 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
             error = "unsupported lvalue range for divide-equals IR lowering";
             return QoreIRValue();
         }
+        if (!guardLValueBase(op->getLeft(), error)) {
+            return QoreIRValue();
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -2007,6 +2077,9 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
         }
         if (isRangeLValue(op->getLeft())) {
             error = "unsupported lvalue range for modulo-equals IR lowering";
+            return QoreIRValue();
+        }
+        if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
         if (!exception_stack.empty()) {
@@ -2069,6 +2142,9 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
             error = "unsupported lvalue range for and-equals IR lowering";
             return QoreIRValue();
         }
+        if (!guardLValueBase(op->getLeft(), error)) {
+            return QoreIRValue();
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -2127,6 +2203,9 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
         }
         if (isRangeLValue(op->getLeft())) {
             error = "unsupported lvalue range for or-equals IR lowering";
+            return QoreIRValue();
+        }
+        if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
         if (!exception_stack.empty()) {
@@ -2189,6 +2268,9 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
             error = "unsupported lvalue range for xor-equals IR lowering";
             return QoreIRValue();
         }
+        if (!guardLValueBase(op->getLeft(), error)) {
+            return QoreIRValue();
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -2242,7 +2324,7 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         error = "unsupported lvalue range for pre-increment IR lowering";
         return QoreIRValue();
     }
-    if (!guardVarLValue(lvexp, error)) {
+    if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
     if (!exception_stack.empty()) {
@@ -2278,7 +2360,7 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
         error = "unsupported lvalue range for post-increment IR lowering";
         return QoreIRValue();
     }
-    if (!guardVarLValue(lvexp, error)) {
+    if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
     if (!exception_stack.empty()) {
@@ -2314,7 +2396,7 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         error = "unsupported lvalue range for pre-decrement IR lowering";
         return QoreIRValue();
     }
-    if (!guardVarLValue(lvexp, error)) {
+    if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
     if (!exception_stack.empty()) {
@@ -2350,7 +2432,7 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
         error = "unsupported lvalue range for post-decrement IR lowering";
         return QoreIRValue();
     }
-    if (!guardVarLValue(lvexp, error)) {
+    if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
     if (!exception_stack.empty()) {
@@ -2897,6 +2979,9 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
             error = "unsupported lvalue range for shift-left-assign IR lowering";
             return QoreIRValue();
         }
+        if (!guardLValueBase(op->getLeft(), error)) {
+            return QoreIRValue();
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -2948,6 +3033,9 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
         }
         if (isRangeLValue(op->getLeft())) {
             error = "unsupported lvalue range for shift-right-assign IR lowering";
+            return QoreIRValue();
+        }
+        if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
         if (!exception_stack.empty()) {
@@ -3044,6 +3132,7 @@ QoreIRValue QoreIRLowering::lowerSquareBracketsRange(const QoreValue& expr, std:
     if (!end.isValid()) {
         return QoreIRValue();
     }
+    maybeInsertNotNothingGuard(seq, op->get(0));
     maybeInsertNotNothingGuard(start, op->get(1));
     maybeInsertNotNothingGuard(end, op->get(2));
     QoreIROpcode opcode = QoreIROpcode::RangeSliceAny;
@@ -3089,6 +3178,9 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
         error = "unsupported lvalue range for square brackets IR lowering";
         return QoreIRValue();
     }
+    if (!guardLValueBase(lvalue, error)) {
+        return QoreIRValue();
+    }
     QoreIRValue result;
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
@@ -3117,6 +3209,9 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
     QoreValue lvalue(expr);
     if (!lvalue.hasNode()) {
         error = "unsupported lvalue for hash dereference IR lowering";
+        return QoreIRValue();
+    }
+    if (!guardLValueBase(lvalue, error)) {
         return QoreIRValue();
     }
     if (!exception_stack.empty()) {
@@ -3149,6 +3244,9 @@ QoreIRValue QoreIRLowering::lowerShift(const QoreValue& expr, std::string& error
         error = "unsupported lvalue range for shift IR lowering";
         return QoreIRValue();
     }
+    if (!guardLValueBase(lvalue, error)) {
+        return QoreIRValue();
+    }
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -3177,6 +3275,9 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
     }
     if (isRangeLValue(lvalue)) {
         error = "unsupported lvalue range for unshift IR lowering";
+        return QoreIRValue();
+    }
+    if (!guardLValueBase(lvalue, error)) {
         return QoreIRValue();
     }
     QoreIRValue right = lowerExpression(op->getRight(), error);
@@ -3211,6 +3312,9 @@ QoreIRValue QoreIRLowering::lowerSplice(const QoreValue& expr, std::string& erro
     }
     if (isRangeLValue(lvalue)) {
         error = "unsupported lvalue range for splice IR lowering";
+        return QoreIRValue();
+    }
+    if (!guardLValueBase(lvalue, error)) {
         return QoreIRValue();
     }
     QoreIRValue offset = lowerExpression(op->getOffset(), error);
