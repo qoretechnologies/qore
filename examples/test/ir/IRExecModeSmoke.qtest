@@ -32,16 +32,21 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR object field smoke", \testIrObjectFieldSmoke());
         addTestCase("IR function call smoke", \testIrFunctionCallSmoke());
         addTestCase("IR method call smoke", \testIrMethodCallSmoke());
+        addTestCase("IR cast smoke", \testIrCastSmoke());
+        addTestCase("IR cast lvalue smoke", \testIrCastLValueSmoke());
         addTestCase("IR regex guard smoke", \testIrRegexGuardSmoke());
         addTestCase("IR hash map select guard smoke", \testIrHashMapSelectGuardSmoke());
         addTestCase("IR throw/rethrow smoke", \testIrThrowRethrowSmoke());
         addTestCase("IR range foreach smoke", \testIrRangeForeachSmoke());
         addTestCase("IR exists smoke", \testIrExistsSmoke());
+        addTestCase("IR collection ops smoke", \testIrCollectionOpsSmoke());
+        addTestCase("IR dot-eval smoke", \testIrDotEvalSmoke());
         addTestCase("IR nested exception smoke", \testIrNestedExceptionSmoke());
         addTestCase("IR date shift smoke", \testIrDateShiftSmoke());
         addTestCase("IR date guard smoke", \testIrDateGuardSmoke());
         addTestCase("IR hash range smoke", \testIrHashRangeSmoke());
         addTestCase("IR regex smoke", \testIrRegexSmoke());
+        addTestCase("IR regex extract/subst smoke", \testIrRegexExtractSubstSmoke());
         addTestCase("IR maybe-NOTHING guard smoke", \testIrMaybeNothingGuardSmoke());
         addTestCase("IR delete guard smoke", \testIrDeleteGuardSmoke());
         addTestCase("IR hash op-assign smoke", \testIrHashOpAssignSmoke());
@@ -1001,6 +1006,80 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         assertEq("method:18\n", stdout_output, "Unexpected IR method call output");
     }
 
+    testIrCastSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("list<int> l = cast<list<int>>((1, 2, 3));\n");
+        script.file.write("*list<int> maybe = cast<*list<int>>(NOTHING);\n");
+        script.file.write("int sum = l[0] + l[1] + l[2];\n");
+        script.file.write("printf(\"cast:%d:%s\\n\", sum, maybe == NOTHING ? \"nothing\" : \"bad\");\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        if (rc != 0) {
+            printf("====CAST ERR====\\n");
+            printf("%s\\n", err_output ?? "no err");
+        }
+
+        assertEq(0, rc, "IR exec mode cast process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("cast:6:nothing\n", stdout_output, "Unexpected IR cast output");
+    }
+
+    testIrCastLValueSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("list l = (1, 2);\n");
+        script.file.write("cast<list>(l)[0] = 5;\n");
+        script.file.write("hash h = (\"a\": 1);\n");
+        script.file.write("cast<hash>(h).b = 3;\n");
+        script.file.write("printf(\"cast-lv:%d:%d\\n\", l[0], h.b);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode cast-lvalue process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("cast-lv:5:3\n", stdout_output, "Unexpected IR cast lvalue output");
+    }
+
     testIrRegexGuardSmoke() {
         string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
@@ -1218,6 +1297,81 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         assertEq("exists:2\n", stdout_output, "Unexpected IR exists output");
     }
 
+    testIrCollectionOpsSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("hash h = (\"a\": 1, \"b\": 2);\n");
+        script.file.write("list k = keys h;\n");
+        script.file.write("int v = elements h;\n");
+        script.file.write("list lst = ();\n");
+        script.file.write("push lst, 10;\n");
+        script.file.write("push lst, 20;\n");
+        script.file.write("push lst, 30;\n");
+        script.file.write("list ex = extract lst, 1, 1;\n");
+        script.file.write("auto kn = keys NOTHING;\n");
+        script.file.write("int en = elements NOTHING;\n");
+        script.file.write("printf(\"coll:%d:%d:%d:%s:%d\\n\", k.size(), v, ex[0], kn == NOTHING ? \"nothing\" : \"bad\", en);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("coll:2:2:20:nothing:0\n", stdout_output, "Unexpected IR collection ops output");
+    }
+
+    testIrDotEvalSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("hash h;\n");
+        script.file.write("h.f = sub () { return 7; };\n");
+        script.file.write("int result = h.f();\n");
+        script.file.write("printf(\"doteval:%d\\n\", result);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("doteval:7\n", stdout_output, "Unexpected IR dot-eval output");
+    }
+
     testIrNestedExceptionSmoke() {
         string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
@@ -1396,5 +1550,39 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("regex:1:abc123123\n", stdout_output, "Unexpected IR regex output");
+    }
+
+    testIrRegexExtractSubstSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("string text = \"abc123\";\n");
+        script.file.write("list m = text =~ x/([0-9]+)/;\n");
+        script.file.write("text =~ s/abc/xyz/;\n");
+        script.file.write("printf(\"regex-es:%s:%s\\n\", m[0], text);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("regex-es:123:xyz123\n", stdout_output, "Unexpected IR regex extract/subst output");
     }
 }
