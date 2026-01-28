@@ -46,12 +46,17 @@ Responsibilities:
 - `dpql-set-context`
   - args: `provider`, `subtype`, `options`, `recordOptions`, `recordType`
   - response: context summary (fields, expressions)
+  - note: Required for schema-aware key completions. The provider resolves full field
+    type information including nested hash/list structures, which enables suggesting
+    hash keys when the cursor is inside `{...}` accessors.
 - `dpql-parse`
   - args: `text`
   - response: diagnostics + tokens
 - `dpql-get-completions`
-  - args: `text`, `position`
+  - args: `text`, `position`, optional `fields` override
   - response: completions list
+  - note: Uses cached context from `dpql-set-context` if available. Schema-aware key
+    completions (e.g., `@record{` suggesting hash keys) require provider-backed context.
 - `dpql-get-tokens`
   - args: `text`
   - response: tokens list

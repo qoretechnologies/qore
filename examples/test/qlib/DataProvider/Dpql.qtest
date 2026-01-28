@@ -17,14 +17,21 @@
 public class DpqlTest inherits QUnit::Test {
     constructor() : Test("DPQL Test", "1.0") {
         addTestCase("tokenizer tests", \tokenizerTests());
+        addTestCase("accessor tokenizer tests", \accessorTokenizerTests());
         addTestCase("parser basic tests", \parserBasicTests());
         addTestCase("parser operator tests", \parserOperatorTests());
         addTestCase("parser complex tests", \parserComplexTests());
         addTestCase("parser function tests", \parserFunctionTests());
+        addTestCase("parser accessor tests", \parserAccessorTests());
         addTestCase("parser error tests", \parserErrorTests());
         addTestCase("serializer tests", \serializerTests());
+        addTestCase("accessor serializer tests", \accessorSerializerTests());
         addTestCase("round-trip tests", \roundTripTests());
+        addTestCase("accessor round-trip tests", \accessorRoundTripTests());
+        addTestCase("accessor evaluation tests", \accessorEvalTests());
+        addTestCase("value expression tests", \valueExpressionTests());
         addTestCase("completion tests", \completionTests());
+        addTestCase("schema-aware key completion tests", \schemaAwareKeyCompletionTests());
         addTestCase("static API tests", \staticApiTests());
         addTestCase("validation tests", \validationTests());
         addTestCase("stress tests", \stressTests());
@@ -110,6 +117,65 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
             assertEq(DPQL_TOK_FIELD, tokens[0].type);
             assertEq('@"field with spaces"', tokens[0].value);
+        }
+
+        # Test quoted field with dots (field name that would conflict with accessor syntax)
+        {
+            DpqlTokenizer tok('@"user.email.address"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq('@"user.email.address"', tokens[0].value);
+        }
+
+        # Test quoted field with special characters
+        {
+            DpqlTokenizer tok('@"field[0]"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq('@"field[0]"', tokens[0].value);
+        }
+
+        # Test quoted field with operators in name
+        {
+            DpqlTokenizer tok('@"a==b"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq('@"a==b"', tokens[0].value);
+        }
+
+        # Test quoted field with escaped quote
+        {
+            string dpql = "@\"field\\\"name\"";  # @"field\"name"
+            DpqlTokenizer tok(dpql);
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(dpql, tokens[0].value);
+        }
+
+        # Test quoted field with escaped backslash
+        {
+            string dpql = "@\"path\\\\to\\\\file\"";  # @"path\\to\\file"
+            DpqlTokenizer tok(dpql);
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(dpql, tokens[0].value);
+        }
+
+        # Test quoted field with various escape sequences
+        {
+            string dpql = "@\"line1\\nline2\\ttab\"";  # @"line1\nline2\ttab"
+            DpqlTokenizer tok(dpql);
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(dpql, tokens[0].value);
+        }
+
+        # Test unquoted field with dots (allowed in unquoted syntax for nested access)
+        {
+            DpqlTokenizer tok('@user.email');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@user.email", tokens[0].value);
         }
 
         # Test keywords and boolean/null
@@ -198,6 +264,36 @@ public class DpqlTest inherits QUnit::Test {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@"field name" == "value"');
             assertEq(DP_SEARCH_OP_EQ, exp.exp);
             assertEq("field name", exp.args[0].field);
+        }
+
+        # Test quoted field with dots in name
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@"user.email.address" == "test@example.com"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("user.email.address", exp.args[0].field);
+        }
+
+        # Test quoted field with brackets in name
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@"items[0]" == 1');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("items[0]", exp.args[0].field);
+        }
+
+        # Test quoted field with escaped quote in name
+        {
+            string dpql = "@\"field\\\"name\" == \"value\"";
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("field\"name", exp.args[0].field);
+        }
+
+        # Test quoted field with escaped backslash in name
+        {
+            string dpql = "@\"path\\\\file\" == \"value\"";
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("path\\file", exp.args[0].field);
         }
 
         # Test numeric comparison
@@ -455,6 +551,45 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("trim", exp.args[0].args[0].exp);
             assertEq("name", exp.args[0].args[0].args[0].field);
         }
+
+        # Test function with accessor argument
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'length(@items[0]) > 5');
+            assertEq(DP_SEARCH_OP_GT, exp.exp);
+            assertEq("length", exp.args[0].exp);
+            assertEq(1, exp.args[0].args.size());
+            hash<DataProviderFieldReference> ref = exp.args[0].args[0];
+            assertEq("items", ref.field);
+            assertEq(1, ref.accessors.size());
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[0].type);
+            assertEq(0, ref.accessors[0].value);
+        }
+
+        # Test function with key accessor argument
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'upper(@data{name}) == "JOHN"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("upper", exp.args[0].exp);
+            hash<DataProviderFieldReference> ref = exp.args[0].args[0];
+            assertEq("data", ref.field);
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[0].type);
+            assertEq(("name",), ref.accessors[0].value);
+        }
+
+        # Test function with chained accessor argument
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'process(@users[0]{name}) == "result"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("process", exp.args[0].exp);
+            hash<DataProviderFieldReference> ref = exp.args[0].args[0];
+            assertEq("users", ref.field);
+            assertEq(2, ref.accessors.size());
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[0].type);
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[1].type);
+        }
     }
 
     parserErrorTests() {
@@ -587,6 +722,48 @@ public class DpqlTest inherits QUnit::Test {
             assertEq('@"field name" == "value"', dpql);
         }
 
+        # Test field name with dots (needs quoting)
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "user.email"}, "test@example.com"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            # Field names with dots at top level might not need quoting since dots are allowed
+            # but the serializer should handle it correctly
+            assertTrue(dpql.find("user.email") >= 0);
+        }
+
+        # Test field name with brackets (needs quoting and escaping)
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "items[0]"}, 1),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@"items[0]" == 1', dpql);
+        }
+
+        # Test field name with embedded quote (needs escaping)
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "field\"name"}, "value"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@\"field\\\"name\" == \"value\"", dpql);
+        }
+
+        # Test field name with backslash (needs escaping)
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "path\\file"}, "value"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@\"path\\\\file\" == \"value\"", dpql);
+        }
+
         # Test null value
         {
             hash<DataProviderExpression> exp = <DataProviderExpression>{
@@ -613,7 +790,33 @@ public class DpqlTest inherits QUnit::Test {
             '@value != null',
             '@score >= 75.5',
             '@temp < -10',
+            # Quoted field names with special characters
+            '@"field with spaces" == "value"',
+            '@"items[0]" == 1',
+            # Field names with dots (using unquoted syntax)
+            '@user.name == "John"',
         );
+
+        # Additional round-trip tests for escaped characters
+        {
+            # Field name with embedded quote
+            string dpql = "@\"field\\\"name\" == \"value\"";
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(dpql);
+            assertEq("field\"name", parsed.args[0].field);
+            string serialized = DataProvider::serializeDpqlExpression(parsed);
+            hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+            assertEq(parsed.args[0].field, reparsed.args[0].field);
+        }
+
+        {
+            # Field name with backslash
+            string dpql = "@\"path\\\\file\" == \"value\"";
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(dpql);
+            assertEq("path\\file", parsed.args[0].field);
+            string serialized = DataProvider::serializeDpqlExpression(parsed);
+            hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+            assertEq(parsed.args[0].field, reparsed.args[0].field);
+        }
 
         foreach string expr in (expressions) {
             hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(expr);
@@ -664,6 +867,272 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name == tr', 11, fields);
             list<hash<DpqlCompletionItem>> keyword_items = select items, $1.kind == "keyword" && $1.label == "true";
             assertTrue(keyword_items.size() > 0);
+        }
+
+    }
+
+    schemaAwareKeyCompletionTests() {
+        # Test key completions for simple hash field
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+                        "email": new QoreDataField("email", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{', 8, fields);
+            assertEq(3, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("name", labels));
+            assertTrue(inlist("age", labels));
+            assertTrue(inlist("email", labels));
+            # Verify completion item properties
+            hash<DpqlCompletionItem> name_item = (select items, $1.label == "name")[0];
+            assertEq("field", name_item.kind);
+            assertEq("name", name_item.insert_text);
+            assertTrue(name_item.documentation.find("string") >= 0);  # Should mention type
+        }
+
+        # Test key completions with prefix filtering
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+                        "address": new QoreDataField("address", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{na', 10, fields);
+            assertEq(1, items.size());
+            assertEq("name", items[0].label);
+        }
+
+        # Test key completions after prefix 'a' matches multiple
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+                        "address": new QoreDataField("address", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{a', 9, fields);
+            assertEq(2, items.size());  # age and address
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("age", labels));
+            assertTrue(inlist("address", labels));
+        }
+
+        # Test prefix matches nothing
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "age": new QoreDataField("age", NOTHING, AbstractDataProviderType::get(IntType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{xyz', 11, fields);
+            assertEq(0, items.size());
+        }
+
+        # Test case-insensitive prefix filtering
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "Name": new QoreDataField("Name", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "AGE": new QoreDataField("AGE", NOTHING, AbstractDataProviderType::get(IntType)),
+                    })),
+            };
+            # Lowercase prefix should match uppercase keys
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{na', 10, fields);
+            assertEq(1, items.size());
+            assertEq("Name", items[0].label);
+        }
+
+        # Test nested accessor: @data[0]{
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new ListDataType(new HashDataType(NOTHING, {
+                        "id": new QoreDataField("id", NOTHING, AbstractDataProviderType::get(IntType)),
+                        "value": new QoreDataField("value", NOTHING, AbstractDataProviderType::get(StringType)),
+                    }))),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data[0]{', 9, fields);
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("id", labels));
+            assertTrue(inlist("value", labels));
+        }
+
+        # Test slice accessor: @data[0..2]{
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new ListDataType(new HashDataType(NOTHING, {
+                        "id": new QoreDataField("id", NOTHING, AbstractDataProviderType::get(IntType)),
+                    }))),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data[0..2]{', 12, fields);
+            assertEq(1, items.size());
+            assertEq("id", items[0].label);
+        }
+
+        # Test chained key accessor: @data{user}{
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "user": new QoreDataField("user", NOTHING,
+                            new HashDataType(NOTHING, {
+                                "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                                "email": new QoreDataField("email", NOTHING, AbstractDataProviderType::get(StringType)),
+                            })),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{user}{', 12, fields);
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("name", labels));
+            assertTrue(inlist("email", labels));
+        }
+
+        # Test no completions for untyped hash
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING, AbstractDataProviderType::get(AutoHashType)),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{', 6, fields);
+            assertEq(0, items.size());
+        }
+
+        # Test no completions for non-existent field
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@nonexistent{', 13, fields);
+            assertEq(0, items.size());
+        }
+
+        # Test no completions for non-hash type (string field)
+        {
+            hash<string, AbstractDataField> fields = {
+                "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name{', 6, fields);
+            assertEq(0, items.size());
+        }
+
+        # Test quoted field name: @"my field"{
+        {
+            hash<string, AbstractDataField> fields = {
+                "my field": new QoreDataField("my field", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "value": new QoreDataField("value", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@"my field"{', 12, fields);
+            assertEq(1, items.size());
+            assertEq("value", items[0].label);
+        }
+
+        # Test key that needs quoting in insert_text
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "my key": new QoreDataField("my key", NOTHING, AbstractDataProviderType::get(StringType)),
+                        "123num": new QoreDataField("123num", NOTHING, AbstractDataProviderType::get(IntType)),
+                        "normal": new QoreDataField("normal", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{', 8, fields);
+            assertEq(3, items.size());
+            hash<DpqlCompletionItem> spaced_key = (select items, $1.label == "my key")[0];
+            hash<DpqlCompletionItem> num_key = (select items, $1.label == "123num")[0];
+            hash<DpqlCompletionItem> normal_key = (select items, $1.label == "normal")[0];
+            # Keys with spaces or starting with digits should have quoted insert_text
+            assertEq('"my key"', spaced_key.insert_text);
+            assertEq('"123num"', num_key.insert_text);
+            assertEq("normal", normal_key.insert_text);
+        }
+
+        # Test deeply nested: @data[0]{users}[1]{
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new ListDataType(new HashDataType(NOTHING, {
+                        "users": new QoreDataField("users", NOTHING,
+                            new ListDataType(new HashDataType(NOTHING, {
+                                "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                                "role": new QoreDataField("role", NOTHING, AbstractDataProviderType::get(StringType)),
+                            }))),
+                    }))),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data[0]{users}[1]{', 19, fields);
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("name", labels));
+            assertTrue(inlist("role", labels));
+        }
+
+        # Test multiple keys in prior accessor: @data{a,b}{ - cannot determine single type
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "a": new QoreDataField("a", NOTHING,
+                            new HashDataType(NOTHING, {
+                                "x": new QoreDataField("x", NOTHING, AbstractDataProviderType::get(IntType)),
+                            })),
+                        "b": new QoreDataField("b", NOTHING,
+                            new HashDataType(NOTHING, {
+                                "y": new QoreDataField("y", NOTHING, AbstractDataProviderType::get(IntType)),
+                            })),
+                    })),
+            };
+            # With multiple keys, we can't determine a single type, so suggest from parent type
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{a,b}{', 11, fields);
+            # Should suggest keys from the data hash (a and b)
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("a", labels));
+            assertTrue(inlist("b", labels));
+        }
+
+        # Test field name with escaped quote: @"field\"name"{
+        {
+            # Field name with a literal quote in it
+            string field_name = "field\"name";
+            hash<string, AbstractDataField> fields = {
+                field_name: new QoreDataField(field_name, NOTHING,
+                    new HashDataType(NOTHING, {
+                        "inner": new QoreDataField("inner", NOTHING, AbstractDataProviderType::get(StringType)),
+                    })),
+            };
+            # The DPQL expression: @"field\"name"{
+            # In double-quoted string, backslash and quote need escaping
+            string dpql = "@\"field\\\"name\"{";
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(dpql, dpql.size(), fields);
+            assertEq(1, items.size());
+            assertEq("inner", items[0].label);
+        }
+
+        # Test empty fields hash
+        {
+            hash<string, AbstractDataField> fields = {};
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{', 8, fields);
+            assertEq(0, items.size());
         }
     }
 
@@ -822,6 +1291,898 @@ public class DpqlTest inherits QUnit::Test {
             hash<DataProviderExpression> exp2 = DataProvider::parseDpqlExpression(serialized);
             assertEq(exp.exp, exp2.exp);
             assertEq(exp.args.size(), exp2.args.size());
+        }
+    }
+
+    accessorTokenizerTests() {
+        # Test index accessor tokens
+        {
+            DpqlTokenizer tok('@items[0]');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@items", tokens[0].value);
+            assertEq(DPQL_TOK_LBRACKET, tokens[1].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[2].type);
+            assertEq("0", tokens[2].value);
+            assertEq(DPQL_TOK_RBRACKET, tokens[3].type);
+        }
+
+        # Test range accessor tokens
+        {
+            DpqlTokenizer tok('@items[0..3]');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(DPQL_TOK_LBRACKET, tokens[1].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[2].type);
+            assertEq("0", tokens[2].value);
+            assertEq(DPQL_TOK_RANGE, tokens[3].type);
+            assertEq("..", tokens[3].value);
+            assertEq(DPQL_TOK_NUMBER, tokens[4].type);
+            assertEq("3", tokens[4].value);
+            assertEq(DPQL_TOK_RBRACKET, tokens[5].type);
+        }
+
+        # Test key accessor tokens
+        {
+            DpqlTokenizer tok('@record{key}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@record", tokens[0].value);
+            assertEq(DPQL_TOK_LBRACE, tokens[1].type);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[2].type);
+            assertEq("key", tokens[2].value);
+            assertEq(DPQL_TOK_RBRACE, tokens[3].type);
+        }
+
+        # Test hash literal still works (not in field context)
+        {
+            DpqlTokenizer tok('{a=1}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_HASH, tokens[0].type);
+            assertEq("{a=1}", tokens[0].value);
+        }
+
+        # Test dot token after accessor
+        {
+            DpqlTokenizer tok('@data[0].name');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(DPQL_TOK_LBRACKET, tokens[1].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[2].type);
+            assertEq(DPQL_TOK_RBRACKET, tokens[3].type);
+            assertEq(DPQL_TOK_DOT, tokens[4].type);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[5].type);
+            assertEq("name", tokens[5].value);
+        }
+
+        # Test negative index
+        {
+            DpqlTokenizer tok('@items[-1]');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(DPQL_TOK_LBRACKET, tokens[1].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[2].type);
+            assertEq("-1", tokens[2].value);
+            assertEq(DPQL_TOK_RBRACKET, tokens[3].type);
+        }
+
+        # Test context switching: key accessor followed by hash literal value
+        {
+            DpqlTokenizer tok('@record{key} == {a=1}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(DPQL_TOK_LBRACE, tokens[1].type);  # key accessor brace
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[2].type);
+            assertEq("key", tokens[2].value);
+            assertEq(DPQL_TOK_RBRACE, tokens[3].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[4].type);
+            assertEq(DPQL_TOK_OP_EQ, tokens[5].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[6].type);
+            assertEq(DPQL_TOK_HASH, tokens[7].type);  # hash literal
+            assertEq("{a=1}", tokens[7].value);
+        }
+
+        # Test context switching: multiple accessors in expression
+        {
+            DpqlTokenizer tok('@a[0]{x} == @b{y}[1]');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            # @a[0]{x}
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(DPQL_TOK_LBRACKET, tokens[1].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[2].type);
+            assertEq(DPQL_TOK_RBRACKET, tokens[3].type);
+            assertEq(DPQL_TOK_LBRACE, tokens[4].type);  # key accessor
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[5].type);
+            assertEq(DPQL_TOK_RBRACE, tokens[6].type);
+            # ==
+            assertEq(DPQL_TOK_WHITESPACE, tokens[7].type);
+            assertEq(DPQL_TOK_OP_EQ, tokens[8].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[9].type);
+            # @b{y}[1]
+            assertEq(DPQL_TOK_FIELD, tokens[10].type);
+            assertEq(DPQL_TOK_LBRACE, tokens[11].type);  # key accessor
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[12].type);
+            assertEq(DPQL_TOK_RBRACE, tokens[13].type);
+            assertEq(DPQL_TOK_LBRACKET, tokens[14].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[15].type);
+            assertEq(DPQL_TOK_RBRACKET, tokens[16].type);
+        }
+
+        # Test comma in index (slice)
+        {
+            DpqlTokenizer tok('@items[1,2,3]');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(DPQL_TOK_LBRACKET, tokens[1].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[2].type);
+            assertEq("1", tokens[2].value);
+            assertEq(DPQL_TOK_COMMA, tokens[3].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[4].type);
+            assertEq("2", tokens[4].value);
+            assertEq(DPQL_TOK_COMMA, tokens[5].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[6].type);
+            assertEq("3", tokens[6].value);
+            assertEq(DPQL_TOK_RBRACKET, tokens[7].type);
+        }
+
+        # Test comma in key accessor
+        {
+            DpqlTokenizer tok('@record{a, b, c}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(DPQL_TOK_LBRACE, tokens[1].type);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[2].type);
+            assertEq("a", tokens[2].value);
+            assertEq(DPQL_TOK_COMMA, tokens[3].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[4].type);
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[5].type);
+            assertEq("b", tokens[5].value);
+        }
+
+        # Test comma clears field ref context: @a, {b=1} should have hash literal
+        {
+            DpqlTokenizer tok('@a, {b=1}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@a", tokens[0].value);
+            assertEq(DPQL_TOK_COMMA, tokens[1].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[2].type);
+            # After comma, { should be hash literal, NOT key accessor
+            assertEq(DPQL_TOK_HASH, tokens[3].type);
+            assertEq("{b=1}", tokens[3].value);
+        }
+
+        # Test function call with field and hash: func(@a, {b=1})
+        {
+            DpqlTokenizer tok('func(@a, {b=1})');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[0].type);
+            assertEq("func", tokens[0].value);
+            assertEq(DPQL_TOK_LPAREN, tokens[1].type);
+            assertEq(DPQL_TOK_FIELD, tokens[2].type);
+            assertEq("@a", tokens[2].value);
+            assertEq(DPQL_TOK_COMMA, tokens[3].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[4].type);
+            # After comma, { should be hash literal
+            assertEq(DPQL_TOK_HASH, tokens[5].type);
+            assertEq("{b=1}", tokens[5].value);
+            assertEq(DPQL_TOK_RPAREN, tokens[6].type);
+        }
+
+        # Test key accessor followed by comma and hash: @a{x}, {b=1}
+        {
+            DpqlTokenizer tok('@a{x}, {b=1}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(DPQL_TOK_LBRACE, tokens[1].type);  # key accessor
+            assertEq(DPQL_TOK_IDENTIFIER, tokens[2].type);
+            assertEq("x", tokens[2].value);
+            assertEq(DPQL_TOK_RBRACE, tokens[3].type);
+            assertEq(DPQL_TOK_COMMA, tokens[4].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[5].type);
+            # After comma, { should be hash literal
+            assertEq(DPQL_TOK_HASH, tokens[6].type);
+            assertEq("{b=1}", tokens[6].value);
+        }
+
+        # Test index accessor followed by comma and hash: @a[0], {b=1}
+        {
+            DpqlTokenizer tok('@a[0], {b=1}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(DPQL_TOK_LBRACKET, tokens[1].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[2].type);
+            assertEq(DPQL_TOK_RBRACKET, tokens[3].type);
+            assertEq(DPQL_TOK_COMMA, tokens[4].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[5].type);
+            # After comma, { should be hash literal
+            assertEq(DPQL_TOK_HASH, tokens[6].type);
+            assertEq("{b=1}", tokens[6].value);
+        }
+    }
+
+    parserAccessorTests() {
+        # Test single index
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0] == "value"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq("items", ref.field);
+            assertEq(1, ref.accessors.size());
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[0].type);
+            assertEq(0, ref.accessors[0].value);
+        }
+
+        # Test negative index
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[-1] == "last"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq(1, ref.accessors.size());
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[0].type);
+            assertEq(-1, ref.accessors[0].value);
+        }
+
+        # Test range (slice)
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0..3] == (1,2,3,4)');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq(1, ref.accessors.size());
+            assertEq(DPQL_ACCESSOR_SLICE, ref.accessors[0].type);
+            list<auto> slice = ref.accessors[0].value;
+            assertEq(1, slice.size());
+            assertEq(0, slice[0].start);
+            assertEq(3, slice[0].end);
+        }
+
+        # Test open-end range [2..]
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[2..] == (3,4,5)');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq(DPQL_ACCESSOR_SLICE, ref.accessors[0].type);
+            list<auto> slice = ref.accessors[0].value;
+            assertEq(2, slice[0].start);
+            assertFalse(exists slice[0].end);
+        }
+
+        # Test open-start range [..5]
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[..5] == (1,2,3,4,5,6)');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq(DPQL_ACCESSOR_SLICE, ref.accessors[0].type);
+            list<auto> slice = ref.accessors[0].value;
+            assertFalse(exists slice[0].start);
+            assertEq(5, slice[0].end);
+        }
+
+        # Test mixed slice [1..3,5,7]
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[1..3,5,7] == (2,3,4,6,8)');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq(DPQL_ACCESSOR_SLICE, ref.accessors[0].type);
+            list<auto> slice = ref.accessors[0].value;
+            assertEq(3, slice.size());
+            # First is range
+            assertEq(1, slice[0].start);
+            assertEq(3, slice[0].end);
+            # Second and third are indices
+            assertEq(5, slice[1]);
+            assertEq(7, slice[2]);
+        }
+
+        # Test single key
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@record{key} == "value"');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq("record", ref.field);
+            assertEq(1, ref.accessors.size());
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[0].type);
+            assertEq(("key",), ref.accessors[0].value);
+        }
+
+        # Test key slice (multiple keys)
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@record{a, b, c} == {a=1}');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[0].type);
+            assertEq(("a", "b", "c"), ref.accessors[0].value);
+        }
+
+        # Test quoted key
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@record{"key with spaces"} == "value"');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[0].type);
+            assertEq(("key with spaces",), ref.accessors[0].value);
+        }
+
+        # Test chained accessors: matrix[0][1]
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@matrix[0][1] == 42');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq("matrix", ref.field);
+            assertEq(2, ref.accessors.size());
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[0].type);
+            assertEq(0, ref.accessors[0].value);
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[1].type);
+            assertEq(1, ref.accessors[1].value);
+        }
+
+        # Test chained accessors: users[0]{name}
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@users[0]{name} == "John"');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq("users", ref.field);
+            assertEq(2, ref.accessors.size());
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[0].type);
+            assertEq(0, ref.accessors[0].value);
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[1].type);
+            assertEq(("name",), ref.accessors[1].value);
+        }
+
+        # Test chained with dot: data[0].items[2]
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@data[0].items[2] == "item"');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq("data", ref.field);
+            assertEq(3, ref.accessors.size());
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[0].type);
+            assertEq(0, ref.accessors[0].value);
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[1].type);  # .items becomes key accessor
+            assertEq(("items",), ref.accessors[1].value);
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[2].type);
+            assertEq(2, ref.accessors[2].value);
+        }
+
+        # Test error: [..] alone should fail
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@items[..]');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertEq("DPQL-E021", result.diagnostics[0].code);
+        }
+
+        # Test error: float index should fail
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@items[1.5]');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertEq("DPQL-E023", result.diagnostics[0].code);
+        }
+
+        # Test error: empty index accessor should fail
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@items[]');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertEq("DPQL-E022", result.diagnostics[0].code);
+        }
+
+        # Test error: empty key accessor should fail
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@record{}');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertEq("DPQL-E024", result.diagnostics[0].code);
+        }
+
+        # Test error: expected identifier after dot
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@items[0]. == 1');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertEq("DPQL-E020", result.diagnostics[0].code);
+        }
+
+        # Test error: unclosed index accessor should fail
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@items[0');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertEq("DPQL-E022", result.diagnostics[0].code);
+            assertTrue(result.diagnostics[0].message =~ /[Uu]nclosed/);
+        }
+
+        # Test error: unclosed index accessor with range should fail
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@items[0..3');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertEq("DPQL-E022", result.diagnostics[0].code);
+        }
+
+        # Test error: unclosed key accessor should fail
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@record{key');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertEq("DPQL-E024", result.diagnostics[0].code);
+            assertTrue(result.diagnostics[0].message =~ /[Uu]nclosed/);
+        }
+
+        # Test error: unclosed key accessor with multiple keys should fail
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@record{a, b, c');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertEq("DPQL-E024", result.diagnostics[0].code);
+        }
+
+        # Test multiple ranges in slice
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0..2,5..7] == (1,2,3,6,7,8)');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq(DPQL_ACCESSOR_SLICE, ref.accessors[0].type);
+            list<auto> slice = ref.accessors[0].value;
+            assertEq(2, slice.size());
+            # First range
+            assertEq(0, slice[0].start);
+            assertEq(2, slice[0].end);
+            # Second range
+            assertEq(5, slice[1].start);
+            assertEq(7, slice[1].end);
+        }
+
+        # Test negative indices in range
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[-3..-1] == (3,4,5)');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq(DPQL_ACCESSOR_SLICE, ref.accessors[0].type);
+            list<auto> slice = ref.accessors[0].value;
+            assertEq(-3, slice[0].start);
+            assertEq(-1, slice[0].end);
+        }
+
+        # Test numeric key
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@data{123} == "value"');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[0].type);
+            assertEq(("123",), ref.accessors[0].value);
+        }
+
+        # Test deeply chained accessors
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@data[0]{users}[1]{address}{city} == "NYC"');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq("data", ref.field);
+            assertEq(5, ref.accessors.size());
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[0].type);
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[1].type);
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[2].type);
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[3].type);
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[4].type);
+        }
+
+        # Test deeply nested accessors with negative indices in ranges
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@data[-1]{items}[-3..-1]{a, b}[0..2] == (1, 2, 3)');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq("data", ref.field);
+            assertEq(5, ref.accessors.size());
+            # First: index -1
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[0].type);
+            assertEq(-1, ref.accessors[0].value);
+            # Second: key "items"
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[1].type);
+            assertEq(("items",), ref.accessors[1].value);
+            # Third: slice -3..-1
+            assertEq(DPQL_ACCESSOR_SLICE, ref.accessors[2].type);
+            assertEq(-3, ref.accessors[2].value[0].start);
+            assertEq(-1, ref.accessors[2].value[0].end);
+            # Fourth: key slice {a, b}
+            assertEq(DPQL_ACCESSOR_KEY, ref.accessors[3].type);
+            assertEq(("a", "b"), ref.accessors[3].value);
+            # Fifth: slice 0..2
+            assertEq(DPQL_ACCESSOR_SLICE, ref.accessors[4].type);
+            assertEq(0, ref.accessors[4].value[0].start);
+            assertEq(2, ref.accessors[4].value[0].end);
+        }
+    }
+
+    accessorSerializerTests() {
+        # Test single index serialization
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (
+                    <DataProviderFieldReference>{
+                        "field": "items",
+                        "accessors": (
+                            <DataProviderFieldAccessor>{"type": DPQL_ACCESSOR_INDEX, "value": 0},
+                        ),
+                    },
+                    "value",
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@items[0] == "value"', dpql);
+        }
+
+        # Test range serialization
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (
+                    <DataProviderFieldReference>{
+                        "field": "items",
+                        "accessors": (
+                            <DataProviderFieldAccessor>{
+                                "type": DPQL_ACCESSOR_SLICE,
+                                "value": (<DataProviderRangeSpec>{"start": 0, "end": 3},),
+                            },
+                        ),
+                    },
+                    (1, 2, 3, 4),
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@items[0..3] == (1,2,3,4)", dpql);
+        }
+
+        # Test open-end range serialization
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (
+                    <DataProviderFieldReference>{
+                        "field": "items",
+                        "accessors": (
+                            <DataProviderFieldAccessor>{
+                                "type": DPQL_ACCESSOR_SLICE,
+                                "value": (<DataProviderRangeSpec>{"start": 2},),
+                            },
+                        ),
+                    },
+                    (3, 4, 5),
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@items[2..] == (3,4,5)", dpql);
+        }
+
+        # Test key serialization
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (
+                    <DataProviderFieldReference>{
+                        "field": "record",
+                        "accessors": (
+                            <DataProviderFieldAccessor>{"type": DPQL_ACCESSOR_KEY, "value": ("a", "b")},
+                        ),
+                    },
+                    {"a": 1, "b": 2},
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertTrue(dpql =~ /^@record\{a, b\}/);
+        }
+
+        # Test quoted key serialization
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (
+                    <DataProviderFieldReference>{
+                        "field": "record",
+                        "accessors": (
+                            <DataProviderFieldAccessor>{"type": DPQL_ACCESSOR_KEY, "value": ("key with spaces",)},
+                        ),
+                    },
+                    "value",
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@record{"key with spaces"} == "value"', dpql);
+        }
+    }
+
+    accessorRoundTripTests() {
+        list<string> expressions = (
+            '@items[0] == "value"',
+            '@items[-1] == "last"',
+            '@items[0..3] == (1,2,3,4)',
+            '@items[2..] == (3,4,5)',
+            '@items[..5] == (1,2,3,4,5,6)',
+            '@items[1..3,5,7] == (2,3,4,6,8)',
+            '@record{key} == "value"',
+            '@record{a, b, c} == {a=1}',
+            '@matrix[0][1] == 42',
+            '@users[0]{name} == "John"',
+            '@data.items[2] == "item"',
+        );
+
+        foreach string expr in (expressions) {
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(expr);
+            string serialized = DataProvider::serializeDpqlExpression(parsed);
+            hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+
+            # Compare field reference accessors
+            if (parsed.args[0].hasKey("field") && parsed.args[0].hasKey("accessors")) {
+                hash<DataProviderFieldReference> orig_ref = parsed.args[0];
+                hash<DataProviderFieldReference> new_ref = reparsed.args[0];
+                assertEq(orig_ref.field, new_ref.field, sprintf("Field mismatch for: %s", expr));
+                if (orig_ref.accessors) {
+                    assertEq(orig_ref.accessors.size(), new_ref.accessors.size(),
+                        sprintf("Accessor count mismatch for: %s", expr));
+                }
+            }
+        }
+    }
+
+    accessorEvalTests() {
+        # Test index accessor evaluation
+        {
+            hash<auto> rec = {"items": (10, 20, 30, 40, 50)};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0] == 10');
+            bool result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertTrue(result);
+        }
+
+        # Test negative index
+        {
+            hash<auto> rec = {"items": (10, 20, 30, 40, 50)};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[-1] == 50');
+            bool result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertTrue(result);
+        }
+
+        # Test range slice
+        {
+            hash<auto> rec = {"items": (10, 20, 30, 40, 50)};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0..2] == (10, 20, 30)');
+            bool result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertTrue(result);
+        }
+
+        # Test open-end range
+        {
+            hash<auto> rec = {"items": (10, 20, 30, 40, 50)};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[3..] == (40, 50)');
+            bool result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertTrue(result);
+        }
+
+        # Test open-start range
+        {
+            hash<auto> rec = {"items": (10, 20, 30, 40, 50)};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[..1] == (10, 20)');
+            bool result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertTrue(result);
+        }
+
+        # Test single key accessor
+        {
+            hash<auto> rec = {"data": {"name": "John", "age": 30}};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@data{name} == "John"');
+            bool result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertTrue(result);
+        }
+
+        # Test multi-key accessor (hash subset)
+        {
+            hash<auto> rec = {"data": {"a": 1, "b": 2, "c": 3}};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@data{a, b} == {a=1, b=2}');
+            bool result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertTrue(result);
+        }
+
+        # Test chained accessors
+        {
+            hash<auto> rec = {"users": ({"name": "Alice", "age": 25}, {"name": "Bob", "age": 30})};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@users[0]{name} == "Alice"');
+            bool result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertTrue(result);
+        }
+
+        # Test matrix access
+        {
+            hash<auto> rec = {"matrix": ((1, 2, 3), (4, 5, 6), (7, 8, 9))};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@matrix[1][2] == 6');
+            bool result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertTrue(result);
+        }
+
+        # Test out-of-bounds returns NOTHING
+        {
+            hash<auto> rec = {"items": (1, 2, 3)};
+            hash<DataProviderFieldReference> ref = <DataProviderFieldReference>{
+                "field": "items",
+                "accessors": (<DataProviderFieldAccessor>{"type": DPQL_ACCESSOR_INDEX, "value": 10},),
+            };
+            auto result = AbstractDataProvider::evalGenericExpressionValue(rec, ref);
+            assertFalse(exists result);
+        }
+
+        # Test negative out-of-bounds returns NOTHING
+        {
+            hash<auto> rec = {"items": (1, 2, 3)};
+            hash<DataProviderFieldReference> ref = <DataProviderFieldReference>{
+                "field": "items",
+                "accessors": (<DataProviderFieldAccessor>{"type": DPQL_ACCESSOR_INDEX, "value": -10},),
+            };
+            auto result = AbstractDataProvider::evalGenericExpressionValue(rec, ref);
+            assertFalse(exists result);
+        }
+
+        # Test index on empty list returns NOTHING
+        {
+            hash<auto> rec = {"items": ()};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0] == 1');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            auto result = AbstractDataProvider::evalGenericExpressionValue(rec, ref);
+            assertFalse(exists result);
+        }
+
+        # Test index on non-list throws INVALID-OPERATION
+        {
+            hash<auto> rec = {"items": "not a list"};
+            hash<DataProviderFieldReference> ref = <DataProviderFieldReference>{
+                "field": "items",
+                "accessors": (<DataProviderFieldAccessor>{"type": DPQL_ACCESSOR_INDEX, "value": 0},),
+            };
+            bool caught = False;
+            try {
+                AbstractDataProvider::evalGenericExpressionValue(rec, ref);
+            } catch (hash<ExceptionInfo> ex) {
+                caught = True;
+                assertEq("INVALID-OPERATION", ex.err);
+                assertTrue(ex.desc =~ /non-list/);
+            }
+            assertTrue(caught);
+        }
+
+        # Test key on non-hash throws INVALID-OPERATION
+        {
+            hash<auto> rec = {"data": "not a hash"};
+            hash<DataProviderFieldReference> ref = <DataProviderFieldReference>{
+                "field": "data",
+                "accessors": (<DataProviderFieldAccessor>{"type": DPQL_ACCESSOR_KEY, "value": ("key",)},),
+            };
+            bool caught = False;
+            try {
+                AbstractDataProvider::evalGenericExpressionValue(rec, ref);
+            } catch (hash<ExceptionInfo> ex) {
+                caught = True;
+                assertEq("INVALID-OPERATION", ex.err);
+                assertTrue(ex.desc =~ /non-hash/);
+            }
+            assertTrue(caught);
+        }
+
+        # Test missing key returns NOTHING
+        {
+            hash<auto> rec = {"data": {"a": 1, "b": 2}};
+            hash<DataProviderFieldReference> ref = <DataProviderFieldReference>{
+                "field": "data",
+                "accessors": (<DataProviderFieldAccessor>{"type": DPQL_ACCESSOR_KEY, "value": ("nonexistent",)},),
+            };
+            auto result = AbstractDataProvider::evalGenericExpressionValue(rec, ref);
+            assertFalse(exists result);
+        }
+
+        # Test slice on empty list returns empty list
+        {
+            hash<auto> rec = {"items": ()};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0..3]');
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertEq((), result);
+        }
+
+        # Test mixed slice with some out-of-bounds indices
+        {
+            hash<auto> rec = {"items": (10, 20, 30)};
+            # Request indices 0, 1, 2, 5 - index 5 is out of bounds
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0..2,5]');
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            # Should include valid indices only
+            assertEq((10, 20, 30), result);
+        }
+    }
+
+    valueExpressionTests() {
+        # Test bare field reference parses to value expression
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name');
+            assertEq(DP_EXPR_VALUE, exp.exp);
+            assertEq(1, exp.args.size());
+            assertEq("name", exp.args[0].field);
+        }
+
+        # Test bare field reference with index accessor
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0]');
+            assertEq(DP_EXPR_VALUE, exp.exp);
+            assertEq("items", exp.args[0].field);
+            assertEq(1, exp.args[0].accessors.size());
+            assertEq(DPQL_ACCESSOR_INDEX, exp.args[0].accessors[0].type);
+            assertEq(0, exp.args[0].accessors[0].value);
+        }
+
+        # Test bare field reference with key accessor
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@data{key}');
+            assertEq(DP_EXPR_VALUE, exp.exp);
+            assertEq("data", exp.args[0].field);
+            assertEq(DPQL_ACCESSOR_KEY, exp.args[0].accessors[0].type);
+        }
+
+        # Test bare field reference with chained accessors
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@users[0]{name}');
+            assertEq(DP_EXPR_VALUE, exp.exp);
+            assertEq("users", exp.args[0].field);
+            assertEq(2, exp.args[0].accessors.size());
+        }
+
+        # Test value expression evaluation - returns the value
+        {
+            hash<auto> rec = {"items": (10, 20, 30)};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0]');
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertEq(10, result);
+        }
+
+        # Test value expression with slice
+        {
+            hash<auto> rec = {"items": (10, 20, 30, 40, 50)};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[1..3]');
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertEq((20, 30, 40), result);
+        }
+
+        # Test value expression with key accessor
+        {
+            hash<auto> rec = {"data": {"name": "Alice", "age": 30}};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@data{name}');
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertEq("Alice", result);
+        }
+
+        # Test value expression with chained accessors
+        {
+            hash<auto> rec = {"users": ({"name": "Alice"}, {"name": "Bob"})};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@users[1]{name}');
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertEq("Bob", result);
+        }
+
+        # Test serialization of value expression
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@items[0]');
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@items[0]", serialized);
+        }
+
+        # Test round-trip for value expressions
+        {
+            list<string> expressions = (
+                "@name",
+                "@items[0]",
+                "@items[-1]",
+                "@items[0..3]",
+                "@data{key}",
+                "@data{a, b}",
+                "@users[0]{name}",
+            );
+            foreach string expr in (expressions) {
+                hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(expr);
+                string serialized = DataProvider::serializeDpqlExpression(parsed);
+                hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+                assertEq(parsed.exp, reparsed.exp, sprintf("Round-trip exp mismatch for: %s", expr));
+                assertEq(parsed.args[0].field, reparsed.args[0].field,
+                    sprintf("Round-trip field mismatch for: %s", expr));
+            }
+        }
+
+        # Test comparison expression still works (not wrapped in value)
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);  # Not DP_EXPR_VALUE
         }
     }
 }

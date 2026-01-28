@@ -760,6 +760,9 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
     IconvHelper c(nccs, from, xsink);
     if (xsink && *xsink)
         return -1;
+    // Also check if iconv handle is valid when xsink is null
+    if (!c.isValid())
+        return -1;
 
     // now convert value
     size_t al = src_len + STR_CLASS_BLOCK;
