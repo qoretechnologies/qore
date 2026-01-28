@@ -43,7 +43,9 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR dot-eval smoke", \testIrDotEvalSmoke());
         addTestCase("IR nested exception smoke", \testIrNestedExceptionSmoke());
         addTestCase("IR date shift smoke", \testIrDateShiftSmoke());
+        addTestCase("IR date shift operator smoke", \testIrDateShiftOperatorSmoke());
         addTestCase("IR date guard smoke", \testIrDateGuardSmoke());
+        addTestCase("IR range slice maybe-NOTHING smoke", \testIrRangeSliceMaybeNothingSmoke());
         addTestCase("IR hash range smoke", \testIrHashRangeSmoke());
         addTestCase("IR regex smoke", \testIrRegexSmoke());
         addTestCase("IR regex extract/subst smoke", \testIrRegexExtractSubstSmoke());
@@ -57,6 +59,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR delete guard smoke", \testIrDeleteGuardSmoke());
         addTestCase("IR hash op-assign smoke", \testIrHashOpAssignSmoke());
         addTestCase("IR list op-assign smoke", \testIrListOpAssignSmoke());
+        addTestCase("IR op-assign maybe-NOTHING smoke", \testIrOpAssignMaybeNothingSmoke());
         set_return_value(main());
     }
 
@@ -576,6 +579,43 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("slice:20,30 range:2\n", stdout_output, "Unexpected IR range slice output");
+    }
+
+    testIrRangeSliceMaybeNothingSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("list nums = (10, 20, 30, 40, 50);\n");
+        script.file.write("*int start;\n");
+        script.file.write("*int end;\n");
+        script.file.write("remove start;\n");
+        script.file.write("remove end;\n");
+        script.file.write("list slice = nums[start..end];\n");
+        script.file.write("printf(\"rangeslice:%d\\n\", slice.size());\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("rangeslice:5\n", stdout_output, "Unexpected IR range slice maybe-NOTHING output");
     }
 
     testIrRangeGuardSmoke() {
@@ -1192,6 +1232,43 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         assertEq("listops:2,1,6\n", stdout_output, "Unexpected IR list op-assign output");
     }
 
+    testIrOpAssignMaybeNothingSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("*hash h;\n");
+        script.file.write("remove h;\n");
+        script.file.write("h += (\"a\": 1);\n");
+        script.file.write("*list l;\n");
+        script.file.write("remove l;\n");
+        script.file.write("l += (1, 2);\n");
+        script.file.write("printf(\"opassign-maybe:%d:%d\\n\", h.size(), l.size());\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("opassign-maybe:1:2\n", stdout_output, "Unexpected IR op-assign maybe-NOTHING output");
+    }
+
     testIrThrowRethrowSmoke() {
         string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
@@ -1450,6 +1527,41 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("dateshift:20260101063000,20260101043000\n",
             stdout_output, "Unexpected IR date shift output");
+    }
+
+    testIrDateShiftOperatorSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("date base = date(\"2026-01-01T00:00:00Z\");\n");
+        script.file.write("auto shifted = base << 3600;\n");
+        script.file.write("auto shifted_back = shifted >> 1800;\n");
+        script.file.write("printf(\"dateshiftop:%s,%s\\n\", shifted.type(), shifted_back.type());\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("dateshiftop:integer,integer\n",
+            stdout_output, "Unexpected IR date shift operator output");
     }
 
     testIrDateGuardSmoke() {
