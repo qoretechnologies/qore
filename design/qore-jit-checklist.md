@@ -48,8 +48,8 @@ Deliverables:
 - [~] Lvalue lowering for op-assign and assignment to all containers and objects.
 - [~] Preserve typed-local semantics where values can be NOTHING.
 - [~] Integrate parse-analysis propagation (definite assignment, maybe-NOTHING) into lowering decisions.
-- [ ] Audit remaining `.any` helper ops (regex/extract/remove/keys/exists/elements/dot-eval/cast/map-select/hash-map)
-  and decide whether to add typed opcodes or document `.any` as the Phase‑1 endpoint.
+- [x] Audit remaining `.any` helper ops (regex/extract/remove/keys/exists/elements/dot-eval/cast/map-select/hash-map)
+  and document `.any` as the Phase‑1 endpoint.
 - [x] Add IR verifier checks for invoke targets and terminator correctness.
 - [x] Add IR printer updates for new ops and invoke forms.
 

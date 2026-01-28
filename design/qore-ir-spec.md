@@ -353,9 +353,10 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
        `MapSelectAny`, `HashMapAny`, `HashMapSelectAny`.
      * Track operators where typed coverage is partial: `UnaryPlusAny` (no typed), `ModInt/ModAny` (no float),
        `And/Or/Xor` (int/any only), `Eq/Ne` (int/any only), `Cmp` (int/float/any but no string-specialized op).
-     * For each item, decide whether to add typed opcodes + interpreter support or explicitly document that `.any`
-       is the intended Phase‑1 endpoint (with a reference to the helper implementation used by the AST interpreter).
+     * **Phase‑1 decision:** keep these helper ops as `.any` endpoints for now; rely on exec‑mode smoke tests to
+       ensure they execute in IR without fallback. Revisit for Phase‑1b/Phase‑2 typed opcode work.
      * Add exec‑mode IR smoke tests for any new typed opcodes so fallback warnings are never emitted.
+     * **Status (2026-01-28):** helper ops smoke test added; Valgrind baseline recorded.
    - **Range/date + container tests**
      * Extend `examples/test/ir/IRExecMode*.qtest` with cases that explicitly validate the guard policy and exception handling for each operator family.
      * After each family is widened, rerun `qore -b --exec-mode=ir` under Valgrind and capture the clean heap baseline so we know no new refcount leaks or unwinding regressions slipped in.
