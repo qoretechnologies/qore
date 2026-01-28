@@ -38,6 +38,12 @@ DPQL token types map to `type` categories:
 - DPQL_TOK_IDENTIFIER -> identifier
 - DPQL_TOK_FUNCTION -> function
 - DPQL_TOK_PAREN -> punctuation
+- DPQL_TOK_LBRACKET -> punctuation (index accessor `[`)
+- DPQL_TOK_RBRACKET -> punctuation (index accessor `]`)
+- DPQL_TOK_LBRACE -> punctuation (key accessor `{`)
+- DPQL_TOK_RBRACE -> punctuation (key accessor `}`)
+- DPQL_TOK_RANGE -> operator (range `..`)
+- DPQL_TOK_DOT -> punctuation (chained accessor `.`)
 
 ## Tree-sitter Token Mapping
 

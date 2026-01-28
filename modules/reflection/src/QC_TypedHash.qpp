@@ -270,7 +270,11 @@ Type TypedHash::getType() [flags=RET_VALUE_ONLY] {
     }
 
     // the typed hash ptr must be valid
-    return new QoreObject(QC_TYPE, thd->pgm, new QoreType(thd->th->getTypeInfo()));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(thd->th->getTypeInfo(), thd->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, thd->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns the "or nothing" type object for this typed hash
@@ -293,7 +297,11 @@ Type TypedHash::getOrNothingType() [flags=RET_VALUE_ONLY] {
     }
 
     // the typed hash ptr must be valid
-    return new QoreObject(QC_TYPE, thd->pgm, new QoreType(thd->th->getTypeInfo(true)));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(thd->th->getTypeInfo(true), thd->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, thd->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns the namespace for the typed hash

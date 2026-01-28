@@ -2201,7 +2201,26 @@ class QdpCmd {
         printf("  %s\n", color.key("(@field <op> value) && (@field2 <op> value2)"));
         printf("\n%s\n", color.bold("FIELD REFERENCES"));
         printf("  %s\n", color.key("@name"));
-        printf("  %s\n", color.key("@\"field with spaces\""));
+        printf("  %s\n", color.key("@user.email"));
+        printf("  %s  %s\n", color.key("@\"field with spaces\""), color.dim("(quoted for special chars)"));
+        printf("  %s  %s\n", color.key("@\"literal.dot.name\""), color.dim("(literal dots, not nested)"));
+        printf("\n%s\n", color.bold("QUOTING FIELD NAMES"));
+        printf("  %s\n", color.dim("Quote field names with special characters using double quotes:"));
+        printf("  %s  %s\n", color.key("@\"items[0]\""), color.dim("field name contains brackets"));
+        printf("  %s  %s\n", color.key("@\"user==admin\""), color.dim("field name contains operators"));
+        printf("  %s  %s\n", color.key("@\"123field\""), color.dim("field name starts with digit"));
+        printf("\n%s\n", color.bold("ESCAPE SEQUENCES"));
+        printf("  %s\n", color.dim("Use backslash to escape special characters in quoted names:"));
+        printf("  %s  %s\n", color.key("@\"field\\\"name\""), color.dim("embedded quote"));
+        printf("  %s  %s\n", color.key("@\"path\\\\file\""), color.dim("embedded backslash"));
+        printf("  %s  %s\n", color.key("\\n \\r \\t"), color.dim("newline, carriage return, tab"));
+        printf("\n%s\n", color.bold("FIELD ACCESSORS"));
+        printf("  %s  %s\n", color.key("@items[0]"), color.dim("index accessor (0 = first, -1 = last)"));
+        printf("  %s  %s\n", color.key("@items[0..2]"), color.dim("slice accessor (inclusive range)"));
+        printf("  %s  %s\n", color.key("@record{key}"), color.dim("key accessor (single key)"));
+        printf("  %s  %s\n", color.key("@record{a, b}"), color.dim("key accessor (multiple keys)"));
+        printf("  %s  %s\n", color.key("@record.field"), color.dim("dot accessor (member access)"));
+        printf("  %s  %s\n", color.key("@data[0]{user}.name"), color.dim("chained accessors"));
         printf("\n%s\n", color.bold("OPERATORS"));
         printf("  %s\n", color.type("== != < <= > >= =~ between in"));
         printf("  %s\n", color.dim("Note: available operators depend on the data provider and server capabilities."));
@@ -2227,6 +2246,10 @@ class QdpCmd {
         printf("  %s\n", color.key("qdp mydb/tables/users search '@blob == <deadbeef>'"));
         printf("  %s\n", color.key("qdp mydb/tables/users search '@tags == (one, two, three)'"));
         printf("  %s\n", color.key("qdp mydb/tables/users search '@meta == {a=1, b=two}'"));
+        printf("\n%s\n", color.bold("ACCESSOR EXAMPLES"));
+        printf("  %s\n", color.key("qdp mydb/tables/orders search '@items[0]{product_id} == 123'"));
+        printf("  %s\n", color.key("qdp mydb/tables/users search '@address{city} == \"NYC\"'"));
+        printf("  %s\n", color.key("qdp mydb/tables/events search '@tags[-1] == \"important\"'"));
         exit(0);
     }
 

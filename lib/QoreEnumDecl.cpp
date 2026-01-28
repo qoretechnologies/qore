@@ -133,9 +133,9 @@ qore_enum_decl_private::qore_enum_decl_private(const qore_enum_decl_private& old
           typeInfo(new QoreEnumTypeInfo(ed, old.name.c_str(), old.path.c_str())),
           orNothingTypeInfo(new QoreEnumOrNothingTypeInfo(ed, old.name.c_str(), old.path.c_str())),
           pub(old.pub), sys(old.sys) {
-    // Copy members
+    // Copy members - must ref the value since constructor takes ownership
     for (auto* member : old.members) {
-        QoreEnumMember* new_member = new QoreEnumMember(member->getName(), member->getValue());
+        QoreEnumMember* new_member = new QoreEnumMember(member->getName(), member->getValue().refSelf());
         members.push_back(new_member);
         member_map[new_member->getName()] = new_member;
     }

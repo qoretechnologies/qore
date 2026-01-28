@@ -78,6 +78,18 @@ public const DPQL_TOK_LPAREN = 30;
 public const DPQL_TOK_RPAREN = 31;
 #! Comma
 public const DPQL_TOK_COMMA = 32;
+#! Left bracket (for index/slice accessor)
+public const DPQL_TOK_LBRACKET = 33;
+#! Right bracket (for index/slice accessor)
+public const DPQL_TOK_RBRACKET = 34;
+#! Left brace (for key accessor, NOT hash literal)
+public const DPQL_TOK_LBRACE = 35;
+#! Right brace (for key accessor)
+public const DPQL_TOK_RBRACE = 36;
+#! Range operator (..)
+public const DPQL_TOK_RANGE = 37;
+#! Dot (for member access after accessor)
+public const DPQL_TOK_DOT = 38;
 #! Whitespace (spaces, tabs)
 public const DPQL_TOK_WHITESPACE = 40;
 #! Newline character
@@ -115,6 +127,12 @@ public const DpqlTokenTypeNames = {
     DPQL_TOK_LPAREN: "(",
     DPQL_TOK_RPAREN: ")",
     DPQL_TOK_COMMA: ",",
+    DPQL_TOK_LBRACKET: "[",
+    DPQL_TOK_RBRACKET: "]",
+    DPQL_TOK_LBRACE: "{",
+    DPQL_TOK_RBRACE: "}",
+    DPQL_TOK_RANGE: "..",
+    DPQL_TOK_DOT: ".",
     DPQL_TOK_WHITESPACE: "whitespace",
     DPQL_TOK_NEWLINE: "newline",
     DPQL_TOK_EOF: "eof",
@@ -202,6 +220,8 @@ public class DpqlTokenizer {
         *hash<DpqlTokenInfo> peeked;
         #! Collected errors during tokenization
         list<hash<DpqlDiagnostic>> errors = ();
+        #! Context flag: when True, '{' is a key accessor; when False, it's a hash literal
+        bool in_field_ref_context = False;
     }
 
     #! Creates a tokenizer for the given DPQL expression
@@ -365,24 +385,68 @@ public class DpqlTokenizer {
             return makeToken(DPQL_TOK_WHITESPACE, ws, start_line, start_column);
         }
 
-        # Field reference
+        # Field reference - sets context for accessor parsing
         if (c == "@") {
-            return scanFieldRef();
+            hash<DpqlTokenInfo> tok = scanFieldRef();
+            in_field_ref_context = True;
+            return tok;
         }
 
         # Single-quoted string
         if (c == "'") {
+            in_field_ref_context = False;
             return scanString("'");
         }
 
         # Double-quoted string
         if (c == '"') {
+            in_field_ref_context = False;
             return scanString('"');
         }
 
-        # Hash literal
+        # Left bracket - index/slice accessor
+        if (c == "[") {
+            advance();
+            # Stay in field ref context until ] is found
+            return makeToken(DPQL_TOK_LBRACKET, "[", start_line, start_column);
+        }
+
+        # Right bracket - end of index/slice accessor
+        if (c == "]") {
+            advance();
+            in_field_ref_context = True;  # After ], we can still have more accessors
+            return makeToken(DPQL_TOK_RBRACKET, "]", start_line, start_column);
+        }
+
+        # Brace handling - context sensitive
         if (c == "{") {
+            if (in_field_ref_context) {
+                # Key accessor
+                advance();
+                return makeToken(DPQL_TOK_LBRACE, "{", start_line, start_column);
+            }
+            # Hash literal
+            in_field_ref_context = False;
             return scanHashLiteral();
+        }
+
+        # Right brace - end of key accessor
+        if (c == "}") {
+            advance();
+            in_field_ref_context = True;  # After }, we can still have more accessors
+            return makeToken(DPQL_TOK_RBRACE, "}", start_line, start_column);
+        }
+
+        # Range operator (..) - must check before dot
+        if (c == "." && peekChar() == ".") {
+            advance(2);
+            return makeToken(DPQL_TOK_RANGE, "..", start_line, start_column);
+        }
+
+        # Dot - member access after accessor
+        if (c == "." && in_field_ref_context) {
+            advance();
+            return makeToken(DPQL_TOK_DOT, ".", start_line, start_column);
         }
 
         # Regex pattern (after =~ operator context, or standalone)
@@ -400,8 +464,9 @@ public class DpqlTokenizer {
             return scanNumber();
         }
 
-        # Operators
+        # Operators - reset field ref context since operators end accessor chains
         if (c == "=") {
+            in_field_ref_context = False;
             if (peekChar() == "=") {
                 advance(2);
                 return makeToken(DPQL_TOK_OP_EQ, "==", start_line, start_column);
@@ -418,6 +483,7 @@ public class DpqlTokenizer {
         }
 
         if (c == "!") {
+            in_field_ref_context = False;
             if (peekChar() == "=") {
                 advance(2);
                 return makeToken(DPQL_TOK_OP_NE, "!=", start_line, start_column);
@@ -428,6 +494,7 @@ public class DpqlTokenizer {
         }
 
         if (c == "<") {
+            in_field_ref_context = False;
             if (peekChar() == "=") {
                 advance(2);
                 return makeToken(DPQL_TOK_OP_LE, "<=", start_line, start_column);
@@ -440,6 +507,7 @@ public class DpqlTokenizer {
         }
 
         if (c == ">") {
+            in_field_ref_context = False;
             if (peekChar() == "=") {
                 advance(2);
                 return makeToken(DPQL_TOK_OP_GE, ">=", start_line, start_column);
@@ -449,6 +517,7 @@ public class DpqlTokenizer {
         }
 
         if (c == "&") {
+            in_field_ref_context = False;
             if (peekChar() == "&") {
                 advance(2);
                 return makeToken(DPQL_TOK_OP_AND, "&&", start_line, start_column);
@@ -461,6 +530,7 @@ public class DpqlTokenizer {
         }
 
         if (c == "|") {
+            in_field_ref_context = False;
             if (peekChar() == "|") {
                 advance(2);
                 return makeToken(DPQL_TOK_OP_OR, "||", start_line, start_column);
@@ -474,6 +544,7 @@ public class DpqlTokenizer {
 
         # Punctuation
         if (c == "(") {
+            in_field_ref_context = False;
             string prev = prevNonWhitespaceChar();
             if (looksLikeListLiteral()
                 && (!prev || !(prev =~ /[a-zA-Z0-9_]/ || prev == "@" || prev == "."
@@ -485,17 +556,27 @@ public class DpqlTokenizer {
         }
 
         if (c == ")") {
+            in_field_ref_context = False;
             advance();
             return makeToken(DPQL_TOK_RPAREN, ")", start_line, start_column);
         }
 
         if (c == ",") {
+            # Reset field ref context on comma so that subsequent { is a hash literal
+            # e.g., in "@a, {b=1}" the {b=1} should be a hash, not a key accessor
+            in_field_ref_context = False;
             advance();
             return makeToken(DPQL_TOK_COMMA, ",", start_line, start_column);
         }
 
         # Identifier (function names, keywords)
         if (c =~ /[a-zA-Z_]/) {
+            # Only reset field-ref context if NOT in an accessor chain (i.e., not after a dot)
+            # This allows expressions like "@data[0].user.name" to keep context across "user"
+            string prev = prevNonWhitespaceChar();
+            if (prev != ".") {
+                in_field_ref_context = False;
+            }
             return scanIdentifier();
         }
 

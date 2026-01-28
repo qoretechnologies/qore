@@ -42,6 +42,7 @@ class DpqlActionSessionTest inherits QUnit::Test {
         addTestCase("dpql-get-tokens", \testTokenize());
         addTestCase("dpql-format invalid", \testFormatInvalid());
         addTestCase("dpql-serialize", \testSerialize());
+        addTestCase("schema-aware key completions", \testSchemaAwareKeyCompletions());
 
         set_return_value(main());
     }
@@ -178,5 +179,70 @@ class DpqlActionSessionTest inherits QUnit::Test {
             },
         });
         assertEq('@name == "John"', result.dpql, "Serialized DPQL should match");
+    }
+
+    testSchemaAwareKeyCompletions() {
+        # Test that schema-aware key completions work when fields have nested hash types
+        # This simulates what a real data provider would return with structured data
+
+        # Create fields with nested hash type (like what a provider would return)
+        hash<string, AbstractDataField> fields = {
+            "record": new QoreDataField("record", "A record with nested fields",
+                new HashDataType(NOTHING, {
+                    "name": new QoreDataField("name", "Name field", AbstractDataProviderType::get(StringType)),
+                    "email": new QoreDataField("email", "Email field", AbstractDataProviderType::get(StringType)),
+                    "age": new QoreDataField("age", "Age field", AbstractDataProviderType::get(IntType)),
+                })),
+            "items": new QoreDataField("items", "List of items",
+                new ListDataType(new HashDataType(NOTHING, {
+                    "id": new QoreDataField("id", "Item ID", AbstractDataProviderType::get(IntType)),
+                    "value": new QoreDataField("value", "Item value", AbstractDataProviderType::get(StringType)),
+                }))),
+        };
+
+        DataProvider::DpqlActionSession session = newSession();
+
+        # Test key completions for hash field: @record{
+        hash<auto> result = session.handleAction("dpql-get-completions", {
+            "text": "@record{",
+            "position": 8,
+            "fields": fields,
+        });
+        assertTrue(result.completions.size() >= 3, "Should return completions for hash keys");
+        list<string> labels = map $1.label, result.completions;
+        assertTrue(inlist("name", labels), "Should suggest 'name' key");
+        assertTrue(inlist("email", labels), "Should suggest 'email' key");
+        assertTrue(inlist("age", labels), "Should suggest 'age' key");
+
+        # Test key completions with prefix filtering: @record{na
+        result = session.handleAction("dpql-get-completions", {
+            "text": "@record{na",
+            "position": 10,
+            "fields": fields,
+        });
+        assertEq(1, result.completions.size(), "Should filter to one completion");
+        assertEq("name", result.completions[0].label, "Should match 'name'");
+
+        # Test nested list->hash: @items[0]{
+        result = session.handleAction("dpql-get-completions", {
+            "text": "@items[0]{",
+            "position": 10,
+            "fields": fields,
+        });
+        assertTrue(result.completions.size() >= 2, "Should return completions for list element hash keys");
+        labels = map $1.label, result.completions;
+        assertTrue(inlist("id", labels), "Should suggest 'id' key");
+        assertTrue(inlist("value", labels), "Should suggest 'value' key");
+
+        # Test that simple string fields return no key completions: @name{
+        hash<string, AbstractDataField> simple_fields = {
+            "name": new QoreDataField("name", "Simple string", AbstractDataProviderType::get(StringType)),
+        };
+        result = session.handleAction("dpql-get-completions", {
+            "text": "@name{",
+            "position": 6,
+            "fields": simple_fields,
+        });
+        assertEq(0, result.completions.size(), "String field should have no key completions");
     }
 }

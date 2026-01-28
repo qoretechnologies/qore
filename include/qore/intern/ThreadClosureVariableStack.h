@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,21 +32,45 @@
 #ifndef _QORE_INTERN_THREADCLOSUREVARIABLESTACK_H
 #define _QORE_INTERN_THREADCLOSUREVARIABLESTACK_H
 
-class ThreadClosureVariableStack : public ThreadLocalData<ClosureVarValue*> {
+#include <utility>
+#include <vector>
+
+//! Stack entry for closure variables, storing both the pointer and per-entry declaration order (issue #5168)
+/** The declaration order is stored per-stack-entry rather than on the shared ClosureVarValue object
+    because ClosureVarValue objects can be shared across multiple threads and pushed multiple times.
+    Storing the order on the shared object would cause race conditions and incorrect destruction ordering.
+*/
+struct ClosureStackEntry {
+    ClosureVarValue* cvv;
+    uint64_t decl_order;
+
+    DLLLOCAL ClosureStackEntry() : cvv(nullptr), decl_order(0) {
+    }
+
+    DLLLOCAL ClosureStackEntry(ClosureVarValue* c, uint64_t order) : cvv(c), decl_order(order) {
+    }
+
+    //! Returns true if this entry is a frame boundary marker
+    DLLLOCAL bool isFrameBoundary() const {
+        return cvv == nullptr;
+    }
+};
+
+class ThreadClosureVariableStack : public ThreadLocalData<ClosureStackEntry> {
 private:
-    DLLLOCAL void instantiateIntern(ClosureVarValue* cvar) {
-        //printd(5, "ThreadClosureVariableStack::instantiateIntern(%p = '%s') this: %p pgm: %p\n", cvar->id, cvar->id, this, getProgram());
+    DLLLOCAL void instantiateIntern(ClosureVarValue* cvar, uint64_t order) {
+        //printd(5, "ThreadClosureVariableStack::instantiateIntern(%p = '%s') this: %p pgm: %p\n", cvar ? cvar->id : "null", cvar ? cvar->id : "null", this, getProgram());
 
         if (curr->pos == QORE_THREAD_STACK_BLOCK) {
-            if (curr->next)
+            if (curr->next) {
                 curr = curr->next;
-            else {
+            } else {
                 curr->next = new Block(curr);
                 //printf("this: %p: add curr: %p, curr->next: %p\n", this, curr, curr->next);
                 curr = curr->next;
             }
         }
-        curr->var[curr->pos++] = cvar;
+        curr->var[curr->pos++] = ClosureStackEntry(cvar, order);
     }
 
 public:
@@ -55,33 +79,61 @@ public:
         //printd(5, "ThreadClosureVariableStack::finalize() this: %p\n", this);
         ThreadClosureVariableStack::iterator i(curr);
         while (i.next()) {
-            //printd(5, "ThreadClosureVariableStack::finalize() this: %p %p %s\n", this, i.get(), i.get()->id);
-            sdh.deref(i.get()->finalize());
+            ClosureStackEntry& entry = i.get();
+            if (entry.cvv) {
+                //printd(5, "ThreadClosureVariableStack::finalize() this: %p %p %s\n", this, entry.cvv, entry.cvv->id);
+                sdh.deref(entry.cvv->finalize());
+            }
+        }
+    }
+
+    //! Collects values with declaration order for sorted finalization (issue #5168)
+    /** Uses the per-entry declaration order stored in ClosureStackEntry rather than the order
+        stored on the shared ClosureVarValue object, ensuring thread-safe destruction ordering.
+    */
+    DLLLOCAL void collectForFinalize(std::vector<std::pair<uint64_t, QoreValue>>& ordered_values) {
+        ThreadClosureVariableStack::iterator i(curr);
+        while (i.next()) {
+            ClosureStackEntry& entry = i.get();
+            if (entry.cvv) {  // skip frame boundaries (nullptr entries)
+                // Use per-entry order, not the shared object's order (thread-safety fix)
+                uint64_t order = entry.decl_order;
+                QoreValue val = entry.cvv->finalize();
+                if (val) {
+                    ordered_values.push_back(std::make_pair(order, val));
+                }
+            }
         }
     }
 
     // deletes everything on the stack
     DLLLOCAL void del(ExceptionSink* xsink) {
-        while (curr->prev || curr->pos)
+        while (curr->prev || curr->pos) {
             uninstantiate(xsink);
+        }
     }
 
-    DLLLOCAL ClosureVarValue* instantiate(const char* id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
+    DLLLOCAL ClosureVarValue* instantiate(const char* id, const QoreTypeInfo* typeInfo, QoreValue& nval,
+            bool assign, uint64_t order) {
         ClosureVarValue* cvar = new ClosureVarValue(id, typeInfo, nval, assign);
-        instantiateIntern(cvar);
+        instantiateIntern(cvar, order);
         return cvar;
     }
 
-    DLLLOCAL void instantiate(ClosureVarValue* cvar) {
-        instantiateIntern(cvar);
+    DLLLOCAL void instantiate(ClosureVarValue* cvar, uint64_t order) {
+        instantiateIntern(cvar, order);
     }
 
     DLLLOCAL void uninstantiateIntern() {
 #if 0
-        if (!curr->pos)
-            printd(0, "ThreadClosureVariableStack::uninstantiate() this: %p pos: %d %p %s\n", this, curr->prev->pos - 1, curr->prev->var[curr->prev->pos - 1]->id, curr->prev->var[curr->prev->pos - 1]->id);
-        else
-            printd(0, "ThreadClosureVariableStack::uninstantiate() this: %p pos: %d %p %s\n", this, curr->pos - 1, curr->var[curr->pos - 1]->id, curr->var[curr->pos - 1]->id);
+        if (!curr->pos) {
+            printd(0, "ThreadClosureVariableStack::uninstantiate() this: %p pos: %d %p %s\n", this,
+                curr->prev->pos - 1, curr->prev->var[curr->prev->pos - 1].cvv->id,
+                curr->prev->var[curr->prev->pos - 1].cvv->id);
+        } else {
+            printd(0, "ThreadClosureVariableStack::uninstantiate() this: %p pos: %d %p %s\n", this,
+                curr->pos - 1, curr->var[curr->pos - 1].cvv->id, curr->var[curr->pos - 1].cvv->id);
+        }
 #endif
         if (!curr->pos) {
             if (curr->next) {
@@ -97,8 +149,8 @@ public:
 
     DLLLOCAL void uninstantiate(ExceptionSink* xsink) {
         uninstantiateIntern();
-        assert(curr->var[curr->pos]);
-        curr->var[curr->pos]->deref(xsink);
+        assert(curr->var[curr->pos].cvv);
+        curr->var[curr->pos].cvv->deref(xsink);
     }
 
     DLLLOCAL ClosureVarValue* find(const char* id) {
@@ -108,7 +160,7 @@ public:
             int p = w->pos;
             while (p) {
                 --p;
-                ClosureVarValue* rv = w->var[p];
+                ClosureVarValue* rv = w->var[p].cvv;
                 //printd(5, "ThreadClosureVariableStack::find(%p '%s') this: %p checking %p '%s'\n", id, id, this, rv ? rv->id : nullptr, rv ? rv->id : "n/a");
                 if (rv && rv->id == id) {
                     //printd(5, "ThreadClosureVariableStack::find(%p '%s') this: %p returning: %p\n", id, id, this, rv);
@@ -124,7 +176,7 @@ public:
                     p = w->pos;
                     while (p) {
                         --p;
-                        ClosureVarValue* cvv = w->var[p];
+                        ClosureVarValue* cvv = w->var[p].cvv;
                         printd(0, "var p: %d: %s (%p)\n", p, cvv ? cvv->id : "frame boundary", cvv ? cvv->id : nullptr);
                     }
                     w = w->prev;
@@ -144,12 +196,14 @@ public:
             int p = w->pos;
             while (p) {
                 --p;
-                ClosureVarValue* cvv = w->var[p];
+                ClosureVarValue* cvv = w->var[p].cvv;
                 // skip frame boundaries
-                if (!cvv)
+                if (!cvv) {
                     continue;
-                if (!cv)
+                }
+                if (!cv) {
                     cv = new cvv_vec_t;
+                }
                 cv->push_back(cvv->refSelf());
             }
             w = w->prev;
@@ -161,7 +215,7 @@ public:
     DLLLOCAL void pushFrameBoundary() {
         ++frame_count;
         //printd(5, "ThreadClosureVariableStack::pushFrameBoundary(): fc:%d\n", frame_count);
-        instantiateIntern(nullptr);
+        instantiateIntern(nullptr, 0);
     }
 
     DLLLOCAL void popFrameBoundary() {
@@ -169,7 +223,7 @@ public:
         --frame_count;
         //printd(5, "ThreadClosureVariableStack::popFrameBoundary(): fc:%d\n", frame_count);
         uninstantiateIntern();
-        assert(!curr->var[curr->pos]);
+        assert(!curr->var[curr->pos].cvv);
     }
 
     DLLLOCAL int getFrame(int frame, Block*& w, int& p);

@@ -100,7 +100,11 @@ Type AbstractMember::getType() [flags=RET_VALUE_ONLY] {
     }
 
     // the class ptr must be valid
-    return new QoreObject(QC_TYPE, m->pgm, new QoreType(m->mem->getTypeInfo()));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(m->mem->getTypeInfo(), m->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, m->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns the default value for the member or @ref nothing if the member has no default value

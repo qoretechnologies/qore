@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -98,6 +98,8 @@ protected:
 public:
     QoreLValueGeneric val;
     const char* id;
+    // declaration order for proper cleanup ordering (issue #5168)
+    uint64_t decl_order = 0;
     bool finalized : 1;
     bool frame_boundary : 1;
 
@@ -108,6 +110,14 @@ public:
     }
 
     DLLLOCAL VarValueBase() : val(QV_Bool), id(nullptr), finalized(false), frame_boundary(false) {
+    }
+
+    DLLLOCAL void setDeclOrder(uint64_t order) {
+        decl_order = order;
+    }
+
+    DLLLOCAL uint64_t getDeclOrder() const {
+        return decl_order;
     }
 
     DLLLOCAL void setFrameBoundary() {

@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1140,7 +1140,11 @@ void thread_ref_remove(const lvalue_ref* r) {
 }
 
 LocalVarValue* thread_instantiate_lvar() {
-    return thread_data.get()->tlpd->lvstack.instantiate();
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    LocalVarValue* var = tlpd->lvstack.instantiate();
+    // Set declaration order for proper cleanup ordering (issue #5168)
+    var->setDeclOrder(tlpd->getNextVarOrder());
+    return var;
 }
 
 void thread_uninstantiate_lvar(ExceptionSink* xsink) {
@@ -1160,11 +1164,20 @@ LocalVarValue* thread_find_lvar(const char* id) {
 }
 
 ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
-    return thread_data.get()->tlpd->cvstack.instantiate(n_id, typeInfo, nval, assign);
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    // Get declaration order for this stack entry (issue #5168)
+    uint64_t order = tlpd->getNextVarOrder();
+    ClosureVarValue* cvv = tlpd->cvstack.instantiate(n_id, typeInfo, nval, assign, order);
+    return cvv;
 }
 
 void thread_instantiate_closure_var(ClosureVarValue* cvar) {
-    return thread_data.get()->tlpd->cvstack.instantiate(cvar);
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    // Get declaration order for this stack entry (issue #5168)
+    // The order is stored per-stack-entry, NOT on the shared ClosureVarValue object,
+    // because the same object can be pushed multiple times or across different threads
+    uint64_t order = tlpd->getNextVarOrder();
+    tlpd->cvstack.instantiate(cvar, order);
 }
 
 void thread_uninstantiate_closure_var(ExceptionSink* xsink) {
