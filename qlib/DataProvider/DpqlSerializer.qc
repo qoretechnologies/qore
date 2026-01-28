@@ -300,8 +300,9 @@ public class DpqlSerializer {
 
         # Check if field name needs quoting
         if (field =~ /[^a-zA-Z0-9_.]/ || field =~ /^[0-9]/) {
-            # Escape special characters
-            field = replace(replace(field, "\\", "\\\\"), '"', '\\"');
+            # Escape special characters: backslash first, then quote
+            # Note: use '\"' not '\\"' - in single quotes, \\ is two backslashes
+            field = replace(replace(field, "\\", "\\\\"), '"', '\"');
             result = '@"' + field + '"';
         } else {
             result = "@" + field;

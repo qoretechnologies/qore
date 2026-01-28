@@ -119,6 +119,65 @@ public class DpqlTest inherits QUnit::Test {
             assertEq('@"field with spaces"', tokens[0].value);
         }
 
+        # Test quoted field with dots (field name that would conflict with accessor syntax)
+        {
+            DpqlTokenizer tok('@"user.email.address"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq('@"user.email.address"', tokens[0].value);
+        }
+
+        # Test quoted field with special characters
+        {
+            DpqlTokenizer tok('@"field[0]"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq('@"field[0]"', tokens[0].value);
+        }
+
+        # Test quoted field with operators in name
+        {
+            DpqlTokenizer tok('@"a==b"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq('@"a==b"', tokens[0].value);
+        }
+
+        # Test quoted field with escaped quote
+        {
+            string dpql = "@\"field\\\"name\"";  # @"field\"name"
+            DpqlTokenizer tok(dpql);
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(dpql, tokens[0].value);
+        }
+
+        # Test quoted field with escaped backslash
+        {
+            string dpql = "@\"path\\\\to\\\\file\"";  # @"path\\to\\file"
+            DpqlTokenizer tok(dpql);
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(dpql, tokens[0].value);
+        }
+
+        # Test quoted field with various escape sequences
+        {
+            string dpql = "@\"line1\\nline2\\ttab\"";  # @"line1\nline2\ttab"
+            DpqlTokenizer tok(dpql);
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq(dpql, tokens[0].value);
+        }
+
+        # Test unquoted field with dots (allowed in unquoted syntax for nested access)
+        {
+            DpqlTokenizer tok('@user.email');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@user.email", tokens[0].value);
+        }
+
         # Test keywords and boolean/null
         {
             DpqlTokenizer tok("true false null between and in");
@@ -205,6 +264,36 @@ public class DpqlTest inherits QUnit::Test {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@"field name" == "value"');
             assertEq(DP_SEARCH_OP_EQ, exp.exp);
             assertEq("field name", exp.args[0].field);
+        }
+
+        # Test quoted field with dots in name
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@"user.email.address" == "test@example.com"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("user.email.address", exp.args[0].field);
+        }
+
+        # Test quoted field with brackets in name
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@"items[0]" == 1');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("items[0]", exp.args[0].field);
+        }
+
+        # Test quoted field with escaped quote in name
+        {
+            string dpql = "@\"field\\\"name\" == \"value\"";
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("field\"name", exp.args[0].field);
+        }
+
+        # Test quoted field with escaped backslash in name
+        {
+            string dpql = "@\"path\\\\file\" == \"value\"";
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql);
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("path\\file", exp.args[0].field);
         }
 
         # Test numeric comparison
@@ -633,6 +722,48 @@ public class DpqlTest inherits QUnit::Test {
             assertEq('@"field name" == "value"', dpql);
         }
 
+        # Test field name with dots (needs quoting)
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "user.email"}, "test@example.com"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            # Field names with dots at top level might not need quoting since dots are allowed
+            # but the serializer should handle it correctly
+            assertTrue(dpql.find("user.email") >= 0);
+        }
+
+        # Test field name with brackets (needs quoting and escaping)
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "items[0]"}, 1),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@"items[0]" == 1', dpql);
+        }
+
+        # Test field name with embedded quote (needs escaping)
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "field\"name"}, "value"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@\"field\\\"name\" == \"value\"", dpql);
+        }
+
+        # Test field name with backslash (needs escaping)
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "path\\file"}, "value"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("@\"path\\\\file\" == \"value\"", dpql);
+        }
+
         # Test null value
         {
             hash<DataProviderExpression> exp = <DataProviderExpression>{
@@ -659,7 +790,33 @@ public class DpqlTest inherits QUnit::Test {
             '@value != null',
             '@score >= 75.5',
             '@temp < -10',
+            # Quoted field names with special characters
+            '@"field with spaces" == "value"',
+            '@"items[0]" == 1',
+            # Field names with dots (using unquoted syntax)
+            '@user.name == "John"',
         );
+
+        # Additional round-trip tests for escaped characters
+        {
+            # Field name with embedded quote
+            string dpql = "@\"field\\\"name\" == \"value\"";
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(dpql);
+            assertEq("field\"name", parsed.args[0].field);
+            string serialized = DataProvider::serializeDpqlExpression(parsed);
+            hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+            assertEq(parsed.args[0].field, reparsed.args[0].field);
+        }
+
+        {
+            # Field name with backslash
+            string dpql = "@\"path\\\\file\" == \"value\"";
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(dpql);
+            assertEq("path\\file", parsed.args[0].field);
+            string serialized = DataProvider::serializeDpqlExpression(parsed);
+            hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+            assertEq(parsed.args[0].field, reparsed.args[0].field);
+        }
 
         foreach string expr in (expressions) {
             hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(expr);
