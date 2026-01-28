@@ -347,6 +347,15 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
      * Guard the lvalue before mutation when it comes from a typed local to prevent operating on `NOTHING` values.
      * Expand exec-mode IR tests to touch these operators individually under normal execution and simulated errors.
      * **Status (2026-01-28):** exec-mode smoke tests added for list shift/unshift/splice + lvalue shift-assign; Valgrind baseline recorded.
+   - **Residual `.any` fallbacks (Phase‑1b backlog)**
+     * Track helper-only ops that currently have **only** `.any` opcodes: `ExtractAny`, `RemoveAny`, `KeysAny`,
+       `RegexMatchAny`, `RegexExtractAny`, `RegexSubstAny`, `ExistsAny`, `ElementsAny`, `DotEvalAny`, `CastAny`,
+       `MapSelectAny`, `HashMapAny`, `HashMapSelectAny`.
+     * Track operators where typed coverage is partial: `UnaryPlusAny` (no typed), `ModInt/ModAny` (no float),
+       `And/Or/Xor` (int/any only), `Eq/Ne` (int/any only), `Cmp` (int/float/any but no string-specialized op).
+     * For each item, decide whether to add typed opcodes + interpreter support or explicitly document that `.any`
+       is the intended Phase‑1 endpoint (with a reference to the helper implementation used by the AST interpreter).
+     * Add exec‑mode IR smoke tests for any new typed opcodes so fallback warnings are never emitted.
    - **Range/date + container tests**
      * Extend `examples/test/ir/IRExecMode*.qtest` with cases that explicitly validate the guard policy and exception handling for each operator family.
      * After each family is widened, rerun `qore -b --exec-mode=ir` under Valgrind and capture the clean heap baseline so we know no new refcount leaks or unwinding regressions slipped in.
