@@ -1134,6 +1134,67 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record{', 8, fields);
             assertEq(0, items.size());
         }
+
+        # Test unquoted field name with dot accessor: @record.address{
+        # Dots in unquoted field names should be treated as accessors, not as part of the field name
+        {
+            hash<string, AbstractDataField> fields = {
+                "record": new QoreDataField("record", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "address": new QoreDataField("address", NOTHING,
+                            new HashDataType(NOTHING, {
+                                "city": new QoreDataField("city", NOTHING, AbstractDataProviderType::get(StringType)),
+                                "zip": new QoreDataField("zip", NOTHING, AbstractDataProviderType::get(StringType)),
+                            })),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@record.address{', 16, fields);
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("city", labels));
+            assertTrue(inlist("zip", labels));
+        }
+
+        # Test multiple dot accessors: @user.profile.settings{
+        {
+            hash<string, AbstractDataField> fields = {
+                "user": new QoreDataField("user", NOTHING,
+                    new HashDataType(NOTHING, {
+                        "profile": new QoreDataField("profile", NOTHING,
+                            new HashDataType(NOTHING, {
+                                "settings": new QoreDataField("settings", NOTHING,
+                                    new HashDataType(NOTHING, {
+                                        "theme": new QoreDataField("theme", NOTHING, AbstractDataProviderType::get(StringType)),
+                                        "lang": new QoreDataField("lang", NOTHING, AbstractDataProviderType::get(StringType)),
+                                    })),
+                            })),
+                    })),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@user.profile.settings{', 23, fields);
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("theme", labels));
+            assertTrue(inlist("lang", labels));
+        }
+
+        # Test mixed accessor chain: @data[0].user{
+        {
+            hash<string, AbstractDataField> fields = {
+                "data": new QoreDataField("data", NOTHING,
+                    new ListDataType(new HashDataType(NOTHING, {
+                        "user": new QoreDataField("user", NOTHING,
+                            new HashDataType(NOTHING, {
+                                "name": new QoreDataField("name", NOTHING, AbstractDataProviderType::get(StringType)),
+                                "email": new QoreDataField("email", NOTHING, AbstractDataProviderType::get(StringType)),
+                            })),
+                    }))),
+            };
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data[0].user{', 14, fields);
+            assertEq(2, items.size());
+            list<string> labels = map $1.label, items;
+            assertTrue(inlist("name", labels));
+            assertTrue(inlist("email", labels));
+        }
     }
 
     staticApiTests() {
@@ -2081,6 +2142,31 @@ public class DpqlTest inherits QUnit::Test {
             auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
             # Should include valid indices only
             assertEq((10, 20, 30), result);
+        }
+
+        # Test key accessor on list (maps each element)
+        {
+            hash<auto> rec = {"users": ({"name": "Alice", "age": 25}, {"name": "Bob", "age": 30})};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@users{name}');
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertEq(("Alice", "Bob"), result);
+        }
+
+        # Test key accessor on list with multiple keys
+        {
+            hash<auto> rec = {"users": ({"name": "Alice", "age": 25, "city": "NYC"},
+                                        {"name": "Bob", "age": 30, "city": "LA"})};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@users{name, age}');
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertEq(({"name": "Alice", "age": 25}, {"name": "Bob", "age": 30}), result);
+        }
+
+        # Test slice then key accessor
+        {
+            hash<auto> rec = {"users": ({"name": "Alice"}, {"name": "Bob"}, {"name": "Charlie"})};
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@users[0..1]{name}');
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertEq(("Alice", "Bob"), result);
         }
     }
 

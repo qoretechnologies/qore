@@ -655,9 +655,9 @@ public class DpqlParser {
             if (value[1] == '"') {
                 # Quoted field: @"field name"
                 # Remove @" prefix and " suffix
-                field_name = substr(value, 2, value.size() - 3);
-                # Process escape sequences
-                field_name = replace(replace(field_name, "\\\"", "\""), "\\\\", "\\");
+                string content = substr(value, 2, value.size() - 3);
+                # Process escape sequences (same handling as parseStringLiteral)
+                field_name = unescapeString(content);
             } else {
                 # Unquoted field: @field
                 field_name = substr(value, 1);
@@ -995,6 +995,51 @@ public class DpqlParser {
             }
         }
 
+        return result;
+    }
+
+    #! Unescapes a string by processing escape sequences
+    /** Handles \\n, \\r, \\t, \\\\, \\', \\" and passes through other backslash sequences
+    */
+    private string unescapeString(string content) {
+        string result = "";
+        int i = 0;
+        while (i < content.size()) {
+            if (content[i] == "\\") {
+                if (i + 1 < content.size()) {
+                    string next = content[i + 1];
+                    switch (next) {
+                        case "n":
+                            result += "\n";
+                            break;
+                        case "r":
+                            result += "\r";
+                            break;
+                        case "t":
+                            result += "\t";
+                            break;
+                        case "\\":
+                            result += "\\";
+                            break;
+                        case "'":
+                            result += "'";
+                            break;
+                        case '"':
+                            result += '"';
+                            break;
+                        default:
+                            result += next;
+                    }
+                    i += 2;
+                } else {
+                    result += "\\";
+                    ++i;
+                }
+            } else {
+                result += content[i];
+                ++i;
+            }
+        }
         return result;
     }
 

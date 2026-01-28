@@ -665,9 +665,11 @@ public class DpqlCompletionProvider {
             field_name = unescapeString(substr(text, start, pos - start));
             ++pos;  # Skip closing quote
         } else {
-            # Unquoted field name (can include dots for nested access)
+            # Unquoted field name: stop at first '.' so nested segments are handled
+            # as accessors (matches eval semantics where @record.address traverses
+            # field "record" then key "address", not a single field "record.address")
             int start = pos;
-            while (pos < text.size() && text[pos] =~ /[a-zA-Z0-9_.]/) {
+            while (pos < text.size() && text[pos] =~ /[a-zA-Z0-9_]/) {
                 ++pos;
             }
             field_name = substr(text, start, pos - start);

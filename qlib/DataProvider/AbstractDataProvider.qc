@@ -4553,6 +4553,14 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.4
     */
     static auto applyKeyAccessor(auto value, list<string> key_list, string field_name) {
+        # Handle list values by mapping key accessor over each element
+        if (value.typeCode() == NT_LIST) {
+            list<auto> result = ();
+            foreach auto elem in (value) {
+                result += applyKeyAccessor(elem, key_list, field_name);
+            }
+            return result;
+        }
         if (value.typeCode() != NT_HASH && value.typeCode() != NT_OBJECT) {
             throw "INVALID-OPERATION", sprintf("key accessor applied to non-hash value of type %y "
                 "in field reference %y", value.fullType(), field_name);
