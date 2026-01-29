@@ -130,6 +130,7 @@
 #include <qore/QoreClass.h>
 #include <qore/QoreStringNode.h>
 #include <qore/intern/qore_list_private.h>
+#include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/QoreParseListNode.h>
 #include <qore/intern/QoreParseHashNode.h>
 #include <qore/ReferenceArgumentHelper.h>
@@ -2810,6 +2811,44 @@ static bool runIRExecutorContainerSmoke() {
         }
         if (list_node->size() != 2) {
             std::cerr << "IR executor make.list checks failed (size)\n";
+            return_value.discard(&xsink);
+            return false;
+        }
+        return_value.discard(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_make_hash_typed");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* key1 = builder.createConstString("a");
+        auto* val1 = builder.createConstInt(1);
+        auto* key2 = builder.createConstString("b");
+        auto* val2 = builder.createConstInt(2);
+        auto* hash = builder.createMakeHash({key1->result, val1->result, key2->result, val2->result}, nullptr);
+        builder.createReturn(hash->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor make.hash checks failed (execute)\n";
+            return false;
+        }
+        if (return_value.getType() != NT_HASH) {
+            std::cerr << "IR executor make.hash checks failed (type)\n";
+            return_value.discard(&xsink);
+            return false;
+        }
+        const QoreHashNode* hash_node = return_value.get<const QoreHashNode>();
+        const QoreTypeInfo* hash_type = qore_hash_private::get(*hash_node)->complexTypeInfo;
+        if (!hash_type
+            || !QoreTypeInfo::equal(hash_type, qore_get_complex_hash_type(bigIntTypeInfo))) {
+            std::cerr << "IR executor make.hash checks failed (element type)\n";
+            return_value.discard(&xsink);
+            return false;
+        }
+        if (hash_node->size() != 2) {
+            std::cerr << "IR executor make.hash checks failed (size)\n";
             return_value.discard(&xsink);
             return false;
         }
