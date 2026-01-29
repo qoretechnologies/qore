@@ -759,6 +759,145 @@ static bool lowerAndExpectOpcodeFromParseAnalysis(const char* name, QoreValue ex
     return true;
 }
 
+static bool lowerAndExpectOpcodeFromParseAnalysisWithDate(const char* name, QoreValue expr,
+        QoreIROpcode int_opcode, QoreIROpcode float_opcode, QoreIROpcode date_opcode, QoreIROpcode any_opcode) {
+    ParseProgramContext program_ctx;
+    if (!program_ctx.init(name)) {
+        return false;
+    }
+    QoreParseContext& parse_context = program_ctx.parse_context;
+    ParseExceptionSink xsink;
+    QoreValue parsed_expr(expr);
+    int init_err = 0;
+    try {
+        init_err = parse_init_value_with_program(parsed_expr, parse_context);
+    } catch (...) {
+        std::cerr << "Parse init exception (" << name << ")\n";
+        return false;
+    }
+    if (init_err || **xsink) {
+        std::cerr << "Parse init failed (" << name << ")"
+            << " err=" << init_err
+            << " type=" << parsed_expr.getTypeName()
+            << " hasNode=" << (parsed_expr.hasNode() ? "true" : "false")
+            << "\n";
+        return false;
+    }
+    const AbstractQoreNode* node = parsed_expr.getInternalNode();
+    const auto* bin = dynamic_cast<const QoreBinaryOperatorNode<>*>(node);
+    const auto* bin_lvalue = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node);
+    const auto* bin_int_lvalue = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node);
+    if (!bin && !bin_lvalue && !bin_int_lvalue) {
+        std::cerr << "Parse analysis helper requires a binary operator (" << name << ")\n";
+        return false;
+    }
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    QoreValue left = bin ? bin->getLeft()
+        : (bin_lvalue ? bin_lvalue->getLeft() : bin_int_lvalue->getLeft());
+    QoreValue right = bin ? bin->getRight()
+        : (bin_lvalue ? bin_lvalue->getRight() : bin_int_lvalue->getRight());
+    if (left.hasNode()) {
+        const auto* left_node = dynamic_cast<const ParseNode*>(left.getInternalNode());
+        if (left_node) {
+            left_analysis = left_node->getParseAnalysis();
+        }
+    }
+    if (right.hasNode()) {
+        const auto* right_node = dynamic_cast<const ParseNode*>(right.getInternalNode());
+        if (right_node) {
+            right_analysis = right_node->getParseAnalysis();
+        }
+    }
+    if (!left_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+        std::cerr << "Parse analysis missing type info (" << name << ")\n";
+        return false;
+    }
+    bool left_int = left_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && QoreTypeInfo::isType(left_analysis.known_type, NT_INT);
+    bool right_int = right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && QoreTypeInfo::isType(right_analysis.known_type, NT_INT);
+    bool left_float = left_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && QoreTypeInfo::isType(left_analysis.known_type, NT_FLOAT);
+    bool right_float = right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && QoreTypeInfo::isType(right_analysis.known_type, NT_FLOAT);
+    bool left_date = left_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && QoreTypeInfo::isType(left_analysis.known_type, NT_DATE);
+    bool right_date = right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && QoreTypeInfo::isType(right_analysis.known_type, NT_DATE);
+    bool left_never_nothing = left_analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+    bool right_never_nothing = right_analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+
+    bool prefer_never_nothing = false;
+    bool compare_int_only = false;
+    if (dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
+        prefer_never_nothing = true;
+        compare_int_only = true;
+    } else if (dynamic_cast<const QorePlusEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreMinusEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreMultiplyEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreDivideEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreModuloEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreAndEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreOrEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreXorEqualsOperatorNode*>(node)) {
+        prefer_never_nothing = true;
+    } else if (dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)
+        || dynamic_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)
+        || dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreLogicalComparisonOperatorNode*>(node)) {
+        prefer_never_nothing = true;
+    }
+    QoreIROpcode expected = any_opcode;
+    if (prefer_never_nothing) {
+        if (left_int && right_int && left_never_nothing && right_never_nothing) {
+            expected = int_opcode;
+        } else if (!compare_int_only
+            && left_float && right_float && left_never_nothing && right_never_nothing) {
+            expected = float_opcode;
+        } else if (left_date && right_date && left_never_nothing && right_never_nothing) {
+            expected = date_opcode;
+        }
+    } else {
+        if (left_int && right_int) {
+            expected = int_opcode;
+        } else if (left_float && right_float) {
+            expected = float_opcode;
+        } else if (left_date && right_date) {
+            expected = date_opcode;
+        }
+    }
+
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    if (!functionHasOpcode(func, expected)) {
+        std::cerr << "Lowered function missing opcode (" << name << ")\n";
+        return false;
+    }
+    return true;
+}
+
 static bool lowerAndExpectUnaryOpcodeFromParseAnalysis(const char* name, QoreValue expr,
         QoreIROpcode int_opcode, QoreIROpcode float_opcode, QoreIROpcode any_opcode) {
     ParseProgramContext program_ctx;
@@ -15636,6 +15775,13 @@ int main() {
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"), &analysis_string_maybe_right, false)))),
             QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysisWithDate("ir_range_parse_date",
+            QoreValue(new QoreRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat, QoreIROpcode::RangeDate, QoreIROpcode::RangeAny)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_int",

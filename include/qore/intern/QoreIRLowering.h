@@ -140,6 +140,7 @@ private:
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
     bool analysisIndicatesInt(const QoreParseAnalysis& analysis) const;
     bool analysisIndicatesFloat(const QoreParseAnalysis& analysis) const;
+    bool analysisIndicatesDate(const QoreParseAnalysis& analysis) const;
     bool guaranteedIntType(const QoreValue* expr) const;
     bool guaranteedFloatType(const QoreValue* expr) const;
     const QoreTypeInfo* selectAnalysisType(const QoreParseAnalysis& analysis) const;

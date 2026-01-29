@@ -199,6 +199,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::RangeAny: return "range.any";
         case QoreIROpcode::RangeInt: return "range.int";
         case QoreIROpcode::RangeFloat: return "range.float";
+        case QoreIROpcode::RangeDate: return "range.date";
         case QoreIROpcode::RangeSliceAny: return "range.slice.any";
         case QoreIROpcode::RangeSliceInt: return "range.slice.int";
         case QoreIROpcode::RangeSliceFloat: return "range.slice.float";

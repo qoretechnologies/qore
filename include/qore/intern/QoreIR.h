@@ -213,6 +213,7 @@ enum class QoreIROpcode : uint16_t {
     RangeAny,
     RangeInt,
     RangeFloat,
+    RangeDate,
     RangeSliceAny,
     RangeSliceInt,
     RangeSliceFloat,

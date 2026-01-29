@@ -895,6 +895,12 @@ bool QoreIRLowering::analysisIndicatesFloat(const QoreParseAnalysis& analysis) c
         && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo);
 }
 
+bool QoreIRLowering::analysisIndicatesDate(const QoreParseAnalysis& analysis) const {
+    const QoreTypeInfo* type = selectAnalysisType(analysis);
+    return type && QoreTypeInfo::isType(type, NT_DATE)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo);
+}
+
 bool QoreIRLowering::guaranteedIntType(const QoreValue* expr) const {
     if (!expr) {
         return false;
@@ -3125,13 +3131,22 @@ QoreIRValue QoreIRLowering::lowerRange(const QoreValue& expr, std::string& error
     maybeInsertNotNothingGuard(left, op->getLeft());
     maybeInsertNotNothingGuard(right, op->getRight());
     QoreIROpcode opcode = QoreIROpcode::RangeAny;
-    QoreParseAnalysis expr_analysis;
-    if (getAnalysis(expr, expr_analysis)) {
-        opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::RangeAny,
-            QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    if (getAnalysis(op->getLeft(), left_analysis)
+        && getAnalysis(op->getRight(), right_analysis)
+        && analysisIndicatesDate(left_analysis)
+        && analysisIndicatesDate(right_analysis)) {
+        opcode = QoreIROpcode::RangeDate;
     } else {
-        opcode = selectNumericOpcode(op->getLeft(), op->getRight(),
-            QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat, QoreIROpcode::RangeAny);
+        QoreParseAnalysis expr_analysis;
+        if (getAnalysis(expr, expr_analysis)) {
+            opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::RangeAny,
+                QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat);
+        } else {
+            opcode = selectNumericOpcode(op->getLeft(), op->getRight(),
+                QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat, QoreIROpcode::RangeAny);
+        }
     }
     QoreIRValue result;
     if (!exception_stack.empty()) {

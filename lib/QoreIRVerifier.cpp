@@ -158,6 +158,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
+        case QoreIROpcode::RangeDate:
         case QoreIROpcode::RangeSliceAny:
         case QoreIROpcode::RangeSliceInt:
         case QoreIROpcode::RangeSliceFloat:
@@ -328,6 +329,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
+        case QoreIROpcode::RangeDate:
             return 2;
         case QoreIROpcode::MapSelectAny:
         case QoreIROpcode::MapSelectList:

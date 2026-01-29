@@ -1024,6 +1024,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::RangeAny:
             case QoreIROpcode::RangeInt:
             case QoreIROpcode::RangeFloat:
+            case QoreIROpcode::RangeDate:
             case QoreIROpcode::EqInt:
             case QoreIROpcode::EqFloat:
             case QoreIROpcode::EqAny:
@@ -1800,7 +1801,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::RangeInt:
-        case QoreIROpcode::RangeFloat: {
+        case QoreIROpcode::RangeFloat:
+        case QoreIROpcode::RangeDate: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreRangeOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
