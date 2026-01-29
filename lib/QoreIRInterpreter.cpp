@@ -18,6 +18,7 @@
 #include <qore/DateTimeNode.h>
 #include <qore/intern/AbstractStatement.h>
 #include <qore/intern/DebugStatement.h>
+#include <qore/intern/AssertStatement.h>
 #include <qore/intern/ForEachStatement.h>
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
@@ -270,6 +271,14 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
             if (!stmt) {
                 if (xsink) {
                     xsink->raiseException("IR-INTERPRETER-ERROR", "debug statement requires a statement");
+                }
+                return -1;
+            }
+            return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
+        case QoreIROpcode::Assert:
+            if (!stmt) {
+                if (xsink) {
+                    xsink->raiseException("IR-INTERPRETER-ERROR", "assert statement requires a statement");
                 }
                 return -1;
             }
@@ -898,6 +907,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 auto* debug_inst = static_cast<QoreIRDebugInstruction*>(inst);
                 QoreValue stmt_return;
                 int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Debug, debug_inst->stmt,
+                    stmt_return, xsink);
+                if (rc || (xsink && *xsink)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Assert: {
+                auto* assert_inst = static_cast<QoreIRAssertInstruction*>(inst);
+                QoreValue stmt_return;
+                int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Assert, assert_inst->stmt,
                     stmt_return, xsink);
                 if (rc || (xsink && *xsink)) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);

@@ -445,3 +445,9 @@ QoreIRDebugInstruction* QoreIRBuilder::createDebug(const DebugStatement* stmt, c
     inst->loc = loc;
     return inst;
 }
+
+QoreIRAssertInstruction* QoreIRBuilder::createAssert(const AssertStatement* stmt, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRAssertInstruction>(stmt);
+    inst->loc = loc;
+    return inst;
+}

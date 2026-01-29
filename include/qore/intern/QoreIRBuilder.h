@@ -116,6 +116,7 @@ public:
     QoreIROnBlockExitInstruction* createOnBlockExit(const OnBlockExitStatement* stmt,
         const QoreProgramLocation* loc = nullptr);
     QoreIRDebugInstruction* createDebug(const DebugStatement* stmt, const QoreProgramLocation* loc = nullptr);
+    QoreIRAssertInstruction* createAssert(const AssertStatement* stmt, const QoreProgramLocation* loc = nullptr);
 
 private:
     QoreIRFunction* func = nullptr;

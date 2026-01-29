@@ -102,6 +102,7 @@
 #include <qore/intern/ThreadExitStatement.h>
 #include <qore/intern/OnBlockExitStatement.h>
 #include <qore/intern/DebugStatement.h>
+#include <qore/intern/AssertStatement.h>
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/QoreTypeInfo.h>
 
@@ -568,6 +569,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     }
     if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
         builder.createDebug(debug_stmt, stmt->loc);
+        return true;
+    }
+    if (auto* assert_stmt = dynamic_cast<const AssertStatement*>(stmt)) {
+        builder.createAssert(assert_stmt, stmt->loc);
         return true;
     }
     if (auto* thread_exit_stmt = dynamic_cast<const ThreadExitStatement*>(stmt)) {
