@@ -504,6 +504,16 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - polling-based event triggers for new invoices, bills, payments, customers, vendors, expenses, and more
       - action catalog integration with reference data support for organizations, customers, vendors, and items
       - connection support with \c zohobooks:// URL scheme
+    - @ref zohoinvoicerestclientintro "ZohoInvoiceRestClient" module
+      - new module providing a REST client for Zoho Invoice's invoicing API
+      - supports OAuth2 authentication with regional endpoint support (.com, .eu, .in, .com.au, .ca, .sa, .jp)
+      - provides ZohoInvoiceRestConnection for connection management with \c zohoinvoice:// URL scheme
+    - @ref zohoinvoicedataproviderintro "ZohoInvoiceDataProvider" module
+      - new module providing a data provider API for Zoho Invoice invoicing and billing
+      - full CRUD support for invoices, recurring invoices, contacts, expenses, recurring expenses, payments, estimates, projects, and items
+      - polling-based event triggers for new invoices, contacts, estimates, expenses, items, and projects
+      - action catalog integration with reference data support for organizations, customers, and contacts
+      - connection support with \c zohoinvoice:// URL scheme
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
