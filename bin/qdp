@@ -1247,7 +1247,8 @@ class QdpCmd {
                 get_script_name(), cmd);
         }
         hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(app, QdpCmd::action);
-        printf("@%s/%s (%s%s): %s\n", app, QdpCmd::action, ActionNameMap{action.action_code},
+        printf("%s/%s (%s%s): %s\n", color.key("@" + app), color.bold(QdpCmd::action),
+            color.type(ActionNameMap{action.action_code}),
             (action.action_val.val() ? " \"" + action.action_val + "\"" : ""), action.short_desc);
         action = DataProviderActionCatalog::checkAppActionOptions(action.app, action.action);
         *hash<auto> req = getHashIntern(shift ARGV, "options");
@@ -1255,7 +1256,7 @@ class QdpCmd {
             ? provider.tryGetActionOptionsWithOptions(action, req)
             : action.options;
         if (opts) {
-            printf("Options:\n");
+            printf("%s\n", color.bold("Options"));
             foreach hash<auto> i in (opts.pairIterator()) {
                 string tn = i.value.type.getName();
                 # get allowed values or element allowed values
@@ -1275,14 +1276,19 @@ class QdpCmd {
                         info += sprintf(", elements: one of: %y", (map $1.value ?? $1, l));
                     }
                 }
-                printf(" - %s (%s%s%s): %s\n", i.key, i.value.required || tn =~ /^\*/ ? "" : "*", tn, info,
+                string req_str = i.value.required ? color.error(" (required)") : "";
+                printf("  %s [%s%s]%s: %s\n", color.key(i.key),
+                    i.value.required || tn =~ /^\*/ ? "" : "*", color.type(tn), req_str,
                     i.value.short_desc);
+                if (info) {
+                    printf("    %s%s\n", color.dim("values"), info);
+                }
             }
         } else {
-            printf("Options: none\n");
+            printf("Options: %s\n", color.dim("none"));
         }
         if (action.output_type) {
-            printf("Output:\n");
+            printf("%s\n", color.bold("Output"));
             QdpCmd::showType(provider, action.output_type, "  ");
         }
     }
@@ -1907,16 +1913,7 @@ class QdpCmd {
             if (conn) {
                 prov = conn.getDataProvider(action.subtype);
             } else if (action.cls) {
-                # load the module into qdp's program space so Class::forName() can resolve the class;
-                # the module was already loaded by ProviderIndexUtil into the DataProvider module's
-                # program context, but Class::forName() resolves in the calling program's context,
-                # so we must load the module here and do the class resolution in qdp's context
-                string mod_name = (action.cls.split("::")[0]);
-                load_module(mod_name);
-                hash<auto> constructor_opts;
-                map constructor_opts{$1.key} = remove options{$1.key}, action.options.pairIterator(),
-                    $1.value.loc == "constructor" && options.hasKey($1.key);
-                prov = Class::forName(action.cls).newObject(constructor_opts);
+                prov = DataProviderActionCatalog::getDataProviderForAction(action, \options);
             }
             # set logger on data provider
             prov.setLogger(logger);
