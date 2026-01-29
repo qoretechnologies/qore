@@ -906,6 +906,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-GUARD-FAIL", "type guard failed");
                     }
+                    if (guard_inst->deopt_target) {
+                        prev_block = block;
+                        block = guard_inst->deopt_target;
+                        ip = 0;
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, nullptr);
                     cleanupStoredValues(globals, nullptr);
