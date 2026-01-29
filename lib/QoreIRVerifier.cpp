@@ -90,12 +90,16 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::ShrAssignInt:
         case QoreIROpcode::ShrAssignAny:
         case QoreIROpcode::AddAssignInt:
+        case QoreIROpcode::AddAssignFloat:
         case QoreIROpcode::AddAssignAny:
         case QoreIROpcode::SubAssignInt:
+        case QoreIROpcode::SubAssignFloat:
         case QoreIROpcode::SubAssignAny:
         case QoreIROpcode::MulAssignInt:
+        case QoreIROpcode::MulAssignFloat:
         case QoreIROpcode::MulAssignAny:
         case QoreIROpcode::DivAssignInt:
+        case QoreIROpcode::DivAssignFloat:
         case QoreIROpcode::DivAssignAny:
         case QoreIROpcode::ModAssignInt:
         case QoreIROpcode::ModAssignAny:
@@ -106,8 +110,10 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::XorAssignInt:
         case QoreIROpcode::XorAssignAny:
         case QoreIROpcode::EqInt:
+        case QoreIROpcode::EqFloat:
         case QoreIROpcode::EqAny:
         case QoreIROpcode::NeInt:
+        case QoreIROpcode::NeFloat:
         case QoreIROpcode::NeAny:
         case QoreIROpcode::EqHard:
         case QoreIROpcode::NeHard:
@@ -265,12 +271,16 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::ShrAssignInt:
         case QoreIROpcode::ShrAssignAny:
         case QoreIROpcode::AddAssignInt:
+        case QoreIROpcode::AddAssignFloat:
         case QoreIROpcode::AddAssignAny:
         case QoreIROpcode::SubAssignInt:
+        case QoreIROpcode::SubAssignFloat:
         case QoreIROpcode::SubAssignAny:
         case QoreIROpcode::MulAssignInt:
+        case QoreIROpcode::MulAssignFloat:
         case QoreIROpcode::MulAssignAny:
         case QoreIROpcode::DivAssignInt:
+        case QoreIROpcode::DivAssignFloat:
         case QoreIROpcode::DivAssignAny:
         case QoreIROpcode::ModAssignInt:
         case QoreIROpcode::ModAssignAny:
@@ -281,8 +291,10 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::XorAssignInt:
         case QoreIROpcode::XorAssignAny:
         case QoreIROpcode::EqInt:
+        case QoreIROpcode::EqFloat:
         case QoreIROpcode::EqAny:
         case QoreIROpcode::NeInt:
+        case QoreIROpcode::NeFloat:
         case QoreIROpcode::NeAny:
         case QoreIROpcode::EqHard:
         case QoreIROpcode::NeHard:

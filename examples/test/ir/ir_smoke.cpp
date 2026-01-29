@@ -9106,11 +9106,9 @@ int main() {
     }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_float",
             QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
-                QoreValue(new QorePreIncrementOperatorNode(nullptr,
-                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
-                QoreValue(new QorePreIncrementOperatorNode(nullptr,
-                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
-            QoreIROpcode::EqInt, QoreIROpcode::EqAny, QoreIROpcode::EqAny)) {
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::EqInt, QoreIROpcode::EqFloat, QoreIROpcode::EqAny)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_lt_parse_float_maybe",
@@ -9133,11 +9131,9 @@ int main() {
     }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_ne_parse_float",
             QoreValue(new QoreLogicalNotEqualsOperatorNode(nullptr,
-                QoreValue(new QorePreIncrementOperatorNode(nullptr,
-                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)))),
-                QoreValue(new QorePreIncrementOperatorNode(nullptr,
-                    QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))))),
-            QoreIROpcode::NeInt, QoreIROpcode::NeAny, QoreIROpcode::NeAny)) {
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::NeInt, QoreIROpcode::NeFloat, QoreIROpcode::NeAny)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_int_float_mixed",
@@ -16856,6 +16852,13 @@ int main() {
             QoreIROpcode::AddAssignInt, QoreIROpcode::AddAssignAny, QoreIROpcode::AddAssignAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_add_assign_parse_float",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::AddAssignInt, QoreIROpcode::AddAssignFloat, QoreIROpcode::AddAssignAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_sub_assign_parse_int",
             QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
@@ -16886,6 +16889,13 @@ int main() {
             QoreIROpcode::SubAssignInt, QoreIROpcode::SubAssignAny, QoreIROpcode::SubAssignAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_sub_assign_parse_float",
+            QoreValue(new QoreMinusEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::SubAssignInt, QoreIROpcode::SubAssignFloat, QoreIROpcode::SubAssignAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mul_assign_parse_int",
             QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
@@ -16902,6 +16912,13 @@ int main() {
             QoreIROpcode::MulAssignInt, QoreIROpcode::MulAssignAny, QoreIROpcode::MulAssignAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mul_assign_parse_float",
+            QoreValue(new QoreMultiplyEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::MulAssignInt, QoreIROpcode::MulAssignFloat, QoreIROpcode::MulAssignAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_div_assign_parse_int",
             QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
@@ -16916,6 +16933,13 @@ int main() {
                 QoreValue(new QorePreIncrementOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))))),
             QoreIROpcode::DivAssignInt, QoreIROpcode::DivAssignAny, QoreIROpcode::DivAssignAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_div_assign_parse_float",
+            QoreValue(new QoreDivideEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::DivAssignInt, QoreIROpcode::DivAssignFloat, QoreIROpcode::DivAssignAny)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_mod_assign_parse_int",

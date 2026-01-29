@@ -991,51 +991,52 @@ static bool isRangeLValue(const QoreValue& value) {
     return node && dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node);
 }
 
-static const QoreValue* getLValueBaseValue(const QoreValue& value) {
+static bool getLValueBaseValue(const QoreValue& value, QoreValue& base) {
     const AbstractQoreNode* node = value.getInternalNode();
     if (!node) {
-        return nullptr;
+        return false;
     }
     if (dynamic_cast<const VarRefNode*>(node)) {
-        return &value;
+        base = value;
+        return true;
     }
     if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLeft());
+        return getLValueBaseValue(op->getLeft(), base);
     }
     if (auto* op = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLeft());
+        return getLValueBaseValue(op->getLeft(), base);
     }
     if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLeft());
+        return getLValueBaseValue(op->getLeft(), base);
     }
     if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
-        return getLValueBaseValue(op->get(0));
+        return getLValueBaseValue(op->get(0), base);
     }
     if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLeft());
+        return getLValueBaseValue(op->getLeft(), base);
     }
     if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getExp());
+        return getLValueBaseValue(op->getExp(), base);
     }
     if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLeft());
+        return getLValueBaseValue(op->getLeft(), base);
     }
     if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getLValue());
+        return getLValueBaseValue(op->getLValue(), base);
     }
     if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getExp());
+        return getLValueBaseValue(op->getExp(), base);
     }
     if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getExp());
+        return getLValueBaseValue(op->getExp(), base);
     }
     if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getExp());
+        return getLValueBaseValue(op->getExp(), base);
     }
     if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
-        return getLValueBaseValue(op->getExp());
+        return getLValueBaseValue(op->getExp(), base);
     }
-    return nullptr;
+    return false;
 }
 
 static bool isInvokeLValueNode(const AbstractQoreNode* node) {
@@ -1418,11 +1419,11 @@ bool QoreIRLowering::guardVarLValue(const QoreValue& exp, std::string& error) {
 }
 
 bool QoreIRLowering::guardLValueBase(const QoreValue& exp, std::string& error) {
-    const QoreValue* base = getLValueBaseValue(exp);
-    if (!base) {
+    QoreValue base;
+    if (!getLValueBaseValue(exp, base)) {
         return true;
     }
-    return guardVarLValue(*base, error);
+    return guardVarLValue(base, error);
 }
 
 void QoreIRLowering::markLocalAssignmentFromExpression(const QoreValue& exp) {
@@ -1857,6 +1858,12 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::AddAssignInt;
+    } else if ((isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))
+        || (getAnalysis(op->getLeft(), left_analysis)
+            && getAnalysis(right_expr, right_analysis)
+            && isNeverNothingFloat(left_analysis)
+            && isNeverNothingFloat(right_analysis))) {
+        opcode = QoreIROpcode::AddAssignFloat;
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
     if (!result.isValid()) {
@@ -1920,6 +1927,12 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::SubAssignInt;
+    } else if ((isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))
+        || (getAnalysis(op->getLeft(), left_analysis)
+            && getAnalysis(right_expr, right_analysis)
+            && isNeverNothingFloat(left_analysis)
+            && isNeverNothingFloat(right_analysis))) {
+        opcode = QoreIROpcode::SubAssignFloat;
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
     if (!result.isValid()) {
@@ -1983,6 +1996,12 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::MulAssignInt;
+    } else if ((isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))
+        || (getAnalysis(op->getLeft(), left_analysis)
+            && getAnalysis(right_expr, right_analysis)
+            && isNeverNothingFloat(left_analysis)
+            && isNeverNothingFloat(right_analysis))) {
+        opcode = QoreIROpcode::MulAssignFloat;
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
     if (!result.isValid()) {
@@ -2046,6 +2065,12 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
             && isNeverNothingInt(left_analysis)
             && isNeverNothingInt(right_analysis))) {
         opcode = QoreIROpcode::DivAssignInt;
+    } else if ((isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))
+        || (getAnalysis(op->getLeft(), left_analysis)
+            && getAnalysis(right_expr, right_analysis)
+            && isNeverNothingFloat(left_analysis)
+            && isNeverNothingFloat(right_analysis))) {
+        opcode = QoreIROpcode::DivAssignFloat;
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
     if (!result.isValid()) {
@@ -2511,11 +2536,18 @@ QoreIRValue QoreIRLowering::lowerLogicalEquals(const QoreValue& expr, std::strin
     QoreIROpcode op = QoreIROpcode::EqAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if (getAnalysis(eq->getLeft(), left_analysis)
-        && getAnalysis(eq->getRight(), right_analysis)
-        && isNeverNothingInt(left_analysis)
-        && isNeverNothingInt(right_analysis)) {
+    if ((isIntConstant(eq->getLeft()) && isIntConstant(eq->getRight()))
+        || (getAnalysis(eq->getLeft(), left_analysis)
+            && getAnalysis(eq->getRight(), right_analysis)
+            && isNeverNothingInt(left_analysis)
+            && isNeverNothingInt(right_analysis))) {
         op = QoreIROpcode::EqInt;
+    } else if ((isFloatConstant(eq->getLeft()) && isFloatConstant(eq->getRight()))
+        || (getAnalysis(eq->getLeft(), left_analysis)
+            && getAnalysis(eq->getRight(), right_analysis)
+            && isNeverNothingFloat(left_analysis)
+            && isNeverNothingFloat(right_analysis))) {
+        op = QoreIROpcode::EqFloat;
     }
     return lowerBinaryOpOrInvoke(op, expr, left, right, eq->loc, error);
 }
@@ -2538,11 +2570,18 @@ QoreIRValue QoreIRLowering::lowerLogicalNotEquals(const QoreValue& expr, std::st
     QoreIROpcode op = QoreIROpcode::NeAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if (getAnalysis(ne->getLeft(), left_analysis)
-        && getAnalysis(ne->getRight(), right_analysis)
-        && isNeverNothingInt(left_analysis)
-        && isNeverNothingInt(right_analysis)) {
+    if ((isIntConstant(ne->getLeft()) && isIntConstant(ne->getRight()))
+        || (getAnalysis(ne->getLeft(), left_analysis)
+            && getAnalysis(ne->getRight(), right_analysis)
+            && isNeverNothingInt(left_analysis)
+            && isNeverNothingInt(right_analysis))) {
         op = QoreIROpcode::NeInt;
+    } else if ((isFloatConstant(ne->getLeft()) && isFloatConstant(ne->getRight()))
+        || (getAnalysis(ne->getLeft(), left_analysis)
+            && getAnalysis(ne->getRight(), right_analysis)
+            && isNeverNothingFloat(left_analysis)
+            && isNeverNothingFloat(right_analysis))) {
+        op = QoreIROpcode::NeFloat;
     }
     return lowerBinaryOpOrInvoke(op, expr, left, right, ne->loc, error);
 }

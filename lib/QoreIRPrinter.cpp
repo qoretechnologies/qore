@@ -75,12 +75,16 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ShrAssignInt: return "shr.assign.int";
         case QoreIROpcode::ShrAssignAny: return "shr.assign.any";
         case QoreIROpcode::AddAssignInt: return "add.assign.int";
+        case QoreIROpcode::AddAssignFloat: return "add.assign.float";
         case QoreIROpcode::AddAssignAny: return "add.assign.any";
         case QoreIROpcode::SubAssignInt: return "sub.assign.int";
+        case QoreIROpcode::SubAssignFloat: return "sub.assign.float";
         case QoreIROpcode::SubAssignAny: return "sub.assign.any";
         case QoreIROpcode::MulAssignInt: return "mul.assign.int";
+        case QoreIROpcode::MulAssignFloat: return "mul.assign.float";
         case QoreIROpcode::MulAssignAny: return "mul.assign.any";
         case QoreIROpcode::DivAssignInt: return "div.assign.int";
+        case QoreIROpcode::DivAssignFloat: return "div.assign.float";
         case QoreIROpcode::DivAssignAny: return "div.assign.any";
         case QoreIROpcode::ModAssignInt: return "mod.assign.int";
         case QoreIROpcode::ModAssignAny: return "mod.assign.any";
@@ -147,8 +151,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ThreadExit: return "thread.exit";
         case QoreIROpcode::Debug: return "debug";
         case QoreIROpcode::EqInt: return "eq.int";
+        case QoreIROpcode::EqFloat: return "eq.float";
         case QoreIROpcode::EqAny: return "eq.any";
         case QoreIROpcode::NeInt: return "ne.int";
+        case QoreIROpcode::NeFloat: return "ne.float";
         case QoreIROpcode::NeAny: return "ne.any";
         case QoreIROpcode::EqHard: return "eq.hard";
         case QoreIROpcode::NeHard: return "ne.hard";

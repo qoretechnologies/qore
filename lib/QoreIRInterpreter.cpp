@@ -111,10 +111,14 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
     switch (op) {
         case QoreIROpcode::EqInt:
             return QoreValue(left.getAsBigInt() == right.getAsBigInt());
+        case QoreIROpcode::EqFloat:
+            return QoreValue(left.getAsFloat() == right.getAsFloat());
         case QoreIROpcode::EqAny:
             return QoreValue(QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
         case QoreIROpcode::NeInt:
             return QoreValue(left.getAsBigInt() != right.getAsBigInt());
+        case QoreIROpcode::NeFloat:
+            return QoreValue(left.getAsFloat() != right.getAsFloat());
         case QoreIROpcode::NeAny:
             return QoreValue(!QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
         case QoreIROpcode::EqHard:
@@ -986,12 +990,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::ShrAssignInt:
             case QoreIROpcode::ShrAssignAny:
             case QoreIROpcode::AddAssignInt:
+            case QoreIROpcode::AddAssignFloat:
             case QoreIROpcode::AddAssignAny:
             case QoreIROpcode::SubAssignInt:
+            case QoreIROpcode::SubAssignFloat:
             case QoreIROpcode::SubAssignAny:
             case QoreIROpcode::MulAssignInt:
+            case QoreIROpcode::MulAssignFloat:
             case QoreIROpcode::MulAssignAny:
             case QoreIROpcode::DivAssignInt:
+            case QoreIROpcode::DivAssignFloat:
             case QoreIROpcode::DivAssignAny:
             case QoreIROpcode::ModAssignInt:
             case QoreIROpcode::ModAssignAny:
@@ -1017,8 +1025,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::RangeInt:
             case QoreIROpcode::RangeFloat:
             case QoreIROpcode::EqInt:
+            case QoreIROpcode::EqFloat:
             case QoreIROpcode::EqAny:
             case QoreIROpcode::NeInt:
+            case QoreIROpcode::NeFloat:
             case QoreIROpcode::NeAny:
             case QoreIROpcode::EqHard:
             case QoreIROpcode::NeHard:
@@ -1649,6 +1659,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::AddAssignInt:
             return QoreValue(left.getAsBigInt() + right.getAsBigInt());
+        case QoreIROpcode::AddAssignFloat:
+            return QoreValue(left.getAsFloat() + right.getAsFloat());
         case QoreIROpcode::AddAssignAny: {
             bool needs_deref = true;
             QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
@@ -1656,6 +1668,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::SubAssignInt:
             return QoreValue(left.getAsBigInt() - right.getAsBigInt());
+        case QoreIROpcode::SubAssignFloat:
+            return QoreValue(left.getAsFloat() - right.getAsFloat());
         case QoreIROpcode::SubAssignAny: {
             bool needs_deref = true;
             QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
@@ -1663,6 +1677,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::MulAssignInt:
             return QoreValue(left.getAsBigInt() * right.getAsBigInt());
+        case QoreIROpcode::MulAssignFloat:
+            return QoreValue(left.getAsFloat() * right.getAsFloat());
         case QoreIROpcode::MulAssignAny: {
             bool needs_deref = true;
             QoreMultiplicationOperatorNode node(nullptr, left.refSelf(), right.refSelf());
@@ -1677,6 +1693,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 return QoreValue();
             }
             return QoreValue(left.getAsBigInt() / divisor);
+        }
+        case QoreIROpcode::DivAssignFloat: {
+            double divisor = right.getAsFloat();
+            if (!divisor) {
+                if (xsink) {
+                    xsink->raiseException("DIVISION-BY-ZERO", "division by zero found in floating-point expression");
+                }
+                return QoreValue();
+            }
+            return QoreValue(left.getAsFloat() / divisor);
         }
         case QoreIROpcode::DivAssignAny:
             return QoreDivisionOperatorNode::doDivision(left, right, xsink);
@@ -1780,8 +1806,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return node->eval(needs_deref, xsink);
         }
         case QoreIROpcode::EqInt:
+        case QoreIROpcode::EqFloat:
         case QoreIROpcode::EqAny:
         case QoreIROpcode::NeInt:
+        case QoreIROpcode::NeFloat:
         case QoreIROpcode::NeAny:
         case QoreIROpcode::EqHard:
         case QoreIROpcode::NeHard:
