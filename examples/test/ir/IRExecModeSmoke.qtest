@@ -40,6 +40,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR cast lvalue smoke", \testIrCastLValueSmoke());
         addTestCase("IR helper ops smoke", \testIrHelperOpsSmoke());
         addTestCase("IR cast object smoke", \testIrCastObjectSmoke());
+        addTestCase("IR exists/elements smoke", \testIrExistsElementsSmoke());
         addTestCase("IR regex guard smoke", \testIrRegexGuardSmoke());
         addTestCase("IR hash map select guard smoke", \testIrHashMapSelectGuardSmoke());
         addTestCase("IR throw/rethrow smoke", \testIrThrowRethrowSmoke());
@@ -1351,6 +1352,41 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("cast-obj:7\n", stdout_output, "Unexpected IR cast object output");
+    }
+
+    testIrExistsElementsSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("hash h = (\"a\": 1);\n");
+        script.file.write("list l = (1, 2, 3);\n");
+        script.file.write("string s = \"abcd\";\n");
+        script.file.write("printf(\"exists:%d:%d\\n\", exists h.a ? 1 : 0, exists h.b ? 1 : 0);\n");
+        script.file.write("printf(\"elements:%d:%d\\n\", elements l, elements s);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode exists/elements process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("exists:1:0\nelements:3:4\n", stdout_output, "Unexpected IR exists/elements output");
     }
 
     testIrHelperOpsSmoke() {
