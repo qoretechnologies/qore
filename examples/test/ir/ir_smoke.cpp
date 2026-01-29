@@ -10095,6 +10095,14 @@ int main() {
             QoreIROpcode::RangeSliceFloat)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_range_slice_parse_date",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::RangeSliceAny)) {
+        return 1;
+    }
     if (!lowerAndExpectAnyOpcodeWithParseInit("ir_range_slice_parse_maybe",
             QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
