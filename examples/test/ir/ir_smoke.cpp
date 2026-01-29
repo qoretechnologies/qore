@@ -16064,6 +16064,22 @@ int main() {
             QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat, QoreIROpcode::RangeDate, QoreIROpcode::RangeAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysisWithDate("ir_range_parse_date_maybe_left",
+            QoreValue(new QoreRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat, QoreIROpcode::RangeDate, QoreIROpcode::RangeAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysisWithDate("ir_range_parse_date_maybe_right",
+            QoreValue(new QoreRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat, QoreIROpcode::RangeDate, QoreIROpcode::RangeAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_eq_parse_range_int",
             QoreValue(new QoreLogicalEqualsOperatorNode(nullptr,
                 QoreValue(new QoreRangeOperatorNode(nullptr,
