@@ -46,6 +46,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ConstNull: return "const.null";
         case QoreIROpcode::ConstString: return "const.string";
         case QoreIROpcode::ConstDate: return "const.date";
+        case QoreIROpcode::MakeList: return "make.list";
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";
         case QoreIROpcode::AddAny: return "add.any";

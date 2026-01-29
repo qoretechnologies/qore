@@ -9,6 +9,7 @@
 
 #include <qore/DateTimeNode.h>
 #include <qore/QoreValue.h>
+#include <qore/QoreListNode.h>
 #include <qore/intern/QoreLibIntern.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>
@@ -34,6 +35,7 @@
 #include <qore/intern/QoreQuestionMarkOperatorNode.h>
 #include <qore/intern/QoreDivisionOperatorNode.h>
 #include <qore/intern/QoreFoldlOperatorNode.h>
+#include <qore/intern/QoreParseListNode.h>
 #include <qore/intern/QoreSelectOperatorNode.h>
 #include <qore/intern/QoreMapSelectOperatorNode.h>
 #include <qore/intern/QoreHashMapOperatorNode.h>
@@ -1065,6 +1067,10 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (!error.empty()) {
         return QoreIRValue();
     }
+    QoreIRValue list = lowerParseList(expr, error);
+    if (list.isValid() || !error.empty()) {
+        return list;
+    }
     QoreIRValue var_ref = lowerVarRef(expr, error);
     if (var_ref.isValid() || !error.empty()) {
         return var_ref;
@@ -1507,6 +1513,22 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     }
     if (expr.isFloat()) {
         return builder.createConstFloat(expr.getAsFloat())->result;
+    }
+    if (expr.getType() == NT_LIST && expr.isValue()) {
+        const QoreListNode* list = expr.get<const QoreListNode>();
+        if (list) {
+            std::vector<QoreIRValue> values;
+            values.reserve(list->size());
+            for (size_t i = 0; i < list->size(); ++i) {
+                QoreValue entry = list->retrieveEntry(i);
+                QoreIRValue lowered = lowerConstant(entry, error);
+                if (!lowered.isValid()) {
+                    return QoreIRValue();
+                }
+                values.push_back(lowered);
+            }
+            return builder.createMakeList(values, nullptr)->result;
+        }
     }
     if (expr.getType() == NT_STRING && expr.isValue()) {
         QoreStringValueHelper str(expr);
@@ -3578,6 +3600,24 @@ QoreIRValue QoreIRLowering::lowerRegexSubst(const QoreValue& expr, std::string& 
     }
     std::vector<QoreIRValue> operands{operand};
     return lowerExprOpOrInvoke(QoreIROpcode::RegexSubstString, expr, operands, op->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* list = dynamic_cast<const QoreParseListNode*>(node);
+    if (!list) {
+        return QoreIRValue();
+    }
+    std::vector<QoreIRValue> values;
+    values.reserve(list->size());
+    for (size_t i = 0; i < list->size(); ++i) {
+        QoreIRValue value = lowerExpression(list->get(i), error);
+        if (!value.isValid()) {
+            return QoreIRValue();
+        }
+        values.push_back(value);
+    }
+    return builder.createMakeList(values, list->loc)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& error) {

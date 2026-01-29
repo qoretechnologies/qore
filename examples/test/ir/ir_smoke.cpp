@@ -4594,6 +4594,15 @@ int main() {
             QoreIROpcode::StoreThreadLocal)) {
         return 1;
     }
+    {
+        QoreProgramLocation list_loc("ir_smoke", 1, 1);
+        QoreParseListNode* list_node = new QoreParseListNode(&list_loc);
+        list_node->add(QoreValue(1), &list_loc);
+        list_node->add(QoreValue(2), &list_loc);
+        if (!lowerAndExpectOpcodeWithParseInit("ir_make_list", QoreValue(list_node), QoreIROpcode::MakeList)) {
+            return 1;
+        }
+    }
     if (!lowerAndExpectGuard("ir_guard_plus_equals_local",
             QoreValue(new QorePlusEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),

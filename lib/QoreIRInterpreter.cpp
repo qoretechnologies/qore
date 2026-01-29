@@ -90,6 +90,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/QoreCastOperatorNode.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/VarRefNode.h>
+#include <qore/QoreListNode.h>
 
 static QoreValue evalExprNode(const QoreValue& expr, ExceptionSink* xsink) {
     if (!expr.hasNode()) {
@@ -542,6 +543,25 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 DateTimeNode* dt = new DateTimeNode(cinst->constant.date_microseconds, cinst->constant.date_is_relative);
                 values[cinst->result.id] = QoreValue(dt);
                 cleanup.push_back(cinst->result.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::MakeList: {
+                ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+                for (const auto& operand : inst->operands) {
+                    QoreValue value = getIRValue(values, operand);
+                    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+                    if (list->push(stored, xsink)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, nullptr);
+                        cleanupStoredValues(globals, nullptr);
+                        cleanupStoredValues(threadlocals, nullptr);
+                        cleanupStoredValues(closures, nullptr);
+                        return false;
+                    }
+                }
+                values[inst->result.id] = QoreValue(list.release());
+                cleanup.push_back(inst->result.id);
                 ++ip;
                 break;
             }
