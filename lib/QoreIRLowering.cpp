@@ -3700,7 +3700,16 @@ QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& erro
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::ExistsBool, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::ExistsAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && analysis.known_type
+        && QoreTypeInfo::isType(analysis.known_type, NT_BOOLEAN)) {
+        opcode = QoreIROpcode::ExistsBool;
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerElements(const QoreValue& expr, std::string& error) {
@@ -3714,7 +3723,16 @@ QoreIRValue QoreIRLowering::lowerElements(const QoreValue& expr, std::string& er
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::ElementsInt, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::ElementsAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && analysis.known_type
+        && QoreTypeInfo::isType(analysis.known_type, NT_INT)) {
+        opcode = QoreIROpcode::ElementsInt;
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& error) {

@@ -6474,12 +6474,12 @@ int main() {
         }
         if (!lowerAndExpectOpcode("ir_exists",
                 QoreValue(new QoreExistsOperatorNode(nullptr, QoreValue(1))),
-                QoreIROpcode::ExistsBool)) {
+                QoreIROpcode::ExistsAny)) {
             return 1;
         }
         if (!lowerAndExpectOpcode("ir_elements",
                 QoreValue(new QoreElementsOperatorNode(nullptr, QoreValue("abc"))),
-                QoreIROpcode::ElementsInt)) {
+                QoreIROpcode::ElementsAny)) {
             return 1;
         }
         {
@@ -6692,7 +6692,7 @@ int main() {
                 stmt_loc_ptr);
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(try_stmt);
-            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_exists_invoke", root, QoreIROpcode::ExistsBool);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_exists_invoke", root, QoreIROpcode::ExistsAny);
             delete root;
             if (!ok) {
                 return 1;
@@ -6709,7 +6709,7 @@ int main() {
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(try_stmt);
             bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_elements_invoke", root,
-                QoreIROpcode::ElementsInt);
+                QoreIROpcode::ElementsAny);
             delete root;
             if (!ok) {
                 return 1;
