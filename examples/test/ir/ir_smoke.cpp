@@ -10154,6 +10154,60 @@ int main() {
             QoreIROpcode::ShrAssignInt)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_add_assign_parse_hash_key",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(1))),
+            QoreIROpcode::AddAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_add_assign_parse_list_index",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(1))),
+            QoreIROpcode::AddAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_add_assign_parse_object_member",
+            QoreValue(new QorePlusEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                    QoreValue(new QoreStringNode("field")))),
+                QoreValue(1))),
+            QoreIROpcode::AddAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_shift_left_equals_parse_hash_key",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)),
+                    QoreValue(new QoreStringNode("key")))),
+                QoreValue(1))),
+            QoreIROpcode::ShlAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_shift_left_equals_parse_list_index",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreSquareBracketsOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+                QoreValue(1))),
+            QoreIROpcode::ShlAssignLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_shift_left_equals_parse_object_member",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new QoreHashObjectDereferenceOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)),
+                    QoreValue(new QoreStringNode("field")))),
+                QoreValue(1))),
+            QoreIROpcode::ShlAssignLValue)) {
+        return 1;
+    }
     if (!lowerAndExpectAnyOpcodeWithParseInit("ir_range_slice_parse_maybe",
             QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
