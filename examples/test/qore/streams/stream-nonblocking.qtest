@@ -1,0 +1,245 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class StreamNonBlockingTest
+
+public class StreamNonBlockingTest inherits QUnit::Test {
+
+    constructor() : Test("StreamNonBlockingTest", "1.0") {
+        addTestCase("BinaryInputStream non-blocking defaults", \testBinaryInputStreamDefaults());
+        addTestCase("StringInputStream non-blocking defaults", \testStringInputStreamDefaults());
+        addTestCase("FileInputStream non-blocking overrides", \testFileInputStreamNonBlocking());
+        addTestCase("FileOutputStream non-blocking overrides", \testFileOutputStreamNonBlocking());
+        addTestCase("OutputStream base defaults", \testOutputStreamDefaults());
+        addTestCase("thread affinity with non-blocking methods", \testThreadAffinityNonBlocking());
+        addTestCase("readWithTimeout on non-pollable stream", \testReadWithTimeoutNonPollable());
+        addTestCase("POLLHUP drains buffered data from pipe", \testPollHupDrainsData());
+        addTestCase("readWithTimeout invalid limit", \testReadWithTimeoutInvalidLimit());
+        addTestCase("readNonBlock EOF returns NOTHING consistently", \testReadNonBlockEofConsistency());
+
+        set_return_value(main());
+    }
+
+    testBinaryInputStreamDefaults() {
+        BinaryInputStream bis(<010203>);
+        assertFalse(bis.supportsNonBlockingIo(), "BinaryInputStream not pollable");
+        assertEq(-1, bis.getPollableDescriptor(), "BinaryInputStream descriptor is -1");
+
+        # readNonBlock delegates to read() for memory streams
+        assertEq(<0102>, bis.readNonBlock(2), "readNonBlock returns data");
+        assertEq(<03>, bis.readNonBlock(2), "readNonBlock returns remaining data");
+        assertEq(NOTHING, bis.readNonBlock(2), "readNonBlock returns NOTHING at EOF");
+
+        # invalid limit
+        BinaryInputStream bis2(<0102>);
+        assertThrows("INPUT-STREAM-ERROR", sub() { bis2.readNonBlock(0); });
+        assertThrows("INPUT-STREAM-ERROR", sub() { bis2.readNonBlock(-1); });
+    }
+
+    testStringInputStreamDefaults() {
+        StringInputStream sis("hello");
+        assertFalse(sis.supportsNonBlockingIo(), "StringInputStream not pollable");
+        assertEq(-1, sis.getPollableDescriptor(), "StringInputStream descriptor is -1");
+
+        *binary data = sis.readNonBlock(3);
+        assertTrue(exists data, "readNonBlock returns data from StringInputStream");
+        assertEq(3, data.size(), "readNonBlock returns requested bytes");
+
+        # read remaining
+        data = sis.readNonBlock(100);
+        assertTrue(exists data, "readNonBlock returns remaining data");
+
+        # EOF
+        assertEq(NOTHING, sis.readNonBlock(1), "readNonBlock NOTHING at EOF");
+    }
+
+    testFileInputStreamNonBlocking() {
+        string tmpfile = tmp_location() + "/stream-nb-test-" + getpid() + ".dat";
+        {
+            FileOutputStream fos(tmpfile);
+            binary test_data = binary("Hello non-blocking world!");
+            fos.write(test_data);
+            fos.close();
+        }
+        on_exit unlink(tmpfile);
+
+        FileInputStream fis(tmpfile);
+        assertTrue(fis.supportsNonBlockingIo(), "FileInputStream supports non-blocking I/O");
+        assertTrue(fis.getPollableDescriptor() > 0, "FileInputStream has valid fd");
+
+        # readNonBlock
+        *binary data = fis.readNonBlock(5);
+        assertTrue(exists data, "readNonBlock returns data from file");
+        assertEq(5, data.size(), "readNonBlock returns requested bytes");
+
+        # read the rest
+        data = fis.readNonBlock(100);
+        assertTrue(exists data, "readNonBlock returns remaining file data");
+
+        # EOF
+        assertEq(NOTHING, fis.readNonBlock(1), "readNonBlock NOTHING at file EOF");
+        delete fis;
+
+        # readWithTimeout tests
+        FileInputStream fis2(tmpfile);
+
+        # timeout=0 (non-blocking poll)
+        data = fis2.readWithTimeout(5, 0);
+        assertTrue(exists data, "readWithTimeout(0) returns data");
+
+        # timeout=-1 (blocking)
+        data = fis2.readWithTimeout(5, -1);
+        assertTrue(exists data, "readWithTimeout(-1) returns data");
+
+        # timeout=100ms
+        data = fis2.readWithTimeout(5, 100);
+        assertTrue(exists data, "readWithTimeout(100) returns data");
+
+        # read to EOF
+        fis2.readWithTimeout(1000, -1);
+        assertEq(NOTHING, fis2.readWithTimeout(1, 0), "readWithTimeout NOTHING at EOF");
+    }
+
+    testFileOutputStreamNonBlocking() {
+        string tmpfile = tmp_location() + "/stream-nb-out-test-" + getpid() + ".dat";
+        on_exit unlink(tmpfile);
+
+        FileOutputStream fos(tmpfile);
+        assertTrue(fos.supportsNonBlockingIo(), "FileOutputStream supports non-blocking I/O");
+        assertTrue(fos.getPollableDescriptor() > 0, "FileOutputStream has valid fd");
+    }
+
+    testOutputStreamDefaults() {
+        StringOutputStream sos();
+        assertFalse(sos.supportsNonBlockingIo(), "StringOutputStream not pollable");
+        assertEq(-1, sos.getPollableDescriptor(), "StringOutputStream descriptor is -1");
+    }
+
+    testThreadAffinityNonBlocking() {
+        BinaryInputStream bis(<010203>);
+        bis.unassignThread();
+
+        # readNonBlock from unassigned stream should throw
+        assertThrows("STREAM-THREAD-ERROR", sub() { bis.readNonBlock(1); });
+
+        # reassign and read should work
+        bis.reassignThread();
+        *binary data = bis.readNonBlock(1);
+        assertEq(<01>, data, "readNonBlock works after reassignThread");
+
+        # background thread reassign + read
+        bis.unassignThread();
+        Counter cnt(1);
+        *binary bg_data;
+        background sub() {
+            bis.reassignThread();
+            bg_data = bis.readNonBlock(1);
+            cnt.dec();
+        }();
+        cnt.waitForZero();
+        assertEq(<02>, bg_data, "readNonBlock works from background thread after reassign");
+    }
+
+    testReadWithTimeoutNonPollable() {
+        BinaryInputStream bis(<010203>);
+
+        # timeout=-1 (blocking) should work — delegates to read()
+        *binary data = bis.readWithTimeout(2, -1);
+        assertEq(<0102>, data, "readWithTimeout(-1) works on non-pollable stream");
+
+        # timeout=0 (non-blocking) should work — delegates to readNonBlock()
+        data = bis.readWithTimeout(2, 0);
+        assertEq(<03>, data, "readWithTimeout(0) works on non-pollable stream");
+
+        # EOF
+        assertEq(NOTHING, bis.readWithTimeout(1, -1), "readWithTimeout NOTHING at EOF");
+
+        # positive timeout on non-pollable stream — may work or throw depending on implementation
+        BinaryInputStream bis2(<0102>);
+        *binary data2 = bis2.readWithTimeout(2, 100);
+        assertEq(<0102>, data2, "readWithTimeout with positive timeout on non-pollable stream");
+    }
+
+    testPollHupDrainsData() {
+        # Test that POLLHUP doesn't cause data loss: write to a FIFO, close writer,
+        # then read with timeout from reader — should get all data despite POLLHUP.
+        string fifo_path = tmp_location() + "/stream-nb-fifo-" + getpid();
+        mkfifo(fifo_path);
+        on_exit unlink(fifo_path);
+
+        string test_data = "POLLHUP drain test data payload";
+        Counter writer_ready(1);
+
+        # Background thread: open FIFO for writing, write data, close
+        background sub() {
+            File f();
+            f.open2(fifo_path, O_WRONLY);
+            writer_ready.dec();
+            f.write(test_data);
+            # small delay to ensure data is buffered before close triggers POLLHUP
+            usleep(50ms);
+            f.close();
+        }();
+
+        # Open FIFO for reading — blocks until writer opens
+        FileInputStream fis(fifo_path);
+        writer_ready.waitForZero();
+
+        # Wait for writer to finish writing + close (which triggers POLLHUP)
+        usleep(200ms);
+
+        # readWithTimeout should still return the buffered data despite POLLHUP
+        *binary result = fis.readWithTimeout(4096, 1000);
+        assertEq(binary(test_data), result, "POLLHUP: all data drained from pipe");
+
+        # Subsequent read should return NOTHING (true EOF)
+        *binary eof_result = fis.readWithTimeout(4096, 100);
+        assertEq(NOTHING, eof_result, "POLLHUP: EOF after data drained");
+    }
+
+    testReadWithTimeoutInvalidLimit() {
+        string tmpfile = tmp_location() + "/stream-nb-limit-" + getpid() + ".dat";
+        {
+            FileOutputStream fos(tmpfile);
+            fos.write(binary("test"));
+            fos.close();
+        }
+        on_exit unlink(tmpfile);
+
+        FileInputStream fis(tmpfile);
+        assertThrows("INPUT-STREAM-ERROR", sub() { fis.readWithTimeout(0, 100); });
+        assertThrows("INPUT-STREAM-ERROR", sub() { fis.readWithTimeout(-5, 100); });
+
+        BinaryInputStream bis(<0102>);
+        assertThrows("INPUT-STREAM-ERROR", sub() { bis.readWithTimeout(0, -1); });
+        assertThrows("INPUT-STREAM-ERROR", sub() { bis.readWithTimeout(-1, 0); });
+    }
+
+    testReadNonBlockEofConsistency() {
+        # Verify that readNonBlock returns NOTHING consistently at EOF (not just once)
+        BinaryInputStream bis(<01>);
+        bis.readNonBlock(1);  # consume all data
+        assertEq(NOTHING, bis.readNonBlock(1), "first EOF call");
+        assertEq(NOTHING, bis.readNonBlock(1), "second EOF call");
+        assertEq(NOTHING, bis.readNonBlock(1), "third EOF call");
+
+        # Same for FileInputStream
+        string tmpfile = tmp_location() + "/stream-nb-eof-" + getpid() + ".dat";
+        {
+            FileOutputStream fos(tmpfile);
+            fos.write(binary("x"));
+            fos.close();
+        }
+        on_exit unlink(tmpfile);
+
+        FileInputStream fis(tmpfile);
+        fis.readNonBlock(100);  # consume all
+        assertEq(NOTHING, fis.readNonBlock(1), "FileInputStream first EOF");
+        assertEq(NOTHING, fis.readNonBlock(1), "FileInputStream second EOF");
+    }
+}

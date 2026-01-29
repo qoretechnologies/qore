@@ -321,6 +321,31 @@ if (push) {
         state = STATE_SENDING;
     }
 
+    #! Starts sending an HTTP/2 streaming response from an InputStream
+    /** @param status_code the HTTP status code
+        @param headers response headers
+        @param body the InputStream to read the response body from
+        @param chunk_size the size of chunks to read from the stream (default: 16384)
+
+        @note This must be called after the request is ready (goalReached() returns True).
+        The InputStream body is read incrementally and sent as HTTP/2 DATA frames without
+        buffering the entire body in memory.
+
+        @since HttpServerAsyncIo 1.1
+    */
+    startSendResponse(int status_code, *hash<auto> headers, InputStream body, *int chunk_size) {
+        if (state != STATE_REQUEST_READY && state != STATE_SENT) {
+            throw "HTTP2-STATE-ERROR", sprintf("cannot send response in state: %y", state);
+        }
+        if (!request || !request.stream_id) {
+            throw "HTTP2-ERROR", "no stream_id available for response";
+        }
+
+        current_op = sock.startPollSendHttp2StreamingResponse(
+            request.stream_id, status_code, headers, body, chunk_size);
+        state = STATE_SENDING;
+    }
+
     #! Starts reading the next HTTP/2 request on this connection
     /** After sending a response, call this to wait for the next request
         on the persistent HTTP/2 connection.

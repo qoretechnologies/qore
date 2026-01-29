@@ -123,3 +123,23 @@ string encoding = fos.getEncoding();
 string FileOutputStream::getEncoding() [flags=CONSTANT] {
    return new QoreStringNode(os->getEncoding());
 }
+
+//! Returns @ref True since FileOutputStream supports non-blocking I/O
+/**
+    @return @ref True
+
+    @since %Qore 2.2
+*/
+bool FileOutputStream::supportsNonBlockingIo() [flags=CONSTANT] {
+    return true;
+}
+
+//! Returns the pollable file descriptor for this stream
+/**
+    @return the file descriptor
+
+    @since %Qore 2.2
+*/
+int FileOutputStream::getPollableDescriptor() [flags=CONSTANT] {
+    return os->getPollableDescriptor();
+}

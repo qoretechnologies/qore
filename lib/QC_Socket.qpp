@@ -4161,6 +4161,58 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
     return rv.release();
 }
 
+//! Starts a poll operation to send an HTTP/2 response with a streaming body from an InputStream
+/** This method reads from the InputStream in chunks and sends HTTP/2 DATA frames
+    without buffering the entire body in memory. This is suitable for large responses.
+
+    The InputStream must have unassignThread() called before passing to this method
+    if it was created in a different thread. The poll operation will call reassignThread()
+    on the event loop thread.
+
+    @param stream_id the HTTP/2 stream ID
+    @param status_code the HTTP status code
+    @param headers response headers (optional)
+    @param body the InputStream to read the response body from
+    @param chunk_size the size of chunks to read from the stream (default: 16384)
+
+    @return an @ref AbstractPollOperation object for the streaming send
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw HTTP2-ERROR if no HTTP/2 session is available
+
+    @since %Qore 2.2
+*/
+AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id, int status_code,
+        *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
+    // body ref is owned by us from QPP; poll operation takes ownership
+    s->ref();
+
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketHttp2SendStreamingResponsePollOperation(xsink, s, stream_id, status_code,
+            headers, body, chunk_size ? chunk_size : 16384),
+        xsink
+    );
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Unassign the stream from the current thread so that the worker thread
+    // calling continuePoll() can reassign it to itself
+    body->unassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("http2-streaming-response"), xsink);
+    }
+    return rv.release();
+}
+
 //! Submits an HTTP/2 PUSH_PROMISE frame for server push
 /** HTTP/2 Server Push allows a server to preemptively send resources to the client
     before the client requests them. This is useful for pushing CSS, JavaScript, or

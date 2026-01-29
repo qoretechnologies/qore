@@ -140,6 +140,7 @@ class QoreSocket {
     friend class my_socket_priv;
     friend class SocketHttp2ServerPollOperation;
     friend class SocketHttp2SendResponsePollOperation;
+    friend class SocketHttp2SendStreamingResponsePollOperation;
 
 public:
     //! creates an empty, unconnected socket

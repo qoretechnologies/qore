@@ -5719,3 +5719,218 @@ Http2Session* SocketHttp2SendResponsePollOperation::takeSession() {
     // Session is now managed by socket, not this operation
     return nullptr;
 }
+
+SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponsePollOperation(
+        ExceptionSink* xsink, QoreSocketObject* sock, int32_t stream_id, int status_code,
+        const QoreHashNode* headers, InputStream* input_stream, int64 chunk_size)
+        : SocketPollSocketOperationBase(sock), stream_id(stream_id),
+          input_stream(input_stream), chunk_size(chunk_size > 0 ? chunk_size : 16384),
+          is_pollable(input_stream->supportsNonBlockingIo()) {
+
+    AutoLocker al(sock->priv->m);
+
+    // Get HTTP/2 session from socket
+    Http2Session* session = sock->priv->socket->priv->h2_session;
+    if (!session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available; "
+            "startPollSendHttp2StreamingResponse() must be called after "
+            "startPollReadHttp2Request() completes on an active HTTP/2 connection");
+        return;
+    }
+
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    if (sock->priv->setNonBlock(xsink)) {
+        return;
+    }
+    set_non_block = true;
+
+    // Build headers map
+    std::map<std::string, std::string> hdr_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    // Submit streaming response (headers only, deferred data provider)
+    int rv = session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
+    if (rv != 0 || *xsink) {
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return;
+    }
+
+    // Cache the pollable file descriptor for non-blocking reads
+    if (is_pollable) {
+        stream_fd = input_stream->getPollableDescriptor();
+        if (stream_fd < 0) {
+            is_pollable = false;
+        }
+    }
+
+    // Thread affinity ownership chain for the InputStream:
+    //   1. Handler thread creates the InputStream (owns thread affinity)
+    //   2. QPP method startPollSendHttp2StreamingResponse() constructs this operation,
+    //      then calls body->unassignThread() to release affinity from the handler thread
+    //   3. On first continuePoll() call (from the I/O worker thread), need_reassign triggers
+    //      input_stream->reassignThread() to claim affinity on the worker thread
+    //   4. All subsequent reads happen on that worker thread until completion
+
+    printd(5, "SocketHttp2SendStreamingResponsePollOperation() headers submitted stream_id=%d\n", stream_id);
+}
+
+SocketHttp2SendStreamingResponsePollOperation::~SocketHttp2SendStreamingResponsePollOperation() {
+}
+
+QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(ExceptionSink* xsink) {
+    // Reassign the input stream to the current (worker) thread on first call
+    if (need_reassign) {
+        need_reassign = false;
+        if (input_stream) {
+            input_stream->reassignThread(xsink);
+            if (*xsink) return nullptr;
+        }
+    }
+
+    AutoLocker al(sock->priv->m);
+
+    Http2Session* session = sock->priv->socket->priv->h2_session;
+    if (!session) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 session no longer available");
+        return nullptr;
+    }
+
+    while (true) {
+        switch (ss_state) {
+            case SS_READ_CHUNK: {
+                if (eof) {
+                    // Send END_STREAM
+                    int rv = session->sendStreamData(stream_id, nullptr, 0, true, xsink);
+                    if (*xsink) return nullptr;
+                    if (rv != 0) {
+                        xsink->raiseException("HTTP2-ERROR", "failed to send END_STREAM");
+                        return nullptr;
+                    }
+                    ss_state = SS_FLUSH;
+                    continue;
+                }
+
+                if (is_pollable) {
+                    // Non-blocking read for pollable streams.
+                    // Use inline poll(0) to check if data is available without blocking,
+                    // then readNonBlock() to get the data. This distinguishes:
+                    // - poll ready + readNonBlock returns 0 → true EOF
+                    // - poll not ready → would block, yield to event loop for socket I/O
+                    assert(stream_fd >= 0);
+                    struct pollfd pfd;
+                    pfd.fd = stream_fd;
+                    pfd.events = POLLIN;
+                    pfd.revents = 0;
+                    int poll_rv = poll(&pfd, 1, 0);
+                    if (poll_rv < 0) {
+                        xsink->raiseException("HTTP2-ERROR", "poll() on stream fd failed: %s",
+                            strerror(errno));
+                        return nullptr;
+                    }
+                    if (poll_rv == 0) {
+                        // Stream not ready — yield to event loop for socket I/O
+                        // and retry reading on next continuePoll() call
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    }
+
+                    // Stream FD is readable — do non-blocking read
+                    SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
+                    chunk->preallocate(chunk_size);
+                    int64 count = input_stream->readNonBlock(
+                        const_cast<void*>(chunk->getPtr()), chunk_size, xsink);
+                    if (*xsink) return nullptr;
+                    if (count == 0) {
+                        // poll said readable but read returned 0 → EOF
+                        eof = true;
+                        continue;
+                    }
+                    chunk->setSize(count);
+                    current_chunk = chunk.release();
+                } else {
+                    // Non-pollable (memory) streams - read() never blocks
+                    current_chunk = input_stream->readHelper(chunk_size, xsink);
+                    if (*xsink) return nullptr;
+                    if (!current_chunk) {
+                        eof = true;
+                        continue;
+                    }
+                }
+
+                printd(5, "SocketHttp2SendStreamingResponsePollOperation::continuePoll() "
+                    "read chunk size=%zu\n", current_chunk->size());
+                ss_state = SS_SEND_CHUNK;
+                continue;
+            }
+
+            case SS_SEND_CHUNK: {
+                // Send the chunk as HTTP/2 DATA frames (not end_stream)
+                int rv = session->sendStreamData(stream_id, current_chunk->getPtr(),
+                    current_chunk->size(), false, xsink);
+                if (*xsink) return nullptr;
+                if (rv != 0) {
+                    xsink->raiseException("HTTP2-ERROR", "failed to send stream data");
+                    return nullptr;
+                }
+                current_chunk = nullptr;
+                ss_state = SS_FLUSH;
+                continue;
+            }
+
+            case SS_FLUSH: {
+                // Flush pending data to socket
+                int rv = session->sendPendingData(0, xsink);
+                if (*xsink) return nullptr;
+
+                if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
+                    return getSocketPollInfoHash(xsink, rv);
+                }
+
+                if (session->hasPendingData()) {
+                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                }
+
+                if (session->wantWrite()) {
+                    continue;
+                }
+
+                if (eof) {
+                    // All done
+                    ss_state = SS_DONE;
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
+                }
+
+                // More data to read
+                ss_state = SS_READ_CHUNK;
+                continue;
+            }
+
+            case SS_DONE:
+                if (set_non_block) {
+                    set_non_block = false;
+                    sock->priv->clearNonBlock();
+                }
+                return nullptr;
+
+            default:
+                xsink->raiseException("HTTP2-ERROR", "unexpected streaming state: %d", ss_state);
+                return nullptr;
+        }
+    }
+}

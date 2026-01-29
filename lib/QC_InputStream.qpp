@@ -83,3 +83,54 @@ abstract *binary InputStream::read(int limit);
     @endcode
 */
 abstract int InputStream::peek();
+
+//! Returns @ref True if this stream supports non-blocking I/O
+/**
+    @return @ref True if non-blocking I/O is supported
+
+    @since %Qore 2.2
+*/
+bool InputStream::supportsNonBlockingIo() [flags=CONSTANT] {
+    return is->supportsNonBlockingIo();
+}
+
+//! Returns the pollable file descriptor for this stream, or -1 if not pollable
+/**
+    @return the file descriptor, or -1
+
+    @since %Qore 2.2
+*/
+int InputStream::getPollableDescriptor() [flags=CONSTANT] {
+    return is->getPollableDescriptor();
+}
+
+//! Performs a non-blocking read of up to \a limit bytes; returns \ref NOTHING if no data available or end of stream
+/**
+    @param limit the maximum number of bytes to read
+
+    @return the read bytes or \ref NOTHING if no data is available or end of stream
+
+    @throw INPUT-STREAM-ERROR \a limit is not positive
+    @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
+
+    @since %Qore 2.2
+*/
+*binary InputStream::readNonBlock(int limit) {
+    return is->readNonBlockHelper(limit, xsink);
+}
+
+//! Reads up to \a limit bytes with a timeout; returns \ref NOTHING if no data available
+/**
+    @param limit the maximum number of bytes to read
+    @param timeout_ms timeout in milliseconds (-1 for blocking, 0 for non-blocking)
+
+    @return the read bytes or \ref NOTHING if no data is available or end of stream
+
+    @throw INPUT-STREAM-ERROR \a limit is not positive or timeout on non-pollable stream
+    @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
+
+    @since %Qore 2.2
+*/
+*binary InputStream::readWithTimeout(int limit, int timeout_ms) {
+    return is->readWithTimeoutHelper(limit, timeout_ms, xsink);
+}
