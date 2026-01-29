@@ -164,6 +164,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::ExtractAny:
         case QoreIROpcode::RemoveAny:
         case QoreIROpcode::KeysAny:
+        case QoreIROpcode::KeysList:
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexExtractAny:
@@ -313,6 +314,7 @@ static int expectedOperands(QoreIROpcode op) {
             return 4;
         case QoreIROpcode::RemoveAny:
         case QoreIROpcode::KeysAny:
+        case QoreIROpcode::KeysList:
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexExtractAny:
@@ -559,6 +561,7 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::ExtractAny
                     || inst->opcode == QoreIROpcode::RemoveAny
                     || inst->opcode == QoreIROpcode::KeysAny
+                    || inst->opcode == QoreIROpcode::KeysList
                     || inst->opcode == QoreIROpcode::RegexMatchAny
                     || inst->opcode == QoreIROpcode::RegexMatchBool
                     || inst->opcode == QoreIROpcode::RegexExtractAny

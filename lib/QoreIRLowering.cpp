@@ -3421,7 +3421,16 @@ QoreIRValue QoreIRLowering::lowerKeys(const QoreValue& expr, std::string& error)
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::KeysAny, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::KeysAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && analysis.known_type
+        && QoreTypeInfo::isType(analysis.known_type, NT_LIST)) {
+        opcode = QoreIROpcode::KeysList;
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerRegexMatch(const QoreValue& expr, std::string& error) {

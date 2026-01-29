@@ -2590,12 +2590,12 @@ static bool runIRExecutorContainerSmoke() {
         hash->setKeyValue("a", QoreValue(1), &xsink);
         hash->setKeyValue("b", QoreValue(2), &xsink);
         QoreValue keys_expr(new QoreKeysOperatorNode(nullptr, QoreValue(hash->refSelf())));
-        auto* keys = builder.createExprOp(QoreIROpcode::KeysAny, keys_expr, {});
+        auto* keys = builder.createExprOp(QoreIROpcode::KeysList, keys_expr, {});
         QoreListNode* list = new QoreListNode(autoTypeInfo);
         list->push(QoreValue(1), &xsink);
         list->push(QoreValue(2), &xsink);
         QoreValue elements_expr(new QoreElementsOperatorNode(nullptr, QoreValue(list->refSelf())));
-        auto* elems = builder.createExprOp(QoreIROpcode::ElementsAny, elements_expr, {});
+        auto* elems = builder.createExprOp(QoreIROpcode::ElementsInt, elements_expr, {});
         builder.createReturn(elems->result);
 
         QoreValue return_value;
@@ -9652,14 +9652,14 @@ int main() {
     if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_hash_assigned",
             QoreValue(new QoreKeysOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
-            QoreIROpcode::KeysAny)) {
+            QoreIROpcode::KeysList)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_hash_maybe",
             QoreValue(new QoreKeysOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
                     &analysis_hash_maybe_left, false)))),
-            QoreIROpcode::KeysAny)) {
+            QoreIROpcode::KeysList)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_hash_deref_parse_maybe",
@@ -9707,7 +9707,7 @@ int main() {
     if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_object_assigned",
             QoreValue(new QoreKeysOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)))),
-            QoreIROpcode::KeysAny)) {
+            QoreIROpcode::KeysList)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_remove_parse_assigned",

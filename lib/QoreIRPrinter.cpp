@@ -112,6 +112,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ExtractAny: return "extract.any";
         case QoreIROpcode::RemoveAny: return "remove.any";
         case QoreIROpcode::KeysAny: return "keys.any";
+        case QoreIROpcode::KeysList: return "keys.list";
         case QoreIROpcode::RegexMatchAny: return "regex.match.any";
         case QoreIROpcode::RegexMatchBool: return "regex.match.bool";
         case QoreIROpcode::RegexExtractAny: return "regex.extract.any";
@@ -290,7 +291,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::CastAny
                     || inst->opcode == QoreIROpcode::ExtractAny
                     || inst->opcode == QoreIROpcode::RemoveAny
-                    || inst->opcode == QoreIROpcode::KeysAny) {
+                    || inst->opcode == QoreIROpcode::KeysAny
+                    || inst->opcode == QoreIROpcode::KeysList) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 if (expr_inst && expr_inst->expr.hasNode()) {
                     out << " <expr>";

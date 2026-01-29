@@ -348,7 +348,7 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
      * Expand exec-mode IR tests to touch these operators individually under normal execution and simulated errors.
      * **Status (2026-01-28):** exec-mode smoke tests added for list shift/unshift/splice + lvalue shift-assign; Valgrind baseline recorded.
    - **Residual `.any` fallbacks (Phase‑1b backlog)**
-     * Track helper-only ops that currently have **only** `.any` opcodes: `ExtractAny`, `RemoveAny`, `KeysAny`,
+     * Track helper-only ops that currently have **only** `.any` opcodes: `ExtractAny`, `RemoveAny`,
        `DotEvalAny`, `MapSelectAny`, `HashMapAny`, `HashMapSelectAny`.
      * Track operators where typed coverage is partial: `UnaryPlusAny` (no typed), `ModInt/ModAny` (no float),
        `And/Or/Xor` (int/any only), `Eq/Ne` (int/any only), `Cmp` (int/float/any but no string-specialized op).
@@ -356,9 +356,9 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
        ensure they execute in IR without fallback. Revisit for Phase‑1b/Phase‑2 typed opcode work.
      * Add exec‑mode IR smoke tests for any new typed opcodes so fallback warnings are never emitted.
      * **Status (2026-01-29):** helper ops smoke test added; `RegexMatchBool`, `RegexExtractList`,
-       `RegexSubstString`, `ExistsBool`, and `ElementsInt` opcodes introduced and lowering now emits them; typed
-       cast opcodes (`CastList`, `CastHash`, `CastObject`, `CastEnum`) added for resolved cast nodes; Valgrind
-       baseline recorded.
+       `RegexSubstString`, `ExistsBool`, `ElementsInt`, and `KeysList` opcodes introduced and lowering now emits
+       them; typed cast opcodes (`CastList`, `CastHash`, `CastObject`, `CastEnum`) added for resolved cast nodes;
+       Valgrind baseline recorded.
    - **Range/date + container tests**
      * Extend `examples/test/ir/IRExecMode*.qtest` with cases that explicitly validate the guard policy and exception handling for each operator family.
      * After each family is widened, rerun `qore -b --exec-mode=ir` under Valgrind and capture the clean heap baseline so we know no new refcount leaks or unwinding regressions slipped in.
