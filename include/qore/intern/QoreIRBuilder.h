@@ -54,6 +54,8 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createMakeList(const std::vector<QoreIRValue>& values,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createMakeHash(const std::vector<QoreIRValue>& values,
+        const QoreProgramLocation* loc = nullptr);
 
     QoreIRInstruction* createBinaryOp(QoreIROpcode op, QoreIRValue lhs, QoreIRValue rhs,
         const QoreProgramLocation* loc = nullptr);

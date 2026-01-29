@@ -57,6 +57,7 @@ enum class QoreIROpcode : uint16_t {
     ConstString,
     ConstDate,
     MakeList,
+    MakeHash,
 
     AddInt,
     AddFloat,

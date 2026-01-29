@@ -163,6 +163,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RangeSliceInt:
         case QoreIROpcode::RangeSliceFloat:
         case QoreIROpcode::MakeList:
+        case QoreIROpcode::MakeHash:
         case QoreIROpcode::CastAny:
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
@@ -423,6 +424,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::ShiftLValue:
             return 0;
         case QoreIROpcode::MakeList:
+        case QoreIROpcode::MakeHash:
             return -1;
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:

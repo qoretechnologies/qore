@@ -117,6 +117,7 @@ private:
     QoreIRValue lowerRegexMatch(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRegexExtract(const QoreValue& expr, std::string& error);
     QoreIRValue lowerRegexSubst(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerParseHash(const QoreValue& expr, std::string& error);
     QoreIRValue lowerParseList(const QoreValue& expr, std::string& error);
     QoreIRValue lowerExists(const QoreValue& expr, std::string& error);
     QoreIRValue lowerElements(const QoreValue& expr, std::string& error);

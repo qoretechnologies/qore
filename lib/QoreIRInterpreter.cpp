@@ -90,7 +90,10 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/QoreCastOperatorNode.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/VarRefNode.h>
+#include <qore/QoreHashNode.h>
 #include <qore/QoreListNode.h>
+#include <qore/QoreStringNode.h>
+#include <qore/intern/QoreHashNodeIntern.h>
 
 static QoreValue evalExprNode(const QoreValue& expr, ExceptionSink* xsink) {
     if (!expr.hasNode()) {
@@ -561,6 +564,52 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                 }
                 values[inst->result.id] = QoreValue(list.release());
+                cleanup.push_back(inst->result.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::MakeHash: {
+                ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
+                const QoreTypeInfo* vtype = nullptr;
+                bool vcommon = false;
+                if (inst->operands.size() % 2 != 0) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "make.hash requires even operands");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                for (size_t i = 0; i < inst->operands.size(); i += 2) {
+                    QoreValue key_val = getIRValue(values, inst->operands[i]);
+                    QoreValue value = getIRValue(values, inst->operands[i + 1]);
+                    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+                    const QoreTypeInfo* vt = stored.getTypeInfo();
+                    if (!i) {
+                        vtype = vt;
+                        vcommon = true;
+                    } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
+                        vcommon = false;
+                    }
+                    QoreStringValueHelper key(key_val);
+                    hash->setKeyValue(key->c_str(), stored, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, nullptr);
+                        cleanupStoredValues(globals, nullptr);
+                        cleanupStoredValues(threadlocals, nullptr);
+                        cleanupStoredValues(closures, nullptr);
+                        return false;
+                    }
+                }
+                if (!vtype || vtype == anyTypeInfo) {
+                    vtype = autoTypeInfo;
+                }
+                qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
+                values[inst->result.id] = QoreValue(hash.release());
                 cleanup.push_back(inst->result.id);
                 ++ip;
                 break;

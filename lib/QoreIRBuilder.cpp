@@ -138,6 +138,15 @@ QoreIRInstruction* QoreIRBuilder::createMakeList(const std::vector<QoreIRValue>&
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createMakeHash(const std::vector<QoreIRValue>& values,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::MakeHash);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = values;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createBinaryOp(QoreIROpcode op, QoreIRValue lhs, QoreIRValue rhs,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(op);

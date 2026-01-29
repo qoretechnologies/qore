@@ -4603,6 +4603,15 @@ int main() {
             return 1;
         }
     }
+    {
+        QoreProgramLocation hash_loc("ir_smoke", 1, 1);
+        QoreParseHashNode* hash_node = new QoreParseHashNode(&hash_loc, true);
+        hash_node->add(QoreValue("a"), QoreValue(1), &hash_loc);
+        hash_node->add(QoreValue("b"), QoreValue(2), &hash_loc);
+        if (!lowerAndExpectOpcodeWithParseInit("ir_make_hash", QoreValue(hash_node), QoreIROpcode::MakeHash)) {
+            return 1;
+        }
+    }
     if (!lowerAndExpectGuard("ir_guard_plus_equals_local",
             QoreValue(new QorePlusEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
