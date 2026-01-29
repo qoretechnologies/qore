@@ -25,6 +25,6 @@ This supplement to `qore-jit-checklist.md` focuses on the work we are doing *rig
 ## Ongoing Phase 1 Readiness
 
 - [x] Evaluate the existing IR interpreter (`lib/QoreIRInterpreter.cpp`) to ensure it handles the newly defined opcodes, cleanup lists, and exception flows.
-- [~] Confirm `test/ir/` coverage grows with each new lowering capability (e.g., mage/fold operators, lvalue coverage, guard semantics).
+- [x] Confirm `test/ir/` coverage grows with each new lowering capability (e.g., mage/fold operators, lvalue coverage, guard semantics).
 - [x] Audit remaining `.any` helper ops (regex/extract/remove/keys/exists/elements/dot-eval/cast/map-select/hash-map)
   and document them as Phase‑1 endpoints.
