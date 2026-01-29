@@ -666,6 +666,10 @@ public:
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
         input_stream = nullptr;
         current_chunk = nullptr;
+        if (set_non_block) {
+            sock->clearNonBlock();
+            set_non_block = false;
+        }
         SocketPollSocketOperationBase::abort(xsink);
     }
 

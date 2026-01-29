@@ -3969,7 +3969,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 AbstractPollOperation op;
                 if (response.input_stream) {
                     # Use streaming response to avoid memory buffering
-                    response.input_stream.unassignThread();
+                    # Stream was unassigned in doResponse(); reassign to current thread so
+                    # startPollSendHttp2StreamingResponse() can access it (it will unassign again)
+                    response.input_stream.reassignThread();
                     op = s.startPollSendHttp2StreamingResponse(stream_id, response.code, hdr,
                         response.input_stream);
                 } else {
@@ -5293,9 +5295,9 @@ class HttpServerIoController {
 
                         if (cinfo.response.input_stream) {
                             # Use streaming response to avoid memory buffering
-                            # Note: the stream was unassigned in doResponse() on the handler thread;
-                            # startPollSendHttp2StreamingResponse() will reassign+unassign, and
-                            # continuePoll() will reassign to the worker thread
+                            # Stream was unassigned in doResponse(); reassign to I/O controller thread
+                            # so startPollSendHttp2StreamingResponse() can access it (it will unassign,
+                            # then continuePoll() will reassign to the worker thread)
                             cinfo.response.input_stream.reassignThread();
                             spop = cinfo.sock.startPollSendHttp2StreamingResponse(
                                 stream_id,

@@ -114,7 +114,10 @@ public:
 
       // Restore blocking mode
       if (!(flags & O_NONBLOCK)) {
-         fcntl(fd, F_SETFL, flags);
+         if (fcntl(fd, F_SETFL, flags) == -1) {
+            printd(0, "FileOutputStream::writeNonBlock() WARNING: failed to restore blocking mode: %s\n",
+               strerror(errno));
+         }
       }
 
       if (rc < 0) {

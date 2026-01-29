@@ -843,7 +843,7 @@ endif ()
 if (${QORE_BUILD_TYPE_LWR} MATCHES "debug")
     set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC} lib/ql_debug.cpp)
 endif ()
-# Non-blocking I/O support for streams
+# Non-blocking I/O support for streams (used by HTTP/2 streaming to avoid buffering large responses in memory)
 set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/InputStream.cpp
     lib/OutputStream.cpp

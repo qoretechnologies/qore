@@ -399,5 +399,5 @@
 #ifdef DEBUG
 #include "ql_debug.cpp"
 #endif
-// HTTP/2 support is always enabled (nghttp2 is required)
+// Non-blocking stream I/O support (used by HTTP/2 streaming)
 #include "Http2Session.cpp"
