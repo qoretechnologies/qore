@@ -209,7 +209,7 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
 
         @throw ZOHOBOOKS-API-ERROR if the response indicates an error
     */
-    private hash<auto> doRestRequest(string method, string path, auto body) {
+    private hash<auto> doRestRequest(string method, string path, auto body = NOTHING) {
         int retries = 0;
         while (True) {
             try {
@@ -232,9 +232,9 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
                         throw "ZOHOBOOKS-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
 
-                # Check for rate limiting
-                if (info."response-headers"."X-Rate-Limit-Remaining" == "0") {
-                    *string reset = info."response-headers"."X-Rate-Limit-Reset";
+                # Check for rate limiting (headers are lowercase in RestClient)
+                if (info."response-headers"."x-rate-limit-remaining" == "0") {
+                    *string reset = info."response-headers"."x-rate-limit-reset";
                     if (reset.val()) {
                         int reset_secs = reset.toInt();
                         if (reset_secs > 0 && reset_secs <= 60) {

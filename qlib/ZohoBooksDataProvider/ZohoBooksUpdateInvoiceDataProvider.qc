@@ -77,7 +77,7 @@ public class ZohoBooksUpdateInvoiceDataProvider inherits ZohoBooksDataProviderBa
 
     #! Returns the request type
     private *AbstractDataProviderType getRequestTypeImpl() {
-        return new ZohoBooksCreateInvoiceRequestDataType();
+        return new ZohoBooksUpdateInvoiceRequestDataType();
     }
 
     #! Returns the response type
