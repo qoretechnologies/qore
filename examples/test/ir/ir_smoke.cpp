@@ -7086,6 +7086,29 @@ int main() {
             analysis_range_type, true, true, false)) {
         return 1;
     }
+    if (!expectParseAnalysisFlags("analysis_range_date_assigned",
+            QoreValue(new QoreRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            analysis_range_type, true, true, true)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_range_date_maybe_left",
+            QoreValue(new QoreRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_left"),
+                    &analysis_date_maybe_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
+            analysis_range_type, true, true, false)) {
+        return 1;
+    }
+    if (!expectParseAnalysisFlags("analysis_range_date_maybe_right",
+            QoreValue(new QoreRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_date_maybe_right"),
+                    &analysis_date_maybe_right, false)))),
+            analysis_range_type, true, true, false)) {
+        return 1;
+    }
     if (!expectParseAnalysisFlags("analysis_map_list_assigned",
             QoreValue(new QoreMapOperatorNode(nullptr, QoreValue(1),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
