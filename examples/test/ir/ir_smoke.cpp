@@ -6450,7 +6450,7 @@ int main() {
         }
         if (!lowerAndExpectOpcode("ir_regex_match",
                 QoreValue(new QoreRegexMatchOperatorNode(nullptr, QoreValue("a"), regex->refSelf())),
-                QoreIROpcode::RegexMatchBool)) {
+                QoreIROpcode::RegexMatchAny)) {
             return 1;
         }
         if (!lowerAndExpectOpcode("ir_regex_extract",
@@ -6640,7 +6640,7 @@ int main() {
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(try_stmt);
             bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_regex_match_invoke", root,
-                QoreIROpcode::RegexMatchBool);
+                QoreIROpcode::RegexMatchAny);
             delete root;
             if (!ok) {
                 return 1;

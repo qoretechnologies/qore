@@ -3595,7 +3595,16 @@ QoreIRValue QoreIRLowering::lowerRegexMatch(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::RegexMatchBool, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::RegexMatchAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && analysis.known_type
+        && QoreTypeInfo::isType(analysis.known_type, NT_BOOLEAN)) {
+        opcode = QoreIROpcode::RegexMatchBool;
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerRegexExtract(const QoreValue& expr, std::string& error) {
