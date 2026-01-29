@@ -19,6 +19,8 @@
 #include <qore/intern/AbstractStatement.h>
 #include <qore/intern/DebugStatement.h>
 #include <qore/intern/AssertStatement.h>
+#include <qore/intern/ContextStatement.h>
+#include <qore/intern/SummarizeStatement.h>
 #include <qore/intern/ForEachStatement.h>
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
@@ -279,6 +281,22 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
             if (!stmt) {
                 if (xsink) {
                     xsink->raiseException("IR-INTERPRETER-ERROR", "assert statement requires a statement");
+                }
+                return -1;
+            }
+            return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
+        case QoreIROpcode::Context:
+            if (!stmt) {
+                if (xsink) {
+                    xsink->raiseException("IR-INTERPRETER-ERROR", "context statement requires a statement");
+                }
+                return -1;
+            }
+            return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
+        case QoreIROpcode::Summarize:
+            if (!stmt) {
+                if (xsink) {
+                    xsink->raiseException("IR-INTERPRETER-ERROR", "summarize statement requires a statement");
                 }
                 return -1;
             }
@@ -923,6 +941,38 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 auto* assert_inst = static_cast<QoreIRAssertInstruction*>(inst);
                 QoreValue stmt_return;
                 int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Assert, assert_inst->stmt,
+                    stmt_return, xsink);
+                if (rc || (xsink && *xsink)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Context: {
+                auto* context_inst = static_cast<QoreIRContextInstruction*>(inst);
+                QoreValue stmt_return;
+                int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Context, context_inst->stmt,
+                    stmt_return, xsink);
+                if (rc || (xsink && *xsink)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Summarize: {
+                auto* summarize_inst = static_cast<QoreIRSummarizeInstruction*>(inst);
+                QoreValue stmt_return;
+                int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Summarize, summarize_inst->stmt,
                     stmt_return, xsink);
                 if (rc || (xsink && *xsink)) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);

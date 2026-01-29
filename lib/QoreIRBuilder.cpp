@@ -451,3 +451,17 @@ QoreIRAssertInstruction* QoreIRBuilder::createAssert(const AssertStatement* stmt
     inst->loc = loc;
     return inst;
 }
+
+QoreIRContextInstruction* QoreIRBuilder::createContext(const ContextStatement* stmt,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRContextInstruction>(stmt);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRSummarizeInstruction* QoreIRBuilder::createSummarize(const SummarizeStatement* stmt,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRSummarizeInstruction>(stmt);
+    inst->loc = loc;
+    return inst;
+}

@@ -117,6 +117,9 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRDebugInstruction* createDebug(const DebugStatement* stmt, const QoreProgramLocation* loc = nullptr);
     QoreIRAssertInstruction* createAssert(const AssertStatement* stmt, const QoreProgramLocation* loc = nullptr);
+    QoreIRContextInstruction* createContext(const ContextStatement* stmt, const QoreProgramLocation* loc = nullptr);
+    QoreIRSummarizeInstruction* createSummarize(const SummarizeStatement* stmt,
+        const QoreProgramLocation* loc = nullptr);
 
 private:
     QoreIRFunction* func = nullptr;

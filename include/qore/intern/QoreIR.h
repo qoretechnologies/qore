@@ -47,6 +47,8 @@ class ForEachStatement;
 class OnBlockExitStatement;
 class DebugStatement;
 class AssertStatement;
+class ContextStatement;
+class SummarizeStatement;
 class QoreTypeInfo;
 
 enum class QoreIROpcode : uint16_t {
@@ -165,6 +167,8 @@ enum class QoreIROpcode : uint16_t {
     ThreadExit,
     Debug,
     Assert,
+    Context,
+    Summarize,
 
     EqInt,
     EqFloat,
@@ -452,6 +456,24 @@ public:
     }
 
     const AssertStatement* stmt = nullptr;
+};
+
+class QoreIRContextInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRContextInstruction(const ContextStatement* n_stmt)
+            : QoreIRInstruction(QoreIROpcode::Context), stmt(n_stmt) {
+    }
+
+    const ContextStatement* stmt = nullptr;
+};
+
+class QoreIRSummarizeInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRSummarizeInstruction(const SummarizeStatement* n_stmt)
+            : QoreIRInstruction(QoreIROpcode::Summarize), stmt(n_stmt) {
+    }
+
+    const SummarizeStatement* stmt = nullptr;
 };
 
 class QoreIRInvokeInstruction : public QoreIRInstruction {

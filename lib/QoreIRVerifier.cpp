@@ -244,6 +244,8 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::ThreadExit:
         case QoreIROpcode::Debug:
         case QoreIROpcode::Assert:
+        case QoreIROpcode::Context:
+        case QoreIROpcode::Summarize:
             return 0;
         case QoreIROpcode::AddInt:
         case QoreIROpcode::AddFloat:

@@ -153,6 +153,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ThreadExit: return "thread.exit";
         case QoreIROpcode::Debug: return "debug";
         case QoreIROpcode::Assert: return "assert";
+        case QoreIROpcode::Context: return "context";
+        case QoreIROpcode::Summarize: return "summarize";
         case QoreIROpcode::EqInt: return "eq.int";
         case QoreIROpcode::EqFloat: return "eq.float";
         case QoreIROpcode::EqAny: return "eq.any";
