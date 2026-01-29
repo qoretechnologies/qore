@@ -206,6 +206,21 @@ void AstTreePrinter::printDeclaration(std::ostream& os, ASTDeclaration* decl, in
             printName(os, d->typeName, indent+1, true, true, "typeName: ");
             break;
         }
+        case ASTDeclarationKind::ADK_Module: {
+            ASTModuleDeclaration* d = static_cast<ASTModuleDeclaration*>(decl);
+            printString(os, "ModuleDecl ", indent);
+            printLocation(os, d->loc, 0);
+            printName(os, d->name, indent+1);
+            if (d->attributes.size() > 0) {
+                printString(os, "attributes:\n", indent+1);
+                for (size_t i = 0, count = d->attributes.size(); i < count; i++) {
+                    printIndent(os, indent+2);
+                    os << d->attributes[i].key << " =\n";
+                    printExpression(os, d->attributes[i].value.get(), indent+3);
+                }
+            }
+            break;
+        }
         default:
             break;
     }

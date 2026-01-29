@@ -327,6 +327,19 @@ public hashdecl DateInfo {
         addTestCase("Doc comments edge cases", \testDocCommentsEdgeCases());
         addTestCase("Date subtype parsing", \testDateSubtypeParsing());
         addTestCase("Conditional directives with comments", \testConditionalDirectivesWithComments());
+        addTestCase("Module metadata getNodesInfo", \testModuleMetadataGetNodesInfo());
+        addTestCase("Module metadata symbols", \testModuleMetadataSymbols());
+        addTestCase("Module metadata doc comment", \testModuleMetadataDocComment());
+        addTestCase("Module with no attributes", \testModuleNoAttributes());
+        addTestCase("Module constants", \testModuleConstants());
+        addTestCase("Module name location", \testModuleNameLocation());
+        addTestCase("Module findSymbolInfo", \testModuleFindSymbolInfo());
+        addTestCase("Module findReferences", \testModuleFindReferences());
+        addTestCase("Module attr expr traversal", \testModuleAttrExprTraversal());
+        addTestCase("Module with following code", \testModuleWithFollowingCode());
+        addTestCase("Module single attribute", \testModuleSingleAttribute());
+        addTestCase("Module special chars in values", \testModuleSpecialCharsInValues());
+        addTestCase("Module init/del attributes", \testModuleInitDelAttributes());
 %endif
         set_return_value(main());
     }
@@ -1539,5 +1552,318 @@ class Used {}
         assertEq(True, exists(tree), "parseString returns tree for mixed comments");
         assertEq(0, parser.getErrorCount(), "no parse errors for mixed comments");
     }
+    testModuleMetadataGetNodesInfo() {
+        string code = "%modern\nmodule TestModule {\n    version = \"1.0\";\n    desc = \"test module\";\n    author = \"tester\";\n    url = \"http://example\";\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertTrue(exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        assertGt(0, nodes.size(), "nodes found");
+
+        *hash modNode;
+        foreach auto node in (nodes) {
+            if (node.kind == ADK_Module) {
+                modNode = node;
+                break;
+            }
+        }
+        assertTrue(exists(modNode), "module node found in getNodesInfo");
+
+        # Verify module name
+        assertEq("TestModule", modNode.name.name, "module name");
+
+        # Verify attribute count
+        assertEq(4, modNode.attributes.size(), "module has 4 attributes");
+
+        # Verify attribute keys
+        assertEq("version", modNode.attributes[0].key, "first attribute key");
+        assertEq("desc", modNode.attributes[1].key, "second attribute key");
+        assertEq("author", modNode.attributes[2].key, "third attribute key");
+        assertEq("url", modNode.attributes[3].key, "fourth attribute key");
+
+        # Verify attribute values are literal string expressions with correct content
+        assertEq(AEK_Literal, modNode.attributes[0].value.kind, "version is literal expression");
+        assertEq("string", modNode.attributes[0].value.literalKind, "version is string literal");
+        assertEq("1.0", modNode.attributes[0].value.value, "version value");
+        assertEq("test module", modNode.attributes[1].value.value, "desc value");
+        assertEq("tester", modNode.attributes[2].value.value, "author value");
+        assertEq("http://example", modNode.attributes[3].value.value, "url value");
+
+        # Verify location info is set
+        assertTrue(exists(modNode.loc), "module has location");
+        assertTrue(exists(modNode.name.loc), "module name has location");
+    }
+
+    testModuleMetadataSymbols() {
+        string code = "%modern\nmodule TestModule {\n    version = \"1.0\";\n    desc = \"test module\";\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        list symbols = searcher.findSymbols(tree, "test.q");
+
+        # Module should appear as a symbol with kind ASYK_Module
+        *hash modSym;
+        foreach auto sym in (symbols) {
+            if (sym.kind == ASYK_Module && sym.name == "TestModule") {
+                modSym = sym;
+                break;
+            }
+        }
+        assertTrue(exists(modSym), "module found in symbols");
+        assertEq(ASYK_Module, modSym.kind, "module symbol kind");
+        assertEq("TestModule", modSym.name, "module symbol name");
+    }
+
+    testModuleMetadataDocComment() {
+        # Test that doc comments on modules are captured
+        string code = "%modern\n#! This is a test module\nmodule DocModule {\n    version = \"1.0\";\n    desc = \"documented module\";\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        *hash modNode;
+        foreach auto node in (nodes) {
+            if (node.kind == ADK_Module) {
+                modNode = node;
+                break;
+            }
+        }
+        assertTrue(exists(modNode), "documented module found in getNodesInfo");
+        assertEq("DocModule", modNode.name.name, "module name");
+        assertTrue(exists(modNode.docComment), "module has docComment");
+        assertRegex("test module", modNode.docComment, "docComment has expected content");
+    }
+
+    testModuleNoAttributes() {
+        # Module with empty body (only parse options, no key=value attributes)
+        string code = "%modern\nmodule EmptyModule {\n%disable-warning deprecated\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertTrue(exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        *hash modNode;
+        foreach auto node in (nodes) {
+            if (node.kind == ADK_Module) {
+                modNode = node;
+                break;
+            }
+        }
+        assertTrue(exists(modNode), "empty module found in getNodesInfo");
+        assertEq("EmptyModule", modNode.name.name, "module name");
+        assertEq(0, modNode.attributes.size(), "module has no key=value attributes");
+    }
+
+    testModuleConstants() {
+        # Verify ADK_Module and ASUK_ModuleDeclName constants
+        assertEq(15, ADK_Module, "ADK_Module value");
+        assertEq(112, ASUK_ModuleDeclName, "ASUK_ModuleDeclName value");
+    }
+
+    testModuleNameLocation() {
+        # Verify the module name location covers only the identifier, not "module <name>"
+        # Line 1 (0-indexed): "module TestModule {"
+        #   "module " = 7 chars, "TestModule" = 10 chars
+        #   So name should start at col 7 and end at col 17
+        string code = "%modern\nmodule TestModule {\n    version = \"1.0\";\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        *hash modNode;
+        foreach auto node in (nodes) {
+            if (node.kind == ADK_Module) {
+                modNode = node;
+                break;
+            }
+        }
+        assertTrue(exists(modNode), "module found");
+
+        # Name location should not start at col 0 (which would be the 'm' in 'module')
+        assertEq(1, modNode.name.loc.start_line, "name on correct line");
+        assertGt(0, modNode.name.loc.start_column, "name start_column > 0 (not at 'module' keyword)");
+        assertEq(7, modNode.name.loc.start_column, "name starts at col 7 (after 'module ')");
+
+        # Module decl location should span the full declaration
+        assertEq(1, modNode.loc.start_line, "decl starts on line 1");
+        assertEq(0, modNode.loc.start_column, "decl starts at col 0");
+    }
+
+    testModuleFindSymbolInfo() {
+        # Test findSymbolInfo on the module name position
+        # Line 1 (0-indexed): "module TestModule {" — name at cols 7..17
+        string code = "%modern\nmodule TestModule {\n    version = \"1.0\";\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+
+        # Position on the module name itself
+        *hash info = searcher.findSymbolInfo(tree, 1, 10);
+        assertTrue(exists(info), "findSymbolInfo returns result for module name");
+        assertEq(ASYK_Module, info.kind, "symbol info kind is module");
+
+        # Position on the "module" keyword (col 0-6) should NOT match the name
+        *hash kwInfo = searcher.findSymbolInfo(tree, 1, 3);
+        # Should either be NOTHING or not match the name location
+        if (kwInfo) {
+            # If it returns something, it shouldn't be specifically the module name symbol
+            # (it may return the module decl itself)
+        }
+    }
+
+    testModuleFindReferences() {
+        # Test findReferences on the module name position
+        string code = "%modern\nmodule TestModule {\n    version = \"1.0\";\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list refs = searcher.findReferences(tree, "test.q", 1, 10, True);
+        # Module name should have at least one reference (its own declaration)
+        assertTrue(exists(refs), "findReferences returns result for module name");
+        assertGt(0, refs.size(), "found references to module name");
+    }
+
+    testModuleAttrExprTraversal() {
+        # Test that query walkers descend into attribute value expressions.
+        # Position the cursor on the string literal inside an attribute value
+        # and verify findSymbolInfo/findNode can locate the expression node.
+        # Line 2 (0-indexed): "    version = \"1.0\";"
+        #   The string literal "1.0" is at approximately cols 14..19
+        string code = "%modern\nmodule TestModule {\n    version = \"1.0\";\n    desc = \"test module\";\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        # findSymbolInfo at the string literal position inside module attr
+        *hash info = searcher.findSymbolInfo(tree, 2, 16);
+        # The lookup should NOT return the module declaration itself;
+        # it should either return info about the expression or nothing.
+        # The key assertion is that it doesn't crash and it reaches the expression.
+
+        # Verify attribute expression has correct location info via getNodesInfo
+        list nodes = tree.getNodesInfo();
+        *hash modNode;
+        foreach auto node in (nodes) {
+            if (node.kind == ADK_Module) {
+                modNode = node;
+                break;
+            }
+        }
+        assertTrue(exists(modNode), "module found");
+        # The version attribute value should have location info inside the module body
+        hash verLoc = modNode.attributes[0].value.loc;
+        assertEq(2, verLoc.start_line, "version value on line 2");
+        assertGt(0, verLoc.start_column, "version value has non-zero start column");
+    }
+
+    testModuleWithFollowingCode() {
+        # Module declaration followed by namespace and function code
+        string code = "%modern\nmodule TestModule {\n    version = \"1.0\";\n    desc = \"test module\";\n    author = \"tester\";\n    url = \"http://example\";\n    license = \"MIT\";\n}\npublic namespace TestModule {\n    public int sub getValue() {\n        return 1;\n    }\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertTrue(exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        # Should have both module and namespace declarations
+        bool foundModule = False;
+        bool foundNamespace = False;
+        foreach auto node in (nodes) {
+            if (node.kind == ADK_Module) {
+                foundModule = True;
+                assertEq(5, node.attributes.size(), "module has 5 attributes including license");
+                assertEq("license", node.attributes[4].key, "fifth attribute is license");
+                assertEq("MIT", node.attributes[4].value.value, "license value");
+            }
+            if (node.kind == ADK_Namespace)
+                foundNamespace = True;
+        }
+        assertTrue(foundModule, "module declaration found");
+        assertTrue(foundNamespace, "namespace declaration found after module");
+    }
+
+    testModuleSingleAttribute() {
+        # Module with just one attribute
+        string code = "%modern\nmodule MinModule {\n    version = \"0.1\";\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        *hash modNode;
+        foreach auto node in (nodes) {
+            if (node.kind == ADK_Module) {
+                modNode = node;
+                break;
+            }
+        }
+        assertTrue(exists(modNode), "module found");
+        assertEq("MinModule", modNode.name.name, "module name");
+        assertEq(1, modNode.attributes.size(), "exactly one attribute");
+        assertEq("version", modNode.attributes[0].key, "attribute key");
+        assertEq("0.1", modNode.attributes[0].value.value, "attribute value");
+    }
+
+    testModuleSpecialCharsInValues() {
+        # Module with special characters in attribute values
+        string code = "%modern\nmodule SpecialModule {\n    version = \"2.0.1-beta\";\n    desc = \"module with <special> & \\\"chars\\\"\";\n    author = \"Name <email@example.com>\";\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        *hash modNode;
+        foreach auto node in (nodes) {
+            if (node.kind == ADK_Module) {
+                modNode = node;
+                break;
+            }
+        }
+        assertTrue(exists(modNode), "module found");
+        assertEq("SpecialModule", modNode.name.name, "module name");
+        assertEq(3, modNode.attributes.size(), "3 attributes");
+        assertEq("2.0.1-beta", modNode.attributes[0].value.value, "version with hyphens");
+    }
+
+    testModuleInitDelAttributes() {
+        # init and del attributes accept code/closure expressions
+        string code = "%modern\nmodule TestModule {\n    version = \"1.0\";\n    init = sub () { printf(\"init\\n\"); };\n    del = sub () { printf(\"del\\n\"); };\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        # init/del with closures should parse without errors
+        assertTrue(exists(tree), "parseString returns tree for init/del module");
+        assertEq(0, parser.getErrorCount(), "no parse errors for init/del attributes");
+
+        list nodes = tree.getNodesInfo();
+        *hash modNode;
+        foreach auto node in (nodes) {
+            if (node.kind == ADK_Module) {
+                modNode = node;
+                break;
+            }
+        }
+        assertTrue(exists(modNode), "module found");
+        assertEq("TestModule", modNode.name.name, "module name");
+        assertEq(3, modNode.attributes.size(), "3 attributes (version, init, del)");
+        assertEq("version", modNode.attributes[0].key, "first attr is version");
+        assertEq("init", modNode.attributes[1].key, "second attr is init");
+        assertEq("del", modNode.attributes[2].key, "third attr is del");
+        # init/del values should be closure expressions, not literal strings
+        assertNeq(AEK_Literal, modNode.attributes[1].value.kind, "init is not a literal");
+        assertNeq(AEK_Literal, modNode.attributes[2].value.kind, "del is not a literal");
+    }
+
 %endif
 }

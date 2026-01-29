@@ -165,6 +165,23 @@ QoreHashNode* GetNodesInfoQuery::getDeclaration(ASTTree* tree, ASTDeclaration* d
             nodeInfo->setKeyValue("typeName", getName(tree, d->typeName, xsink), xsink);
             break;
         }
+        case ASTDeclarationKind::ADK_Module: {
+            ASTModuleDeclaration* d = static_cast<ASTModuleDeclaration*>(decl);
+            nodeInfo->setKeyValue("name", getName(tree, d->name, xsink), xsink);
+            ReferenceHolder<QoreListNode> attrs(new QoreListNode, xsink);
+            if (*xsink)
+                return nullptr;
+            for (size_t i = 0, count = d->attributes.size(); i < count; i++) {
+                ReferenceHolder<QoreHashNode> attr(new QoreHashNode, xsink);
+                if (*xsink)
+                    return nullptr;
+                attr->setKeyValue("key", new QoreStringNode(d->attributes[i].key), xsink);
+                attr->setKeyValue("value", getExpression(tree, d->attributes[i].value.get(), xsink), xsink);
+                attrs->push(attr.release(), xsink);
+            }
+            nodeInfo->setKeyValue("attributes", attrs.release(), xsink);
+            break;
+        }
         default:
             break;
     }
@@ -335,7 +352,7 @@ QoreHashNode* GetNodesInfoQuery::getExpression(ASTTree* tree, ASTExpression* exp
                     break;
                 case ALEK_String:
                     nodeInfo->setKeyValue("literalKind", new QoreStringNode("string"), xsink);
-                    nodeInfo->setKeyValue("value", new QoreStringNode(e->value.stdstr), xsink);
+                    nodeInfo->setKeyValue("value", new QoreStringNode(*e->value.stdstr), xsink);
                     break;
                 default:
                     break;
