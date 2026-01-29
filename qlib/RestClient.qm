@@ -3003,6 +3003,15 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "desc": "Use basic authorization with the client ID and client secret when making token "
                         "requests",
                 },
+                "oauth2_redirect_passthrough_state": <ConnectionOptionInfo>{
+                    "display_name": "OAuth2 Redirect Passthrough State?",
+                    "short_desc": "If False, embed state in redirect_uri for non-compliant OAuth2 providers",
+                    "type": "bool",
+                    "desc": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the "
+                        "authorization server. Some providers (like Trello) do not pass through the state "
+                        "parameter. Set this to False to embed the state in the redirect_uri as a workaround "
+                        "for non-compliant providers. Default: True (spec-compliant behavior).",
+                },
                 "openapi3": <ConnectionOptionInfo>{
                     "display_name": "OpenApi 3 Schema",
                     "short_desc": "Sets the location of an OpenApi 3 schema to use for the connection",
@@ -3184,6 +3193,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             "oauth2_grant_type",
             "oauth2_pkce",
             "oauth2_redirect_url",
+            "oauth2_redirect_passthrough_state",
             "oauth2_refresh_token",
             "oauth2_scopes",
             "oauth2_token_args",
@@ -3201,6 +3211,21 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             flow
         */
         const RCF_OAUTH2_AUTH_CODE = "oauth2-auth-code";
+
+        #! RestClient feature: OAuth2 Implicit Grant support
+        /** Returned as a connection feature if the connection is configured for the oauth2 implicit grant flow
+
+            @since %RestClient 2.3.3
+        */
+        const RCF_OAUTH2_IMPLICIT = "oauth2-implicit";
+
+        #! RestClient feature: OAuth2 Authorization support (any grant type requiring user authorization)
+        /** Returned as a connection feature if the connection is configured for oauth2 authorization_code or
+            implicit grant flow
+
+            @since %RestClient 2.3.3
+        */
+        const RCF_OAUTH2_AUTH = "oauth2-auth";
 
         #! Validator options
         const ValOpts = (
@@ -3303,6 +3328,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     hash<auto> getExtendedInfo(*hash<auto> opts) {
         return AbstractConnection::getExtendedInfo(opts) + {
             "oauth2_auth_code": features{RCF_OAUTH2_AUTH_CODE} ? True : False,
+            "oauth2_implicit": features{RCF_OAUTH2_IMPLICIT} ? True : False,
+            "oauth2_auth": features{RCF_OAUTH2_AUTH} ? True : False,
         };
     }
 
@@ -3319,6 +3346,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     hash<auto> getExtendedInfoAsData(*hash<auto> opts) {
         return AbstractConnection::getExtendedInfoAsData(opts) + {
             "oauth2_auth_code": features{RCF_OAUTH2_AUTH_CODE} ? True : False,
+            "oauth2_implicit": features{RCF_OAUTH2_IMPLICIT} ? True : False,
+            "oauth2_auth": features{RCF_OAUTH2_AUTH} ? True : False,
         };
     }
 
@@ -3557,10 +3586,13 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         } else {
             uri += "?";
         }
-        # For implicit grant, embed state in the redirect_uri since some providers (like Trello)
-        # don't pass through the state parameter
+        # For implicit grant with non-compliant providers, embed state in the redirect_uri
+        # since some providers (like Trello) don't pass through the state parameter.
+        # This is controlled by oauth2_redirect_passthrough_state option (default: True = spec-compliant)
         string redirect_uri = info.redirect_uri ?? opts.oauth2_redirect_url;
-        if (opts.oauth2_grant_type == "implicit" && info.state) {
+        bool embed_state = opts.oauth2_grant_type == "implicit"
+            && !(opts.oauth2_redirect_passthrough_state ?? True);
+        if (embed_state && info.state) {
             # Append state as a query parameter to the redirect_uri
             if (redirect_uri =~ /\?/) {
                 redirect_uri += "&state=" + info.state;
@@ -3835,15 +3867,22 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         return new_opts;
     }
 
-    #! Sets the auth code feature if supported
-    /** The feature is enabled for both authorization_code and implicit grant types
+    #! Sets the OAuth2 authorization features if supported
+    /** Sets the appropriate feature flags based on grant type:
+        - \c RCF_OAUTH2_AUTH_CODE for authorization_code grant
+        - \c RCF_OAUTH2_IMPLICIT for implicit grant
+        - \c RCF_OAUTH2_AUTH for either grant type (general authorization support)
+
+        @since %RestClient 2.3.3 added RCF_OAUTH2_IMPLICIT and RCF_OAUTH2_AUTH features
     */
     private checkAuthCodeFeature() {
         if (opts{OAuth2AuthRequestOptions}.size() == OAuth2AuthRequestOptions.size()) {
             features{RCF_OAUTH2_AUTH_CODE} = True;
+            features{RCF_OAUTH2_AUTH} = True;
         } else if (opts.oauth2_grant_type == "implicit"
                 && opts{OAuth2ImplicitAuthRequestOptions}.size() == OAuth2ImplicitAuthRequestOptions.size()) {
-            features{RCF_OAUTH2_AUTH_CODE} = True;
+            features{RCF_OAUTH2_IMPLICIT} = True;
+            features{RCF_OAUTH2_AUTH} = True;
         }
     }
 
