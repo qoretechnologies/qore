@@ -94,6 +94,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/QoreListNode.h>
 #include <qore/QoreStringNode.h>
 #include <qore/intern/QoreHashNodeIntern.h>
+#include <qore/intern/qore_list_private.h>
 
 static QoreValue evalExprNode(const QoreValue& expr, ExceptionSink* xsink) {
     if (!expr.hasNode()) {
@@ -551,9 +552,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             case QoreIROpcode::MakeList: {
                 ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+                const QoreTypeInfo* vtype = nullptr;
+                bool vcommon = false;
                 for (const auto& operand : inst->operands) {
                     QoreValue value = getIRValue(values, operand);
                     QoreValue stored = value.hasNode() ? value.refSelf() : value;
+                    const QoreTypeInfo* vt = stored.getTypeInfo();
+                    if (!vtype) {
+                        vtype = vt;
+                        vcommon = true;
+                    } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
+                        vcommon = false;
+                    }
                     if (list->push(stored, xsink)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupStoredValues(locals, nullptr);
@@ -563,6 +573,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         return false;
                     }
                 }
+                if (!vtype || vtype == anyTypeInfo || !vcommon) {
+                    vtype = autoTypeInfo;
+                }
+                qore_list_private::get(*list)->complexTypeInfo = qore_get_complex_list_type(vtype);
                 values[inst->result.id] = QoreValue(list.release());
                 cleanup.push_back(inst->result.id);
                 ++ip;
