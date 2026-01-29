@@ -352,6 +352,8 @@
 #include "QC_TreeMap.cpp"
 #include "QC_AbstractThreadResource.cpp"
 #include "QC_StreamBase.cpp"
+#include "InputStream.cpp"
+#include "OutputStream.cpp"
 #include "QC_InputStream.cpp"
 #include "QC_BinaryInputStream.cpp"
 #include "QC_StringInputStream.cpp"
@@ -397,3 +399,5 @@
 #ifdef DEBUG
 #include "ql_debug.cpp"
 #endif
+// Non-blocking stream I/O support (used by HTTP/2 streaming)
+#include "Http2Session.cpp"
