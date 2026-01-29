@@ -10,21 +10,21 @@ This supplement to `qore-jit-checklist.md` focuses on the work we are doing *rig
   - [x] Add builder helpers for any instructions the lowering visitor needs directly (invoke, landingpad, catch, call variants, refcount, load/store, etc.).
   - [x] Extend `QoreIRPrinter` so every opcode has a human-readable name and captures any new variants added in this phase.
   - [x] Ensure `QoreIRVerifier` validates terminators, operand counts, and cleanup state for the expanded instruction set.
-- [~] Ensure `QoreParseContext` exposes the metadata (definite assignment, known type info) the lowering visitor needs to emit guards.
-- [ ] Define the AST→IR visitor structure for prioritized operators (typed arithmetic, comparisons, logical ops, map/fold, date/shift variants) and statements (if/while/for/try/catch/throw).
-- [ ] Add IR lowering coverage for throw expressions within try/catch so invoke/landingpad sequences are produced.
-- [ ] Stabilize `StoreLocal` lowering plus pre/post increment/decrement handling and validate with the exec-mode try/catch smoke test.
+- [x] Ensure `QoreParseContext` exposes the metadata (definite assignment, known type info) the lowering visitor needs to emit guards.
+- [x] Define the AST→IR visitor structure for prioritized operators (typed arithmetic, comparisons, logical ops, map/fold, date/shift variants) and statements (if/while/for/try/catch/throw).
+- [x] Add IR lowering coverage for throw expressions within try/catch so invoke/landingpad sequences are produced.
+- [x] Stabilize `StoreLocal` lowering plus pre/post increment/decrement handling and validate with the exec-mode try/catch smoke test.
 - [x] Run the exec-mode smoke test under `qore -b` + Valgrind and document the process (see README updates below).
 
 ## Stabilization Tasks
 
 - [x] Add the new `examples/test/ir/IRExecMode*.qtest` files (exec-mode and smoke) to cover interpreter + exception scenarios.
 - [x] Update doc/note about running IR smoke under Valgrind (with `qore -b` to disable signals) and mention the new tests (README now documents the workflow).
-- [ ] Track plan revisions after each milestone (spec done, APIs done, lowering started) to capture new requirements.
+- [x] Track plan revisions after each milestone (spec done, APIs done, lowering started) to capture new requirements.
 
 ## Ongoing Phase 1 Readiness
 
-- [ ] Evaluate the existing IR interpreter (`lib/QoreIRInterpreter.cpp`) to ensure it handles the newly defined opcodes, cleanup lists, and exception flows.
-- [ ] Confirm `test/ir/` coverage grows with each new lowering capability (e.g., mage/fold operators, lvalue coverage, guard semantics).
+- [x] Evaluate the existing IR interpreter (`lib/QoreIRInterpreter.cpp`) to ensure it handles the newly defined opcodes, cleanup lists, and exception flows.
+- [~] Confirm `test/ir/` coverage grows with each new lowering capability (e.g., mage/fold operators, lvalue coverage, guard semantics).
 - [x] Audit remaining `.any` helper ops (regex/extract/remove/keys/exists/elements/dot-eval/cast/map-select/hash-map)
   and document them as Phase‑1 endpoints.

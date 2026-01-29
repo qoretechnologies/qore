@@ -226,8 +226,16 @@ struct QoreParseContext {
         return analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned);
     }
 
+    DLLLOCAL bool isExpressionNeverNothing() const {
+        return analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+    }
+
     DLLLOCAL const QoreTypeInfo* expressionAnalysisType() const {
         return analysis.known_type ? analysis.known_type : analysis.narrowed_type;
+    }
+
+    DLLLOCAL bool expressionHasKnownType() const {
+        return analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo);
     }
 
     DLLLOCAL void markExpressionType(const QoreTypeInfo* typeInfo) {
@@ -237,6 +245,14 @@ struct QoreParseContext {
         } else {
             analysis.flags &= ~QoreParseAnalysis::KnownTypeInfo;
         }
+    }
+
+    DLLLOCAL void markExpressionNeverNothing() {
+        analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    }
+
+    DLLLOCAL void markExpressionMayBeNothing() {
+        analysis.flags &= ~QoreParseAnalysis::NeverNothing;
     }
 };
 
