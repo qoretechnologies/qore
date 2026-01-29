@@ -74,6 +74,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR hash op-assign smoke", \testIrHashOpAssignSmoke());
         addTestCase("IR list op-assign smoke", \testIrListOpAssignSmoke());
         addTestCase("IR op-assign maybe-NOTHING smoke", \testIrOpAssignMaybeNothingSmoke());
+        addTestCase("IR object op-assign maybe-NOTHING smoke", \testIrObjectOpAssignMaybeNothingSmoke());
         set_return_value(main());
     }
 
@@ -1615,6 +1616,44 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("opassign-maybe:1:2\n", stdout_output, "Unexpected IR op-assign maybe-NOTHING output");
+    }
+
+    testIrObjectOpAssignMaybeNothingSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("class Holder { public { *hash h; *list l; } }\n");
+        script.file.write("Holder obj = new Holder();\n");
+        script.file.write("remove obj.h;\n");
+        script.file.write("obj.h += (\"a\": 1);\n");
+        script.file.write("remove obj.l;\n");
+        script.file.write("obj.l += (1, 2);\n");
+        script.file.write("printf(\"obj-opassign:%d:%d\\n\", obj.h.size(), obj.l.size());\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("obj-opassign:1:2\n", stdout_output,
+            "Unexpected IR object op-assign maybe-NOTHING output");
     }
 
     testIrThrowRethrowSmoke() {
