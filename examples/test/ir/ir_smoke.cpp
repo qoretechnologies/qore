@@ -1615,7 +1615,7 @@ static bool runExprInterpreterSmoke() {
         }
         regex_invoke_xsink.clear();
         ExceptionSink regex_extract_xsink;
-        bool regex_extract_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::RegexExtractAny,
+        bool regex_extract_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::RegexExtractList,
             QoreValue(1), &regex_extract_xsink);
         if (!regex_extract_xsink || !regex_extract_invoke) {
             std::cerr << "Expr interpreter smoke checks failed (regex extract invoke)\n";
@@ -1628,7 +1628,7 @@ static bool runExprInterpreterSmoke() {
             return false;
         }
         ExceptionSink regex_subst_xsink;
-        bool regex_subst_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::RegexSubstAny,
+        bool regex_subst_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::RegexSubstString,
             QoreValue(1), &regex_subst_xsink);
         if (!regex_subst_xsink || !regex_subst_invoke) {
             std::cerr << "Expr interpreter smoke checks failed (regex subst invoke)\n";
@@ -6239,7 +6239,7 @@ int main() {
         }
         if (!lowerAndExpectOpcode("ir_regex_extract",
                 QoreValue(new QoreRegexExtractOperatorNode(nullptr, QoreValue("a"), regex->refSelf())),
-                QoreIROpcode::RegexExtractAny)) {
+                QoreIROpcode::RegexExtractList)) {
             return 1;
         }
         SimpleRefHolder<QoreRegexSubst> subst(new QoreRegexSubst("s/a/b/", 0, &xsink));
@@ -6253,7 +6253,7 @@ int main() {
                 QoreValue(new QoreRegexSubstOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("regex_subst_var"), &regex_subst_var, false)),
                     subst->refSelf())),
-                QoreIROpcode::RegexSubstAny)) {
+                QoreIROpcode::RegexSubstString)) {
             return 1;
         }
         if (!lowerAndExpectOpcode("ir_exists",
@@ -6440,7 +6440,7 @@ int main() {
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(try_stmt);
             bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_regex_extract_invoke", root,
-                QoreIROpcode::RegexExtractAny);
+                QoreIROpcode::RegexExtractList);
             delete root;
             if (!ok) {
                 return 1;
@@ -6459,7 +6459,7 @@ int main() {
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(try_stmt);
             bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_regex_subst_invoke", root,
-                QoreIROpcode::RegexSubstAny);
+                QoreIROpcode::RegexSubstString);
             delete root;
             if (!ok) {
                 return 1;
@@ -9789,7 +9789,7 @@ int main() {
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"),
                         &analysis_string_right, false)),
                     regex->refSelf())),
-                QoreIROpcode::RegexExtractAny)) {
+                QoreIROpcode::RegexExtractList)) {
             return 1;
         }
         if (!lowerAndExpectOpcodeWithParseInit("ir_regex_extract_parse_maybe",
@@ -9797,7 +9797,7 @@ int main() {
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
                         &analysis_string_maybe_right, false)),
                     regex->refSelf())),
-                QoreIROpcode::RegexExtractAny)) {
+                QoreIROpcode::RegexExtractList)) {
             return 1;
         }
         SimpleRefHolder<QoreRegexSubst> subst(new QoreRegexSubst("s/a/b/", 0, &regex_xsink));
@@ -9810,7 +9810,7 @@ int main() {
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_string_subst"),
                         &analysis_string_subst, false)),
                     subst->refSelf())),
-                QoreIROpcode::RegexSubstAny)) {
+                QoreIROpcode::RegexSubstString)) {
             return 1;
         }
         if (!lowerAndExpectOpcodeWithParseInit("ir_regex_subst_parse_maybe",
@@ -9818,7 +9818,7 @@ int main() {
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_string_subst_maybe"),
                         &analysis_string_subst_maybe, false)),
                     subst->refSelf())),
-                QoreIROpcode::RegexSubstAny)) {
+                QoreIROpcode::RegexSubstString)) {
             return 1;
         }
     }

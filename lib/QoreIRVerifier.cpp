@@ -167,7 +167,9 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::RegexSubstString:
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
@@ -314,7 +316,9 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::RegexSubstString:
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
@@ -558,7 +562,9 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::RegexMatchAny
                     || inst->opcode == QoreIROpcode::RegexMatchBool
                     || inst->opcode == QoreIROpcode::RegexExtractAny
+                    || inst->opcode == QoreIROpcode::RegexExtractList
                     || inst->opcode == QoreIROpcode::RegexSubstAny
+                    || inst->opcode == QoreIROpcode::RegexSubstString
                     || inst->opcode == QoreIROpcode::ExistsAny
                     || inst->opcode == QoreIROpcode::ExistsBool
                     || inst->opcode == QoreIROpcode::ElementsAny

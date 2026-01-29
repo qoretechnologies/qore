@@ -330,7 +330,7 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
    - Run the expanded exec-mode IR smoke suite and record the first clean `valgrind --leak-check=full qore -b ...` result to serve as the Phase 0 regression baseline.
    - Add a paragraph summarizing the current build/test status and any TODOs (e.g., “needs include fix in QoreParseContext.h before lowering can include the new helper,” “valgrind uncovered handler leaks in GuardNotNothing cleanup”) so the next turn can pick up smoothly.
 
-   **Current status (2026-01-28)**: `qore-ir-smoke` passes under Valgrind with **0 errors** and only expected “still reachable” allocations (mpfr/gmp init + dynamic loader). The exec‑mode IR smoke suite now covers cast/cast‑lvalue, dot‑eval call refs, regex extract/no‑match + subst, typed maybe‑NOTHING guards, range slice with maybe‑NOTHING bounds, op‑assign with maybe‑NOTHING lvalues, ternary mixed types, unary maybe‑NOTHING, and hash/list mixed ops. Re‑run and re‑record this baseline after any further lowering changes.
+   **Current status (2026-01-29)**: `qore-ir-smoke` passes under Valgrind with **0 errors** and only expected “still reachable” allocations (mpfr/gmp init + dynamic loader). The exec‑mode IR smoke suite now covers cast/cast‑lvalue, dot‑eval call refs, regex extract/no‑match + subst, typed maybe‑NOTHING guards, range slice with maybe‑NOTHING bounds, op‑assign with maybe‑NOTHING lvalues, ternary mixed types, unary maybe‑NOTHING, and hash/list mixed ops. Re‑run and re‑record this baseline after any further lowering changes.
 5. **Phase‑1 operator family checklist (execute sequentially)**
    - **Range & date helpers**
      * Emit `RangeInt`/`RangeFloat` when parse analysis confirms the bounds, with `RangeAny` as the conservative fallback.
@@ -349,15 +349,16 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
      * **Status (2026-01-28):** exec-mode smoke tests added for list shift/unshift/splice + lvalue shift-assign; Valgrind baseline recorded.
    - **Residual `.any` fallbacks (Phase‑1b backlog)**
      * Track helper-only ops that currently have **only** `.any` opcodes: `ExtractAny`, `RemoveAny`, `KeysAny`,
-       `RegexExtractAny`, `RegexSubstAny`, `DotEvalAny`, `MapSelectAny`, `HashMapAny`, `HashMapSelectAny`.
+       `DotEvalAny`, `MapSelectAny`, `HashMapAny`, `HashMapSelectAny`.
      * Track operators where typed coverage is partial: `UnaryPlusAny` (no typed), `ModInt/ModAny` (no float),
        `And/Or/Xor` (int/any only), `Eq/Ne` (int/any only), `Cmp` (int/float/any but no string-specialized op).
      * **Phase‑1 decision:** keep these helper ops as `.any` endpoints for now; rely on exec‑mode smoke tests to
        ensure they execute in IR without fallback. Revisit for Phase‑1b/Phase‑2 typed opcode work.
      * Add exec‑mode IR smoke tests for any new typed opcodes so fallback warnings are never emitted.
-     * **Status (2026-01-28):** helper ops smoke test added; `RegexMatchBool`, `ExistsBool`, and `ElementsInt`
-       opcodes introduced and lowering now emits them; typed cast opcodes (`CastList`, `CastHash`, `CastObject`,
-       `CastEnum`) added for resolved cast nodes; Valgrind baseline recorded.
+     * **Status (2026-01-29):** helper ops smoke test added; `RegexMatchBool`, `RegexExtractList`,
+       `RegexSubstString`, `ExistsBool`, and `ElementsInt` opcodes introduced and lowering now emits them; typed
+       cast opcodes (`CastList`, `CastHash`, `CastObject`, `CastEnum`) added for resolved cast nodes; Valgrind
+       baseline recorded.
    - **Range/date + container tests**
      * Extend `examples/test/ir/IRExecMode*.qtest` with cases that explicitly validate the guard policy and exception handling for each operator family.
      * After each family is widened, rerun `qore -b --exec-mode=ir` under Valgrind and capture the clean heap baseline so we know no new refcount leaks or unwinding regressions slipped in.

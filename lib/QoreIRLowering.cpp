@@ -3449,7 +3449,7 @@ QoreIRValue QoreIRLowering::lowerRegexExtract(const QoreValue& expr, std::string
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::RegexExtractAny, expr, operands, op->loc, error);
+    return lowerExprOpOrInvoke(QoreIROpcode::RegexExtractList, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerRegexSubst(const QoreValue& expr, std::string& error) {
@@ -3463,7 +3463,7 @@ QoreIRValue QoreIRLowering::lowerRegexSubst(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::RegexSubstAny, expr, operands, op->loc, error);
+    return lowerExprOpOrInvoke(QoreIROpcode::RegexSubstString, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& error) {

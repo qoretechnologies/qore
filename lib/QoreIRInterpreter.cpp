@@ -186,7 +186,9 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::RegexSubstString:
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
@@ -1347,7 +1349,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::RegexMatchAny:
             case QoreIROpcode::RegexMatchBool:
             case QoreIROpcode::RegexExtractAny:
+            case QoreIROpcode::RegexExtractList:
             case QoreIROpcode::RegexSubstAny:
+            case QoreIROpcode::RegexSubstString:
             case QoreIROpcode::ExistsAny:
             case QoreIROpcode::ExistsBool:
             case QoreIROpcode::ElementsAny:
