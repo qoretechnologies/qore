@@ -135,6 +135,14 @@ void FindSymbolsQuery::inDeclaration(std::vector<ASTSymbolInfo>* vec, ASTDeclara
             }
             break;
         }
+        case ASTDeclarationKind::ADK_Module: {
+            ASTModuleDeclaration* d = static_cast<ASTModuleDeclaration*>(decl);
+            vec->push_back(ASTSymbolInfo(ASYK_Module, &d->name));
+            if (d->hasDocComment()) {
+                vec->back().docComment = *d->getDocComment();
+            }
+            break;
+        }
         default:
             break;
     }

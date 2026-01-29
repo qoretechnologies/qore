@@ -49,6 +49,7 @@ enum ASTSymbolUsageKind {
     ASUK_HashMemberName = 109,
     ASUK_TypedefDeclName = 110,
     ASUK_TypedefTypeName = 111,
+    ASUK_ModuleDeclName = 112,
 
     // Expressions.
     ASUK_AccessVariable = 200,

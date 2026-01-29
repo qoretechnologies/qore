@@ -1653,7 +1653,7 @@ class{WS}+({WORD}::)+{WORD}             { claimClassDocComment(); yylval->string
 class{WS}+(::{WORD})+                   { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
 class{WS}+{WORD}                        { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_STRING; }
 namespace{WS}+{WORD}                    { claimNamespaceDocComment(); yylval->string = trim(yytext + 10); return NAMESPACE; }
-module{WS}+{WORD}                       { /* TODO const char* mod = trim_inplace(yytext + 7); */ return TOK_MODULE; }
+module{WS}+{WORD}                       { yylval->string = trim(yytext + 7); return TOK_MODULE; }
 {WORD}                                  { yylval->string = strdup(yytext); return IDENTIFIER; }
 \<({WORD}::)+{WORD}\>\{                 {
                                             yylval->string = strdup(yytext + 1);

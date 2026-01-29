@@ -49,6 +49,7 @@ enum ASTDeclarationKind {
     ADK_Typedef = 12,       //!< Identifies instances of \ref ASTTypedefDeclaration.
     ADK_Enum = 13,          //!< Identifies instances of \ref ASTEnumDeclaration.
     ADK_EnumMember = 14,    //!< Identifies instances of \ref ASTEnumMemberDeclaration.
+    ADK_Module = 15,        //!< Identifies instances of \ref ASTModuleDeclaration.
 };
 
 #endif // _QLS_AST_ASTDECLARATIONKIND_H
