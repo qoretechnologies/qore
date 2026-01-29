@@ -9332,6 +9332,20 @@ int main() {
             QoreIROpcode::ShrInt, QoreIROpcode::ShrAny, QoreIROpcode::ShrAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shl_parse_float",
+            QoreValue(new QoreShiftLeftOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::ShlInt, QoreIROpcode::ShlAny, QoreIROpcode::ShlAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shr_parse_float",
+            QoreValue(new QoreShiftRightOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::ShrInt, QoreIROpcode::ShrAny, QoreIROpcode::ShrAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeFromParseAnalysis("ir_shl_parse_int_maybe",
             QoreValue(new QoreShiftLeftOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_left"), &analysis_int_maybe_left, false)),
@@ -10101,6 +10115,20 @@ int main() {
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_date_left"), &analysis_date_left, false)),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_date_right"), &analysis_date_right, false)))),
             QoreIROpcode::RangeSliceAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_shift_left_equals_parse_int",
+            QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::ShlAssignInt)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_shift_right_equals_parse_int",
+            QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::ShrAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectAnyOpcodeWithParseInit("ir_range_slice_parse_maybe",
