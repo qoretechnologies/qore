@@ -132,6 +132,13 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ElementsAny: return "elements.any";
         case QoreIROpcode::ElementsInt: return "elements.int";
         case QoreIROpcode::DotEvalAny: return "dot.eval.any";
+        case QoreIROpcode::DotEvalInt: return "dot.eval.int";
+        case QoreIROpcode::DotEvalFloat: return "dot.eval.float";
+        case QoreIROpcode::DotEvalString: return "dot.eval.string";
+        case QoreIROpcode::DotEvalDate: return "dot.eval.date";
+        case QoreIROpcode::DotEvalList: return "dot.eval.list";
+        case QoreIROpcode::DotEvalHash: return "dot.eval.hash";
+        case QoreIROpcode::DotEvalObject: return "dot.eval.object";
         case QoreIROpcode::Foreach: return "foreach";
         case QoreIROpcode::OnBlockExit: return "on.block.exit";
         case QoreIROpcode::ThreadExit: return "thread.exit";
@@ -308,7 +315,15 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::RemoveString
                     || inst->opcode == QoreIROpcode::RemoveBinary
                     || inst->opcode == QoreIROpcode::KeysAny
-                    || inst->opcode == QoreIROpcode::KeysList) {
+                    || inst->opcode == QoreIROpcode::KeysList
+                    || inst->opcode == QoreIROpcode::DotEvalAny
+                    || inst->opcode == QoreIROpcode::DotEvalInt
+                    || inst->opcode == QoreIROpcode::DotEvalFloat
+                    || inst->opcode == QoreIROpcode::DotEvalString
+                    || inst->opcode == QoreIROpcode::DotEvalDate
+                    || inst->opcode == QoreIROpcode::DotEvalList
+                    || inst->opcode == QoreIROpcode::DotEvalHash
+                    || inst->opcode == QoreIROpcode::DotEvalObject) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 if (expr_inst && expr_inst->expr.hasNode()) {
                     out << " <expr>";

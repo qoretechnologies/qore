@@ -1679,12 +1679,12 @@ static bool runExprInterpreterSmoke() {
             return false;
         }
         ValueHolder dot_holder(dot_expr, &xsink);
-        QoreValue dot_result = QoreIRInterpreter::evalExpr(QoreIROpcode::DotEvalAny, *dot_holder, &xsink);
+        QoreValue dot_result = QoreIRInterpreter::evalExpr(QoreIROpcode::DotEvalInt, *dot_holder, &xsink);
         if (xsink || dot_result.getAsBigInt() != 4) {
             std::cerr << "Expr interpreter smoke checks failed (dot eval)\n";
             return false;
         }
-        bool dot_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::DotEvalAny, *dot_holder, &xsink);
+        bool dot_invoke = QoreIRInterpreter::simulateInvoke(QoreIROpcode::DotEvalInt, *dot_holder, &xsink);
         if (xsink || dot_invoke) {
             std::cerr << "Expr interpreter smoke checks failed (dot eval invoke)\n";
             return false;
@@ -6280,7 +6280,8 @@ int main() {
                 std::cerr << "Failed to acquire parse lock (ir_dot_eval)\n";
                 return 1;
             }
-            const char* dot_source = "class MyDot { int m() { return 7; } }\n";
+            const char* dot_source =
+                "class MyDot { int m() { return 7; } }\n";
             program->parse(dot_source, "ir_smoke", &dot_xsink);
             if (dot_xsink) {
                 std::cerr << "Failed to parse program source (ir_dot_eval)\n";
@@ -6322,7 +6323,7 @@ int main() {
                 std::cerr << "IR verify failed (ir_dot_eval): " << error << "\n";
                 return 1;
             }
-            if (!functionHasOpcode(func, QoreIROpcode::DotEvalAny)) {
+            if (!functionHasOpcode(func, QoreIROpcode::DotEvalInt)) {
                 std::cerr << "Lowered function missing opcode (ir_dot_eval)\n";
                 return 1;
             }
@@ -6554,7 +6555,7 @@ int main() {
                 return 1;
             }
             if (!functionHasOpcode(func, QoreIROpcode::Invoke)
-                    || !functionHasInvokeOpcode(func, QoreIROpcode::DotEvalAny)) {
+                    || !functionHasInvokeOpcode(func, QoreIROpcode::DotEvalInt)) {
                 std::cerr << "Lowered function missing invoke opcode (ir_dot_eval_invoke)\n";
                 delete root;
                 return 1;
@@ -8037,11 +8038,14 @@ int main() {
     }
 }
 {
-    const char* dot_source = "class IrDotObj { }\n"
-        "class IrDotClass { int m(int $i) { return $i + 1; } string ms(int $i) { return \"s\"; }"
-        " date md(int $i) { return 2005-01-05; } IrDotObj mo(int $i) { return new IrDotObj(); }"
-        " *int mn(int $i) { return NOTHING; } *string msn(int $i) { return NOTHING; }"
-        " *date mdn(int $i) { return NOTHING; } *IrDotObj mon(int $i) { return NOTHING; } }\n";
+    const char* dot_source = "%new-style\n"
+        "class IrDotObj { }\n"
+        "class IrDotClass { int m(int i) { return i + 1; } string ms(int i) { return \"s\"; }"
+        " date md(int i) { return 2005-01-05; } IrDotObj mo(int i) { return new IrDotObj(); }"
+        " list ml(int i) { return (1, 2); }"
+        " hash mh(int i) { return (\"a\": 1); }"
+        " *int mn(int i) { return NOTHING; } *string msn(int i) { return NOTHING; }"
+        " *date mdn(int i) { return NOTHING; } *IrDotObj mon(int i) { return NOTHING; } }\n";
     ExceptionSink xsink;
     QoreProgramHelper pgm_helper(xsink);
     if (xsink) {
@@ -8066,6 +8070,30 @@ int main() {
         std::cerr << "Failed to resolve dot-eval class (analysis_dot_eval)\n";
         return 1;
     }
+    auto expect_dot_opcode = [&](const char* name, const QoreValue& expr, QoreParseContext& dot_context,
+            QoreIROpcode opcode) -> bool {
+        QoreIRFunction func(name);
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        QoreIRLowering lowering(builder, &dot_context);
+        std::string error;
+        QoreIRValue lowered = lowering.lowerExpression(expr, error);
+        if (!lowered.isValid()) {
+            std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+            return false;
+        }
+        builder.createReturn(lowered);
+        if (!QoreIRVerifier::verify(func, error)) {
+            std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+            return false;
+        }
+        if (!functionHasOpcode(func, opcode)) {
+            std::cerr << "Lowered function missing opcode (" << name << ")\n";
+            return false;
+        }
+        return true;
+    };
     QoreProgramLocation dot_loc("ir_smoke", 1, 1);
     {
         QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
@@ -8090,6 +8118,9 @@ int main() {
             std::cerr << "Parse analysis mismatch (analysis_dot_eval_assigned)\n";
             return 1;
         }
+        if (!expect_dot_opcode("ir_dot_eval_int", *expr_holder, dot_context, QoreIROpcode::DotEvalInt)) {
+            return 1;
+        }
     }
     {
         QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
@@ -8111,6 +8142,9 @@ int main() {
             || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
             || !QoreTypeInfo::equal(analysis.known_type, bigIntTypeInfo)) {
             std::cerr << "Parse analysis mismatch (analysis_dot_eval_maybe)\n";
+            return 1;
+        }
+        if (!expect_dot_opcode("ir_dot_eval_int_maybe", *expr_holder, dot_context, QoreIROpcode::DotEvalInt)) {
             return 1;
         }
     }
@@ -8137,6 +8171,9 @@ int main() {
             std::cerr << "Parse analysis mismatch (analysis_dot_eval_string)\n";
             return 1;
         }
+        if (!expect_dot_opcode("ir_dot_eval_string", *expr_holder, dot_context, QoreIROpcode::DotEvalString)) {
+            return 1;
+        }
     }
     {
         QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
@@ -8161,6 +8198,9 @@ int main() {
             std::cerr << "Parse analysis mismatch (analysis_dot_eval_date)\n";
             return 1;
         }
+        if (!expect_dot_opcode("ir_dot_eval_date", *expr_holder, dot_context, QoreIROpcode::DotEvalDate)) {
+            return 1;
+        }
     }
     {
         QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
@@ -8183,6 +8223,63 @@ int main() {
             || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
             || !QoreTypeInfo::equal(analysis.known_type, dot_obj_class->getTypeInfo())) {
             std::cerr << "Parse analysis mismatch (analysis_dot_eval_object)\n";
+            return 1;
+        }
+        if (!expect_dot_opcode("ir_dot_eval_object", *expr_holder, dot_context, QoreIROpcode::DotEvalObject)) {
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("ml"), dot_args);
+        LocalVar dot_obj("dot_obj_list", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_list"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_list)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || QoreTypeInfo::parseReturns(analysis.known_type, NT_LIST) == QTI_NOT_EQUAL) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_list)\n";
+            return 1;
+        }
+        if (!expect_dot_opcode("ir_dot_eval_list", *expr_holder, dot_context, QoreIROpcode::DotEvalList)) {
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("mh"), dot_args);
+        LocalVar dot_obj("dot_obj_hash", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_hash"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_hash)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || QoreTypeInfo::parseReturns(analysis.known_type, NT_HASH) == QTI_NOT_EQUAL) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_hash)\n";
+            return 1;
+        }
+        if (!expect_dot_opcode("ir_dot_eval_hash", *expr_holder, dot_context, QoreIROpcode::DotEvalHash)) {
             return 1;
         }
     }

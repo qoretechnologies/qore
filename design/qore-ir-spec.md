@@ -349,7 +349,7 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
      * **Status (2026-01-28):** exec-mode smoke tests added for list shift/unshift/splice + lvalue shift-assign; Valgrind baseline recorded.
    - **Residual `.any` fallbacks (Phase‑1b backlog)**
      * Track helper-only ops that currently have **only** `.any` opcodes:
-       `DotEvalAny`, `MapSelectAny`, `HashMapAny`, `HashMapSelectAny`.
+       `MapSelectAny`, `HashMapAny`, `HashMapSelectAny`.
      * Track operators where typed coverage is partial: `UnaryPlusAny` (no typed), `ModInt/ModAny` (no float),
        `And/Or/Xor` (int/any only), `Eq/Ne` (int/any only), `Cmp` (int/float/any but no string-specialized op).
      * **Phase‑1 decision:** keep these helper ops as `.any` endpoints for now; rely on exec‑mode smoke tests to
@@ -357,7 +357,8 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
      * Add exec‑mode IR smoke tests for any new typed opcodes so fallback warnings are never emitted.
      * **Status (2026-01-29):** helper ops smoke test added; `RegexMatchBool`, `RegexExtractList`,
        `RegexSubstString`, `ExistsBool`, `ElementsInt`, `KeysList`, `ExtractList`/`ExtractString`/`ExtractBinary`,
-       and `RemoveList`/`RemoveHash`/`RemoveObject`/`RemoveString`/`RemoveBinary` opcodes introduced and lowering
+       `RemoveList`/`RemoveHash`/`RemoveObject`/`RemoveString`/`RemoveBinary`, and `DotEvalInt`/`DotEvalFloat`/
+       `DotEvalString`/`DotEvalDate`/`DotEvalList`/`DotEvalHash`/`DotEvalObject` opcodes introduced and lowering
        now emits them; typed cast opcodes (`CastList`, `CastHash`, `CastObject`, `CastEnum`) added for resolved
        cast nodes; Valgrind baseline recorded.
    - **Range/date + container tests**

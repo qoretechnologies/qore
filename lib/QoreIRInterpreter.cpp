@@ -203,6 +203,13 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt:
         case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
         case QoreIROpcode::CastObject:
@@ -1372,10 +1379,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::RegexSubstString:
             case QoreIROpcode::ExistsAny:
             case QoreIROpcode::ExistsBool:
-            case QoreIROpcode::ElementsAny:
-            case QoreIROpcode::ElementsInt:
-            case QoreIROpcode::DotEvalAny:
-            case QoreIROpcode::CastAny:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::CastAny:
             case QoreIROpcode::CastList:
             case QoreIROpcode::CastHash:
             case QoreIROpcode::CastObject:

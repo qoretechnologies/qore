@@ -3561,7 +3561,28 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::DotEvalAny, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::DotEvalAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.known_type) {
+        if (QoreTypeInfo::isType(analysis.known_type, NT_INT)) {
+            opcode = QoreIROpcode::DotEvalInt;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_FLOAT)) {
+            opcode = QoreIROpcode::DotEvalFloat;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_STRING)) {
+            opcode = QoreIROpcode::DotEvalString;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_DATE)) {
+            opcode = QoreIROpcode::DotEvalDate;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_LIST)) {
+            opcode = QoreIROpcode::DotEvalList;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_HASH)) {
+            opcode = QoreIROpcode::DotEvalHash;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_OBJECT)) {
+            opcode = QoreIROpcode::DotEvalObject;
+        }
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,

@@ -184,6 +184,13 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt:
         case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
         case QoreIROpcode::LoadLocal:
         case QoreIROpcode::LoadArg:
         case QoreIROpcode::LoadClosure:
@@ -342,6 +349,13 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt:
         case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
             return 1;
         case QoreIROpcode::ToBool:
         case QoreIROpcode::Not:
@@ -596,7 +610,14 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::ExistsBool
                     || inst->opcode == QoreIROpcode::ElementsAny
                     || inst->opcode == QoreIROpcode::ElementsInt
-                    || inst->opcode == QoreIROpcode::DotEvalAny) {
+                    || inst->opcode == QoreIROpcode::DotEvalAny
+                    || inst->opcode == QoreIROpcode::DotEvalInt
+                    || inst->opcode == QoreIROpcode::DotEvalFloat
+                    || inst->opcode == QoreIROpcode::DotEvalString
+                    || inst->opcode == QoreIROpcode::DotEvalDate
+                    || inst->opcode == QoreIROpcode::DotEvalList
+                    || inst->opcode == QoreIROpcode::DotEvalHash
+                    || inst->opcode == QoreIROpcode::DotEvalObject) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 if (!expr_inst || !expr_inst->expr.hasNode()) {
                     error = "expr instruction missing expr";
