@@ -6455,7 +6455,7 @@ int main() {
         }
         if (!lowerAndExpectOpcode("ir_regex_extract",
                 QoreValue(new QoreRegexExtractOperatorNode(nullptr, QoreValue("a"), regex->refSelf())),
-                QoreIROpcode::RegexExtractList)) {
+                QoreIROpcode::RegexExtractAny)) {
             return 1;
         }
         SimpleRefHolder<QoreRegexSubst> subst(new QoreRegexSubst("s/a/b/", 0, &xsink));
@@ -6469,7 +6469,7 @@ int main() {
                 QoreValue(new QoreRegexSubstOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("regex_subst_var"), &regex_subst_var, false)),
                     subst->refSelf())),
-                QoreIROpcode::RegexSubstString)) {
+                QoreIROpcode::RegexSubstAny)) {
             return 1;
         }
         if (!lowerAndExpectOpcode("ir_exists",
@@ -6657,7 +6657,7 @@ int main() {
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(try_stmt);
             bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_regex_extract_invoke", root,
-                QoreIROpcode::RegexExtractList);
+                QoreIROpcode::RegexExtractAny);
             delete root;
             if (!ok) {
                 return 1;
@@ -6676,7 +6676,7 @@ int main() {
             StatementBlock* root = new StatementBlock(1, 1);
             root->addStatement(try_stmt);
             bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_regex_subst_invoke", root,
-                QoreIROpcode::RegexSubstString);
+                QoreIROpcode::RegexSubstAny);
             delete root;
             if (!ok) {
                 return 1;

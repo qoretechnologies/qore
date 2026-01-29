@@ -3609,7 +3609,15 @@ QoreIRValue QoreIRLowering::lowerRegexExtract(const QoreValue& expr, std::string
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::RegexExtractList, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::RegexExtractAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.known_type
+        && QoreTypeInfo::parseReturns(analysis.known_type, NT_LIST) != QTI_NOT_EQUAL) {
+        opcode = QoreIROpcode::RegexExtractList;
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerRegexSubst(const QoreValue& expr, std::string& error) {
@@ -3623,7 +3631,15 @@ QoreIRValue QoreIRLowering::lowerRegexSubst(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::RegexSubstString, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::RegexSubstAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.known_type
+        && QoreTypeInfo::parseReturns(analysis.known_type, NT_STRING) != QTI_NOT_EQUAL) {
+        opcode = QoreIROpcode::RegexSubstString;
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& error) {
