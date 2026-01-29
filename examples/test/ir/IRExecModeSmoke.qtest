@@ -46,6 +46,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR throw/rethrow smoke", \testIrThrowRethrowSmoke());
         addTestCase("IR rethrow outside catch smoke", \testIrRethrowOutsideCatchSmoke());
         addTestCase("IR guard mismatch smoke", \testIrGuardMismatchSmoke());
+        addTestCase("IR guard exception flow smoke", \testIrGuardExceptionFlowSmoke());
         addTestCase("IR ternary mixed smoke", \testIrTernaryMixedSmoke());
         addTestCase("IR unary maybe-NOTHING smoke", \testIrUnaryMaybeNothingSmoke());
         addTestCase("IR object/hash/list op smoke", \testIrObjectHashListOpSmoke());
@@ -1683,6 +1684,45 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("guard:caught\n", stdout_output, "Unexpected IR guard mismatch output");
+    }
+
+    testIrGuardExceptionFlowSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("string out = \"start\";\n");
+        script.file.write("hash h = (\"b\": 1);\n");
+        script.file.write("try {\n");
+        script.file.write("    int i = h.a;\n");
+        script.file.write("    out = \"no\";\n");
+        script.file.write("} catch (ex) {\n");
+        script.file.write("    out = \"caught\";\n");
+        script.file.write("}\n");
+        script.file.write("printf(\"guard-flow:%s\\n\", out);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("guard-flow:caught\n", stdout_output, "Unexpected IR guard flow output");
     }
 
     testIrTernaryMixedSmoke() {
