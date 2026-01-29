@@ -57,6 +57,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR logical short-circuit smoke", \testIrLogicalShortCircuitSmoke());
         addTestCase("IR string compare smoke", \testIrStringCompareSmoke());
         addTestCase("IR coalescing smoke", \testIrCoalescingSmoke());
+        addTestCase("IR unary logical smoke", \testIrUnaryLogicalSmoke());
         addTestCase("IR object/hash/list op smoke", \testIrObjectHashListOpSmoke());
         addTestCase("IR range foreach smoke", \testIrRangeForeachSmoke());
         addTestCase("IR exists smoke", \testIrExistsSmoke());
@@ -2183,6 +2184,42 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("coal:5:3:7:ok:1\n", stdout_output, "Unexpected IR coalescing output");
+    }
+
+    testIrUnaryLogicalSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%new-style\n");
+        script.file.write("int a = 0;\n");
+        script.file.write("int b = 1;\n");
+        script.file.write("*int maybe;\n");
+        script.file.write("remove maybe;\n");
+        script.file.write("printf(\"ulogic:%d:%d:%d:%d\\n\", !a ? 1 : 0, !b ? 1 : 0,\n");
+        script.file.write("    (a ?? 0) == 0 ? 1 : 0, maybe == NOTHING ? 1 : 0);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("ulogic:1:0:1:1\n", stdout_output, "Unexpected IR unary logical output");
     }
 
     testIrObjectHashListOpSmoke() {
