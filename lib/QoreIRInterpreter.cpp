@@ -210,6 +210,12 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         case QoreIROpcode::DotEvalList:
         case QoreIROpcode::DotEvalHash:
         case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::MapSelectAny:
+        case QoreIROpcode::MapSelectList:
+        case QoreIROpcode::HashMapAny:
+        case QoreIROpcode::HashMap:
+        case QoreIROpcode::HashMapSelectAny:
+        case QoreIROpcode::HashMapSelect:
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
         case QoreIROpcode::CastObject:
