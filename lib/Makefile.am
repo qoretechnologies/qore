@@ -199,6 +199,9 @@ libqore_la_SOURCES = \
 	QoreFile.cpp \
 	QoreDir.cpp \
 	QoreSocket.cpp \
+	InputStream.cpp \
+	OutputStream.cpp \
+	Http2Session.cpp \
 	DateTime.cpp \
 	QoreLib.cpp \
 	QoreTimeZoneManager.cpp \

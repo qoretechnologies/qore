@@ -843,6 +843,12 @@ endif ()
 if (${QORE_BUILD_TYPE_LWR} MATCHES "debug")
     set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC} lib/ql_debug.cpp)
 endif ()
+# Non-blocking I/O support for streams (used by HTTP/2 streaming to avoid buffering large responses in memory)
+set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
+    lib/InputStream.cpp
+    lib/OutputStream.cpp
+)
+
 # HTTP/2 support is always enabled (nghttp2 is required)
 set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/Http2Session.cpp
@@ -1232,6 +1238,9 @@ if (SINGLE_COMPILATION_UNIT)
 #ifdef DEBUG
 #include \"${CMAKE_SOURCE_DIR}/lib/ql_debug.cpp\"
 #endif
+// Non-blocking I/O support for streams
+#include \"${CMAKE_SOURCE_DIR}/lib/InputStream.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/OutputStream.cpp\"
 // HTTP/2 support is always enabled (nghttp2 is required)
 #include \"${CMAKE_SOURCE_DIR}/lib/Http2Session.cpp\"
 ")

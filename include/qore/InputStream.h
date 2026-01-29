@@ -33,6 +33,7 @@
 #define _QORE_INPUTSTREAM_H
 
 #include "qore/StreamBase.h"
+#include <cstdint>
 
 DLLEXPORT extern QoreClass* QC_INPUTSTREAM;
 
@@ -95,6 +96,112 @@ public:
       * @return the next byte available to be read, -1 indicates end of the stream, -2 indicates an error
       */
     virtual int64 peek(ExceptionSink *xsink) = 0;
+
+    /**
+      * @brief Returns true if this stream supports non-blocking I/O.
+      *
+      * Streams that return true must implement getPollableDescriptor() and readNonBlock().
+      * @return true if non-blocking I/O is supported
+      *
+      * @since %Qore 2.2
+      */
+    virtual bool supportsNonBlockingIo() const { return false; }
+
+    /**
+      * @brief Returns the pollable file descriptor for this stream, or -1 if not pollable.
+      * @return the file descriptor, or -1
+      *
+      * @since %Qore 2.2
+      */
+    virtual int getPollableDescriptor() const { return -1; }
+
+    /**
+      * @brief Non-blocking read: returns bytes read, 0 if would block, -1 on error.
+      *
+      * Default implementation delegates to blocking read() (safe for memory-based streams).
+      * @param ptr the destination buffer
+      * @param limit the maximum number of bytes to read
+      * @param xsink the exception sink
+      * @return the number of bytes read, 0 if would block
+      *
+      * @since %Qore 2.2
+      */
+    virtual int64 readNonBlock(void* ptr, int64 limit, ExceptionSink* xsink) {
+        return read(ptr, limit, xsink);
+    }
+
+    /**
+      * @brief Read with timeout in milliseconds. -1 = blocking, 0 = non-blocking poll.
+      *
+      * Default implementation uses getPollableDescriptor() + poll() + readNonBlock().
+      * For non-pollable streams that don't support non-blocking I/O, a positive timeout
+      * falls back to readNonBlock() (safe for memory-backed streams that never block).
+      * Throws INPUT-STREAM-ERROR only for streams that claim non-blocking support
+      * (supportsNonBlockingIo() returns true) but return -1 from getPollableDescriptor().
+      * @param ptr the destination buffer
+      * @param limit the maximum number of bytes to read
+      * @param timeout_ms timeout in milliseconds (-1 for blocking, 0 for non-blocking)
+      * @param xsink the exception sink
+      * @return the number of bytes read, 0 if would block or timeout
+      *
+      * @since %Qore 2.2
+      */
+    DLLEXPORT virtual int64 readWithTimeout(void* ptr, int64 limit, int64 timeout_ms, ExceptionSink* xsink);
+
+    /**
+      * @brief Helper wrapping readWithTimeout for Qore level.
+      * @param limit the maximum number of bytes to read
+      * @param timeout_ms timeout in milliseconds
+      * @param xsink the exception sink
+      * @return the binary data read, or nullptr if nothing available
+      *
+      * @since %Qore 2.2
+      */
+    DLLLOCAL BinaryNode* readWithTimeoutHelper(int64 limit, int64 timeout_ms, ExceptionSink* xsink) {
+        if (!check(xsink)) {
+            return nullptr;
+        }
+        if (limit <= 0) {
+            xsink->raiseException("INPUT-STREAM-ERROR", "%s::readWithTimeout() called with non-positive limit " QLLD,
+                getName(), limit);
+            return nullptr;
+        }
+        SimpleRefHolder<BinaryNode> result(new BinaryNode);
+        result->preallocate(limit);
+        int64 count = readWithTimeout(const_cast<void*>(result->getPtr()), limit, timeout_ms, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        result->setSize(count);
+        return count ? result.release() : nullptr;
+    }
+
+    /**
+      * @brief Helper wrapping readNonBlock for Qore level.
+      * @param limit the maximum number of bytes to read
+      * @param xsink the exception sink
+      * @return the binary data read, or nullptr if nothing available
+      *
+      * @since %Qore 2.2
+      */
+    DLLLOCAL BinaryNode* readNonBlockHelper(int64 limit, ExceptionSink* xsink) {
+        if (!check(xsink)) {
+            return nullptr;
+        }
+        if (limit <= 0) {
+            xsink->raiseException("INPUT-STREAM-ERROR", "%s::readNonBlock() called with non-positive limit " QLLD,
+                getName(), limit);
+            return nullptr;
+        }
+        SimpleRefHolder<BinaryNode> result(new BinaryNode);
+        result->preallocate(limit);
+        int64 count = readNonBlock(const_cast<void*>(result->getPtr()), limit, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        result->setSize(count);
+        return count ? result.release() : nullptr;
+    }
 
 protected:
     /**
