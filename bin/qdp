@@ -615,9 +615,9 @@ class QdpCmd {
     static getInfo(AbstractDataProvider provider) {
         hash<DataProviderInfo> info = provider.getInfo();
 
-        # For JSON/YAML output, just dump the raw info
+        # For JSON/YAML output, convert type objects to serializable data
         if (opts.json || opts.yaml) {
-            output(info);
+            output(provider.getInfoAsData());
             return;
         }
 
@@ -631,6 +631,26 @@ class QdpCmd {
         printf("  %s: %s\n", color.key("Type"), color.type(info.type));
         if (info.short_desc) {
             printf("  %s: %s\n", color.key("Description"), info.short_desc);
+        }
+
+        # Constructor options
+        if (info.constructor_options) {
+            printf("%s\n", color.bold("Constructor Options"));
+            foreach hash<auto> opt in (info.constructor_options.pairIterator()) {
+                string type_str = (map $1.getName(), opt.value.type).join("|");
+                string req = opt.value.required ? color.error(" (required)") : "";
+                printf("  %s [%s]%s\n", color.key(opt.key), color.type(type_str), req);
+                if (opt.value.short_desc) {
+                    printf("    %s\n", opt.value.short_desc);
+                }
+                if (opt.value.allowed_values) {
+                    printf("    %s: %s\n", color.dim("values"),
+                        (map $1.value, opt.value.allowed_values).join(", "));
+                }
+                if (exists opt.value.default_value) {
+                    printf("    %s: %y\n", color.dim("default"), opt.value.default_value);
+                }
+            }
         }
 
         # Capabilities section
@@ -1887,13 +1907,25 @@ class QdpCmd {
             if (conn) {
                 prov = conn.getDataProvider(action.subtype);
             } else if (action.cls) {
-                prov = DataProviderActionCatalog::getDataProviderForAction(action, \options);
+                # load the module into qdp's program space so Class::forName() can resolve the class;
+                # the module was already loaded by ProviderIndexUtil into the DataProvider module's
+                # program context, but Class::forName() resolves in the calling program's context,
+                # so we must load the module here and do the class resolution in qdp's context
+                string mod_name = (action.cls.split("::")[0]);
+                load_module(mod_name);
+                hash<auto> constructor_opts;
+                map constructor_opts{$1.key} = remove options{$1.key}, action.options.pairIterator(),
+                    $1.value.loc == "constructor" && options.hasKey($1.key);
+                prov = Class::forName(action.cls).newObject(constructor_opts);
             }
             # set logger on data provider
             prov.setLogger(logger);
 
             DataProviderDataContextHelper dch(options);
             foreach string seg in (action.path[1..].split("/")) {
+                if (!seg.val()) {
+                    continue;
+                }
                 if (*string var = (seg =~ x/^\{([^\}]+)\}$/)[0]) {
                     seg = remove options{var};
                 }
@@ -2295,7 +2327,7 @@ class QdpCmd {
 %endif
         } else if (opts.yaml) {
 %ifndef NoYaml
-            printf("%s", make_yaml(data));
+            printf("%s", make_yaml(data, YAML::BlockStyle));
 %else
             error("YAML output requested but yaml module is not available");
 %endif

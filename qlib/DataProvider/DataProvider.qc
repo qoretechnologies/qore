@@ -93,6 +93,7 @@ public class DataProvider {
             "ftpclient": "FtpClientDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
+            "generator": "GeneratorDataProvider",
             "gmail": "GmailDataProvider",
             "httpclient": "HttpClientDataProvider",
             "jotform": "JotformDataProvider",
