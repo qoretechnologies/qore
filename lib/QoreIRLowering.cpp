@@ -3372,7 +3372,20 @@ QoreIRValue QoreIRLowering::lowerExtract(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{lvalue, offset, length, replacement};
-    return lowerExprOpOrInvoke(QoreIROpcode::ExtractAny, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::ExtractAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(op->getLValue(), analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.known_type) {
+        if (QoreTypeInfo::isType(analysis.known_type, NT_LIST)) {
+            opcode = QoreIROpcode::ExtractList;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_STRING)) {
+            opcode = QoreIROpcode::ExtractString;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_BINARY)) {
+            opcode = QoreIROpcode::ExtractBinary;
+        }
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& error) {
@@ -3386,7 +3399,24 @@ QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& erro
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::RemoveAny, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::RemoveAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(op->getExp(), analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.known_type) {
+        if (QoreTypeInfo::isType(analysis.known_type, NT_LIST)) {
+            opcode = QoreIROpcode::RemoveList;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_HASH)) {
+            opcode = QoreIROpcode::RemoveHash;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_OBJECT)) {
+            opcode = QoreIROpcode::RemoveObject;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_STRING)) {
+            opcode = QoreIROpcode::RemoveString;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_BINARY)) {
+            opcode = QoreIROpcode::RemoveBinary;
+        }
+    }
+    QoreIRValue result = lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
     markLocalUnassignmentFromExpression(op->getExp());
     return result;
 }
@@ -3402,7 +3432,24 @@ QoreIRValue QoreIRLowering::lowerDelete(const QoreValue& expr, std::string& erro
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::RemoveAny, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::RemoveAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(op->getExp(), analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.known_type) {
+        if (QoreTypeInfo::isType(analysis.known_type, NT_LIST)) {
+            opcode = QoreIROpcode::RemoveList;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_HASH)) {
+            opcode = QoreIROpcode::RemoveHash;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_OBJECT)) {
+            opcode = QoreIROpcode::RemoveObject;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_STRING)) {
+            opcode = QoreIROpcode::RemoveString;
+        } else if (QoreTypeInfo::isType(analysis.known_type, NT_BINARY)) {
+            opcode = QoreIROpcode::RemoveBinary;
+        }
+    }
+    QoreIRValue result = lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
     markLocalUnassignmentFromExpression(op->getExp());
     if (!result.isValid()) {
         return result;

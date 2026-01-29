@@ -162,7 +162,15 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum:
         case QoreIROpcode::ExtractAny:
+        case QoreIROpcode::ExtractList:
+        case QoreIROpcode::ExtractString:
+        case QoreIROpcode::ExtractBinary:
         case QoreIROpcode::RemoveAny:
+        case QoreIROpcode::RemoveList:
+        case QoreIROpcode::RemoveHash:
+        case QoreIROpcode::RemoveObject:
+        case QoreIROpcode::RemoveString:
+        case QoreIROpcode::RemoveBinary:
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
         case QoreIROpcode::RegexMatchAny:
@@ -311,8 +319,16 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::CastEnum:
             return 1;
         case QoreIROpcode::ExtractAny:
+        case QoreIROpcode::ExtractList:
+        case QoreIROpcode::ExtractString:
+        case QoreIROpcode::ExtractBinary:
             return 4;
         case QoreIROpcode::RemoveAny:
+        case QoreIROpcode::RemoveList:
+        case QoreIROpcode::RemoveHash:
+        case QoreIROpcode::RemoveObject:
+        case QoreIROpcode::RemoveString:
+        case QoreIROpcode::RemoveBinary:
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
         case QoreIROpcode::RegexMatchAny:
@@ -559,7 +575,15 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::CastObject
                     || inst->opcode == QoreIROpcode::CastEnum
                     || inst->opcode == QoreIROpcode::ExtractAny
+                    || inst->opcode == QoreIROpcode::ExtractList
+                    || inst->opcode == QoreIROpcode::ExtractString
+                    || inst->opcode == QoreIROpcode::ExtractBinary
                     || inst->opcode == QoreIROpcode::RemoveAny
+                    || inst->opcode == QoreIROpcode::RemoveList
+                    || inst->opcode == QoreIROpcode::RemoveHash
+                    || inst->opcode == QoreIROpcode::RemoveObject
+                    || inst->opcode == QoreIROpcode::RemoveString
+                    || inst->opcode == QoreIROpcode::RemoveBinary
                     || inst->opcode == QoreIROpcode::KeysAny
                     || inst->opcode == QoreIROpcode::KeysList
                     || inst->opcode == QoreIROpcode::RegexMatchAny

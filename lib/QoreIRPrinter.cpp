@@ -110,7 +110,15 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::UnshiftLValue: return "unshift.lvalue";
         case QoreIROpcode::SpliceLValue: return "splice.lvalue";
         case QoreIROpcode::ExtractAny: return "extract.any";
+        case QoreIROpcode::ExtractList: return "extract.list";
+        case QoreIROpcode::ExtractString: return "extract.string";
+        case QoreIROpcode::ExtractBinary: return "extract.binary";
         case QoreIROpcode::RemoveAny: return "remove.any";
+        case QoreIROpcode::RemoveList: return "remove.list";
+        case QoreIROpcode::RemoveHash: return "remove.hash";
+        case QoreIROpcode::RemoveObject: return "remove.object";
+        case QoreIROpcode::RemoveString: return "remove.string";
+        case QoreIROpcode::RemoveBinary: return "remove.binary";
         case QoreIROpcode::KeysAny: return "keys.any";
         case QoreIROpcode::KeysList: return "keys.list";
         case QoreIROpcode::RegexMatchAny: return "regex.match.any";
@@ -290,7 +298,15 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::CallStatic
                     || inst->opcode == QoreIROpcode::CastAny
                     || inst->opcode == QoreIROpcode::ExtractAny
+                    || inst->opcode == QoreIROpcode::ExtractList
+                    || inst->opcode == QoreIROpcode::ExtractString
+                    || inst->opcode == QoreIROpcode::ExtractBinary
                     || inst->opcode == QoreIROpcode::RemoveAny
+                    || inst->opcode == QoreIROpcode::RemoveList
+                    || inst->opcode == QoreIROpcode::RemoveHash
+                    || inst->opcode == QoreIROpcode::RemoveObject
+                    || inst->opcode == QoreIROpcode::RemoveString
+                    || inst->opcode == QoreIROpcode::RemoveBinary
                     || inst->opcode == QoreIROpcode::KeysAny
                     || inst->opcode == QoreIROpcode::KeysList) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());

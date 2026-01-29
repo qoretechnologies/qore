@@ -9716,11 +9716,77 @@ int main() {
             QoreIROpcode::RemoveAny)) {
         return 1;
     }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_remove_parse_list_assigned",
+            QoreValue(new QoreRemoveOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::RemoveList)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_remove_parse_hash_assigned",
+            QoreValue(new QoreRemoveOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
+            QoreIROpcode::RemoveHash)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_remove_parse_object_assigned",
+            QoreValue(new QoreRemoveOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)))),
+            QoreIROpcode::RemoveObject)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_remove_parse_string_assigned",
+            QoreValue(new QoreRemoveOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)))),
+            QoreIROpcode::RemoveString)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_remove_parse_binary_assigned",
+            QoreValue(new QoreRemoveOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)))),
+            QoreIROpcode::RemoveBinary)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcodeWithParseInit("ir_remove_parse_maybe",
             QoreValue(new QoreRemoveOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_unassigned"),
                     &analysis_int_unassigned, false)))),
             QoreIROpcode::RemoveAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_extract_parse_list_assigned",
+            QoreValue(new QoreExtractOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(0),
+                QoreValue(1),
+                QoreValue())),
+            QoreIROpcode::ExtractList)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_extract_parse_list_maybe",
+            QoreValue(new QoreExtractOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"), &analysis_list_maybe_left, false)),
+                QoreValue(0),
+                QoreValue(1),
+                QoreValue())),
+            QoreIROpcode::ExtractList)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_extract_parse_string_assigned",
+            QoreValue(new QoreExtractOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(0),
+                QoreValue(1),
+                QoreValue())),
+            QoreIROpcode::ExtractString)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_extract_parse_binary_assigned",
+            QoreValue(new QoreExtractOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_binary_left"), &analysis_binary_left, false)),
+                QoreValue(0),
+                QoreValue(1),
+                QoreValue())),
+            QoreIROpcode::ExtractBinary)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_exists_parse_assigned",
