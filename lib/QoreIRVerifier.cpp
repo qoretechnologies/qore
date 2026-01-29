@@ -191,6 +191,9 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::DotEvalList:
         case QoreIROpcode::DotEvalHash:
         case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::MapSelectList:
+        case QoreIROpcode::HashMap:
+        case QoreIROpcode::HashMapSelect:
         case QoreIROpcode::LoadLocal:
         case QoreIROpcode::LoadArg:
         case QoreIROpcode::LoadClosure:
@@ -315,9 +318,12 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RangeFloat:
             return 2;
         case QoreIROpcode::MapSelectAny:
+        case QoreIROpcode::MapSelectList:
         case QoreIROpcode::HashMapAny:
+        case QoreIROpcode::HashMap:
             return 3;
         case QoreIROpcode::HashMapSelectAny:
+        case QoreIROpcode::HashMapSelect:
             return 4;
         case QoreIROpcode::CastAny:
         case QoreIROpcode::CastList:
@@ -356,7 +362,6 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::DotEvalList:
         case QoreIROpcode::DotEvalHash:
         case QoreIROpcode::DotEvalObject:
-            return 1;
         case QoreIROpcode::ToBool:
         case QoreIROpcode::Not:
         case QoreIROpcode::IsNullOrNothing:

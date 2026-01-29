@@ -3943,6 +3943,14 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
     if (!third.isValid()) {
         return QoreIRValue();
     }
+    QoreIROpcode opcode = QoreIROpcode::MapSelectAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.known_type
+        && QoreTypeInfo::parseReturns(analysis.known_type, NT_LIST) != QTI_NOT_EQUAL) {
+        opcode = QoreIROpcode::MapSelectList;
+    }
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -3951,11 +3959,11 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
         }
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {first, second, third}, normal_block, handler, map_select->loc);
-        inst->invoke_opcode = QoreIROpcode::MapSelectAny;
+        inst->invoke_opcode = opcode;
         builder.setBlock(normal_block);
         return inst->result;
     }
-    return builder.createTernaryOp(QoreIROpcode::MapSelectAny, first, second, third)->result;
+    return builder.createTernaryOp(opcode, first, second, third)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& error) {
@@ -3977,6 +3985,14 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
     if (!third.isValid()) {
         return QoreIRValue();
     }
+    QoreIROpcode opcode = QoreIROpcode::HashMapAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.known_type
+        && QoreTypeInfo::parseReturns(analysis.known_type, NT_HASH) != QTI_NOT_EQUAL) {
+        opcode = QoreIROpcode::HashMap;
+    }
     QoreIRValue result;
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
@@ -3986,11 +4002,11 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
         }
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {first, second, third}, normal_block, handler, map->loc);
-        inst->invoke_opcode = QoreIROpcode::HashMapAny;
+        inst->invoke_opcode = opcode;
         builder.setBlock(normal_block);
         result = inst->result;
     } else {
-        result = builder.createTernaryOp(QoreIROpcode::HashMapAny, first, second, third, map->loc)->result;
+        result = builder.createTernaryOp(opcode, first, second, third, map->loc)->result;
     }
     maybeInsertNotNothingGuard(result, &expr, map->loc, nullptr);
     return result;
@@ -4019,6 +4035,14 @@ QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::strin
     if (!fourth.isValid()) {
         return QoreIRValue();
     }
+    QoreIROpcode opcode = QoreIROpcode::HashMapSelectAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.known_type
+        && QoreTypeInfo::parseReturns(analysis.known_type, NT_HASH) != QTI_NOT_EQUAL) {
+        opcode = QoreIROpcode::HashMapSelect;
+    }
     QoreIRValue result;
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
@@ -4029,11 +4053,11 @@ QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::strin
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, {first, second, third, fourth}, normal_block, handler,
             map_select->loc);
-        inst->invoke_opcode = QoreIROpcode::HashMapSelectAny;
+        inst->invoke_opcode = opcode;
         builder.setBlock(normal_block);
         result = inst->result;
     } else {
-        result = builder.createQuaternaryOp(QoreIROpcode::HashMapSelectAny, first, second, third, fourth,
+        result = builder.createQuaternaryOp(opcode, first, second, third, fourth,
             map_select->loc)->result;
     }
     maybeInsertNotNothingGuard(result, &expr, map_select->loc, nullptr);

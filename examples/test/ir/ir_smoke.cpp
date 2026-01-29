@@ -2465,7 +2465,7 @@ static bool runIRExecutorContainerSmoke() {
         auto* map_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx0->result);
         auto* iter_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx1->result);
         auto* sel_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx2->result);
-        auto* map_sel = builder.createTernaryOp(QoreIROpcode::MapSelectAny, map_expr->result, iter_expr->result,
+        auto* map_sel = builder.createTernaryOp(QoreIROpcode::MapSelectList, map_expr->result, iter_expr->result,
             sel_expr->result);
         builder.createReturn(map_sel->result);
 
@@ -2504,7 +2504,7 @@ static bool runIRExecutorContainerSmoke() {
         auto* key_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx0->result);
         auto* val_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx1->result);
         auto* iter_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx2->result);
-        auto* hmap = builder.createTernaryOp(QoreIROpcode::HashMapAny, key_expr->result, val_expr->result,
+        auto* hmap = builder.createTernaryOp(QoreIROpcode::HashMap, key_expr->result, val_expr->result,
             iter_expr->result);
         builder.createReturn(hmap->result);
 
@@ -2549,7 +2549,7 @@ static bool runIRExecutorContainerSmoke() {
         auto* val_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx1->result);
         auto* iter_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx2->result);
         auto* sel_expr = builder.createUnaryOp(QoreIROpcode::LoadArg, idx3->result);
-        auto* hmap = builder.createQuaternaryOp(QoreIROpcode::HashMapSelectAny, key_expr->result, val_expr->result,
+        auto* hmap = builder.createQuaternaryOp(QoreIROpcode::HashMapSelect, key_expr->result, val_expr->result,
             iter_expr->result, sel_expr->result);
         builder.createReturn(hmap->result);
 
@@ -9884,6 +9884,31 @@ int main() {
                 QoreValue(1),
                 QoreValue())),
             QoreIROpcode::ExtractBinary)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_map_select_parse_list",
+            QoreValue(new QoreMapSelectOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(true))),
+            QoreIROpcode::MapSelectList)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_hash_map_parse_list",
+            QoreValue(new QoreHashMapOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::HashMap)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_hash_map_select_parse_list",
+            QoreValue(new QoreHashMapSelectOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"), &analysis_string_right, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(true))),
+            QoreIROpcode::HashMapSelect)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_exists_parse_assigned",

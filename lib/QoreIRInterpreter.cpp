@@ -1058,7 +1058,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::RangeSliceInt:
             case QoreIROpcode::RangeSliceFloat:
             case QoreIROpcode::MapSelectAny:
-            case QoreIROpcode::HashMapAny: {
+            case QoreIROpcode::MapSelectList:
+            case QoreIROpcode::HashMapAny:
+            case QoreIROpcode::HashMap: {
                 if (inst->operands.size() < 3) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "ternary op missing operands");
@@ -1089,7 +1091,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ++ip;
                 break;
             }
-            case QoreIROpcode::HashMapSelectAny: {
+            case QoreIROpcode::HashMapSelectAny:
+            case QoreIROpcode::HashMapSelect: {
                 if (inst->operands.size() < 4) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "quaternary op missing operands");
@@ -1806,13 +1809,15 @@ QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first
                 first.refSelf(), second.refSelf(), third.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
-        case QoreIROpcode::MapSelectAny: {
+        case QoreIROpcode::MapSelectAny:
+        case QoreIROpcode::MapSelectList: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreMapSelectOperatorNode(nullptr,
                 first.refSelf(), second.refSelf(), third.refSelf())), xsink);
             return node->eval(needs_deref, xsink);
         }
-        case QoreIROpcode::HashMapAny: {
+        case QoreIROpcode::HashMapAny:
+        case QoreIROpcode::HashMap: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreHashMapOperatorNode(nullptr,
                 first.refSelf(), second.refSelf(), third.refSelf())), xsink);
@@ -1830,7 +1835,8 @@ QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first
 QoreValue QoreIRInterpreter::evalQuaternary(QoreIROpcode op, const QoreValue& first, const QoreValue& second,
         const QoreValue& third, const QoreValue& fourth, ExceptionSink* xsink) {
     switch (op) {
-        case QoreIROpcode::HashMapSelectAny: {
+        case QoreIROpcode::HashMapSelectAny:
+        case QoreIROpcode::HashMapSelect: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreHashMapSelectOperatorNode(nullptr,
                 first.refSelf(), second.refSelf(), third.refSelf(), fourth.refSelf())), xsink);

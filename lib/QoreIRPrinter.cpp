@@ -139,6 +139,9 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::DotEvalList: return "dot.eval.list";
         case QoreIROpcode::DotEvalHash: return "dot.eval.hash";
         case QoreIROpcode::DotEvalObject: return "dot.eval.object";
+        case QoreIROpcode::MapSelectList: return "map.select.list";
+        case QoreIROpcode::HashMap: return "hash.map";
+        case QoreIROpcode::HashMapSelect: return "hash.map.select";
         case QoreIROpcode::Foreach: return "foreach";
         case QoreIROpcode::OnBlockExit: return "on.block.exit";
         case QoreIROpcode::ThreadExit: return "thread.exit";
@@ -323,7 +326,13 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::DotEvalDate
                     || inst->opcode == QoreIROpcode::DotEvalList
                     || inst->opcode == QoreIROpcode::DotEvalHash
-                    || inst->opcode == QoreIROpcode::DotEvalObject) {
+                    || inst->opcode == QoreIROpcode::DotEvalObject
+                    || inst->opcode == QoreIROpcode::MapSelectAny
+                    || inst->opcode == QoreIROpcode::MapSelectList
+                    || inst->opcode == QoreIROpcode::HashMapAny
+                    || inst->opcode == QoreIROpcode::HashMap
+                    || inst->opcode == QoreIROpcode::HashMapSelectAny
+                    || inst->opcode == QoreIROpcode::HashMapSelect) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 if (expr_inst && expr_inst->expr.hasNode()) {
                     out << " <expr>";
