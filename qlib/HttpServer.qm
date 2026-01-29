@@ -1527,8 +1527,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 encoding = cast<StringInputStream>(chunked_msg).getEncoding();
             }
             if (is_http2) {
-                response_msg = readAllStream(chunked_msg);
-                remove chunked_msg;
+                # Keep the InputStream for HTTP/2 streaming - don't buffer
             } else {
                 extra_hdrs."Transfer-Encoding" = "chunked";
             }
@@ -1582,12 +1581,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # Check if this is an HTTP/2 connection
             if (is_http2) {
                 int stream_id = cx."header-info".stream_id;
-                if (response_msg && !hdr."Content-Length") {
-                    hdr."Content-Length" = string(response_msg.size());
+                auto send_body = response_msg ?? chunked_msg;
+                AbstractPollOperation op;
+                if (send_body instanceof InputStream) {
+                    # Use streaming response for InputStream bodies
+                    op = s.startPollSendHttp2StreamingResponse(stream_id, status_code, hdr,
+                        send_body);
+                } else {
+                    if (send_body && !hdr."Content-Length") {
+                        hdr."Content-Length" = string(send_body.size());
+                    }
+                    op = s.startPollSendHttp2Response(stream_id, status_code, hdr, send_body);
                 }
-                # Send HTTP/2 response using global async I/O controller
-                AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, status_code, hdr,
-                    response_msg ?? chunked_msg);
                 execHttp2PollOperation(s, op);
             } else {
                 s.sendHTTPResponse(status_code, HttpServer::HttpCodes{status_code}, "1.1", hdr,
@@ -2637,18 +2642,25 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         listener.log("doResponse: async_response_out=%y code=%d is_http2=%y",
             exists async_response_out, rv."code", cx."header-info".http2);
         if (async_response_out) {
-            # For async sending, we need to read streams into memory.
-            # NOTE: async capture of InputStream bodies buffers the full payload in memory.
-            # For large payloads, prefer synchronous responses or pre-materialized bodies.
-            if (body instanceof InputStream) {
+            # For HTTP/2 async mode, preserve InputStream for streaming instead of buffering
+            *InputStream is;
+            if (cx."header-info".http2 && body instanceof InputStream) {
+                is = body;
+                # Unassign thread affinity while still on the handler thread
+                # so the I/O controller thread can access it later
+                is.unassignThread();
+                body = NOTHING;
+            } else if (body instanceof InputStream) {
+                # For HTTP/1.1 async, we still need to buffer
                 body = readAllStream(body);
             }
-            listener.log("doResponse: capturing async response code=%d body_size=%d",
-                rv."code", body ? body.size() : 0);
+            listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
+                rv."code", body ? body.size() : 0, exists is);
             async_response_out = <HttpAsyncResponseInfo>{
                 "code": rv."code",
                 "hdr": rv.hdr ?? {},
                 "body": body,
+                "input_stream": is,
                 "chunked": chunked,
                 "close": cx.close ?? False,
                 "cx": cx,
@@ -2662,25 +2674,29 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # Check if this is an HTTP/2 connection
             if (cx."header-info".http2) {
                 int stream_id = cx."header-info".stream_id;
-                # HTTP/2: read stream data into memory if needed
-                auto send_body = body;
-                if (chunked && body instanceof InputStream) {
-                    send_body = readAllStream(body);
-                }
                 # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
                 hash<auto> hdr = rv.hdr ?? {};
                 remove hdr."Transfer-Encoding";
-                # Set Content-Length for HTTP/2 if body exists
-                auto final_body = send_body ?? rv.body;
-                if (final_body && !hdr."Content-Length") {
-                    hdr."Content-Length" = string(final_body.size());
+
+                if (body instanceof InputStream) {
+                    # HTTP/2: use streaming response to avoid buffering entire body in memory
+                    listener.log("doResponse: HTTP/2 streaming send starting stream=%d code=%d",
+                        stream_id, rv."code");
+                    AbstractPollOperation op = s.startPollSendHttp2StreamingResponse(
+                        stream_id, rv."code", hdr, body);
+                    execHttp2PollOperation(s, op);
+                } else {
+                    # HTTP/2: send pre-materialized body
+                    auto final_body = body ?? rv.body;
+                    if (final_body && !hdr."Content-Length") {
+                        hdr."Content-Length" = string(final_body.size());
+                    }
+                    listener.log("doResponse: HTTP/2 send starting stream=%d code=%d body_size=%d",
+                        stream_id, rv."code", final_body ? final_body.size() : 0);
+                    AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, rv."code", hdr,
+                        final_body);
+                    execHttp2PollOperation(s, op);
                 }
-                # Send HTTP/2 response using global async I/O controller
-                listener.log("doResponse: HTTP/2 send starting stream=%d code=%d body_size=%d",
-                    stream_id, rv."code", final_body ? final_body.size() : 0);
-                AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, rv."code", hdr,
-                    final_body);
-                execHttp2PollOperation(s, op);
                 listener.log("doResponse: HTTP/2 send complete");
             } else if (!chunked) {
                 # HTTP/1.x: send a normal monolithic response
@@ -3950,13 +3966,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
                 hash<auto> hdr = response.hdr ?? {};
                 remove hdr."Transfer-Encoding";
-                # Set Content-Length for HTTP/2 if body exists
-                if (response.body && !hdr."Content-Length") {
-                    hdr."Content-Length" = string(response.body.size());
+                AbstractPollOperation op;
+                if (response.input_stream) {
+                    # Use streaming response to avoid memory buffering
+                    response.input_stream.unassignThread();
+                    op = s.startPollSendHttp2StreamingResponse(stream_id, response.code, hdr,
+                        response.input_stream);
+                } else {
+                    # Set Content-Length for HTTP/2 if body exists
+                    if (response.body && !hdr."Content-Length") {
+                        hdr."Content-Length" = string(response.body.size());
+                    }
+                    op = s.startPollSendHttp2Response(stream_id, response.code, hdr,
+                        response.body);
                 }
-                # Send HTTP/2 response using global async I/O controller
-                AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, response.code, hdr,
-                    response.body);
                 serv.execHttp2PollOperation(s, op);
             } else {
                 # Send HTTP/1.x response (chunked data has already been read into memory in async_response)
@@ -4534,6 +4557,14 @@ hashdecl HttpAsyncResponseInfo {
 
     #! Response body (NOTHING if no body)
     *data body;
+
+    #! InputStream for streaming response body (used for HTTP/2 streaming)
+    /** When set, the body is read from this stream incrementally instead of
+        being buffered in memory. Takes precedence over \c body for HTTP/2 responses.
+
+        @since HttpServer 1.6
+    */
+    *InputStream input_stream;
 
     #! Whether this is a chunked response
     bool chunked = False;
@@ -5260,12 +5291,26 @@ class HttpServerIoController {
                             hdr."Content-Length" = string(cinfo.response.body.size());
                         }
 
-                        spop = cinfo.sock.startPollSendHttp2Response(
-                            stream_id,
-                            cinfo.response.code,
-                            hdr,
-                            cinfo.response.body,
-                        );
+                        if (cinfo.response.input_stream) {
+                            # Use streaming response to avoid memory buffering
+                            # Note: the stream was unassigned in doResponse() on the handler thread;
+                            # startPollSendHttp2StreamingResponse() will reassign+unassign, and
+                            # continuePoll() will reassign to the worker thread
+                            cinfo.response.input_stream.reassignThread();
+                            spop = cinfo.sock.startPollSendHttp2StreamingResponse(
+                                stream_id,
+                                cinfo.response.code,
+                                hdr,
+                                cinfo.response.input_stream,
+                            );
+                        } else {
+                            spop = cinfo.sock.startPollSendHttp2Response(
+                                stream_id,
+                                cinfo.response.code,
+                                hdr,
+                                cinfo.response.body,
+                            );
+                        }
                         connections{key}.is_http2 = True;
                     } else if (cinfo.response.chunked) {
                         # Chunked responses need special formatting

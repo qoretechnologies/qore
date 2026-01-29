@@ -36,6 +36,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/QoreSocketObject.h"
+#include "qore/InputStream.h"
 
 #include <memory>
 
@@ -611,6 +612,74 @@ public:
 private:
     int h2_state = H2S_NONE;
     int32_t stream_id = 0;
+
+    DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+};
+
+//! Poll operation for sending HTTP/2 streaming responses from an InputStream
+/** This poll operation reads from an InputStream in chunks and sends them as HTTP/2
+    DATA frames without buffering the entire body in memory.
+
+    State machine:
+    - SS_SUBMIT_HEADERS: Submit HTTP/2 response headers with deferred data provider
+    - SS_READ_CHUNK: Read a chunk from the InputStream
+    - SS_SEND_CHUNK: Send the chunk as HTTP/2 DATA frames
+    - SS_FLUSH: Flush pending data to socket
+    - SS_DONE: Goal reached
+
+    @since Qore 2.2
+*/
+class SocketHttp2SendStreamingResponsePollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketHttp2SendStreamingResponsePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        int32_t stream_id, int status_code, const QoreHashNode* headers,
+        InputStream* input_stream, int64 chunk_size = 16384);
+
+    DLLLOCAL ~SocketHttp2SendStreamingResponsePollOperation();
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const {
+        return ss_state == SS_DONE;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+
+    DLLLOCAL virtual const char* getStateImpl() const {
+        switch (ss_state) {
+            case SS_READ_CHUNK: return "reading-chunk";
+            case SS_SEND_CHUNK: return "sending-chunk";
+            case SS_FLUSH: return "flushing";
+            case SS_DONE: return "done";
+            default: return "unknown";
+        }
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        input_stream = nullptr;
+        current_chunk = nullptr;
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
+private:
+    enum StreamingState { SS_READ_CHUNK, SS_SEND_CHUNK, SS_FLUSH, SS_DONE };
+    StreamingState ss_state = SS_READ_CHUNK;
+    int32_t stream_id = 0;
+    SimpleRefHolder<InputStream> input_stream;
+    int64 chunk_size;
+    bool eof = false;
+    bool is_pollable;
+    bool need_reassign = true;
+    int stream_fd = -1;
+    SimpleRefHolder<BinaryNode> current_chunk;
 
     DLLLOCAL virtual bool abortNeedsClose() const { return true; }
 };

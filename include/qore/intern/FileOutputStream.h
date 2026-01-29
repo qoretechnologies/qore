@@ -33,6 +33,10 @@
 #define _QORE_FILEOUTPUTSTREAM_H
 
 #include <stdint.h>
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
 #include "qore/OutputStream.h"
 
 /**
@@ -74,6 +78,54 @@ public:
    }
 
    DLLLOCAL const QoreEncoding* getEncoding() const { return f.getEncoding(); }
+
+   DLLLOCAL bool supportsNonBlockingIo() const override { return true; }
+
+   DLLLOCAL int getPollableDescriptor() const override { return f.getFD(); }
+
+   //! Non-blocking write — sets O_NONBLOCK for the duration of the write and restores it.
+   /** @note Stream classes are single-threaded by design (enforced by thread affinity checks).
+       The O_NONBLOCK flag toggle is safe because no other thread should access this stream
+       concurrently.  However, if the underlying fd is shared with another descriptor (e.g. via
+       dup()), the flag change is visible to all descriptors sharing the same file description.
+   */
+   DLLLOCAL int64 writeNonBlock(const void* ptr, int64 count, ExceptionSink* xsink) override {
+      int fd = f.getFD();
+      if (fd < 0) {
+         xsink->raiseException("FILE-WRITE-ERROR", "file is not open");
+         return -1;
+      }
+
+      // Set O_NONBLOCK
+      int flags = fcntl(fd, F_GETFL);
+      if (flags == -1) {
+         xsink->raiseException("FILE-WRITE-ERROR", "fcntl F_GETFL failed: %s", strerror(errno));
+         return -1;
+      }
+      if (!(flags & O_NONBLOCK)) {
+         if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+            xsink->raiseException("FILE-WRITE-ERROR", "fcntl F_SETFL failed: %s", strerror(errno));
+            return -1;
+         }
+      }
+
+      ssize_t rc = ::write(fd, ptr, count);
+      int saved_errno = errno;
+
+      // Restore blocking mode
+      if (!(flags & O_NONBLOCK)) {
+         fcntl(fd, F_SETFL, flags);
+      }
+
+      if (rc < 0) {
+         if (saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
+            return 0;
+         }
+         xsink->raiseException("FILE-WRITE-ERROR", "write failed: %s", strerror(saved_errno));
+         return -1;
+      }
+      return rc;
+   }
 
 private:
    QoreFile f;

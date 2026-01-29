@@ -352,6 +352,8 @@
 #include "QC_TreeMap.cpp"
 #include "QC_AbstractThreadResource.cpp"
 #include "QC_StreamBase.cpp"
+#include "InputStream.cpp"
+#include "OutputStream.cpp"
 #include "QC_InputStream.cpp"
 #include "QC_BinaryInputStream.cpp"
 #include "QC_StringInputStream.cpp"
@@ -397,3 +399,5 @@
 #ifdef DEBUG
 #include "ql_debug.cpp"
 #endif
+// HTTP/2 support is always enabled (nghttp2 is required)
+#include "Http2Session.cpp"

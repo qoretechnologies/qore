@@ -121,6 +121,52 @@ public:
       */
     virtual void write(const void *ptr, int64 count, ExceptionSink *xsink) = 0;
 
+    /**
+      * @brief Returns true if this stream supports non-blocking I/O.
+      * @return true if non-blocking I/O is supported
+      *
+      * @since %Qore 2.2
+      */
+    virtual bool supportsNonBlockingIo() const { return false; }
+
+    /**
+      * @brief Returns the pollable file descriptor for this stream, or -1 if not pollable.
+      * @return the file descriptor, or -1
+      *
+      * @since %Qore 2.2
+      */
+    virtual int getPollableDescriptor() const { return -1; }
+
+    /**
+      * @brief Non-blocking write: returns bytes written, 0 if would block, -1 on error.
+      *
+      * Default implementation delegates to blocking write() and returns count on success.
+      * @param ptr the source buffer
+      * @param count the number of bytes to write
+      * @param xsink the exception sink
+      * @return the number of bytes written, or -1 on error
+      *
+      * @since %Qore 2.2
+      */
+    virtual int64 writeNonBlock(const void* ptr, int64 count, ExceptionSink* xsink) {
+        write(ptr, count, xsink);
+        return *xsink ? -1 : count;
+    }
+
+    /**
+      * @brief Write with timeout in milliseconds.
+      *
+      * Default implementation uses getPollableDescriptor() + poll() + writeNonBlock().
+      * @param ptr the source buffer
+      * @param count the number of bytes to write
+      * @param timeout_ms timeout in milliseconds (-1 for blocking, 0 for non-blocking)
+      * @param xsink the exception sink
+      * @return the number of bytes written, 0 if would block or timeout
+      *
+      * @since %Qore 2.2
+      */
+    DLLEXPORT virtual int64 writeWithTimeout(const void* ptr, int64 count, int64 timeout_ms, ExceptionSink* xsink);
+
 protected:
     /**
       * @brief Constructor.
