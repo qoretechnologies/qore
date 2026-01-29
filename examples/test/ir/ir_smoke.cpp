@@ -129,6 +129,7 @@
 #include <qore/QoreHashNode.h>
 #include <qore/QoreClass.h>
 #include <qore/QoreStringNode.h>
+#include <qore/intern/qore_list_private.h>
 #include <qore/intern/QoreParseListNode.h>
 #include <qore/intern/QoreParseHashNode.h>
 #include <qore/ReferenceArgumentHelper.h>
@@ -2777,6 +2778,42 @@ static bool runIRExecutorContainerSmoke() {
         implicit_key.discard(&xsink);
         implicit_val.discard(&xsink);
         list->deref(&xsink);
+    }
+    {
+        ExceptionSink xsink;
+        QoreIRFunction func("ir_exec_make_list_typed");
+        QoreIRBuilder builder(&func);
+        auto* entry = func.createBlock("entry");
+        builder.setBlock(entry);
+        auto* v1 = builder.createConstInt(1);
+        auto* v2 = builder.createConstInt(2);
+        auto* list = builder.createMakeList({v1->result, v2->result}, nullptr);
+        builder.createReturn(list->result);
+
+        QoreValue return_value;
+        if (!QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || xsink) {
+            std::cerr << "IR executor make.list checks failed (execute)\n";
+            return false;
+        }
+        if (return_value.getType() != NT_LIST) {
+            std::cerr << "IR executor make.list checks failed (type)\n";
+            return_value.discard(&xsink);
+            return false;
+        }
+        const QoreListNode* list_node = return_value.get<const QoreListNode>();
+        const QoreTypeInfo* list_type = qore_list_private::get(*list_node)->complexTypeInfo;
+        if (!list_type
+            || !QoreTypeInfo::equal(list_type, qore_get_complex_list_type(bigIntTypeInfo))) {
+            std::cerr << "IR executor make.list checks failed (element type)\n";
+            return_value.discard(&xsink);
+            return false;
+        }
+        if (list_node->size() != 2) {
+            std::cerr << "IR executor make.list checks failed (size)\n";
+            return_value.discard(&xsink);
+            return false;
+        }
+        return_value.discard(&xsink);
     }
     {
         ExceptionSink xsink;
