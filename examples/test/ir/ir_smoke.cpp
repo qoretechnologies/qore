@@ -410,6 +410,9 @@ static bool lowerAndExpectOpcode(const char* name, QoreValue expr, QoreIROpcode 
     }
 
     if (!functionHasOpcode(func, opcode)) {
+        if (shouldPrintIR()) {
+            QoreIRPrinter::print(func, std::cout);
+        }
         std::cerr << "Lowered function missing opcode (" << name << ")\n";
         return false;
     }
@@ -442,6 +445,9 @@ static bool lowerAndExpectAnyOpcode(const char* name, QoreValue expr,
         if (functionHasOpcode(func, opcode)) {
             return true;
         }
+    }
+    if (shouldPrintIR()) {
+        QoreIRPrinter::print(func, std::cout);
     }
     std::cerr << "Lowered function missing any of the expected opcodes (" << name << "): ";
     bool first = true;
@@ -533,6 +539,59 @@ static bool lowerAndExpectOpcodesWithParseInit(const char* name, QoreValue expr,
         }
     }
     return true;
+}
+
+static bool lowerAndExpectAnyOpcodeWithParseInit(const char* name, QoreValue expr,
+        std::initializer_list<QoreIROpcode> opcodes) {
+    ParseProgramContext program_ctx;
+    if (!program_ctx.init(name)) {
+        return false;
+    }
+    QoreParseContext& parse_context = program_ctx.parse_context;
+    QoreValue parsed_expr(expr);
+    if (parse_init_value_with_program(parsed_expr, parse_context)) {
+        std::cerr << "Parse init failed (" << name << ")\n";
+        return false;
+    }
+    ValueHolder expr_holder(parsed_expr, nullptr);
+    QoreIRFunction func(name);
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string error;
+    QoreIRValue lowered = lowering.lowerExpression(*expr_holder, error);
+    if (!lowered.isValid()) {
+        std::cerr << "Lowering failed (" << name << "): " << error << "\n";
+        return false;
+    }
+    builder.createReturn(lowered);
+
+    if (!QoreIRVerifier::verify(func, error)) {
+        std::cerr << "IR verify failed (" << name << "): " << error << "\n";
+        return false;
+    }
+
+    for (QoreIROpcode opcode : opcodes) {
+        if (functionHasOpcode(func, opcode)) {
+            return true;
+        }
+    }
+    if (shouldPrintIR()) {
+        QoreIRPrinter::print(func, std::cout);
+    }
+    std::cerr << "Lowered function missing any of the expected opcodes (" << name << "): ";
+    bool first = true;
+    for (QoreIROpcode opcode : opcodes) {
+        if (!first) {
+            std::cerr << ", ";
+        }
+        std::cerr << static_cast<int>(opcode);
+        first = false;
+    }
+    std::cerr << "\n";
+    return false;
 }
 
 static bool lowerAndExpectGuard(const char* name, QoreValue expr) {
@@ -10019,6 +10078,58 @@ int main() {
                 QoreValue(1),
                 QoreValue())),
             QoreIROpcode::ExtractBinary)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_foldl_parse_list_int",
+            QoreValue(new QoreFoldlOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::FoldlInt)) {
+        return 1;
+    }
+    if (!lowerAndExpectAnyOpcodeWithParseInit("ir_foldl_parse_list_maybe",
+            QoreValue(new QoreFoldlOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            {QoreIROpcode::FoldlAny, QoreIROpcode::FoldlInt, QoreIROpcode::FoldlFloat})) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_foldr_parse_list_int",
+            QoreValue(new QoreFoldrOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::FoldrInt)) {
+        return 1;
+    }
+    if (!lowerAndExpectAnyOpcodeWithParseInit("ir_foldr_parse_list_maybe",
+            QoreValue(new QoreFoldrOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            {QoreIROpcode::FoldrAny, QoreIROpcode::FoldrInt, QoreIROpcode::FoldrFloat})) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_map_parse_list_int",
+            QoreValue(new QoreMapOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::MapInt)) {
+        return 1;
+    }
+    if (!lowerAndExpectAnyOpcodeWithParseInit("ir_map_parse_list_maybe",
+            QoreValue(new QoreMapOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            {QoreIROpcode::MapAny, QoreIROpcode::MapInt, QoreIROpcode::MapFloat})) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_select_parse_list_int",
+            QoreValue(new QoreSelectOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)))),
+            QoreIROpcode::SelectInt)) {
+        return 1;
+    }
+    if (!lowerAndExpectAnyOpcodeWithParseInit("ir_select_parse_list_maybe",
+            QoreValue(new QoreSelectOperatorNode(nullptr, QoreValue(1),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
+                    &analysis_list_maybe_left, false)))),
+            {QoreIROpcode::SelectAny, QoreIROpcode::SelectInt, QoreIROpcode::SelectFloat})) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_map_select_parse_list",

@@ -3922,6 +3922,19 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
     QoreIROpcode opcode = QoreIROpcode::MapAny;
     if (getAnalysis(expr, expr_analysis)) {
         opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::MapAny, QoreIROpcode::MapInt, QoreIROpcode::MapFloat);
+        if (opcode == QoreIROpcode::MapAny
+            && expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            && expr_analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            const QoreTypeInfo* type = selectAnalysisType(expr_analysis);
+            if (QoreTypeInfo::isListType(type)) {
+                const QoreTypeInfo* elem_type = QoreTypeInfo::getElementType(type);
+                if (elem_type && QoreTypeInfo::isType(elem_type, NT_INT)) {
+                    opcode = QoreIROpcode::MapInt;
+                } else if (elem_type && QoreTypeInfo::isType(elem_type, NT_FLOAT)) {
+                    opcode = QoreIROpcode::MapFloat;
+                }
+            }
+        }
     }
     QoreIRValue result;
     if (!exception_stack.empty()) {
@@ -3962,6 +3975,19 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
     if (getAnalysis(expr, expr_analysis)) {
         opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::SelectAny,
             QoreIROpcode::SelectInt, QoreIROpcode::SelectFloat);
+        if (opcode == QoreIROpcode::SelectAny
+            && expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            && expr_analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            const QoreTypeInfo* type = selectAnalysisType(expr_analysis);
+            if (QoreTypeInfo::isListType(type)) {
+                const QoreTypeInfo* elem_type = QoreTypeInfo::getElementType(type);
+                if (elem_type && QoreTypeInfo::isType(elem_type, NT_INT)) {
+                    opcode = QoreIROpcode::SelectInt;
+                } else if (elem_type && QoreTypeInfo::isType(elem_type, NT_FLOAT)) {
+                    opcode = QoreIROpcode::SelectFloat;
+                }
+            }
+        }
     }
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
