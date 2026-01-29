@@ -3194,6 +3194,10 @@ QoreIRValue QoreIRLowering::lowerSquareBracketsRange(const QoreValue& expr, std:
     if (getAnalysis(expr, expr_analysis)) {
         opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::RangeSliceAny,
             QoreIROpcode::RangeSliceInt, QoreIROpcode::RangeSliceFloat);
+        if (opcode == QoreIROpcode::RangeSliceAny) {
+            opcode = selectNumericOpcode(op->get(1), op->get(2),
+                QoreIROpcode::RangeSliceInt, QoreIROpcode::RangeSliceFloat, QoreIROpcode::RangeSliceAny);
+        }
     } else {
         opcode = selectNumericOpcode(op->get(1), op->get(2),
             QoreIROpcode::RangeSliceInt, QoreIROpcode::RangeSliceFloat, QoreIROpcode::RangeSliceAny);

@@ -9985,14 +9985,30 @@ int main() {
             QoreIROpcode::LoadLValue)) {
         return 1;
     }
-    if (!lowerAndExpectOpcodeWithParseInit("ir_range_slice_parse_maybe",
+    if (!lowerAndExpectOpcodeWithParseInit("ir_range_slice_parse_int",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_left"), &analysis_int_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)))),
+            QoreIROpcode::RangeSliceInt)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_range_slice_parse_float",
+            QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"), &analysis_list_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_left"), &analysis_float_left, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_float_right"), &analysis_float_right, false)))),
+            QoreIROpcode::RangeSliceFloat)) {
+        return 1;
+    }
+    if (!lowerAndExpectAnyOpcodeWithParseInit("ir_range_slice_parse_maybe",
             QoreValue(new QoreSquareBracketsRangeOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_list_maybe_left"),
                     &analysis_list_maybe_left, false)),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_right"), &analysis_int_right, false)),
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_int_maybe_right"),
                     &analysis_int_maybe_right, false)))),
-            QoreIROpcode::RangeSliceAny)) {
+            {QoreIROpcode::RangeSliceAny, QoreIROpcode::RangeSliceInt, QoreIROpcode::RangeSliceFloat})) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_object_assigned",
