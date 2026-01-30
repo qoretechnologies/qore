@@ -87,11 +87,14 @@ public class ZohoBooksUpdateInvoiceDataProvider inherits ZohoBooksDataProviderBa
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string id = request_options.invoice_id ?? invoice_id;
+        # Extract invoice_id from request body, request_options, or constructor
+        string id = req.invoice_id ?? request_options.invoice_id ?? invoice_id;
         if (!id) {
             throw "ZOHOBOOKS-ERROR", "invoice_id is required for update operation";
         }
-        hash<auto> response = doPut(sprintf("/invoices/%s", id), req);
+        # Remove invoice_id from request body before sending to API
+        hash<auto> body = req - "invoice_id";
+        hash<auto> response = doPut(sprintf("/invoices/%s", id), body);
         return response.invoice;
     }
 

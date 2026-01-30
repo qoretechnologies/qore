@@ -169,16 +169,30 @@ public class ZohoBooksRestClient inherits RestClient::RestClient {
         const DefaultPingMethod = "GET";
 
         #! Default ping path (organizations endpoint doesn't require org_id)
-        const DefaultPingPath = "/organizations";
+        #! Note: no leading slash so it appends to the base URL path /books/v3
+        const DefaultPingPath = "organizations";
 
         #! Default ping headers
         const DefaultPingHeaders = {
             "Accept": MimeTypeJson,
         };
 
+        #! Default OAuth2 auth args to request offline access (refresh tokens)
+        const DefaultAuthArgs = {
+            "access_type": "offline",
+            "prompt": "consent",
+        };
+
+        #! Default headers for all requests
+        const DefaultHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
+            "headers": DefaultHeaders,
+            "oauth2_auth_args": DefaultAuthArgs,
             "ping_headers": DefaultPingHeaders,
             "ping_method": DefaultPingMethod,
             "ping_path": DefaultPingPath,
@@ -255,12 +269,14 @@ ZohoBooksRestClient zoho({
 
     #! Overrides doRequest to automatically add organization_id parameter
     /** The organization_id is automatically appended to all API paths except for
-        /organizations which is used to retrieve the list of available organizations.
+        /organizations which is used to retrieve the list of available organizations,
+        and paths that already contain organization_id.
     */
     hash<auto> doRequest(string method, string path, auto body,
             *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
         # Append organization_id to all requests except /organizations
-        if (organization_id && path !~ /^\/organizations($|\?)/) {
+        # Also skip if organization_id is already in the path (to avoid duplicates)
+        if (organization_id && path !~ /^\/organizations($|\?)/ && path !~ /organization_id=/) {
             if (path !~ /\?/) {
                 path += "?organization_id=" + organization_id;
             } else {
@@ -290,20 +306,26 @@ ZohoBooksRestClient zoho({
         # Build API URL from domain
         rv.url = sprintf("https://www.zohoapis%s/books/v3", domain);
 
-        # Build OAuth2 URLs from subdomain and domain
-        rv.oauth2_auth_url = opts.oauth2_auth_url ?? sprintf("https://accounts.%s%s/oauth/v2/auth",
-            subdomain, domain);
-        rv.oauth2_token_url = opts.oauth2_token_url ?? sprintf("https://accounts.%s%s/oauth/v2/token",
-            subdomain, domain);
+        # Check if token-only mode (token provided without OAuth2 credentials)
+        bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
+            && !opts.oauth2_refresh_token;
 
-        # Set default scopes if not provided
-        if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = DefaultScopes;
-        }
+        if (!token_only) {
+            # Build OAuth2 URLs from subdomain and domain
+            rv.oauth2_auth_url = opts.oauth2_auth_url ?? sprintf("https://accounts.%s%s/oauth/v2/auth",
+                subdomain, domain);
+            rv.oauth2_token_url = opts.oauth2_token_url ?? sprintf("https://accounts.%s%s/oauth/v2/token",
+                subdomain, domain);
 
-        # Set default grant type
-        if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = DefaultGrantType;
+            # Set default scopes if not provided
+            if (!rv.oauth2_scopes) {
+                rv.oauth2_scopes = DefaultScopes;
+            }
+
+            # Set default grant type
+            if (!rv.oauth2_grant_type) {
+                rv.oauth2_grant_type = DefaultGrantType;
+            }
         }
 
         # Remove custom options that RestClient doesn't understand
@@ -327,7 +349,7 @@ ZohoBooksRestClient zoho({
 public class ZohoBooksRestConnection inherits RestClient::RestConnection {
     public {
         #! Default connection URL
-        const DefaultConnectionUrl = "zohobooks://www.zohoapis.com";
+        const DefaultConnectionUrl = "zohobooks://www.zohoapis.com/books/v3";
 
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
@@ -451,8 +473,13 @@ public class ZohoBooksRestConnection inherits RestClient::RestConnection {
                 + <ConnectionOptionInfo>{
                     "default_value": ZohoBooksRestClient::DefaultScopes,
                 },
+                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
+                + <ConnectionOptionInfo>{
+                    "default_value": ZohoBooksRestClient::DefaultAuthArgs,
+                },
             },
-            "required_options": "subdomain,domain",
+            "required_options": "subdomain,domain,token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
+                "oauth2_client_id,oauth2_client_secret",
             "messages": (
                 <UiMessageInfo>{
                     "title": "Select Your Zoho Region",
@@ -511,8 +538,8 @@ public class ZohoBooksRestConnection inherits RestClient::RestConnection {
         # Get domain from options, default to .com
         string domain = config.opts.domain ?? ZohoBooksRestClient::DefaultDomain;
 
-        # Build URL from domain
-        string url = sprintf("zohobooks://www.zohoapis%s", domain);
+        # Build URL from domain - include /books/v3 API path
+        string url = sprintf("zohobooks://www.zohoapis%s/books/v3", domain);
         return config + {
             "url": url,
         };
@@ -526,22 +553,22 @@ public class ZohoBooksRestConnection inherits RestClient::RestConnection {
     #! Returns connection options with dynamically built OAuth2 URLs
     /** The OAuth2 URLs are built based on the subdomain and domain options
     */
-    hash<auto> getConnectionOptions() {
-        hash<auto> rv = RestConnection::getConnectionOptions();
-        # Build OAuth2 URLs from subdomain and domain
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        # Build OAuth2 URLs from subdomain and domain - always rebuild to ensure they match the domain
         string subdomain = rv.subdomain ?? ZohoBooksRestClient::DefaultSubdomain;
         string domain = rv.domain ?? ZohoBooksRestClient::DefaultDomain;
-        if (!rv.oauth2_auth_url) {
-            rv.oauth2_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
-        }
-        if (!rv.oauth2_token_url) {
-            rv.oauth2_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
-        }
+        # Always set OAuth2 URLs based on domain to ensure they're correct when domain changes
+        rv.oauth2_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
+        rv.oauth2_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
         if (!rv.oauth2_grant_type) {
             rv.oauth2_grant_type = ZohoBooksRestClient::DefaultGrantType;
         }
         if (!rv.oauth2_scopes) {
             rv.oauth2_scopes = ZohoBooksRestClient::DefaultScopes;
+        }
+        if (!rv.oauth2_auth_args) {
+            rv.oauth2_auth_args = ZohoBooksRestClient::DefaultAuthArgs;
         }
         return rv;
     }
@@ -586,13 +613,33 @@ public class ZohoBooksRestConnection inherits RestClient::RestConnection {
     */
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
-        # update the URL immediately if necessary
-        if (update_options && url != DefaultConnectionUrl) {
-            # NOTE: do not update the URL or real URL values here, or the external update will fail, because it will
-            # believe that no changes are necessary
-            doUpdateOptions(self, {
-                "url": DefaultConnectionUrl,
-            });
+        # update the URL and OAuth2 URLs immediately if necessary
+        if (update_options) {
+            # Build correct URLs from subdomain and domain options instead of hardcoded defaults
+            string subdomain = opts.subdomain ?? ZohoBooksRestClient::DefaultSubdomain;
+            string domain = opts.domain ?? ZohoBooksRestClient::DefaultDomain;
+            string correct_url = sprintf("zohobooks://www.zohoapis%s/books/v3", domain);
+            string correct_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
+            string correct_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
+            # NOTE: do not update the URL or real URL values here, or the external update will fail, because it
+            # will believe that no changes are necessary
+            hash<auto> updates;
+            if (url != correct_url) {
+                updates.url = correct_url;
+            }
+            if (opts.oauth2_auth_url != correct_auth_url) {
+                updates.oauth2_auth_url = correct_auth_url;
+            }
+            if (opts.oauth2_token_url != correct_token_url) {
+                updates.oauth2_token_url = correct_token_url;
+            }
+            # Fix ping_path if it has a leading slash (absolute path would bypass /books/v3)
+            if (opts.ping_path =~ /^\//) {
+                updates.ping_path = opts.ping_path[1..];
+            }
+            if (updates) {
+                doUpdateOptions(self, updates);
+            }
         }
     }
 

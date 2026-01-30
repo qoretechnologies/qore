@@ -29,6 +29,9 @@ public namespace ZohoBooksDataProvider {
 public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
         DataProvider::DelayedObservable {
     public {
+        #! Maximum number of seen IDs to track before pruning
+        const MaxSeenIds = 10000;
+
         #! Constructor options for watch providers
         const WatchConstructorOptions = BaseConstructorOptions + {
             "poll_interval": <DataProviderOptionInfo>{
@@ -184,6 +187,11 @@ public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
             }
 
             last_check = new_last_check;
+
+            # Prune seen_ids if it gets too large (time-based filtering is primary dedup)
+            if (seen_ids.size() > MaxSeenIds) {
+                seen_ids = {};
+            }
         } catch (hash<ExceptionInfo> ex) {
             # Log error but continue polling
             log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getResourcePath(), ex.err, ex.desc);
@@ -194,7 +202,54 @@ public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
     private hash<auto> getQueryParams() {
         return {
             "sort_column": "created_time",
-            "sort_order": "A",
+            "sort_order": "D",
+            "page": 1,
+            "per_page": 200,
+        };
+    }
+
+    #! Returns a hash of all supported event types
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
+        return {
+            getEventName(): <DataProviderMessageInfo>{
+                "desc": sprintf("A new %s has been created", getResourceKey()),
+                "type": AbstractDataProviderType::get(AutoHashType),
+            },
+        };
+    }
+
+    #! Returns example event data for documentation/testing
+    /** Tries to fetch a real record from the API first; falls back to fake example data if no records exist
+    */
+    private auto getExampleEventDataImpl(string event_id) {
+        # Try to get a real record from the API
+        try {
+            hash<auto> params = {
+                "sort_column": "created_time",
+                "sort_order": "D",
+                "page": 1,
+                "per_page": 1,
+            };
+            hash<auto> response = doGet(getResourcePath(), params);
+            list<auto> records = response{getResourceKey()} ?? ();
+            if (records) {
+                return records[0];
+            }
+        } catch () {
+            # Fall through to fake data if API call fails
+        }
+        # Fall back to fake example data
+        return getFakeExampleData();
+    }
+
+    #! Returns fake example data when no real records are available
+    /** Subclasses should override to provide resource-specific example fields
+    */
+    private hash<auto> getFakeExampleData() {
+        return {
+            getIdField(): "123456789012345678",
+            "created_time": "2026-01-30T10:30:00+00:00",
+            "last_modified_time": "2026-01-30T10:30:00+00:00",
         };
     }
 

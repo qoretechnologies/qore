@@ -4,12 +4,35 @@
 public namespace ZohoBooksDataProvider {
 
 public class ZohoBooksSalesOrdersDataProvider inherits ZohoBooksDataProviderBase {
-    public { const ProviderInfo = <DataProviderInfo>{"name": "salesorders", "desc": "Zoho Books sales orders", "type": "ZohoBooksSalesOrdersDataProvider", "supports_read": True, "supports_native_search": True}; }
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "salesorders",
+            "desc": "Zoho Books sales orders",
+            "type": "ZohoBooksSalesOrdersDataProvider",
+            "supports_read": True,
+            "supports_native_search": True,
+            "search_options": SearchOptions,
+        };
+
+        const SearchOptions = {
+            "organization_id": <DataProviderOptionInfo>{
+                "display_name": "Organization ID",
+                "short_desc": "Zoho Books organization ID",
+                "type": AbstractDataProviderType::get(SoftStringType),
+                "desc": "The organization ID (required for all Zoho Books API calls)",
+                "required": True,
+            },
+        };
+    }
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "salesorders"; }
-    private *AbstractDataProviderType getRecordTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getRecordTypeImpl() { return new ZohoBooksSalesOrderDataType(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        hash<auto> response = doGet("/salesorders", search_options);
+        hash<auto> params;
+        if (search_options.organization_id) {
+            params.organization_id = search_options.organization_id;
+        }
+        hash<auto> response = doGet("/salesorders", params);
         return new DefaultRecordIterator(new ListHashIterator(response.salesorders ?? ()), where_cond, search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
@@ -49,6 +72,20 @@ public class ZohoBooksDeleteSalesOrderDataProvider inherits ZohoBooksDataProvide
         string id = req.salesorder_id ?? request_options.salesorder_id;
         if (!id) throw "ZOHOBOOKS-ERROR", "salesorder_id required";
         return doDelete(sprintf("/salesorders/%s", id));
+    }
+    private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+}
+
+public class ZohoBooksGetSalesOrderDataProvider inherits ZohoBooksDataProviderBase {
+    public { const ProviderInfo = <DataProviderInfo>{"name": "get-salesorder", "desc": "Gets a sales order", "type": "ZohoBooksGetSalesOrderDataProvider", "supports_request": True}; }
+    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    string getName() { return "get-salesorder"; }
+    private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksSalesOrderDataType(); }
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        string id = req.salesorder_id ?? request_options.salesorder_id;
+        if (!id) throw "ZOHOBOOKS-ERROR", "salesorder_id required";
+        return doGet(sprintf("/salesorders/%s", id)).salesorder;
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }

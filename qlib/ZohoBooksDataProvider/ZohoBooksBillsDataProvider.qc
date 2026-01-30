@@ -12,6 +12,29 @@ public class ZohoBooksBillsDataProvider inherits ZohoBooksDataProviderBase {
             "supports_read": True,
             "supports_native_search": True,
             "constructor_options": BaseConstructorOptions,
+            "search_options": SearchOptions,
+        };
+
+        const SearchOptions = {
+            "organization_id": <DataProviderOptionInfo>{
+                "display_name": "Organization ID",
+                "short_desc": "Zoho Books organization ID",
+                "type": AbstractDataProviderType::get(SoftStringType),
+                "desc": "The organization ID (required for all Zoho Books API calls)",
+                "required": True,
+            },
+            "status": <DataProviderOptionInfo>{
+                "display_name": "Status",
+                "short_desc": "Filter by bill status",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Filter bills by status (open, overdue, paid, void, partially_paid)",
+            },
+            "vendor_id": <DataProviderOptionInfo>{
+                "display_name": "Vendor ID",
+                "short_desc": "Filter by vendor",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Filter bills by vendor ID",
+            },
         };
     }
 
@@ -22,11 +45,21 @@ public class ZohoBooksBillsDataProvider inherits ZohoBooksDataProviderBase {
     *string getDesc() { return "Zoho Books bills data provider for listing bills"; }
 
     private *AbstractDataProviderType getRecordTypeImpl() {
-        return AbstractDataProviderTypeMap."hash";
+        return new ZohoBooksBillDataType();
     }
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        hash<auto> response = doGet("/bills", search_options);
+        hash<auto> params;
+        if (search_options.organization_id) {
+            params.organization_id = search_options.organization_id;
+        }
+        if (search_options.status) {
+            params.status = search_options.status;
+        }
+        if (search_options.vendor_id) {
+            params.vendor_id = search_options.vendor_id;
+        }
+        hash<auto> response = doGet("/bills", params);
         return new DefaultRecordIterator(new ListHashIterator(response.bills ?? ()), where_cond, search_options);
     }
 

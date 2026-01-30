@@ -505,7 +505,10 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - provides ZohoBooksRestConnection for connection management with \c zohobooks:// URL scheme
     - @ref zohobooksdataproviderintro "ZohoBooksDataProvider" module
       - new module providing a data provider API for Zoho Books accounting and invoicing
-      - full CRUD support for invoices, bills, contacts, expenses, items, estimates, sales orders, and purchase orders
+      - full CRUD support for invoices, bills, payments, and sales orders
+      - create, read, and update support for contacts, expenses, and estimates
+      - create and read support for items
+      - read support for purchase orders
       - polling-based event triggers for new invoices, bills, payments, customers, vendors, expenses, and more
       - action catalog integration with reference data support for organizations, customers, vendors, and items
       - connection support with \c zohobooks:// URL scheme

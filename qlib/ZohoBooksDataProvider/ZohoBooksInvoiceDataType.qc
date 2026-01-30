@@ -332,6 +332,12 @@ public class ZohoBooksUpdateInvoiceRequestDataType inherits HashDataType {
     public {
         #! Field definitions for updating an invoice (all optional for partial updates)
         const Fields = {
+            "invoice_id": {
+                "display_name": "Invoice ID",
+                "short_desc": "Invoice to update",
+                "desc": "The ID of the invoice to update",
+                "type": SoftStringOrNothingType,
+            },
             "customer_id": {
                 "display_name": "Customer ID",
                 "short_desc": "Customer identifier",
