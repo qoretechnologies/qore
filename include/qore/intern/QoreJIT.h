@@ -48,6 +48,10 @@ class ExceptionSink;
 
 class QoreJIT {
 public:
+    enum class DeoptPolicy {
+        FallbackToInterpreter,
+        DisableJit,
+    };
     static QoreJIT& instance();
 
     bool isEnabled() const;
@@ -60,6 +64,7 @@ public:
     uint64 recordExecution();
     bool shouldJit(uint64 count) const;
     void recordTypeProfile(const QoreValue& value);
+    void setDeoptPolicy(DeoptPolicy policy);
 
 private:
     QoreJIT() = default;
@@ -73,6 +78,7 @@ private:
     std::atomic<uint64> exec_count{0};
     uint64 hot_threshold = 1000;
     std::unordered_map<qore_type_t, uint64> type_profile;
+    DeoptPolicy deopt_policy = DeoptPolicy::FallbackToInterpreter;
 };
 
 #endif

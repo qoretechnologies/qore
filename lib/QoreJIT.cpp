@@ -102,6 +102,9 @@ bool QoreJIT::executeWithFallback(const QoreIRFunction& func, QoreValue& return_
         std::string& error) {
 #ifdef QORE_JIT_ENABLED
     if (!compileFunction(func, error)) {
+        if (deopt_policy == DeoptPolicy::DisableJit) {
+            return false;
+        }
         return QoreIRInterpreter::execute(func, return_value, xsink, nullptr);
     }
     // JIT execution will replace this once lowering is implemented.
@@ -122,6 +125,10 @@ bool QoreJIT::shouldJit(uint64 count) const {
 
 void QoreJIT::recordTypeProfile(const QoreValue& value) {
     ++type_profile[value.getType()];
+}
+
+void QoreJIT::setDeoptPolicy(DeoptPolicy policy) {
+    deopt_policy = policy;
 }
 
 void QoreJIT::shutdown() {
