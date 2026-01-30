@@ -598,6 +598,15 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - @ref restclientintro "RestClient" module
       - fixed non-blocking polling with connections that use basic auth
         (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
+      - added OAuth2 implicit grant flow support for providers that return access tokens directly in URL fragments
+        - new @ref RestClient::RestConnection::RCF_OAUTH2_IMPLICIT "RCF_OAUTH2_IMPLICIT" connection feature constant
+          for implicit grant connections
+        - new @ref RestClient::RestConnection::RCF_OAUTH2_AUTH "RCF_OAUTH2_AUTH" connection feature constant
+          for any OAuth2 authorization (auth code or implicit)
+        - new \c oauth2_redirect_passthrough_state option - set to \c False for providers that don't pass through
+          the state parameter (e.g., Trello)
+        - added template variable substitution in \c oauth2_auth_args (e.g., \c key: \c "{{oauth2_client_id}}")
+          for providers that use non-standard parameter names
     - @ref resthandlerintro "RestHandler" module
       - fixed handling \c OPTIONS requests with an \c action parameter
         (<a href="https://github.com/qoretechnologies/qore/issues/4988">issue 4988</a>)
