@@ -35,6 +35,7 @@
 #include <memory>
 #include <string>
 #include <atomic>
+#include <unordered_map>
 
 #include <qore/QoreValue.h>
 #include <qore/Restrictions.h>
@@ -58,6 +59,7 @@ public:
     void shutdown();
     uint64 recordExecution();
     bool shouldJit(uint64 count) const;
+    void recordTypeProfile(const QoreValue& value);
 
 private:
     QoreJIT() = default;
@@ -70,6 +72,7 @@ private:
     bool initialized = false;
     std::atomic<uint64> exec_count{0};
     uint64 hot_threshold = 1000;
+    std::unordered_map<qore_type_t, uint64> type_profile;
 };
 
 #endif

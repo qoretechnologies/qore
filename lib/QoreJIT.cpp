@@ -120,6 +120,10 @@ bool QoreJIT::shouldJit(uint64 count) const {
     return count >= hot_threshold;
 }
 
+void QoreJIT::recordTypeProfile(const QoreValue& value) {
+    ++type_profile[value.getType()];
+}
+
 void QoreJIT::shutdown() {
 #ifdef QORE_JIT_ENABLED
     jit.reset();
