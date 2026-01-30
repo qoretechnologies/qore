@@ -88,6 +88,8 @@
 #include <qore/intern/QoreExtractOperatorNode.h>
 #include <qore/intern/QoreRemoveOperatorNode.h>
 #include <qore/intern/QoreKeysOperatorNode.h>
+#include <qore/intern/QorePopOperatorNode.h>
+#include <qore/intern/QorePushOperatorNode.h>
 #include <qore/intern/QoreRegex.h>
 #include <qore/intern/QoreRegexSubst.h>
 #include <qore/intern/QoreRegexMatchOperatorNode.h>
@@ -4566,6 +4568,12 @@ int main() {
             QoreIROpcode::TransliterateString)) {
         return 1;
     }
+    if (!lowerAndExpectOpcode("ir_instanceof_bool",
+            QoreValue(new QoreInstanceOfOperatorNode(nullptr,
+                QoreValue(new QoreStringNode("a")), stringTypeInfo)),
+            QoreIROpcode::InstanceOfBool)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcode("ir_background_int",
             QoreValue(new QoreBackgroundOperatorNode(nullptr, QoreValue(1))),
             QoreIROpcode::BackgroundInt)) {
@@ -4795,6 +4803,19 @@ int main() {
                 QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
                 QoreValue(0))),
             QoreIROpcode::LoadLValue)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_pop_list",
+            QoreValue(new QorePopOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)))),
+            QoreIROpcode::PopAny)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_push_list",
+            QoreValue(new QorePushOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("list_var"), &list_var, false)),
+                QoreValue(1))),
+            QoreIROpcode::PushAny)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_shift_list",

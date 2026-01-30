@@ -64,7 +64,7 @@ Deliverables:
 
 ### Phase 1 Execution Checklist (current)
 
-- [~] Audit remaining lowering error paths ("unsupported ... for IR lowering") and cover or explicitly reject:
+- [x] Audit remaining lowering error paths ("unsupported ... for IR lowering") and cover or explicitly reject:
   - [x] Unsupported expression nodes in `lowerExpression()` (fill gaps or add explicit policy checks).
   - [x] Unsupported statement nodes in `lowerStatement()` (confirm all statement classes handled).
   - [x] Unsupported lvalue types/ranges in assignment/op-assign/inc/dec/shift/unshift/splice.

@@ -189,6 +189,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
         case QoreIROpcode::RegexSubstString:
+        case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:

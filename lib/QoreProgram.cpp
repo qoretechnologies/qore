@@ -1923,7 +1923,7 @@ void QoreProgram::parsePending(const char* code, const char* label, ExceptionSin
     priv->parsePending(code, label, xsink, wS, wm, source, offset);
 }
 
-static void ensureIrExecMode(QoreProgramPrivate* priv) {
+static void ensureIrExecMode(qore_program_private* priv) {
     // JIT/IR exec mode only supports PO_MODERN; fallback to AST otherwise.
     if (priv->exec_mode == QEM_IR && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
         if (!priv->ir_fallback_warned) {
