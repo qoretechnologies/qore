@@ -114,7 +114,7 @@ Deliverables:
 
 - [~] Add LLVM optional build configuration and ORC JIT bootstrap.
 - [~] Implement IR -> LLVM lowering for initial hot paths (int/float arith, comparisons, control flow).
-- [ ] Implement invoke/landingpad + personality integration with Qore exception model.
+- [~] Implement invoke/landingpad + personality integration with Qore exception model.
 - [ ] Provide deopt fallback to IR interpreter for failed guards.
 - [ ] Add basic benchmarks and validation against IR interpreter.
 - [ ] Enforce PO_MODERN at JIT entry (non-modern falls back to interpreter/IR with warning).

@@ -40,4 +40,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     error = "IR to LLVM lowering not implemented";
     return false;
 }
+
+bool QoreIRToLLVM::lowerInvoke(const QoreIRFunction& func, std::string& error) {
+    (void)func;
+    error = "IR invoke/landingpad lowering not implemented";
+    return false;
+}
 #endif

@@ -61,6 +61,7 @@ public:
 private:
 #ifdef QORE_JIT_ENABLED
     llvm::LLVMContext& ctx;
+    bool lowerInvoke(const QoreIRFunction& func, std::string& error);
 #endif
 };
 
