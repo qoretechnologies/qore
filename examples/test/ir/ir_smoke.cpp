@@ -29,6 +29,11 @@
 #include <qore/intern/QoreIRLowering.h>
 #include <qore/intern/QoreIRPrinter.h>
 #include <qore/intern/QoreIRVerifier.h>
+#include <qore/intern/Variable.h>
+#include <qore/intern/QoreImplicitElementNode.h>
+#include <qore/intern/BackquoteNode.h>
+#include <qore/intern/ContextrefNode.h>
+#include <qore/intern/ParseReferenceNode.h>
 #include <qore/intern/QoreBinaryAndOperatorNode.h>
 #include <qore/intern/QoreBinaryNotOperatorNode.h>
 #include <qore/intern/QoreBinaryOrOperatorNode.h>
@@ -793,6 +798,10 @@ static bool lowerAndExpectOpcodeFromParseAnalysis(const char* name, QoreValue ex
         }
     }
     if (bin_int_lvalue) {
+        expected = int_opcode;
+    }
+    if (dynamic_cast<const QoreIntPlusEqualsOperatorNode*>(node)
+        || dynamic_cast<const QoreIntMinusEqualsOperatorNode*>(node)) {
         expected = int_opcode;
     }
 
@@ -4608,14 +4617,14 @@ int main() {
             QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("shift_tmp"), &shift_var, false)),
                 QoreValue(2))),
-            QoreIROpcode::ShlAssignAny)) {
+            QoreIROpcode::ShlAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_shift_right_equals",
             QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("shift_tmp"), &shift_var, false)),
                 QoreValue(2))),
-            QoreIROpcode::ShrAssignAny)) {
+            QoreIROpcode::ShrAssignInt)) {
         return 1;
     }
     LocalVar date_shift_var("date_shift_var", dateTypeInfo);
@@ -5794,6 +5803,34 @@ int main() {
             QoreValue(new FunctionCallNode(nullptr, strdup("ir_call"), nullptr)))) {
         return 1;
     }
+    if (!lowerExpectFailure("ir_varref_unresolved_lower_fail",
+            QoreValue(new VarRefNode(nullptr, strdup("unresolved"), VT_UNRESOLVED)))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_implicit_arg_lower_fail",
+            QoreValue(new QoreImplicitArgumentNode(nullptr, 1)))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_implicit_element_lower_fail",
+            QoreValue(new QoreImplicitElementNode(nullptr)))) {
+        return 1;
+    }
+    if (!lowerExpectFailure("ir_contextref_lower_fail",
+            QoreValue(new ContextrefNode(nullptr, strdup("ctx"))))) {
+        return 1;
+    }
+    {
+        LocalVar ref_local("ref_local", bigIntTypeInfo);
+        if (!lowerExpectFailure("ir_parse_reference_lower_fail",
+                QoreValue(new ParseReferenceNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("ref_local"), &ref_local, false)))))) {
+            return 1;
+        }
+    }
+    if (!lowerExpectFailure("ir_backquote_lower_fail",
+            QoreValue(new BackquoteNode(nullptr, strdup("echo ir"))))) {
+        return 1;
+    }
     {
         const char* call_lower_source = "int sub ir_call(int $i) { return $i; }\n"
             "int sub ir_call_ref(int $i) { return $i; }\n"
@@ -6042,168 +6079,168 @@ int main() {
             QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
                 QoreValue(4))),
-                QoreIROpcode::ModAssignAny)) {
+                QoreIROpcode::ModAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_modulo_equals_closure",
             QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
                 QoreValue(5))),
-                QoreIROpcode::ModAssignAny)) {
+                QoreIROpcode::ModAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_modulo_equals_global",
             QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
                 QoreValue(6))),
-                QoreIROpcode::ModAssignAny)) {
+                QoreIROpcode::ModAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_modulo_equals_threadlocal",
             QoreValue(new QoreModuloEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
                 QoreValue(7))),
-                QoreIROpcode::ModAssignAny)) {
+                QoreIROpcode::ModAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_and_equals_local",
             QoreValue(new QoreAndEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
                 QoreValue(4))),
-                QoreIROpcode::AndAssignAny)) {
+                QoreIROpcode::AndAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_and_equals_closure",
             QoreValue(new QoreAndEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
                 QoreValue(5))),
-                QoreIROpcode::AndAssignAny)) {
+                QoreIROpcode::AndAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_and_equals_global",
             QoreValue(new QoreAndEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
                 QoreValue(6))),
-                QoreIROpcode::AndAssignAny)) {
+                QoreIROpcode::AndAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_and_equals_threadlocal",
             QoreValue(new QoreAndEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
                 QoreValue(7))),
-                QoreIROpcode::AndAssignAny)) {
+                QoreIROpcode::AndAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_or_equals_local",
             QoreValue(new QoreOrEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
                 QoreValue(4))),
-                QoreIROpcode::OrAssignAny)) {
+                QoreIROpcode::OrAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_or_equals_closure",
             QoreValue(new QoreOrEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
                 QoreValue(5))),
-                QoreIROpcode::OrAssignAny)) {
+                QoreIROpcode::OrAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_or_equals_global",
             QoreValue(new QoreOrEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
                 QoreValue(6))),
-                QoreIROpcode::OrAssignAny)) {
+                QoreIROpcode::OrAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_or_equals_threadlocal",
             QoreValue(new QoreOrEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
                 QoreValue(7))),
-                QoreIROpcode::OrAssignAny)) {
+                QoreIROpcode::OrAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_xor_equals_local",
             QoreValue(new QoreXorEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
                 QoreValue(4))),
-                QoreIROpcode::XorAssignAny)) {
+                QoreIROpcode::XorAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_xor_equals_closure",
             QoreValue(new QoreXorEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
                 QoreValue(5))),
-                QoreIROpcode::XorAssignAny)) {
+                QoreIROpcode::XorAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_xor_equals_global",
             QoreValue(new QoreXorEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
                 QoreValue(6))),
-                QoreIROpcode::XorAssignAny)) {
+                QoreIROpcode::XorAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_xor_equals_threadlocal",
             QoreValue(new QoreXorEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
                 QoreValue(7))),
-                QoreIROpcode::XorAssignAny)) {
+                QoreIROpcode::XorAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_shift_left_equals_local",
             QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
                 QoreValue(1))),
-                QoreIROpcode::ShlAssignAny)) {
+                QoreIROpcode::ShlAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_shift_left_equals_closure",
             QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
                 QoreValue(1))),
-                QoreIROpcode::ShlAssignAny)) {
+                QoreIROpcode::ShlAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_shift_left_equals_global",
             QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
                 QoreValue(1))),
-                QoreIROpcode::ShlAssignAny)) {
+                QoreIROpcode::ShlAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_shift_left_equals_threadlocal",
             QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
                 QoreValue(1))),
-                QoreIROpcode::ShlAssignAny)) {
+                QoreIROpcode::ShlAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_shift_right_equals_local",
             QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
                 QoreValue(1))),
-                QoreIROpcode::ShrAssignAny)) {
+                QoreIROpcode::ShrAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_shift_right_equals_closure",
             QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("assign_closure"), &assign_closure, true)),
                 QoreValue(1))),
-                QoreIROpcode::ShrAssignAny)) {
+                QoreIROpcode::ShrAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_shift_right_equals_global",
             QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_global"), assign_global)),
                 QoreValue(1))),
-                QoreIROpcode::ShrAssignAny)) {
+                QoreIROpcode::ShrAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_shift_right_equals_threadlocal",
             QoreValue(new QoreShiftRightEqualsOperatorNode(nullptr,
                 QoreValue(new GlobalVarRefNode(nullptr, strdup("assign_thread"), assign_thread)),
                 QoreValue(1))),
-                QoreIROpcode::ShrAssignAny)) {
+                QoreIROpcode::ShrAssignInt)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_multiply_equals_lvalue_list",

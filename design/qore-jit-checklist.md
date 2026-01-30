@@ -62,6 +62,19 @@ Deliverables:
 - [~] `lib/QoreIRPrinter.cpp`
 - [~] `test/ir/`
 
+### Phase 1 Execution Checklist (current)
+
+- [~] Audit remaining lowering error paths ("unsupported ... for IR lowering") and cover or explicitly reject:
+  - [x] Unsupported expression nodes in `lowerExpression()` (fill gaps or add explicit policy checks).
+  - [x] Unsupported statement nodes in `lowerStatement()` (confirm all statement classes handled).
+  - [x] Unsupported lvalue types/ranges in assignment/op-assign/inc/dec/shift/unshift/splice.
+  - [x] Unsupported VarRef kinds in `loadVarRef()/storeVarRef()` (notably `VT_IMMEDIATE` / `VT_UNRESOLVED`).
+- [ ] Expand parse-analysis driven opcode selection where available for:
+  - [x] Extract/Remove/Keys type-driven opcodes (list/hash/string/binary) via operand analysis.
+  - [x] Map/Select/MapSelect/HashMap/HashMapSelect typed opcodes via element/return analysis.
+  - [x] Regex extract/subst typed opcodes (list/string) via return analysis.
+- [ ] Expand tests in `examples/test/ir/` to cover any newly supported nodes or explicit rejection cases.
+
 ---
 
 ## Phase 2: IR Interpreter
