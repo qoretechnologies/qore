@@ -159,6 +159,36 @@ public class DpqlSerializer {
                 result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY);
                 break;
 
+            case DP_FUNC_INDEX:
+                # Render as sugar: base[n] only if index arg is a literal
+                if (isAccessorArgLiteral(exp.args[1])) {
+                    result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY)
+                        + "[" + string(exp.args[1]) + "]";
+                } else {
+                    result = serializeFunctionCall(op, exp.args);
+                }
+                break;
+
+            case DP_FUNC_SLICE:
+                # Render as sugar: base[items...] only if all args are literals/ranges
+                if (areSliceArgsLiteral(exp.args)) {
+                    result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY)
+                        + "[" + serializeSliceArgs(exp.args) + "]";
+                } else {
+                    result = serializeFunctionCall(op, exp.args);
+                }
+                break;
+
+            case DP_FUNC_KEY:
+                # Render as sugar: base{keys...} only if all key args are literals
+                if (areKeyArgsLiteral(exp.args)) {
+                    result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY)
+                        + "{" + serializeKeyArgs(exp.args) + "}";
+                } else {
+                    result = serializeFunctionCall(op, exp.args);
+                }
+                break;
+
             default:
                 # Unknown operator - treat as function call
                 result = serializeFunctionCall(op, exp.args);
@@ -293,67 +323,54 @@ public class DpqlSerializer {
         }
     }
 
-    #! Serializes a field reference with optional accessor chain
+    #! Serializes a field reference
     private string serializeFieldRef(hash<auto> ref) {
         string field = ref.field;
-        string result;
 
         # Check if field name needs quoting
         if (field =~ /[^a-zA-Z0-9_.]/ || field =~ /^[0-9]/) {
             # Escape special characters: backslash first, then quote
             # Note: use '\"' not '\\"' - in single quotes, \\ is two backslashes
             field = replace(replace(field, "\\", "\\\\"), '"', '\"');
-            result = '@"' + field + '"';
-        } else {
-            result = "@" + field;
+            return '@"' + field + '"';
         }
+        return "@" + field;
+    }
 
-        # Serialize accessor chain if present
-        if (ref.accessors) {
-            foreach hash<auto> acc in (ref.accessors) {
-                result += serializeAccessor(cast<hash<DataProviderFieldAccessor>>(acc));
+    #! Returns True if an accessor arg is a literal (not an expression)
+    private bool isAccessorArgLiteral(auto arg) {
+        if (arg.typeCode() == NT_HASH) {
+            # Range specs (start/end keys) are literals; expression hashes have "exp" key
+            return !arg.hasKey("exp");
+        }
+        return True;
+    }
+
+    #! Returns True if all slice args (args[1..]) are literals or range specs
+    private bool areSliceArgsLiteral(list<auto> args) {
+        for (int i = 1; i < args.size(); ++i) {
+            if (!isAccessorArgLiteral(args[i])) {
+                return False;
             }
         }
-
-        return result;
+        return True;
     }
 
-    #! Serializes a single accessor (type-safe version)
-    private string serializeAccessor(hash<DataProviderFieldAccessor> acc) {
-        switch (acc.type) {
-            case DPQL_ACCESSOR_INDEX:
-                return "[" + string(acc.value) + "]";
-
-            case DPQL_ACCESSOR_SLICE:
-                return "[" + serializeSliceItems(acc.value) + "]";
-
-            case DPQL_ACCESSOR_KEY:
-                return "{" + serializeKeyList(acc.value) + "}";
-
-            default:
-                throw "DPQL-SERIALIZE-ERROR", sprintf("Unknown accessor type: %y", acc.type);
-        }
-    }
-
-    #! Serializes a single accessor from untyped data (e.g., JSON-deserialized)
-    /** Attempts to cast the hash to DataProviderFieldAccessor with proper error reporting
-    */
-    private string serializeAccessor(hash<auto> acc) {
-        try {
-            return serializeAccessor(cast<hash<DataProviderFieldAccessor>>(acc));
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "RUNTIME-CAST-ERROR") {
-                throw "DPQL-SERIALIZE-ERROR", sprintf("Invalid accessor hash: expected keys 'type' and 'value', "
-                    "got: %y", keys acc);
+    #! Returns True if all key args (args[1..]) are literals
+    private bool areKeyArgsLiteral(list<auto> args) {
+        for (int i = 1; i < args.size(); ++i) {
+            if (!isAccessorArgLiteral(args[i])) {
+                return False;
             }
-            rethrow;
         }
+        return True;
     }
 
-    #! Serializes slice items (indices and ranges)
-    private string serializeSliceItems(list<auto> items) {
+    #! Serializes slice arguments from a DP_FUNC_SLICE expression (args[1..])
+    private string serializeSliceArgs(list<auto> args) {
         list<string> parts = ();
-        foreach auto item in (items) {
+        for (int i = 1; i < args.size(); ++i) {
+            auto item = args[i];
             if (item.typeCode() == NT_HASH && (item.hasKey("start") || item.hasKey("end"))) {
                 # Range spec
                 parts += serializeRange(item);
@@ -365,8 +382,23 @@ public class DpqlSerializer {
         return parts.join(",");
     }
 
-    #! Serializes a range: start..end, ..end, start.. (type-safe version)
-    private string serializeRange(hash<DataProviderRangeSpec> range) {
+    #! Serializes key arguments from a DP_FUNC_KEY expression (args[1..])
+    private string serializeKeyArgs(list<auto> args) {
+        list<string> parts = ();
+        for (int i = 1; i < args.size(); ++i) {
+            string skey = string(args[i]);
+            # Check if key needs quoting
+            if (skey =~ /[^a-zA-Z0-9_]/ || skey =~ /^[0-9]/) {
+                parts += serializeString(skey);
+            } else {
+                parts += skey;
+            }
+        }
+        return parts.join(", ");
+    }
+
+    #! Serializes a range: start..end, ..end, start..
+    private string serializeRange(hash<auto> range) {
         string result = "";
         if (exists range.start) {
             result += string(range.start);
@@ -376,48 +408,6 @@ public class DpqlSerializer {
             result += string(range.end);
         }
         return result;
-    }
-
-    #! Serializes a range from untyped data (e.g., JSON-deserialized)
-    private string serializeRange(hash<auto> range) {
-        try {
-            return serializeRange(cast<hash<DataProviderRangeSpec>>(range));
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "RUNTIME-CAST-ERROR") {
-                throw "DPQL-SERIALIZE-ERROR", sprintf("Invalid range spec: expected keys 'start' and/or 'end', "
-                    "got: %y", keys range);
-            }
-            rethrow;
-        }
-    }
-
-    #! Serializes key list for key accessor (type-safe version)
-    private string serializeKeyList(list<string> key_list) {
-        list<string> parts = ();
-        foreach string key in (key_list) {
-            # Check if key needs quoting
-            if (key =~ /[^a-zA-Z0-9_]/ || key =~ /^[0-9]/) {
-                parts += serializeString(key);
-            } else {
-                parts += key;
-            }
-        }
-        return parts.join(", ");
-    }
-
-    #! Serializes key list from untyped data (e.g., JSON-deserialized)
-    private string serializeKeyList(list<auto> key_list) {
-        list<string> parts = ();
-        foreach auto key in (key_list) {
-            string skey = string(key);
-            # Check if key needs quoting
-            if (skey =~ /[^a-zA-Z0-9_]/ || skey =~ /^[0-9]/) {
-                parts += serializeString(skey);
-            } else {
-                parts += skey;
-            }
-        }
-        return parts.join(", ");
     }
 
     #! Serializes a literal value
