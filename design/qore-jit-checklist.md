@@ -12,6 +12,7 @@ Decision constraints:
 - Exceptions: use real exceptions with stack unwinding (LLVM invoke/landingpad), with `ExceptionSink` compatibility for non-JIT paths.
 - Refcounting & memory management: must be fully exception-safe.
 - Typed locals can be unassigned (NOTHING); lowering must preserve that semantics.
+- JIT only supports PO_MODERN (non-modern code must fall back to interpreter with a clear diagnostic).
 
 ---
 
@@ -40,7 +41,8 @@ Deliverables:
 ## Phase 1: AST -> IR Lowering (tight checklist)
 
 - [ ] Lower all expression families with invoke where needed:
-  - arithmetic, bitwise, comparisons, logical, regex, container ops, date/time ops
+  - arithmetic, bitwise, comparisons, logical, regex (including nmatch), container ops (including pop/push),
+    date/time ops, instanceof, trim/chomp/transliteration, background, list assignment
   - cast/conversion ops
   - deref / element / field access
   - map/fold/foldr/select
@@ -69,6 +71,8 @@ Deliverables:
 - [x] Add `--exec-mode=ir` or equivalent runtime switch.
 - [ ] Ensure all existing tests pass under IR.
 - [x] Add IR smoke tests and coverage tests for operators and lvalues (including const/refcount ops).
+- [ ] Add parse-option gate: if not PO_MODERN, skip JIT and fall back to interpreter (with a warning).
+- [ ] Keep IR and JIT parse-option gating consistent (single policy, reused warning text).
 
 ---
 
@@ -87,6 +91,7 @@ Deliverables:
 - [x] IR interpreter: execute statement opcodes (foreach/on-block-exit/debug/thread-exit); add thread-exit executor smoke test.
 - [x] Docs: add a short note on running IR smoke under valgrind with `qore -b`.
 - [~] Statement lowering: do-while, foreach, on-block-exit, thread-exit, debug covered.
+- [x] Added IR opcodes for regex nmatch, instanceof, trim/chomp/transliteration, background, list assignment, pop/push.
 - [x] IR exec-mode smoke test for control-flow without fallback warnings.
 - [x] IR opcode coverage includes const and refcount operations.
 
@@ -99,6 +104,7 @@ Deliverables:
 - [ ] Implement invoke/landingpad + personality integration with Qore exception model.
 - [ ] Provide deopt fallback to IR interpreter for failed guards.
 - [ ] Add basic benchmarks and validation against IR interpreter.
+- [ ] Enforce PO_MODERN at JIT entry (non-modern falls back to interpreter/IR with warning).
 
 ---
 

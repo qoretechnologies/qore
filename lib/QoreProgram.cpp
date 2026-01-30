@@ -1927,6 +1927,14 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
+    // JIT/IR exec mode only supports PO_MODERN; fallback to AST otherwise.
+    if (priv->exec_mode == QEM_IR && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
+        if (!priv->ir_fallback_warned) {
+            printe("IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
+            priv->ir_fallback_warned = true;
+        }
+        priv->exec_mode = QEM_AST;
+    }
     return priv->sb.exec(xsink);
 }
 
@@ -1934,6 +1942,15 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
     SimpleRefHolder<FunctionCallNode> fc;
 
     printd(5, "QoreProgram::callFunction() creating function call to %s()\n", name);
+
+    // JIT/IR exec mode only supports PO_MODERN; fallback to AST otherwise.
+    if (priv->exec_mode == QEM_IR && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
+        if (!priv->ir_fallback_warned) {
+            printe("IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
+            priv->ir_fallback_warned = true;
+        }
+        priv->exec_mode = QEM_AST;
+    }
 
     const FunctionEntry* fe;
 
@@ -1980,6 +1997,14 @@ qore_exec_mode_t QoreProgram::getExecMode() const {
 }
 
 void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
+    // JIT/IR exec mode only supports PO_MODERN; fallback to AST otherwise.
+    if (priv->exec_mode == QEM_IR && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
+        if (!priv->ir_fallback_warned) {
+            printe("IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
+            priv->ir_fallback_warned = true;
+        }
+        priv->exec_mode = QEM_AST;
+    }
     // find class
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*priv->RootNS, classname);
     if (!qc) {
