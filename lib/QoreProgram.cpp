@@ -1923,10 +1923,7 @@ void QoreProgram::parsePending(const char* code, const char* label, ExceptionSin
     priv->parsePending(code, label, xsink, wS, wm, source, offset);
 }
 
-QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
-    ProgramThreadCountContextHelper tch(xsink, this, true);
-    if (*xsink)
-        return QoreValue();
+static void ensureIrExecMode(QoreProgramPrivate* priv) {
     // JIT/IR exec mode only supports PO_MODERN; fallback to AST otherwise.
     if (priv->exec_mode == QEM_IR && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
         if (!priv->ir_fallback_warned) {
@@ -1935,6 +1932,13 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
         }
         priv->exec_mode = QEM_AST;
     }
+}
+
+QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
+    ProgramThreadCountContextHelper tch(xsink, this, true);
+    if (*xsink)
+        return QoreValue();
+    ensureIrExecMode(priv);
     return priv->sb.exec(xsink);
 }
 
@@ -1943,14 +1947,7 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 
     printd(5, "QoreProgram::callFunction() creating function call to %s()\n", name);
 
-    // JIT/IR exec mode only supports PO_MODERN; fallback to AST otherwise.
-    if (priv->exec_mode == QEM_IR && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
-        if (!priv->ir_fallback_warned) {
-            printe("IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
-            priv->ir_fallback_warned = true;
-        }
-        priv->exec_mode = QEM_AST;
-    }
+    ensureIrExecMode(priv);
 
     const FunctionEntry* fe;
 
@@ -1997,14 +1994,7 @@ qore_exec_mode_t QoreProgram::getExecMode() const {
 }
 
 void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
-    // JIT/IR exec mode only supports PO_MODERN; fallback to AST otherwise.
-    if (priv->exec_mode == QEM_IR && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
-        if (!priv->ir_fallback_warned) {
-            printe("IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
-            priv->ir_fallback_warned = true;
-        }
-        priv->exec_mode = QEM_AST;
-    }
+    ensureIrExecMode(priv);
     // find class
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*priv->RootNS, classname);
     if (!qc) {

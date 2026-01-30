@@ -85,7 +85,7 @@ Deliverables:
 - [x] Ensure all existing tests pass under IR.
 - [x] Add IR smoke tests and coverage tests for operators and lvalues (including const/refcount ops).
 - [x] Add parse-option gate: if not PO_MODERN, skip JIT and fall back to interpreter (with a warning).
-- [ ] Keep IR and JIT parse-option gating consistent (single policy, reused warning text).
+- [x] Keep IR and JIT parse-option gating consistent (single policy, reused warning text).
 
 ---
 
