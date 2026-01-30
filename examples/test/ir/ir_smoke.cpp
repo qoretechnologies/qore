@@ -120,6 +120,9 @@
 #include <qore/intern/IfStatement.h>
 #include <qore/intern/DoWhileStatement.h>
 #include <qore/intern/WhileStatement.h>
+#include <qore/intern/AssertStatement.h>
+#include <qore/intern/ContextStatement.h>
+#include <qore/intern/SummarizeStatement.h>
 #include <qore/intern/ForStatement.h>
 #include <qore/intern/ExpressionStatement.h>
 #include <qore/intern/ReturnStatement.h>
@@ -1387,9 +1390,10 @@ static bool runConstRefcountInterpreterSmoke() {
     builder.setBlock(entry);
 
     auto* c_int = builder.createConstInt(7);
-    builder.createConstFloat(1.25);
-    builder.createConstBool(true);
+    auto* c_float = builder.createConstFloat(1.25);
+    auto* c_bool = builder.createConstBool(true);
     builder.createConstNothing();
+    builder.createConstNull();
     auto* c_string = builder.createConstString("const");
     auto* c_date = builder.createConstDate(1700000, false);
 
@@ -1403,12 +1407,50 @@ static bool runConstRefcountInterpreterSmoke() {
     auto* decref_date = entry->appendInstruction<QoreIRInstruction>(QoreIROpcode::DecrefNoThrow);
     decref_date->operands.push_back(c_date->result);
 
+    auto* guard_deopt = func.createBlock("guard.deopt");
+    auto* cast_block = func.createBlock("cast.ops");
+    builder.createGuardInt(c_int->result, guard_deopt);
+    builder.createGuardFloat(c_float->result, guard_deopt);
+    builder.createGuardType(c_string->result, stringTypeInfo, guard_deopt);
+
     builder.createBinaryOp(QoreIROpcode::AddInt, c_int->result, c_int->result);
     builder.createReturn(c_int->result);
+
+    builder.setBlock(guard_deopt);
+    builder.createReturnNothing();
+
+    builder.setBlock(cast_block);
+    {
+        ValueHolder cast_obj_expr(new QoreStringNode("obj"), nullptr);
+        auto* cast_obj = cast_block->appendInstruction<QoreIRExprInstruction>(QoreIROpcode::CastObject,
+            *cast_obj_expr);
+        cast_obj->operands.push_back(c_string->result);
+        cast_obj->result = func.createValue();
+        ValueHolder cast_enum_expr(new QoreStringNode("enum"), nullptr);
+        auto* cast_enum = cast_block->appendInstruction<QoreIRExprInstruction>(QoreIROpcode::CastEnum,
+            *cast_enum_expr);
+        cast_enum->operands.push_back(c_int->result);
+        cast_enum->result = func.createValue();
+    }
+    builder.createReturnNothing();
 
     std::string error;
     if (!QoreIRVerifier::verify(func, error)) {
         std::cerr << "IR verify failed (ir_const_refcount_smoke): " << error << "\n";
+        return false;
+    }
+    if (!functionHasOpcode(func, QoreIROpcode::ConstInt)
+        || !functionHasOpcode(func, QoreIROpcode::ConstFloat)
+        || !functionHasOpcode(func, QoreIROpcode::ConstBool)
+        || !functionHasOpcode(func, QoreIROpcode::ConstNothing)
+        || !functionHasOpcode(func, QoreIROpcode::ConstNull)
+        || !functionHasOpcode(func, QoreIROpcode::ConstString)
+        || !functionHasOpcode(func, QoreIROpcode::GuardInt)
+        || !functionHasOpcode(func, QoreIROpcode::GuardFloat)
+        || !functionHasOpcode(func, QoreIROpcode::GuardType)
+        || !functionHasOpcode(func, QoreIROpcode::CastObject)
+        || !functionHasOpcode(func, QoreIROpcode::CastEnum)) {
+        std::cerr << "IR const/refcount smoke missing opcode\n";
         return false;
     }
 
@@ -3850,6 +3892,41 @@ int main() {
             }
         }
         {
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new AssertStatement(1, 1, QoreValue(true)));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_assert", root,
+                {QoreIROpcode::Assert});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* context_body = new StatementBlock(1, 1);
+            context_body->addStatement(new ExpressionStatement(stmt_loc, QoreValue(1)));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new ContextStatement(1, 1, strdup("ctx"), QoreValue(1), nullptr, context_body));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_context", root,
+                {QoreIROpcode::Context});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* summarize_body = new StatementBlock(1, 1);
+            summarize_body->addStatement(new ExpressionStatement(stmt_loc, QoreValue(1)));
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(new SummarizeStatement(1, 1, strdup("sum"), QoreValue(1), nullptr, summarize_body,
+                QoreValue(1)));
+            bool ok = lowerStatementBlockAndExpectOpcodes("ir_stmt_summarize", root,
+                {QoreIROpcode::Summarize});
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
             ExceptionSink exec_xsink;
             QoreValue return_value;
             DebugStatement* debug_stmt = new DebugStatement(1, 1, QoreValue(1));
@@ -4550,9 +4627,19 @@ int main() {
             QoreIROpcode::TrimString)) {
         return 1;
     }
+    if (!lowerAndExpectOpcode("ir_trim_any",
+            QoreValue(new QoreTrimOperatorNode(nullptr, QoreValue(1))),
+            QoreIROpcode::TrimAny)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcode("ir_chomp_string",
             QoreValue(new QoreChompOperatorNode(nullptr, QoreValue(new QoreStringNode("hi\n")))),
             QoreIROpcode::ChompString)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_chomp_any",
+            QoreValue(new QoreChompOperatorNode(nullptr, QoreValue(1))),
+            QoreIROpcode::ChompAny)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_transliterate_string",
@@ -4566,6 +4653,19 @@ int main() {
                     QoreValue(new QoreStringNode("abc")), tr->refSelf()));
             }(),
             QoreIROpcode::TransliterateString)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_transliterate_any",
+            [&]() {
+                SimpleRefHolder<QoreTransliteration> tr(new QoreTransliteration(nullptr));
+                tr->concatSource('a');
+                tr->concatTarget('b');
+                tr->finishSource();
+                tr->finishTarget();
+                return QoreValue(new QoreTransliterationOperatorNode(nullptr,
+                    QoreValue(1), tr->refSelf()));
+            }(),
+            QoreIROpcode::TransliterateAny)) {
         return 1;
     }
     if (!lowerAndExpectOpcode("ir_instanceof_bool",
@@ -8523,7 +8623,8 @@ int main() {
 {
     const char* dot_source = "%new-style\n"
         "class IrDotObj { }\n"
-        "class IrDotClass { int m(int i) { return i + 1; } string ms(int i) { return \"s\"; }"
+        "class IrDotClass { int m(int i) { return i + 1; } float mf(int i) { return 1.5; }"
+        " string ms(int i) { return \"s\"; } any ma(int i) { return i; }"
         " date md(int i) { return 2005-01-05; } IrDotObj mo(int i) { return new IrDotObj(); }"
         " list ml(int i) { return (1, 2); }"
         " hash mh(int i) { return (\"a\": 1); }"
@@ -8602,6 +8703,33 @@ int main() {
             return 1;
         }
         if (!expect_dot_opcode("ir_dot_eval_int", *expr_holder, dot_context, QoreIROpcode::DotEvalInt)) {
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("mf"), dot_args);
+        LocalVar dot_obj("dot_obj_float", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_float"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_float)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        const QoreParseAnalysis& analysis = dot_context.analysis;
+        if (!analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || !QoreTypeInfo::equal(analysis.known_type, floatTypeInfo)) {
+            std::cerr << "Parse analysis mismatch (analysis_dot_eval_float)\n";
+            return 1;
+        }
+        if (!expect_dot_opcode("ir_dot_eval_float", *expr_holder, dot_context, QoreIROpcode::DotEvalFloat)) {
             return 1;
         }
     }
@@ -8763,6 +8891,25 @@ int main() {
             return 1;
         }
         if (!expect_dot_opcode("ir_dot_eval_hash", *expr_holder, dot_context, QoreIROpcode::DotEvalHash)) {
+            return 1;
+        }
+    }
+    {
+        QoreParseListNode* dot_args = new QoreParseListNode(&dot_loc);
+        dot_args->add(QoreValue(1), &dot_loc);
+        MethodCallNode* method_call = new MethodCallNode(&dot_loc, strdup("ma"), dot_args);
+        LocalVar dot_obj("dot_obj_any", dot_class->getTypeInfo());
+        dot_obj.parseAssigned();
+        QoreParseContext dot_context(&dot_obj, program);
+        QoreValue dot_expr(new QoreDotEvalOperatorNode(&dot_loc,
+            QoreValue(new VarRefNode(&dot_loc, strdup("dot_obj_any"), &dot_obj, false)), method_call));
+        QoreValue parsed_expr(dot_expr);
+        if (parse_init_value_with_program(parsed_expr, dot_context)) {
+            std::cerr << "Parse init failed (analysis_dot_eval_any)\n";
+            return 1;
+        }
+        ValueHolder expr_holder(parsed_expr, nullptr);
+        if (!expect_dot_opcode("ir_dot_eval_any", *expr_holder, dot_context, QoreIROpcode::DotEvalAny)) {
             return 1;
         }
     }
@@ -10250,6 +10397,13 @@ int main() {
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
                     &analysis_hash_maybe_left, false)))),
             QoreIROpcode::KeysHash)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_list_assigned",
+            QoreValue(new QoreKeysOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("analysis_list_left"),
+                    &analysis_list_left, false)))),
+            QoreIROpcode::KeysList)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_hash_deref_parse_maybe",

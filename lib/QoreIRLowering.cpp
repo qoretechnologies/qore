@@ -603,12 +603,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createAssert(assert_stmt, stmt->loc);
         return true;
     }
-    if (auto* context_stmt = dynamic_cast<const ContextStatement*>(stmt)) {
-        builder.createContext(context_stmt, stmt->loc);
-        return true;
-    }
     if (auto* summarize_stmt = dynamic_cast<const SummarizeStatement*>(stmt)) {
         builder.createSummarize(summarize_stmt, stmt->loc);
+        return true;
+    }
+    if (auto* context_stmt = dynamic_cast<const ContextStatement*>(stmt)) {
+        builder.createContext(context_stmt, stmt->loc);
         return true;
     }
     if (auto* thread_exit_stmt = dynamic_cast<const ThreadExitStatement*>(stmt)) {

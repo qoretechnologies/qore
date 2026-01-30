@@ -46,7 +46,7 @@ Deliverables:
   - cast/conversion ops
   - deref / element / field access
   - map/fold/foldr/select
-- [~] Lower all statements: if/else, loops, switch, try/catch, throw/rethrow, return, break/continue.
+- [x] Lower all statements: if/else, loops, switch, try/catch, throw/rethrow, return, break/continue.
 - [~] Lvalue lowering for op-assign and assignment to all containers and objects.
 - [~] Preserve typed-local semantics where values can be NOTHING.
 - [~] Integrate parse-analysis propagation (definite assignment, maybe-NOTHING) into lowering decisions.
@@ -103,7 +103,7 @@ Deliverables:
   - [x] Unwind cleanup tests via minimal IR executor with cleanup list + catch.exception coverage.
 - [x] IR interpreter: execute statement opcodes (foreach/on-block-exit/debug/thread-exit); add thread-exit executor smoke test.
 - [x] Docs: add a short note on running IR smoke under valgrind with `qore -b`.
-- [~] Statement lowering: do-while, foreach, on-block-exit, thread-exit, debug covered.
+- [x] Statement lowering: do-while, foreach, on-block-exit, thread-exit, debug covered.
 - [x] Added IR opcodes for regex nmatch, instanceof, trim/chomp/transliteration, background, list assignment, pop/push.
 - [x] IR exec-mode smoke test for control-flow without fallback warnings.
 - [x] IR opcode coverage includes const and refcount operations.
