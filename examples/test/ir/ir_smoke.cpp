@@ -34,6 +34,7 @@
 #include <qore/intern/BackquoteNode.h>
 #include <qore/intern/ContextrefNode.h>
 #include <qore/intern/ParseReferenceNode.h>
+#include <qore/intern/QoreTransliteration.h>
 #include <qore/intern/QoreBinaryAndOperatorNode.h>
 #include <qore/intern/QoreBinaryNotOperatorNode.h>
 #include <qore/intern/QoreBinaryOrOperatorNode.h>
@@ -90,6 +91,7 @@
 #include <qore/intern/QoreRegex.h>
 #include <qore/intern/QoreRegexSubst.h>
 #include <qore/intern/QoreRegexMatchOperatorNode.h>
+#include <qore/intern/QoreRegexNMatchOperatorNode.h>
 #include <qore/intern/QoreRegexExtractOperatorNode.h>
 #include <qore/intern/QoreRegexSubstOperatorNode.h>
 #include <qore/intern/QoreExistsOperatorNode.h>
@@ -4541,6 +4543,34 @@ int main() {
             QoreValue(new QoreUnaryMinusOperatorNode(nullptr, QoreValue(4))))) {
         return 1;
     }
+    if (!lowerAndExpectOpcode("ir_trim_string",
+            QoreValue(new QoreTrimOperatorNode(nullptr, QoreValue(new QoreStringNode("  hi  ")))),
+            QoreIROpcode::TrimString)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_chomp_string",
+            QoreValue(new QoreChompOperatorNode(nullptr, QoreValue(new QoreStringNode("hi\n")))),
+            QoreIROpcode::ChompString)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_transliterate_string",
+            [&]() {
+                SimpleRefHolder<QoreTransliteration> tr(new QoreTransliteration(nullptr));
+                tr->concatSource('a');
+                tr->concatTarget('b');
+                tr->finishSource();
+                tr->finishTarget();
+                return QoreValue(new QoreTransliterationOperatorNode(nullptr,
+                    QoreValue(new QoreStringNode("abc")), tr->refSelf()));
+            }(),
+            QoreIROpcode::TransliterateString)) {
+        return 1;
+    }
+    if (!lowerAndExpectOpcode("ir_background_int",
+            QoreValue(new QoreBackgroundOperatorNode(nullptr, QoreValue(1))),
+            QoreIROpcode::BackgroundInt)) {
+        return 1;
+    }
     if (!lowerAndExpectOpcode("ir_add_any",
             QoreValue(new QorePlusOperatorNode(nullptr, QoreValue(new QoreStringNode("2")),
                 QoreValue(new QoreStringNode("3")))),
@@ -4726,6 +4756,28 @@ int main() {
     LocalVar list_var("list_var", autoTypeInfo);
     LocalVar hash_var("hash_var", autoTypeInfo);
     LocalVar string_var("string_var", stringTypeInfo);
+    {
+        ExceptionSink list_assign_xsink;
+        QoreProgramLocation list_assign_loc("ir_smoke", 1, 1);
+        LocalVar list_assign_a("list_assign_a", autoTypeInfo);
+        LocalVar list_assign_b("list_assign_b", autoTypeInfo);
+        QoreParseListNode* list_assign_lhs = new QoreParseListNode(&list_assign_loc);
+        list_assign_lhs->add(QoreValue(new VarRefNode(nullptr, strdup("list_assign_a"),
+            &list_assign_a, false)), &list_assign_loc);
+        list_assign_lhs->add(QoreValue(new VarRefNode(nullptr, strdup("list_assign_b"),
+            &list_assign_b, false)), &list_assign_loc);
+        QoreListNode* list_assign_rhs = makeIntList({1, 2}, &list_assign_xsink);
+        if (list_assign_xsink) {
+            std::cerr << "Failed to create list assignment RHS\n";
+            return 1;
+        }
+        if (!lowerAndExpectOpcode("ir_list_assign",
+                QoreValue(new QoreListAssignmentOperatorNode(nullptr,
+                    QoreValue(list_assign_lhs), QoreValue(list_assign_rhs))),
+                QoreIROpcode::ListAssignAny)) {
+            return 1;
+        }
+    }
     if (!lowerAndExpectAnyOpcode("ir_range",
             QoreValue(new QoreRangeOperatorNode(nullptr, QoreValue(1), QoreValue(3))),
             {QoreIROpcode::RangeAny, QoreIROpcode::RangeInt, QoreIROpcode::RangeFloat})) {
@@ -6576,12 +6628,20 @@ int main() {
             return 1;
         }
         if (!lowerAndExpectOpcode("ir_regex_match",
-                QoreValue(new QoreRegexMatchOperatorNode(nullptr, QoreValue("a"), regex->refSelf())),
+                QoreValue(new QoreRegexMatchOperatorNode(nullptr,
+                    QoreValue(new QoreStringNode("a")), regex->refSelf())),
                 QoreIROpcode::RegexMatchAny)) {
             return 1;
         }
+        if (!lowerAndExpectOpcode("ir_regex_nmatch",
+                QoreValue(new QoreRegexNMatchOperatorNode(nullptr,
+                    QoreValue(new QoreStringNode("a")), regex->refSelf())),
+                QoreIROpcode::RegexNMatchBool)) {
+            return 1;
+        }
         if (!lowerAndExpectOpcode("ir_regex_extract",
-                QoreValue(new QoreRegexExtractOperatorNode(nullptr, QoreValue("a"), regex->refSelf())),
+                QoreValue(new QoreRegexExtractOperatorNode(nullptr,
+                    QoreValue(new QoreStringNode("a")), regex->refSelf())),
                 QoreIROpcode::RegexExtractAny)) {
             return 1;
         }
@@ -6759,7 +6819,8 @@ int main() {
         {
             StatementBlock* try_body = new StatementBlock(1, 1);
             try_body->addStatement(new ReturnStatement(1, 1,
-                QoreValue(new QoreRegexMatchOperatorNode(nullptr, QoreValue("a"), regex->refSelf()))));
+                QoreValue(new QoreRegexMatchOperatorNode(nullptr,
+                    QoreValue(new QoreStringNode("a")), regex->refSelf()))));
             StatementBlock* catch_body = new StatementBlock(1, 1);
             catch_body->addStatement(new RethrowStatement(1, 1));
             TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
@@ -6776,7 +6837,26 @@ int main() {
         {
             StatementBlock* try_body = new StatementBlock(1, 1);
             try_body->addStatement(new ReturnStatement(1, 1,
-                QoreValue(new QoreRegexExtractOperatorNode(nullptr, QoreValue("a"), regex->refSelf()))));
+                QoreValue(new QoreRegexNMatchOperatorNode(nullptr,
+                    QoreValue(new QoreStringNode("a")), regex->refSelf()))));
+            StatementBlock* catch_body = new StatementBlock(1, 1);
+            catch_body->addStatement(new RethrowStatement(1, 1));
+            TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
+                stmt_loc_ptr);
+            StatementBlock* root = new StatementBlock(1, 1);
+            root->addStatement(try_stmt);
+            bool ok = lowerStatementBlockAndExpectInvokeOpcode("ir_regex_nmatch_invoke", root,
+                QoreIROpcode::RegexNMatchBool);
+            delete root;
+            if (!ok) {
+                return 1;
+            }
+        }
+        {
+            StatementBlock* try_body = new StatementBlock(1, 1);
+            try_body->addStatement(new ReturnStatement(1, 1,
+                QoreValue(new QoreRegexExtractOperatorNode(nullptr,
+                    QoreValue(new QoreStringNode("a")), regex->refSelf()))));
             StatementBlock* catch_body = new StatementBlock(1, 1);
             catch_body->addStatement(new RethrowStatement(1, 1));
             TryStatement* try_stmt = new TryStatement(stmt_loc_ptr, try_body, catch_body, nullptr, nullptr, nullptr,
@@ -7769,6 +7849,22 @@ int main() {
         }
         if (!expectParseAnalysisFlags("analysis_regex_match_maybe",
                 QoreValue(new QoreRegexMatchOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                        &analysis_string_maybe_right, false)),
+                    regex->refSelf())),
+                boolTypeInfo, true, true, false)) {
+            return 1;
+        }
+        if (!expectParseAnalysisFlags("analysis_regex_nmatch_assigned",
+                QoreValue(new QoreRegexNMatchOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"),
+                        &analysis_string_right, false)),
+                    regex->refSelf())),
+                boolTypeInfo, true, true, true)) {
+            return 1;
+        }
+        if (!expectParseAnalysisFlags("analysis_regex_nmatch_maybe",
+                QoreValue(new QoreRegexNMatchOperatorNode(nullptr,
                     QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
                         &analysis_string_maybe_right, false)),
                     regex->refSelf())),
@@ -10490,6 +10586,22 @@ int main() {
                         &analysis_string_maybe_right, false)),
                     regex->refSelf())),
                 QoreIROpcode::RegexMatchBool)) {
+            return 1;
+        }
+        if (!lowerAndExpectOpcodeWithParseInit("ir_regex_nmatch_parse_assigned",
+                QoreValue(new QoreRegexNMatchOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_right"),
+                        &analysis_string_right, false)),
+                    regex->refSelf())),
+                QoreIROpcode::RegexNMatchBool)) {
+            return 1;
+        }
+        if (!lowerAndExpectOpcodeWithParseInit("ir_regex_nmatch_parse_maybe",
+                QoreValue(new QoreRegexNMatchOperatorNode(nullptr,
+                    QoreValue(new VarRefNode(nullptr, strdup("analysis_string_maybe_right"),
+                        &analysis_string_maybe_right, false)),
+                    regex->refSelf())),
+                QoreIROpcode::RegexNMatchBool)) {
             return 1;
         }
         if (!lowerAndExpectOpcodeWithParseInit("ir_regex_extract_parse_assigned",

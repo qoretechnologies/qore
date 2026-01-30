@@ -69,11 +69,11 @@ Deliverables:
   - [x] Unsupported statement nodes in `lowerStatement()` (confirm all statement classes handled).
   - [x] Unsupported lvalue types/ranges in assignment/op-assign/inc/dec/shift/unshift/splice.
   - [x] Unsupported VarRef kinds in `loadVarRef()/storeVarRef()` (notably `VT_IMMEDIATE` / `VT_UNRESOLVED`).
-- [ ] Expand parse-analysis driven opcode selection where available for:
+- [x] Expand parse-analysis driven opcode selection where available for:
   - [x] Extract/Remove/Keys type-driven opcodes (list/hash/string/binary) via operand analysis.
   - [x] Map/Select/MapSelect/HashMap/HashMapSelect typed opcodes via element/return analysis.
   - [x] Regex extract/subst typed opcodes (list/string) via return analysis.
-- [ ] Expand tests in `examples/test/ir/` to cover any newly supported nodes or explicit rejection cases.
+- [x] Expand tests in `examples/test/ir/` to cover any newly supported nodes or explicit rejection cases.
 
 ---
 
@@ -82,7 +82,7 @@ Deliverables:
 - [x] Execute all IR ops (including invoke with exception paths).
 - [x] Validate refcount behavior at all exits (normal and exceptional).
 - [x] Add `--exec-mode=ir` or equivalent runtime switch.
-- [ ] Ensure all existing tests pass under IR.
+- [x] Ensure all existing tests pass under IR.
 - [x] Add IR smoke tests and coverage tests for operators and lvalues (including const/refcount ops).
 - [x] Add parse-option gate: if not PO_MODERN, skip JIT and fall back to interpreter (with a warning).
 - [ ] Keep IR and JIT parse-option gating consistent (single policy, reused warning text).

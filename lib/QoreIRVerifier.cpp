@@ -193,6 +193,14 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt:
+        case QoreIROpcode::TrimAny:
+        case QoreIROpcode::TrimString:
+        case QoreIROpcode::ChompAny:
+        case QoreIROpcode::ChompString:
+        case QoreIROpcode::TransliterateAny:
+        case QoreIROpcode::TransliterateString:
+        case QoreIROpcode::BackgroundInt:
+        case QoreIROpcode::ListAssignAny:
         case QoreIROpcode::DotEvalAny:
         case QoreIROpcode::DotEvalInt:
         case QoreIROpcode::DotEvalFloat:
@@ -252,8 +260,11 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::Summarize:
         case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::TrimAny:
+        case QoreIROpcode::TrimString:
         case QoreIROpcode::ChompAny:
+        case QoreIROpcode::ChompString:
         case QoreIROpcode::TransliterateAny:
+        case QoreIROpcode::TransliterateString:
         case QoreIROpcode::BackgroundInt:
         case QoreIROpcode::ListAssignAny:
         case QoreIROpcode::PopAny:
@@ -648,8 +659,11 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::RegexSubstString
                     || inst->opcode == QoreIROpcode::InstanceOfBool
                     || inst->opcode == QoreIROpcode::TrimAny
+                    || inst->opcode == QoreIROpcode::TrimString
                     || inst->opcode == QoreIROpcode::ChompAny
+                    || inst->opcode == QoreIROpcode::ChompString
                     || inst->opcode == QoreIROpcode::TransliterateAny
+                    || inst->opcode == QoreIROpcode::TransliterateString
                     || inst->opcode == QoreIROpcode::BackgroundInt
                     || inst->opcode == QoreIROpcode::ListAssignAny
                     || inst->opcode == QoreIROpcode::PopAny
