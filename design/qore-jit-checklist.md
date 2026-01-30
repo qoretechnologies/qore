@@ -113,7 +113,7 @@ Deliverables:
 ## Phase 3: LLVM Integration & IR -> LLVM Lowering
 
 - [~] Add LLVM optional build configuration and ORC JIT bootstrap.
-- [ ] Implement IR -> LLVM lowering for initial hot paths (int/float arith, comparisons, control flow).
+- [~] Implement IR -> LLVM lowering for initial hot paths (int/float arith, comparisons, control flow).
 - [ ] Implement invoke/landingpad + personality integration with Qore exception model.
 - [ ] Provide deopt fallback to IR interpreter for failed guards.
 - [ ] Add basic benchmarks and validation against IR interpreter.

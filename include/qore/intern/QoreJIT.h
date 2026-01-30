@@ -45,6 +45,7 @@ public:
 
     bool isEnabled() const;
     bool initialize(std::string& error);
+    bool compileFunction(const class QoreIRFunction& func, std::string& error);
     void shutdown();
 
 private:

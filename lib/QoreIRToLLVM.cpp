@@ -1,6 +1,6 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
-    QoreJIT.cpp
+    QoreIRToLLVM.cpp
 
     Qore Programming Language
 
@@ -29,68 +29,15 @@
     information.
 */
 
-#include "qore/intern/QoreJIT.h"
-
-#ifdef QORE_JIT_ENABLED
-#include <llvm/Support/Error.h>
-#include <llvm/Support/TargetSelect.h>
 #include "qore/intern/QoreIRToLLVM.h"
-#endif
 
-QoreJIT& QoreJIT::instance() {
-    static QoreJIT jit;
-    return jit;
-}
-
-bool QoreJIT::isEnabled() const {
 #ifdef QORE_JIT_ENABLED
-    return true;
-#else
+#include "qore/intern/QoreIR.h"
+
+bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error) {
+    (void)func;
+    (void)module;
+    error = "IR to LLVM lowering not implemented";
     return false;
-#endif
 }
-
-bool QoreJIT::initialize(std::string& error) {
-    if (initialized) {
-        return true;
-    }
-#ifdef QORE_JIT_ENABLED
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
-
-    auto jit_or_err = llvm::orc::LLJITBuilder().create();
-    if (!jit_or_err) {
-        error = llvm::toString(jit_or_err.takeError());
-        return false;
-    }
-    jit = std::move(*jit_or_err);
-    initialized = true;
-    return true;
-#else
-    error = "JIT support is not enabled in this build";
-    return false;
 #endif
-}
-
-bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error) {
-#ifdef QORE_JIT_ENABLED
-    if (!initialized && !initialize(error)) {
-        return false;
-    }
-    llvm::LLVMContext ctx;
-    llvm::Module module("qore_jit_module", ctx);
-    QoreIRToLLVM lowering(ctx);
-    return lowering.lowerFunction(func, module, error);
-#else
-    error = "JIT support is not enabled in this build";
-    return false;
-#endif
-}
-
-void QoreJIT::shutdown() {
-#ifdef QORE_JIT_ENABLED
-    jit.reset();
-#endif
-    initialized = false;
-}

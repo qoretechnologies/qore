@@ -1,6 +1,6 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
-    QoreJIT.cpp
+    QoreIRToLLVM.h
 
     Qore Programming Language
 
@@ -29,68 +29,39 @@
     information.
 */
 
-#include "qore/intern/QoreJIT.h"
+#ifndef _QORE_QOREIRTOLLVM_H
+#define _QORE_QOREIRTOLLVM_H
+
+#include <string>
 
 #ifdef QORE_JIT_ENABLED
-#include <llvm/Support/Error.h>
-#include <llvm/Support/TargetSelect.h>
-#include "qore/intern/QoreIRToLLVM.h"
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
 #endif
 
-QoreJIT& QoreJIT::instance() {
-    static QoreJIT jit;
-    return jit;
-}
+class QoreIRFunction;
 
-bool QoreJIT::isEnabled() const {
+class QoreIRToLLVM {
+public:
 #ifdef QORE_JIT_ENABLED
-    return true;
-#else
-    return false;
-#endif
-}
-
-bool QoreJIT::initialize(std::string& error) {
-    if (initialized) {
-        return true;
+    explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
     }
-#ifdef QORE_JIT_ENABLED
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
 
-    auto jit_or_err = llvm::orc::LLJITBuilder().create();
-    if (!jit_or_err) {
-        error = llvm::toString(jit_or_err.takeError());
+    bool lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error);
+#else
+    explicit QoreIRToLLVM(int) {
+    }
+
+    bool lowerFunction(const QoreIRFunction&, int, std::string& error) {
+        error = "JIT support is not enabled in this build";
         return false;
     }
-    jit = std::move(*jit_or_err);
-    initialized = true;
-    return true;
-#else
-    error = "JIT support is not enabled in this build";
-    return false;
 #endif
-}
 
-bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error) {
+private:
 #ifdef QORE_JIT_ENABLED
-    if (!initialized && !initialize(error)) {
-        return false;
-    }
-    llvm::LLVMContext ctx;
-    llvm::Module module("qore_jit_module", ctx);
-    QoreIRToLLVM lowering(ctx);
-    return lowering.lowerFunction(func, module, error);
-#else
-    error = "JIT support is not enabled in this build";
-    return false;
+    llvm::LLVMContext& ctx;
 #endif
-}
+};
 
-void QoreJIT::shutdown() {
-#ifdef QORE_JIT_ENABLED
-    jit.reset();
 #endif
-    initialized = false;
-}

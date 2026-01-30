@@ -725,6 +725,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreStandardException.cpp
     lib/QoreXSinkException.cpp
     lib/QoreJIT.cpp
+    lib/QoreIRToLLVM.cpp
     lib/QoreClass.cpp
     lib/TypedHashDecl.cpp
     lib/QoreEnumDecl.cpp
