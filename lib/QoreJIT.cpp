@@ -37,6 +37,8 @@
 #include "qore/intern/QoreIRToLLVM.h"
 #endif
 
+#include "qore/intern/QoreIRInterpreter.h"
+
 QoreJIT& QoreJIT::instance() {
     static QoreJIT jit;
     return jit;
@@ -85,6 +87,20 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error) {
 #else
     error = "JIT support is not enabled in this build";
     return false;
+#endif
+}
+
+bool QoreJIT::executeWithFallback(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
+        std::string& error) {
+#ifdef QORE_JIT_ENABLED
+    if (!compileFunction(func, error)) {
+        return QoreIRInterpreter::execute(func, return_value, xsink, nullptr);
+    }
+    // JIT execution will replace this once lowering is implemented.
+    return QoreIRInterpreter::execute(func, return_value, xsink, nullptr);
+#else
+    error = "JIT support is not enabled in this build";
+    return QoreIRInterpreter::execute(func, return_value, xsink, nullptr);
 #endif
 }
 

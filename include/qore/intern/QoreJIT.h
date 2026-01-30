@@ -35,6 +35,10 @@
 #include <memory>
 #include <string>
 
+#include <qore/QoreValue.h>
+
+class ExceptionSink;
+
 #ifdef QORE_JIT_ENABLED
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #endif
@@ -46,6 +50,8 @@ public:
     bool isEnabled() const;
     bool initialize(std::string& error);
     bool compileFunction(const class QoreIRFunction& func, std::string& error);
+    bool executeWithFallback(const class QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
+            std::string& error);
     void shutdown();
 
 private:
