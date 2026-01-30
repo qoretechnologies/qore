@@ -3881,7 +3881,16 @@ QoreIRValue QoreIRLowering::lowerTrim(const QoreValue& expr, std::string& error)
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::TrimAny, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::TrimAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(op->getExp(), analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && analysis.known_type
+        && QoreTypeInfo::isType(analysis.known_type, NT_STRING)) {
+        opcode = QoreIROpcode::TrimString;
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerChomp(const QoreValue& expr, std::string& error) {
@@ -3891,7 +3900,16 @@ QoreIRValue QoreIRLowering::lowerChomp(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::ChompAny, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::ChompAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(op->getExp(), analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && analysis.known_type
+        && QoreTypeInfo::isType(analysis.known_type, NT_STRING)) {
+        opcode = QoreIROpcode::ChompString;
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerTransliteration(const QoreValue& expr, std::string& error) {
@@ -3901,7 +3919,21 @@ QoreIRValue QoreIRLowering::lowerTransliteration(const QoreValue& expr, std::str
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::TransliterateAny, expr, operands, op->loc, error);
+    QoreIROpcode opcode = QoreIROpcode::TransliterateAny;
+    QoreParseAnalysis analysis;
+    if (getAnalysis(op->getExp(), analysis)
+        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+        && analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && analysis.known_type
+        && QoreTypeInfo::isType(analysis.known_type, NT_STRING)) {
+        opcode = QoreIROpcode::TransliterateString;
+    } else if (op->getExp().isValue()) {
+        const QoreValue& value = op->getExp();
+        if (value.getType() == NT_STRING) {
+            opcode = QoreIROpcode::TransliterateString;
+        }
+    }
+    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& error) {

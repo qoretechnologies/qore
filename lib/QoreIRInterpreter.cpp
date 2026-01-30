@@ -214,8 +214,11 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         case QoreIROpcode::RegexSubstString:
         case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::TrimAny:
+        case QoreIROpcode::TrimString:
         case QoreIROpcode::ChompAny:
+        case QoreIROpcode::ChompString:
         case QoreIROpcode::TransliterateAny:
+        case QoreIROpcode::TransliterateString:
         case QoreIROpcode::BackgroundInt:
         case QoreIROpcode::ListAssignAny:
         case QoreIROpcode::PopAny:
@@ -1575,8 +1578,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::RegexSubstString:
             case QoreIROpcode::InstanceOfBool:
             case QoreIROpcode::TrimAny:
+            case QoreIROpcode::TrimString:
             case QoreIROpcode::ChompAny:
+            case QoreIROpcode::ChompString:
             case QoreIROpcode::TransliterateAny:
+            case QoreIROpcode::TransliterateString:
             case QoreIROpcode::BackgroundInt:
             case QoreIROpcode::ListAssignAny:
             case QoreIROpcode::PopAny:

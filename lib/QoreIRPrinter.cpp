@@ -139,8 +139,11 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::RegexSubstString: return "regex.subst.string";
         case QoreIROpcode::InstanceOfBool: return "instanceof.bool";
         case QoreIROpcode::TrimAny: return "trim.any";
+        case QoreIROpcode::TrimString: return "trim.string";
         case QoreIROpcode::ChompAny: return "chomp.any";
+        case QoreIROpcode::ChompString: return "chomp.string";
         case QoreIROpcode::TransliterateAny: return "transliterate.any";
+        case QoreIROpcode::TransliterateString: return "transliterate.string";
         case QoreIROpcode::BackgroundInt: return "background.int";
         case QoreIROpcode::ListAssignAny: return "list.assign.any";
         case QoreIROpcode::ExistsAny: return "exists.any";
