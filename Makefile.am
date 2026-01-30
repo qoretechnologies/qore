@@ -103,6 +103,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/VscDebugAdapter.qm \
 	qlib/WebUtil.qm \
 	qlib/ZeyosRestClient.qm \
+	qlib/ZohoBooksRestClient.qm \
 	qlib/BillwerkRestClient.qm \
     qlib/AwsRestClient.qm \
     qlib/ElasticSearchLoggerAppender.qm
@@ -132,6 +133,7 @@ DOX_SPLIT_MODULES = \
     qlib/ServerSentEventHandler \
     qlib/ServiceNowRestDataProvider \
     qlib/SwaggerDataProvider \
+    qlib/ZohoBooksDataProvider \
     qlib/AsyncApiDataProvider \
     qlib/HttpServerAsyncIo \
     qlib/MongoDbDataProvider \
@@ -181,6 +183,7 @@ ServerSentEventHandler_modverdir = $(modverdir)/ServerSentEventHandler
 ServiceNowRestDataProvider_modverdir = $(modverdir)/ServiceNowRestDataProvider
 SqlUtil_modverdir = $(modverdir)/SqlUtil
 SwaggerDataProvider_modverdir = $(modverdir)/SwaggerDataProvider
+ZohoBooksDataProvider_modverdir = $(modverdir)/ZohoBooksDataProvider
 
 dist_AsyncSocketIo_modver_DATA = $(wildcard qlib/AsyncSocketIo/*.q[cm])
 dist_AwsRestClientDataProvider_modver_DATA = $(wildcard qlib/AwsRestClientDataProvider/*.q[cm])
@@ -224,6 +227,7 @@ dist_ServerSentEventHandler_modver_DATA = $(wildcard qlib/ServerSentEventHandler
 dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestDataProvider/*.q[cm])
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
 dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[cm])
+dist_ZohoBooksDataProvider_modver_DATA = $(wildcard qlib/ZohoBooksDataProvider/*.q[cm]) $(wildcard qlib/ZohoBooksDataProvider/*.svg)
 dist_AsyncApiDataProvider_modver_DATA = $(wildcard qlib/AsyncApiDataProvider/*.q[cm])
 
 USER_MODULES = $(DOX_SRC_MODULES) \
