@@ -131,6 +131,10 @@ void QoreJIT::setDeoptPolicy(DeoptPolicy policy) {
     deopt_policy = policy;
 }
 
+void QoreJIT::setOsrEnabled(bool enable) {
+    osr_enabled = enable;
+}
+
 void QoreJIT::shutdown() {
 #ifdef QORE_JIT_ENABLED
     jit.reset();

@@ -126,7 +126,7 @@ Deliverables:
 - [~] Execution counters and tier transitions (AST -> IR -> JIT).
 - [~] Type profiling and guard placement strategy.
 - [~] Deopt policy and failure handling.
-- [ ] OSR for hot loops.
+- [~] OSR for hot loops.
 
 ---
 

@@ -65,6 +65,7 @@ public:
     bool shouldJit(uint64 count) const;
     void recordTypeProfile(const QoreValue& value);
     void setDeoptPolicy(DeoptPolicy policy);
+    void setOsrEnabled(bool enable);
 
 private:
     QoreJIT() = default;
@@ -79,6 +80,7 @@ private:
     uint64 hot_threshold = 1000;
     std::unordered_map<qore_type_t, uint64> type_profile;
     DeoptPolicy deopt_policy = DeoptPolicy::FallbackToInterpreter;
+    bool osr_enabled = false;
 };
 
 #endif
