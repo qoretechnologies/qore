@@ -147,6 +147,16 @@ ASTNode* FindNodeQuery::inDeclaration(ASTDeclaration* decl, ast_loc_t line, ast_
             if (result) return result;
             break;
         }
+        case ASTDeclarationKind::ADK_Module: {
+            ASTModuleDeclaration* d = static_cast<ASTModuleDeclaration*>(decl);
+            result = inName(d->name, line, col);
+            if (result) return result;
+            for (size_t i = 0, count = d->attributes.size(); i < count; i++) {
+                result = inExpression(d->attributes[i].value.get(), line, col);
+                if (result) return result;
+            }
+            break;
+        }
         default:
             break;
     }

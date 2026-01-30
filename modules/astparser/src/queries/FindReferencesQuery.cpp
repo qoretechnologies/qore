@@ -115,6 +115,14 @@ void FindReferencesQuery::inDeclaration(std::vector<ASTNode*>* vec, ASTDeclarati
             inName(vec, d->typeName, name);
             break;
         }
+        case ASTDeclarationKind::ADK_Module: {
+            ASTModuleDeclaration* d = static_cast<ASTModuleDeclaration*>(decl);
+            inName(vec, d->name, name);
+            for (size_t i = 0, count = d->attributes.size(); i < count; i++) {
+                inExpression(vec, d->attributes[i].value.get(), name);
+            }
+            break;
+        }
         default:
             break;
     }

@@ -445,6 +445,11 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
       - enabled bulk operations on ElasticSearchIndexTableDataProvider
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+    - @ref generatordataproviderintro "GeneratorDataProvider" module
+      - new module providing a data provider API for generating configurable test record streams for data
+        pipeline testing with no external dependencies
+      - supports configurable record count, field schema, sequential and random generation strategies,
+        template-based record generation, null injection, and reproducible output via random seeds
     - @ref elasticsearchloggerappenderintro "ElasticSearchLoggerAppender" module
       - new module providing a logger appender that sends log events to ElasticSearch using the Bulk API with
         batching support, configurable batch size and flush interval, date-based index patterns, and thread-safe

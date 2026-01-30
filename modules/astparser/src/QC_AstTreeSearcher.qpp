@@ -69,6 +69,8 @@ int64_t getSymbolKind(ASTDeclaration* decl) {
             break;
         case ASTDeclarationKind::ADK_Typedef:
             return static_cast<int64_t>(ASYK_TypeAlias);
+        case ASTDeclarationKind::ADK_Module:
+            return static_cast<int64_t>(ASYK_Module);
         default:
             break;
     }
