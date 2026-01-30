@@ -34,6 +34,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("schema-aware key completion tests", \schemaAwareKeyCompletionTests());
         addTestCase("static API tests", \staticApiTests());
         addTestCase("validation tests", \validationTests());
+        addTestCase("field dot edge case tests", \fieldDotEdgeCaseTests());
         addTestCase("stress tests", \stressTests());
 
         # Return for compatibility with test harnesses that check the return value.
@@ -246,6 +247,79 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(DPQL_TOK_WHITESPACE, tokens[1].type);
             assertEq(DPQL_TOK_HASH, tokens[2].type);
             assertEq("{x=1, y=(1,2)}", tokens[2].value);
+        }
+
+        # Test trailing dot is stripped from unquoted field name
+        {
+            DpqlTokenizer tok('@user.');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@user", tokens[0].value, "trailing dot should be stripped from field name");
+        }
+
+        # Test trailing dot with following token
+        {
+            DpqlTokenizer tok('@user. == "x"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@user", tokens[0].value, "trailing dot stripped when followed by space");
+        }
+
+        # Test multiple trailing dots are stripped
+        {
+            DpqlTokenizer tok('@user...');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@user", tokens[0].value, "multiple trailing dots should be stripped");
+        }
+
+        # Test consecutive dots break scanning (field before dots is captured)
+        {
+            DpqlTokenizer tok('@user..name');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@user", tokens[0].value, "consecutive dots should stop field scanning");
+        }
+
+        # Test single dot between segments still works (nested access)
+        {
+            DpqlTokenizer tok('@user.name');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@user.name", tokens[0].value, "single dots should be kept for nested access");
+        }
+
+        # Test multiple nested dots still works
+        {
+            DpqlTokenizer tok('@a.b.c.d');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@a.b.c.d", tokens[0].value, "multi-level nested access should work");
+        }
+
+        # Test consecutive dots in the middle: field stops before the double dot
+        {
+            DpqlTokenizer tok('@a.b..c');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@a.b", tokens[0].value, "field should stop before consecutive dots in middle");
+        }
+
+        # Test trailing dot position tracking is correct
+        {
+            DpqlTokenizer tok('@user. == "x"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            # After stripping trailing dot, next non-whitespace token should still parse correctly
+            assertEq("@user", tokens[0].value);
+            # Find the == operator
+            bool found_eq = False;
+            foreach hash<DpqlTokenInfo> t in (tokens) {
+                if (t.type == DPQL_TOK_OP_EQ) {
+                    found_eq = True;
+                    break;
+                }
+            }
+            assertTrue(found_eq, "operator should be found after trailing dot is stripped");
         }
     }
 
@@ -1311,6 +1385,65 @@ public class DpqlTest inherits QUnit::Test {
         }
     }
 
+    fieldDotEdgeCaseTests() {
+        # Test parsing expression with trailing dot on field name
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@user. == "x"');
+            # Should fail or the field should be parsed as "user" (not "user.")
+            if (result.success) {
+                assertEq("user", result.expression.args[0].field,
+                    "trailing dot should be stripped - field should be 'user'");
+            }
+        }
+
+        # Test parsing with consecutive dots - should produce parse error
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('@user..name == "x"');
+            # The tokenizer breaks at consecutive dots, so the parser sees @user then ..name
+            # which should be a parse error
+            assertFalse(result.success, "consecutive dots should cause a parse error");
+        }
+
+        # Test valid dotted field parses correctly
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@user.name == "John"');
+            assertEq("user.name", exp.args[0].field);
+            assertEq("John", exp.args[1]);
+        }
+
+        # Test deeply nested dotted field
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@a.b.c.d == 1');
+            assertEq("a.b.c.d", exp.args[0].field);
+            assertEq(1, exp.args[1]);
+        }
+
+        # Test dotted field round-trip
+        {
+            string expr = '@user.name == "John"';
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(expr);
+            string serialized = DataProvider::serializeDpqlExpression(parsed);
+            assertEq(expr, serialized, "dotted field should round-trip correctly");
+        }
+
+        # Test deeply nested dotted field round-trip
+        {
+            string expr = '@a.b.c == "value"';
+            hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(expr);
+            string serialized = DataProvider::serializeDpqlExpression(parsed);
+            assertEq(expr, serialized, "multi-level dotted field should round-trip correctly");
+        }
+
+        # Test field with dot followed by accessor
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@data.items[0] == "x"');
+            hash<DataProviderFieldReference> ref = exp.args[0];
+            assertEq("data.items", ref.field, "dotted field before accessor should work");
+            assertTrue(ref.accessors.size() > 0, "accessor should be parsed");
+            assertEq(DPQL_ACCESSOR_INDEX, ref.accessors[0].type);
+        }
+    }
+
     stressTests() {
         # Test deeply nested expressions
         {
@@ -1939,6 +2072,40 @@ public class DpqlTest inherits QUnit::Test {
             };
             string dpql = DataProvider::serializeDpqlExpression(exp);
             assertEq('@record{"key with spaces"} == "value"', dpql);
+        }
+
+        # Test serializer with untyped (hash<auto>) accessors (e.g., from JSON deserialization)
+        # Simulate runtime hash<auto> data by building via soft cast
+        {
+            hash<auto> ref = {
+                "field": "items",
+                "accessors": (
+                    {"type": DPQL_ACCESSOR_INDEX, "value": 0},
+                ),
+            };
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (ref, "value"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@items[0] == "value"', dpql);
+        }
+
+        # Test serializer with multiple untyped accessors (chained)
+        {
+            hash<auto> ref = {
+                "field": "data",
+                "accessors": (
+                    {"type": DPQL_ACCESSOR_INDEX, "value": 0},
+                    {"type": DPQL_ACCESSOR_KEY, "value": ("name",)},
+                ),
+            };
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (ref, "John"),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@data[0]{name} == "John"', dpql);
         }
     }
 
