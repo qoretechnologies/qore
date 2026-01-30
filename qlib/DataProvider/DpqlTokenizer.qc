@@ -643,8 +643,19 @@ public class DpqlTokenizer {
                 if (c !~ /[a-zA-Z0-9_.]/) {
                     break;
                 }
+                # Don't allow consecutive dots (e.g., @user..name)
+                if (c == "." && value.size() > 0 && value[value.size() - 1] == ".") {
+                    break;
+                }
                 value += c;
                 advance();
+            }
+            # Strip trailing dots - they are not part of the field name
+            # (e.g., "@user." should tokenize as field "@user" followed by dot)
+            while (value.size() > 1 && value[value.size() - 1] == ".") {
+                value = substr(value, 0, value.size() - 1);
+                --pos;
+                --column;
             }
             return makeToken(DPQL_TOK_FIELD, value, start_line, start_column);
         }

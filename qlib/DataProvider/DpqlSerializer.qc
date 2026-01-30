@@ -310,8 +310,8 @@ public class DpqlSerializer {
 
         # Serialize accessor chain if present
         if (ref.accessors) {
-            foreach hash<DataProviderFieldAccessor> acc in (ref.accessors) {
-                result += serializeAccessor(acc);
+            foreach hash<auto> acc in (ref.accessors) {
+                result += serializeAccessor(cast<hash<DataProviderFieldAccessor>>(acc));
             }
         }
 
