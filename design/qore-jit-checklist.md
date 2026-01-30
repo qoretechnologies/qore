@@ -40,16 +40,16 @@ Deliverables:
 
 ## Phase 1: AST -> IR Lowering (tight checklist)
 
-- [ ] Lower all expression families with invoke where needed:
+- [x] Lower all expression families with invoke where needed:
   - arithmetic, bitwise, comparisons, logical, regex (including nmatch), container ops (including pop/push),
     date/time ops, instanceof, trim/chomp/transliteration, background, list assignment
   - cast/conversion ops
   - deref / element / field access
   - map/fold/foldr/select
 - [x] Lower all statements: if/else, loops, switch, try/catch, throw/rethrow, return, break/continue.
-- [~] Lvalue lowering for op-assign and assignment to all containers and objects.
-- [~] Preserve typed-local semantics where values can be NOTHING.
-- [~] Integrate parse-analysis propagation (definite assignment, maybe-NOTHING) into lowering decisions.
+- [x] Lvalue lowering for op-assign and assignment to all containers and objects.
+- [x] Preserve typed-local semantics where values can be NOTHING.
+- [x] Integrate parse-analysis propagation (definite assignment, maybe-NOTHING) into lowering decisions.
 - [x] Audit remaining `.any` helper ops (regex/extract/remove/keys/exists/elements/dot-eval/cast/map-select/hash-map)
   and document `.any` as the Phase‑1 endpoint.
 - [x] Add IR verifier checks for invoke targets and terminator correctness.
