@@ -123,7 +123,7 @@ Deliverables:
 
 ## Phase 4: Tiered Compilation
 
-- [ ] Execution counters and tier transitions (AST -> IR -> JIT).
+- [~] Execution counters and tier transitions (AST -> IR -> JIT).
 - [ ] Type profiling and guard placement strategy.
 - [ ] Deopt policy and failure handling.
 - [ ] OSR for hot loops.

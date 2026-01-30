@@ -112,6 +112,14 @@ bool QoreJIT::executeWithFallback(const QoreIRFunction& func, QoreValue& return_
 #endif
 }
 
+uint64 QoreJIT::recordExecution() {
+    return ++exec_count;
+}
+
+bool QoreJIT::shouldJit(uint64 count) const {
+    return count >= hot_threshold;
+}
+
 void QoreJIT::shutdown() {
 #ifdef QORE_JIT_ENABLED
     jit.reset();

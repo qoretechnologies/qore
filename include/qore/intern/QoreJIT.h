@@ -34,6 +34,7 @@
 
 #include <memory>
 #include <string>
+#include <atomic>
 
 #include <qore/QoreValue.h>
 #include <qore/Restrictions.h>
@@ -55,6 +56,8 @@ public:
     bool executeWithFallback(const class QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
             std::string& error);
     void shutdown();
+    uint64 recordExecution();
+    bool shouldJit(uint64 count) const;
 
 private:
     QoreJIT() = default;
@@ -65,6 +68,8 @@ private:
     std::unique_ptr<llvm::orc::LLJIT> jit;
 #endif
     bool initialized = false;
+    std::atomic<uint64> exec_count{0};
+    uint64 hot_threshold = 1000;
 };
 
 #endif
