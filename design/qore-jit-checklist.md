@@ -56,11 +56,11 @@ Deliverables:
 - [x] Add IR printer updates for new ops and invoke forms.
 
 Deliverables:
-- [~] `lib/QoreIRLowering.cpp`
-- [~] `include/qore/intern/QoreIRLowering.h`
-- [~] `lib/QoreIRVerifier.cpp`
-- [~] `lib/QoreIRPrinter.cpp`
-- [~] `test/ir/`
+- [x] `lib/QoreIRLowering.cpp`
+- [x] `include/qore/intern/QoreIRLowering.h`
+- [x] `lib/QoreIRVerifier.cpp`
+- [x] `lib/QoreIRPrinter.cpp`
+- [x] `test/ir/`
 
 ### Phase 1 Execution Checklist (current)
 
@@ -92,13 +92,13 @@ Deliverables:
 ## Current Gap Snapshot (2026-01-23)
 
 - [x] Tighten Phase 0 spec items with concrete ABI + ownership tables (call ABI, refcount ownership per op).
-- [~] Invoke coverage: ExpressionStatement + nested expressions now use `invoke` for expr-ops; added invoke for
+- [x] Invoke coverage: ExpressionStatement + nested expressions now use `invoke` for expr-ops; added invoke for
   lvalue ops (load/store/op-assign/inc/dec/shift/unshift/splice), binary/unary ops, switch case comparisons,
   and condition/logical `ToBool` via `invoke_opcode`.
 - [x] Parse-analysis propagation: ensure definite assignment/maybe-NOTHING is used for mixed-type comparisons and more ops (not only numeric); add dot-eval return-type coverage (int/string/date/object) and optional-return coverage for dot-eval.
 - [x] Lvalue op-assign coverage: verify hash/object/array lvalues and range-slice lvalues have full op-assign support.
 - [x] Negative tests: range/lvalue invalid ops and unsupported date shift-assign expectations.
-- [~] IR interpreter: add tests for `invoke.sim.error`, `call`/`call.indirect`/`dot.eval` invoke paths, and unwind cleanup paths.
+- [x] IR interpreter: add tests for `invoke.sim.error`, `call`/`call.indirect`/`dot.eval` invoke paths, and unwind cleanup paths.
   - [x] invoke.sim.error + call/dot.eval invoke coverage.
   - [x] Unwind cleanup tests via minimal IR executor with cleanup list + catch.exception coverage.
 - [x] IR interpreter: execute statement opcodes (foreach/on-block-exit/debug/thread-exit); add thread-exit executor smoke test.
