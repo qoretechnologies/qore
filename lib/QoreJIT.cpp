@@ -52,6 +52,14 @@ bool QoreJIT::isEnabled() const {
 #endif
 }
 
+bool QoreJIT::canJit(int64 parse_options, std::string& reason) const {
+    if ((parse_options & PO_MODERN) != PO_MODERN) {
+        reason = "requires %modern (PO_MODERN)";
+        return false;
+    }
+    return true;
+}
+
 bool QoreJIT::initialize(std::string& error) {
     if (initialized) {
         return true;

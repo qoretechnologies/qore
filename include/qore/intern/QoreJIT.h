@@ -36,6 +36,7 @@
 #include <string>
 
 #include <qore/QoreValue.h>
+#include <qore/Restrictions.h>
 
 class ExceptionSink;
 
@@ -49,6 +50,7 @@ public:
 
     bool isEnabled() const;
     bool initialize(std::string& error);
+    bool canJit(int64 parse_options, std::string& reason) const;
     bool compileFunction(const class QoreIRFunction& func, std::string& error);
     bool executeWithFallback(const class QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
             std::string& error);
