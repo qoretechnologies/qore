@@ -792,6 +792,9 @@ static bool lowerAndExpectOpcodeFromParseAnalysis(const char* name, QoreValue ex
             expected = float_opcode;
         }
     }
+    if (bin_int_lvalue) {
+        expected = int_opcode;
+    }
 
     ValueHolder expr_holder(parsed_expr, nullptr);
     QoreIRFunction func(name);
@@ -814,6 +817,14 @@ static bool lowerAndExpectOpcodeFromParseAnalysis(const char* name, QoreValue ex
     }
 
     if (!functionHasOpcode(func, expected)) {
+        if (shouldPrintIR()) {
+            QoreIRPrinter::print(func, std::cerr);
+        }
+        std::cerr << "Expected opcode: " << static_cast<int>(expected)
+            << " left(" << (left_analysis.known_type ? QoreTypeInfo::getName(left_analysis.known_type) : "null")
+            << " nn=" << (left_never_nothing ? "y" : "n") << ")"
+            << " right(" << (right_analysis.known_type ? QoreTypeInfo::getName(right_analysis.known_type) : "null")
+            << " nn=" << (right_never_nothing ? "y" : "n") << ")\n";
         std::cerr << "Lowered function missing opcode (" << name << ")\n";
         return false;
     }
@@ -953,6 +964,9 @@ static bool lowerAndExpectOpcodeFromParseAnalysisWithDate(const char* name, Qore
     }
 
     if (!functionHasOpcode(func, expected)) {
+        if (shouldPrintIR()) {
+            QoreIRPrinter::print(func, std::cerr);
+        }
         std::cerr << "Lowered function missing opcode (" << name << ")\n";
         return false;
     }
@@ -2864,7 +2878,7 @@ static bool runIRExecutorContainerSmoke() {
         hash->setKeyValue("a", QoreValue(1), &xsink);
         hash->setKeyValue("b", QoreValue(2), &xsink);
         QoreValue keys_expr(new QoreKeysOperatorNode(nullptr, QoreValue(hash->refSelf())));
-        auto* keys = builder.createExprOp(QoreIROpcode::KeysList, keys_expr, {});
+        auto* keys = builder.createExprOp(QoreIROpcode::KeysHash, keys_expr, {});
         QoreListNode* list = new QoreListNode(autoTypeInfo);
         list->push(QoreValue(1), &xsink);
         list->push(QoreValue(2), &xsink);
@@ -10074,14 +10088,14 @@ int main() {
     if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_hash_assigned",
             QoreValue(new QoreKeysOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_left"), &analysis_hash_left, false)))),
-            QoreIROpcode::KeysList)) {
+            QoreIROpcode::KeysHash)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_hash_maybe",
             QoreValue(new QoreKeysOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_hash_maybe_left"),
                     &analysis_hash_maybe_left, false)))),
-            QoreIROpcode::KeysList)) {
+            QoreIROpcode::KeysHash)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_hash_deref_parse_maybe",
@@ -10221,7 +10235,7 @@ int main() {
     if (!lowerAndExpectOpcodeWithParseInit("ir_keys_parse_object_assigned",
             QoreValue(new QoreKeysOperatorNode(nullptr,
                 QoreValue(new VarRefNode(nullptr, strdup("analysis_object_left"), &analysis_object_left, false)))),
-            QoreIROpcode::KeysList)) {
+            QoreIROpcode::KeysAny)) {
         return 1;
     }
     if (!lowerAndExpectOpcodeWithParseInit("ir_remove_parse_assigned",

@@ -114,6 +114,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ShrAssignLValue: return "shr.assign.lvalue";
         case QoreIROpcode::ShiftLValue: return "shift.lvalue";
         case QoreIROpcode::UnshiftLValue: return "unshift.lvalue";
+        case QoreIROpcode::PopAny: return "pop.any";
+        case QoreIROpcode::PushAny: return "push.any";
         case QoreIROpcode::SpliceLValue: return "splice.lvalue";
         case QoreIROpcode::ExtractAny: return "extract.any";
         case QoreIROpcode::ExtractList: return "extract.list";
@@ -127,12 +129,20 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::RemoveBinary: return "remove.binary";
         case QoreIROpcode::KeysAny: return "keys.any";
         case QoreIROpcode::KeysList: return "keys.list";
+        case QoreIROpcode::KeysHash: return "keys.hash";
         case QoreIROpcode::RegexMatchAny: return "regex.match.any";
         case QoreIROpcode::RegexMatchBool: return "regex.match.bool";
+        case QoreIROpcode::RegexNMatchBool: return "regex.nmatch.bool";
         case QoreIROpcode::RegexExtractAny: return "regex.extract.any";
         case QoreIROpcode::RegexExtractList: return "regex.extract.list";
         case QoreIROpcode::RegexSubstAny: return "regex.subst.any";
         case QoreIROpcode::RegexSubstString: return "regex.subst.string";
+        case QoreIROpcode::InstanceOfBool: return "instanceof.bool";
+        case QoreIROpcode::TrimAny: return "trim.any";
+        case QoreIROpcode::ChompAny: return "chomp.any";
+        case QoreIROpcode::TransliterateAny: return "transliterate.any";
+        case QoreIROpcode::BackgroundInt: return "background.int";
+        case QoreIROpcode::ListAssignAny: return "list.assign.any";
         case QoreIROpcode::ExistsAny: return "exists.any";
         case QoreIROpcode::ExistsBool: return "exists.bool";
         case QoreIROpcode::ElementsAny: return "elements.any";
@@ -331,6 +341,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::RemoveBinary
                     || inst->opcode == QoreIROpcode::KeysAny
                     || inst->opcode == QoreIROpcode::KeysList
+                    || inst->opcode == QoreIROpcode::KeysHash
                     || inst->opcode == QoreIROpcode::DotEvalAny
                     || inst->opcode == QoreIROpcode::DotEvalInt
                     || inst->opcode == QoreIROpcode::DotEvalFloat

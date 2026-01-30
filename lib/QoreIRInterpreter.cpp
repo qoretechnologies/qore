@@ -204,12 +204,22 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         case QoreIROpcode::RemoveBinary:
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
         case QoreIROpcode::RegexExtractAny:
         case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
         case QoreIROpcode::RegexSubstString:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::TrimAny:
+        case QoreIROpcode::ChompAny:
+        case QoreIROpcode::TransliterateAny:
+        case QoreIROpcode::BackgroundInt:
+        case QoreIROpcode::ListAssignAny:
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
@@ -1555,12 +1565,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         case QoreIROpcode::RemoveBinary:
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
         case QoreIROpcode::RegexMatchAny:
             case QoreIROpcode::RegexMatchBool:
+            case QoreIROpcode::RegexNMatchBool:
             case QoreIROpcode::RegexExtractAny:
             case QoreIROpcode::RegexExtractList:
             case QoreIROpcode::RegexSubstAny:
             case QoreIROpcode::RegexSubstString:
+            case QoreIROpcode::InstanceOfBool:
+            case QoreIROpcode::TrimAny:
+            case QoreIROpcode::ChompAny:
+            case QoreIROpcode::TransliterateAny:
+            case QoreIROpcode::BackgroundInt:
+            case QoreIROpcode::ListAssignAny:
+            case QoreIROpcode::PopAny:
+            case QoreIROpcode::PushAny:
             case QoreIROpcode::ExistsAny:
             case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:

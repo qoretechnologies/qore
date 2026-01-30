@@ -181,8 +181,10 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RemoveBinary:
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
         case QoreIROpcode::RegexExtractAny:
         case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
@@ -224,6 +226,8 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::ShrAssignLValue:
         case QoreIROpcode::ShiftLValue:
         case QoreIROpcode::UnshiftLValue:
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
         case QoreIROpcode::SpliceLValue:
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:
@@ -246,6 +250,14 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::Assert:
         case QoreIROpcode::Context:
         case QoreIROpcode::Summarize:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::TrimAny:
+        case QoreIROpcode::ChompAny:
+        case QoreIROpcode::TransliterateAny:
+        case QoreIROpcode::BackgroundInt:
+        case QoreIROpcode::ListAssignAny:
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
             return 0;
         case QoreIROpcode::AddInt:
         case QoreIROpcode::AddFloat:
@@ -362,8 +374,10 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RemoveBinary:
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
         case QoreIROpcode::RegexExtractAny:
         case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
@@ -624,12 +638,22 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::RemoveBinary
                     || inst->opcode == QoreIROpcode::KeysAny
                     || inst->opcode == QoreIROpcode::KeysList
+                    || inst->opcode == QoreIROpcode::KeysHash
                     || inst->opcode == QoreIROpcode::RegexMatchAny
                     || inst->opcode == QoreIROpcode::RegexMatchBool
+                    || inst->opcode == QoreIROpcode::RegexNMatchBool
                     || inst->opcode == QoreIROpcode::RegexExtractAny
                     || inst->opcode == QoreIROpcode::RegexExtractList
                     || inst->opcode == QoreIROpcode::RegexSubstAny
                     || inst->opcode == QoreIROpcode::RegexSubstString
+                    || inst->opcode == QoreIROpcode::InstanceOfBool
+                    || inst->opcode == QoreIROpcode::TrimAny
+                    || inst->opcode == QoreIROpcode::ChompAny
+                    || inst->opcode == QoreIROpcode::TransliterateAny
+                    || inst->opcode == QoreIROpcode::BackgroundInt
+                    || inst->opcode == QoreIROpcode::ListAssignAny
+                    || inst->opcode == QoreIROpcode::PopAny
+                    || inst->opcode == QoreIROpcode::PushAny
                     || inst->opcode == QoreIROpcode::ExistsAny
                     || inst->opcode == QoreIROpcode::ExistsBool
                     || inst->opcode == QoreIROpcode::ElementsAny
