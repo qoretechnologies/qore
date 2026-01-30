@@ -1048,6 +1048,14 @@ int check_stack(ExceptionSink* xsink) {
 }
 #endif
 
+int q_check_stack(ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+    return check_stack(xsink);
+#else
+    return 0;
+#endif
+}
+
 void inc_active_exceptions(int diff) {
     ThreadData* td = thread_data.get();
     assert(diff == 1 || diff < 0);
