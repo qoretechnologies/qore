@@ -615,9 +615,9 @@ class QdpCmd {
     static getInfo(AbstractDataProvider provider) {
         hash<DataProviderInfo> info = provider.getInfo();
 
-        # For JSON/YAML output, just dump the raw info
+        # For JSON/YAML output, convert type objects to serializable data
         if (opts.json || opts.yaml) {
-            output(info);
+            output(provider.getInfoAsData());
             return;
         }
 
@@ -631,6 +631,26 @@ class QdpCmd {
         printf("  %s: %s\n", color.key("Type"), color.type(info.type));
         if (info.short_desc) {
             printf("  %s: %s\n", color.key("Description"), info.short_desc);
+        }
+
+        # Constructor options
+        if (info.constructor_options) {
+            printf("%s\n", color.bold("Constructor Options"));
+            foreach hash<auto> opt in (info.constructor_options.pairIterator()) {
+                string type_str = (map $1.getName(), opt.value.type).join("|");
+                string req = opt.value.required ? color.error(" (required)") : "";
+                printf("  %s [%s]%s\n", color.key(opt.key), color.type(type_str), req);
+                if (opt.value.short_desc) {
+                    printf("    %s\n", opt.value.short_desc);
+                }
+                if (opt.value.allowed_values) {
+                    printf("    %s: %s\n", color.dim("values"),
+                        (map $1.value, opt.value.allowed_values).join(", "));
+                }
+                if (exists opt.value.default_value) {
+                    printf("    %s: %y\n", color.dim("default"), opt.value.default_value);
+                }
+            }
         }
 
         # Capabilities section
@@ -1227,7 +1247,8 @@ class QdpCmd {
                 get_script_name(), cmd);
         }
         hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(app, QdpCmd::action);
-        printf("@%s/%s (%s%s): %s\n", app, QdpCmd::action, ActionNameMap{action.action_code},
+        printf("%s/%s (%s%s): %s\n", color.key("@" + app), color.bold(QdpCmd::action),
+            color.type(ActionNameMap{action.action_code}),
             (action.action_val.val() ? " \"" + action.action_val + "\"" : ""), action.short_desc);
         action = DataProviderActionCatalog::checkAppActionOptions(action.app, action.action);
         *hash<auto> req = getHashIntern(shift ARGV, "options");
@@ -1235,7 +1256,7 @@ class QdpCmd {
             ? provider.tryGetActionOptionsWithOptions(action, req)
             : action.options;
         if (opts) {
-            printf("Options:\n");
+            printf("%s\n", color.bold("Options"));
             foreach hash<auto> i in (opts.pairIterator()) {
                 string tn = i.value.type.getName();
                 # get allowed values or element allowed values
@@ -1255,14 +1276,19 @@ class QdpCmd {
                         info += sprintf(", elements: one of: %y", (map $1.value ?? $1, l));
                     }
                 }
-                printf(" - %s (%s%s%s): %s\n", i.key, i.value.required || tn =~ /^\*/ ? "" : "*", tn, info,
+                string req_str = i.value.required ? color.error(" (required)") : "";
+                printf("  %s [%s%s]%s: %s\n", color.key(i.key),
+                    i.value.required || tn =~ /^\*/ ? "" : "*", color.type(tn), req_str,
                     i.value.short_desc);
+                if (info) {
+                    printf("    %s%s\n", color.dim("values"), info);
+                }
             }
         } else {
-            printf("Options: none\n");
+            printf("Options: %s\n", color.dim("none"));
         }
         if (action.output_type) {
-            printf("Output:\n");
+            printf("%s\n", color.bold("Output"));
             QdpCmd::showType(provider, action.output_type, "  ");
         }
     }
@@ -1894,6 +1920,9 @@ class QdpCmd {
 
             DataProviderDataContextHelper dch(options);
             foreach string seg in (action.path[1..].split("/")) {
+                if (!seg.val()) {
+                    continue;
+                }
                 if (*string var = (seg =~ x/^\{([^\}]+)\}$/)[0]) {
                     seg = remove options{var};
                 }
@@ -2295,7 +2324,7 @@ class QdpCmd {
 %endif
         } else if (opts.yaml) {
 %ifndef NoYaml
-            printf("%s", make_yaml(data));
+            printf("%s", make_yaml(data, YAML::BlockStyle));
 %else
             error("YAML output requested but yaml module is not available");
 %endif
