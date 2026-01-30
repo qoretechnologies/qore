@@ -193,6 +193,8 @@ public class ConnectionSchemeCache {
             "esmtps": "SmtpClient",
             "esmtptls": "SmtpClient",
 
+            "shipstation": "ShipStationRestClient",
+
             "sse": "ServerSentEventClient",
             "sses": "ServerSentEventClient",
 

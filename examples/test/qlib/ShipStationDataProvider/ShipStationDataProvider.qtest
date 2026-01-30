@@ -1,0 +1,864 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ShipStationDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/ShipStationRestClient.qm
+%requires ../../../../qlib/ShipStationDataProvider
+
+%exec-class ShipStationDataProviderTest
+
+public class ShipStationDataProviderTest inherits QUnit::Test {
+    private {
+        #! ShipStation REST client for integration tests
+        *ShipStationRestClient::ShipStationRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "apisecret": "s,apisecret=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test store ID for integration tests
+        *int testStoreId;
+
+        #! Test warehouse ID for integration tests
+        *int testWarehouseId;
+
+        #! Test carrier code for integration tests
+        *string testCarrierCode;
+
+        #! Test order ID created during tests (for cleanup)
+        *int testOrderId;
+    }
+
+    constructor() : Test("ShipStationDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET)
+        addTestCase("integration tests", \integrationTests());
+
+        # Webhook trigger tests
+        addTestCase("webhook trigger tests", \webhookTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the ShipStation client for integration tests
+    private setupConnection() {
+        *string apikey = m_options.apikey ?? ENV.SHIPSTATION_API_KEY;
+        *string apisecret = m_options.apisecret ?? ENV.SHIPSTATION_API_SECRET;
+        if (!apikey || !apisecret) {
+            if (m_options.verbose) {
+                printf("No API credentials provided (use -k/-s options or SHIPSTATION_API_KEY/SHIPSTATION_API_SECRET env vars)\n");
+            }
+            return;
+        }
+        hash<auto> opts = {
+            "api_key": apikey,
+            "api_secret": apisecret,
+        };
+        client = new ShipStationRestClient::ShipStationRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        # Test creating provider with fake credentials
+        ShipStationDataProvider::ShipStationDataProvider prov({
+            "api_key": "fake-key-for-testing",
+            "api_secret": "fake-secret-for-testing",
+        });
+        assertEq("shipstation", prov.getName());
+        assertEq("ShipStation data provider for shipping and logistics management", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("shipstation");
+        assertEq("shipstation", factory.getInfo().name);
+        assertEq("ShipStation data provider factory", factory.getInfo().desc);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("api_key"));
+        assertTrue(factoryOpts.hasKey("api_secret"));
+        assertTrue(factoryOpts.hasKey("shipstationrestclient"));
+        assertTrue(factoryOpts.hasKey("shipstationrestclient_options"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        ShipStationDataProvider::ShipStationDataProvider prov({
+            "api_key": "x",
+            "api_secret": "y",
+        });
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertEq("ShipStationDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("api_key"));
+        assertTrue(info.constructor_options.hasKey("api_secret"));
+        assertTrue(info.constructor_options.hasKey("shipstationrestclient"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        ShipStationDataProvider::ShipStationDataProvider prov({
+            "api_key": "x",
+            "api_secret": "y",
+        });
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Collection providers
+        assertTrue(children.contains("orders"));
+        assertTrue(children.contains("carriers"));
+        assertTrue(children.contains("customers"));
+        assertTrue(children.contains("products"));
+        assertTrue(children.contains("shipments"));
+        assertTrue(children.contains("fulfillments"));
+        assertTrue(children.contains("stores"));
+        assertTrue(children.contains("warehouses"));
+        assertTrue(children.contains("users"));
+        assertTrue(children.contains("tags"));
+        assertTrue(children.contains("marketplaces"));
+
+        # Action providers
+        assertTrue(children.contains("get-order"));
+        assertTrue(children.contains("create-order"));
+        assertTrue(children.contains("update-order"));
+        assertTrue(children.contains("delete-order"));
+        assertTrue(children.contains("mark-order-as-shipped"));
+        assertTrue(children.contains("add-tag-to-order"));
+        assertTrue(children.contains("remove-tag-from-order"));
+        assertTrue(children.contains("assign-user-to-order"));
+        assertTrue(children.contains("unassign-user-from-order"));
+        assertTrue(children.contains("get-carrier"));
+        assertTrue(children.contains("list-services"));
+        assertTrue(children.contains("list-packages"));
+        assertTrue(children.contains("add-funds"));
+        assertTrue(children.contains("get-customer"));
+        assertTrue(children.contains("get-product"));
+        assertTrue(children.contains("update-product"));
+        assertTrue(children.contains("void-label"));
+        assertTrue(children.contains("get-store"));
+        assertTrue(children.contains("update-store"));
+        assertTrue(children.contains("deactivate-store"));
+        assertTrue(children.contains("reactivate-store"));
+        assertTrue(children.contains("refresh-store"));
+        assertTrue(children.contains("get-warehouse"));
+        assertTrue(children.contains("create-warehouse"));
+        assertTrue(children.contains("update-warehouse"));
+        assertTrue(children.contains("make-api-call"));
+        assertTrue(children.contains("events"));
+
+        # Check orders child provider
+        AbstractDataProvider orders = prov.getChildProvider("orders");
+        assertEq("orders", orders.getName());
+        hash<DataProviderInfo> ordersInfo = orders.getInfo();
+        assertTrue(ordersInfo.supports_read);
+        assertTrue(ordersInfo.supports_native_search);
+        assertTrue(ordersInfo.has_record);
+
+        # Check create-order child provider
+        AbstractDataProvider createOrder = prov.getChildProvider("create-order");
+        assertEq("create-order", createOrder.getName());
+        hash<DataProviderInfo> createOrderInfo = createOrder.getInfo();
+        assertTrue(createOrderInfo.supports_request);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check events child providers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("order-notify"));
+        assertTrue(eventChildren.contains("item-order-notify"));
+        assertTrue(eventChildren.contains("ship-notify"));
+        assertTrue(eventChildren.contains("item-ship-notify"));
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test order data type
+        ShipStationDataProvider::ShipStationOrderDataType orderType();
+        hash<string, AbstractDataField> orderFields = orderType.getFields();
+        assertTrue(orderFields.hasKey("orderId"));
+        assertTrue(orderFields.hasKey("orderNumber"));
+        assertTrue(orderFields.hasKey("orderStatus"));
+        assertTrue(orderFields.hasKey("orderDate"));
+        assertTrue(orderFields.hasKey("shipTo"));
+        assertTrue(orderFields.hasKey("items"));
+
+        # Test address data type
+        ShipStationDataProvider::ShipStationAddressDataType addressType();
+        hash<string, AbstractDataField> addressFields = addressType.getFields();
+        assertTrue(addressFields.hasKey("name"));
+        assertTrue(addressFields.hasKey("street1"));
+        assertTrue(addressFields.hasKey("city"));
+        assertTrue(addressFields.hasKey("state"));
+        assertTrue(addressFields.hasKey("postalCode"));
+        assertTrue(addressFields.hasKey("country"));
+
+        # Test carrier data type
+        ShipStationDataProvider::ShipStationCarrierDataType carrierType();
+        hash<string, AbstractDataField> carrierFields = carrierType.getFields();
+        assertTrue(carrierFields.hasKey("code"));
+        assertTrue(carrierFields.hasKey("name"));
+        assertTrue(carrierFields.hasKey("accountNumber"));
+        assertTrue(carrierFields.hasKey("shippingProviderId"));
+
+        # Test warehouse data type
+        ShipStationDataProvider::ShipStationWarehouseDataType warehouseType();
+        hash<string, AbstractDataField> warehouseFields = warehouseType.getFields();
+        assertTrue(warehouseFields.hasKey("warehouseId"));
+        assertTrue(warehouseFields.hasKey("warehouseName"));
+        assertTrue(warehouseFields.hasKey("originAddress"));
+        assertTrue(warehouseFields.hasKey("isDefault"));
+
+        # Test event data types
+        ShipStationDataProvider::ShipStationOrderNotifyEventDataType orderEventType();
+        hash<string, AbstractDataField> orderEventFields = orderEventType.getFields();
+        assertTrue(orderEventFields.hasKey("event"));
+        assertTrue(orderEventFields.hasKey("resource_url"));
+        assertTrue(orderEventFields.hasKey("orderId"));
+        assertTrue(orderEventFields.hasKey("orderNumber"));
+
+        ShipStationDataProvider::ShipStationShipNotifyEventDataType shipEventType();
+        hash<string, AbstractDataField> shipEventFields = shipEventType.getFields();
+        assertTrue(shipEventFields.hasKey("event"));
+        assertTrue(shipEventFields.hasKey("resource_url"));
+        assertTrue(shipEventFields.hasKey("shipmentId"));
+        assertTrue(shipEventFields.hasKey("trackingNumber"));
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        ShipStationDataProvider::ShipStationDataProvider prov({
+            "api_key": "invalid-key",
+            "api_secret": "invalid-secret",
+        });
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid child in events provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            events.getChildProviderEx("invalid-event-type");
+        });
+    }
+
+    #! Corner case tests - edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+        # Test REST client URL
+        ShipStationRestClient::ShipStationRestClient client1({
+            "api_key": "x",
+            "api_secret": "y",
+        });
+        assertTrue(client1.getURL() =~ /ssapi\.shipstation\.com$/);
+
+        # Test missing credentials throws error
+        assertThrows("SHIPSTATION-ERROR", sub() {
+            new ShipStationRestClient::ShipStationRestClient({});
+        });
+
+        assertThrows("SHIPSTATION-ERROR", sub() {
+            new ShipStationRestClient::ShipStationRestClient({"api_key": "x"});
+        });
+
+        assertThrows("SHIPSTATION-ERROR", sub() {
+            new ShipStationRestClient::ShipStationRestClient({"api_secret": "y"});
+        });
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("shipstation");
+        assertEq("ShipStation REST Connection", scheme.display_name);
+        assertTrue(scheme.options.hasKey("api_key"));
+        assertTrue(scheme.options.hasKey("api_secret"));
+        assertTrue(scheme.options."api_key".sensitive);
+        assertTrue(scheme.options."api_secret".sensitive);
+
+        # Verify connection can create data provider
+        ShipStationRestClient::ShipStationRestConnection conn("test", "test connection",
+            "shipstation://ssapi.shipstation.com", {}, {"api_key": "x", "api_secret": "y"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("ShipStation", conn.getAppName());
+        assertEq("shipstation", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Get all actions for the ShipStation app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            ShipStationDataProvider::AppName);
+        assertTrue(actions.size() > 0);
+
+        # Verify action names
+        list<string> actionNames = map $1.action, actions;
+
+        # Order actions
+        assertTrue(actionNames.contains("list-orders"));
+        assertTrue(actionNames.contains("get-order"));
+        assertTrue(actionNames.contains("create-order"));
+        assertTrue(actionNames.contains("update-order"));
+        assertTrue(actionNames.contains("delete-order"));
+        assertTrue(actionNames.contains("mark-order-as-shipped"));
+        assertTrue(actionNames.contains("add-tag-to-order"));
+        assertTrue(actionNames.contains("remove-tag-from-order"));
+        assertTrue(actionNames.contains("assign-user-to-order"));
+        assertTrue(actionNames.contains("unassign-user-from-order"));
+
+        # Carrier actions
+        assertTrue(actionNames.contains("list-carriers"));
+        assertTrue(actionNames.contains("get-carrier"));
+        assertTrue(actionNames.contains("list-services"));
+        assertTrue(actionNames.contains("list-packages"));
+        assertTrue(actionNames.contains("add-funds"));
+
+        # Customer and product actions
+        assertTrue(actionNames.contains("list-customers"));
+        assertTrue(actionNames.contains("get-customer"));
+        assertTrue(actionNames.contains("list-products"));
+        assertTrue(actionNames.contains("get-product"));
+        assertTrue(actionNames.contains("update-product"));
+
+        # Shipment actions
+        assertTrue(actionNames.contains("list-shipments"));
+        assertTrue(actionNames.contains("list-fulfillments"));
+        assertTrue(actionNames.contains("void-label"));
+
+        # Store actions
+        assertTrue(actionNames.contains("list-stores"));
+        assertTrue(actionNames.contains("get-store"));
+        assertTrue(actionNames.contains("update-store"));
+        assertTrue(actionNames.contains("deactivate-store"));
+        assertTrue(actionNames.contains("reactivate-store"));
+        assertTrue(actionNames.contains("refresh-store"));
+        assertTrue(actionNames.contains("list-marketplaces"));
+
+        # Warehouse actions
+        assertTrue(actionNames.contains("list-warehouses"));
+        assertTrue(actionNames.contains("get-warehouse"));
+        assertTrue(actionNames.contains("create-warehouse"));
+        assertTrue(actionNames.contains("update-warehouse"));
+
+        # Other actions
+        assertTrue(actionNames.contains("list-tags"));
+        assertTrue(actionNames.contains("list-users"));
+        assertTrue(actionNames.contains("make-api-call"));
+
+        # Trigger actions
+        assertTrue(actionNames.contains("order-notify"));
+        assertTrue(actionNames.contains("item-order-notify"));
+        assertTrue(actionNames.contains("ship-notify"));
+        assertTrue(actionNames.contains("item-ship-notify"));
+
+        # Verify trigger actions have correct action_code
+        *hash<DataProviderActionInfo> orderNotifyAction = DataProviderActionCatalog::getAppAction(
+            ShipStationDataProvider::AppName, "order-notify");
+        assertTrue(exists orderNotifyAction, "order-notify action should exist");
+        assertEq(DPAT_EVENT, orderNotifyAction.action_code);
+    }
+
+    #! Integration tests - require SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No ShipStation credentials provided (use -k/-s options or SHIPSTATION_API_KEY/SHIPSTATION_API_SECRET env vars)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test carriers provider
+        testCarriersProvider();
+
+        # Test stores provider
+        testStoresProvider();
+
+        # Test warehouses provider
+        testWarehousesProvider();
+
+        # Test tags provider
+        testTagsProvider();
+
+        # Test users provider
+        testUsersProvider();
+
+        # Test reference data
+        testReferenceData();
+
+        # Test order data integrity
+        testOrderDataIntegrity();
+    }
+
+    #! Test API connectivity
+    private testApiConnectivity() {
+        # Test that we can connect to the API
+        hash<auto> response = client.get("/carriers");
+        assertTrue(response.body.typeCode() == NT_LIST || response.body.typeCode() == NT_HASH);
+        if (m_options.verbose) {
+            printf("Connected to ShipStation API successfully\n");
+        }
+    }
+
+    #! Test carriers provider
+    private testCarriersProvider() {
+        ShipStationDataProvider::ShipStationDataProvider prov(client);
+
+        # Get carriers
+        AbstractDataProvider carriersProvider = prov.getChildProvider("carriers");
+        list<hash<auto>> carriers = map $1, carriersProvider.searchRecords();
+
+        if (m_options.verbose) {
+            printf("Found %d carriers\n", carriers.size());
+        }
+
+        # Store first carrier for further tests
+        if (carriers.size() > 0) {
+            testCarrierCode = carriers[0].code;
+            if (m_options.verbose) {
+                printf("Using carrier: %s (%s)\n", carriers[0].name ?? "N/A", carriers[0].code);
+            }
+        }
+    }
+
+    #! Test stores provider
+    private testStoresProvider() {
+        ShipStationDataProvider::ShipStationDataProvider prov(client);
+
+        # Get stores
+        AbstractDataProvider storesProvider = prov.getChildProvider("stores");
+        list<hash<auto>> stores = map $1, storesProvider.searchRecords();
+
+        if (m_options.verbose) {
+            printf("Found %d stores\n", stores.size());
+        }
+
+        # Store first store for further tests
+        if (stores.size() > 0) {
+            testStoreId = stores[0].storeId;
+            if (m_options.verbose) {
+                printf("Using store: %s (ID: %d)\n", stores[0].storeName ?? "N/A", stores[0].storeId);
+            }
+        }
+    }
+
+    #! Test warehouses provider
+    private testWarehousesProvider() {
+        ShipStationDataProvider::ShipStationDataProvider prov(client);
+
+        # Get warehouses
+        AbstractDataProvider warehousesProvider = prov.getChildProvider("warehouses");
+        list<hash<auto>> warehouses = map $1, warehousesProvider.searchRecords();
+
+        if (m_options.verbose) {
+            printf("Found %d warehouses\n", warehouses.size());
+        }
+
+        # Store first warehouse for further tests
+        if (warehouses.size() > 0) {
+            testWarehouseId = warehouses[0].warehouseId;
+            if (m_options.verbose) {
+                printf("Using warehouse: %s (ID: %d)\n",
+                    warehouses[0].warehouseName ?? "N/A", warehouses[0].warehouseId);
+            }
+        }
+    }
+
+    #! Test tags provider
+    private testTagsProvider() {
+        ShipStationDataProvider::ShipStationDataProvider prov(client);
+
+        # Get tags
+        AbstractDataProvider tagsProvider = prov.getChildProvider("tags");
+        list<hash<auto>> tags = map $1, tagsProvider.searchRecords();
+
+        if (m_options.verbose) {
+            printf("Found %d tags\n", tags.size());
+        }
+    }
+
+    #! Test users provider
+    private testUsersProvider() {
+        ShipStationDataProvider::ShipStationDataProvider prov(client);
+
+        # Get users
+        AbstractDataProvider usersProvider = prov.getChildProvider("users");
+        list<hash<auto>> users = map $1, usersProvider.searchRecords();
+
+        if (m_options.verbose) {
+            printf("Found %d users\n", users.size());
+        }
+    }
+
+    #! Test reference data
+    private testReferenceData() {
+        ShipStationDataProvider::ShipStationDataProvider prov(client);
+
+        # Test carriers reference data
+        *list<hash<AllowedValueInfo>> carriers = prov.getReferenceData("carriers");
+        if (carriers && carriers.size() > 0) {
+            assertTrue(carriers[0].display_name.val());
+            assertTrue(carriers[0].value.val());
+            if (m_options.verbose) {
+                printf("Reference data: %d carriers available\n", carriers.size());
+            }
+        }
+
+        # Test stores reference data
+        *list<hash<AllowedValueInfo>> stores = prov.getReferenceData("stores");
+        if (stores && stores.size() > 0) {
+            assertTrue(stores[0].display_name.val());
+            assertTrue(exists stores[0].value);
+            if (m_options.verbose) {
+                printf("Reference data: %d stores available\n", stores.size());
+            }
+        }
+
+        # Test warehouses reference data
+        *list<hash<AllowedValueInfo>> warehouses = prov.getReferenceData("warehouses");
+        if (warehouses && warehouses.size() > 0) {
+            assertTrue(warehouses[0].display_name.val());
+            assertTrue(exists warehouses[0].value);
+            if (m_options.verbose) {
+                printf("Reference data: %d warehouses available\n", warehouses.size());
+            }
+        }
+
+        # Test tags reference data
+        *list<hash<AllowedValueInfo>> tags = prov.getReferenceData("tags");
+        if (tags && tags.size() > 0) {
+            assertTrue(tags[0].display_name.val());
+            assertTrue(exists tags[0].value);
+            if (m_options.verbose) {
+                printf("Reference data: %d tags available\n", tags.size());
+            }
+        }
+
+        # Test users reference data
+        *list<hash<AllowedValueInfo>> users = prov.getReferenceData("users");
+        if (users && users.size() > 0) {
+            assertTrue(users[0].display_name.val());
+            assertTrue(exists users[0].value);
+            if (m_options.verbose) {
+                printf("Reference data: %d users available\n", users.size());
+            }
+        }
+    }
+
+    #! Test order data integrity - verifies data actually persists
+    /** CRITICAL: This test verifies that order data is correctly saved and retrievable.
+        This catches issues like:
+        - Wrong Content-Type
+        - Silent API acceptance without data persistence
+        - Incorrect field handling
+
+        The test creates an order with known values, retrieves it, and verifies the values match.
+    */
+    private testOrderDataIntegrity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Order Data Integrity ---\n");
+        }
+
+        ShipStationDataProvider::ShipStationDataProvider prov(client);
+
+        # Generate unique test order number
+        string testOrderNumber = sprintf("TEST_%s_%d",
+            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+
+        # Test 1: Create order
+        if (m_options.verbose) {
+            printf("\nTest 1: Create order...\n");
+        }
+
+        AbstractDataProvider createOrderProvider = prov.getChildProvider("create-order");
+        hash<auto> createRequest = {
+            "orderNumber": testOrderNumber,
+            "orderDate": format_date("YYYY-MM-DD", now()),
+            "orderStatus": "awaiting_shipment",
+            "billTo": {
+                "name": "Test Customer",
+                "street1": "123 Test Street",
+                "city": "Austin",
+                "state": "TX",
+                "postalCode": "78701",
+                "country": "US",
+            },
+            "shipTo": {
+                "name": "Test Customer",
+                "street1": "123 Test Street",
+                "city": "Austin",
+                "state": "TX",
+                "postalCode": "78701",
+                "country": "US",
+            },
+        };
+
+        try {
+            auto createResult = createOrderProvider.doRequest(createRequest);
+            if (m_options.verbose) {
+                printf("  Create result: orderId=%y\n", createResult.orderId);
+            }
+            assertTrue(createResult.orderId > 0, "Order should be created with an ID");
+            testOrderId = createResult.orderId;
+
+            # Verify the data was actually saved by fetching it back
+            AbstractDataProvider getOrderProvider = prov.getChildProvider("get-order");
+            hash<auto> getRequest = {
+                "orderId": testOrderId,
+            };
+
+            auto fetchedOrder = getOrderProvider.doRequest(getRequest);
+            if (m_options.verbose) {
+                printf("  Fetched order: orderNumber=%y, orderStatus=%y\n",
+                    fetchedOrder.orderNumber, fetchedOrder.orderStatus);
+            }
+
+            assertEq(testOrderNumber, fetchedOrder.orderNumber, "Order number should match");
+            assertEq("awaiting_shipment", fetchedOrder.orderStatus, "Order status should match");
+            assertEq("Test Customer", fetchedOrder.shipTo.name, "Ship-to name should match");
+            assertEq("Austin", fetchedOrder.shipTo.city, "Ship-to city should match");
+            assertEq("TX", fetchedOrder.shipTo.state, "Ship-to state should match");
+            assertEq("78701", fetchedOrder.shipTo.postalCode, "Ship-to postal code should match");
+
+            if (m_options.verbose) {
+                printf("  Data integrity verified: order saved and retrieved correctly\n");
+            }
+
+            # Cleanup: delete the test order
+            AbstractDataProvider deleteOrderProvider = prov.getChildProvider("delete-order");
+            hash<auto> deleteRequest = {
+                "orderId": testOrderId,
+            };
+
+            try {
+                deleteOrderProvider.doRequest(deleteRequest);
+                if (m_options.verbose) {
+                    printf("\nCleaned up test order: %d\n", testOrderId);
+                }
+                testOrderId = NOTHING;
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Cleanup failed: %s\n", ex.desc);
+                }
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  Create order failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Order Data Integrity tests completed ---\n");
+        }
+    }
+
+    #! Webhook trigger tests
+    webhookTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No ShipStation credentials provided");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Webhook Trigger Registration/Deregistration ---\n");
+        }
+
+        # ============================================
+        # Test Order Notify Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ShipStationOrderNotifyEventDataProvider...\n");
+        }
+
+        # Test event provider instantiation
+        ShipStationDataProvider::ShipStationOrderNotifyEventDataProvider eventProv(client, {});
+        assertEq("order-notify", eventProv.getName());
+
+        # Verify provider metadata
+        assertTrue(eventProv.getInfo().supports_observable);
+
+        # Test event types
+        hash<string, hash<DataProviderMessageInfo>> eventTypes = eventProv.getEventTypes();
+        assertTrue(eventTypes.hasKey("order-notify"));
+        assertTrue(eventTypes{"order-notify"}.desc.val());
+
+        # Test example event data
+        auto exampleData = eventProv.getExampleEventData("order-notify");
+        assertTrue(exampleData.event.val());
+        assertTrue(exampleData.hasKey("resource_url"));
+        assertTrue(exampleData.hasKey("orderId"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys eventTypes);
+            printf("  Example data has keys: %y\n", keys exampleData);
+        }
+
+        # ============================================
+        # Test Ship Notify Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ShipStationShipNotifyEventDataProvider...\n");
+        }
+
+        ShipStationDataProvider::ShipStationShipNotifyEventDataProvider shipProv(client, {});
+        assertEq("ship-notify", shipProv.getName());
+        assertTrue(shipProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> shipEventTypes = shipProv.getEventTypes();
+        assertTrue(shipEventTypes.hasKey("ship-notify"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys shipEventTypes);
+        }
+
+        # ============================================
+        # Test Item Order Notify Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ShipStationItemOrderNotifyEventDataProvider...\n");
+        }
+
+        ShipStationDataProvider::ShipStationItemOrderNotifyEventDataProvider itemOrderProv(client, {});
+        assertEq("item-order-notify", itemOrderProv.getName());
+        assertTrue(itemOrderProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> itemOrderEventTypes = itemOrderProv.getEventTypes();
+        assertTrue(itemOrderEventTypes.hasKey("item-order-notify"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys itemOrderEventTypes);
+        }
+
+        # ============================================
+        # Test Item Ship Notify Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ShipStationItemShipNotifyEventDataProvider...\n");
+        }
+
+        ShipStationDataProvider::ShipStationItemShipNotifyEventDataProvider itemShipProv(client, {});
+        assertEq("item-ship-notify", itemShipProv.getName());
+        assertTrue(itemShipProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> itemShipEventTypes = itemShipProv.getEventTypes();
+        assertTrue(itemShipEventTypes.hasKey("item-ship-notify"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys itemShipEventTypes);
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Webhook Trigger tests completed ---\n");
+        }
+    }
+}
+
+#! Test observer for webhook events
+class TestObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data) {
+        events += {"event_id": event_id, "data": data};
+    }
+}
