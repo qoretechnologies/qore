@@ -391,7 +391,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             if (io_exiting || !tid) {
                 startIntern();
             }
-            add_signal = enqueueCmdLocked(IoCommand::Add);
+            # IO_ADD is a no-op in processCommands() — the I/O thread picks up new
+            # cache entries in Phase 1 automatically.  Just notify the event loop to
+            # wake the I/O thread so it re-polls with the new operation.
+            add_signal = True;
         }
         if (add_signal) {
             notifier.notify();
@@ -689,6 +692,18 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 # timeout checks, avoiding race conditions where poll_deadline becomes negative
                 date now;
                 bool force_poll_cycle = False;
+                bool do_autostop = False;
+                # Deferred delivery list: callbacks and queue pushes are collected under the
+                # lock and delivered after the lock is released.  This avoids LOCK-ERROR when
+                # a callback calls submit() (which also acquires m).
+                list<hash<auto>> deferred_deliveries;
+
+                # ── PHASE 1: Snapshot under lock ──────────────────────────────
+                # Collect the set of operations that need continuePoll() and
+                # identify timed-out operations.  The lock is released before
+                # any continuePoll() call so that submit() from worker threads
+                # can add new operations without waiting for I/O processing.
+                list<hash<auto>> ops_to_poll;
                 {
                     AutoLock al(m);
                     @debug {
@@ -702,113 +717,129 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         force_poll = False;
                     }
                     # Note: notifier is already registered in EventLoop from constructor
-                    # scan for timed out operations
                     now = now_us();
-                    # take the first key that has not already been processed on this run
-                    hash<string, bool> dmap;
-                    while ((*string key = (cache - keys dmap).firstKey()).val()) {
+                    foreach string key in (keys cache) {
                         hash<PollInfo> cinfo = cache{key};
                         # Only set timeout_date if a non-negative timeout was specified (negative means no timeout)
                         if (!cinfo.timeout_date && cinfo.to >= 0s) {
                             cinfo.timeout_date = cache{key}.timeout_date = now_us() + cinfo.to;
                         }
-                        dmap{key} = True;
-                        Socket sock = cinfo.sock;
-                        Socket poll_sock = cinfo.poll_info ? cinfo.poll_info.socket : sock;
-                        string sock_key = poll_sock.uniqueHash();
-                        try {
-                            # Only check for timeout if timeout_date is set (not set when to < 0)
-                            if (cinfo.timeout_date && cinfo.timeout_date <= now) {
-                                @debug {
-                                    if (getenv("QORE_ASYNCIO_TRACE")) {
-                                        log(LoggerLevel::INFO,
-                                            "%s: timeout expired; state=%y sock=%s goal=%y listener_id=%y http2=%y to=%y timeout_date=%y now=%y",
-                                            key, cinfo.spop.getState(),
-                                            sprintf("%s %s", cinfo.sock.className(), cinfo.sock.uniqueHash()[0..8]),
-                                            cinfo.other.goal, cinfo.other.listener_id, cinfo.other.http2,
-                                            cinfo.to, cinfo.timeout_date, now);
-                                    }
-                                }
-                                throw "SOCKET-TIMEOUT", sprintf("The I/O operation did not complete in the timeout "
-                                    "period (%y)", cinfo.to);
-                            }
-                            if (cinfo.poll_info
-                                && !force_poll_cycle
-                                && !(ready_sockets{sock_key} ?? False)) {
-                                # Skip continuePoll for sockets that weren't marked ready by the kernel
-                                # Note: On macOS, kqueue is used instead of poll() which properly detects
-                                # pending connections on listener sockets. Socket is already registered
-                                # in EventLoop, so no action needed.
-                                @debug {
-                                    if (getenv("QORE_ASYNCIO_TRACE")) {
-                                        bool only_notifier_ready = ready_sockets.size() == 1 && (ready_sockets{notifier_hash} ?? False);
-                                        log(LoggerLevel::INFO,
-                                            "%s: skip continuePoll for unready socket (state=%y sock=%s ready=%d only_notifier=%y goal=%y)",
-                                            key, cinfo.spop.getState(),
-                                            sprintf("%s %s", poll_sock.className(),
-                                                poll_sock.uniqueHash()[0..8]),
-                                            ready_sockets.size(), only_notifier_ready, cinfo.other.goal);
-                                    }
-                                }
-                                # Socket already registered in EventLoop; just update poll_deadline for timeout handling
-                                if (cinfo.timeout_date && (!poll_deadline || (poll_deadline > cinfo.timeout_date))) {
-                                    poll_deadline = cinfo.timeout_date;
-                                }
-                                continue;
-                            }
-                            bool first_poll = !cinfo.poll_info;
-                            *hash<SocketPollInfo> info = cinfo.spop.continuePoll();
+                        # Only check for timeout if timeout_date is set (not set when to < 0)
+                        if (cinfo.timeout_date && cinfo.timeout_date <= now) {
                             @debug {
                                 if (getenv("QORE_ASYNCIO_TRACE")) {
-                                    log(LoggerLevel::INFO, "%y: state: %y: got poll info: %y", key,
-                                        cinfo.spop.getState(), info ? {
-                                            "events": PollEventMap{info.events} ?? "unknown",
-                                            "socket": sprintf("%s %s", info.socket.className(),
-                                                info.socket.uniqueHash()[0..8]),
-                                            "timeout_date": cinfo.timeout_date,
-                                            "now": now,
-                                            "to": cinfo.to,
-                                        } : NOTHING);
-                                }
-                                # Specific debug for accept operations
-                                if (getenv("QORE_ACCEPT_POLL_DEBUG")) {
-                                    *string goal = cinfo.other.goal;
-                                    if (goal && goal =~ /^listener:/) {
-                                        log(LoggerLevel::INFO,
-                                            "ACCEPT_POLL: key=%y goal=%y first_poll=%y state=%y info=%y "
-                                            "listener_fd=%y",
-                                            key, goal, first_poll, cinfo.spop.getState(),
-                                            info ? sprintf("events=%d need_poll=%y", info.events, info.events > 0)
-                                                : "COMPLETE",
-                                            cinfo.sock.isOpen() ? cinfo.sock.getSocket() : "closed");
-                                    }
+                                    log(LoggerLevel::INFO,
+                                        "%s: timeout expired; state=%y sock=%s goal=%y listener_id=%y http2=%y to=%y timeout_date=%y now=%y",
+                                        key, cinfo.spop.getState(),
+                                        sprintf("%s %s", cinfo.sock.className(), cinfo.sock.uniqueHash()[0..8]),
+                                        cinfo.other.goal, cinfo.other.listener_id, cinfo.other.http2,
+                                        cinfo.to, cinfo.timeout_date, now);
                                 }
                             }
+                            ops_to_poll += {
+                                "key": key,
+                                "cinfo": cinfo,
+                                "timed_out": True,
+                            };
+                            continue;
+                        }
+                        Socket poll_sock = cinfo.poll_info ? cinfo.poll_info.socket : cinfo.sock;
+                        string sock_key = poll_sock.uniqueHash();
+                        if (cinfo.poll_info
+                            && !force_poll_cycle
+                            && !(ready_sockets{sock_key} ?? False)) {
+                            # Skip continuePoll for sockets that weren't marked ready by the kernel
                             @debug {
-                                if (getenv("QORE_ASYNCIO_TRACE")
-                                    && info
-                                    && cinfo.spop.getState() == "receiving") {
-                                    date last = recv_debug_last{key} ?? 0s;
-                                    if (!last || (now - last) > 5s) {
-                                        recv_debug_last{key} = now;
-                                        string sock_desc = sprintf("%s %s", cinfo.sock.className(),
-                                            cinfo.sock.uniqueHash()[0..8]);
-                                        string sock_fd = "unknown";
-                                        try {
-                                            int fd = cinfo.sock.getSocket();
-                                            sock_fd = fd >= 0 ? sprintf("%d", fd) : "closed";
-                                        } catch (hash<ExceptionInfo> ex) {
-                                            # ignore socket info errors in debug logging
-                                        }
-                                        log(LoggerLevel::INFO,
-                                            "%s: receiving poll spin; sock=%s fd=%s timeout_date=%y now=%y to=%y goal=%y state=%y listener_id=%y http2=%y",
-                                            key, sock_desc, sock_fd,
-                                            cinfo.timeout_date, now, cinfo.to, cinfo.other.goal,
-                                            cinfo.other.state, cinfo.other.listener_id, cinfo.other.http2);
-                                    }
+                                if (getenv("QORE_ASYNCIO_TRACE")) {
+                                    bool only_notifier_ready = ready_sockets.size() == 1 && (ready_sockets{notifier_hash} ?? False);
+                                    log(LoggerLevel::INFO,
+                                        "%s: skip continuePoll for unready socket (state=%y sock=%s ready=%d only_notifier=%y goal=%y)",
+                                        key, cinfo.spop.getState(),
+                                        sprintf("%s %s", poll_sock.className(),
+                                            poll_sock.uniqueHash()[0..8]),
+                                        ready_sockets.size(), only_notifier_ready, cinfo.other.goal);
                                 }
                             }
-                            cinfo.poll_info = cache{key}.poll_info = info;
+                            # Socket already registered in EventLoop; just update poll_deadline for timeout handling
+                            if (cinfo.timeout_date && (!poll_deadline || (poll_deadline > cinfo.timeout_date))) {
+                                poll_deadline = cinfo.timeout_date;
+                            }
+                            continue;
+                        }
+                        ops_to_poll += {
+                            "key": key,
+                            "cinfo": cinfo,
+                        };
+                    }
+                }
+
+                # ── PHASE 2: continuePoll outside the lock ────────────────────
+                # This is the main scalability improvement: worker threads can
+                # call submit() while we drive I/O operations forward.
+                hash<string, hash<auto>> poll_results;
+                foreach hash<auto> op in (ops_to_poll) {
+                    string key = op.key;
+                    hash<PollInfo> cinfo = op.cinfo;
+                    if (op.timed_out) {
+                        try {
+                            throw "SOCKET-TIMEOUT", sprintf("The I/O operation did not complete in the timeout "
+                                "period (%y)", cinfo.to);
+                        } catch (hash<ExceptionInfo> ex) {
+                            poll_results{key} = {"ex": ex};
+                        }
+                        continue;
+                    }
+                    try {
+                        @debug { string state = cinfo.spop.getState(); }
+                        *hash<SocketPollInfo> info = cinfo.spop.continuePoll();
+                        @debug { auto goal = cinfo.other.goal; }
+                        poll_results{key} = {"info": info};
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "SOCKET-HTTP-ERROR"
+                            && ex.desc =~ /remote end closed connection/) {
+                            log(LoggerLevel::DETAIL, "%s: remote end closed connection", key);
+                        } else {
+                            log(LoggerLevel::ERROR, "%s: %s", key, get_exception_string(ex));
+                        }
+                        poll_results{key} = {"ex": ex};
+                    }
+                }
+
+                # ── PHASE 3: Update cache and EventLoop under lock ────────────
+                # Apply poll results back to the cache.  EventLoop updates access
+                # I/O-thread-only state but are done under the lock together with
+                # cache mutations for simplicity.
+                {
+                    AutoLock al(m);
+                    foreach hash<auto> op in (ops_to_poll) {
+                        string key = op.key;
+                        if (!cache{key}) {
+                            continue;  # canceled during PHASE 2
+                        }
+                        hash<PollInfo> cinfo = op.cinfo;
+                        *hash<auto> pr = poll_results{key};
+                        if (pr.ex) {
+                            # poll operation failed with an exception or timeout
+                            updateEventLoopRegistration(key, NOTHING);
+                            remove cache{key};
+                            if (*Condition c = remove cancel_cond_map{key}) {
+                                c.broadcast();
+                            }
+                            hash<SocketPollResultInfo> err_result = <SocketPollResultInfo>{
+                                "sock": cinfo.sock,
+                                "spop": cinfo.spop,
+                                "ex": pr.ex,
+                                "other": cinfo.other,
+                            };
+                            deferred_deliveries += {
+                                "key": key,
+                                "callback": cinfo.callback,
+                                "q": cinfo.q,
+                                "result": err_result,
+                            };
+                        } else {
+                            *hash<SocketPollInfo> info = pr.info;
+                            cache{key}.poll_info = info;
                             if (!info) {
                                 # operation successful - remove from EventLoop
                                 updateEventLoopRegistration(key, NOTHING);
@@ -821,87 +852,19 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                     "spop": cinfo.spop,
                                     "other": cinfo.other,
                                 };
-                                if (cinfo.callback) {
-                                    @debug(log(LoggerLevel::INFO, "delivering result via callback for key %y", key));
-                                    try {
-                                        cinfo.callback(result);
-                                    } catch (hash<ExceptionInfo> cbex) {
-                                        log(LoggerLevel::ERROR, "%s: callback exception: %s: %s",
-                                            key, cbex.err, cbex.desc);
-                                    }
-                                } else {
-                                    cinfo.q.push(result);
-                                }
-                                remove dmap{key};
+                                deferred_deliveries += {
+                                    "key": key,
+                                    "callback": cinfo.callback,
+                                    "q": cinfo.q,
+                                    "result": result,
+                                };
                             } else {
                                 # Register or update socket in EventLoop
                                 updateEventLoopRegistration(key, info.socket, info.events);
-                                # Find the MINIMUM (earliest) timeout so poll returns in time to handle it
-                                # Only consider operations with timeouts
                                 if (cinfo.timeout_date && (!poll_deadline || (poll_deadline > cinfo.timeout_date))) {
                                     poll_deadline = cinfo.timeout_date;
                                 }
                             }
-                        } catch (hash<ExceptionInfo> ex) {
-                            @debug {
-                                if (getenv("QORE_ASYNCIO_TRACE")) {
-                                    int lvl = (ex.err == "SOCKET-HTTP-ERROR"
-                                        && ex.desc =~ /remote end closed connection/)
-                                        ? LoggerLevel::DEBUG : LoggerLevel::ERROR;
-                                    log(lvl, "%y: state: %y: poll exception: %s (sock=%s goal=%y)",
-                                        key, cinfo.spop.getState(), get_exception_string(ex),
-                                        sprintf("%s %s", cinfo.sock.className(), cinfo.sock.uniqueHash()[0..8]),
-                                        cinfo.other.goal);
-                                }
-                            }
-                            if (ex.err == "SOCKET-HTTP-ERROR"
-                                && ex.desc =~ /remote end closed connection/) {
-                                @debug {
-                                    if (getenv("QORE_ASYNCIO_DEBUG")) {
-                                        string peer_desc = "unknown";
-                                        # Avoid SOCKET-NOT-OPEN when logging peer info after close
-                                        if (cinfo.sock.isOpen()) {
-                                            hash<auto> peer_info = cinfo.sock.getPeerInfo();
-                                            peer_desc = peer_info."address_desc"
-                                                ?? peer_info."address"
-                                                ?? peer_info."host"
-                                                ?? "unknown";
-                                        }
-                                        string sock_id = sprintf("%s %s", cinfo.sock.className(),
-                                            cinfo.sock.uniqueHash()[0..8]);
-                                        log(LoggerLevel::INFO,
-                                            "%s: remote end closed connection (sock=%s peer=%s goal=%y)",
-                                            key, sock_id, peer_desc, cinfo.other.goal);
-                                    }
-                                }
-                                log(LoggerLevel::DETAIL, "%s: remote end closed connection", key);
-                            } else {
-                                log(LoggerLevel::ERROR, "%s: %s", key, get_exception_string(ex));
-                            }
-                            # poll operation failed with an exception - remove from EventLoop
-                            updateEventLoopRegistration(key, NOTHING);
-                            remove cache{key};
-                            if (*Condition c = remove cancel_cond_map{key}) {
-                                c.broadcast();
-                            }
-                            hash<SocketPollResultInfo> err_result = <SocketPollResultInfo>{
-                                "sock": cinfo.sock,
-                                "spop": cinfo.spop,
-                                "ex": ex,
-                                "other": cinfo.other,
-                            };
-                            if (cinfo.callback) {
-                                @debug(log(LoggerLevel::INFO, "delivering error via callback for key %y", key));
-                                try {
-                                    cinfo.callback(err_result);
-                                } catch (hash<ExceptionInfo> cbex) {
-                                    log(LoggerLevel::ERROR, "%s: error callback exception: %s: %s",
-                                        key, cbex.err, cbex.desc);
-                                }
-                            } else {
-                                cinfo.q.push(err_result);
-                            }
-                            remove dmap{key};
                         }
                     }
 
@@ -912,14 +875,45 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         }
                     }
 
-                    if (!cache && autostop && !cmdq.size()) {
+                    if (!cache && autostop && !cmdq.size() && !deferred_deliveries) {
                         log(LoggerLevel::DEBUG, "All operations have completed; exiting the I/O thread");
                         io_exiting = True;
                         if (io_waiting) {
                             io_cond.broadcast();
                         }
-                        break;
+                        do_autostop = True;
                     }
+                }
+                # Deliver results outside the lock so callbacks can safely call submit()
+                foreach hash<auto> delivery in (deferred_deliveries) {
+                    if (delivery.callback) {
+                        @debug(log(LoggerLevel::INFO, "delivering result via callback for key %y",
+                            delivery.key));
+                        try {
+                            delivery.callback(delivery.result);
+                        } catch (hash<ExceptionInfo> cbex) {
+                            log(LoggerLevel::ERROR, "%s: callback exception: %s: %s",
+                                delivery.key, cbex.err, cbex.desc);
+                        }
+                    } else if (delivery.q) {
+                        delivery.q.push(delivery.result);
+                    }
+                }
+                if (!do_autostop && deferred_deliveries) {
+                    # Re-check autostop after deliveries: callbacks may have submitted
+                    # new operations via submit(), so cache may no longer be empty
+                    AutoLock al(m);
+                    if (!cache && autostop && !cmdq.size()) {
+                        log(LoggerLevel::DEBUG, "All operations have completed after deliveries; exiting the I/O thread");
+                        io_exiting = True;
+                        if (io_waiting) {
+                            io_cond.broadcast();
+                        }
+                        do_autostop = True;
+                    }
+                }
+                if (do_autostop) {
+                    break;
                 }
                 # NOTE: We use the same 'now' timestamp for poll_timeout calculation as used for
                 # timeout checks to avoid race conditions where poll_deadline becomes negative

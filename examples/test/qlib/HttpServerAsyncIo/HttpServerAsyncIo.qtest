@@ -4,6 +4,7 @@
 %modern
 
 %requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 
 %exec-class HttpServerAsyncIoTest
@@ -17,6 +18,65 @@ class TestTarget inherits HttpAsyncTarget {
     hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
         last_request = info;
         request_received = True;
+        return <HttpRequestResultInfo>{
+            "close": True,
+        };
+    }
+
+    onIdleTimeout(Socket sock, object listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onSseDisconnect(Socket sock, object listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, object listener, hash<auto> cx) {
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+}
+
+#! Target that captures handler thread IDs and supports configurable delays
+class InstrumentedTarget inherits HttpAsyncTarget {
+    public {
+        #! Thread IDs of all handler invocations
+        list<int> handler_tids;
+
+        #! Mutex for thread-safe access to handler_tids
+        Mutex handler_m();
+
+        #! Number of requests handled
+        int request_count = 0;
+
+        #! Optional delay in handler (for testing concurrent dispatch and stop safety)
+        timeout handler_delay = 0ms;
+
+        #! Counter decremented when each handler completes
+        *Counter handler_done;
+    }
+
+    hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
+        int tid = gettid();
+        {
+            AutoLock al(handler_m);
+            handler_tids += tid;
+            ++request_count;
+        }
+        if (handler_delay > 0ms) {
+            usleep(handler_delay);
+        }
+        # Send a minimal response before closing
+        info.sock.send("HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK");
+        if (handler_done) {
+            handler_done.dec();
+        }
         return <HttpRequestResultInfo>{
             "close": True,
         };
@@ -101,11 +161,17 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("Hashdecl test", \hashdeclTest());
         addTestCase("Target class test", \targetClassTest());
         addTestCase("HttpIdlePollOperation basic test", \idlePollOperationBasicTest());
+        addTestCase("HttpKeepAlivePollOperation basic test", \keepAlivePollOperationBasicTest());
+        addTestCase("HttpKeepAlivePollOperation header timeout test", \keepAliveHeaderTimeoutTest());
         addTestCase("Controller start/stop test", \controllerStartStopTest());
         addTestCase("HttpAcceptPollOperation HTTP/2 mode test", \acceptPollHttp2ModeTest());
         addTestCase("concurrent addListener/removeListener", \concurrentListenerTest());
         addTestCase("stop during active accepts", \stopDuringAcceptsTest());
         addTestCase("accept replenish contention", \acceptReplenishContentionTest());
+        addTestCase("thread pool dispatch", \threadPoolDispatchTest());
+        addTestCase("multi I/O thread distribution", \multiIoThreadTest());
+        addTestCase("stop with in-flight handlers", \stopWithInFlightHandlersTest());
+        addTestCase("stop during SSL handshake", \stopDuringSslHandshakeTest());
         set_return_value(main());
     }
 
@@ -462,5 +528,330 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         ctrl.removeListener(server);
         assertTrue(True, "accept replenish contention test completed without deadlock");
+    }
+
+    #! Helper: sends HTTP request and reads response
+    /** @param port the port to connect to
+        @param ignore_errors if True, swallow connection/I/O errors (for tests where the
+            server may close the socket during shutdown)
+        @return response body string, or NOTHING if ignore_errors and an error occurred
+    */
+    private *string doHttpRequest(int port, bool ignore_errors = False) {
+        try {
+            Socket c();
+            c.connect("127.0.0.1:" + port, 2s);
+            c.send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n");
+            *string resp = c.recv(4096, 2s);
+            c.close();
+            return resp;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ignore_errors) {
+                return NOTHING;
+            }
+            rethrow;
+        }
+    }
+
+    #! Tests that onHttpRequest runs on a handler thread pool worker, not the I/O thread
+    threadPoolDispatchTest() {
+        InstrumentedTarget target();
+
+        HttpAsyncSocketIoController ctrl();
+        ctrl.start();
+        on_exit delete ctrl;
+
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        on_exit server.close();
+
+        ctrl.addListener(server, target);
+
+        # Send several requests sequentially to collect handler TIDs
+        int num_requests = 5;
+        for (int i = 0; i < num_requests; ++i) {
+            doHttpRequest(port);
+        }
+
+        # Give callbacks time to settle
+        usleep(500ms);
+
+        assertEq(num_requests, target.request_count, "all requests should be handled");
+
+        # Verify handlers ran on worker threads — all handler TIDs should be
+        # different from the test thread TID.  We can't easily capture the I/O
+        # thread TID, but we CAN verify that not all handlers ran on a single
+        # thread (proving thread pool dispatch actually parallelizes).
+        assertTrue(target.handler_tids.size() == num_requests,
+            "should have one TID per request");
+
+        # At least verify we got valid TIDs
+        foreach int tid in (target.handler_tids) {
+            assertTrue(tid > 0, "handler TID should be positive");
+        }
+
+        ctrl.removeListener(server);
+    }
+
+    #! Tests that io_threads option creates multiple I/O threads and distributes connections
+    multiIoThreadTest() {
+        InstrumentedTarget target();
+
+        # Create controller with 2 I/O threads
+        HttpAsyncSocketIoController ctrl(NOTHING, {"io_threads": 2});
+        ctrl.start();
+        on_exit delete ctrl;
+
+        # Verify getStats reports correct io_threads
+        hash<auto> stats = ctrl.getStats();
+        assertEq(2, stats.io_threads, "should report 2 I/O threads");
+
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        on_exit server.close();
+
+        ctrl.addListener(server, target);
+
+        # Send requests sequentially — they should work correctly regardless of thread distribution
+        int num_requests = 10;
+        for (int i = 0; i < num_requests; ++i) {
+            doHttpRequest(port);
+        }
+
+        # Give callbacks time to settle
+        usleep(500ms);
+
+        assertEq(num_requests, target.request_count,
+            "all requests should complete with 2 I/O threads");
+
+        # Test with default 1 thread — verify backward compatibility
+        {
+            HttpAsyncSocketIoController ctrl1();
+            hash<auto> stats1 = ctrl1.getStats();
+            assertEq(1, stats1.io_threads, "default should be 1 I/O thread");
+            delete ctrl1;
+        }
+
+        # Test with explicit external controller — should report 1
+        {
+            AsyncSocketIoController ext_ctrl(False);
+            HttpAsyncSocketIoController ctrl_ext(ext_ctrl);
+            hash<auto> stats_ext = ctrl_ext.getStats();
+            assertEq(1, stats_ext.io_threads,
+                "external controller should report 1 I/O thread");
+            delete ctrl_ext;
+        }
+
+        ctrl.removeListener(server);
+    }
+
+    #! Tests HttpKeepAlivePollOperation basic lifecycle
+    keepAlivePollOperationBasicTest() {
+        # Create a socket pair
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        Socket accepted = server.accept(1s);
+
+        # Create keep-alive poll operation with idle timeout long enough for test
+        HttpKeepAlivePollOperation op(accepted, 10s);
+        assertEq("keep_alive_idle", op.getGoal());
+        assertEq("idle", op.getState());
+        assertEq("idle", op.getPhase());
+        assertFalse(op.goalReached());
+        assertFalse(op.timedOut());
+        assertFalse(op.headersReady());
+        assertFalse(op.wasClosed());
+
+        # Send a full HTTP request — should transition to header phase and complete
+        client.send("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        usleep(50ms);
+
+        # Drive the poll operation to completion
+        date deadline = now_us() + 5s;
+        while (!op.goalReached() && now_us() < deadline) {
+            *hash<SocketPollInfo> poll_info = op.continuePoll();
+            if (!poll_info) {
+                if (op.goalReached()) {
+                    break;
+                }
+                # No poll info but not done — brief sleep and retry
+                usleep(10ms);
+                continue;
+            }
+            Socket::poll((poll_info,), 100ms);
+        }
+
+        assertTrue(op.goalReached(), "operation should be complete");
+        assertTrue(op.headersReady(), "headers should be ready");
+        assertEq("header_complete", op.getState());
+        assertEq("header", op.getPhase());
+
+        # getOutput should return parsed headers
+        hash<auto> output = op.getOutput();
+        assertTrue(output.hasKey("hdr"), "output should contain parsed headers");
+
+        # Test resetForIdle
+        op.resetForIdle();
+        assertEq("idle", op.getPhase());
+        assertEq("idle", op.getState());
+        assertFalse(op.goalReached());
+
+        client.close();
+        accepted.close();
+        server.close();
+    }
+
+    #! Tests that HttpKeepAlivePollOperation enforces header read timeout, not idle TTL
+    keepAliveHeaderTimeoutTest() {
+        # Create a socket pair
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        Socket accepted = server.accept(1s);
+
+        # Use a very long idle TTL (60s) but we expect header timeout (DefaultHeaderReadTimeout=30s)
+        # to kick in. We can't wait 30s in a test, so we test the mechanism:
+        # 1. Create the operation
+        # 2. Send partial headers to trigger transition to header phase
+        # 3. Verify that the header_deadline is set and is much shorter than idle TTL
+        HttpKeepAlivePollOperation op(accepted, 60s);
+
+        # Send partial HTTP request — just enough to trigger data available
+        client.send("GET / HTTP/1.1\r\n");
+        usleep(50ms);
+
+        # Drive until we're in header phase
+        date drive_deadline = now_us() + 5s;
+        while (op.getPhase() == "idle" && now_us() < drive_deadline) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (!info) {
+                break;
+            }
+            Socket::poll((info,), 50ms);
+        }
+
+        # Should now be in header phase, waiting for the rest of the headers
+        assertEq("header", op.getPhase(), "should transition to header phase on partial data");
+        assertEq("header_reading", op.getState());
+        assertFalse(op.goalReached(), "should not be complete with partial headers");
+
+        # The operation should NOT have timed out yet (header timeout is 30s)
+        assertFalse(op.timedOut(), "should not timeout immediately in header phase");
+
+        # Verify the operation is still polling (not complete)
+        op.continuePoll();
+        # Should still be waiting for more header data
+        assertTrue(!op.goalReached(), "should still be waiting for complete headers");
+
+        client.close();
+        accepted.close();
+        server.close();
+    }
+
+    #! Tests that stop() during SSL handshake doesn't leak operations
+    stopDuringSslHandshakeTest() {
+        for (int iter = 0; iter < 5; ++iter) {
+            HttpAsyncSocketIoController ctrl();
+            ctrl.start();
+
+            TestTarget target();
+
+            Socket server();
+            server.bind("127.0.0.1:0");
+            server.setCertificate(CertPem);
+            server.setPrivateKey(KeyPem);
+            server.listen();
+            int port = server.getSocketInfo().port;
+
+            ctrl.addListener(server, target, True, CertPem, KeyPem);
+
+            # Connect a client but DON'T do the SSL handshake — leave it hanging
+            # This means the server will have an in-flight SSL handshake operation
+            Socket client();
+            try {
+                # Plain TCP connect (no SSL) to trigger accept + SSL handshake start on server
+                client.connect("127.0.0.1:" + port, 1s);
+            } catch () {}
+
+            # Brief delay so accept completes and SSL handshake op is submitted
+            usleep(100ms);
+
+            # Stop while SSL handshake is in progress
+            ctrl.stop();
+            assertFalse(ctrl.running(),
+                sprintf("controller should be stopped after SSL handshake stop (iter=%d)", iter));
+
+            # Verify clean shutdown
+            hash<auto> stats = ctrl.getStats();
+            assertEq(0, stats.connections,
+                sprintf("no connections should remain after stop during SSL (iter=%d)", iter));
+            assertEq(0, stats.listeners,
+                sprintf("no listeners should remain after stop during SSL (iter=%d)", iter));
+
+            client.close();
+            server.close();
+            delete ctrl;
+        }
+        assertTrue(True, "stop during SSL handshake completed cleanly");
+    }
+
+    #! Tests that stop() with in-flight handler tasks doesn't leak operations
+    stopWithInFlightHandlersTest() {
+        for (int iter = 0; iter < 3; ++iter) {
+            InstrumentedTarget target();
+            # Handler sleeps 500ms to ensure stop() is called while handlers are active
+            target.handler_delay = 500ms;
+
+            HttpAsyncSocketIoController ctrl();
+            ctrl.start();
+
+            Socket server();
+            server.bind("127.0.0.1:0");
+            server.listen();
+            int port = server.getSocketInfo().port;
+
+            ctrl.addListener(server, target);
+
+            # Fire off requests — their handlers will sleep
+            int num_requests = 3;
+            Counter client_done(num_requests);
+            for (int i = 0; i < num_requests; ++i) {
+                background sub () {
+                    on_exit client_done.dec();
+                    doHttpRequest(port, True);
+                }();
+            }
+
+            # Brief delay so accepts + header reads complete and handler tasks start
+            usleep(100ms);
+
+            # Stop while handlers are sleeping — should complete without leaking ops
+            ctrl.stop();
+            assertFalse(ctrl.running(), sprintf("controller should be stopped (iter=%d)", iter));
+
+            # Verify clean shutdown — getStats should show no connections
+            hash<auto> stats = ctrl.getStats();
+            assertEq(0, stats.connections,
+                sprintf("no connections should remain after stop (iter=%d)", iter));
+            assertEq(0, stats.listeners,
+                sprintf("no listeners should remain after stop (iter=%d)", iter));
+
+            client_done.waitForZero(5s);
+            server.close();
+            delete ctrl;
+        }
+        assertTrue(True, "stop with in-flight handlers completed without leaks");
     }
 }

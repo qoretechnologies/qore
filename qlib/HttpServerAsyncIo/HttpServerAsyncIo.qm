@@ -55,6 +55,7 @@ module HttpServerAsyncIo {
     - @ref HttpServerAsyncIo::HttpAcceptPollOperation "HttpAcceptPollOperation" - Composite operation for accept + SSL + ALPN negotiation
     - @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" - HTTP/2 server connection handling
     - @ref HttpServerAsyncIo::HttpIdlePollOperation "HttpIdlePollOperation" - Monitors idle keep-alive connections
+    - @ref HttpServerAsyncIo::HttpKeepAlivePollOperation "HttpKeepAlivePollOperation" - Combined idle + header read for HTTP/1.x keep-alive
     - @ref HttpServerAsyncIo::HttpSseStreamPollOperation "HttpSseStreamPollOperation" - SSE streaming support (HTTP/1.x)
     - @ref HttpServerAsyncIo::HttpWebSocketPollOperation "HttpWebSocketPollOperation" - WebSocket bidirectional I/O (HTTP/1.x)
     - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events
