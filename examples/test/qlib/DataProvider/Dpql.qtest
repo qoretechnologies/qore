@@ -1011,6 +1011,136 @@ public class DpqlTest inherits QUnit::Test {
             assertTrue(keyword_items.size() > 0);
         }
 
+        # Helper: build expression map excluding specific operators
+        code<hash<string, hash<DataProviderExpressionInfo>>(list<string>)> make_expmap = hash<string, hash<DataProviderExpressionInfo>> sub (list<string> exclude) {
+            return cast<hash<string, hash<DataProviderExpressionInfo>>>(
+                map {$1.key: $1.value}, DataProviderGenericExpressions.pairIterator(),
+                    !inlist($1.key, exclude)
+            );
+        };
+
+        # === DPQL_CTX_AFTER_FIELD context (after "@field ") ===
+
+        # All accessor completions offered with generic expressions (default)
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name ', 6, fields);
+            list<hash<DpqlCompletionItem>> acc_items = select items, $1.label == "[" || $1.label == "{" || $1.label == ".";
+            assertEq(3, acc_items.size(), "AFTER_FIELD: all accessors with generic expressions");
+        }
+
+        # No accessor completions when provider lacks all accessor operators
+        {
+            auto limited = make_expmap((DP_FUNC_INDEX, DP_FUNC_SLICE, DP_FUNC_KEY));
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name ', 6, fields, limited);
+            list<hash<DpqlCompletionItem>> acc_items = select items, $1.label == "[" || $1.label == "{" || $1.label == ".";
+            assertEq(0, acc_items.size(), "AFTER_FIELD: no accessors without accessor operators");
+            # Comparison operators should still be offered
+            assertTrue((select items, $1.label == "==").size() > 0, "AFTER_FIELD: comparison operators still offered");
+        }
+
+        # Only index supported (no slice, no key)
+        {
+            auto index_only = make_expmap((DP_FUNC_SLICE, DP_FUNC_KEY));
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name ', 6, fields, index_only);
+            assertEq(1, (select items, $1.label == "[").size(), "AFTER_FIELD: [ offered with index only");
+            assertEq(0, (select items, $1.label == "{").size(), "AFTER_FIELD: { not offered without key");
+            assertEq(0, (select items, $1.label == ".").size(), "AFTER_FIELD: . not offered without key");
+        }
+
+        # Only slice supported (no index, no key) — [ should be offered for slice
+        {
+            auto slice_only = make_expmap((DP_FUNC_INDEX, DP_FUNC_KEY));
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name ', 6, fields, slice_only);
+            assertEq(1, (select items, $1.label == "[").size(), "AFTER_FIELD: [ offered with slice only");
+            assertEq(0, (select items, $1.label == "{").size(), "AFTER_FIELD: { not offered without key");
+            assertEq(0, (select items, $1.label == ".").size(), "AFTER_FIELD: . not offered without key");
+        }
+
+        # Only key supported (no index, no slice)
+        {
+            auto key_only = make_expmap((DP_FUNC_INDEX, DP_FUNC_SLICE));
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name ', 6, fields, key_only);
+            assertEq(0, (select items, $1.label == "[").size(), "AFTER_FIELD: [ not offered without index/slice");
+            assertEq(1, (select items, $1.label == "{").size(), "AFTER_FIELD: { offered with key");
+            assertEq(1, (select items, $1.label == ".").size(), "AFTER_FIELD: . offered with key");
+        }
+
+        # Index + key supported (no slice)
+        {
+            auto ik = make_expmap((DP_FUNC_SLICE,));
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name ', 6, fields, ik);
+            assertEq(1, (select items, $1.label == "[").size(), "AFTER_FIELD: [ offered with index");
+            assertEq(1, (select items, $1.label == "{").size(), "AFTER_FIELD: { offered with key");
+            assertEq(1, (select items, $1.label == ".").size(), "AFTER_FIELD: . offered with key");
+        }
+
+        # === DPQL_CTX_AFTER_ACCESSOR context (after "]" or "}") ===
+
+        # All accessor completions after ] with generic expressions
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@items[0]', 9, fields);
+            list<hash<DpqlCompletionItem>> acc_items = select items, $1.label == "[" || $1.label == "{" || $1.label == ".";
+            assertEq(3, acc_items.size(), "AFTER_ACCESSOR ]: all accessors with generic expressions");
+        }
+
+        # No accessor completions after ] without accessor operators
+        {
+            auto limited = make_expmap((DP_FUNC_INDEX, DP_FUNC_SLICE, DP_FUNC_KEY));
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@items[0]', 9, fields, limited);
+            list<hash<DpqlCompletionItem>> acc_items = select items, $1.label == "[" || $1.label == "{" || $1.label == ".";
+            assertEq(0, acc_items.size(), "AFTER_ACCESSOR ]: no accessors without accessor operators");
+        }
+
+        # All accessor completions after } with generic expressions
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{name}', 11, fields);
+            list<hash<DpqlCompletionItem>> acc_items = select items, $1.label == "[" || $1.label == "{" || $1.label == ".";
+            assertEq(3, acc_items.size(), "AFTER_ACCESSOR }: all accessors with generic expressions");
+        }
+
+        # Selective accessor completions after } with only index
+        {
+            auto index_only = make_expmap((DP_FUNC_SLICE, DP_FUNC_KEY));
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@data{name}', 11, fields,
+                index_only);
+            assertEq(1, (select items, $1.label == "[").size(), "AFTER_ACCESSOR }: [ offered with index");
+            assertEq(0, (select items, $1.label == "{").size(), "AFTER_ACCESSOR }: { not offered without key");
+            assertEq(0, (select items, $1.label == ".").size(), "AFTER_ACCESSOR }: . not offered without key");
+        }
+
+        # === Function completions for accessor operators ===
+
+        # index/slice/key offered as function completions with generic expressions
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('', 0, fields);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
+            list<string> fn_names = map $1.label, fn_items;
+            assertTrue(inlist(DP_FUNC_INDEX, fn_names), "index() offered as function with generic expressions");
+            assertTrue(inlist(DP_FUNC_SLICE, fn_names), "slice() offered as function with generic expressions");
+            assertTrue(inlist(DP_FUNC_KEY, fn_names), "key() offered as function with generic expressions");
+        }
+
+        # index/slice/key NOT offered as function completions without them in expression map
+        {
+            auto limited = make_expmap((DP_FUNC_INDEX, DP_FUNC_SLICE, DP_FUNC_KEY));
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('', 0, fields, limited);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
+            list<string> fn_names = map $1.label, fn_items;
+            assertFalse(inlist(DP_FUNC_INDEX, fn_names), "index() not offered without index in expression map");
+            assertFalse(inlist(DP_FUNC_SLICE, fn_names), "slice() not offered without slice in expression map");
+            assertFalse(inlist(DP_FUNC_KEY, fn_names), "key() not offered without key in expression map");
+        }
+
+        # Only index() offered when only index is in expression map
+        {
+            auto index_only = make_expmap((DP_FUNC_SLICE, DP_FUNC_KEY));
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('', 0, fields, index_only);
+            list<hash<DpqlCompletionItem>> fn_items = select items, $1.kind == "function";
+            list<string> fn_names = map $1.label, fn_items;
+            assertTrue(inlist(DP_FUNC_INDEX, fn_names), "index() offered when in expression map");
+            assertFalse(inlist(DP_FUNC_SLICE, fn_names), "slice() not offered when not in expression map");
+            assertFalse(inlist(DP_FUNC_KEY, fn_names), "key() not offered when not in expression map");
+        }
     }
 
     schemaAwareKeyCompletionTests() {
