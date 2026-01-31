@@ -97,18 +97,18 @@ public const DP_SEARCH_OP_IN = "in";
 public const DP_SEARCH_OP_NOT = "!";
 #/@}
 
-/** @defgroup dpql_accessor_types DPQL Accessor Type Constants
-    These constants define the different accessor types for DPQL field references
+/** @defgroup dpql_function_ops DPQL Function Operator Constants
+    These constants define function operators for accessing data elements in DPQL expressions
 */
 #/@{
-#! Index accessor type: access a single element by index (e.g., \c \@items[0])
-public const DPQL_ACCESSOR_INDEX = 1;
+#! Index function: access a single element by index (e.g., \c index(\@items, 0))
+public const DP_FUNC_INDEX = "index";
 
-#! Slice accessor type: access multiple elements by indices/ranges (e.g., \c \@items[0..3] or \c \@items[1,3,5])
-public const DPQL_ACCESSOR_SLICE = 2;
+#! Slice function: access multiple elements by indices/ranges (e.g., \c slice(\@items, 0..3))
+public const DP_FUNC_SLICE = "slice";
 
-#! Key accessor type: access hash values by key (e.g., \c \@record{key} or \c \@record{a,b,c})
-public const DPQL_ACCESSOR_KEY = 3;
+#! Key function: access hash values by key (e.g., \c key(\@record, "name"))
+public const DP_FUNC_KEY = "key";
 #/@}
 
 /** @defgroup dpql_expression_types DPQL Expression Type Constants
@@ -116,16 +116,16 @@ public const DPQL_ACCESSOR_KEY = 3;
 */
 #/@{
 #! Value expression type: evaluates and returns a field reference value
-/** This expression type wraps a bare field reference (with optional accessors) and
-    returns its evaluated value. It allows field references to be used as standalone
-    expressions without requiring a comparison operator.
+/** This expression type wraps a bare field reference and returns its evaluated value.
+    It allows field references to be used as standalone expressions without requiring
+    a comparison operator.
 
     @par Example:
     @code
-    # "@users[0]{name}" parses to:
+    # "@name" parses to:
     {
         "exp": "value",
-        "args": (<DataProviderFieldReference>{"field": "users", "accessors": ...},),
+        "args": (<DataProviderFieldReference>{"field": "name"},),
     }
     @endcode
 

@@ -646,7 +646,7 @@ class PipelineQueue {
 
     @since DataProvider 3.1
 */
-class PipelineMetricsCollector {
+public class PipelineMetricsCollector {
     private {
         #! Metrics lock for thread-safe updates
         Mutex metrics_lock();

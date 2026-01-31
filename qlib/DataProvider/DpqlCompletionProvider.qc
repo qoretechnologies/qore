@@ -700,7 +700,7 @@ public class DpqlCompletionProvider {
                     # We've consumed the closing ], so content is bracket_start to pos-1
                     string content = substr(text, bracket_start, pos - 1 - bracket_start);
                     # Simplified: treat as INDEX for type traversal
-                    accessors += {"type": DPQL_ACCESSOR_INDEX, "content": content};
+                    accessors += {"type": DP_FUNC_INDEX, "content": content};
                 }
                 # If not closed, we're still inside this accessor - stop parsing
                 else {
@@ -721,7 +721,7 @@ public class DpqlCompletionProvider {
                     # Extract keys from content
                     string content = substr(text, brace_start, pos - 1 - brace_start);
                     list<string> key_list = parseKeyList(content);
-                    accessors += {"type": DPQL_ACCESSOR_KEY, "key_list": key_list};
+                    accessors += {"type": DP_FUNC_KEY, "key_list": key_list};
                 }
                 # If not closed, we're still inside this accessor - stop parsing
                 else {
@@ -736,7 +736,7 @@ public class DpqlCompletionProvider {
                 }
                 if (pos > start) {
                     string key = substr(text, start, pos - start);
-                    accessors += {"type": DPQL_ACCESSOR_KEY, "key_list": (key,)};
+                    accessors += {"type": DP_FUNC_KEY, "key_list": (key,)};
                 }
             } else {
                 # Unknown character, stop parsing
@@ -817,8 +817,8 @@ public class DpqlCompletionProvider {
 
         foreach hash<auto> acc in (accessors) {
             switch (acc.type) {
-                case DPQL_ACCESSOR_INDEX:
-                case DPQL_ACCESSOR_SLICE:
+                case DP_FUNC_INDEX:
+                case DP_FUNC_SLICE:
                     # List index/slice access: get element type
                     *AbstractDataProviderType elem = current.getElementType();
                     if (!elem) {
@@ -827,7 +827,7 @@ public class DpqlCompletionProvider {
                     current = elem;
                     break;
 
-                case DPQL_ACCESSOR_KEY:
+                case DP_FUNC_KEY:
                     # Key access: get the field's type for single key
                     if (acc.key_list && acc.key_list.size() == 1) {
                         *AbstractDataField field = current.getField(acc.key_list[0]);

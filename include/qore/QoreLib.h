@@ -834,6 +834,17 @@ DLLEXPORT size_t q_thread_stack_remaining();
 */
 DLLEXPORT size_t q_thread_stack_used();
 
+//! Checks if the current thread's stack has exceeded its limit
+/** @param xsink if the stack limit has been exceeded, a \c STACK-LIMIT-EXCEEDED exception is raised here
+
+    @return 0 if OK, -1 if the stack limit has been exceeded (exception raised)
+
+    @note this function does nothing if the Qore library was not compiled with stack management support
+
+    @since %Qore 2.1
+*/
+DLLEXPORT int q_check_stack(ExceptionSink* xsink);
+
 //! Sets the thread stack limit on the primary thread
 /** @since %Qore 1.19
 */
