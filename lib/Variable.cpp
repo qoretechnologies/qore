@@ -2455,7 +2455,9 @@ void ClosureVarValue::ref() const {
 }
 
 void ClosureVarValue::deref(ExceptionSink* xsink) {
-    printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p refs: %d -> %d rcount: %d rset: %p val: %s\n", this, references.load(), references.load() - 1, rcount, rset, val.getTypeName());
+    // NOTE: do not access val here without holding rml; val may be modified concurrently
+    // by another thread that holds a reference to this ClosureVarValue
+    printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p refs: %d -> %d rcount: %d rset: %p\n", this, references.load(), references.load() - 1, rcount, rset);
 
     int ref_copy;
     bool do_del = false;
