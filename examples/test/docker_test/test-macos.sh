@@ -22,7 +22,7 @@ cd "${BUILD_DIR}"
 
 # Configure with CMake
 cmake .. \
-    -DCMAKE_BUILD_TYPE=debug \
+    -DCMAKE_BUILD_TYPE=release \
     -DSINGLE_COMPILATION_UNIT=1
 
 # Build
