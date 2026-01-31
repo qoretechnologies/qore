@@ -54,6 +54,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("callback mode concurrent", \callbackConcurrentTest());
         addTestCase("shared socket custom keys", \sharedSocketCustomKeysTest());
         addTestCase("callback exception safety", \callbackExceptionSafetyTest());
+        addTestCase("submit from callback", \submitFromCallbackTest());
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("%Y\n", get_all_thread_call_stacks());
@@ -772,6 +773,54 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             "owner": "post-exception-owner",
         });
         assertFalse(exists info.ex, "controller should still work after callback exception");
+    }
+
+    #! Tests that submit() can be called from within a callback without deadlock
+    submitFromCallbackTest() {
+        AsyncSocketIoController ctrl(logger);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int listen_port = server.getSocketInfo().port;
+        on_exit server.close();
+
+        bool submit_ok = False;
+        Counter done(1);
+
+        AbstractPollOperation op = server.startPollAccept();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": server,
+            "spop": op,
+            "key": "submit-cb-accept-1",
+            "owner": "submit-cb-test",
+            "to": 5s,
+            "callback": sub (hash<SocketPollResultInfo> result) {
+                # Submit a new accept from within the callback — previously caused LOCK-ERROR
+                AbstractPollOperation op2 = server.startPollAccept();
+                ctrl.submit(<SocketPollOperationInfo>{
+                    "sock": server,
+                    "spop": op2,
+                    "key": "submit-cb-accept-2",
+                    "owner": "submit-cb-test",
+                    "to": 5s,
+                });
+                submit_ok = True;
+                done.dec();
+            },
+        });
+
+        # Connect a client to trigger the accept
+        Socket client();
+        client.connect("127.0.0.1:" + listen_port, 2s);
+        client.close();
+
+        done.waitForZero(5s);
+        assertTrue(submit_ok, "submit from callback should succeed without LOCK-ERROR");
+
+        ctrl.cancelByOwner("submit-cb-test");
     }
 }
 
