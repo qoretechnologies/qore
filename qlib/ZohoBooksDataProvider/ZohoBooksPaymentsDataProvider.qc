@@ -4,12 +4,35 @@
 public namespace ZohoBooksDataProvider {
 
 public class ZohoBooksPaymentsDataProvider inherits ZohoBooksDataProviderBase {
-    public { const ProviderInfo = <DataProviderInfo>{"name": "payments", "desc": "Zoho Books payments", "type": "ZohoBooksPaymentsDataProvider", "supports_read": True, "supports_native_search": True}; }
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "payments",
+            "desc": "Zoho Books payments",
+            "type": "ZohoBooksPaymentsDataProvider",
+            "supports_read": True,
+            "supports_native_search": True,
+            "search_options": SearchOptions,
+        };
+
+        const SearchOptions = {
+            "organization_id": <DataProviderOptionInfo>{
+                "display_name": "Organization ID",
+                "short_desc": "Zoho Books organization ID",
+                "type": AbstractDataProviderType::get(SoftStringType),
+                "desc": "The organization ID (required for all Zoho Books API calls)",
+                "required": True,
+            },
+        };
+    }
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "payments"; }
-    private *AbstractDataProviderType getRecordTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getRecordTypeImpl() { return new ZohoBooksPaymentDataType(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        hash<auto> response = doGet("/customerpayments", search_options);
+        hash<auto> params;
+        if (search_options.organization_id) {
+            params.organization_id = search_options.organization_id;
+        }
+        hash<auto> response = doGet("/customerpayments", params);
         return new DefaultRecordIterator(new ListHashIterator(response.customerpayments ?? ()), where_cond, search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }

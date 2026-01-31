@@ -467,6 +467,73 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
     return 0;
 }
 
+int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
+        const std::map<std::string, std::string>& headers, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (!is_server) {
+        xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
+        return -1;
+    }
+
+    // Build response headers
+    std::vector<nghttp2_nv> nva;
+    nva.reserve(headers.size() + 1);
+
+    // Add :status pseudo-header
+    std::string status_str = std::to_string(status_code);
+    nghttp2_nv nv_status = {
+        reinterpret_cast<uint8_t*>(const_cast<char*>(":status")),
+        reinterpret_cast<uint8_t*>(const_cast<char*>(status_str.c_str())),
+        7, status_str.size(), NGHTTP2_NV_FLAG_NONE
+    };
+    nva.push_back(nv_status);
+
+    // Add regular headers, filtering out connection-specific headers
+    std::vector<std::string> lowered_names;
+    lowered_names.reserve(headers.size());
+    for (const auto& h : headers) {
+        std::string lname = toLowerHeaderName(h.first);
+        if (lname[0] == ':') {
+            continue;
+        }
+        if (lname == "connection" || lname == "keep-alive" || lname == "proxy-connection" ||
+            lname == "transfer-encoding" || lname == "upgrade") {
+            continue;
+        }
+        lowered_names.push_back(lname);
+        nghttp2_nv nv = {
+            reinterpret_cast<uint8_t*>(const_cast<char*>(lowered_names.back().c_str())),
+            reinterpret_cast<uint8_t*>(const_cast<char*>(h.second.c_str())),
+            lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
+        };
+        nva.push_back(nv);
+    }
+
+    // Create a deferred data provider - body will be fed via sendStreamData()
+    auto provider_ctx = std::make_unique<DataProviderContext>();
+    provider_ctx->h2 = this;
+    provider_ctx->provider.source.ptr = provider_ctx.get();
+    provider_ctx->provider.read_callback = dataProviderReadCallback;
+    provider_ctx->defer_on_empty = true;
+    provider_ctx->no_end_stream = false;
+    provider_ctx->remove_on_empty = true;
+
+    printd(5, "submitResponseStreaming() stream_id=%d status=%d nva.size=%zu\n",
+        stream_id, status_code, nva.size());
+
+    int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(),
+        &provider_ctx->provider);
+    if (rv != 0) {
+        xsink->raiseException("HTTP2-ERROR", "failed to submit streaming response: %s",
+            nghttp2_strerror(rv));
+        return -1;
+    }
+
+    pending_data_providers.emplace(stream_id, std::move(provider_ctx));
+    printd(5, "submitResponseStreaming() SUCCESS stream_id=%d\n", stream_id);
+    return 0;
+}
+
 int32_t Http2Session::submitPushPromise(int32_t stream_id, const char* path,
         const std::map<std::string, std::string>& headers, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
@@ -1279,9 +1346,20 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     }
 
     if (bd.offset >= bd.data.size()) {
+        bool is_end = bd.end_stream;
         h2->pending_body_data.erase(it);
         if (ctx->no_end_stream) {
             *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+        } else if (is_end) {
+            // Explicitly signaled end of stream
+            *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+            if (ctx->remove_on_empty) {
+                h2->pending_data_providers.erase(stream_id);
+            }
+        } else if (ctx->defer_on_empty) {
+            // Streaming mode: buffer consumed but more data may arrive;
+            // defer until the next sendStreamData() call resumes us.
+            // Don't set EOF — the caller will signal end_stream explicitly.
         } else {
             *data_flags |= NGHTTP2_DATA_FLAG_EOF;
             if (ctx->remove_on_empty) {
@@ -1402,8 +1480,12 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
         fflush(stderr);
     }
     printd(5, "sendStreamData() stream_id=%d len=%zu end_stream=%d isServer=%d\n", stream_id, len, end_stream, is_server);
+    // For streaming responses, the stream may have been moved to completed_streams
+    // when the request was fully received (markStreamComplete), but the response
+    // is still being sent via the deferred data provider. Check both streams and
+    // pending_data_providers.
     Http2StreamInfo* stream = getStream(stream_id);
-    if (!stream) {
+    if (!stream && pending_data_providers.find(stream_id) == pending_data_providers.end()) {
         xsink->raiseException("HTTP2-ERROR", "stream %d not found", stream_id);
         return -1;
     }
@@ -1424,12 +1506,17 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     // Append data to the pending buffer for the data provider callback
     if (it == pending_body_data.end()) {
         // No existing data - create new entry
-        pending_body_data[stream_id] = BodyData(data, len);
+        pending_body_data[stream_id] = BodyData(data, len, end_stream);
     } else {
         // Append to existing data (preserving unread data)
         BodyData& bd = it->second;
-        const uint8_t* src = reinterpret_cast<const uint8_t*>(data);
-        bd.data.insert(bd.data.end(), src, src + len);
+        if (len > 0) {
+            const uint8_t* src = reinterpret_cast<const uint8_t*>(data);
+            bd.data.insert(bd.data.end(), src, src + len);
+        }
+        if (end_stream) {
+            bd.end_stream = true;
+        }
     }
     {
         auto it2 = pending_body_data.find(stream_id);

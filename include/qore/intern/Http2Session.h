@@ -184,6 +184,20 @@ public:
         const std::map<std::string, std::string>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink);
 
+    //! Submit a streaming response (server-side, headers only, deferred body)
+    /** Submits response HEADERS without END_STREAM. Body data is sent incrementally
+        via sendStreamData() calls.
+        @param stream_id Stream ID for the response
+        @param status_code HTTP status code
+        @param headers Response headers
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error
+
+        @since Qore 2.2
+    */
+    DLLLOCAL int submitResponseStreaming(int32_t stream_id, int status_code,
+        const std::map<std::string, std::string>& headers, ExceptionSink* xsink);
+
     //! Submit a PUSH_PROMISE (server-side)
     /** @param stream_id Stream ID of the associated request
         @param path Path of the pushed resource
@@ -382,11 +396,13 @@ private:
     struct BodyData {
         std::vector<uint8_t> data;
         size_t offset = 0;
+        bool end_stream = false;  //!< if true, signal EOF after this data is consumed
 
         BodyData() = default;
-        BodyData(const void* src, size_t len)
+        BodyData(const void* src, size_t len, bool end_stream = false)
             : data(reinterpret_cast<const uint8_t*>(src),
-                   reinterpret_cast<const uint8_t*>(src) + len) {}
+                   reinterpret_cast<const uint8_t*>(src) + len),
+              end_stream(end_stream) {}
     };
     std::map<int32_t, BodyData> pending_body_data;
 

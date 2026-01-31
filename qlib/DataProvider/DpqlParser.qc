@@ -644,8 +644,11 @@ public class DpqlParser {
         }
     }
 
-    #! Parses a field reference with optional accessor chain
-    private hash<DataProviderFieldReference> parseFieldRef() {
+    #! Parses a field reference with optional accessor chain as expression nodes
+    /** Returns a plain DataProviderFieldReference if no accessors follow, or a nested
+        expression tree using DP_FUNC_INDEX/DP_FUNC_SLICE/DP_FUNC_KEY operators.
+    */
+    private auto parseFieldRef() {
         hash<DpqlTokenInfo> tok = nextToken();
         string value = tok.value;
 
@@ -667,22 +670,22 @@ public class DpqlParser {
             throw "DPQL-PARSE-ERROR", "Invalid field reference";
         }
 
-        # Parse optional accessor chain
-        *list<hash<DataProviderFieldAccessor>> accessors = parseAccessorChain();
-
-        return <DataProviderFieldReference>{
+        auto result = <DataProviderFieldReference>{
             "field": field_name,
-            "accessors": accessors,
         };
+
+        # Parse optional accessor chain, wrapping in expression nodes
+        return parseAccessorChain(result);
     }
 
-    #! Parses accessor chain: [...], {...}, .identifier
-    private *list<hash<DataProviderFieldAccessor>> parseAccessorChain() {
-        list<hash<DataProviderFieldAccessor>> accessors = ();
+    #! Parses accessor chain and wraps the base expression in nested operator nodes
+    /** @param base the base value (field reference or expression) to wrap
+        @return the base if no accessors, or a nested expression tree
+    */
+    private auto parseAccessorChain(auto base) {
+        auto result = base;
 
         while (!atEnd()) {
-            # Don't skip whitespace - accessors must be adjacent or separated only by whitespace
-            # that we intentionally allow for readability
             skipWhitespace();
             if (atEnd()) {
                 break;
@@ -692,10 +695,10 @@ public class DpqlParser {
 
             if (tok.type == DPQL_TOK_LBRACKET) {
                 # Index or slice accessor: [...]
-                accessors += parseIndexAccessor();
+                result = parseIndexAccessor(result);
             } else if (tok.type == DPQL_TOK_LBRACE) {
                 # Key accessor: {...}
-                accessors += parseKeyAccessor();
+                result = parseKeyAccessor(result);
             } else if (tok.type == DPQL_TOK_DOT) {
                 # Member access after accessor: .identifier
                 nextToken();  # consume .
@@ -717,10 +720,10 @@ public class DpqlParser {
                     member_name = id_tok.value;
                 }
                 nextToken();  # consume identifier
-                # Member access is a single-key accessor
-                accessors += <DataProviderFieldAccessor>{
-                    "type": DPQL_ACCESSOR_KEY,
-                    "value": (member_name,),
+                # Member access is a single-key expression node
+                result = <DataProviderExpression>{
+                    "exp": DP_FUNC_KEY,
+                    "args": (result, member_name),
                 };
             } else {
                 # No more accessors
@@ -728,11 +731,14 @@ public class DpqlParser {
             }
         }
 
-        return accessors ? accessors : NOTHING;
+        return result;
     }
 
     #! Parses index accessor: [n], [n..m], [n,m,p], [n..m,p], [2..], [..5]
-    private hash<DataProviderFieldAccessor> parseIndexAccessor() {
+    /** @param base the base expression to index into
+        @return a DP_FUNC_INDEX or DP_FUNC_SLICE expression node
+    */
+    private hash<DataProviderExpression> parseIndexAccessor(auto base) {
         hash<DpqlTokenInfo> lbracket = nextToken();  # consume [
         skipWhitespace();
 
@@ -784,17 +790,17 @@ public class DpqlParser {
             throw "DPQL-PARSE-ERROR", "Empty index accessor";
         }
 
-        # Determine accessor type: INDEX (single int) or SLICE (multiple or range)
+        # Determine expression type: INDEX (single int) or SLICE (multiple or range)
         if (items.size() == 1 && items[0].typeCode() == NT_INT) {
-            return <DataProviderFieldAccessor>{
-                "type": DPQL_ACCESSOR_INDEX,
-                "value": items[0],
+            return <DataProviderExpression>{
+                "exp": DP_FUNC_INDEX,
+                "args": (base, items[0]),
             };
         }
 
-        return <DataProviderFieldAccessor>{
-            "type": DPQL_ACCESSOR_SLICE,
-            "value": items,
+        return <DataProviderExpression>{
+            "exp": DP_FUNC_SLICE,
+            "args": (base,) + items,
         };
     }
 
@@ -866,7 +872,10 @@ public class DpqlParser {
     }
 
     #! Parses key accessor: {key}, {"key"}, {key1, key2}
-    private hash<DataProviderFieldAccessor> parseKeyAccessor() {
+    /** @param base the base expression to apply key access to
+        @return a DP_FUNC_KEY expression node
+    */
+    private hash<DataProviderExpression> parseKeyAccessor(auto base) {
         hash<DpqlTokenInfo> lbrace = nextToken();  # consume {
         skipWhitespace();
 
@@ -917,9 +926,9 @@ public class DpqlParser {
             throw "DPQL-PARSE-ERROR", "Empty key accessor";
         }
 
-        return <DataProviderFieldAccessor>{
-            "type": DPQL_ACCESSOR_KEY,
-            "value": key_list,
+        return <DataProviderExpression>{
+            "exp": DP_FUNC_KEY,
+            "args": (base,) + key_list,
         };
     }
 

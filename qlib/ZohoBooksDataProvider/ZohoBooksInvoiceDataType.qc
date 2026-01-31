@@ -327,4 +327,127 @@ public class ZohoBooksCreateInvoiceRequestDataType inherits HashDataType {
     }
 }
 
+#! Zoho Books update invoice request data type (all fields optional for partial updates)
+public class ZohoBooksUpdateInvoiceRequestDataType inherits HashDataType {
+    public {
+        #! Field definitions for updating an invoice (all optional for partial updates)
+        const Fields = {
+            "invoice_id": {
+                "display_name": "Invoice ID",
+                "short_desc": "Invoice to update",
+                "desc": "The ID of the invoice to update",
+                "type": SoftStringOrNothingType,
+            },
+            "customer_id": {
+                "display_name": "Customer ID",
+                "short_desc": "Customer identifier",
+                "desc": "The ID of the customer for this invoice",
+                "type": SoftStringOrNothingType,
+            },
+            "date": {
+                "display_name": "Invoice Date",
+                "short_desc": "Date of the invoice",
+                "desc": "The date of the invoice (YYYY-MM-DD format)",
+                "type": SoftStringOrNothingType,
+            },
+            "due_date": {
+                "display_name": "Due Date",
+                "short_desc": "Payment due date",
+                "desc": "The date payment is due (YYYY-MM-DD format)",
+                "type": SoftStringOrNothingType,
+            },
+            "invoice_number": {
+                "display_name": "Invoice Number",
+                "short_desc": "Custom invoice number",
+                "desc": "Custom invoice number",
+                "type": SoftStringOrNothingType,
+            },
+            "reference_number": {
+                "display_name": "Reference Number",
+                "short_desc": "Reference number",
+                "desc": "An optional reference number (e.g., PO number)",
+                "type": SoftStringOrNothingType,
+            },
+            "line_items": {
+                "display_name": "Line Items",
+                "short_desc": "Invoice line items",
+                "desc": "The line items on the invoice (replaces existing line items if provided)",
+                "type": new SoftListDataType("LineItems", new ZohoBooksLineItemDataType(), True),
+            },
+            "discount": {
+                "display_name": "Discount",
+                "short_desc": "Discount amount",
+                "desc": "The discount amount or percentage",
+                "type": SoftFloatOrNothingType,
+            },
+            "discount_type": {
+                "display_name": "Discount Type",
+                "short_desc": "Type of discount",
+                "desc": "Whether discount is 'entity_level' or 'item_level'",
+                "type": SoftStringOrNothingType,
+            },
+            "is_discount_before_tax": {
+                "display_name": "Discount Before Tax",
+                "short_desc": "Apply discount before tax",
+                "desc": "Whether to apply discount before calculating tax",
+                "type": SoftBoolOrNothingType,
+            },
+            "payment_terms": {
+                "display_name": "Payment Terms",
+                "short_desc": "Payment terms in days",
+                "desc": "The payment terms in days (e.g., 30 for Net 30)",
+                "type": SoftIntOrNothingType,
+            },
+            "notes": {
+                "display_name": "Notes",
+                "short_desc": "Invoice notes",
+                "desc": "Notes to display on the invoice",
+                "type": SoftStringOrNothingType,
+            },
+            "terms": {
+                "display_name": "Terms & Conditions",
+                "short_desc": "Terms and conditions",
+                "desc": "Terms and conditions to display on the invoice",
+                "type": SoftStringOrNothingType,
+            },
+            "shipping_charge": {
+                "display_name": "Shipping Charge",
+                "short_desc": "Shipping charges",
+                "desc": "Shipping charges on the invoice",
+                "type": SoftFloatOrNothingType,
+            },
+            "adjustment": {
+                "display_name": "Adjustment",
+                "short_desc": "Adjustment amount",
+                "desc": "Any adjustment to the invoice total",
+                "type": SoftFloatOrNothingType,
+            },
+            "adjustment_description": {
+                "display_name": "Adjustment Description",
+                "short_desc": "Description of adjustment",
+                "desc": "Description for the adjustment",
+                "type": SoftStringOrNothingType,
+            },
+            "salesperson_name": {
+                "display_name": "Salesperson",
+                "short_desc": "Salesperson name",
+                "desc": "The name of the salesperson",
+                "type": SoftStringOrNothingType,
+            },
+            "custom_fields": {
+                "display_name": "Custom Fields",
+                "short_desc": "Custom field values",
+                "desc": "Custom field values for the invoice",
+                "type": AutoHashOrNothingType,
+            },
+        };
+    }
+
+    #! Creates the object
+    constructor() {
+        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
+            Fields.pairIterator();
+    }
+}
+
 } # namespace ZohoBooksDataProvider

@@ -92,6 +92,54 @@ module ZohoBooksDataProvider {
                     "preselected": True,
                     "ref_data": "customers",
                 },
+                "invoice_number": <ActionOptionInfo>{
+                    "display_name": "Invoice Number",
+                    "short_desc": "Unique invoice identifier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A unique sequential identifier for the invoice",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Invoice Date",
+                    "short_desc": "Invoice issue date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Invoice issue date in yyyy-mm-dd format",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Payment due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment due date in yyyy-mm-dd format",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of days within which payment must be made",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Invoice line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, tax_id",
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Invoice discount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                    "desc": "Discount amount or percentage applied to invoice",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Notes visible to the customer on the invoice",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Terms and conditions for the invoice",
+                },
             },
         });
 
@@ -120,6 +168,56 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "invoices",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the invoice",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "invoice_number": <ActionOptionInfo>{
+                    "display_name": "Invoice Number",
+                    "short_desc": "Unique invoice identifier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Invoice Date",
+                    "short_desc": "Invoice issue date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Invoice issue date in yyyy-mm-dd format",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Payment due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment due date in yyyy-mm-dd format",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Invoice line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, tax_id",
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Invoice discount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
                 },
             },
         });
@@ -149,6 +247,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "invoices",
                 },
             },
         });
@@ -162,7 +261,7 @@ module ZohoBooksDataProvider {
             "display_name": "Get Invoice",
             "short_desc": "Get invoice details",
             "desc": "Retrieve details of a specific invoice",
-            "action_code": DPAT_FIND_SINGLE,
+            "action_code": DPAT_API,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -178,6 +277,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "invoices",
                 },
             },
         });
@@ -249,6 +349,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "invoices",
                 },
                 "to_mail_ids": <ActionOptionInfo>{
                     "display_name": "To",
@@ -298,6 +399,46 @@ module ZohoBooksDataProvider {
                     "preselected": True,
                     "ref_data": "vendors",
                 },
+                "bill_number": <ActionOptionInfo>{
+                    "display_name": "Bill Number",
+                    "short_desc": "Unique bill identifier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A unique sequential identifier for the bill",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Bill Date",
+                    "short_desc": "Bill issue date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Bill issue date in yyyy-mm-dd format",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Payment due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment due date in yyyy-mm-dd format",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "External vendor reference",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Vendor's reference number for this bill",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Bill line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, account_id, tax_id",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Additional notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Payment and delivery terms",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
             },
         });
 
@@ -326,6 +467,51 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "bills",
+                },
+                "vendor_id": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "The vendor for the bill",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "vendors",
+                },
+                "bill_number": <ActionOptionInfo>{
+                    "display_name": "Bill Number",
+                    "short_desc": "Unique bill identifier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Bill Date",
+                    "short_desc": "Bill issue date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Bill issue date in yyyy-mm-dd format",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Payment due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment due date in yyyy-mm-dd format",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "External vendor reference",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Bill line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, account_id, tax_id",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Additional notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Payment and delivery terms",
+                    "type": AbstractDataProviderTypeMap."*string",
                 },
             },
         });
@@ -355,6 +541,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "bills",
                 },
             },
         });
@@ -368,7 +555,7 @@ module ZohoBooksDataProvider {
             "display_name": "Get Bill",
             "short_desc": "Get bill details",
             "desc": "Retrieve details of a specific bill",
-            "action_code": DPAT_FIND_SINGLE,
+            "action_code": DPAT_API,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -384,6 +571,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "bills",
                 },
             },
         });
@@ -464,6 +652,41 @@ module ZohoBooksDataProvider {
                     "required": True,
                     "preselected": True,
                 },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Payment Date",
+                    "short_desc": "Date of payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment date in yyyy-mm-dd format",
+                },
+                "payment_mode": <ActionOptionInfo>{
+                    "display_name": "Payment Mode",
+                    "short_desc": "Mode of payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Mode of payment (e.g., Cash, Check, Bank Transfer, Credit Card)",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Transaction reference",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Reference number for the payment transaction",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Payment description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "invoices": <ActionOptionInfo>{
+                    "display_name": "Invoices",
+                    "short_desc": "Invoices to apply payment to",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of invoices with fields: invoice_id, amount_applied",
+                },
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Deposit Account",
+                    "short_desc": "Account to deposit payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "ID of the account where the payment will be deposited",
+                },
             },
         });
 
@@ -492,6 +715,45 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "payments",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer making the payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Payment amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Payment Date",
+                    "short_desc": "Date of payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment date in yyyy-mm-dd format",
+                },
+                "payment_mode": <ActionOptionInfo>{
+                    "display_name": "Payment Mode",
+                    "short_desc": "Mode of payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Transaction reference",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Payment description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "invoices": <ActionOptionInfo>{
+                    "display_name": "Invoices",
+                    "short_desc": "Invoices to apply payment to",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of invoices with fields: invoice_id, amount_applied",
                 },
             },
         });
@@ -521,6 +783,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "payments",
                 },
             },
         });
@@ -534,7 +797,7 @@ module ZohoBooksDataProvider {
             "display_name": "Get Payment",
             "short_desc": "Get payment details",
             "desc": "Retrieve details of a specific payment",
-            "action_code": DPAT_FIND_SINGLE,
+            "action_code": DPAT_API,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -550,6 +813,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "payments",
                 },
             },
         });
@@ -593,6 +857,52 @@ module ZohoBooksDataProvider {
                         <AllowedValueInfo>{"value": "vendor", "desc": "Vendor contact"},
                     ),
                 },
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Legal company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Legal name of the company (max 200 characters)",
+                },
+                "contact_persons": <ActionOptionInfo>{
+                    "display_name": "Contact Persons",
+                    "short_desc": "List of contact persons",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of contact persons with fields: salutation, first_name, last_name, email, phone, mobile, designation, department, is_primary_contact",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Contact website URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "billing_address": <ActionOptionInfo>{
+                    "display_name": "Billing Address",
+                    "short_desc": "Billing address details",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Billing address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                },
+                "shipping_address": <ActionOptionInfo>{
+                    "display_name": "Shipping Address",
+                    "short_desc": "Shipping address details",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Shipping address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of days within which payment must be made",
+                },
+                "currency_id": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Currency for transactions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Currency ID for transactions with this contact",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Additional notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
             },
         });
 
@@ -622,6 +932,63 @@ module ZohoBooksDataProvider {
                     "required": True,
                     "preselected": True,
                     "ref_data": "contacts",
+                },
+                "contact_name": <ActionOptionInfo>{
+                    "display_name": "Contact Name",
+                    "short_desc": "Name of the contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "contact_type": <ActionOptionInfo>{
+                    "display_name": "Contact Type",
+                    "short_desc": "Type of contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "customer", "desc": "Customer contact"},
+                        <AllowedValueInfo>{"value": "vendor", "desc": "Vendor contact"},
+                    ),
+                },
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Legal company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "contact_persons": <ActionOptionInfo>{
+                    "display_name": "Contact Persons",
+                    "short_desc": "List of contact persons",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of contact persons with fields: salutation, first_name, last_name, email, phone, mobile, designation, department, is_primary_contact",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Contact website URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "billing_address": <ActionOptionInfo>{
+                    "display_name": "Billing Address",
+                    "short_desc": "Billing address details",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Billing address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                },
+                "shipping_address": <ActionOptionInfo>{
+                    "display_name": "Shipping Address",
+                    "short_desc": "Shipping address details",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Shipping address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "currency_id": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Currency for transactions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Additional notes",
+                    "type": AbstractDataProviderTypeMap."*string",
                 },
             },
         });
@@ -653,6 +1020,36 @@ module ZohoBooksDataProvider {
                         <AllowedValueInfo>{"value": "customer", "desc": "Customer contacts only"},
                         <AllowedValueInfo>{"value": "vendor", "desc": "Vendor contacts only"},
                     ),
+                },
+            },
+        });
+
+        # Get Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-contact",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get Contact",
+            "short_desc": "Get a contact by ID",
+            "desc": "Retrieve details of a specific contact",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
                 },
             },
         });
@@ -720,6 +1117,102 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "expenses",
+                },
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account",
+                    "short_desc": "Expense account",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Expense amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Expense date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in yyyy-mm-dd format",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Expense description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "vendor_id": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "Vendor for the expense",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "vendors",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "is_billable": <ActionOptionInfo>{
+                    "display_name": "Billable",
+                    "short_desc": "Is this expense billable",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Customer to bill",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # List Expenses
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/expenses",
+            "action": "list-expenses",
+            "groups": "Expenses",
+            "display_name": "List Expenses",
+            "short_desc": "List all expenses",
+            "desc": "Retrieve a list of expenses",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Get Expense
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-expense",
+            "action": "get-expense",
+            "groups": "Expenses",
+            "display_name": "Get Expense",
+            "short_desc": "Get an expense by ID",
+            "desc": "Retrieve details of a specific expense",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "expense_id": <ActionOptionInfo>{
+                    "display_name": "Expense ID",
+                    "short_desc": "The expense to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "expenses",
                 },
             },
         });
@@ -758,6 +1251,58 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."float",
                     "required": True,
                     "preselected": True,
+                },
+            },
+        });
+
+        # List Items
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/items",
+            "action": "list-items",
+            "groups": "Items",
+            "display_name": "List Items",
+            "short_desc": "List all items",
+            "desc": "Retrieve a list of items (products and services)",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Get Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-item",
+            "action": "get-item",
+            "groups": "Items",
+            "display_name": "Get Item",
+            "short_desc": "Get an item by ID",
+            "desc": "Retrieve details of a specific item",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "item_id": <ActionOptionInfo>{
+                    "display_name": "Item ID",
+                    "short_desc": "The item to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "items",
                 },
             },
         });
@@ -819,6 +1364,103 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "estimates",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the estimate",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Estimate date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in yyyy-mm-dd format",
+                },
+                "expiry_date": <ActionOptionInfo>{
+                    "display_name": "Expiry Date",
+                    "short_desc": "Estimate expiry date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in yyyy-mm-dd format",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Estimate line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items",
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Discount amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # List Estimates
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/estimates",
+            "action": "list-estimates",
+            "groups": "Estimates",
+            "display_name": "List Estimates",
+            "short_desc": "List all estimates",
+            "desc": "Retrieve a list of estimates/quotes",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Get Estimate
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-estimate",
+            "action": "get-estimate",
+            "groups": "Estimates",
+            "display_name": "Get Estimate",
+            "short_desc": "Get an estimate by ID",
+            "desc": "Retrieve details of a specific estimate",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "estimate_id": <ActionOptionInfo>{
+                    "display_name": "Estimate ID",
+                    "short_desc": "The estimate to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "estimates",
                 },
             },
         });
@@ -880,6 +1522,56 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "salesorders",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the sales order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Sales order date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in yyyy-mm-dd format",
+                },
+                "shipment_date": <ActionOptionInfo>{
+                    "display_name": "Shipment Date",
+                    "short_desc": "Expected shipment date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in yyyy-mm-dd format",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Sales order line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items",
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Discount amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "delivery_method": <ActionOptionInfo>{
+                    "display_name": "Delivery Method",
+                    "short_desc": "Delivery method",
+                    "type": AbstractDataProviderTypeMap."*string",
                 },
             },
         });
@@ -909,6 +1601,137 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "salesorders",
+                },
+            },
+        });
+
+        # List Sales Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/salesorders",
+            "action": "list-salesorders",
+            "groups": "Sales Orders",
+            "display_name": "List Sales Orders",
+            "short_desc": "List all sales orders",
+            "desc": "Retrieve a list of sales orders",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Get Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-salesorder",
+            "action": "get-salesorder",
+            "groups": "Sales Orders",
+            "display_name": "Get Sales Order",
+            "short_desc": "Get a sales order by ID",
+            "desc": "Retrieve details of a specific sales order",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order ID",
+                    "short_desc": "The sales order to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "salesorders",
+                },
+            },
+        });
+
+        # ========== PURCHASE ORDER ACTIONS ==========
+
+        # List Purchase Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/purchaseorders",
+            "action": "list-purchaseorders",
+            "groups": "Purchase Orders",
+            "display_name": "List Purchase Orders",
+            "short_desc": "List all purchase orders",
+            "desc": "Retrieve a list of purchase orders",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Get Purchase Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-purchaseorder",
+            "action": "get-purchaseorder",
+            "groups": "Purchase Orders",
+            "display_name": "Get Purchase Order",
+            "short_desc": "Get a purchase order by ID",
+            "desc": "Retrieve details of a specific purchase order",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "purchaseorder_id": <ActionOptionInfo>{
+                    "display_name": "Purchase Order ID",
+                    "short_desc": "The purchase order to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "purchaseorders",
+                },
+            },
+        });
+
+        # ========== PAYMENT ACTIONS ==========
+
+        # List Payments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/payments",
+            "action": "list-payments",
+            "groups": "Payments",
+            "display_name": "List Payments",
+            "short_desc": "List all payments",
+            "desc": "Retrieve a list of customer payments",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
                 },
             },
         });

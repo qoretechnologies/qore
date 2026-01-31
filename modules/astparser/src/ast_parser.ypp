@@ -154,6 +154,8 @@ typedef void* yyscan_t;
     std::vector<ASTSuperclassDeclaration*>* sclist;
     ASTStatement* statement;
     ASTSwitchBodyExpression* switchexpr;
+    ASTModuleDeclaration* moduledecl;
+    std::pair<std::string, ASTExpression*>* moduleattr;
 }
 
 %{
@@ -272,7 +274,7 @@ extern std::string* takeSubDocComment();
 %token TOK_INHERITS "inherits"
 %token TOK_ELSE "else"
 %token TOK_STATIC "static"
-%token TOK_MODULE "module"
+%token <string> TOK_MODULE "module"
 %token TOK_FINAL "final"
 %token TOK_ABSTRACT "abstract"
 %token TOK_HASHDECL "hashdecl"
@@ -510,6 +512,8 @@ extern std::string* takeSubDocComment();
 %type <sclist>         superclass_list
 %type <statement>      switch_statement
 %type <astnode>        top_level_command
+%type <moduledecl>    module_decls
+%type <moduleattr>    module_decl
 %type <nsdecl>         top_namespace_decl
 %type <statement>      try_statement
 %type <String>         uncqtypedef
@@ -519,6 +523,8 @@ extern std::string* takeSubDocComment();
 %destructor { delete $$; $$ = nullptr; } DOT_KW_IDENTIFIER PARSE_OPTION_END PARSE_OPTION_FULL QUOTED_WORD REGEX REGEX_EXTRACT REGEX_SUBST REGEX_TRANS alt_hash base_constructor base_constructor_list block case_block case_code classvardecl class_def context_mod enum_def enum_member exp exp_c exp_n exp_nl gvardecl hash hash_element hashdecl_def hashdecl_inherits hashdecl_member immediate_typed_hash inline_methoddef internal_member_list list list_item list_item_n list_n member member2 myexp namespace_decl optname outofline_methoddef parse_option private_member_list public_member_list qtypedef return_statement return_value scalar scoped_const_decl scoped_sub_def statement statements statement_or_block string sub_def superclass switch_statement top_level_command top_namespace_decl transient_member transient_member2 try_statement typedef_def uncqtypedef unscoped_const_decl
 %destructor { free($$); $$ = nullptr; } ANGLE_IDENTIFIER BACKQUOTE BASE_CLASS_CALL BINARY CLASS_SCOPED_REF CLASS_STRING COMPLEX_CONTEXT_REF CONTEXT_REF DATETIME HASHDECL_IDENTIFIER_OPENCURLY IDENTIFIER KW_IDENTIFIER_OPENPAREN NAMESPACE NUMBER QORE_CAST SCOPED_REF SCOPED_VREF SELF_REF VAR_REF ident_openparen
 %destructor { if ($$) { for (int i = 0, count = $$->size(); i < count; i++) {delete (*$$)[i];} delete $$; } $$ = nullptr; } base_constructors class_attributes context_mods enum_members hashdecl_attributes inheritance_list member_list member_list2 namespace_decls superclass_list
+%destructor { delete $$; $$ = nullptr; } module_decls
+%destructor { if ($$) { delete $$->second; delete $$; } $$ = nullptr; } module_decl
 
 %code top {
 #if defined(__GNUC__)
@@ -591,7 +597,20 @@ top_level_command:
             ATTACH_DOC_COMMENT($1);
             $$ = $1;
         }
-        | TOK_MODULE '{' module_decls '}' { $$ = nullptr; }
+        | TOK_MODULE '{' module_decls '}' {
+            ASTName modname($1, ASTNameKind::ANK_None);
+            // Set name location to just the identifier, not the full "module <name>" token.
+            size_t nameLen = strlen($1);
+            modname.loc = @1;
+            modname.loc.firstCol = @1.lastCol - static_cast<ast_loc_t>(nameLen);
+            free($1);
+            ASTModuleDeclaration* md = new ASTModuleDeclaration(std::move(modname));
+            md->attributes.swap($3->attributes);
+            delete $3;
+            md->loc.set(@1, @4);
+            ATTACH_DOC_COMMENT(md);
+            $$ = md;
+        }
         | parse_option {
             // Allow directives inside module blocks for doc-only builds.
             delete $1;
@@ -612,19 +631,31 @@ parse_option:
 
 module_decls:
         module_decl {
+            // Create the module declaration with a placeholder name (set by the parent rule).
+            $$ = new ASTModuleDeclaration(ASTName());
+            if ($1) {
+                $$->addAttribute(std::move($1->first), $1->second);
+                delete $1;
+            }
         }
         | module_decls module_decl {
+            $$ = $1;
+            if ($2) {
+                $$->addAttribute(std::move($2->first), $2->second);
+                delete $2;
+            }
         }
         ;
 
 module_decl:
         IDENTIFIER '=' exp ';' {
+            $$ = new std::pair<std::string, ASTExpression*>(std::string($1), $3);
             free($1);
-            delete $3;
         }
         | parse_option {
             // Ignore parse directives inside module declarations.
             delete $1;
+            $$ = nullptr;
         }
         ;
 

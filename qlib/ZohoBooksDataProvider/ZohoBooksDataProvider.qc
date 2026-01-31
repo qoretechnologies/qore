@@ -71,14 +71,20 @@ public class ZohoBooksDataProvider inherits ZohoBooksDataProviderBase {
             "get-payment": Class::forName("ZohoBooksGetPaymentDataProvider"),
             "create-contact": Class::forName("ZohoBooksCreateContactDataProvider"),
             "update-contact": Class::forName("ZohoBooksUpdateContactDataProvider"),
+            "get-contact": Class::forName("ZohoBooksGetContactDataProvider"),
             "create-expense": Class::forName("ZohoBooksCreateExpenseDataProvider"),
             "update-expense": Class::forName("ZohoBooksUpdateExpenseDataProvider"),
+            "get-expense": Class::forName("ZohoBooksGetExpenseDataProvider"),
             "create-item": Class::forName("ZohoBooksCreateItemDataProvider"),
+            "get-item": Class::forName("ZohoBooksGetItemDataProvider"),
             "create-estimate": Class::forName("ZohoBooksCreateEstimateDataProvider"),
             "update-estimate": Class::forName("ZohoBooksUpdateEstimateDataProvider"),
+            "get-estimate": Class::forName("ZohoBooksGetEstimateDataProvider"),
             "create-salesorder": Class::forName("ZohoBooksCreateSalesOrderDataProvider"),
             "update-salesorder": Class::forName("ZohoBooksUpdateSalesOrderDataProvider"),
             "delete-salesorder": Class::forName("ZohoBooksDeleteSalesOrderDataProvider"),
+            "get-salesorder": Class::forName("ZohoBooksGetSalesOrderDataProvider"),
+            "get-purchaseorder": Class::forName("ZohoBooksGetPurchaseOrderDataProvider"),
         };
     }
 

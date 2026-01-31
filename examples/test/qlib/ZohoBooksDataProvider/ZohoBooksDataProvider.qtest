@@ -56,6 +56,7 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
             "client_id": "i,client-id=s",
             "client_secret": "s,client-secret=s",
             "refresh_token": "r,refresh-token=s",
+            "token": "t,token=s",
             "org_id": "o,org-id=s",
             "subdomain": "S,subdomain=s",
             "domain": "D,domain=s",
@@ -70,6 +71,9 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
 
         #! Test item ID (created during test)
         *string testItemId;
+
+        #! Organization ID for tests (passed per-action, not from connection)
+        *string organizationId;
     }
 
     constructor() : Test("ZohoBooksDataProvider Test", "1.0", \ARGV, MyOpts) {
@@ -106,18 +110,63 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Zoho Books client for integration tests
     private setupConnection() {
+        # Organization ID is always required for actions (passed per-action, not from connection)
+        organizationId = m_options.org_id ?? ENV.ZOHOBOOKS_ORGANIZATION_ID;
+
+        # Try to use a connection from Qorus if specified
+        *string conn_name = m_options.conn ?? ENV.ZOHOBOOKS_CONNECTION;
+        if (conn_name) {
+            if (m_options.verbose) {
+                printf("Using connection: %s\n", conn_name);
+            }
+            if (!organizationId) {
+                if (m_options.verbose) {
+                    printf("Warning: No organization_id provided. Use -o option or ZOHOBOOKS_ORGANIZATION_ID env var.\n");
+                }
+            }
+            client = get_connection(conn_name).get();
+            # Set organization_id on the client for request providers
+            if (organizationId) {
+                client.setOrganizationId(organizationId);
+            }
+            return;
+        }
+
         *string client_id = m_options.client_id ?? ENV.ZOHOBOOKS_CLIENT_ID;
         *string client_secret = m_options.client_secret ?? ENV.ZOHOBOOKS_CLIENT_SECRET;
         *string refresh_token = m_options.refresh_token ?? ENV.ZOHOBOOKS_REFRESH_TOKEN;
-        *string org_id = m_options.org_id ?? ENV.ZOHOBOOKS_ORGANIZATION_ID;
+        *string token = m_options.token ?? ENV.ZOHOBOOKS_TOKEN;
 
-        if (!client_id || !client_secret || !refresh_token || !org_id) {
+        # Allow token-only mode: just access token + org_id for quick testing
+        if (token && organizationId && (!client_id || !client_secret || !refresh_token)) {
+            if (m_options.verbose) {
+                printf("Using token-only mode (no OAuth2 refresh)\n");
+            }
+            hash<auto> opts = {
+                "subdomain": m_options.subdomain ?? ENV.ZOHOBOOKS_SUBDOMAIN ?? "zoho",
+                "domain": m_options.domain ?? ENV.ZOHOBOOKS_DOMAIN ?? ".com",
+                "token": token,
+            };
+            client = new ZohoBooksRestClient::ZohoBooksRestClient(opts);
+            if (organizationId) {
+                client.setOrganizationId(organizationId);
+            }
+            return;
+        }
+
+        if (!client_id || !client_secret || !refresh_token || !organizationId) {
             if (m_options.verbose) {
                 printf("Missing Zoho Books credentials. Required:\n");
+                printf("  - ZOHOBOOKS_CONNECTION or -c option (Qorus connection name)\n");
+                printf("Or (token-only mode):\n");
+                printf("  - ZOHOBOOKS_TOKEN or -t option (access token)\n");
+                printf("  - ZOHOBOOKS_ORGANIZATION_ID or -o option\n");
+                printf("Or (full OAuth2 mode):\n");
                 printf("  - ZOHOBOOKS_CLIENT_ID or -i option\n");
                 printf("  - ZOHOBOOKS_CLIENT_SECRET or -s option\n");
                 printf("  - ZOHOBOOKS_REFRESH_TOKEN or -r option\n");
                 printf("  - ZOHOBOOKS_ORGANIZATION_ID or -o option\n");
+                printf("  - ZOHOBOOKS_TOKEN or -t option (optional access token)\n");
             }
             return;
         }
@@ -126,12 +175,22 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
             "oauth2_client_id": client_id,
             "oauth2_client_secret": client_secret,
             "oauth2_refresh_token": refresh_token,
-            "organization_id": org_id,
+            # NOTE: organization_id is intentionally NOT set here to match real Qorus behavior
+            # where it's selected per-action, not from the connection
             "subdomain": m_options.subdomain ?? ENV.ZOHOBOOKS_SUBDOMAIN ?? "zoho",
             "domain": m_options.domain ?? ENV.ZOHOBOOKS_DOMAIN ?? ".com",
         };
+        if (token) {
+            opts.token = token;
+        }
 
         client = new ZohoBooksRestClient::ZohoBooksRestClient(opts);
+
+        # Set organization_id on the client for request providers (create, update, delete, get)
+        # Search providers pass it via search_options, the REST client won't duplicate it
+        if (organizationId) {
+            client.setOrganizationId(organizationId);
+        }
     }
 
     #! Check if json module is available
@@ -534,8 +593,9 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
         assertTrue(scheme.short_desc.val());
         assertTrue(scheme.desc.val());
 
-        # Verify required options
-        assertEq("subdomain,domain", scheme.required_options);
+        # Verify required options (subdomain,domain always required + token OR oauth2 options)
+        assertEq("subdomain,domain,token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
+            "oauth2_client_id,oauth2_client_secret", scheme.required_options);
         assertTrue(scheme.options.hasKey("subdomain"));
         assertTrue(scheme.options.hasKey("domain"));
         assertTrue(scheme.options.hasKey("oauth2_client_id"));
@@ -574,8 +634,8 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
             ZohoBooksDataProvider::AppName);
         assertTrue(actions.size() > 0);
 
-        # Verify action count (26 CRUD + 10 triggers = 36)
-        assertEq(36, actions.size());
+        # Verify action count (38 CRUD + 10 triggers = 48)
+        assertEq(48, actions.size());
 
         # Get action names
         list<string> actionNames = map $1.action, actions;
@@ -773,7 +833,10 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
 
         # List existing contacts
         AbstractDataProvider contactsProvider = prov.getChildProvider("contacts");
-        list<hash<auto>> contacts = map $1, contactsProvider.searchRecords(NOTHING, {"contact_type": "customer"});
+        list<hash<auto>> contacts = map $1, contactsProvider.searchRecords(NOTHING, {
+            "organization_id": organizationId,
+            "contact_type": "customer",
+        });
 
         if (m_options.verbose) {
             printf("Found %d customer contacts\n", contacts.size());
@@ -787,7 +850,24 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
             hash<auto> newContact = createContactProvider.doRequest({
                 "contact_name": testName,
                 "contact_type": "customer",
-                "email": "test@example.com",
+                "company_name": "Test Company Inc",
+                "website": "https://test-company.example.com",
+                "payment_terms": 30,
+                "contact_persons": ({
+                    "first_name": "Test",
+                    "last_name": "User",
+                    "email": "test@example.com",
+                    "phone": "+1-555-123-4567",
+                    "is_primary_contact": True,
+                },),
+                "billing_address": {
+                    "address": "123 Test Street",
+                    "city": "Test City",
+                    "state": "TS",
+                    "zip": "12345",
+                    "country": "United States",
+                },
+                "notes": "Created by integration test",
             });
 
             if (newContact.contact_id) {
@@ -799,12 +879,23 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
 
                 # Verify the customer was created by fetching it
                 list<hash<auto>> updatedContacts = map $1, contactsProvider.searchRecords(
-                    NOTHING, {"contact_type": "customer"});
+                    NOTHING, {"organization_id": organizationId, "contact_type": "customer"});
                 bool found = False;
                 foreach hash<auto> contact in (updatedContacts) {
                     if (contact.contact_id == testCustomerId) {
                         found = True;
                         assertEq(testName, contact.contact_name);
+                        # Verify additional fields were saved (if returned in list response)
+                        if (contact.hasKey("company_name")) {
+                            assertEq("Test Company Inc", contact.company_name);
+                        }
+                        if (contact.hasKey("payment_terms")) {
+                            assertEq(30, contact.payment_terms);
+                        }
+                        if (m_options.verbose) {
+                            printf("  Verified contact: %s (company: %s)\n",
+                                contact.contact_name, contact.company_name ?? "N/A");
+                        }
                         break;
                     }
                 }
@@ -831,7 +922,9 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
 
         # List existing items
         AbstractDataProvider itemsProvider = prov.getChildProvider("items");
-        list<hash<auto>> items = map $1, itemsProvider.searchRecords();
+        list<hash<auto>> items = map $1, itemsProvider.searchRecords(NOTHING, {
+            "organization_id": organizationId,
+        });
 
         if (m_options.verbose) {
             printf("Found %d items\n", items.size());
@@ -884,7 +977,9 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
 
         # List existing invoices
         AbstractDataProvider invoicesProvider = prov.getChildProvider("invoices");
-        list<hash<auto>> invoices = map $1, invoicesProvider.searchRecords();
+        list<hash<auto>> invoices = map $1, invoicesProvider.searchRecords(NOTHING, {
+            "organization_id": organizationId,
+        });
 
         if (m_options.verbose) {
             printf("Found %d invoices\n", invoices.size());
@@ -893,15 +988,27 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
         # Create a test invoice
         AbstractDataProvider createInvoiceProvider = prov.getChildProvider("create-invoice");
 
+        string invoiceDate = now().format("YYYY-MM-DD");
+        string dueDate = (now() + 30D).format("YYYY-MM-DD");
+        string testNotes = sprintf("Test invoice created at %s", now_us().toString());
+        string testTerms = "Net 30 - Payment due within 30 days";
+
         try {
             hash<auto> newInvoice = createInvoiceProvider.doRequest({
                 "customer_id": testCustomerId,
-                "date": now().format("YYYY-MM-DD"),
+                "date": invoiceDate,
+                "due_date": dueDate,
+                "payment_terms": 30,
                 "line_items": ({
                     "item_id": testItemId,
-                    "quantity": 1,
+                    "name": "Test Item",
+                    "description": "Integration test item",
+                    "quantity": 2,
                     "rate": 100.00,
                 },),
+                "discount": 10.00,
+                "notes": testNotes,
+                "terms": testTerms,
             });
 
             if (newInvoice.invoice_id) {
@@ -913,23 +1020,38 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
                         newInvoice.total ?? "N/A");
                 }
 
-                # Test get invoice
+                # Small delay to allow API to fully process the created invoice
+                sleep(500ms);
+
+                # Test get invoice and verify created fields
                 AbstractDataProvider getInvoiceProvider = prov.getChildProvider("get-invoice");
                 hash<auto> fetchedInvoice = getInvoiceProvider.doRequest({
                     "invoice_id": testInvoiceId,
                 });
                 assertEq(testInvoiceId, fetchedInvoice.invoice_id);
                 assertEq(testCustomerId, fetchedInvoice.customer_id);
+                assertEq(invoiceDate, fetchedInvoice.date);
+                assertEq(dueDate, fetchedInvoice.due_date);
+                assertEq(testNotes, fetchedInvoice.notes);
+                assertEq(testTerms, fetchedInvoice.terms);
+                assertTrue(fetchedInvoice.line_items.size() > 0, "Invoice should have line items");
                 if (m_options.verbose) {
-                    printf("Fetched invoice: %s\n", fetchedInvoice.invoice_number ?? testInvoiceId);
+                    printf("Fetched invoice: %s (notes: %s, terms: %s)\n",
+                        fetchedInvoice.invoice_number ?? testInvoiceId,
+                        fetchedInvoice.notes ?? "N/A",
+                        fetchedInvoice.terms ?? "N/A");
                 }
 
-                # Test update invoice
+                # Test update invoice with multiple fields
                 AbstractDataProvider updateInvoiceProvider = prov.getChildProvider("update-invoice");
-                string testNotes = sprintf("Updated by integration test at %s", now_us().toString());
+                string updatedNotes = sprintf("Updated by integration test at %s", now_us().toString());
+                string updatedTerms = "Net 45 - Updated payment terms";
+                string newDueDate = (now() + 45D).format("YYYY-MM-DD");
                 hash<auto> updatedInvoice = updateInvoiceProvider.doRequest({
                     "invoice_id": testInvoiceId,
-                    "notes": testNotes,
+                    "notes": updatedNotes,
+                    "terms": updatedTerms,
+                    "due_date": newDueDate,
                 });
                 if (m_options.verbose) {
                     printf("Updated invoice: %s\n", updatedInvoice.invoice_number ?? testInvoiceId);
@@ -939,7 +1061,9 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
                 hash<auto> verifyInvoice = getInvoiceProvider.doRequest({
                     "invoice_id": testInvoiceId,
                 });
-                assertEq(testNotes, verifyInvoice.notes);
+                assertEq(updatedNotes, verifyInvoice.notes);
+                assertEq(updatedTerms, verifyInvoice.terms);
+                assertEq(newDueDate, verifyInvoice.due_date);
             }
         } catch (hash<ExceptionInfo> ex) {
             if (m_options.verbose) {
@@ -992,7 +1116,7 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
         # Verify line item data
         hash<auto> lineItem = invoice.line_items[0];
         assertEq(testItemId, lineItem.item_id);
-        assertEq(1, lineItem.quantity);
+        assertEq(2.0, lineItem.quantity);
         assertEq(100.00, lineItem.rate);
 
         if (m_options.verbose) {
@@ -1021,7 +1145,9 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
 
         # List existing bills
         AbstractDataProvider billsProvider = prov.getChildProvider("bills");
-        list<hash<auto>> bills = map $1, billsProvider.searchRecords();
+        list<hash<auto>> bills = map $1, billsProvider.searchRecords(NOTHING, {
+            "organization_id": organizationId,
+        });
 
         if (m_options.verbose) {
             printf("Found %d bills\n", bills.size());
@@ -1042,7 +1168,9 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
 
         # List existing estimates
         AbstractDataProvider estimatesProvider = prov.getChildProvider("estimates");
-        list<hash<auto>> estimates = map $1, estimatesProvider.searchRecords();
+        list<hash<auto>> estimates = map $1, estimatesProvider.searchRecords(NOTHING, {
+            "organization_id": organizationId,
+        });
 
         if (m_options.verbose) {
             printf("Found %d estimates\n", estimates.size());
@@ -1063,7 +1191,9 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
 
         # List existing sales orders
         AbstractDataProvider salesOrdersProvider = prov.getChildProvider("salesorders");
-        list<hash<auto>> salesOrders = map $1, salesOrdersProvider.searchRecords();
+        list<hash<auto>> salesOrders = map $1, salesOrdersProvider.searchRecords(NOTHING, {
+            "organization_id": organizationId,
+        });
 
         if (m_options.verbose) {
             printf("Found %d sales orders\n", salesOrders.size());
@@ -1249,6 +1379,46 @@ public class ZohoBooksDataProviderTest inherits QUnit::Test {
 
         if (m_options.verbose) {
             printf("  Observer registered successfully\n");
+        }
+
+        # ============================================
+        # Test Example Event Data
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting example event data (getExampleEventData)...\n");
+        }
+
+        # Test that each event provider returns example data (either real or fake)
+        hash<string, hash<DataProviderMessageInfo>> invoiceEventTypes = invoiceEventProv.getEventTypes();
+        assertTrue(invoiceEventTypes.hasKey(ZohoBooksDataProvider::EVENT_NEW_INVOICE));
+        auto invoiceExampleData = invoiceEventProv.getExampleEventData(ZohoBooksDataProvider::EVENT_NEW_INVOICE);
+        assertTrue(invoiceExampleData.invoice_id.val(), "Invoice example should have invoice_id");
+        if (m_options.verbose) {
+            printf("  Invoice example data: invoice_id=%s\n", invoiceExampleData.invoice_id);
+        }
+
+        hash<string, hash<DataProviderMessageInfo>> billEventTypes = billEventProv.getEventTypes();
+        assertTrue(billEventTypes.hasKey(ZohoBooksDataProvider::EVENT_NEW_BILL));
+        auto billExampleData = billEventProv.getExampleEventData(ZohoBooksDataProvider::EVENT_NEW_BILL);
+        assertTrue(billExampleData.bill_id.val(), "Bill example should have bill_id");
+        if (m_options.verbose) {
+            printf("  Bill example data: bill_id=%s\n", billExampleData.bill_id);
+        }
+
+        hash<string, hash<DataProviderMessageInfo>> customerEventTypes = customerEventProv.getEventTypes();
+        assertTrue(customerEventTypes.hasKey(ZohoBooksDataProvider::EVENT_NEW_CUSTOMER));
+        auto customerExampleData = customerEventProv.getExampleEventData(ZohoBooksDataProvider::EVENT_NEW_CUSTOMER);
+        assertTrue(customerExampleData.contact_id.val(), "Customer example should have contact_id");
+        if (m_options.verbose) {
+            printf("  Customer example data: contact_id=%s\n", customerExampleData.contact_id);
+        }
+
+        hash<string, hash<DataProviderMessageInfo>> itemEventTypes = itemEventProv.getEventTypes();
+        assertTrue(itemEventTypes.hasKey(ZohoBooksDataProvider::EVENT_NEW_ITEM));
+        auto itemExampleData = itemEventProv.getExampleEventData(ZohoBooksDataProvider::EVENT_NEW_ITEM);
+        assertTrue(itemExampleData.item_id.val(), "Item example should have item_id");
+        if (m_options.verbose) {
+            printf("  Item example data: item_id=%s\n", itemExampleData.item_id);
         }
 
         if (m_options.verbose) {

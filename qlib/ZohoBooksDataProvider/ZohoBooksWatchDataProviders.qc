@@ -45,6 +45,21 @@ public class ZohoBooksNewInvoiceWatchDataProvider inherits ZohoBooksWatchDataPro
     private string getIdField() { return "invoice_id"; }
     private string getEventName() { return EVENT_NEW_INVOICE; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private hash<auto> getFakeExampleData() {
+        return ZohoBooksWatchDataProviderBase::getFakeExampleData() + {
+            "invoice_number": "INV-001",
+            "customer_id": "987654321098765432",
+            "customer_name": "Acme Corporation",
+            "total": 1500.00,
+            "balance": 1500.00,
+            "status": "draft",
+            "date": "2026-01-30",
+            "due_date": "2026-02-28",
+            "currency_code": "USD",
+            "currency_symbol": "$",
+        };
+    }
 }
 
 #! Watch for new bills
@@ -68,6 +83,20 @@ public class ZohoBooksNewBillWatchDataProvider inherits ZohoBooksWatchDataProvid
     private string getIdField() { return "bill_id"; }
     private string getEventName() { return EVENT_NEW_BILL; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private hash<auto> getFakeExampleData() {
+        return ZohoBooksWatchDataProviderBase::getFakeExampleData() + {
+            "bill_number": "BILL-001",
+            "vendor_id": "876543210987654321",
+            "vendor_name": "Office Supplies Inc",
+            "total": 450.00,
+            "balance": 450.00,
+            "status": "open",
+            "date": "2026-01-30",
+            "due_date": "2026-02-15",
+            "currency_code": "USD",
+        };
+    }
 }
 
 #! Watch for new payments
@@ -91,6 +120,18 @@ public class ZohoBooksNewPaymentWatchDataProvider inherits ZohoBooksWatchDataPro
     private string getIdField() { return "payment_id"; }
     private string getEventName() { return EVENT_NEW_PAYMENT; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private hash<auto> getFakeExampleData() {
+        return ZohoBooksWatchDataProviderBase::getFakeExampleData() + {
+            "payment_number": "PAY-001",
+            "customer_id": "987654321098765432",
+            "customer_name": "Acme Corporation",
+            "amount": 500.00,
+            "date": "2026-01-30",
+            "payment_mode": "Bank Transfer",
+            "reference_number": "TXN123456",
+        };
+    }
 }
 
 #! Watch for new customers
@@ -118,6 +159,17 @@ public class ZohoBooksNewCustomerWatchDataProvider inherits ZohoBooksWatchDataPr
         return ZohoBooksWatchDataProviderBase::getQueryParams() + {"contact_type": "customer"};
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private hash<auto> getFakeExampleData() {
+        return ZohoBooksWatchDataProviderBase::getFakeExampleData() + {
+            "contact_name": "John Smith",
+            "company_name": "Acme Corporation",
+            "contact_type": "customer",
+            "email": "john.smith@acme.com",
+            "phone": "+1-555-123-4567",
+            "status": "active",
+        };
+    }
 }
 
 #! Watch for new expenses
@@ -141,6 +193,16 @@ public class ZohoBooksNewExpenseWatchDataProvider inherits ZohoBooksWatchDataPro
     private string getIdField() { return "expense_id"; }
     private string getEventName() { return EVENT_NEW_EXPENSE; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private hash<auto> getFakeExampleData() {
+        return ZohoBooksWatchDataProviderBase::getFakeExampleData() + {
+            "account_name": "Travel Expenses",
+            "total": 125.50,
+            "date": "2026-01-30",
+            "description": "Client meeting travel",
+            "status": "unbilled",
+        };
+    }
 }
 
 #! Watch for new sales orders
@@ -164,6 +226,17 @@ public class ZohoBooksNewSalesOrderWatchDataProvider inherits ZohoBooksWatchData
     private string getIdField() { return "salesorder_id"; }
     private string getEventName() { return EVENT_NEW_SALESORDER; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private hash<auto> getFakeExampleData() {
+        return ZohoBooksWatchDataProviderBase::getFakeExampleData() + {
+            "salesorder_number": "SO-001",
+            "customer_id": "987654321098765432",
+            "customer_name": "Acme Corporation",
+            "total": 2500.00,
+            "date": "2026-01-30",
+            "status": "open",
+        };
+    }
 }
 
 #! Watch for new estimates
@@ -187,6 +260,18 @@ public class ZohoBooksNewEstimateWatchDataProvider inherits ZohoBooksWatchDataPr
     private string getIdField() { return "estimate_id"; }
     private string getEventName() { return EVENT_NEW_ESTIMATE; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private hash<auto> getFakeExampleData() {
+        return ZohoBooksWatchDataProviderBase::getFakeExampleData() + {
+            "estimate_number": "EST-001",
+            "customer_id": "987654321098765432",
+            "customer_name": "Acme Corporation",
+            "total": 1800.00,
+            "date": "2026-01-30",
+            "expiry_date": "2026-02-28",
+            "status": "draft",
+        };
+    }
 }
 
 #! Watch for new items
@@ -210,6 +295,17 @@ public class ZohoBooksNewItemWatchDataProvider inherits ZohoBooksWatchDataProvid
     private string getIdField() { return "item_id"; }
     private string getEventName() { return EVENT_NEW_ITEM; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private hash<auto> getFakeExampleData() {
+        return ZohoBooksWatchDataProviderBase::getFakeExampleData() + {
+            "name": "Widget Pro",
+            "sku": "WDG-001",
+            "rate": 49.99,
+            "description": "Professional grade widget",
+            "status": "active",
+            "item_type": "inventory",
+        };
+    }
 }
 
 #! Watch for new purchase orders
@@ -233,6 +329,18 @@ public class ZohoBooksNewPurchaseOrderWatchDataProvider inherits ZohoBooksWatchD
     private string getIdField() { return "purchaseorder_id"; }
     private string getEventName() { return EVENT_NEW_PURCHASEORDER; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private hash<auto> getFakeExampleData() {
+        return ZohoBooksWatchDataProviderBase::getFakeExampleData() + {
+            "purchaseorder_number": "PO-001",
+            "vendor_id": "876543210987654321",
+            "vendor_name": "Office Supplies Inc",
+            "total": 750.00,
+            "date": "2026-01-30",
+            "delivery_date": "2026-02-15",
+            "status": "open",
+        };
+    }
 }
 
 #! Watch for new vendors
@@ -260,6 +368,17 @@ public class ZohoBooksNewVendorWatchDataProvider inherits ZohoBooksWatchDataProv
         return ZohoBooksWatchDataProviderBase::getQueryParams() + {"contact_type": "vendor"};
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private hash<auto> getFakeExampleData() {
+        return ZohoBooksWatchDataProviderBase::getFakeExampleData() + {
+            "contact_name": "Office Supplies Inc",
+            "company_name": "Office Supplies Inc",
+            "contact_type": "vendor",
+            "email": "orders@officesupplies.com",
+            "phone": "+1-555-987-6543",
+            "status": "active",
+        };
+    }
 }
 
 } # namespace ZohoBooksDataProvider

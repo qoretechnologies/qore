@@ -43,14 +43,14 @@
 %requires(reexport) Mime >= 1.4
 %requires(reexport) Util >= 1.3
 %requires(reexport) HttpServerUtil >= 0.3.12
-%requires(reexport) RestSchemaValidator >= 1.0
+%requires(reexport) RestSchemaValidator >= 2.5
 %requires(reexport) FileLocationHandler
 %requires(reexport) DataProvider >= 3.0
 
 %allow-weak-references
 
 module Swagger {
-    version = "2.4";
+    version = "2.5";
     desc = "Swagger module providing functionality for Swagger 2.0 schema definitions";
     author = "Ondrej Musil <ondrej.musil@qoretechnologies.com>, David Nichols <david.nichols@qoretechnologies.com>";
     url = "http://qore.org";
@@ -429,39 +429,20 @@ public const ValidSchemes = ("http", "https", "ws", "wss");
 public const ValidSchemesHash = map {$1: True}, ValidSchemes;
 
 #! Base class for the %Swagger specification objects, wrapping the vendor extensions.
-class ObjectBase inherits Qore::Serializable {
-    public {
-        #! Allows extensions to the %Swagger Schema.
-        /**
-            The field name MUST begin with \c x-, for example, \c x-internal-id.
-            The value can be \c null, a primitive, an array or an object.
-         */
-        hash<auto> vendorExtensions;
-    }
-
-    #! Constructor.
+class ObjectBase inherits RestSchemaValidator::AbstractObjectBase {
+    #! Constructor
     public constructor() {
     }
 
-    #! Constructor.
+    #! Constructor
     /**
         @param oh deserialized hash from the source schema description describing the object
-     */
-    public constructor(hash<auto> oh) {
-        initialize(oh);
-    }
-
-    #! copy constructor
-    constructor(ObjectBase other) {
-        vendorExtensions = other.vendorExtensions;
-    }
-
-    #! Initialize.
-    /**
-        @param oh deserialized hash from the source schema description
     */
-    public initialize(hash<auto> oh) {
-        vendorExtensions = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^x-/;
+    public constructor(hash<auto> oh) : AbstractObjectBase(oh) {
+    }
+
+    #! Copy constructor
+    constructor(ObjectBase other) : AbstractObjectBase(other) {
     }
 }
 
@@ -469,7 +450,7 @@ class ObjectBase inherits Qore::Serializable {
 /** Inherits common validation constraint members from
     @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase".
 */
-class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
+class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
     #! Constructor.
     /** @param objType the type of object
         @param oh deserialized hash from the source schema description
@@ -501,459 +482,14 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
     private constructor() {
     }
 
-    #! returns an example value for the given type
-    private auto getExampleValueWithFormat(string type, *string format, *string fname) {
-        if (enumValues) {
-            auto rv = enumValues.firstKey();
-            switch (type) {
-                case "integer": {
-                    rv = rv.toInt();
-                    switch (format) {
-                        case "unix-time":
-                            rv = localtime(rv);
-                            break;
-                    }
-                    break;
-                }
-                case "number": rv = (format && ValidNumberFormatsHash{format} ? rv.toFloat() : rv.toNumber()); break;
-                case "boolean": rv = rv.toBool(); break;
-                case "string": {
-                    switch (format) {
-                        case "byte": return parse_base64_string(rv);
-                        case "date":
-                        case "date-time":
-                        default:
-                            break;
-                    }
-                }
-            }
-            return rv;
-        }
-        switch (type) {
-            case "string": {
-                switch (format) {
-                    case "byte":
-                    case "binary": return <feedface>;
-                    case "date": return 1987-05-23;
-                    case "date-time": return 1987-05-23T07:45:30Z;
-                    case "uuid": return "d242e639-4ed6-4930-a375-b139c13f89da";
-                    default:
-                        return sprintf("Example %s", fname ?? "string");
-                }
-            }
-            case "integer": {
-                switch (format) {
-                    case "unix-time": return 1726733382;
-                }
-                if (exists minimum)
-                    return exclusiveMin ? minimum + 1 : minimum;
-                if (exists maximum)
-                    return exclusiveMax ? maximum - 1 : maximum;
-                return 1;
-            }
-            case "number": {
-                number rv;
-                if (exists minimum)
-                    rv = exclusiveMin ? minimum + 0.1 : minimum;
-                else if (exists maximum)
-                    rv = exclusiveMax ? maximum - 0.1 : maximum;
-                else
-                    rv = 1.1n;
-                if (format && ValidNumberFormatsHash{format})
-                    return rv.toFloat();
-                return rv;
-            }
-            case "boolean":
-                return True;
-            case "null":
-                return NOTHING;
-            case "any": {
-                return "any value";
-            }
-        }
+    #! Returns the label for path in error messages
+    string getPathLabel() {
+        return "path";
     }
 
-    #! validates the value against the schema definition
-    private check(bool serialize, bool request, string type, *string format, *SchemaObject items, string path,
-            string method, string name, reference<auto> value) {
-        # accept a single value for an array (= one-element list)
-        if (type == "array") {
-            # convert to a list before checking
-            if (exists value && value.typeCode() != NT_LIST) {
-                value = (value,);
-            }
-            checkArrayParam(serialize, request, items, path, method, name, \value);
-        } else {
-            on_error rethrow $1.err, sprintf("%s (while checking parameter %y)", $1.desc, name);
-            checkIntern(serialize, request, type, format, path, method, name, value, \value);
-        }
-    }
-
-    private checkStringIntern(string path, string method, string name, string value) {
-        # minLength and maxLength are based on the number of characters in the string, not bytes
-        if (exists maxLength && value.length() > maxLength)
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for path %y and method %y is too long (maxLength: %d, actual: %d)",
-                    name, path, method, maxLength, value.length());
-        if (exists minLength && value.length() < minLength)
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for path %y and method %y is too short (minLength: %d, actual: %d)",
-                    name, path, method, minLength, value.length());
-        if (exists pattern && !value.regex(pattern))
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for path %y and method %y does not fit the parameter string pattern "
-                    "(pattern: %y, value: %y)", name, path, method, pattern, value);
-        if (enumValues && !enumValues{value})
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for path %y and method %y does not fit the enumerated values (enum: %y, "
-                    "actual: %y)", name, path, method, keys enumValues, value);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, list<auto> v, reference<list> value) {
-        if (type != "list" && type != "any")
-            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y is an array (%y), but "
-                "the expected type is %y", name, path, method, v, type);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, hash<auto> v, reference<hash> value) {
-        if (type != "file" && type != "any" && type != "object")
-            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y is an object (%y), but "
-                "the expected type is %y", name, path, method, v, type);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, int v, reference<auto> value) {
-        # NOTE: "number" also accepts "int"
-        if (type == "number") {
-            checkIntern(serialize, request, type, format, path, method, name, v.toNumber(), \value);
-            return;
-        }
-        if (type != "integer" && type != "any")
-            throwInvalidType(name, "integer", type, v);
-
-        if (!serialize) {
-            switch (format) {
-                case "unix-time":
-                    value = localtime(v);
-                    break;
-            }
-        }
-
-        if (exists maximum) {
-            if (exclusiveMax) {
-                if (value >= maximum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for path %y and method %y is too big (maximum: %f, actual: %d)",
-                            name, path, method, maximum, value);
-            } else {
-                if (value > maximum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for path %y and method %y is too big (maximum: %f, actual: %d)",
-                            name, path, method, maximum, value);
-            }
-        }
-
-        if (exists minimum) {
-            if (exclusiveMin) {
-                if (value <= minimum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for path %y and method %y is too small (minimum: %f, actual: %d)",
-                            name, path, method, maximum, value);
-            } else {
-                if (value < minimum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for path %y and method %y is too small (minimum: %f, actual: %d)",
-                            name, path, method, maximum, value);
-            }
-        }
-
-        if (enumValues && !enumValues{value})
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for path %y and method %y does not fit the enumerated values (enum: %y, actual: %d)",
-                    name, path, method, keys enumValues, value);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, number v, reference<number> value) {
-        checkInternNumber(serialize, request, type, format, path, method, name, v, \value);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, float v, reference<number> value) {
-        checkInternNumber(serialize, request, type, format, path, method, name, v, \value);
-    }
-
-    private checkInternNumber(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, auto v, reference<auto> value) {
-        if (type != "number" && type != "any")
-            throwInvalidType(name, "number", type, v);
-        if (exists maximum) {
-            if (exclusiveMax) {
-                if (value >= maximum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for path %y and method %y is too big (maximum: %f, actual: %f)",
-                            name, path, method, maximum, value);
-            } else {
-                if (value > maximum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for path %y and method %y is too big (maximum: %f, actual: %f)",
-                            name, path, method, maximum, value);
-            }
-        }
-
-        if (exists minimum) {
-            if (exclusiveMin) {
-                if (value <= minimum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for path %y and method %y is too small (minimum: %f, actual: %f)",
-                            name, path, method, maximum, value);
-            } else {
-                if (value < minimum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for path %y and method %y is too small (minimum: %f, actual: %f)",
-                            name, path, method, maximum, value);
-            }
-        }
-
-        if (enumValues && !enumValues{value}) {
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for path %y and method %y does not fit the enumerated values (enum: %y, "
-                    "actual: %f)", name, path, method, keys enumValues, value);
-        }
-
-        switch (format) {
-            case "float":
-            case "double":
-            case NOTHING:
-                value = v.toFloat();
-                break;
-
-            default:
-                throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for path %y and method %y has an invalid format: %y; expecting (\"float\", "
-                    "\"double\", or no value; value provided: %y)", name, path, method, format, value);
-        }
-    }
-
-    #! converts binary values to strings for supported formats
-    private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, binary v, reference value) {
-        if (type != "string" && type != "any")
-            throwInvalidType(name, "string", type, v);
-
-        if (serialize) {
-            switch (format) {
-                case "byte":
-                    value = make_base64_string(v);
-                    break;
-                case "binary":
-                    value = v;
-                    return;
-                default:
-                    throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameters %y: cannot serialize a binary value "
-                        "to a string value with format %y", method.upr(), path, name, format);
-            }
-            checkStringIntern(path, method, name, value);
-        }
-    }
-
-    #! validates string values
-    private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, string v, reference<auto> value) {
-        if (type != "string" && type != "any") {
-            throwInvalidType(name, "string", type, v);
-        }
-
-        if (serialize) {
-            switch (format) {
-                case "byte":
-                    value = make_base64_string(v);
-                    break;
-                case "binary":
-                    value = binary(v);
-                    break;
-                case "date":
-                case "date-time":
-                    # issue #3847: with non-YAML serialization, this will always be a string
-                    value = date(v);
-                    break;
-            }
-        } else {
-            switch (format) {
-                # NOTE: deserializes to a binary object
-                case "byte":
-                    try {
-                        value = parse_base64_string(v);
-                    } catch (hash<ExceptionInfo> ex) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y of type %y "
-                            "is invalid; value provided: %y (%s)", name, path, method, format, v, ex.desc);
-                    }
-                    break;
-                # NOTE: deserializes to a binary object
-                case "binary":
-                    try {
-                        value = binary(v);
-                    } catch (hash<ExceptionInfo> ex) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y of type %y "
-                            "is invalid; value provided: %y (%s)", name, path, method, format, v, ex.desc);
-                    }
-                    break;
-                # NOTE: deserializes to a date/time value
-                case "date":
-                case "date-time":
-                    try {
-                        # https://xml2rfc.tools.ietf.org/public/rfc/html/rfc3339.html#anchor14
-                        value = date(v);
-                    } catch (hash<ExceptionInfo> ex) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y of type %y "
-                            "is invalid; value provided: %y (%s)", name, path, method, format, v, ex.desc);
-                    }
-                    break;
-            }
-        }
-        if (value.typeCode() == NT_STRING) {
-            checkStringIntern(path, method, name, value);
-        }
-    }
-
-    #! converts dates to/from string or int values for supported formats
-    private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, date v, reference<auto> value) {
-        if (type != "string" && type != "any" && (type != "integer" || format != "unix-time"))
-            throwInvalidType(name, "string", type, v);
-
-        if (serialize) {
-            if (type == "integer" && format == "unix-time") {
-                value = v.getEpochSeconds();
-            } else {
-                switch (format) {
-                    case "date":
-                        # https://xml2rfc.tools.ietf.org/public/rfc/html/rfc3339.html#anchor14
-                        value = v.format("YYYY-MM-DD");
-                        break;
-                    case "date-time":
-                        # https://xml2rfc.tools.ietf.org/public/rfc/html/rfc3339.html#anchor14
-                        if (v.milliseconds() != 0)
-                            value = v.format("YYYY-MM-DDTHH:mm:SS.yZ");
-                        else
-                            value = v.format("YYYY-MM-DDTHH:mm:SSZ");
-                        break;
-                    default:
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameters %y: cannot serialize a date/time "
-                            "value to a string value with format %y", method.upr(), path, name, format);
-                }
-                checkStringIntern(path, method, name, value);
-            }
-        }
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, bool v, reference<bool> value) {
-        if (type != "boolean" && type != "any")
-            throwInvalidType(name, "boolean", type, v);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, nothing v, reference<nothing> value) {
-        if (type != "null" && type != "any")
-            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y is null, but the "
-                "expected type is %y", name, path, method, type);
-    }
-
-    #! validates the value against the schema definition
-    private checkArrayParam(bool serialize, bool request, SchemaObject items, string path, string method, string name,
-            reference<list<auto>> value) {
-        if (exists maxItems && value.size() > maxItems) {
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for path %y and method %y has too many items (maxItems: %d, actual: %d)",
-                    name, path, method, maxItems, value.size());
-        }
-        if (exists minItems && value.size() < minItems) {
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for path %y and method %y has too few items (minItems: %d, actual: %d)",
-                    name, path, method, minItems, value.size());
-        }
-
-        if (!value) {
-            return;
-        }
-
-        # check array element types
-        if (!uniqueItems || items.type != "array") {
-            # hash for checking uniqueness if uniqueItems is true
-            hash<string, bool> h;
-            foreach auto v in (\value) {
-                items.check(serialize, request, path, method, name, \v);
-                if (uniqueItems) {
-                    if (h{v}) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameter value %y is duplicated in the "
-                            "array", method, path, v);
-                    }
-                    h{v} = True;
-                }
-            }
-        } else {
-            # perform slow array uniqueness check
-            list<auto> uniqueItems = ();
-            foreach auto val in (\value) {
-                items.check(serialize, request, path, method, name, \val);
-                if (uniqueItems.contains(val)) {
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("%s %s: Array parameter %y does not have unique items",
-                            method, path, name);
-                }
-                uniqueItems += val;
-            }
-        }
-    }
-
-    #! throws an \c SCHEMA-VALIDATION-ERROR exception
-    static private throwInvalidType(string name, string actual, string expected, auto value) {
-        throw "SCHEMA-VALIDATION-ERROR",
-            sprintf("Parameter %y has invalid type %y (should be %y); value: %y", name, actual, expected, value);
-    }
-
-    #! Checks the value against the type
-    /** @return True if the value is OK, False if not
-    */
-    static bool checkValueType(reference<auto> value, string type) {
-        if (type == "any") {
-            return True;
-        }
-        int vt = value.typeCode();
-
-        # check for string values
-        if (vt == NT_STRING) {
-            if (type == "boolean") {
-                if (value == "true") {
-                    value = True;
-                    return True;
-                } else if (value == "false") {
-                    value = False;
-                    return True;
-                }
-            } else if (type == "int" && value =~ /^[0-9]+$/) {
-                value = value.toInt();
-                return True;
-            }
-        }
-
-        # check for number values
-        if (vt == NT_INT && type == "number") {
-            value = value.toFloat();
-            return True;
-        }
-
-        if ((vt == NT_BOOLEAN && type != "boolean") ||
-            (vt == NT_INT && type != "integer") ||
-            (vt == NT_FLOAT && type != "number") ||
-            (vt == NT_STRING && (type != "string" && type != "file")) ||
-            (vt == NT_LIST && type != "array")) {
-            return False;
-        }
-        return True;
+    #! Returns the label for method in error messages
+    string getMethodLabel() {
+        return "method";
     }
 }
 
@@ -4355,28 +3891,8 @@ public class TagObject inherits ObjectBase {
 /** Inherits common schema members from
     @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject".
 */
-public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::AbstractSchemaObject {
+public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::AbstractRestSchemaObject {
     public {
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.3.1.
-        *SchemaObject items;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.4.
-        /**
-            MUST be an object. Each value of this object MUST be an object,
-            and each object MUST be a valid JSON Schema (@ref SchemaObject).
-         */
-        hash<string, SchemaObject> properties;
-
-        #! extention to allow properties to be nullable
-        hash<string, bool> nullable_properties;
-
-        #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.4.
-        /**
-            MUST be a bool or an object. If it is an object, it MUST also be
-            a valid JSON Schema (@ref SchemaObject).
-         */
-        auto additionalProperties;
-
         #! See https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.3.
         /**
             List of @ref SchemaObject "SchemaObjects"; MUST have at least one element.
@@ -4401,15 +3917,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         #! Additional external documentation for this schema.
         *ExternalDocumentationObject externalDocs;
 
-        #! A free-form property to include an example of an instance for this schema.
-        auto example;
-
-        #! The data type of the schema (required)
-        *AbstractDataProviderType dataType;
-
-        #! The data type of the schema (not required)
-        *AbstractDataProviderType orNothingDataType;
-
         #! valid scalar types
         const ScalarTypes = (
             "string": True,
@@ -4428,9 +3935,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
     private {
         SwaggerSchema swagger;
-
-        # maps fields: name -> {Y,N} -> field
-        hash<string, hash<string, AbstractDataField>> fieldmap;
     }
 
     #! private constructor; use newSchemaObject() instead
@@ -4630,163 +4134,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
     }
 
-    AbstractDataProviderType getDataType(bool required = True, *HTTPClient rest) {
-        if (required) {
-            if (!dataType) {
-                if (orNothingDataType) {
-                    dataType = orNothingDataType.getMandatoryType();
-                } else {
-                    # "dataType" is assigned in the call below
-                    getDataTypeIntern("/", True, rest);
-                }
-            }
-            return dataType;
-        }
-        if (!orNothingDataType) {
-            if (dataType) {
-                orNothingDataType = dataType.getOrNothingType();
-            } else {
-                # "orNothingDataType" is assigned in the call below
-                getDataTypeIntern("/", False, rest);
-            }
-        }
-        return orNothingDataType;
-    }
-
-    #! Returns the data type for the given schema
-    private AbstractDataProviderType getDataTypeIntern(string path, bool required = True, *HTTPClient rest) {
-        if (type == "string") {
-            AbstractDataProviderType type = AbstractDataProviderType::get((required ? "" : "*") + "string");
-            if (required) {
-                dataType = type;
-            } else {
-                orNothingDataType = type;
-            }
-            return type;
-        }
-
-        auto def_body;
-        if (rest) {
-            def_body = cast<object>(rest).preprocessRequestBody();
-            if (exists def_body && def_body.typeCode() != NT_HASH) {
-                remove def_body;
-            }
-        }
-
-        string typename = required
-            ? name
-            : "*" + name;
-        HashDataType type(required ? AutoHashType : AutoHashOrNothingType, typename);
-        if (required) {
-            dataType = type;
-        } else {
-            orNothingDataType = type;
-        }
-        getSchemaObjectFields(type, path, def_body);
-        if (additionalProperties === True) {
-            type.setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
-        } else if (additionalProperties) {
-            on_error printf("schema: %N\n", self);
-            string new_path = path == "/"
-                ? "/" + additionalProperties.type
-                : path + "/" + additionalProperties.type;
-            type.setDefaultOtherFieldType(swagger.getType(new_path,
-                additionalProperties.type, additionalProperties.format,
-                additionalProperties.items,
-                !additionalProperties.nullable));
-        } else {
-            # make sure that extra fields are not supported
-            type.setDefaultOtherFieldType();
-        }
-
-        return type;
-    }
-
-    #! Returns a field definition from the Swagger parameter
-    AbstractDataField getField(string name, *string desc, bool required = True, *HTTPClient rest,
-            auto default_value) {
-        string rstr = required ? "Y" : "N";
-        if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
-            return rv;
-        }
-        return getFieldIntern(name, name, desc, required, rest, default_value, rstr);
-    }
-
-    #! Returns a field definition from the Swagger parameter
-    AbstractDataField getField(string path, string name, *string desc, bool required = True, *HTTPClient rest,
-            auto default_value) {
-        string rstr = required ? "Y" : "N";
-        if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
-            return rv;
-        }
-        return getFieldIntern(path, name, desc, required, rest, default_value, rstr);
-    }
-
-    #! Returns a field object from the given cache
-    private static *AbstractDataField getCacheField(reference<hash<string, AbstractDataField>> h, string key) {
-        if (h) {
-            if ((key == "N") && !h.N) {
-                return h.N = h.Y.getOrNothingType();
-            }
-            if ((key == "Y") && !h.Y) {
-                return h.Y = h.N.getMandatoryType();
-            }
-            return h{key};
-        }
-    }
-
-    #! Sets fields of a schema object
-    private getSchemaObjectFields(HashDataType type, string path, auto def_body) {
-        map type.addField($1.value.getField(path + "/" + $1.key, $1.key, NOTHING,
-            required{$1.key} ?? False, NOTHING, def_body{$1.key})), properties.pairIterator();
-    }
-
-    #! Returns a field definition from the Swagger parameter
-    private AbstractDataField getFieldIntern(string path, string name, *string desc, bool required = True,
-            *HTTPClient rest, auto default_value, *string rstr) {
-        if (!rstr) {
-            rstr = required ? "Y" : "N";
-        }
-        if (self.desc.val()) {
-            if (desc.val()) {
-                desc += ": " + self.desc;
-            } else {
-                desc = self.desc;
-            }
-        }
-        if (!exists desc) {
-            desc = "";
-        }
-        if (type == "object") {
-            # create the field with a placeholder type
-            QoreDataField field({
-                "name": name,
-                "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
-                "type": AutoType,
-                "allowed_values": keys enumValues,
-                "default_value": default_value,
-            } + (required ? {
-                "attr": {
-                    "preselected": True,
-                    "required": True,
-                },
-            } : NOTHING));
-            fieldmap{name}{rstr} = field;
-            field.updateFieldType(getDataType(required, rest));
-            return field;
-        }
-
-        # create the field with a placeholder type
-        QoreDataField field({
-            "name": name,
-            "desc": desc.val() ? desc.getDecoded(CE_XHTML) : "",
-            "type": AutoType,
-            "allowed_values": keys enumValues,
-            "default_value": default_value,
-        });
-        fieldmap{name}{rstr} = field;
-        field.updateFieldType(swagger.getType(path, type, format, items, required));
-        return field;
+    #! Returns the data provider type for a given type/format/items path
+    AbstractDataProviderType getSchemaType(string path, string typestr, *string format,
+            *AbstractSchemaObject arrayItems, bool required) {
+        return swagger.getType(path, typestr, format, arrayItems, required);
     }
 
     #! returns example Qore code for the object
@@ -4794,9 +4145,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         string typestr = get_qore_type(self.name, type, format, items);
         if (type == "array") {
             if (decl)
-                return sprintf("%s %s(%s,);\n", typestr, name, items.getQoreExample(\rv, name, False));
+                return sprintf("%s %s(%s,);\n", typestr, name, cast<SchemaObject>(items).getQoreExample(\rv, name, False));
             else
-                return sprintf("(%s,)", items.getQoreExample(\rv, self.name, False));
+                return sprintf("(%s,)", cast<SchemaObject>(items).getQoreExample(\rv, self.name, False));
         }
 
         if (type != "object") {
@@ -4820,7 +4171,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
         if (properties) {
             string str = sprintf("hashdecl %s {\n", self.name);
-            foreach hash h in (properties.pairIterator()) {
+            foreach hash h in (cast<hash<string, SchemaObject>>(properties).pairIterator()) {
                 str += sprintf("    %s %s", get_qore_type(h.value.name, h.value.type, h.value.format, h.value.items), h.key);
                 if (exists h.value.defaultVal)
                     str += sprintf(" = %y", h.value.defaultVal);
@@ -4838,7 +4189,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 str = sprintf("new hash<%s>(", self.name);
 
             str += "{\n";
-            foreach hash<auto> h in (properties.pairIterator()) {
+            foreach hash<auto> h in (cast<hash<string, SchemaObject>>(properties).pairIterator()) {
                 string pstr;
                 if (h.value.type == "string" && (h.value.format =~ /date(-time)?/))
                     pstr = sprintf("%y: date(%s)", h.key, h.value.getQoreExample(\rv, h.key, False));
@@ -4880,17 +4231,17 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
             # Also add any local properties
             if (properties) {
-                rv += map {$1.key: $1.value.getExampleValue(emap, $1.key)}, properties.pairIterator();
+                rv += map {$1.key: cast<SchemaObject>($1.value).getExampleValue(emap, $1.key)}, properties.pairIterator();
             }
             return rv;
         }
 
         if (type == "object") {
-            return map {$1.key: $1.value.getExampleValue(emap, $1.key)}, properties.pairIterator();
+            return map {$1.key: cast<SchemaObject>($1.value).getExampleValue(emap, $1.key)}, properties.pairIterator();
         }
 
         if (type == "array") {
-            return (items.getExampleValue(emap, fname),);
+            return (cast<SchemaObject>(items).getExampleValue(emap, fname),);
         }
 
         return SchemaBase::getExampleValueWithFormat(type, format);
@@ -4944,7 +4295,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             # issue #4825: write the hash keys to another hash in case values need to change type
             hash<auto> nv;
             foreach string key in (keys value) {
-                *SchemaObject prop = properties{key};
+                *SchemaObject prop = cast<*SchemaObject>(properties{key});
                 if (!prop) {
                     if (additionalProperties instanceof SchemaObject) {
                         prop = additionalProperties;
@@ -5019,15 +4370,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             name);
     }
 
-    #! Returns the items schema for arrays
-    *RestSchemaValidator::AbstractSchemaObject getItems() {
-        return items;
-    }
-
-    #! Returns a hash of property schemas for objects
-    *hash<string, RestSchemaValidator::AbstractSchemaObject> getProperties() {
-        return cast<*hash<string, RestSchemaValidator::AbstractSchemaObject>>(properties);
-    }
 }
 
 #! items schema object for non-body parameters

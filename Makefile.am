@@ -47,6 +47,7 @@ DOX_SRC_SPLIT_MODULES = \
     qlib/DbDataProvider \
     qlib/ElasticSearchDataProvider \
     qlib/EmpathicBuildingDataProvider \
+    qlib/GeneratorDataProvider \
     qlib/FileLocationHandler \
     qlib/GoogleDataProvider \
     qlib/ProviderIndexUtil \
@@ -102,6 +103,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/VscDebugAdapter.qm \
 	qlib/WebUtil.qm \
 	qlib/ZeyosRestClient.qm \
+	qlib/ZohoBooksRestClient.qm \
 	qlib/BillwerkRestClient.qm \
     qlib/AwsRestClient.qm \
     qlib/ElasticSearchLoggerAppender.qm
@@ -131,6 +133,7 @@ DOX_SPLIT_MODULES = \
     qlib/ServerSentEventHandler \
     qlib/ServiceNowRestDataProvider \
     qlib/SwaggerDataProvider \
+    qlib/ZohoBooksDataProvider \
     qlib/AsyncApiDataProvider \
     qlib/HttpServerAsyncIo \
     qlib/MongoDbDataProvider \
@@ -151,6 +154,7 @@ DiscordDataProvider_modverdir = $(modverdir)/DiscordDataProvider
 LinearDataProvider_modverdir = $(modverdir)/LinearDataProvider
 ElasticSearchDataProvider_modverdir = $(modverdir)/ElasticSearchDataProvider
 EmpathicBuildingDataProvider_modverdir = $(modverdir)/EmpathicBuildingDataProvider
+GeneratorDataProvider_modverdir = $(modverdir)/GeneratorDataProvider
 FileLocationHandler_modverdir = $(modverdir)/FileLocationHandler
 FixedLengthUtil_modverdir = $(modverdir)/FixedLengthUtil
 FileDataProvider_modverdir = $(modverdir)/FileDataProvider
@@ -179,6 +183,7 @@ ServerSentEventHandler_modverdir = $(modverdir)/ServerSentEventHandler
 ServiceNowRestDataProvider_modverdir = $(modverdir)/ServiceNowRestDataProvider
 SqlUtil_modverdir = $(modverdir)/SqlUtil
 SwaggerDataProvider_modverdir = $(modverdir)/SwaggerDataProvider
+ZohoBooksDataProvider_modverdir = $(modverdir)/ZohoBooksDataProvider
 
 dist_AsyncSocketIo_modver_DATA = $(wildcard qlib/AsyncSocketIo/*.q[cm])
 dist_AwsRestClientDataProvider_modver_DATA = $(wildcard qlib/AwsRestClientDataProvider/*.q[cm])
@@ -193,6 +198,7 @@ dist_DiscordDataProvider_modver_DATA = $(wildcard qlib/DiscordDataProvider/*.q[c
 dist_LinearDataProvider_modver_DATA = $(wildcard qlib/LinearDataProvider/*.q[cm])
 dist_ElasticSearchDataProvider_modver_DATA = $(wildcard qlib/ElasticSearchDataProvider/*.q[cm])
 dist_EmpathicBuildingDataProvider_modver_DATA = $(wildcard qlib/EmpathicBuildingDataProvider/*.q[cm])
+dist_GeneratorDataProvider_modver_DATA = $(wildcard qlib/GeneratorDataProvider/*.q[cm])
 dist_FileDataProvider_modver_DATA = $(wildcard qlib/FileDataProvider/*.q[cm])
 dist_FileLocationHandler_modver_DATA = $(wildcard qlib/FileLocationHandler/*.q[cm])
 dist_FixedLengthUtil_modver_DATA = $(wildcard qlib/FixedLengthUtil/*.q[cm])
@@ -221,6 +227,7 @@ dist_ServerSentEventHandler_modver_DATA = $(wildcard qlib/ServerSentEventHandler
 dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestDataProvider/*.q[cm])
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
 dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[cm])
+dist_ZohoBooksDataProvider_modver_DATA = $(wildcard qlib/ZohoBooksDataProvider/*.q[cm]) $(wildcard qlib/ZohoBooksDataProvider/*.svg)
 dist_AsyncApiDataProvider_modver_DATA = $(wildcard qlib/AsyncApiDataProvider/*.q[cm])
 
 USER_MODULES = $(DOX_SRC_MODULES) \
@@ -1153,6 +1160,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/LinearDataProvider/linear-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \
 	qlib/EmpathicBuildingDataProvider/Haltian-EmpathicBuilding.svg \
+	qlib/GeneratorDataProvider/generator-logo.svg \
 	qlib/FileDataProvider/file-logo-white.svg \
 	qlib/FileDataProvider/file-logo-black.svg \
 	qlib/FtpClientDataProvider/ftp-logo-white.svg \
@@ -1353,6 +1361,10 @@ doxygen/qlib/Doxyfile.FsUtil: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 # to provide the graphic file
 doxygen/qlib/Doxyfile.ElasticSearchDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/ElasticSearchDataProvider:doxygen/qlib/ElasticSearchDataProvider -tDataProvider.tag=../../DataProvider/html -tRestClient.tag=../../RestClient/html -X=doxygen/ -E=elastic-logo.svg $< $@
+
+# to provide the graphic file
+doxygen/qlib/Doxyfile.GeneratorDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/GeneratorDataProvider:doxygen/qlib/GeneratorDataProvider -tDataProvider.tag=../../DataProvider/html -X=doxygen/ -E=generator-logo.svg $< $@
 
 doxygen/qlib/Doxyfile.ElasticSearchLoggerAppender: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/ElasticSearchLoggerAppender.qm:doxygen/qlib/ElasticSearchLoggerAppender.qm -tLogger.tag=../../Logger/html -tRestClient.tag=../../RestClient/html -X=doxygen/ -E=elastic-logo.svg $< $@

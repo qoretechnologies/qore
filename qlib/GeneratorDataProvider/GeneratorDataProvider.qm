@@ -1,0 +1,174 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore GeneratorDataProvider module definition
+
+/** GeneratorDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+
+module GeneratorDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for generating test record streams";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new GeneratorDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": GeneratorDataProvider::AppName,
+            "display_name": "Data Generator",
+            "short_desc": "Generate test record streams",
+            "desc": "Generate configurable record streams for testing data pipelines without any external "
+                "service connections",
+            "logo": GeneratorLogo,
+            "logo_file_name": "generator-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::DataTransformation,),
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeneratorDataProvider::AppName,
+            "path": "/",
+            "action": "generate-records",
+            "display_name": "Generate Records",
+            "short_desc": "Generate a stream of records with a configurable schema",
+            "desc": "Generate a stream of records with configurable count, field types, and data generation "
+                "strategy for testing data pipelines",
+            "action_code": DPAT_FIND,
+            "cls": "GeneratorDataProvider::GeneratorGenerateRecordsDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeneratorGenerateRecordsDataProvider::ConstructorOptions{"count",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GeneratorGenerateRecordsDataProvider::ConstructorOptions
+                    - ("count",), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeneratorDataProvider::AppName,
+            "path": "/",
+            "action": "generate-from-template",
+            "display_name": "Generate From Template",
+            "short_desc": "Generate records based on a template record",
+            "desc": "Generate a stream of records by repeating and varying a template record with optional "
+                "randomization for testing data pipelines",
+            "action_code": DPAT_FIND,
+            "cls": "GeneratorDataProvider::GeneratorGenerateFromTemplateDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeneratorGenerateFromTemplateDataProvider::ConstructorOptions{"template", "count"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GeneratorGenerateFromTemplateDataProvider::ConstructorOptions
+                    - ("template", "count"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage GeneratorDataProvider Module
+
+    @tableofcontents
+
+    @section generatordataproviderintro Introduction to the GeneratorDataProvider Module
+
+    The %GeneratorDataProvider module provides a \c dataproviderintro "data provider" API for generating
+    configurable test record streams for data pipeline testing.  It requires no external connections and
+    generates data purely in-memory.
+
+    This data provider provides the following actions:
+    - <b><tt>@ref GeneratorDataProvider::GeneratorGenerateRecordsDataProvider "generate-records"</tt></b>:
+      Generate a stream of records with a configurable or default schema
+    - <b><tt>@ref GeneratorDataProvider::GeneratorGenerateFromTemplateDataProvider "generate-from-template"</tt></b>:
+      Generate records by varying a template record
+
+    @section generatordataprovider_factory Generator Data Provider Factory
+
+    The name of the generator data provider factory is <b><tt>generator</tt></b>.
+
+    @section generatordataprovider_examples Generator Data Provider Examples
+
+    These examples are with \c qdp, the command-line interface to the Data Provider API.
+
+    @par Generate 100 Records with Default Schema
+    @verbatim qdp 'generator/generate-records' count=100
+    @endverbatim
+
+    @par Generate Records with Custom Schema
+    @verbatim qdp 'generator/generate-records' count=50,strategy=random,seed=42,fields='({name=id,type=int},{name=label,type=string})'
+    @endverbatim
+
+    @par Generate Records from Template
+    @verbatim qdp 'generator/generate-from-template' count=10,template='{id=1,name=test,score=99.5}'
+    @endverbatim
+
+    @section generatordataprovider_relnotes Release Notes
+
+    @subsection generatordataprovider_v1_0 GeneratorDataProvider v1.0
+    - initial release of the module
+*/
+
+#! Contains all public definitions in the GeneratorDataProvider module
+public namespace GeneratorDataProvider {
+#! Generator logo
+public const GeneratorLogo = File::readTextFile(get_script_dir() + "/generator-logo.svg");
+
+#! Data generation strategy constants
+public enum GeneratorStrategy : string {
+    #! Sequential: deterministic values based on record index
+    Sequential = "sequential",
+    #! Random: pseudo-random values
+    Random = "random",
+}
+
+#! Field type constants for generator schema definitions
+public enum GeneratorFieldType : string {
+    #! String field type
+    String = "string",
+    #! Integer field type
+    Int = "int",
+    #! Float field type
+    Float = "float",
+    #! Boolean field type
+    Bool = "bool",
+    #! Date field type
+    Date = "date",
+}
+}

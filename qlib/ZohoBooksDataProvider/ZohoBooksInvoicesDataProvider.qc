@@ -44,6 +44,13 @@ public class ZohoBooksInvoicesDataProvider inherits ZohoBooksDataProviderBase {
 
         #! Search options
         const SearchOptions = {
+            "organization_id": <DataProviderOptionInfo>{
+                "display_name": "Organization ID",
+                "short_desc": "Zoho Books organization ID",
+                "type": AbstractDataProviderType::get(SoftStringType),
+                "desc": "The organization ID (required for all Zoho Books API calls)",
+                "required": True,
+            },
             "status": <DataProviderOptionInfo>{
                 "display_name": "Status",
                 "short_desc": "Filter by invoice status",
@@ -107,6 +114,9 @@ public class ZohoBooksInvoicesDataProvider inherits ZohoBooksDataProviderBase {
             *hash<auto> search_options) {
         # Build query parameters
         hash<auto> params;
+        if (search_options.organization_id) {
+            params.organization_id = search_options.organization_id;
+        }
         if (search_options.status) {
             params.status = search_options.status;
         }

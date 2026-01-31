@@ -1,0 +1,731 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/GeneratorDataProvider
+
+%exec-class GeneratorDataProviderTest
+
+public class GeneratorDataProviderTest inherits QUnit::Test {
+    constructor() : Test("GeneratorDataProvider Test", "1.0") {
+        addTestCase("generate-records default schema", \testGenerateRecordsDefault());
+        addTestCase("generate-records custom schema", \testGenerateRecordsCustomSchema());
+        addTestCase("generate-records sequential strategy", \testGenerateRecordsSequential());
+        addTestCase("generate-records random with seed reproducibility", \testGenerateRecordsRandomSeed());
+        addTestCase("generate-records include nulls", \testGenerateRecordsIncludeNulls());
+        addTestCase("generate-from-template basic", \testGenerateFromTemplateBasic());
+        addTestCase("generate-from-template sequential variation", \testGenerateFromTemplateSequential());
+        addTestCase("generate-from-template type inference", \testGenerateFromTemplateTypeInference());
+        addTestCase("generate-from-template random strategy", \testGenerateFromTemplateRandom());
+        addTestCase("seed date determinism", \testSeedDateDeterminism());
+        addTestCase("seed does not pollute global RNG", \testSeedIsolation());
+        addTestCase("factory registration", \testFactoryRegistration());
+        addTestCase("child provider navigation", \testChildProviderNavigation());
+        addTestCase("record iterator direct", \testRecordIteratorDirect());
+        addTestCase("bulk record interface", \testBulkRecordInterface());
+        addTestCase("edge case: count 0", \testEdgeCaseCountZero());
+        addTestCase("edge case: count 1", \testEdgeCaseCountOne());
+        addTestCase("enum values", \testEnumValues());
+        addTestCase("record type from custom fields", \testRecordTypeCustomFields());
+        addTestCase("record type from template", \testRecordTypeFromTemplate());
+        addTestCase("template with include_nulls", \testTemplateIncludeNulls());
+        addTestCase("bulk record interface for template", \testBulkRecordInterfaceTemplate());
+        addTestCase("negative count validation", \testNegativeCount());
+        addTestCase("unsupported template type", \testUnsupportedTemplateType());
+        addTestCase("empty template", \testEmptyTemplate());
+        addTestCase("action: app registration", \testActionAppRegistration());
+        addTestCase("action: generate-records registration", \testActionGenerateRecordsRegistration());
+        addTestCase("action: generate-records option metadata", \testActionGenerateRecordsOptionMetadata());
+        addTestCase("action: generate-from-template registration", \testActionGenerateFromTemplateRegistration());
+        addTestCase("action: generate-from-template option metadata", \testActionGenerateFromTemplateOptionMetadata());
+        addTestCase("action: generate-records option allowed values", \testActionGenerateRecordsAllowedValues());
+        addTestCase("action: generate-from-template option allowed values", \testActionFromTemplateAllowedValues());
+        addTestCase("action: all actions retrievable", \testActionAllActionsRetrievable());
+
+        set_return_value(main());
+    }
+
+    #! Helper: collect all records from a provider's record stream into a list
+    static list<hash<auto>> readAllRecords(AbstractDataProvider prov) {
+        list<hash<auto>> result = ();
+        AbstractDataProviderRecordIterator it = prov.searchRecords();
+        while (it.next()) {
+            result += it.getValue();
+        }
+        return result;
+    }
+
+    private testGenerateRecordsDefault() {
+        GeneratorGenerateRecordsDataProvider prov({"count": 5});
+        list<hash<auto>> result = readAllRecords(prov);
+        assertEq(5, result.size());
+
+        # verify default schema fields
+        hash<auto> rec = result[0];
+        assertTrue(rec.hasKey("id"));
+        assertTrue(rec.hasKey("name"));
+        assertTrue(rec.hasKey("value"));
+        assertTrue(rec.hasKey("active"));
+        assertTrue(rec.hasKey("created"));
+
+        # verify types
+        assertEq("integer", rec.id.type());
+        assertEq("string", rec.name.type());
+        assertEq("float", rec.value.type());
+        assertEq("bool", rec.active.type());
+        assertEq("date", rec.created.type());
+    }
+
+    private testGenerateRecordsCustomSchema() {
+        list<auto> fields = (
+            {"name": "order_id", "type": GeneratorFieldType::Int},
+            {"name": "product", "type": GeneratorFieldType::String},
+            {"name": "price", "type": GeneratorFieldType::Float},
+        );
+        GeneratorGenerateRecordsDataProvider prov({"count": 3, "fields": fields});
+        list<hash<auto>> result = readAllRecords(prov);
+        assertEq(3, result.size());
+
+        hash<auto> rec = result[0];
+        assertTrue(rec.hasKey("order_id"));
+        assertTrue(rec.hasKey("product"));
+        assertTrue(rec.hasKey("price"));
+        assertFalse(rec.hasKey("id"));
+        assertFalse(rec.hasKey("name"));
+
+        assertEq("integer", rec.order_id.type());
+        assertEq("string", rec.product.type());
+        assertEq("float", rec.price.type());
+    }
+
+    private testGenerateRecordsSequential() {
+        GeneratorGenerateRecordsDataProvider prov({
+            "count": 3,
+            "strategy": GeneratorStrategy::Sequential,
+        });
+        list<hash<auto>> result = readAllRecords(prov);
+        assertEq(3, result.size());
+
+        # sequential: id should be 0, 1, 2
+        assertEq(0, result[0].id);
+        assertEq(1, result[1].id);
+        assertEq(2, result[2].id);
+
+        # sequential: name should be "name_0", "name_1", "name_2"
+        assertEq("name_0", result[0].name);
+        assertEq("name_1", result[1].name);
+        assertEq("name_2", result[2].name);
+
+        # sequential: value should be 0.0, 1.0, 2.0
+        assertEq(0.0, result[0].value);
+        assertEq(1.0, result[1].value);
+        assertEq(2.0, result[2].value);
+
+        # sequential: active alternates (even=True)
+        assertTrue(result[0].active);
+        assertFalse(result[1].active);
+        assertTrue(result[2].active);
+    }
+
+    private testGenerateRecordsRandomSeed() {
+        hash<auto> opts = {
+            "count": 10,
+            "strategy": GeneratorStrategy::Random,
+            "seed": 12345,
+        };
+
+        list<hash<auto>> result1 = readAllRecords(new GeneratorGenerateRecordsDataProvider(opts));
+        list<hash<auto>> result2 = readAllRecords(new GeneratorGenerateRecordsDataProvider(opts));
+
+        assertEq(10, result1.size());
+        assertEq(10, result2.size());
+
+        # same seed should produce identical results
+        for (int i = 0; i < 10; i++) {
+            assertEq(result1[i].id, result2[i].id);
+            assertEq(result1[i].name, result2[i].name);
+        }
+    }
+
+    private testGenerateRecordsIncludeNulls() {
+        GeneratorGenerateRecordsDataProvider prov({
+            "count": 200,
+            "strategy": GeneratorStrategy::Random,
+            "include_nulls": True,
+            "seed": 99,
+        });
+        list<hash<auto>> result = readAllRecords(prov);
+        assertEq(200, result.size());
+
+        # with 200 records and 5 fields each (~1000 values), ~10% should be null
+        int null_count = 0;
+        foreach hash<auto> rec in (result) {
+            foreach string key in (keys rec) {
+                if (!exists rec{key}) {
+                    null_count++;
+                }
+            }
+        }
+        assertTrue(null_count > 0, "expected some null values with include_nulls=True");
+    }
+
+    private testGenerateFromTemplateBasic() {
+        hash<auto> tpl = {"id": 100, "name": "test", "score": 99.5};
+        GeneratorGenerateFromTemplateDataProvider prov({"template": tpl, "count": 3});
+        list<hash<auto>> result = readAllRecords(prov);
+        assertEq(3, result.size());
+
+        # all records should have template keys
+        foreach hash<auto> rec in (result) {
+            assertTrue(rec.hasKey("id"));
+            assertTrue(rec.hasKey("name"));
+            assertTrue(rec.hasKey("score"));
+        }
+    }
+
+    private testGenerateFromTemplateSequential() {
+        hash<auto> tpl = {"id": 100, "name": "item", "price": 10.0};
+        GeneratorGenerateFromTemplateDataProvider prov({
+            "template": tpl,
+            "count": 3,
+            "strategy": GeneratorStrategy::Sequential,
+        });
+        list<hash<auto>> result = readAllRecords(prov);
+
+        # int: template + idx
+        assertEq(100, result[0].id);
+        assertEq(101, result[1].id);
+        assertEq(102, result[2].id);
+
+        # string: template + "_" + idx
+        assertEq("item_0", result[0].name);
+        assertEq("item_1", result[1].name);
+        assertEq("item_2", result[2].name);
+
+        # float: template + idx * 0.1
+        assertEq(10.0, result[0].price);
+        assertEq(10.1, result[1].price);
+        assertEq(10.2, result[2].price);
+    }
+
+    private testGenerateFromTemplateTypeInference() {
+        # verify that type inference works correctly for all supported types
+        assertEq(GeneratorFieldType::Int,
+            GeneratorGenerateFromTemplateDataProvider::inferType(42));
+        assertEq(GeneratorFieldType::Float,
+            GeneratorGenerateFromTemplateDataProvider::inferType(3.14));
+        assertEq(GeneratorFieldType::Bool,
+            GeneratorGenerateFromTemplateDataProvider::inferType(True));
+        assertEq(GeneratorFieldType::Date,
+            GeneratorGenerateFromTemplateDataProvider::inferType(now()));
+        assertEq(GeneratorFieldType::String,
+            GeneratorGenerateFromTemplateDataProvider::inferType("hello"));
+    }
+
+    private testGenerateFromTemplateRandom() {
+        hash<auto> tpl = {"id": 100, "name": "item", "price": 10.0, "active": True};
+
+        # random with seed for reproducibility
+        hash<auto> opts = {
+            "template": tpl,
+            "count": 20,
+            "strategy": GeneratorStrategy::Random,
+            "seed": 777,
+        };
+        list<hash<auto>> result1 = readAllRecords(new GeneratorGenerateFromTemplateDataProvider(opts));
+        list<hash<auto>> result2 = readAllRecords(new GeneratorGenerateFromTemplateDataProvider(opts));
+        assertEq(20, result1.size());
+        assertEq(20, result2.size());
+
+        # same seed should produce identical results
+        for (int i = 0; i < 20; i++) {
+            assertEq(result1[i].id, result2[i].id);
+            assertEq(result1[i].name, result2[i].name);
+            assertEq(result1[i].price, result2[i].price);
+            assertEq(result1[i].active, result2[i].active);
+        }
+
+        # random strategy should produce varied values (not just sequential idx offsets)
+        bool found_non_sequential = False;
+        for (int i = 0; i < 20; i++) {
+            if (result1[i].id != 100 + i) {
+                found_non_sequential = True;
+                break;
+            }
+        }
+        assertTrue(found_non_sequential, "random template variation should differ from sequential");
+
+        # names should have random suffixes, not just _0, _1, ...
+        bool found_random_name = False;
+        for (int i = 0; i < 20; i++) {
+            if (result1[i].name != "item_" + string(i)) {
+                found_random_name = True;
+                break;
+            }
+        }
+        assertTrue(found_random_name, "random template names should differ from sequential pattern");
+    }
+
+    private testSeedDateDeterminism() {
+        # with base_date + seed, date fields are fully deterministic across any invocation
+        date fixed_date = 2025-06-15;
+        hash<auto> opts = {
+            "count": 5,
+            "strategy": GeneratorStrategy::Random,
+            "seed": 55555,
+            "base_date": fixed_date,
+        };
+        list<hash<auto>> result1 = readAllRecords(new GeneratorGenerateRecordsDataProvider(opts));
+        list<hash<auto>> result2 = readAllRecords(new GeneratorGenerateRecordsDataProvider(opts));
+
+        # date values must be identical across runs with the same seed + base_date
+        for (int i = 0; i < 5; i++) {
+            assertEq(result1[i].created, result2[i].created);
+        }
+
+        # also verify that the dates are relative to the fixed base_date, not now()
+        for (int i = 0; i < 5; i++) {
+            assertTrue(result1[i].created <= fixed_date,
+                "generated date should be on or before base_date");
+        }
+
+        # without base_date, dates will differ across invocations due to now_us() advancing;
+        # this is expected — use base_date for full cross-run reproducibility
+    }
+
+    private testSeedIsolation() {
+        # calling with a seed should not permanently alter the global RNG
+        # we verify by checking that non-seeded random calls after a seeded run still produce
+        # varied output (not stuck in a deterministic sequence)
+
+        # seeded run
+        readAllRecords(new GeneratorGenerateRecordsDataProvider({
+            "count": 10,
+            "strategy": GeneratorStrategy::Random,
+            "seed": 12345,
+        }));
+
+        # two non-seeded runs should produce different output
+        list<hash<auto>> r1 = readAllRecords(new GeneratorGenerateRecordsDataProvider({
+            "count": 5,
+            "strategy": GeneratorStrategy::Random,
+        }));
+        list<hash<auto>> r2 = readAllRecords(new GeneratorGenerateRecordsDataProvider({
+            "count": 5,
+            "strategy": GeneratorStrategy::Random,
+        }));
+
+        # at least some values should differ (extremely unlikely to be identical without
+        # a deterministic seed)
+        bool found_diff = False;
+        for (int i = 0; i < 5; i++) {
+            if (r1[i].id != r2[i].id) {
+                found_diff = True;
+                break;
+            }
+        }
+        assertTrue(found_diff, "non-seeded runs after a seeded run should produce different output");
+    }
+
+    private testFactoryRegistration() {
+        AbstractDataProviderFactory factory = DataProvider::getFactoryEx("generator");
+        assertEq("generator", factory.getName());
+
+        hash<auto> info = factory.getInfo();
+        assertEq("generator", info.name);
+        assertTrue(info.children_can_support_records);
+    }
+
+    private testChildProviderNavigation() {
+        GeneratorDataProvider root();
+        *list<string> children = root.getChildProviderNames();
+        assertEq(2, children.size());
+        assertTrue(children.contains("generate-records"));
+        assertTrue(children.contains("generate-from-template"));
+
+        AbstractDataProvider child1 = root.getChildProviderEx("generate-records");
+        assertEq("generate-records", child1.getName());
+
+        # generate-from-template requires a "template" option, so verify it throws without one
+        assertThrows("CONSTRUCTOR-ERROR", sub () { root.getChildProviderEx("generate-from-template"); });
+    }
+
+    private testRecordIteratorDirect() {
+        list<auto> fields = (
+            {"name": "x", "type": GeneratorFieldType::Int},
+            {"name": "y", "type": GeneratorFieldType::String},
+        );
+        GeneratorRecordIterator it(5, fields);
+
+        int count = 0;
+        while (it.next()) {
+            hash<auto> rec = it.getValue();
+            assertTrue(rec.hasKey("x"));
+            assertTrue(rec.hasKey("y"));
+            assertEq("integer", rec.x.type());
+            assertEq("string", rec.y.type());
+            count++;
+        }
+        assertEq(5, count);
+        assertFalse(it.valid());
+
+        # verify record type
+        *hash<string, AbstractDataField> rt = it.getRecordType();
+        assertTrue(exists rt);
+        assertTrue(rt.hasKey("x"));
+        assertTrue(rt.hasKey("y"));
+    }
+
+    private testBulkRecordInterface() {
+        GeneratorGenerateRecordsDataProvider prov({"count": 25});
+
+        # get bulk interface with block size 10
+        AbstractDataProviderBulkRecordInterface bulk = prov.getBulkRecordInterface(10);
+
+        int total = 0;
+        while (*hash<auto> block = bulk.getValue()) {
+            # block is a hash of lists (column-oriented)
+            # all lists should be the same length
+            *list<auto> first_col = block{block.firstKey()};
+            if (!first_col) {
+                break;
+            }
+            total += first_col.size();
+        }
+        assertEq(25, total);
+    }
+
+    private testEdgeCaseCountZero() {
+        GeneratorGenerateRecordsDataProvider prov({"count": 0});
+        list<hash<auto>> result = readAllRecords(prov);
+        assertEq(0, result.size());
+    }
+
+    private testEdgeCaseCountOne() {
+        GeneratorGenerateRecordsDataProvider prov({"count": 1});
+        list<hash<auto>> result = readAllRecords(prov);
+        assertEq(1, result.size());
+        assertTrue(result[0].hasKey("id"));
+    }
+
+    private testEnumValues() {
+        # verify enum values are correct strings
+        assertEq("sequential", GeneratorStrategy::Sequential);
+        assertEq("random", GeneratorStrategy::Random);
+
+        assertEq("string", GeneratorFieldType::String);
+        assertEq("int", GeneratorFieldType::Int);
+        assertEq("float", GeneratorFieldType::Float);
+        assertEq("bool", GeneratorFieldType::Bool);
+        assertEq("date", GeneratorFieldType::Date);
+    }
+
+    private testRecordTypeCustomFields() {
+        list<auto> fields = (
+            {"name": "order_id", "type": GeneratorFieldType::Int},
+            {"name": "product", "type": GeneratorFieldType::String},
+        );
+        GeneratorGenerateRecordsDataProvider prov({"count": 1, "fields": fields});
+
+        # verify record type matches custom fields
+        *hash<string, AbstractDataField> rt = prov.getRecordType();
+        assertTrue(exists rt);
+        assertEq(2, rt.size());
+        assertTrue(rt.hasKey("order_id"));
+        assertTrue(rt.hasKey("product"));
+        assertFalse(rt.hasKey("id"));
+        assertFalse(rt.hasKey("name"));
+
+        # verify default schema record type
+        GeneratorGenerateRecordsDataProvider prov2({"count": 1});
+        *hash<string, AbstractDataField> rt2 = prov2.getRecordType();
+        assertTrue(exists rt2);
+        assertEq(5, rt2.size());
+        assertTrue(rt2.hasKey("id"));
+        assertTrue(rt2.hasKey("name"));
+        assertTrue(rt2.hasKey("value"));
+        assertTrue(rt2.hasKey("active"));
+        assertTrue(rt2.hasKey("created"));
+    }
+
+    private testRecordTypeFromTemplate() {
+        hash<auto> tpl = {"x": 1, "y": "hello", "z": 3.14};
+        GeneratorGenerateFromTemplateDataProvider prov({"template": tpl, "count": 1});
+
+        *hash<string, AbstractDataField> rt = prov.getRecordType();
+        assertTrue(exists rt);
+        assertEq(3, rt.size());
+        assertTrue(rt.hasKey("x"));
+        assertTrue(rt.hasKey("y"));
+        assertTrue(rt.hasKey("z"));
+    }
+
+    private testTemplateIncludeNulls() {
+        hash<auto> tpl = {"id": 1, "name": "test", "score": 5.0, "active": True, "ts": now()};
+        GeneratorGenerateFromTemplateDataProvider prov({
+            "template": tpl,
+            "count": 200,
+            "strategy": GeneratorStrategy::Random,
+            "include_nulls": True,
+            "seed": 99,
+        });
+        list<hash<auto>> result = readAllRecords(prov);
+        assertEq(200, result.size());
+
+        int null_count = 0;
+        foreach hash<auto> rec in (result) {
+            foreach string key in (keys rec) {
+                if (!exists rec{key}) {
+                    null_count++;
+                }
+            }
+        }
+        assertTrue(null_count > 0, "expected some null values with include_nulls=True on template provider");
+    }
+
+    private testBulkRecordInterfaceTemplate() {
+        hash<auto> tpl = {"id": 1, "label": "item"};
+        GeneratorGenerateFromTemplateDataProvider prov({"template": tpl, "count": 25});
+
+        AbstractDataProviderBulkRecordInterface bulk = prov.getBulkRecordInterface(10);
+
+        int total = 0;
+        while (*hash<auto> block = bulk.getValue()) {
+            *list<auto> first_col = block{block.firstKey()};
+            if (!first_col) {
+                break;
+            }
+            total += first_col.size();
+        }
+        assertEq(25, total);
+    }
+
+    private testNegativeCount() {
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new GeneratorGenerateRecordsDataProvider({"count": -1});
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new GeneratorGenerateFromTemplateDataProvider({"template": {"id": 1}, "count": -5});
+        });
+    }
+
+    private testUnsupportedTemplateType() {
+        assertThrows("TEMPLATE-ERROR", sub () {
+            new GeneratorGenerateFromTemplateDataProvider({"template": {"data": {"nested": 1}}});
+        });
+        assertThrows("TEMPLATE-ERROR", sub () {
+            new GeneratorGenerateFromTemplateDataProvider({"template": {"items": (1, 2, 3)}});
+        });
+    }
+
+    private testEmptyTemplate() {
+        # empty template hash should be accepted (not rejected by exists check)
+        GeneratorGenerateFromTemplateDataProvider prov({"template": {}, "count": 3});
+        list<hash<auto>> result = readAllRecords(prov);
+        assertEq(3, result.size());
+    }
+
+    private testActionAppRegistration() {
+        *hash<DataProviderAppInfo> app_info = DataProviderActionCatalog::getApp(GeneratorDataProvider::AppName);
+        assertTrue(exists app_info, "DataGenerator app should be registered");
+        assertEq("DataGenerator", app_info.name);
+        assertEq("Data Generator", app_info.display_name);
+        assertTrue(exists app_info.logo, "app should have a logo");
+        assertTrue(app_info.logo.size() > 0, "logo should not be empty");
+    }
+
+    private testActionGenerateRecordsRegistration() {
+        *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            GeneratorDataProvider::AppName, "generate-records");
+        assertTrue(exists action, "generate-records action should be registered");
+        assertEq("generate-records", action.action);
+        assertEq(DPAT_FIND, action.action_code);
+        assertEq("Generate Records", action.display_name);
+        assertTrue(action.short_desc.val(), "action should have a short description");
+        assertTrue(action.desc.val(), "action should have a description");
+        assertEq("/", action.path);
+        assertEq("GeneratorDataProvider::GeneratorGenerateRecordsDataProvider", action.cls);
+
+        # verify all expected options are present
+        assertTrue(exists action.options, "action should have options");
+        list<string> expected_opts = ("count", "strategy", "fields", "include_nulls", "seed", "base_date");
+        foreach string opt_name in (expected_opts) {
+            assertTrue(action.options.hasKey(opt_name),
+                sprintf("generate-records action should have '%s' option", opt_name));
+        }
+    }
+
+    private testActionGenerateRecordsOptionMetadata() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+            GeneratorDataProvider::AppName, "generate-records");
+
+        # count: required, preselected, int type
+        hash<ActionOptionInfo> count_opt = action.options.count;
+        assertTrue(count_opt.required, "count should be required");
+        assertTrue(count_opt.preselected, "count should be preselected");
+        assertEq("Record Count", count_opt.display_name);
+        assertTrue(count_opt.short_desc.val(), "count should have short_desc");
+        assertTrue(count_opt.desc.val(), "count should have desc");
+        assertEq("int", count_opt.type.getName());
+        assertEq(10, count_opt.default_value);
+
+        # strategy: not required, string type, has allowed_values
+        hash<ActionOptionInfo> strat_opt = action.options.strategy;
+        assertFalse(strat_opt.required, "strategy should not be required");
+        assertEq("string", strat_opt.type.getName());
+        assertEq("sequential", strat_opt.default_value);
+        assertTrue(strat_opt.short_desc.val(), "strategy should have short_desc");
+
+        # fields: not required, any type
+        hash<ActionOptionInfo> fields_opt = action.options.fields;
+        assertFalse(fields_opt.required, "fields should not be required");
+        assertTrue(fields_opt.short_desc.val(), "fields should have short_desc");
+
+        # include_nulls: not required, bool type
+        hash<ActionOptionInfo> nulls_opt = action.options.include_nulls;
+        assertFalse(nulls_opt.required, "include_nulls should not be required");
+        assertEq("bool", nulls_opt.type.getName());
+        assertEq(False, nulls_opt.default_value);
+
+        # seed: not required, int type
+        hash<ActionOptionInfo> seed_opt = action.options.seed;
+        assertFalse(seed_opt.required, "seed should not be required");
+        assertEq("int", seed_opt.type.getName());
+
+        # base_date: not required, date type
+        hash<ActionOptionInfo> date_opt = action.options.base_date;
+        assertFalse(date_opt.required, "base_date should not be required");
+        assertEq("date", date_opt.type.getName());
+
+        # all options should have loc=constructor
+        foreach hash<auto> opt in (action.options.pairIterator()) {
+            assertEq("constructor", opt.value.loc,
+                sprintf("option '%s' should have loc=constructor", opt.key));
+        }
+    }
+
+    private testActionGenerateFromTemplateRegistration() {
+        *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            GeneratorDataProvider::AppName, "generate-from-template");
+        assertTrue(exists action, "generate-from-template action should be registered");
+        assertEq("generate-from-template", action.action);
+        assertEq(DPAT_FIND, action.action_code);
+        assertEq("Generate From Template", action.display_name);
+        assertTrue(action.short_desc.val(), "action should have a short description");
+        assertTrue(action.desc.val(), "action should have a description");
+        assertEq("/", action.path);
+        assertEq("GeneratorDataProvider::GeneratorGenerateFromTemplateDataProvider", action.cls);
+
+        # verify all expected options are present
+        assertTrue(exists action.options, "action should have options");
+        list<string> expected_opts = ("template", "count", "strategy", "include_nulls", "seed", "base_date");
+        foreach string opt_name in (expected_opts) {
+            assertTrue(action.options.hasKey(opt_name),
+                sprintf("generate-from-template action should have '%s' option", opt_name));
+        }
+    }
+
+    private testActionGenerateFromTemplateOptionMetadata() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+            GeneratorDataProvider::AppName, "generate-from-template");
+
+        # template: required, preselected, hash type
+        hash<ActionOptionInfo> tpl_opt = action.options.template;
+        assertTrue(tpl_opt.required, "template should be required");
+        assertTrue(tpl_opt.preselected, "template should be preselected");
+        assertEq("Template Record", tpl_opt.display_name);
+        assertTrue(tpl_opt.short_desc.val(), "template should have short_desc");
+        assertTrue(tpl_opt.desc.val(), "template should have desc");
+
+        # count: required, preselected, int type with default
+        hash<ActionOptionInfo> count_opt = action.options.count;
+        assertTrue(count_opt.required, "count should be required");
+        assertTrue(count_opt.preselected, "count should be preselected");
+        assertEq("int", count_opt.type.getName());
+        assertEq(10, count_opt.default_value);
+
+        # strategy: not required, string type with default and allowed_values
+        hash<ActionOptionInfo> strat_opt = action.options.strategy;
+        assertFalse(strat_opt.required, "strategy should not be required");
+        assertEq("string", strat_opt.type.getName());
+        assertEq("sequential", strat_opt.default_value);
+
+        # include_nulls: not required, bool type with default
+        hash<ActionOptionInfo> nulls_opt = action.options.include_nulls;
+        assertFalse(nulls_opt.required, "include_nulls should not be required");
+        assertEq(False, nulls_opt.default_value);
+
+        # all options should have loc=constructor
+        foreach hash<auto> opt in (action.options.pairIterator()) {
+            assertEq("constructor", opt.value.loc,
+                sprintf("option '%s' should have loc=constructor", opt.key));
+        }
+    }
+
+    private testActionGenerateRecordsAllowedValues() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+            GeneratorDataProvider::AppName, "generate-records");
+
+        # strategy should have exactly 2 allowed values
+        hash<ActionOptionInfo> strat_opt = action.options.strategy;
+        assertTrue(exists strat_opt.allowed_values, "strategy should have allowed_values");
+        assertEq(2, strat_opt.allowed_values.size());
+
+        # extract values
+        list<auto> values = map $1.value, strat_opt.allowed_values;
+        assertTrue(values.contains("sequential"), "allowed values should include 'sequential'");
+        assertTrue(values.contains("random"), "allowed values should include 'random'");
+
+        # each allowed value should have a description
+        foreach hash<auto> av in (strat_opt.allowed_values) {
+            assertTrue(av.desc.val(),
+                sprintf("allowed value '%s' should have a description", av.value));
+        }
+    }
+
+    private testActionFromTemplateAllowedValues() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+            GeneratorDataProvider::AppName, "generate-from-template");
+
+        # strategy should have exactly 2 allowed values
+        hash<ActionOptionInfo> strat_opt = action.options.strategy;
+        assertTrue(exists strat_opt.allowed_values, "strategy should have allowed_values");
+        assertEq(2, strat_opt.allowed_values.size());
+
+        list<auto> values = map $1.value, strat_opt.allowed_values;
+        assertTrue(values.contains("sequential"), "allowed values should include 'sequential'");
+        assertTrue(values.contains("random"), "allowed values should include 'random'");
+
+        foreach hash<auto> av in (strat_opt.allowed_values) {
+            assertTrue(av.desc.val(),
+                sprintf("allowed value '%s' should have a description", av.value));
+        }
+    }
+
+    private testActionAllActionsRetrievable() {
+        # verify both actions are returned when querying all actions for the app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            GeneratorDataProvider::AppName);
+        assertTrue(exists actions, "should have actions for DataGenerator app");
+        assertEq(2, actions.size());
+
+        list<string> action_names = map $1.action, actions;
+        assertTrue(action_names.contains("generate-records"),
+            "actions should include generate-records");
+        assertTrue(action_names.contains("generate-from-template"),
+            "actions should include generate-from-template");
+
+        # verify all actions have DPAT_FIND code
+        foreach hash<DataProviderActionInfo> act in (actions) {
+            assertEq(DPAT_FIND, act.action_code,
+                sprintf("action '%s' should have DPAT_FIND action_code", act.action));
+        }
+    }
+}

@@ -1048,6 +1048,14 @@ int check_stack(ExceptionSink* xsink) {
 }
 #endif
 
+int q_check_stack(ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+    return check_stack(xsink);
+#else
+    return 0;
+#endif
+}
+
 void inc_active_exceptions(int diff) {
     ThreadData* td = thread_data.get();
     assert(diff == 1 || diff < 0);
@@ -2602,8 +2610,17 @@ void qore_exit_process(int rc) {
     qore_exiting.store(true, std::memory_order_relaxed);
 
     // call exit() in a single-threaded process; flushes file buffers, etc
-    if (thread_list.getNumThreads() <= 1)
+    // NOTE: the signal handler thread (TID 0) is not counted in getNumThreads(),
+    // so when called from the signal handler thread (e.g., SIGTERM handler),
+    // other application threads may still be active; we must use _Exit() to
+    // avoid running static destructors while other threads access static data
+    if (thread_list.getNumThreads() <= 1
+#ifdef HAVE_SIGNAL_HANDLING
+        && q_gettid() > 0
+#endif
+    ) {
         exit(rc);
+    }
     // do not call exit here since it will try to execute cleanup, which will cause crashes
     // in multithreaded programs; call _Exit() instead
     _Exit(rc);
