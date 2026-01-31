@@ -378,9 +378,9 @@ public bool sub optional_field(string obj_type, hash<auto> oh, string name, auto
             throw "INVALID-FIELD-TYPE", sprintf("%s Object: '%s' field has invalid type %y; expected one of: %y",
                 obj_type, name, val.type(), (map Qore::type($1), keys type_codes));
         }
-        # check for conversion
-        code conv = type_codes{tc};
-        if (exists conv) {
+        # check for conversion; hash values can be True (accept as-is) or a closure (convert)
+        auto conv = type_codes{tc};
+        if (conv.callp()) {
             target = conv(val);
         } else {
             target = val;
