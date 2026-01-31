@@ -28,7 +28,7 @@
 %requires Logger
 
 module HttpServerAsyncIo {
-    version = "1.0";
+    version = "1.1";
     desc = "Async I/O support for HttpServer";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
@@ -71,6 +71,15 @@ module HttpServerAsyncIo {
     - @ref HttpServerAsyncIo::Http1WebSocketConnection "Http1WebSocketConnection" - HTTP/1.x WebSocket wrapper
 
     @section httpserverasyncio_relnotes Release Notes
+
+    @subsection httpserverasyncio_v1_1 Version 1.1
+    - Refactored @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController"
+      to delegate all I/O polling to @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController"
+      via callback-based result delivery, eliminating the duplicate I/O thread and EventLoop
+    - Added @ref HttpServerAsyncIo::HttpConnectionState "HttpConnectionState" enum for type-safe connection states
+    - Added @ref HttpServerAsyncIo::HttpPollType "HttpPollType" enum for type-safe poll operation types
+    - Added @ref HttpServerAsyncIo::HttpVersionMode "HttpVersionMode" enum for type-safe HTTP version modes
+    - Added constructor overload accepting a shared AsyncSocketIoController instance
 
     @subsection httpserverasyncio_v1_0 Version 1.0
     - Initial release of HttpServer async I/O and HTTP/2 support

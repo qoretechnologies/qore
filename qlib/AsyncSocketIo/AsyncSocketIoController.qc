@@ -26,6 +26,20 @@
 /** All public declarations in the %AsyncSocketIo module are defined in this namespace
 */
 public namespace AsyncSocketIo {
+#! I/O thread commands
+public enum IoCommand : string {
+    #! Add a new operation
+    Add = "add",
+    #! Cancel a specific operation
+    Cancel = "cancel",
+    #! Cancel all operations for an owner
+    CancelOwner = "cancel_owner",
+    #! Quit the I/O thread
+    Quit = "quit",
+    #! Wake the I/O thread to force re-poll
+    Wake = "wake",
+}
+
 #! Socket polling operation info hash
 public hashdecl SocketPollOperationInfo {
     #! Socket object
@@ -50,6 +64,19 @@ public hashdecl SocketPollOperationInfo {
     /** This allows multiple operations to share a single result Queue for easier coordination
     */
     *Queue resultQueue;
+
+    #! Optional completion callback; called in the I/O thread when the operation completes
+    /** When provided, results are delivered via callback instead of Queue.
+        The callback signature must accept a single hash<SocketPollResultInfo> argument.
+        Mutually exclusive with \c resultQueue.
+    */
+    *code callback;
+
+    #! Optional custom cache key; default: sock.uniqueHash()
+    /** Allows multiple concurrent operations on the same socket (e.g., concurrent accepts
+        on a listener) by using distinct keys like "accept:<hash>:1", "accept:<hash>:2".
+    */
+    *string key;
 }
 
 #! Socket poll result
@@ -100,23 +127,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         #! Shutdown flag to prevent new operations during stop
         bool shutting_down = False;
 
-        #! I/O thread command: add
-        const IO_ADD = "add";
-
-        #! I/O thread command: cancel
-        const IO_CANCEL = "cancel";
-
-        #! I/O thread command: cancel by owner
-        const IO_CANCEL_OWNER = "cancel_owner";
-
-        #! I/O thread command: quit
-        const IO_QUIT = "quit";
-
-        #! I/O thread command: wake
-        const IO_WAKE = "wake";
-
         #! Force continuePoll on all operations after a wake (needed for HTTP/2 pending writes)
         bool force_poll = False;
+
+        #! Map of socket unique hash -> reference count (number of operations using this socket)
+        hash<string, int> socket_refcounts;
     }
 
     private:internal {
@@ -150,10 +165,13 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         */
         hash<string, Socket> registered_sockets;
 
-        #! Map of registered socket unique hash -> current poll events
-        /** Tracks the events currently registered for each socket in the EventLoop
-        */
+        #! Map of registered socket unique hash -> current poll events applied in EventLoop
         hash<string, int> registered_events;
+
+        #! Map of operation key -> events requested by that key
+        /** Used to compute the event union when multiple operations share a socket
+        */
+        hash<string, int> key_events;
     }
 
     #! Creates the object
@@ -215,7 +233,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             AutoLock al(m);
             if (tid) {
                 shutting_down = True;
-                signal = enqueueCmdLocked(IO_QUIT);
+                signal = enqueueCmdLocked(IoCommand::Quit);
             } else {
                 shutting_down = True;
             }
@@ -235,7 +253,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             count = cache.size();
             shutting_down = True;
             if (tid) {
-                signal = enqueueCmdLocked(IO_QUIT);
+                signal = enqueueCmdLocked(IoCommand::Quit);
             }
         }
         if (signal) {
@@ -296,13 +314,13 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     /** @param info a hash with the socket operation and supporting info
         @param replace if True, then any operation currently in place for the given socket will be replaced
 
-        @return Queue a Queue that will have the result of the operation pushed to it; if \a info.resultQueue is
-        provided, that Queue is returned
+        @return a Queue that will have the result of the operation pushed to it; if \a info.resultQueue is
+        provided, that Queue is returned; returns @ref NOTHING when \a info.callback is provided
 
         @throw CONTROLLER-ADD-ERROR invalid or incomplete data in \a info; a different operation on this socket is
         already in progress
     */
-    Queue submit(hash<SocketPollOperationInfo> info, *bool replace) {
+    *Queue submit(hash<SocketPollOperationInfo> info, *bool replace) {
         if (!info.sock) {
             throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'sock' value; got: %y", info);
         }
@@ -313,16 +331,20 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'owner' value; required for proper shutdown via "
                 "cancelByOwner(); got: %y", info);
         }
-        # get unique key for socket object
-        string uh = info.sock.uniqueHash();
+        @assert(!info.callback || !info.resultQueue,
+            "callback and resultQueue are mutually exclusive");
+        @assert(!info.key || info.key.size() > 0,
+            "key must be non-empty if provided");
+        # get unique key: use custom key if provided, otherwise socket unique hash
+        string uh = info.key ?? info.sock.uniqueHash();
         hash<PollInfo> cinfo;
         bool cancel_signal = False;
         bool wait_cancel = False;
-        Queue result_queue = info.resultQueue ?? new Queue();
+        *Queue result_queue = info.callback ? NOTHING : (info.resultQueue ?? new Queue());
         {
             AutoLock al(m);
             if (shutting_down) {
-                throw "CONTROLLER-ADD-ERROR", sprintf("Cannot add operation for socket %y; controller is shutting down",
+                throw "CONTROLLER-ADD-ERROR", sprintf("Cannot add operation for key %y; controller is shutting down",
                     uh);
             }
             if (*hash<PollInfo> existing = cache{uh}) {
@@ -331,7 +353,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     wait_cancel = True;
                 } else {
                     # otherwise throw an exception
-                    throw "CONTROLLER-ADD-ERROR", sprintf("An operation with socket %y is already in process", uh);
+                    throw "CONTROLLER-ADD-ERROR", sprintf("An operation with key %y is already in process", uh);
                 }
             }
         }
@@ -345,7 +367,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         {
             AutoLock al(m);
             if (shutting_down) {
-                throw "CONTROLLER-ADD-ERROR", sprintf("Cannot add operation for socket %y; controller is shutting down",
+                throw "CONTROLLER-ADD-ERROR", sprintf("Cannot add operation for key %y; controller is shutting down",
                     uh);
             }
             cinfo = cache{uh} = <PollInfo>{
@@ -355,11 +377,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 "owner": info.owner,
                 "other": info.other,
                 "q": result_queue,
+                "callback": info.callback,
             };
             @debug {
                 if (getenv("QORE_ASYNCIO_DEBUG")) {
-                    log(LoggerLevel::INFO, "submit: added operation for socket %s goal=%y to=%y cache_size=%d",
-                        uh, info.other.goal, info.to, cache.size());
+                    log(LoggerLevel::INFO, "submit: added operation for key %s goal=%y to=%y cache_size=%d callback=%y",
+                        uh, info.other.goal, info.to, cache.size(), info.callback ? True : False);
                 }
                 if (getenv("QORE_ASYNCIO_TRACE")) {
                     log(LoggerLevel::DEBUG, "submit: info=%y", info);
@@ -368,12 +391,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             if (io_exiting || !tid) {
                 startIntern();
             }
-            add_signal = enqueueCmdLocked(IO_ADD);
+            add_signal = enqueueCmdLocked(IoCommand::Add);
         }
         if (add_signal) {
             notifier.notify();
         }
-        return cinfo.q;
+        return result_queue;
     }
 
     #! Executes a socket operation asynchronously and waits for the results
@@ -386,14 +409,21 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         already in progress
     */
     hash<SocketPollResultInfo> exec(hash<SocketPollOperationInfo> info, *bool replace) {
+        @assert(!info.callback, "exec() cannot be used with callback mode");
         return submit(info, replace).get();
     }
 
-    #! Cancels any operation in progress for the given Socket
+    #! Cancels the operation with the given Socket's unique hash as the key
     /** @param sock the socket to cancel any operation in progress for
 
-        @note Stops the I/O thread if the last operation is canceled and the \a autostop flag is enabled
+        @note This method only cancels operations keyed by the socket's unique hash (the default).
+        Operations submitted with a custom \c key will not be found by this method; use
+        cancelByKey() or cancelByOwner() for those.
 
+        Stops the I/O thread if the last operation is canceled and the \a autostop flag is enabled.
+
+        @see cancelByKey()
+        @see cancelByOwner()
         @see cancelEx()
     */
     bool cancel(Socket sock) {
@@ -421,7 +451,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         {
             AutoLock al(m);
             if (autostop && rv && !cache && tid) {
-                stop_signal = enqueueCmdLocked(IO_QUIT);
+                stop_signal = enqueueCmdLocked(IoCommand::Quit);
                 stopped = True;
             }
         }
@@ -436,7 +466,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
     #! Wakes the I/O thread to re-evaluate poll state
     wake() {
-        sendCmd(IO_WAKE);
+        sendCmd(IoCommand::Wake);
     }
 
     #! Cancels any operation in progress for the given Socket
@@ -455,6 +485,56 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             throw "CONTROLLER-CANCEL-ERROR", sprintf("Socket %y has no operation in progress", sock.uniqueHash());
         }
         return True;
+    }
+
+    #! Cancels the operation with the given custom key
+    /** @param key the custom key used when submitting the operation
+
+        @return True if an operation was found and canceled, False otherwise
+
+        @note This method is needed for operations submitted with a custom \c key field,
+        since cancel(Socket) only looks up the socket's unique hash.
+
+        @since %AsyncSocketIo 2.0
+
+        @see cancel()
+        @see cancelByOwner()
+    */
+    bool cancelByKey(string key) {
+        bool rv;
+        bool stopped;
+        bool cancel_signal = False;
+        bool stop_signal = False;
+
+        {
+            AutoLock al(m);
+            if (cache{key}) {
+                rv = True;
+                cancel_signal = enqueueCancelLocked(key);
+            } else {
+                rv = False;
+            }
+        }
+        if (cancel_signal) {
+            notifier.notify();
+        }
+        if (rv) {
+            waitCancel(key);
+        }
+        {
+            AutoLock al(m);
+            if (autostop && rv && !cache && tid) {
+                stop_signal = enqueueCmdLocked(IoCommand::Quit);
+                stopped = True;
+            }
+        }
+        if (stop_signal) {
+            notifier.notify();
+        }
+        if (stopped) {
+            waitStop();
+        }
+        return rv;
     }
 
     #! Cancels all operations belonging to a specific owner
@@ -486,7 +566,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             if (!rv) {
                 return 0;
             }
-            signal = enqueueCmdLocked(IO_CANCEL_OWNER, (owner,));
+            signal = enqueueCmdLocked(IoCommand::CancelOwner, (owner,));
         }
         if (signal) {
             notifier.notify();
@@ -533,7 +613,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         if (!cancel_cond_map{uh}) {
             cancel_cond_map{uh} = new Condition();
         }
-        return enqueueCmdLocked(IO_CANCEL, (uh,));
+        return enqueueCmdLocked(IoCommand::Cancel, (uh,));
     }
 
     #! Waits for a queued cancel to complete
@@ -736,11 +816,22 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                                 if (*Condition c = remove cancel_cond_map{key}) {
                                     c.broadcast();
                                 }
-                                cinfo.q.push(<SocketPollResultInfo>{
+                                hash<SocketPollResultInfo> result = <SocketPollResultInfo>{
                                     "sock": cinfo.sock,
                                     "spop": cinfo.spop,
                                     "other": cinfo.other,
-                                });
+                                };
+                                if (cinfo.callback) {
+                                    @debug(log(LoggerLevel::INFO, "delivering result via callback for key %y", key));
+                                    try {
+                                        cinfo.callback(result);
+                                    } catch (hash<ExceptionInfo> cbex) {
+                                        log(LoggerLevel::ERROR, "%s: callback exception: %s: %s",
+                                            key, cbex.err, cbex.desc);
+                                    }
+                                } else {
+                                    cinfo.q.push(result);
+                                }
                                 remove dmap{key};
                             } else {
                                 # Register or update socket in EventLoop
@@ -793,12 +884,23 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             if (*Condition c = remove cancel_cond_map{key}) {
                                 c.broadcast();
                             }
-                            cinfo.q.push(<SocketPollResultInfo>{
+                            hash<SocketPollResultInfo> err_result = <SocketPollResultInfo>{
                                 "sock": cinfo.sock,
                                 "spop": cinfo.spop,
                                 "ex": ex,
                                 "other": cinfo.other,
-                            });
+                            };
+                            if (cinfo.callback) {
+                                @debug(log(LoggerLevel::INFO, "delivering error via callback for key %y", key));
+                                try {
+                                    cinfo.callback(err_result);
+                                } catch (hash<ExceptionInfo> cbex) {
+                                    log(LoggerLevel::ERROR, "%s: error callback exception: %s: %s",
+                                        key, cbex.err, cbex.desc);
+                                }
+                            } else {
+                                cinfo.q.push(err_result);
+                            }
                             remove dmap{key};
                         }
                     }
@@ -932,7 +1034,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 @debug(log(LoggerLevel::INFO, "I/O thread got command: %y", h));
                 list<auto> args = h.args ?? ();
                 switch (h.cmd) {
-                    case IO_QUIT: {
+                    case IoCommand::Quit: {
                         # cancel all operations in progress without holding the lock while aborting
                         list<hash<PollInfo>> cancel_list = ();
                         list<Condition> cond_list = ();
@@ -957,11 +1059,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         return True;
                     }
 
-                    case IO_ADD:
+                    case IoCommand::Add:
                         # processed automatically
                         break;
 
-                    case IO_CANCEL: {
+                    case IoCommand::Cancel: {
                         hash<PollInfo> cinfo;
                         *Condition c;
                         {
@@ -991,7 +1093,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         break;
                     }
 
-                    case IO_CANCEL_OWNER: {
+                    case IoCommand::CancelOwner: {
                         # Cancel all operations belonging to a specific owner
                         string owner = args[0];
                         list<hash<PollInfo>> cancel_list = ();
@@ -1021,7 +1123,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         break;
                     }
 
-                    case IO_WAKE:
+                    case IoCommand::Wake:
                         {
                             AutoLock al(m);
                             force_poll = True;
@@ -1086,13 +1188,25 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::WARN, "Ignoring error aborting canceled async I/O: %s", get_exception_string(ex));
         }
-        # push cancelation message on the queue
-        cinfo.q.push(<SocketPollResultInfo>{
+        # deliver cancelation result
+        hash<SocketPollResultInfo> cancel_result = <SocketPollResultInfo>{
             "sock": cinfo.sock,
             "spop": cinfo.spop,
             "canceled": True,
             "other": cinfo.other,
-        });
+        };
+        if (cinfo.callback) {
+            @debug(log(LoggerLevel::INFO, "delivering cancel via callback for sock %s",
+                sprintf("%s %s", cinfo.sock.className(), cinfo.sock.uniqueHash()[0..8])));
+            try {
+                cinfo.callback(cancel_result);
+            } catch (hash<ExceptionInfo> cbex) {
+                log(LoggerLevel::ERROR, "cancel callback exception for sock %s: %s: %s",
+                    cinfo.sock.uniqueHash(), cbex.err, cbex.desc);
+            }
+        } else {
+            cinfo.q.push(cancel_result);
+        }
     }
 
     private bool enqueueCmdLocked(string cmd, *list<auto> args) {
@@ -1139,96 +1253,149 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @param socket the socket to register (or NOTHING to unregister)
         @param events the poll events (SOCK_POLLIN and/or SOCK_POLLOUT)
 
-        Handles add, modify, and remove operations based on current state
+        Uses reference counting to handle multiple operations sharing the same socket
+        (e.g., multiple concurrent accept operations on the same listener socket)
     */
+    #! Computes the event mask union for all operations on the given socket hash
+    private int computeEventUnion(string sock_hash) {
+        int result = 0;
+        foreach string k in (keys key_events) {
+            *Socket s = registered_sockets{k};
+            if (s && s.uniqueHash() == sock_hash) {
+                result |= key_events{k};
+            }
+        }
+        return result;
+    }
+
+    #! Applies the correct event union to the EventLoop for a socket
+    private applyEventUnion(Socket socket, string sock_hash) {
+        int union_events = computeEventUnion(sock_hash);
+        int prev_events = registered_events{sock_hash} ?? 0;
+        if (union_events != prev_events) {
+            loop.modify(socket, union_events);
+            registered_events{sock_hash} = union_events;
+            @debug {
+                if (getenv("QORE_ASYNCIO_TRACE")) {
+                    log(LoggerLevel::DEBUG, "EventLoop modify union: sock=%s events=%d->%d",
+                        sock_hash[0..8], prev_events, union_events);
+                }
+            }
+        }
+    }
+
     private updateEventLoopRegistration(string key, *Socket socket, *int events) {
         *Socket prev_sock = registered_sockets{key};
         string prev_sock_hash = prev_sock ? prev_sock.uniqueHash() : "";
         string new_sock_hash = socket ? socket.uniqueHash() : "";
 
         if (!socket) {
-            # Remove registration for this operation
+            # Remove registration for this key
+            remove key_events{key};
             if (prev_sock) {
-                try {
-                    loop.del(prev_sock);
-                    @debug {
-                        if (getenv("QORE_ASYNCIO_TRACE")) {
-                            log(LoggerLevel::DEBUG, "EventLoop remove: key=%s sock=%s",
-                                key, prev_sock_hash[0..8]);
+                remove registered_sockets{key};
+                # Decrement reference count
+                int refcount = socket_refcounts{prev_sock_hash} ?? 0;
+                if (refcount <= 1) {
+                    # Last reference - actually remove from EventLoop
+                    try {
+                        loop.del(prev_sock);
+                        @debug {
+                            if (getenv("QORE_ASYNCIO_TRACE")) {
+                                log(LoggerLevel::DEBUG, "EventLoop remove: key=%s sock=%s refcount=0",
+                                    key, prev_sock_hash[0..8]);
+                            }
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        @debug {
+                            if (getenv("QORE_ASYNCIO_TRACE")) {
+                                log(LoggerLevel::DEBUG, "EventLoop remove ignored error: %s", ex.err);
+                            }
                         }
                     }
-                } catch (hash<ExceptionInfo> ex) {
-                    # Ignore errors when removing - socket may already be closed
+                    remove registered_events{prev_sock_hash};
+                    remove socket_refcounts{prev_sock_hash};
+                } else {
+                    # Other operations still using this socket - update refcount and recompute union
+                    socket_refcounts{prev_sock_hash} = refcount - 1;
+                    applyEventUnion(prev_sock, prev_sock_hash);
                     @debug {
                         if (getenv("QORE_ASYNCIO_TRACE")) {
-                            log(LoggerLevel::DEBUG, "EventLoop remove ignored error: %s", ex.err);
+                            log(LoggerLevel::DEBUG, "EventLoop deref: key=%s sock=%s refcount=%d",
+                                key, prev_sock_hash[0..8], refcount - 1);
                         }
                     }
                 }
-                remove registered_sockets{key};
-                remove registered_events{prev_sock_hash};
             }
             return;
         }
 
-        int prev_events = registered_events{new_sock_hash} ?? 0;
+        # Track per-key events
+        key_events{key} = events;
 
         if (new_sock_hash == prev_sock_hash) {
-            # Same socket - check if events changed
-            if (events != prev_events) {
-                loop.modify(socket, events);
-                registered_events{new_sock_hash} = events;
-                @debug {
-                    if (getenv("QORE_ASYNCIO_TRACE")) {
-                        log(LoggerLevel::DEBUG, "EventLoop modify: key=%s sock=%s events=%d->%d",
-                            key, new_sock_hash[0..8], prev_events, events);
-                    }
-                }
-            }
+            # Same socket - recompute event union
+            applyEventUnion(socket, new_sock_hash);
         } else {
             # Different socket or new registration
             if (prev_sock) {
-                # Remove old socket
-                try {
-                    loop.del(prev_sock);
-                    @debug {
-                        if (getenv("QORE_ASYNCIO_TRACE")) {
-                            log(LoggerLevel::DEBUG, "EventLoop remove (for replace): key=%s sock=%s",
-                                key, prev_sock_hash[0..8]);
+                # Decrement refcount for previous socket
+                int old_refcount = socket_refcounts{prev_sock_hash} ?? 0;
+                if (old_refcount <= 1) {
+                    try {
+                        loop.del(prev_sock);
+                    } catch (hash<ExceptionInfo> ex) {
+                        @debug {
+                            if (getenv("QORE_ASYNCIO_TRACE")) {
+                                log(LoggerLevel::DEBUG, "EventLoop remove (for replace) ignored error: %s", ex.err);
+                            }
                         }
                     }
-                } catch (hash<ExceptionInfo> ex) {
-                    @debug {
-                        if (getenv("QORE_ASYNCIO_TRACE")) {
-                            log(LoggerLevel::DEBUG, "EventLoop remove (for replace) ignored error: %s", ex.err);
-                        }
-                    }
-                }
-                remove registered_events{prev_sock_hash};
-            }
-            # Add new socket (only if not already registered by another operation)
-            if (!registered_events{new_sock_hash}) {
-                loop.add(socket, events);
-                @debug {
-                    if (getenv("QORE_ASYNCIO_TRACE")) {
-                        log(LoggerLevel::DEBUG, "EventLoop add: key=%s sock=%s events=%d",
-                            key, new_sock_hash[0..8], events);
-                    }
-                }
-            } else if (events != prev_events) {
-                loop.modify(socket, events);
-                @debug {
-                    if (getenv("QORE_ASYNCIO_TRACE")) {
-                        log(LoggerLevel::DEBUG, "EventLoop modify (shared): key=%s sock=%s events=%d->%d",
-                            key, new_sock_hash[0..8], prev_events, events);
-                    }
+                    remove registered_events{prev_sock_hash};
+                    remove socket_refcounts{prev_sock_hash};
+                } else {
+                    socket_refcounts{prev_sock_hash} = old_refcount - 1;
+                    applyEventUnion(prev_sock, prev_sock_hash);
                 }
             }
+            # Add/update new socket
             registered_sockets{key} = socket;
-            registered_events{new_sock_hash} = events;
+            int new_refcount = socket_refcounts{new_sock_hash} ?? 0;
+            if (new_refcount == 0) {
+                # First registration for this socket - use the event union (may just be this key's events)
+                int union_events = computeEventUnion(new_sock_hash);
+                loop.add(socket, union_events);
+                socket_refcounts{new_sock_hash} = 1;
+                registered_events{new_sock_hash} = union_events;
+                @debug {
+                    if (getenv("QORE_ASYNCIO_TRACE")) {
+                        log(LoggerLevel::DEBUG, "EventLoop add: key=%s sock=%s events=%d refcount=1",
+                            key, new_sock_hash[0..8], union_events);
+                    }
+                }
+            } else {
+                # Socket already registered by another operation - update refcount and recompute union
+                socket_refcounts{new_sock_hash} = new_refcount + 1;
+                applyEventUnion(socket, new_sock_hash);
+                @debug {
+                    if (getenv("QORE_ASYNCIO_TRACE")) {
+                        log(LoggerLevel::DEBUG, "EventLoop ref: key=%s sock=%s refcount=%d",
+                            key, new_sock_hash[0..8], new_refcount + 1);
+                    }
+                }
+            }
         }
     }
 }
+
+#! Returns the global async I/O controller singleton
+/** The controller is created during module initialization with autostop disabled.
+*/
+public AsyncSocketIoController sub getGlobalAsyncIoController() {
+    return globalController;
+}
+
+our *AsyncSocketIoController globalController;
 }
 
 # private symbols
@@ -1256,7 +1423,10 @@ hashdecl PollInfo {
     #! Other data stored alongside the socket
     *hash<auto> other;
 
-    #! Result Queue
-    Queue q();
+    #! Result Queue (NOTHING when using callback mode)
+    *Queue q;
+
+    #! Optional completion callback for I/O thread delivery
+    *code callback;
 }
 }

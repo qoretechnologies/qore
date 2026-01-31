@@ -103,6 +103,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("HttpIdlePollOperation basic test", \idlePollOperationBasicTest());
         addTestCase("Controller start/stop test", \controllerStartStopTest());
         addTestCase("HttpAcceptPollOperation HTTP/2 mode test", \acceptPollHttp2ModeTest());
+        addTestCase("concurrent addListener/removeListener", \concurrentListenerTest());
+        addTestCase("stop during active accepts", \stopDuringAcceptsTest());
+        addTestCase("accept replenish contention", \acceptReplenishContentionTest());
         set_return_value(main());
     }
 
@@ -323,5 +326,141 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         client.close();
         server2.close();
+    }
+
+    #! Tests concurrent addListener/removeListener — exercises lock contention on m
+    concurrentListenerTest() {
+        HttpAsyncSocketIoController ctrl();
+        ctrl.start();
+        on_exit delete ctrl;
+
+        TestTarget target();
+        int num_listeners = 4;
+        list<Socket> sockets;
+
+        # Create listener sockets
+        for (int i = 0; i < num_listeners; ++i) {
+            Socket s();
+            s.bind("127.0.0.1:0");
+            s.listen();
+            push sockets, s;
+        }
+
+        # Add all listeners concurrently from background threads
+        Counter add_cnt(num_listeners);
+        for (int i = 0; i < num_listeners; ++i) {
+            int idx = i;
+            background sub () {
+                on_exit add_cnt.dec();
+                ctrl.addListener(sockets[idx], target);
+            }();
+        }
+        add_cnt.waitForZero(10s);
+
+        hash<auto> stats = ctrl.getStats();
+        assertEq(num_listeners, stats.listeners, "all listeners should be registered");
+
+        # Remove all listeners concurrently
+        Counter rm_cnt(num_listeners);
+        for (int i = 0; i < num_listeners; ++i) {
+            int idx = i;
+            background sub () {
+                on_exit rm_cnt.dec();
+                ctrl.removeListener(sockets[idx]);
+            }();
+        }
+        rm_cnt.waitForZero(10s);
+
+        stats = ctrl.getStats();
+        assertEq(0, stats.listeners, "all listeners should be removed");
+
+        foreach Socket s in (sockets) {
+            s.close();
+        }
+        assertTrue(True, "concurrent add/remove completed without deadlock");
+    }
+
+    #! Tests stop() while accept operations are in flight — the deadlock scenario we fixed
+    stopDuringAcceptsTest() {
+        # Run several iterations to increase the chance of hitting the race window
+        for (int iter = 0; iter < 5; ++iter) {
+            HttpAsyncSocketIoController ctrl();
+            ctrl.start();
+
+            TestTarget target();
+
+            Socket server();
+            server.bind("127.0.0.1:0");
+            server.listen();
+            int listen_port = server.getSocketInfo().port;
+
+            ctrl.addListener(server, target);
+
+            # Connect a client so at least one accept completes, triggering replenish
+            Socket client();
+            try {
+                client.connect("127.0.0.1:" + listen_port, 1s);
+            } catch () {
+                # connection may fail — that's fine
+            }
+
+            # Small delay to let accept callbacks fire and replenish
+            usleep(50ms);
+
+            # Stop while accepts are being replenished — this is the deadlock scenario
+            ctrl.stop();
+
+            client.close();
+            server.close();
+            delete ctrl;
+        }
+        assertTrue(True, "stop during active accepts completed without deadlock");
+    }
+
+    #! Tests accept replenish under heavy client connection load
+    acceptReplenishContentionTest() {
+        HttpAsyncSocketIoController ctrl();
+        ctrl.start();
+        on_exit delete ctrl;
+
+        TestTarget target();
+
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int listen_port = server.getSocketInfo().port;
+        on_exit server.close();
+
+        ctrl.addListener(server, target);
+
+        # Rapidly connect multiple clients — each triggers accept completion + replenish
+        int num_clients = 10;
+        Counter client_cnt(num_clients);
+        for (int i = 0; i < num_clients; ++i) {
+            background sub () {
+                on_exit client_cnt.dec();
+                try {
+                    Socket c();
+                    c.connect("127.0.0.1:" + listen_port, 2s);
+                    # Send a minimal HTTP request so the header read completes
+                    c.send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n");
+                    usleep(50ms);
+                    c.close();
+                } catch () {
+                    # ignore connection errors
+                }
+            }();
+        }
+
+        client_cnt.waitForZero(15s);
+
+        # Give time for callbacks to settle
+        usleep(200ms);
+
+        # The key assertion: no deadlock occurred and controller is still healthy
+        assertTrue(ctrl.running(), "controller should still be running after accept replenish storm");
+
+        ctrl.removeListener(server);
+        assertTrue(True, "accept replenish contention test completed without deadlock");
     }
 }
