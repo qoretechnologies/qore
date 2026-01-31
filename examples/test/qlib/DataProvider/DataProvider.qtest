@@ -151,6 +151,131 @@ class RecordProcessorSink inherits AbstractDataProcessor {
     }
 }
 
+class TestMetricsCollector inherits AbstractPipelineMetricsCollector {
+    public {
+        list<hash<PipelineMetricsSnapshot>> collected_metrics;
+        Mutex m();
+        int interval_ms;
+        int record_interval;
+        *hash<auto> user_context;
+        bool shutdown_called = False;
+    }
+
+    constructor(int interval_ms = 10, int record_interval = 5, *hash<auto> user_context) {
+        self.interval_ms = interval_ms;
+        self.record_interval = record_interval;
+        self.user_context = user_context;
+    }
+
+    int getIntervalMs() {
+        return interval_ms;
+    }
+
+    int getRecordInterval() {
+        return record_interval;
+    }
+
+    reportMetrics(hash<PipelineMetricsSnapshot> snapshot) {
+        if (user_context) {
+            snapshot.user_context = user_context;
+        }
+        m.lock();
+        on_exit m.unlock();
+        collected_metrics += snapshot;
+    }
+
+    shutdown() {
+        shutdown_called = True;
+    }
+}
+
+#! Metrics collector that throws from reportMetrics()
+class ThrowingMetricsCollector inherits AbstractPipelineMetricsCollector {
+    public {
+        int interval_ms;
+        int record_interval;
+        bool shutdown_called = False;
+        int report_count = 0;
+    }
+
+    constructor(int interval_ms = 10, int record_interval = 5) {
+        self.interval_ms = interval_ms;
+        self.record_interval = record_interval;
+    }
+
+    int getIntervalMs() {
+        return interval_ms;
+    }
+
+    int getRecordInterval() {
+        return record_interval;
+    }
+
+    reportMetrics(hash<PipelineMetricsSnapshot> snapshot) {
+        ++report_count;
+        throw "METRICS-ERROR", "test error from reportMetrics";
+    }
+
+    shutdown() {
+        shutdown_called = True;
+    }
+}
+
+#! Metrics collector that throws from shutdown()
+class ThrowingShutdownCollector inherits AbstractPipelineMetricsCollector {
+    public {
+        list<hash<PipelineMetricsSnapshot>> collected_metrics;
+        Mutex m();
+        bool shutdown_called = False;
+    }
+
+    int getIntervalMs() {
+        return 1000;
+    }
+
+    int getRecordInterval() {
+        return 1000;
+    }
+
+    reportMetrics(hash<PipelineMetricsSnapshot> snapshot) {
+        m.lock();
+        on_exit m.unlock();
+        collected_metrics += snapshot;
+    }
+
+    shutdown() {
+        shutdown_called = True;
+        throw "SHUTDOWN-ERROR", "test error from shutdown";
+    }
+}
+
+#! Metrics collector that throws from getIntervalMs()/getRecordInterval()
+class ThrowingThresholdCollector inherits AbstractPipelineMetricsCollector {
+    public {
+        list<hash<PipelineMetricsSnapshot>> collected_metrics;
+        Mutex m();
+        bool shutdown_called = False;
+    }
+
+    int getIntervalMs() {
+        throw "THRESHOLD-ERROR", "test error from getIntervalMs";
+    }
+
+    int getRecordInterval() {
+        throw "THRESHOLD-ERROR", "test error from getRecordInterval";
+    }
+
+    reportMetrics(hash<PipelineMetricsSnapshot> snapshot) {
+        m.lock();
+        on_exit m.unlock();
+        collected_metrics += snapshot;
+    }
+
+    shutdown() {
+        shutdown_called = True;
+    }
+}
+
 class DummyRecordProcessor inherits AbstractDataProcessor {
     private submitImpl(code enqueue, auto rec) {
         enqueue({"x": 1});
@@ -1906,22 +2031,13 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq(123, ms.user_context.test_key);
         }
 
-        # Test pipeline metrics collection via callback
+        # Test pipeline metrics collection via collector
         {
-            list<hash<PipelineMetricsSnapshot>> collected_metrics;
-            Mutex m();
-
-            code metrics_callback = sub (hash<PipelineMetricsSnapshot> metrics) {
-                m.lock();
-                on_exit m.unlock();
-                collected_metrics += metrics;
-            };
+            TestMetricsCollector collector(10, 5);
 
             hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
                 "name": "metrics-test-pipeline",
-                "metrics_callback": metrics_callback,
-                "metrics_interval_ms": 10,
-                "metrics_record_interval": 5,
+                "metrics_collector": collector,
             };
 
             DataProviderPipeline pipe(opts);
@@ -1934,21 +2050,22 @@ public class DataProviderTest inherits QUnit::Test {
             }
             pipe.waitDone();
 
-            assertTrue(collected_metrics.size() > 0, "should have received metrics callbacks");
+            assertTrue(collector.collected_metrics.size() > 0, "should have received metrics reports");
 
             # Verify metrics content
-            hash<PipelineMetricsSnapshot> last_metrics = collected_metrics[collected_metrics.size() - 1];
+            hash<PipelineMetricsSnapshot> last_metrics = collector.collected_metrics[collector.collected_metrics.size() - 1];
             assertEq("metrics-test-pipeline", last_metrics.pipeline_name);
             assertTrue(last_metrics.total_records_submitted > 0);
+            assertTrue(collector.shutdown_called, "shutdown should have been called");
         }
 
         # Test getMetrics() method
         {
+            TestMetricsCollector collector(1000, 1000);
+
             hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
                 "name": "getmetrics-test-pipeline",
-                "metrics_callback": sub (hash<PipelineMetricsSnapshot> m) {},
-                "metrics_interval_ms": 1000,
-                "metrics_record_interval": 1000,
+                "metrics_collector": collector,
             };
 
             DataProviderPipeline pipe(opts);
@@ -1970,26 +2087,16 @@ public class DataProviderTest inherits QUnit::Test {
 
         # Test metrics with user context
         {
-            list<hash<PipelineMetricsSnapshot>> collected_metrics;
-            Mutex m();
-
             hash<auto> user_ctx = {
                 "fsm_id": 123,
                 "exec_id": 456,
             };
 
-            code metrics_callback = sub (hash<PipelineMetricsSnapshot> metrics) {
-                m.lock();
-                on_exit m.unlock();
-                collected_metrics += metrics;
-            };
+            TestMetricsCollector collector(10, 1, user_ctx);
 
             hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
                 "name": "context-test-pipeline",
-                "metrics_callback": metrics_callback,
-                "metrics_interval_ms": 10,
-                "metrics_record_interval": 1,
-                "metrics_context": user_ctx,
+                "metrics_collector": collector,
             };
 
             DataProviderPipeline pipe(opts);
@@ -1999,28 +2106,19 @@ public class DataProviderTest inherits QUnit::Test {
             pipe.submit({"record": 1});
             pipe.waitDone();
 
-            assertTrue(collected_metrics.size() > 0);
-            hash<PipelineMetricsSnapshot> metrics = collected_metrics[0];
+            assertTrue(collector.collected_metrics.size() > 0);
+            hash<PipelineMetricsSnapshot> metrics = collector.collected_metrics[0];
             assertEq(123, metrics.user_context.fsm_id);
             assertEq(456, metrics.user_context.exec_id);
         }
 
         # Test element metrics collection
         {
-            list<hash<PipelineMetricsSnapshot>> collected_metrics;
-            Mutex m();
-
-            code metrics_callback = sub (hash<PipelineMetricsSnapshot> metrics) {
-                m.lock();
-                on_exit m.unlock();
-                collected_metrics += metrics;
-            };
+            TestMetricsCollector collector(10, 5);
 
             hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
                 "name": "element-metrics-pipeline",
-                "metrics_callback": metrics_callback,
-                "metrics_interval_ms": 10,
-                "metrics_record_interval": 5,
+                "metrics_collector": collector,
             };
 
             DataProviderPipeline pipe(opts);
@@ -2034,8 +2132,8 @@ public class DataProviderTest inherits QUnit::Test {
             }
             pipe.waitDone();
 
-            assertTrue(collected_metrics.size() > 0);
-            hash<PipelineMetricsSnapshot> last_metrics = collected_metrics[collected_metrics.size() - 1];
+            assertTrue(collector.collected_metrics.size() > 0);
+            hash<PipelineMetricsSnapshot> last_metrics = collector.collected_metrics[collector.collected_metrics.size() - 1];
 
             # Should have element metrics for both processors
             assertTrue(last_metrics.element_metrics.hasKey("0:0"), "should have element 0:0");
@@ -2046,11 +2144,11 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq("processor", last_metrics.element_metrics."0:1".element_type);
         }
 
-        # Test pipeline without metrics callback (getMetrics returns NOTHING)
+        # Test pipeline without metrics collector (getMetrics returns NOTHING)
         {
             hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
                 "name": "no-metrics-pipeline",
-                # No metrics_callback set
+                # No metrics_collector set
             };
 
             DataProviderPipeline pipe(opts);
@@ -2066,11 +2164,11 @@ public class DataProviderTest inherits QUnit::Test {
 
         # Test empty pipeline metrics
         {
+            TestMetricsCollector collector(100, 10);
+
             hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
                 "name": "empty-pipeline",
-                "metrics_callback": sub (hash<PipelineMetricsSnapshot> m) {},
-                "metrics_interval_ms": 100,
-                "metrics_record_interval": 10,
+                "metrics_collector": collector,
             };
 
             DataProviderPipeline pipe(opts);
@@ -2085,6 +2183,196 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq(0, metrics.total_records_submitted);
             assertEq(0, metrics.total_records_completed);
             assertEq(0, metrics.records_in_flight);
+        }
+
+        # Test that reportMetrics() exceptions don't crash the pipeline
+        {
+            ThrowingMetricsCollector collector(10, 1);
+
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "throwing-report-pipeline",
+                "metrics_collector": collector,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            # Submit records - reportMetrics will throw each time, but pipeline should continue
+            for (int i = 0; i < 10; ++i) {
+                pipe.submit({"record": i});
+            }
+            pipe.waitDone();
+
+            # Pipeline should complete successfully despite collector errors
+            hash<PipelineInfo> info = pipe.getInfo();
+            assertEq(10, info.record_count);
+            assertTrue(collector.shutdown_called, "shutdown should still be called after report errors");
+        }
+
+        # Test that shutdown() exceptions don't crash the pipeline
+        {
+            ThrowingShutdownCollector collector();
+
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "throwing-shutdown-pipeline",
+                "metrics_collector": collector,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            pipe.submit({"record": 1});
+            # waitDone calls shutdown which throws - should not propagate
+            pipe.waitDone();
+
+            assertTrue(collector.shutdown_called, "shutdown should have been called");
+            # Destructor will see isShutDown() == True and skip the second call
+        }
+
+        # Test that getIntervalMs()/getRecordInterval() exceptions don't deadlock or crash
+        {
+            ThrowingThresholdCollector collector();
+
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "throwing-threshold-pipeline",
+                "metrics_collector": collector,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            for (int i = 0; i < 10; ++i) {
+                pipe.submit({"record": i});
+            }
+            # Should not deadlock despite threshold read errors
+            pipe.waitDone();
+
+            hash<PipelineInfo> info = pipe.getInfo();
+            assertEq(10, info.record_count);
+            # No periodic reportMetrics calls since thresholds couldn't be read;
+            # only the forced final report from waitDone
+            assertEq(1, collector.collected_metrics.size(),
+                "only the forced final report should exist when threshold reads fail");
+            assertTrue(collector.shutdown_called, "shutdown should still be called");
+        }
+
+        # Test idempotent shutdown (waitDone + destructor path)
+        {
+            TestMetricsCollector collector(1000, 1000);
+
+            {
+                hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                    "name": "idempotent-shutdown-pipeline",
+                    "metrics_collector": collector,
+                };
+
+                DataProviderPipeline pipe(opts);
+                RecordProcessorSink proc();
+                pipe.append(proc);
+
+                pipe.submit({"record": 1});
+                pipe.waitDone();
+                assertTrue(collector.shutdown_called, "shutdown called by waitDone");
+
+                # pipe goes out of scope here - destructor should not call forceCallback/shutdown again
+            }
+
+            # shutdown was called exactly once (the idempotency guard prevents double call)
+            assertTrue(collector.shutdown_called);
+        }
+
+        # Test abort() calls shutdown
+        {
+            TestMetricsCollector collector(1000, 1000);
+
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "abort-shutdown-pipeline",
+                "metrics_collector": collector,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            pipe.submit({"record": 1});
+            pipe.abort(True);
+
+            assertTrue(collector.shutdown_called, "shutdown should be called on abort");
+        }
+
+        # Test time-based reporting only (record_interval = 0)
+        {
+            TestMetricsCollector collector(10, 0);
+
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "time-only-metrics-pipeline",
+                "metrics_collector": collector,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            for (int i = 0; i < 20; ++i) {
+                pipe.submit({"record": i});
+            }
+            pipe.waitDone();
+
+            # Final forced callback should always produce at least one report
+            assertTrue(collector.collected_metrics.size() > 0,
+                "should have received at least one metrics report");
+            assertTrue(collector.shutdown_called);
+        }
+
+        # Test record-based reporting only (interval_ms = 0)
+        {
+            TestMetricsCollector collector(0, 5);
+
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "record-only-metrics-pipeline",
+                "metrics_collector": collector,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            for (int i = 0; i < 20; ++i) {
+                pipe.submit({"record": i});
+            }
+            pipe.waitDone();
+
+            assertTrue(collector.collected_metrics.size() > 0,
+                "should have received metrics reports based on record count");
+            assertTrue(collector.shutdown_called);
+        }
+
+        # Test both thresholds disabled (interval_ms = 0, record_interval = 0)
+        {
+            TestMetricsCollector collector(0, 0);
+
+            hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+                "name": "no-auto-report-pipeline",
+                "metrics_collector": collector,
+            };
+
+            DataProviderPipeline pipe(opts);
+            RecordProcessorSink proc();
+            pipe.append(proc);
+
+            for (int i = 0; i < 20; ++i) {
+                pipe.submit({"record": i});
+            }
+            pipe.waitDone();
+
+            # Only the forced final callback from waitDone should produce a report
+            assertEq(1, collector.collected_metrics.size(),
+                "only the forced final report should exist when both thresholds are 0");
+            assertEq(20, collector.collected_metrics[0].total_records_submitted);
+            assertTrue(collector.shutdown_called);
         }
     }
 
