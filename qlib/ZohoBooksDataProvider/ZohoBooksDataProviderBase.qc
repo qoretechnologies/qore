@@ -416,7 +416,12 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
             if (response.contacts) {
                 foreach hash<auto> contact in (response.contacts) {
                     string display_name = contact.contact_name ?? sprintf("Contact %s", contact.contact_id);
-                    string type_label = contact.contact_type == "customer" ? "Customer" : "Vendor";
+                    string type_label;
+                    switch (contact.contact_type) {
+                        case "customer": type_label = "Customer"; break;
+                        case "vendor": type_label = "Vendor"; break;
+                        default: type_label = "Contact"; break;
+                    }
                     rv += <AllowedValueInfo>{
                         "display_name": display_name,
                         "short_desc": type_label,

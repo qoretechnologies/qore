@@ -274,9 +274,9 @@ ZohoBooksRestClient zoho({
     */
     hash<auto> doRequest(string method, string path, auto body,
             *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
-        # Append organization_id to all requests except /organizations
+        # Append organization_id to all requests except /organizations (with or without leading slash)
         # Also skip if organization_id is already in the path (to avoid duplicates)
-        if (organization_id && path !~ /^\/organizations($|\?)/ && path !~ /organization_id=/) {
+        if (organization_id && path !~ /^\/?organizations($|\?)/ && path !~ /organization_id=/) {
             if (path !~ /\?/) {
                 path += "?organization_id=" + organization_id;
             } else {
