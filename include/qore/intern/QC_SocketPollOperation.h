@@ -358,9 +358,10 @@ public:
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) {
         // NOTE: we do not close the socket here in any case
-        if (set_non_block) {
-            set_non_block = false;
-            sock->clearNonBlock();
+        if (set_non_block_accept) {
+            set_non_block_accept = false;
+            AutoLocker al(sock->priv->m);
+            sock->priv->clearNonBlockAccept();
             state = SPS_NONE;
         }
     }
@@ -368,7 +369,7 @@ public:
 protected:
     QoreSocketObject* sock = nullptr;
     int state = SPS_NONE;
-    bool set_non_block = false;
+    bool set_non_block_accept = false;
 
     DLLLOCAL virtual bool abortNeedsClose() const {
         return true;
@@ -381,8 +382,9 @@ public:
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
-            if (set_non_block) {
-                sock->clearNonBlock();
+            if (set_non_block_accept) {
+                AutoLocker al(sock->priv->m);
+                sock->priv->clearNonBlockAccept();
             }
             sock->deref(xsink);
             delete this;
