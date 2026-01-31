@@ -114,8 +114,9 @@ public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
         on_exit lck.unlock();
         stop = True;
         cond.broadcast();
-        if (io_tid) {
-            cond.wait(lck, 30s);
+        # Wait in a loop until the polling thread exits
+        while (io_tid) {
+            cond.wait(lck, 5s);
         }
     }
 
@@ -136,13 +137,25 @@ public class ZohoBooksWatchDataProviderBase inherits ZohoBooksDataProviderBase,
         # Initialize tracking state
         last_check = start_date ?? now_us();
 
-        while (!stop) {
+        while (True) {
+            # Check stop flag under lock
+            {
+                lck.lock();
+                on_exit lck.unlock();
+                if (stop) {
+                    break;
+                }
+            }
+
             pollOnce();
 
-            # Wait for next poll interval
-            lck.lock();
-            on_exit lck.unlock();
-            if (!stop) {
+            # Wait for next poll interval under lock
+            {
+                lck.lock();
+                on_exit lck.unlock();
+                if (stop) {
+                    break;
+                }
                 cond.wait(lck, poll_secs * 1000ms);
             }
         }

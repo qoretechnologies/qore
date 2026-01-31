@@ -354,21 +354,24 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
         @return a list of allowed values for this data
     */
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        # Extract organization_id from action_opts if provided
+        *string org_id = action_opts.organization_id;
+
         switch (type) {
             case "organizations": return getReferenceOrganizations();
-            case "contacts": return getReferenceContacts();
-            case "customers": return getReferenceContacts("customer");
-            case "vendors": return getReferenceContacts("vendor");
-            case "items": return getReferenceItems();
-            case "currencies": return getReferenceCurrencies();
-            case "taxes": return getReferenceTaxes();
-            case "invoices": return getReferenceInvoices();
-            case "bills": return getReferenceBills();
-            case "payments": return getReferencePayments();
-            case "estimates": return getReferenceEstimates();
-            case "salesorders": return getReferenceSalesOrders();
-            case "purchaseorders": return getReferencePurchaseOrders();
-            case "expenses": return getReferenceExpenses();
+            case "contacts": return getReferenceContacts(NOTHING, org_id);
+            case "customers": return getReferenceContacts("customer", org_id);
+            case "vendors": return getReferenceContacts("vendor", org_id);
+            case "items": return getReferenceItems(org_id);
+            case "currencies": return getReferenceCurrencies(org_id);
+            case "taxes": return getReferenceTaxes(org_id);
+            case "invoices": return getReferenceInvoices(org_id);
+            case "bills": return getReferenceBills(org_id);
+            case "payments": return getReferencePayments(org_id);
+            case "estimates": return getReferenceEstimates(org_id);
+            case "salesorders": return getReferenceSalesOrders(org_id);
+            case "purchaseorders": return getReferencePurchaseOrders(org_id);
+            case "expenses": return getReferenceExpenses(org_id);
         }
     }
 
@@ -397,11 +400,15 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
 
     #! Returns available contacts for reference data
     /** @param contact_type optional contact type filter ("customer" or "vendor")
+        @param org_id optional organization ID from action options
     */
-    private *list<hash<AllowedValueInfo>> getReferenceContacts(*string contact_type) {
+    private *list<hash<AllowedValueInfo>> getReferenceContacts(*string contact_type, *string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
             hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
             if (contact_type) {
                 params.contact_type = contact_type;
             }
@@ -425,10 +432,16 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns available items for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceItems() {
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceItems(*string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/items");
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/items", params);
             if (response.items) {
                 foreach hash<auto> item in (response.items) {
                     string display_name = item.name ?? sprintf("Item %s", item.item_id);
@@ -447,10 +460,16 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns available currencies for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceCurrencies() {
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceCurrencies(*string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/settings/currencies");
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/settings/currencies", params);
             if (response.currencies) {
                 foreach hash<auto> currency in (response.currencies) {
                     string display_name = sprintf("%s (%s)", currency.currency_name, currency.currency_code);
@@ -469,10 +488,16 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns available taxes for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceTaxes() {
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceTaxes(*string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/settings/taxes");
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/settings/taxes", params);
             if (response.taxes) {
                 foreach hash<auto> tax in (response.taxes) {
                     string display_name = sprintf("%s (%s%%)", tax.tax_name, tax.tax_percentage);
@@ -491,10 +516,16 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns available invoices for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceInvoices() {
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceInvoices(*string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/invoices");
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/invoices", params);
             if (response.invoices) {
                 foreach hash<auto> invoice in (response.invoices) {
                     string display_name = invoice.invoice_number ?? sprintf("Invoice %s", invoice.invoice_id);
@@ -514,10 +545,16 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns available bills for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceBills() {
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceBills(*string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/bills");
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/bills", params);
             if (response.bills) {
                 foreach hash<auto> bill in (response.bills) {
                     string display_name = bill.bill_number ?? sprintf("Bill %s", bill.bill_id);
@@ -537,10 +574,16 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns available payments for reference data
-    private *list<hash<AllowedValueInfo>> getReferencePayments() {
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferencePayments(*string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/customerpayments");
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/customerpayments", params);
             if (response.customerpayments) {
                 foreach hash<auto> payment in (response.customerpayments) {
                     string display_name = payment.payment_number ?? sprintf("Payment %s", payment.payment_id);
@@ -560,10 +603,16 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns available estimates for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceEstimates() {
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceEstimates(*string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/estimates");
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/estimates", params);
             if (response.estimates) {
                 foreach hash<auto> estimate in (response.estimates) {
                     string display_name = estimate.estimate_number ?? sprintf("Estimate %s", estimate.estimate_id);
@@ -583,10 +632,16 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns available sales orders for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceSalesOrders() {
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceSalesOrders(*string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/salesorders");
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/salesorders", params);
             if (response.salesorders) {
                 foreach hash<auto> order in (response.salesorders) {
                     string display_name = order.salesorder_number ?? sprintf("Sales Order %s", order.salesorder_id);
@@ -606,10 +661,16 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns available purchase orders for reference data
-    private *list<hash<AllowedValueInfo>> getReferencePurchaseOrders() {
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferencePurchaseOrders(*string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/purchaseorders");
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/purchaseorders", params);
             if (response.purchaseorders) {
                 foreach hash<auto> order in (response.purchaseorders) {
                     string display_name = order.purchaseorder_number ?? sprintf("Purchase Order %s", order.purchaseorder_id);
@@ -629,10 +690,16 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns available expenses for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceExpenses() {
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceExpenses(*string org_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/expenses");
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/expenses", params);
             if (response.expenses) {
                 foreach hash<auto> expense in (response.expenses) {
                     string display_name = expense.description ?? sprintf("Expense %s", expense.expense_id);
