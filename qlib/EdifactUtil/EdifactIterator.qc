@@ -140,7 +140,6 @@ while (i.next()) {
         */
         constructor(string path, *hash<auto> opts) : EdifactAbstractIterator(opts) {
             @assert(path.val(), "file path cannot be empty");
-            @debug(printf("EdifactFileIterator::constructor(): reading from %y\n", path));
             m_path = path;
 
             # Use FileLocationHandler if available for location:// URLs

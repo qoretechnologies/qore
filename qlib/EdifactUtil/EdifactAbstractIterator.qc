@@ -115,7 +115,6 @@ while (i.next()) {
             m_segments = splitIntoSegments(data);
             m_index = -1;
             m_current = NOTHING;
-            @debug(printf("EdifactAbstractIterator::initializeFromData(): parsed %d segments\n", m_segments.size()));
         }
 
         #! Returns True if the iterator is currently valid
@@ -154,7 +153,6 @@ while (i.next()) {
                 # Parse the segment
                 m_current = parseSegment(segment_str);
                 m_segment_count++;
-                @debug(printf("EdifactAbstractIterator::next(): parsed segment %s at index %d\n", m_current.tag, m_index));
 
                 # Track interchange and message headers
                 switch (m_current.tag) {
