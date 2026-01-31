@@ -4796,16 +4796,16 @@ SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreS
     if (preVerify(xsink)) {
         return;
     }
-    if (!sock->priv->setNonBlock(xsink)) {
-        set_non_block = true;
+    if (!sock->priv->setNonBlockAccept(xsink)) {
+        set_non_block_accept = true;
         poll_state.reset(sock->priv->socket->startAccept(xsink));
         if (!*xsink) {
             assert(poll_state);
             state = SPS_ACCEPTING;
         }
         if (*xsink) {
-            sock->priv->clearNonBlock();
-            set_non_block = false;
+            sock->priv->clearNonBlockAccept();
+            set_non_block_accept = false;
         }
     }
 }
@@ -4879,7 +4879,8 @@ QoreHashNode* SocketAcceptPollOperation::continuePoll(ExceptionSink* xsink) {
         } else {
             accepted();
         }
-        sock->priv->clearNonBlock();
+        sock->priv->clearNonBlockAccept();
+        set_non_block_accept = false;
     } else {
         assert(!*xsink);
     }

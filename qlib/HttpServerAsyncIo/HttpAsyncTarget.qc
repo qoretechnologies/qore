@@ -44,8 +44,12 @@ public class HttpAsyncTarget {
     /** This is the main callback for handling HTTP requests. The implementation
         should:
         1. Find the appropriate handler based on URL/content-type
-        2. Process the request (inline or via ThreadPool)
+        2. Process the request
         3. Return instructions for connection handling
+
+        @note This method is called from a worker thread in the handler thread pool,
+        not from the I/O thread. Implementations must be thread-safe, as multiple
+        requests may be processed concurrently across different worker threads.
 
         @param info Connection and request information (see @ref HttpConnectionInfo)
         @return Instructions for connection handling (see @ref HttpRequestResultInfo):
@@ -118,6 +122,24 @@ public class HttpAsyncTarget {
         @param cx Connection context
     */
     abstract onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx);
+
+    #! Returns True if this handler can process requests inline in the I/O thread
+    /** When True, onHttpRequest() is called directly in the I/O callback instead of
+        dispatching to the handler thread pool. This eliminates the overhead of queue
+        push + thread wakeup + context switch for trivial handlers.
+
+        @warning Only return True for handlers that are very fast and non-blocking.
+        Long-running handlers will block the I/O thread and stall all other connections
+        on that I/O thread.
+
+        @param info connection and request information
+        @return True to handle inline, False (default) to dispatch to thread pool
+
+        @since HttpServerAsyncIo 1.1
+    */
+    bool canHandleInline(hash<HttpConnectionInfo> info) {
+        return False;
+    }
 }
 
 } # namespace HttpServerAsyncIo
