@@ -142,6 +142,21 @@ public class HttpAsyncTarget {
     *hash<HttpRequestResultInfo> tryInlineRequest(hash<HttpConnectionInfo> info) {
         return NOTHING;
     }
+
+    #! Called during controller shutdown to signal streaming handlers to stop
+    /** This is called by @ref HttpAsyncSocketIoController::stop() before waiting for the
+        handler thread pool to complete.  Implementations should signal all active streaming
+        connections (SSE, WebSocket) to exit their polling loops so that the handler pool
+        can shut down deterministically.
+
+        The default implementation does nothing.  Subclasses should override this to signal
+        their streaming handlers using the appropriate mechanism (e.g. calling
+        @ref AbstractHttpSocketHandlerInterface::stop() on each active handler).
+
+        @since HttpServerAsyncIo 1.0
+    */
+    stopStreaming() {
+    }
 }
 
 } # namespace HttpServerAsyncIo

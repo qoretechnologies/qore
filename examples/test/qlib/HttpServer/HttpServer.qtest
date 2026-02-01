@@ -323,6 +323,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode inline Connection: close", \asyncModeInlineConnectionCloseTest());
         addTestCase("async mode inline HTTP/1.0 close", \asyncModeInlineHttp10CloseTest());
         addTestCase("async mode HTTP/2 keep-alive", \asyncModeHttp2KeepAliveTest());
+        addTestCase("async mode WebSocket streaming shutdown", \asyncModeWebSocketShutdownTest());
+        addTestCase("async mode multiple WebSocket shutdown", \asyncModeMultipleWebSocketShutdownTest());
+        addTestCase("async mode mixed streaming shutdown", \asyncModeMixedStreamingShutdownTest());
 
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
@@ -2244,6 +2247,145 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         on_exit client.disconnect();
         hash<auto> resp = client.send(NOTHING, "GET", "/inline");
         assertEq(200, resp.status_code, "server still operational after HTTP/1.0");
+    }
+
+    #! Verifies that stop() completes deterministically with an active WebSocket connection.
+    #! Before the stopStreaming() fix, the handler pool's stopWait() would block indefinitely
+    #! because the WebSocket handler task's polling loop was never signaled to stop.
+    asyncModeWebSocketShutdownTest() {
+        Logger logger("async-ws-shutdown-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+        TestWsHandler ws_handler();
+        server.setHandler("ws-handler", "", NOTHING, ws_handler);
+        server.setDefaultHandler("ws-handler", ws_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Establish a WebSocket connection
+        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://localhost:" + test_port});
+        on_exit { try { ws_client.disconnect(); } catch () {} }
+        ws_client.connect();
+
+        # Brief delay to ensure the handler's startImpl loop is running
+        usleep(250ms);
+
+        # Stop the server in a background thread with a timeout guard;
+        # before the fix this would hang indefinitely
+        Queue stopped();
+        background sub () {
+            server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(10s) != NOTHING, "server.stop() should complete deterministically");
+    }
+
+    #! Verifies deterministic shutdown with multiple concurrent WebSocket connections.
+    asyncModeMultipleWebSocketShutdownTest() {
+        Logger logger("async-multi-ws-shutdown-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+        TestWsHandler ws_handler();
+        server.setHandler("ws-handler", "", NOTHING, ws_handler);
+        server.setDefaultHandler("ws-handler", ws_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Establish multiple WebSocket connections
+        int num_clients = 5;
+        list<WebSocketClient> clients;
+        on_exit {
+            foreach WebSocketClient ws in (clients) {
+                try { ws.disconnect(); } catch () {}
+            }
+        }
+        for (int i = 0; i < num_clients; ++i) {
+            WebSocketClient ws(sub (*data msg) {}, {"url": "ws://localhost:" + test_port});
+            ws.connect();
+            clients += ws;
+        }
+        assertEq(num_clients, clients.size(), "all clients should be connected");
+
+        # Brief delay to ensure all handler loops are running
+        usleep(250ms);
+
+        # Stop the server — all WebSocket handlers must exit deterministically
+        Queue stopped();
+        background sub () {
+            server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(10s) != NOTHING,
+            "server.stop() should complete with multiple WebSocket connections");
+    }
+
+    #! Verifies deterministic shutdown with a mix of WebSocket and regular HTTP connections.
+    asyncModeMixedStreamingShutdownTest() {
+        Logger logger("async-mixed-shutdown-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+        TestWsHandler ws_handler();
+        server.setHandler("ws-handler", "/ws", NOTHING, ws_handler);
+        server.setHandler("http-handler", "/http", MimeTypeHtml, new ReqHandler());
+        server.setDefaultHandler("ws-handler", ws_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Start a WebSocket connection (streaming)
+        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://localhost:" + test_port});
+        on_exit { try { ws_client.disconnect(); } catch () {} }
+        ws_client.connect();
+
+        # Make regular HTTP requests concurrently to ensure mixed workload
+        Counter http_done(3);
+        for (int i = 0; i < 3; ++i) {
+            background sub () {
+                on_exit http_done.dec();
+                try {
+                    HTTPClient hclient({"url": "http://localhost:" + test_port, "timeout": 5s});
+                    hclient.connect();
+                    hclient.get("/http/test");
+                    hclient.disconnect();
+                } catch () {}
+            }();
+        }
+        http_done.waitForZero(5s);
+
+        # Brief delay to ensure the WebSocket handler loop is running
+        usleep(250ms);
+
+        # Stop the server — both streaming and regular connections must clean up
+        Queue stopped();
+        background sub () {
+            server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(10s) != NOTHING,
+            "server.stop() should complete with mixed streaming and HTTP connections");
     }
 }
 

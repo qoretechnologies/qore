@@ -246,11 +246,16 @@ public class HttpAsyncSocketIoController {
         # to avoid deadlock with I/O thread callbacks that also acquire m
         *list<string> listener_keys;
         *list<hash<auto>> conn_cancel_info;
+        *list<HttpAsyncTarget> streaming_targets;
         {
             AutoLock al(m);
             stopping = True;
             has_been_stopped = True;
             listener_keys = keys listeners;
+            # Collect targets before clearing so we can signal streaming handlers to stop
+            if (listeners) {
+                streaming_targets = map $1.target, listeners.iterator();
+            }
             if (connections) {
                 conn_cancel_info = map (
                     {"sock": connections{$1}.sock} + {"controller_idx": connections{$1}.controller_idx}
@@ -271,6 +276,10 @@ public class HttpAsyncSocketIoController {
                 # ignore - operation may have already completed
             }
         }
+        # Signal streaming handlers (SSE, WebSocket) to stop their polling loops
+        # before waiting for the handler pool; this sets handler-level stop flags
+        # (lsh{lid}) so handler tasks exit within one poll interval
+        map $1.stopStreaming(), streaming_targets;
         # Wait for in-flight handler tasks to complete; the stopping flag prevents
         # them from submitting new operations to the controllers
         handler_pool.stopWait();

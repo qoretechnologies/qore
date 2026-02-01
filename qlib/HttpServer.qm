@@ -672,6 +672,25 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         return self.uniqueHash();
     }
 
+    #! Signals all active streaming handlers (SSE, WebSocket) to stop their polling loops
+    /** Called by the async I/O controller during shutdown before waiting for the handler pool
+        to complete.  This allows handler tasks to exit deterministically so that
+        @ref ThreadPool::stopWait() "stopWait()" does not block indefinitely.
+
+        @since HttpServer 1.6
+    */
+    signalStreamingHandlersToStop() {
+        # Copy listeners under lock, then iterate outside to avoid holding lm
+        # while calling handler.stop(), which could block or re-enter server state
+        *hash<string, HttpListener> llist;
+        {
+            lm.enter();
+            on_exit lm.exit();
+            llist = listeners;
+        }
+        map $1.signalHandlersToStop(), llist.iterator();
+    }
+
     #! Returns the handler for inline check from global handler lists (no side effects)
     /** Looks up the handler from the permanent global handler list only.
         Dynamic handlers are not returned since they require lifecycle tracking
@@ -3848,6 +3867,31 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         remove shh{id};
     }
 
+    #! Signals all active dedicated socket handlers to stop without closing the listener
+    /** Called during async I/O controller shutdown to ensure streaming handler tasks
+        (SSE, WebSocket) exit their polling loops before the handler pool is stopped.
+
+        Unlike @ref stop(), this does not shut down the listener socket or wait for
+        connection threads; it only sets the handler-level stop flags.
+
+        @since HttpServer 1.6
+    */
+    signalHandlersToStop() {
+        *hash<string, AbstractHttpSocketHandlerInterface> shh_copy;
+        {
+            m.lock();
+            on_exit m.unlock();
+            shh_copy = shh;
+        }
+        foreach AbstractHttpSocketHandlerInterface handler in (shh_copy.iterator()) {
+            try {
+                handler.stop(id);
+            } catch (hash<ExceptionInfo> ex) {
+                log("signalHandlersToStop: error stopping handler: %s: %s", ex.err, ex.desc);
+            }
+        }
+    }
+
     #! Returns the context template for new connections
     /** @param info peer info hash with "address", "address_desc", "port" keys
         @return context hash for new connection
@@ -4789,6 +4833,17 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         } catch () {
             # Ignore close errors
         }
+    }
+
+    #! Signals streaming handlers (SSE, WebSocket) to stop their polling loops
+    /** Called by @ref HttpServerAsyncIo::HttpAsyncSocketIoController::stop() before waiting
+        for the handler thread pool to complete.  Signals all active dedicated socket handlers
+        on all listeners so their polling loops (e.g. SSE queue polling) exit promptly.
+
+        @since HttpServer 1.6
+    */
+    stopStreaming() {
+        server.signalStreamingHandlersToStop();
     }
 
     #! Logs a message
