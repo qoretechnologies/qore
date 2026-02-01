@@ -317,6 +317,12 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode stop inflight", \asyncModeStopInFlightTest());
         addTestCase("async mode shutdown guard", \asyncModeShutdownGuardTest());
         addTestCase("async mode accept restart on exception", \asyncAcceptRestartOnExceptionTest());
+        addTestCase("async mode inline handler", \asyncModeInlineHandlerTest());
+        addTestCase("async mode inline handler with body", \asyncModeInlineBodyTest());
+        addTestCase("async mode idle timeout", \asyncModeIdleTimeoutTest());
+        addTestCase("async mode inline Connection: close", \asyncModeInlineConnectionCloseTest());
+        addTestCase("async mode inline HTTP/1.0 close", \asyncModeInlineHttp10CloseTest());
+        addTestCase("async mode HTTP/2 keep-alive", \asyncModeHttp2KeepAliveTest());
 
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
@@ -1834,6 +1840,411 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         server2.stop();
     }
 
+    asyncModeInlineHandlerTest() {
+        # Use a small, fixed handler thread pool so we can exhaust it
+        int pool_size = 2;
+        Logger logger("async-inline-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+            "max_handler_threads": pool_size,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        # Register an inline handler at /inline
+        InlineTestHandler inline_handler();
+        server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
+
+        # Register a regular (non-inline) handler at /regular
+        SimpleStringHandler regular_handler("regular-response");
+        server.setHandler("regular-handler", "/regular", MimeTypeText, regular_handler);
+
+        # Register a slow handler to exhaust the thread pool
+        Queue slow_started();
+        SlowHandler slow_handler(slow_started, 10s);
+        server.setHandler("slow-handler", "/slow", MimeTypeHtml, slow_handler);
+        server.setDefaultHandler("slow-handler", slow_handler);
+
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Test 1: Basic inline handler response
+        {
+            HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+            client.connect();
+            on_exit client.disconnect();
+            hash<auto> resp = client.send(NOTHING, "GET", "/inline");
+            assertEq(200, resp.status_code, "inline handler status code");
+            assertEq("inline-ok", resp.body, "inline handler body");
+            assertEq("inline-value", resp."x-inline-header", "inline handler custom header");
+        }
+
+        # Test 2: Inline handler works on keep-alive connections
+        {
+            HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+            client.connect();
+            on_exit client.disconnect();
+            # First request
+            hash<auto> resp1 = client.send(NOTHING, "GET", "/inline");
+            assertEq(200, resp1.status_code, "inline keep-alive first request");
+            assertEq("inline-ok", resp1.body, "inline keep-alive first body");
+            # Second request on same connection (keep-alive)
+            hash<auto> resp2 = client.send(NOTHING, "GET", "/inline");
+            assertEq(200, resp2.status_code, "inline keep-alive second request");
+            assertEq("inline-ok", resp2.body, "inline keep-alive second body");
+        }
+
+        # Test 3: Non-inline handler still works alongside inline handler
+        {
+            HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+            client.connect();
+            on_exit client.disconnect();
+            hash<auto> resp = client.send(NOTHING, "GET", "/regular");
+            assertEq(200, resp.status_code, "regular handler still works");
+            assertEq("regular-response", resp.body, "regular handler body");
+        }
+
+        # Test 4: Inline handler works when thread pool is exhausted
+        # This is the key proof that inline handlers bypass the pool.
+        # We exhaust the pool with slow requests, then verify the inline
+        # handler still responds.
+        {
+            # Exhaust the handler thread pool with slow requests
+            for (int i = 0; i < pool_size; i++) {
+                background sub () {
+                    try {
+                        HTTPClient client({
+                            "url": "http://localhost:" + test_port,
+                            "timeout": 15s,
+                        });
+                        client.connect();
+                        client.get("/slow");
+                        client.disconnect();
+                    } catch () {
+                        # Ignore errors on shutdown
+                    }
+                }();
+            }
+
+            # Wait for all slow handlers to start (proves pool is fully occupied)
+            for (int i = 0; i < pool_size; i++) {
+                auto val = slow_started.get(5s);
+                assertTrue(val != NOTHING, "slow handler " + string(i) + " started");
+            }
+
+            # Now the thread pool is fully occupied. Inline handler should still work
+            # because it runs on the I/O thread, not the pool.
+            HTTPClient inline_client({
+                "url": "http://localhost:" + test_port,
+                "timeout": 5s,
+            });
+            inline_client.connect();
+            on_exit inline_client.disconnect();
+            hash<auto> resp = inline_client.send(NOTHING, "GET", "/inline");
+            assertEq(200, resp.status_code, "inline handler works with exhausted pool");
+            assertEq("inline-ok", resp.body, "inline handler body with exhausted pool");
+        }
+    }
+
+    #! Verifies that requests with a body fall back to the thread pool even when
+    #! the handler supports inline processing, and that keep-alive stays in sync.
+    asyncModeInlineBodyTest() {
+        Logger logger("async-inline-body-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        InlineTestHandler inline_handler();
+        server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
+
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+
+        # Send a POST with a body to the inline handler.  The framework must
+        # fall back to the thread-pool path (processNativeRequest) which reads
+        # the body, so the next header parse on the same keep-alive connection
+        # is not corrupted.
+        hash<auto> resp1 = client.send("hello body", "POST", "/inline",
+            {"Content-Type": "text/plain"});
+        # POST with body goes through the normal (non-inline) handleRequest()
+        # which returns "non-inline-response"
+        assertEq(200, resp1.status_code, "POST with body status");
+        assertEq("non-inline-response", resp1.body, "POST with body falls back to full path");
+
+        # Second request on the same keep-alive connection must succeed —
+        # proves the body bytes were consumed and the socket is in sync.
+        hash<auto> resp2 = client.send(NOTHING, "GET", "/inline");
+        assertEq(200, resp2.status_code, "GET after POST status");
+        assertEq("inline-ok", resp2.body, "keep-alive intact after body request");
+    }
+
+    #! Verifies HTTP/2 keep-alive behaviour after the do_close refactor
+    #! (consolidated lock scopes in handleHttp2RequestResult).
+    asyncModeHttp2KeepAliveTest() {
+        # Create a dedicated async-mode HTTPS server for this test
+        Logger logger("async-h2-keepalive-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        SimpleStringHandler handler("h2-ok");
+        server.setHandler("h2-handler", "/h2", MimeTypeText, handler);
+        server.setDefaultHandler("h2-handler", handler);
+
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        assertTrue(server.waitForAsyncIo(5s), "async I/O ready");
+
+        HTTPClient h2client({
+            "url": "https://localhost:" + linfo.port,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "auto",
+        });
+        if (!h2client.isHttp2Enabled()) {
+            testSkip("HTTP/2 not compiled in");
+            return;
+        }
+        h2client.connect();
+        on_exit h2client.disconnect();
+
+        # Multiple keep-alive requests on a single HTTP/2 connection.
+        # This exercises the consolidated lock scope in handleHttp2RequestResult():
+        # each request must transition back to keep-alive without the socket being
+        # closed by an uninitialised do_close flag.
+        for (int i = 1; i <= 10; i++) {
+            string resp = h2client.get("/h2");
+            assertEq("h2-ok", resp, sprintf("HTTP/2 keep-alive request %d", i));
+        }
+        assertTrue(h2client.isHttp2Active(), "HTTP/2 still active after keep-alive burst");
+    }
+
+    #! Helper: read an HTTP response from a raw socket using protocol-aware methods
+    private hash<auto> readRawHttpResponse(Socket sock, timeout to = 5s) {
+        hash<auto> hdr = sock.readHTTPHeader(to);
+        string body = "";
+        if (hdr."content-length") {
+            body = sock.recv(hdr."content-length".toInt(), to);
+        }
+        hdr.body = body;
+        return hdr;
+    }
+
+    #! Verifies that async-mode connections are closed after the idle TTL expires.
+    #! This tests the fix that changed timeout from -1s (infinite) to
+    #! milliseconds(ttl) + DefaultIoOperationTimeout for KeepAlive and
+    #! SendAndReadHeader states.
+    asyncModeIdleTimeoutTest() {
+        Logger logger("async-idle-timeout-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server.setDefaultHandler("my-handler", new ReqHandler());
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Set a short TTL so the test doesn't take too long
+        date orig_ttl = server.getTtl();
+        server.setTtl(200ms);
+        on_exit server.setTtl(orig_ttl);
+
+        # Open a connection and make a request to establish keep-alive
+        Socket sock();
+        sock.connect("localhost:" + test_port);
+        sock.send("GET /idle-test HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        # Read the full HTTP response (header + body) using protocol-aware methods
+        hash<auto> resp = readRawHttpResponse(sock);
+        assertEq(200, resp.status_code, "should be 200 OK");
+
+        # Now sit idle past the TTL — the server should close the connection
+        # Wait for TTL + safety margin
+        usleep(500ms);
+
+        # Try to send another request — should fail because server closed the connection
+        bool closed = False;
+        try {
+            sock.send("GET /idle-test2 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            readRawHttpResponse(sock, 1s);
+            # If we got a valid response, connection wasn't closed
+        } catch (hash<ExceptionInfo> ex) {
+            # Socket errors indicate the server closed the connection
+            if (ex.err == "SOCKET-SEND-ERROR" || ex.err == "SOCKET-CLOSED"
+                    || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                    || ex.err == "SOCKET-TIMEOUT" || ex.err == "SOCKET-HTTP-ERROR") {
+                closed = True;
+            } else {
+                rethrow;
+            }
+        }
+        assertTrue(closed, "idle connection should be closed by server after TTL");
+
+        # Verify the server is still operational
+        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+        assertEq("GET, afteridle, /afteridle", client.get("/afteridle"));
+    }
+
+    #! Verifies that the inline request path respects the Connection: close header
+    #! on HTTP/1.1 requests.
+    asyncModeInlineConnectionCloseTest() {
+        Logger logger("async-inline-close-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        InlineTestHandler inline_handler();
+        server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
+        server.setDefaultHandler("inline-handler", inline_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Test: HTTP/1.1 with Connection: close — server should close connection after response
+        {
+            Socket sock();
+            sock.connect("localhost:" + test_port);
+            sock.send("GET /inline HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+            # Read the HTTP response properly
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(200, resp.status_code, "inline response should be 200");
+            assertEq("inline-ok", resp.body, "inline response should contain body");
+
+            # The server should close the connection — verify by trying to read more
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "Connection: close should cause server to close connection");
+        }
+
+        # Control test: HTTP/1.1 without Connection: close — connection stays open (keep-alive)
+        {
+            Socket sock();
+            sock.connect("localhost:" + test_port);
+            sock.send("GET /inline HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(200, resp.status_code, "response should be 200");
+
+            # Send a second request on the same connection — should work
+            sock.send("GET /inline HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            hash<auto> resp2 = readRawHttpResponse(sock);
+            assertEq(200, resp2.status_code, "keep-alive: second response should be 200");
+            assertEq("inline-ok", resp2.body, "keep-alive: second response body");
+            sock.close();
+        }
+
+        # Verify server is still operational
+        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+        hash<auto> resp = client.send(NOTHING, "GET", "/inline");
+        assertEq(200, resp.status_code, "server still operational");
+    }
+
+    #! Verifies that the inline request path closes the connection for HTTP/1.0
+    #! requests (which default to close unless Connection: Keep-Alive is sent).
+    asyncModeInlineHttp10CloseTest() {
+        Logger logger("async-inline-http10-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        InlineTestHandler inline_handler();
+        server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
+        server.setDefaultHandler("inline-handler", inline_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Test: HTTP/1.0 request without Connection: Keep-Alive — should close
+        {
+            Socket sock();
+            sock.connect("localhost:" + test_port);
+            sock.send("GET /inline HTTP/1.0\r\nHost: localhost\r\n\r\n");
+            # Read the HTTP response properly
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(200, resp.status_code, "HTTP/1.0 inline response should be 200");
+            assertEq("inline-ok", resp.body, "HTTP/1.0 inline response should contain body");
+
+            # Server should close the connection for HTTP/1.0
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "HTTP/1.0 should cause server to close connection by default");
+        }
+
+        # Verify server is still operational
+        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+        hash<auto> resp = client.send(NOTHING, "GET", "/inline");
+        assertEq(200, resp.status_code, "server still operational after HTTP/1.0");
+    }
 }
 
 #! Test handler that supports persistent connections
@@ -1865,5 +2276,23 @@ class PersistentTestHandler inherits AbstractHttpRequestHandler {
         }
 
         return makeResponse({"x-thread-id": string(tid)}, 404, "not found");
+    }
+}
+
+#! Test handler that supports inline processing in the I/O thread
+class InlineTestHandler inherits AbstractHttpRequestHandler {
+    #! Returns True — this handler can run inline in the I/O thread
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    #! Lightweight inline response — no context setup needed
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse({"x-inline-header": "inline-value"}, 200, "inline-ok");
+    }
+
+    #! Full handleRequest (should not be called when inline path is used)
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "non-inline-response");
     }
 }

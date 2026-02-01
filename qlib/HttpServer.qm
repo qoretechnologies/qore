@@ -442,6 +442,29 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.5
     */
     bool async_mode = True;
+
+    #! Maximum number of handler threads for the async I/O thread pool (0 = unlimited)
+    /** Only used when \c async_mode is enabled. Controls the maximum number of concurrent
+        threads that can be used for request processing. Set to 0 (default) for unlimited.
+
+        @since HttpServer 1.6
+    */
+    int max_handler_threads = 0;
+
+    #! Minimum idle handler threads kept alive in the async I/O thread pool
+    /** Only used when \c async_mode is enabled.
+
+        @since HttpServer 1.6
+    */
+    int min_idle_handler_threads = 0;
+
+    #! Maximum idle handler threads in the async I/O thread pool
+    /** Only used when \c async_mode is enabled.
+
+        @since HttpServer 1.6
+    */
+    int max_idle_handler_threads = 0;
+
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -561,7 +584,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         HttpHandlerList handlers();
 
         # default handler
-        hash<auto> defaultHandler;
+        *HandlerInfo defaultHandler;
 
         # hash of listeners keyed by listener ID
         hash<string, HttpListener> listeners;
@@ -647,6 +670,24 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     #! Returns the owner ID for this server (used to tag async I/O operations)
     string getOwnerId() {
         return self.uniqueHash();
+    }
+
+    #! Returns the handler for inline check from global handler lists (no side effects)
+    /** Looks up the handler from the permanent global handler list only.
+        Dynamic handlers are not returned since they require lifecycle tracking
+        that is incompatible with the inline path.
+
+        @param hdr parsed HTTP headers
+        @return the handler info if found, NOTHING otherwise
+    */
+    *HandlerInfo findGlobalHandler(hash<auto> hdr) {
+        int score = 0;
+        string root_path;
+        *HandlerInfo hi = handlers.findHandler(hdr, \score, False, \root_path);
+        if (!hi && defaultHandler) {
+            hi = defaultHandler;
+        }
+        return hi;
     }
     #! @endcond
 
@@ -1201,10 +1242,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
     #! sets the default request handler when no other handler can be matched
     setDefaultHandler(string name, HttpServer::AbstractHttpRequestHandler obj) {
-        defaultHandler = {
-            "name": name,
-            "obj": obj,
-        };
+        defaultHandler = new HandlerInfo(name, <HttpHandlerConfigInfo>{
+            "handler": obj,
+        });
     }
 
     #! sets a request handler according to the arguments given
@@ -1764,7 +1804,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 globalAsyncCtrl.start();
             }
             asyncTarget = new Priv::HttpServerNativeAsyncTarget(self, logger);
-            asyncIo = new HttpServerAsyncIo::HttpAsyncSocketIoController(globalAsyncCtrl, logger);
+            asyncIo = new HttpServerAsyncIo::HttpAsyncSocketIoController(globalAsyncCtrl, logger, {
+                "max_handler_threads": opts.max_handler_threads,
+                "min_idle_handler_threads": opts.min_idle_handler_threads,
+                "max_idle_handler_threads": opts.max_idle_handler_threads,
+            });
             asyncIo.start();
         }
     }
@@ -3000,6 +3044,70 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     bool hasHandlers() {
         return !handlers.empty();
+    }
+
+    #! Returns the handler for inline check (no side effects)
+    /** Looks up the handler for the given request headers without creating
+        DynamicHandlerHelper objects or modifying any state.
+
+        @param hdr parsed HTTP headers
+        @return the handler if found, NOTHING otherwise
+
+        @note Only returns permanent (non-dynamic) handlers. Dynamic handlers
+        require lifecycle tracking that is incompatible with the inline path.
+
+        @since HttpServer 1.6
+    */
+    *AbstractHttpRequestHandler findHandlerForInlineCheck(hash<auto> hdr) {
+        int score = 0;
+        string root_path;
+        *HandlerInfo hi;
+        if (hasHandlers()) {
+            hi = findHandler(hdr, \score, True, \root_path);
+            if (!hi) {
+                hi = defaultHandler;
+            }
+        } else {
+            hi = serv.findGlobalHandler(hdr);
+        }
+        if (hi) {
+            return hi.obj;
+        }
+        return NOTHING;
+    }
+
+    #! Lightweight inline request processing — no context setup, logging, auth
+    /** This method processes a request inline in the I/O thread, bypassing
+        the full processNativeRequest() path. It is only called when the handler's
+        canHandleInline() returns True.
+
+        @param sock the client socket
+        @param cx the connection context (peer info only)
+        @param hdr parsed HTTP headers
+        @param handler the handler to use
+        @param header_info header parsing info including the \c close flag for connection semantics
+
+        @return result info for the controller to act on
+
+        @since HttpServer 1.6
+    */
+    hash<HttpServerAsyncIo::HttpRequestResultInfo> processInlineRequest(Socket sock, hash<auto> cx,
+            hash<auto> hdr, AbstractHttpRequestHandler handler, hash<auto> header_info) {
+        try {
+            hash<HttpResponseInfo> resp = handler.handleInlineRequest(cx, hdr, NOTHING);
+            bool req_close = header_info.close.toBool();
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                "code": resp.code,
+                "status_message": HttpCodes{resp.code},
+                "hdr": resp.hdr,
+                "body": resp.body,
+                "close": resp.close ?? req_close ?? !sock.isOpen(),
+                "return_to_idle": !resp.close && !req_close && sock.isOpen(),
+                "ttl": serv.getTtl(),
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
+        }
     }
 
     #! stop listeners if there are no handlers
@@ -4557,6 +4665,38 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         self.logger = logger;
     }
 
+    #! Attempts to handle a request inline in the I/O thread
+    /** Looks up the handler and, if it supports inline processing and the request
+        has no body, processes it directly without thread pool dispatch.
+
+        Only for HTTP/1.x — HTTP/2 always returns @ref nothing. Requests with a
+        body (Content-Length or Transfer-Encoding) are rejected because the inline
+        path does not read the body; unread bytes would corrupt the next header
+        parse on keep-alive connections.
+
+        @param info connection and request information
+        @return result hash if handled inline, or @ref nothing to dispatch to thread pool
+
+        @since HttpServer 1.6
+    */
+    *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(
+            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        # Only for HTTP/1.x — HTTP/2 always uses thread pool
+        if (info.header_info.http2) {
+            return NOTHING;
+        }
+        # Reject requests with a body — the inline path does not read the body
+        if (info.hdr."content-length" || info.hdr."transfer-encoding") {
+            return NOTHING;
+        }
+        HttpListener listener = cast<HttpListener>(info.listener);
+        *AbstractHttpRequestHandler handler = listener.findHandlerForInlineCheck(info.hdr);
+        if (!handler || !handler.canHandleInline(info.cx, info.hdr)) {
+            return NOTHING;
+        }
+        return listener.processInlineRequest(info.sock, info.cx, info.hdr, handler, info.header_info);
+    }
+
     #! Called when an HTTP request is ready (header fully parsed)
     /** Dispatches the request to HttpListener.processNativeRequest() which handles
         context setup, request processing, and returns response data for the controller
@@ -4567,7 +4707,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
     */
     hash<HttpServerAsyncIo::HttpRequestResultInfo> onHttpRequest(hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
         HttpListener listener = cast<HttpListener>(info.listener);
-        # Build proper connection context using the listener's template
+        # Full path — build proper connection context using the listener's template
         # The controller's cx only has "peer" and "socket" keys; the listener's
         # getContextTemplate() builds the full context with "peer-info", "id",
         # "ssl", "listener-id", "listener-name", "async_mode", "async_ctrl"
