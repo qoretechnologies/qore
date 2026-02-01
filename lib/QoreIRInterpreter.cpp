@@ -1475,11 +1475,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                values[lval_inst->result.id] = res;
-                if (res.hasNode()) {
-                    cleanup.push_back(lval_inst->result.id);
-                }
+                // Update local var cache before potentially discarding the result
                 updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated);
+                // StoreLValue has no result register (result.id == 0); discard
+                // the returned reference to avoid storing into values[0] which
+                // causes double-free when multiple stores accumulate in cleanup
+                if (lval_inst->result.isValid()) {
+                    values[lval_inst->result.id] = res;
+                    if (res.hasNode()) {
+                        cleanup.push_back(lval_inst->result.id);
+                    }
+                } else {
+                    res.discard(xsink);
+                }
                 ++ip;
                 break;
             }

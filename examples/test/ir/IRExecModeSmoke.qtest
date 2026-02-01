@@ -98,6 +98,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR op-assign maybe-NOTHING smoke", \testIrOpAssignMaybeNothingSmoke());
         addTestCase("IR object op-assign maybe-NOTHING smoke", \testIrObjectOpAssignMaybeNothingSmoke());
         addTestCase("IR object container op-assign smoke", \testIrObjectContainerOpAssignSmoke());
+        addTestCase("IR multi-member node store smoke", \testIrMultiMemberNodeStoreSmoke());
         addTestCase("IR list edge smoke", \testIrListEdgeSmoke());
         addTestCase("IR container edge smoke", \testIrContainerEdgeSmoke());
         addTestCase("IR hash edge smoke", \testIrHashEdgeSmoke());
@@ -1830,18 +1831,15 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             return;
         }
 
-        # Test op-assign on object members
-        # NOTE: compound member-of-member assignment (obj.h.k += 3) across multiple
-        # objects triggers a known IR interpreter cleanup bug; test single-level members
+        # Test op-assign on object members including member-of-member access
         TmpFile script();
         script.file.write("%new-style\n%modern\n");
-        script.file.write("class Holder { public { int x; int y; } }\n");
+        script.file.write("class Holder { public { hash h; list l; } }\n");
         script.file.write("Holder obj = new Holder();\n");
-        script.file.write("obj.x = 10;\n");
-        script.file.write("obj.y = 20;\n");
-        script.file.write("obj.x += 5;\n");
-        script.file.write("obj.y -= 3;\n");
-        script.file.write("printf(\"obj-container-opassign:%d:%d\\n\", obj.x, obj.y);\n");
+        script.file.write("obj.h = (\"k\": 2);\n");
+        script.file.write("obj.l = (1, 2);\n");
+        script.file.write("obj.h.k += 3;\n");
+        script.file.write("printf(\"obj-container-opassign:%d:%d\\n\", obj.h.k, obj.l[0]);\n");
         script.file.close();
 
         TmpFile out();
@@ -1860,8 +1858,48 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
-        assertEq("obj-container-opassign:15:17\n", stdout_output,
+        assertEq("obj-container-opassign:5:1\n", stdout_output,
             "Unexpected IR object container op-assign output");
+    }
+
+    testIrMultiMemberNodeStoreSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        # Test storing multiple node-type values into object members
+        # (regression test for StoreLValue double-free with result.id == 0)
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("class Multi { public { string s1; string s2; list l; hash h; } }\n");
+        script.file.write("Multi obj = new Multi();\n");
+        script.file.write("obj.s1 = \"hello\";\n");
+        script.file.write("obj.s2 = \"world\";\n");
+        script.file.write("obj.l = (1, 2, 3);\n");
+        script.file.write("obj.h = (\"a\": 10);\n");
+        script.file.write("printf(\"multi-store:%s:%s:%d:%d\\n\", obj.s1, obj.s2, obj.l[2], obj.h.a);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir --ir-fallback-warn %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR multi-member node store should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("multi-store:hello:world:3:10\n", stdout_output,
+            "Unexpected IR multi-member node store output");
     }
 
     testIrThrowRethrowSmoke() {
