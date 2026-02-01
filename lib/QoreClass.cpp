@@ -5618,7 +5618,7 @@ void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObj
     }
 
     if (!constructorPrelude(thisclass, ceh, self, bcl, bceal, xsink)) {
-        evalIntern(uveh.getArgv(), 0, xsink).discard(xsink);
+        evalIntern("constructor", uveh.getArgv(), 0, xsink).discard(xsink);
     }
 
     // uninstantiate argv
@@ -5711,7 +5711,7 @@ void UserCopyVariant::evalCopy(const QoreClass& thisclass, QoreObject* self, Qor
         }
     }
 
-    evalIntern(uveh.getArgv(), self, xsink).discard(xsink);
+    evalIntern("copy", uveh.getArgv(), self, xsink).discard(xsink);
 }
 
 int UserCopyVariant::parseInit(QoreFunction* f) {

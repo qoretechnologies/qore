@@ -274,6 +274,7 @@ enum qore_exec_mode_t {
     QEM_AST = 0,
     QEM_IR = 1,
     QEM_JIT = 2,
+    QEM_TIERED = 3,
 };
 
 //! Serialization flag; include static class vars

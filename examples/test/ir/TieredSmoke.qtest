@@ -1,0 +1,345 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class TieredSmokeTest
+
+class TieredSmokeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("TieredSmokeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("tiered basic correctness", \testTieredBasicCorrectness());
+        addTestCase("tiered low-threshold promotion to IR", \testTieredIRPromotion());
+        addTestCase("tiered low-threshold promotion to JIT", \testTieredJITPromotion());
+        addTestCase("tiered stays on AST below threshold", \testTieredBelowThreshold());
+        addTestCase("tiered non-modern stays on AST", \testTieredNonModernFallback());
+        addTestCase("tiered IR lowering failure stays on AST", \testTieredIRFailureStaysAST());
+        addTestCase("tiered concurrent calls correctness", \testTieredConcurrentCalls());
+        addTestCase("tiered threshold options", \testTieredThresholdOptions());
+        addTestCase("tiered correctness across all modes", \testTieredCorrectnessAllModes());
+        addTestCase("tiered recursive function", \testTieredRecursiveFunction());
+        addTestCase("tiered nested control flow", \testTieredNestedControlFlow());
+        addTestCase("tiered exception handling across tiers", \testTieredExceptionHandling());
+        set_return_value(main());
+    }
+
+    private string runScript(string code, *string exec_mode, *string extra_opts) {
+        string mode = exec_mode ?? "tiered";
+        TmpFile tmp(".q");
+        tmp.file.write(code);
+        tmp.file.close();
+        string path = tmp.path;
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s 2>&1",
+            qore_bin, mode, extra_opts ?? "", path);
+        return backquote(cmd);
+    }
+
+    testTieredBasicCorrectness() {
+        # Basic test: tiered mode produces correct results for simple functions
+        string code = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+int result = 0;
+for (int i = 0; i < 10; i++) {
+    result += add(i, 1);
+}
+printf(\"%d\\n\", result);
+";
+        string result = trim(runScript(code));
+        assertEq("55", result, "tiered mode basic correctness: sum 1..10");
+    }
+
+    testTieredIRPromotion() {
+        # Set IR threshold to 5 — function should be promoted after 5 calls
+        # and still produce correct results for remaining calls
+        string code = "%modern
+int sub square(int n) {
+    return n * n;
+}
+list<int> results = ();
+for (int i = 0; i < 20; i++) {
+    results += square(i);
+}
+printf(\"%s\\n\", (map $1.toString(), results).join(\",\"));
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=100000"));
+        # Verify all 20 squares are correct
+        list<string> parts = result.split(",");
+        assertEq(20, parts.size(), "IR promotion: got 20 results");
+        for (int i = 0; i < 20; i++) {
+            assertEq((i * i).toString(), parts[i],
+                sprintf("IR promotion: square(%d) = %d", i, i * i));
+        }
+    }
+
+    testTieredJITPromotion() {
+        # Set both thresholds very low — function should reach JIT tier quickly
+        # and still produce correct results
+        string code = "%modern
+int sub triple(int n) {
+    return n * 3;
+}
+int sum = 0;
+for (int i = 0; i < 50; i++) {
+    sum += triple(i);
+}
+printf(\"%d\\n\", sum);
+";
+        # Expected: sum of 3*i for i=0..49 = 3 * (49*50/2) = 3675
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=3 --jit-jit-threshold=10"));
+        assertEq("3675", result, "JIT promotion: sum of triple(0..49)");
+    }
+
+    testTieredBelowThreshold() {
+        # With a high threshold, function should stay on AST and still work
+        string code = "%modern
+int sub double_it(int n) {
+    return n * 2;
+}
+int result = double_it(21);
+printf(\"%d\\n\", result);
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=1000000"));
+        assertEq("42", result, "below threshold: function stays on AST");
+    }
+
+    testTieredNonModernFallback() {
+        # Non-%modern code should always stay on AST in tiered mode
+        string code = "
+sub compute($n) {
+    return $n + 1;
+}
+printf(\"%d\\n\", compute(41));
+";
+        string result = runScript(code, "tiered");
+        assertRegex("42", result, "non-modern: stays on AST, correct output");
+    }
+
+    testTieredIRFailureStaysAST() {
+        # Code with operations that can't be lowered to IR should stay on AST
+        # and still produce correct results (graceful failure)
+        string code = "%modern
+auto sub complex_op() {
+    # Use operations likely not supported in IR lowering
+    hash<auto> h = {\"a\": 1, \"b\": 2};
+    auto result = h.a + h.b;
+    return result;
+}
+int sum = 0;
+for (int i = 0; i < 20; i++) {
+    sum += complex_op();
+}
+printf(\"%d\\n\", sum);
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5"));
+        assertEq("60", result, "IR failure: graceful fallback, correct result");
+    }
+
+    testTieredConcurrentCalls() {
+        # Multiple background threads calling the same function should be
+        # correct even during tier promotion
+        string code = "%modern
+int sub accumulate(int n) {
+    int sum = 0;
+    for (int i = 0; i <= n; i++) {
+        sum += i;
+    }
+    return sum;
+}
+
+# Run multiple threads all calling the same function
+int thread_count = 4;
+int calls_per_thread = 30;
+Counter done(thread_count);
+list<int> results = ();
+Mutex mtx();
+
+code thread_body = sub () {
+    for (int i = 0; i < calls_per_thread; i++) {
+        int r = accumulate(10);
+        mtx.lock();
+        on_exit mtx.unlock();
+        results += r;
+    }
+    done.dec();
+};
+
+for (int t = 0; t < thread_count; t++) {
+    background thread_body();
+}
+
+done.waitForZero();
+
+# All results should be accumulate(10) = 55
+bool all_correct = True;
+for (int i = 0; i < results.size(); i++) {
+    if (results[i] != 55) {
+        all_correct = False;
+        printf(\"ERROR: results[%d] = %d, expected 55\\n\", i, results[i]);
+    }
+}
+printf(\"%s:%d\\n\", all_correct ? \"OK\" : \"FAIL\", results.size());
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=20"));
+        assertEq("OK:120", result, "concurrent: all threads get correct results");
+    }
+
+    testTieredThresholdOptions() {
+        # Verify that --jit-ir-threshold and --jit-jit-threshold options are accepted
+        # Run with explicit thresholds and verify correct execution
+        string code = "%modern
+int sub inc(int n) {
+    return n + 1;
+}
+int val = 0;
+for (int i = 0; i < 10; i++) {
+    val = inc(val);
+}
+printf(\"%d\\n\", val);
+";
+        # Test with different threshold values
+        string result1 = trim(runScript(code, "tiered", "--jit-ir-threshold=3 --jit-jit-threshold=6"));
+        assertEq("10", result1, "threshold opts: ir=3 jit=6 produces correct result");
+
+        string result2 = trim(runScript(code, "tiered", "--jit-ir-threshold=100 --jit-jit-threshold=1000"));
+        assertEq("10", result2, "threshold opts: ir=100 jit=1000 produces correct result");
+
+        string result3 = trim(runScript(code, "tiered", "--jit-ir-threshold=1 --jit-jit-threshold=2"));
+        assertEq("10", result3, "threshold opts: ir=1 jit=2 produces correct result");
+    }
+
+    testTieredCorrectnessAllModes() {
+        # Verify identical output across all four modes for a non-trivial program
+        string code = "%modern
+int sub compute(int n) {
+    int result = 0;
+    for (int i = 0; i < n; i++) {
+        if (i % 2 == 0) {
+            result += i * i;
+        } else {
+            result -= i;
+        }
+    }
+    return result;
+}
+printf(\"%d\\n\", compute(20));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        string tiered_result = trim(runScript(code, "tiered"));
+        assertEq(ast_result, ir_result, "all modes: IR matches AST");
+        assertEq(ast_result, jit_result, "all modes: JIT matches AST");
+        assertEq(ast_result, tiered_result, "all modes: tiered matches AST");
+    }
+
+    testTieredRecursiveFunction() {
+        # Recursive functions should work correctly as they get promoted across tiers
+        string code = "%modern
+int sub factorial(int n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+# Call factorial many times to trigger promotion
+list<int> results = ();
+for (int i = 0; i < 30; i++) {
+    results += factorial(6);
+}
+# All should be 720
+bool all_ok = True;
+for (int i = 0; i < results.size(); i++) {
+    if (results[i] != 720) {
+        all_ok = False;
+    }
+}
+printf(\"%s:%d\\n\", all_ok ? \"OK\" : \"FAIL\", results.size());
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=15"));
+        assertEq("OK:30", result, "recursive: correct across tier promotions");
+    }
+
+    testTieredNestedControlFlow() {
+        # Test nested if/for/while with locals in each scope
+        string code = "%modern
+int sub nested_compute(int n) {
+    int total = 0;
+    for (int i = 0; i < n; i++) {
+        int x = i * 2;
+        if (x > 5) {
+            int y = x - 5;
+            total += y;
+        } else {
+            int z = 5 - x;
+            total += z;
+        }
+    }
+    return total;
+}
+# Call many times to force tier promotions
+int last = 0;
+for (int i = 0; i < 50; i++) {
+    last = nested_compute(10);
+}
+printf(\"%d\\n\", last);
+";
+        # Manual computation: i=0..9, x=0,2,4,6,8,10,12,14,16,18
+        # x<=5: i=0(x=0,z=5), i=1(x=2,z=3), i=2(x=4,z=1) => 5+3+1=9
+        # x>5: i=3(x=6,y=1), i=4(x=8,y=3), i=5(x=10,y=5), i=6(x=12,y=7),
+        #       i=7(x=14,y=9), i=8(x=16,y=11), i=9(x=18,y=13) => 1+3+5+7+9+11+13=49
+        # total = 9 + 49 = 58
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=15"));
+        assertEq("58", result, "nested control flow: correct across tiers");
+    }
+
+    testTieredExceptionHandling() {
+        # Verify exception handling works correctly across tier promotions
+        string code = "%modern
+string sub safe_divide(int a, int b) {
+    try {
+        int result = a / b;
+        return result.toString();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+list<string> results = ();
+for (int i = 0; i < 30; i++) {
+    if (i % 5 == 0) {
+        results += safe_divide(10, 0);
+    } else {
+        results += safe_divide(10, i % 5);
+    }
+}
+# Every 5th call (i=0,5,10,15,20,25) should be DIVISION-BY-ZERO
+# Others should be the integer division result
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=15"));
+        list<string> parts = result.split(",");
+        assertEq(30, parts.size(), "exception handling: got 30 results");
+        for (int i = 0; i < 30; i++) {
+            if (i % 5 == 0) {
+                assertEq("DIVISION-BY-ZERO", parts[i],
+                    sprintf("exception handling: call %d should be exception", i));
+            } else {
+                int expected = 10 / (i % 5);
+                assertEq(expected.toString(), parts[i],
+                    sprintf("exception handling: call %d = 10 / %d", i, i % 5));
+            }
+        }
+    }
+}

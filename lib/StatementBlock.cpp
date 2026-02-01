@@ -696,6 +696,10 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
     hwm = statement_list.last();
 }
 
+TopLevelStatementBlock::~TopLevelStatementBlock() {
+    delete cached_toplevel_ir;
+}
+
 int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return execImpl(rc, return_value, xsink);
@@ -710,69 +714,85 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
     int64 runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
 
-    // IR/JIT execution dispatch — only for non-REPARSE mode
+    // IR/JIT/Tiered execution dispatch — only for non-REPARSE mode
     if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
         qore_exec_mode_t exec_mode = qore_program_private::get(*pgm)->exec_mode;
-        if (exec_mode == QEM_IR || exec_mode == QEM_JIT) {
-            QoreIRFunction func("_toplevel");
-            QoreIRBuilder builder(&func);
-            auto* entry = func.createBlock("entry");
-            builder.setBlock(entry);
+        // QEM_TIERED uses IR/JIT immediately for top-level code (same as QEM_JIT)
+        if (exec_mode == QEM_IR || exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+            // Try to use cached IR if available
+            QoreIRFunction* ir_func = cached_toplevel_ir;
+            bool need_lower = !ir_func && !toplevel_ir_failed;
 
-            QoreParseContext parse_context(pgm);
-            QoreIRLowering lowering(builder, &parse_context);
-            std::string error;
-            bool lowered = lowering.lowerStatementBlock(this, error);
-            if (lowered) {
-                if (!irBlockHasTerminator(builder.getBlock())) {
-                    builder.createReturnNothing();
-                }
-                if (QoreIRVerifier::verify(func, error)) {
-                    if (qore_program_private::get(*pgm)->ir_dump) {
-                        QoreIRPrinter::print(func, std::cout);
-                    }
-                    QoreValue ir_return_value;
-                    bool ok;
-                    // Build set of pre-instantiated local variables from the top-level block
-                    std::unordered_set<const LocalVar*> pre_instantiated;
-                    const LVList* lv_list = getLVList();
-                    if (lv_list) {
-                        for (unsigned i = 0; i < lv_list->size(); ++i) {
-                            pre_instantiated.insert(lv_list->lv[i]);
+            if (need_lower) {
+                std::call_once(toplevel_ir_once, [this, pgm]() {
+                    QoreIRFunction* func = new QoreIRFunction("_toplevel");
+                    QoreIRBuilder builder(func);
+                    auto* entry = func->createBlock("entry");
+                    builder.setBlock(entry);
+
+                    QoreParseContext parse_context(pgm);
+                    QoreIRLowering lowering(builder, &parse_context);
+                    std::string error;
+                    if (!lowering.lowerStatementBlock(this, error)) {
+                        toplevel_ir_failed = true;
+                        delete func;
+                        printd(1, "IR lowering failed: %s\n", error.c_str());
+                        if (qore_program_private::get(*pgm)->ir_fallback_warn) {
+                            printe("IR exec fallback to AST: %s\n", error.c_str());
                         }
+                        return;
                     }
-                    if (exec_mode == QEM_JIT) {
-                        ok = QoreJIT::instance().executeWithFallback(func, ir_return_value, xsink, error,
-                            &pre_instantiated);
-                    } else {
-                        ok = QoreIRInterpreter::execute(func, ir_return_value, xsink, nullptr,
-                            nullptr, nullptr, &pre_instantiated);
+                    if (!irBlockHasTerminator(builder.getBlock())) {
+                        builder.createReturnNothing();
                     }
-                    if (ok && !*xsink) {
-                        return_value = ir_return_value;
-                        return 0;
+                    if (!QoreIRVerifier::verify(*func, error)) {
+                        toplevel_ir_failed = true;
+                        delete func;
+                        printd(1, "IR verification failed: %s\n", error.c_str());
+                        if (qore_program_private::get(*pgm)->ir_fallback_warn) {
+                            printe("IR exec fallback to AST: verification failed: %s\n", error.c_str());
+                        }
+                        return;
                     }
-                    // If IR execution raised an exception, propagate it
-                    if (*xsink) {
-                        return 0;
-                    }
-                    // IR execution failed without exception — fall through to AST
-                    printd(1, "IR execution failed without exception, falling back to AST\n");
-                    if (qore_program_private::get(*pgm)->ir_fallback_warn) {
-                        printe("IR exec fallback to AST: execution failed\n");
-                    }
-                } else {
-                    // Verification failed — fall through to AST
-                    printd(1, "IR verification failed: %s\n", error.c_str());
-                    if (qore_program_private::get(*pgm)->ir_fallback_warn) {
-                        printe("IR exec fallback to AST: verification failed: %s\n", error.c_str());
+                    cached_toplevel_ir = func;
+                });
+                ir_func = cached_toplevel_ir;
+            }
+
+            if (ir_func) {
+                if (qore_program_private::get(*pgm)->ir_dump) {
+                    QoreIRPrinter::print(*ir_func, std::cout);
+                }
+                QoreValue ir_return_value;
+                bool ok;
+                // Build set of pre-instantiated local variables from the top-level block
+                std::unordered_set<const LocalVar*> pre_instantiated;
+                const LVList* lv_list = getLVList();
+                if (lv_list) {
+                    for (unsigned i = 0; i < lv_list->size(); ++i) {
+                        pre_instantiated.insert(lv_list->lv[i]);
                     }
                 }
-            } else {
-                // Lowering failed — fall through to AST
-                printd(1, "IR lowering failed: %s\n", error.c_str());
+                std::string error;
+                if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+                    ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
+                        &pre_instantiated);
+                } else {
+                    ok = QoreIRInterpreter::execute(*ir_func, ir_return_value, xsink, nullptr,
+                        nullptr, nullptr, &pre_instantiated);
+                }
+                if (ok && !*xsink) {
+                    return_value = ir_return_value;
+                    return 0;
+                }
+                // If IR execution raised an exception, propagate it
+                if (*xsink) {
+                    return 0;
+                }
+                // IR execution failed without exception — fall through to AST
+                printd(1, "IR execution failed without exception, falling back to AST\n");
                 if (qore_program_private::get(*pgm)->ir_fallback_warn) {
-                    printe("IR exec fallback to AST: %s\n", error.c_str());
+                    printe("IR exec fallback to AST: execution failed\n");
                 }
             }
         }

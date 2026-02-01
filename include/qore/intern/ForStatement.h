@@ -65,6 +65,10 @@ public:
         return code;
     }
 
+    DLLLOCAL const LVList* getLVList() const {
+        return lvars;
+    }
+
 private:
     QoreValue assignment{};
     QoreValue cond{};

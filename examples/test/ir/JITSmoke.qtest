@@ -1,0 +1,367 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class JITSmokeTest
+
+class JITSmokeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JITSmokeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("JIT integer arithmetic", \testJitIntArithmetic());
+        addTestCase("JIT integer comparisons", \testJitIntComparisons());
+        addTestCase("JIT float arithmetic", \testJitFloatArithmetic());
+        addTestCase("JIT float comparisons", \testJitFloatComparisons());
+        addTestCase("JIT boolean operations", \testJitBoolOps());
+        addTestCase("JIT control flow", \testJitControlFlow());
+        addTestCase("JIT bitwise operations", \testJitBitwiseOps());
+        addTestCase("JIT division by zero", \testJitDivisionByZero());
+        addTestCase("JIT nested if/else", \testJitNestedIfElse());
+        addTestCase("JIT loop computation", \testJitLoopComputation());
+        addTestCase("JIT fallback to IR", \testJitFallbackToIr());
+        addTestCase("JIT non-modern fallback", \testJitNonModernFallback());
+        addTestCase("JIT try/catch exception", \testJitTryCatch());
+        addTestCase("JIT float division by zero", \testJitFloatDivByZero());
+        addTestCase("JIT modulo by zero", \testJitModuloByZero());
+        addTestCase("JIT unary operations", \testJitUnaryOps());
+        addTestCase("JIT mixed arithmetic", \testJitMixedArithmetic());
+        addTestCase("JIT string operations", \testJitStringOps());
+        addTestCase("JIT switch statement", \testJitSwitch());
+        addTestCase("JIT while loop", \testJitWhileLoop());
+        addTestCase("JIT do-while loop", \testJitDoWhileLoop());
+        addTestCase("JIT correctness across modes", \testJitCorrectnessAcrossModes());
+        set_return_value(main());
+    }
+
+    private string runScript(string code, *string exec_mode) {
+        string mode = exec_mode ?? "jit";
+        TmpFile tmp(".q");
+        tmp.file.write(code);
+        tmp.file.close();
+        string path = tmp.path;
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s 2>&1", qore_bin, mode, path);
+        return backquote(cmd);
+    }
+
+    testJitIntArithmetic() {
+        # Test that JIT or fallback produces correct integer arithmetic
+        string code = "%modern
+int sub compute(int a, int b) {
+    int sum = a + b;
+    int diff = a - b;
+    int prod = a * b;
+    return sum + diff + prod;
+}
+printf(\"%d\\n\", compute(10, 3));
+";
+        string result = trim(runScript(code));
+        assertEq("50", result, "integer arithmetic: (10+3) + (10-3) + (10*3) = 13+7+30 = 50");
+    }
+
+    testJitIntComparisons() {
+        string code = "%modern
+int a = 5;
+int b = 10;
+list<string> results = ();
+if (a < b) { results += \"lt\"; }
+if (a <= b) { results += \"le\"; }
+if (b > a) { results += \"gt\"; }
+if (b >= a) { results += \"ge\"; }
+if (a == a) { results += \"eq\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("lt,le,gt,ge,eq,ne", result, "integer comparisons");
+    }
+
+    testJitFloatArithmetic() {
+        string code = "%modern
+float sub fcompute(float a, float b) {
+    float sum = a + b;
+    float diff = a - b;
+    float prod = a * b;
+    return sum + diff + prod;
+}
+printf(\"%.1f\\n\", fcompute(10.0, 3.0));
+";
+        string result = trim(runScript(code));
+        assertEq("50.0", result, "float arithmetic");
+    }
+
+    testJitFloatComparisons() {
+        string code = "%modern
+float a = 1.5;
+float b = 2.5;
+list<string> results = ();
+if (a < b) { results += \"lt\"; }
+if (a <= b) { results += \"le\"; }
+if (b > a) { results += \"gt\"; }
+if (b >= a) { results += \"ge\"; }
+if (a == a) { results += \"eq\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("lt,le,gt,ge,eq,ne", result, "float comparisons");
+    }
+
+    testJitBoolOps() {
+        string code = "%modern
+bool a = True;
+bool b = False;
+list<string> results = ();
+if (a) { results += \"a_true\"; }
+if (!b) { results += \"b_false\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("a_true,b_false,ne", result, "boolean operations");
+    }
+
+    testJitControlFlow() {
+        string code = "%modern
+int sub fib(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+printf(\"%d\\n\", fib(10));
+";
+        string result = trim(runScript(code));
+        assertEq("55", result, "recursive fibonacci");
+    }
+
+    testJitBitwiseOps() {
+        string code = "%modern
+int a = 0xFF;
+int b = 0x0F;
+int and_result = a & b;
+int or_result = a | b;
+int xor_result = a ^ b;
+int shl_result = 1 << 8;
+int shr_result = 256 >> 4;
+printf(\"%d,%d,%d,%d,%d\\n\", and_result, or_result, xor_result, shl_result, shr_result);
+";
+        string result = trim(runScript(code));
+        assertEq("15,255,240,256,16", result, "bitwise operations");
+    }
+
+    testJitDivisionByZero() {
+        string code = "%modern
+%disable-warning unreferenced-variable
+try {
+    int zero = 0;
+    int x = 10 / zero;
+    printf(\"ERROR: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("DIVISION-BY-ZERO", result, "division by zero exception");
+    }
+
+    testJitNestedIfElse() {
+        string code = "%modern
+int sub classify(int n) {
+    if (n < 0) {
+        return -1;
+    } else if (n == 0) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
+printf(\"%d,%d,%d\\n\", classify(-5), classify(0), classify(5));
+";
+        string result = trim(runScript(code));
+        assertEq("-1,0,1", result, "nested if/else");
+    }
+
+    testJitLoopComputation() {
+        string code = "%modern
+int sum = 0;
+for (int i = 1; i <= 100; i++) {
+    sum += i;
+}
+printf(\"%d\\n\", sum);
+";
+        string result = trim(runScript(code));
+        assertEq("5050", result, "loop sum 1..100");
+    }
+
+    testJitFallbackToIr() {
+        # Test that JIT falls back gracefully for complex operations
+        string code = "%modern
+hash<auto> h = {\"key\": \"value\"};
+printf(\"%s\\n\", h.key);
+";
+        string result = trim(runScript(code));
+        assertEq("value", result, "JIT fallback for hash access");
+    }
+
+    testJitNonModernFallback() {
+        # Non-%modern code should fall back to AST; check output contains "42"
+        string code = "printf(\"%d\\n\", 42);\n";
+        string result = runScript(code);
+        assertRegex("42", result, "non-modern fallback to AST produces correct output");
+    }
+
+    testJitTryCatch() {
+        string code = "%modern
+try {
+    throw \"TEST-ERROR\", \"test message\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%s\\n\", ex.err, ex.desc);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("TEST-ERROR:test message", result, "try/catch with throw");
+    }
+
+    testJitFloatDivByZero() {
+        string code = "%modern
+%disable-warning unreferenced-variable
+try {
+    float zero = 0.0;
+    float x = 10.0 / zero;
+    printf(\"ERROR: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("DIVISION-BY-ZERO", result, "float division by zero");
+    }
+
+    testJitModuloByZero() {
+        string code = "%modern
+%disable-warning unreferenced-variable
+try {
+    int zero = 0;
+    int x = 10 % zero;
+    printf(\"ERROR: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("DIVISION-BY-ZERO", result, "modulo by zero");
+    }
+
+    testJitUnaryOps() {
+        string code = "%modern
+int a = 42;
+int neg = -a;
+float f = 3.14;
+float fneg = -f;
+printf(\"%d,%.2f\\n\", neg, fneg);
+";
+        string result = trim(runScript(code));
+        assertEq("-42,-3.14", result, "unary negation");
+    }
+
+    testJitMixedArithmetic() {
+        string code = "%modern
+int a = 7;
+int b = 3;
+int sum = a + b;
+int diff = a - b;
+int prod = a * b;
+int quot = a / b;
+int mod = a % b;
+printf(\"%d,%d,%d,%d,%d\\n\", sum, diff, prod, quot, mod);
+";
+        string result = trim(runScript(code));
+        assertEq("10,4,21,2,1", result, "mixed integer arithmetic");
+    }
+
+    testJitStringOps() {
+        string code = "%modern
+string s = \"hello\";
+printf(\"%s world\\n\", s);
+";
+        string result = trim(runScript(code));
+        assertEq("hello world", result, "string operations");
+    }
+
+    testJitSwitch() {
+        string code = "%modern
+int sub classify(int n) {
+    switch (n) {
+        case 1: return 10;
+        case 2: return 20;
+        case 3: return 30;
+        default: return -1;
+    }
+}
+printf(\"%d,%d,%d,%d\\n\", classify(1), classify(2), classify(3), classify(99));
+";
+        string result = trim(runScript(code));
+        assertEq("10,20,30,-1", result, "switch statement");
+    }
+
+    testJitWhileLoop() {
+        string code = "%modern
+int n = 10;
+int sum = 0;
+int i = 1;
+while (i <= n) {
+    sum += i;
+    i++;
+}
+printf(\"%d\\n\", sum);
+";
+        string result = trim(runScript(code));
+        assertEq("55", result, "while loop sum");
+    }
+
+    testJitDoWhileLoop() {
+        string code = "%modern
+int n = 5;
+int prod = 1;
+int i = 1;
+do {
+    prod *= i;
+    i++;
+} while (i <= n);
+printf(\"%d\\n\", prod);
+";
+        string result = trim(runScript(code));
+        assertEq("120", result, "do-while factorial");
+    }
+
+    testJitCorrectnessAcrossModes() {
+        # Verify identical output across all three modes for a non-trivial program
+        string code = "%modern
+int sub compute(int n) {
+    int result = 0;
+    for (int i = 0; i < n; i++) {
+        if (i % 2 == 0) {
+            result += i * i;
+        } else {
+            result -= i;
+        }
+    }
+    return result;
+}
+printf(\"%d\\n\", compute(20));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq(ast_result, ir_result, "IR produces same result as AST");
+        assertEq(ast_result, jit_result, "JIT produces same result as AST");
+    }
+}

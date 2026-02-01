@@ -33,15 +33,20 @@
 
 #define _QORE_FUNCTION_H
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
 
 class qore_class_private;
+class QoreIRFunction;
+using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 
 // these data structures are all private to the library
 
@@ -597,6 +602,10 @@ class UserVariantExecHelper;
 class UserVariantBase {
     friend class UserVariantExecHelper;
 
+public:
+    //! Tiered compilation execution tier
+    enum ExecutionTier : uint8_t { TIER_AST = 0, TIER_IR = 1, TIER_JIT = 2 };
+
 protected:
     UserSignature signature;
     StatementBlock* statements;
@@ -612,11 +621,30 @@ protected:
     // flag to tell if variant has been initialized or not (still in pending list)
     bool init;
 
-    DLLLOCAL QoreValue evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const;
+    // Tiered compilation state
+    mutable std::atomic<uint64_t> exec_count{0};
+    mutable std::atomic<ExecutionTier> current_tier{TIER_AST};
+    mutable QoreIRFunction* cached_ir = nullptr;
+    mutable JitFunctionPtr cached_jit_fn = nullptr;
+    mutable std::once_flag ir_lower_once;
+    mutable std::once_flag jit_compile_once;
+    mutable bool ir_lower_failed = false;
+    mutable bool jit_compile_failed = false;
+
+    DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
+            ExceptionSink* xsink) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
             const qore_class_private* qc = nullptr) const;
     DLLLOCAL int setupCall(CodeEvaluationHelper* ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink)
             const;
+
+    //! Tiered compilation dispatch path
+    DLLLOCAL QoreValue evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
+            ExceptionSink* xsink) const;
+    //! Attempt to lower to IR; called via std::call_once
+    DLLLOCAL void attemptIRLowering(const char* name) const;
+    //! Attempt JIT compilation; called via std::call_once
+    DLLLOCAL void attemptJITCompilation() const;
 
 public:
     DLLLOCAL UserVariantBase(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params,

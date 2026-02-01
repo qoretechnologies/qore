@@ -32,7 +32,9 @@
 #ifndef _QORE_QOREJIT_H
 #define _QORE_QOREJIT_H
 
+#include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <atomic>
 #include <unordered_map>
@@ -44,10 +46,12 @@
 
 class ExceptionSink;
 class LocalVar;
+class QoreIRFunction;
 
-#ifdef QORE_JIT_ENABLED
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
-#endif
+
+//! JIT-compiled function signature: takes ExceptionSink*, returns NaN-boxed QoreValue as uint64_t
+using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 
 class QoreJIT {
 public:
@@ -60,30 +64,43 @@ public:
     bool isEnabled() const;
     bool initialize(std::string& error);
     bool canJit(int64 parse_options, std::string& reason) const;
-    bool compileFunction(const class QoreIRFunction& func, std::string& error);
-    bool executeWithFallback(const class QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
+
+    //! Compile an IR function to native code and cache the result.
+    //! Returns true on success; on failure, sets error message.
+    bool compileFunction(const QoreIRFunction& func, std::string& error);
+
+    //! Look up a previously compiled function by name.
+    //! Returns nullptr if not found.
+    JitFunctionPtr lookupFunction(const std::string& name) const;
+
+    //! Compile and execute, falling back to IR interpreter on failure.
+    bool executeWithFallback(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
             std::string& error, const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr);
     void shutdown();
-    uint64_t recordExecution();
-    bool shouldJit(uint64_t count) const;
-    void recordTypeProfile(const QoreValue& value);
     void setDeoptPolicy(DeoptPolicy policy);
-    void setOsrEnabled(bool enable);
+
+    //! Tiered compilation threshold accessors
+    static uint64_t getIRThreshold();
+    static uint64_t getJITThreshold();
+    static void setIRThreshold(uint64_t t);
+    static void setJITThreshold(uint64_t t);
 
 private:
     QoreJIT() = default;
     QoreJIT(const QoreJIT&) = delete;
     QoreJIT& operator=(const QoreJIT&) = delete;
 
-#ifdef QORE_JIT_ENABLED
     std::unique_ptr<llvm::orc::LLJIT> jit;
-#endif
+    bool registerRuntimeSymbols(std::string& error);
+    bool symbols_registered = false;
+    mutable std::mutex cache_mutex;
+    std::unordered_map<std::string, JitFunctionPtr> compiled_functions;
     bool initialized = false;
-    std::atomic<uint64_t> exec_count{0};
-    uint64_t hot_threshold = 1000;
-    std::unordered_map<qore_type_t, uint64_t> type_profile;
     DeoptPolicy deopt_policy = DeoptPolicy::FallbackToInterpreter;
-    bool osr_enabled = false;
+
+    //! Tiered compilation thresholds
+    static uint64_t ir_threshold;
+    static uint64_t jit_threshold;
 };
 
 #endif

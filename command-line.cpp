@@ -35,6 +35,7 @@
 #include <qore/Qore.h>
 #include <qore/ParseOptionMap.h>
 #include <qore/safe_dslist>
+#include "qore/intern/QoreJIT.h"
 
 #include "command-line.h"
 
@@ -100,6 +101,10 @@ static bool ir_dump = false;
 // warn on IR fallback to AST
 static bool ir_fallback_warn = false;
 
+// tiered compilation thresholds (0 = use defaults)
+static uint64_t jit_ir_threshold = 0;
+static uint64_t jit_jit_threshold = 0;
+
 // program text given on the command-line
 static const char* cl_pgm = 0;
 
@@ -159,9 +164,14 @@ static const char helpstr[] =
    "  -c, --charset=arg            sets default character set encoding\n"
    "  -D, --define=arg             sets the value of a parse define\n"
    "  -e, --exec=arg               execute program given on command-line\n"
-   "      --exec-mode=arg          execution mode: ast (default), ir, or jit\n"
+   "      --exec-mode=arg          execution mode: ast (default), ir, jit, or\n"
+   "                               tiered (auto-promote AST->IR->JIT per function)\n"
    "      --ir-dump                dump IR representation before execution\n"
    "      --ir-fallback-warn       warn on stderr when IR falls back to AST\n"
+   "      --jit-ir-threshold=N     tiered mode: calls before IR promotion (default:\n"
+   "                               100)\n"
+   "      --jit-jit-threshold=N    tiered mode: calls before JIT promotion (default:\n"
+   "                               1000)\n"
    "  -g, --disable-gc             disable the garbage collector\n"
    "  -h, --help                   shows this help text and exit\n"
    "  -i, --list-warnings          list all warnings and quit\n"
@@ -656,7 +666,11 @@ static void set_exec_mode(const char* arg) {
         exec_mode = QEM_JIT;
         return;
     }
-    printe("error: invalid --exec-mode value '%s' (use ast, ir, or jit)\n", arg);
+    if (!strcasecmp(arg, "tiered")) {
+        exec_mode = QEM_TIERED;
+        return;
+    }
+    printe("error: invalid --exec-mode value '%s' (use ast, ir, jit, or tiered)\n", arg);
     opt_errors++;
 }
 static void set_ir_dump(const char* arg) {
@@ -665,6 +679,24 @@ static void set_ir_dump(const char* arg) {
 
 static void set_ir_fallback_warn(const char* arg) {
     ir_fallback_warn = true;
+}
+
+static void set_jit_ir_threshold(const char* arg) {
+    if (!arg || !*arg) {
+        printe("error: --jit-ir-threshold requires a numeric value\n");
+        opt_errors++;
+        return;
+    }
+    jit_ir_threshold = strtoull(arg, nullptr, 10);
+}
+
+static void set_jit_jit_threshold(const char* arg) {
+    if (!arg || !*arg) {
+        printe("error: --jit-jit-threshold requires a numeric value\n");
+        opt_errors++;
+        return;
+    }
+    jit_jit_threshold = strtoull(arg, nullptr, 10);
 }
 
 static void disable_gc(const char* arg) {
@@ -707,6 +739,8 @@ static struct opt_struct_s {
    { '\0', "exec-mode",            ARG_MAND, set_exec_mode },
    { '\0', "ir-dump",              ARG_NONE, set_ir_dump },
    { '\0', "ir-fallback-warn",    ARG_NONE, set_ir_fallback_warn },
+   { '\0', "jit-ir-threshold",    ARG_MAND, set_jit_ir_threshold },
+   { '\0', "jit-jit-threshold",   ARG_MAND, set_jit_jit_threshold },
    { 'g', "disable-gc",            ARG_NONE, disable_gc },
    { 'h', "help",                  ARG_NONE, do_help },
    { 'i', "list-warnings",         ARG_NONE, list_warnings },
@@ -997,6 +1031,14 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
 
    // initialize Qore subsystem
    qore_init(license, def_charset, show_mod_errs, qore_lib_options);
+
+   // apply tiered compilation thresholds from command-line
+   if (jit_ir_threshold) {
+       QoreJIT::setIRThreshold(jit_ir_threshold);
+   }
+   if (jit_jit_threshold) {
+       QoreJIT::setJITThreshold(jit_jit_threshold);
+   }
 
    ExceptionSink wsink, xsink;
    {

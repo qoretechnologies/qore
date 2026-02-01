@@ -59,6 +59,10 @@ public:
         return else_code;
     }
 
+    DLLLOCAL const LVList* getLVList() const {
+        return lvars;
+    }
+
 private:
     QoreValue cond{};
     StatementBlock* if_code;

@@ -120,6 +120,7 @@
 #include "QoreIRToLLVM.cpp"
 #include "QoreIRVerifier.cpp"
 #include "QoreJIT.cpp"
+#include "JITRuntime.cpp"
 #include "QoreNamespace.cpp"
 #include "QoreNet.cpp"
 #include "QoreURL.cpp"

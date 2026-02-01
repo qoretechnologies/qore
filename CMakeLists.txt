@@ -33,10 +33,6 @@ option(QORE_BUILD_IR_SMOKE
        "Build the Qore IR smoke test executable"
        OFF)
 
-option(WITH_JIT
-       "Enable LLVM-based JIT compilation"
-       OFF)
-
 STRING(LENGTH ${VERSION_MINOR} MINOR_LEN)
 if (${MINOR_LEN} EQUAL 1)
     set(VERSION_FORMATTED_MINOR 0${VERSION_MINOR})
@@ -76,18 +72,28 @@ set(CMAKE_CXX_FLAGS "-I${CMAKE_SOURCE_DIR}/include")
 
 find_package(Java)
 
-if (WITH_JIT)
-    find_package(LLVM 16 REQUIRED CONFIG)
+# LLVM is required for JIT compilation
+find_package(LLVM REQUIRED CONFIG)
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+if (LLVM_VERSION_MAJOR LESS 16)
+    message(FATAL_ERROR "LLVM 16 or later is required for JIT support; found ${LLVM_PACKAGE_VERSION}")
+endif()
+
+# Use LLVM's own library detection; shared LLVM builds provide a single libLLVM-XX.so
+# while static builds provide individual component libraries
+if (LLVM_LINK_LLVM_DYLIB)
+    set(LLVM_LIBS LLVM)
+else()
     include(AddLLVM)
     llvm_map_components_to_libnames(LLVM_LIBS
         Core
         OrcJIT
-        Native
+        ${LLVM_NATIVE_ARCH}
         Support
     )
-    add_definitions(-DQORE_JIT_ENABLED)
-    include_directories(${LLVM_INCLUDE_DIRS})
 endif()
+message(STATUS "LLVM libs: ${LLVM_LIBS}")
+include_directories(${LLVM_INCLUDE_DIRS})
 
 if (DEFINED ENV{DOXYGEN_EXECUTABLE})
     set(DOXYGEN_EXECUTABLE $ENV{DOXYGEN_EXECUTABLE})
@@ -726,6 +732,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreXSinkException.cpp
     lib/QoreJIT.cpp
     lib/QoreIRToLLVM.cpp
+    lib/JITRuntime.cpp
     lib/QoreClass.cpp
     lib/TypedHashDecl.cpp
     lib/QoreEnumDecl.cpp
@@ -987,9 +994,7 @@ string(REPLACE ";" " " CMAKE_LDFLAGS "${QORE_LIBS}")
 string(STRIP "${CMAKE_LDFLAGS}" CMAKE_LDFLAGS)
 string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
 target_link_libraries(libqore ${QORE_LIBS})
-if (WITH_JIT)
-    target_link_libraries(libqore ${LLVM_LIBS})
-endif()
+target_link_libraries(libqore ${LLVM_LIBS})
 if (WIN32 OR MINGW OR MSYS)
     target_link_libraries(libqore ${WINSOCKET_LIBRARIES})
 endif (WIN32 OR MINGW OR MSYS)
@@ -1039,6 +1044,7 @@ if (QORE_BUILD_IR_SMOKE)
         ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
     target_link_libraries(qore-ir-smoke ${QORE_LIBS})
+    target_link_libraries(qore-ir-smoke ${LLVM_LIBS})
 endif()
 
 # Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.

@@ -147,6 +147,34 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - @ref Qore::Option::HAVE_LZ4 "Option::HAVE_LZ4"
     @endparblock
 
+    @par New Required Library: LLVM (JIT Compilation)
+    @parblock
+    %Qore now requires LLVM 16 or later for JIT (Just-In-Time) compilation support.  The
+    \c --exec-mode=jit command-line option compiles hot paths to native code via LLVM's ORC JIT,
+    with automatic fallback to the IR interpreter for unsupported operations.
+
+    Install the LLVM development packages:
+    - <b>Debian/Ubuntu:</b> \c llvm-dev (or version-specific, e.g. \c llvm-20-dev)
+    - <b>RHEL/Fedora:</b> \c llvm-devel
+    - <b>Alpine:</b> \c llvm-dev
+
+    Four execution modes are available via \c --exec-mode:
+    - \c ast (default): traditional AST interpreter
+    - \c ir: IR-based interpreter
+    - \c jit: LLVM JIT with automatic fallback to IR
+    - \c tiered: automatic per-function tier promotion (AST → IR → JIT)
+
+    In \c tiered mode, functions start on the AST interpreter and are automatically promoted to
+    IR after a configurable number of calls (default: 100), then to native JIT after a higher
+    threshold (default: 1000).  Promotion thresholds are configurable via \c --jit-ir-threshold=N
+    and \c --jit-jit-threshold=N.  Failed IR lowering or JIT compilation is permanent per function:
+    the function stays at its current tier.  Non-@ref modern "%modern" code is never promoted.
+
+    JIT compilation is transparent and preserves %Qore semantics including exception handling,
+    NaN-boxed values, and reference counting.  Non-@ref modern "%modern" code automatically
+    falls back to the AST interpreter.
+    @endparblock
+
     - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>
       - new @ref modern "%modern" parse directive combines all recommended parse options into one:
         @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args",

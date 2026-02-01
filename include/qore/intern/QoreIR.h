@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -545,6 +546,19 @@ public:
 
     std::string name;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
+
+    // Set of LocalVar* pointers that are already instantiated by the caller
+    // (tiered compilation: params from setupCall(), argvid/selfid from evalTiered(),
+    // all body locals from the statement tree).  The JIT must not
+    // re-instantiate/uninstantiate these.
+    std::unordered_set<const void*> pre_instantiated_locals;
+
+    // All body locals from the statement tree (top-level + all nested blocks
+    // from fully-lowered statements: if/for/while/try/switch).
+    // Used by evalTiered() to instantiate/uninstantiate all locals before/after
+    // IR or JIT execution, so that AST Invoke callbacks can find them on the
+    // thread-local variable stack.
+    std::vector<LocalVar*> all_body_locals;
 
 private:
     uint32_t next_value_id = 1;

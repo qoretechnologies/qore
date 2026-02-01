@@ -36,6 +36,8 @@
 #include "qore/intern/AbstractStatement.h"
 #include <qore/safe_dslist>
 
+#include <memory>
+#include <mutex>
 #include <set>
 #include <vector>
 
@@ -44,6 +46,7 @@
 
 // all definitions in this file are private to the library and subject to change
 class BCAList;
+class QoreIRFunction;
 class BCList;
 
 class LVList {
@@ -200,8 +203,7 @@ public:
             ehwm(statement_list.end()), first(true) {
     }
 
-    DLLLOCAL virtual ~TopLevelStatementBlock() {
-    }
+    DLLLOCAL virtual ~TopLevelStatementBlock();
 
     using StatementBlock::parseInit;
     DLLLOCAL int parseInit();
@@ -252,6 +254,11 @@ protected:
     statement_list_t::iterator ehwm;
     // true only the first time parseInit() is called
     bool first;
+
+    // Cached IR for top-level code (avoids re-lowering on repeat calls)
+    mutable QoreIRFunction* cached_toplevel_ir = nullptr;
+    mutable std::once_flag toplevel_ir_once;
+    mutable bool toplevel_ir_failed = false;
 };
 
 // parse variable stack

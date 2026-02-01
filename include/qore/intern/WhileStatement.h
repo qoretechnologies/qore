@@ -56,6 +56,10 @@ public:
         return code;
     }
 
+    DLLLOCAL const LVList* getLVList() const {
+        return lvars;
+    }
+
 protected:
     QoreValue cond{};
     StatementBlock* code;
