@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file AbstractSseConnection.qc Abstract SSE connection interface
 
-/** AbstractSseConnection.qc Copyright 2025 Qore Technologies, s.r.o.
+/** AbstractSseConnection.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,7 +33,6 @@ public namespace HttpServerAsyncIo {
     - @ref HttpSseStreamPollOperation for HTTP/1.x
     - @ref Http2SseStream for HTTP/2
 
-    @since HttpServerAsyncIo 1.0
 */
 public class AbstractSseConnection {
     #! Returns the underlying transport protocol
@@ -74,7 +73,6 @@ public class AbstractSseConnection {
 /** Wraps HttpSseStreamPollOperation to implement AbstractSseConnection interface.
     This allows existing HTTP/1.x SSE code to work with the unified interface.
 
-    @since HttpServerAsyncIo 1.0
 */
 public class Http1SseConnection inherits AbstractSseConnection {
     private {

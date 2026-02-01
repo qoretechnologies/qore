@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Http2PollOperation.qc Poll operation for HTTP/2 server connections
 
-/** Http2PollOperation.qc Copyright 2025 Qore Technologies, s.r.o.
+/** Http2PollOperation.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,7 +36,6 @@ public namespace HttpServerAsyncIo {
     This class wraps the low-level Socket HTTP/2 poll operations to provide
     a higher-level interface for the HttpServer async I/O controller.
 
-    @since HttpServerAsyncIo 1.1
 */
 public class Http2PollOperation inherits AbstractPollOperation {
     public {
@@ -230,7 +229,6 @@ int js_stream = h2op.pushResource("/app.js", {"content-type": "application/javas
 h2op.startSendResponse(200, {"content-type": "text/html"}, html_body);
         @endcode
 
-        @since HttpServerAsyncIo 1.1
     */
     int pushResource(string path, *hash<auto> headers) {
         if (state != STATE_REQUEST_READY && state != STATE_SENDING) {
@@ -264,7 +262,6 @@ if (css_stream > 0) {
 }
         @endcode
 
-        @since HttpServerAsyncIo 1.1
     */
     AbstractPollOperation startSendPushedResponse(int promised_stream_id, int status_code,
             *hash<auto> headers, *data body) {
@@ -290,7 +287,6 @@ if (push) {
 }
         @endcode
 
-        @since HttpServerAsyncIo 1.1
     */
     *code getPushResourceCallback() {
         if (state != STATE_REQUEST_READY && state != STATE_SENDING) {
@@ -331,7 +327,6 @@ if (push) {
         The InputStream body is read incrementally and sent as HTTP/2 DATA frames without
         buffering the entire body in memory.
 
-        @since HttpServerAsyncIo 1.1
     */
     startSendResponse(int status_code, *hash<auto> headers, InputStream body, *int chunk_size) {
         if (state != STATE_REQUEST_READY && state != STATE_SENT) {

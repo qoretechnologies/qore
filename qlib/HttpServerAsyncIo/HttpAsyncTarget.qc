@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file HttpAsyncTarget.qc Defines the HttpAsyncTarget abstract class
 
-/** HttpAsyncTarget.qc Copyright 2024 Qore Technologies, s.r.o.
+/** HttpAsyncTarget.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,7 +37,6 @@ public namespace HttpServerAsyncIo {
     - WebSocket frames (onWebSocketFrame)
     - WebSocket connection closes (onWebSocketClose)
 
-    @since HttpServerAsyncIo 1.0
 */
 public class HttpAsyncTarget {
     #! Called when an HTTP request is ready (header fully parsed)
@@ -135,7 +134,6 @@ public class HttpAsyncTarget {
         @param info connection and request information
         @return True to handle inline, False (default) to dispatch to thread pool
 
-        @since HttpServerAsyncIo 1.1
     */
     bool canHandleInline(hash<HttpConnectionInfo> info) {
         return False;

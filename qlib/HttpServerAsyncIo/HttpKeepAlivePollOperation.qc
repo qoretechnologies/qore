@@ -44,7 +44,6 @@ public namespace HttpServerAsyncIo {
     This is an HTTP/1.x-only optimization. HTTP/2 connections use Http2PollOperation
     which already stays in continuous read state.
 
-    @since HttpServerAsyncIo 1.1
 */
 public class HttpKeepAlivePollOperation inherits AbstractPollOperation {
     public {

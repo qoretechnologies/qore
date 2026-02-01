@@ -296,12 +296,14 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode keep-alive", \asyncModeKeepAliveTest());
         addTestCase("async mode concurrent", \asyncModeConcurrentTest());
         addTestCase("async mode HTTPS", \asyncModeHttpsTest());
+        addTestCase("async mode HTTPS HTTP/1.1", \asyncModeHttpsHttp1Test());
         addTestCase("async mode error responses", \asyncModeErrorResponsesTest());
         addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
         addTestCase("async mode WebSocket over SSL", \asyncModeWebSocketSslTest());
         addTestCase("async mode WebSocket HTTP/2 status 200", \asyncModeWebSocketHttp2StatusTest());
         addTestCase("async mode WebSocket over SSL HTTP/1.1", \asyncModeWebSocketSslHttp1Test());
+        addTestCase("async mode client cert capture", \asyncModeClientCertTest());
         addTestCase("async mode WebSocket 401 then success", \asyncModeWebSocket401ThenSuccessTest());
         addTestCase("async mode persistent handler", \asyncModePersistentHandlerTest());
         addTestCase("async mode persistent to non-persistent", \asyncModePersistentToNonPersistentTest());
@@ -795,6 +797,32 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq("GET, test2, /test2", client.get("/test2"));
     }
 
+    asyncModeHttpsHttp1Test() {
+        # Test explicit HTTP/1.1 over SSL in async mode
+        # This validates the *string negotiated ALPN fix - HTTP/1.1 clients
+        # may not negotiate ALPN, resulting in a null protocol
+        HTTPClient client({
+            "url": asyncSslUrl,
+            "timeout": 5s,
+            "ssl_verify_cert": False,
+            "http_version": "1.1",
+        });
+        client.connect();
+        on_exit client.disconnect();
+
+        # Test basic GET request over HTTPS with HTTP/1.1
+        assertEq("GET, secure, /secure", client.get("/secure"));
+
+        # Test POST over HTTPS with HTTP/1.1
+        hash<auto> resp = client.send("secure-data", "POST", "/secure-post");
+        assertEq(200, resp.status_code);
+        assertEq("POST, secure-data, secure-post, /secure-post", resp.body);
+
+        # Test keep-alive over HTTPS with HTTP/1.1
+        assertEq("GET, test1, /test1", client.get("/test1"));
+        assertEq("GET, test2, /test2", client.get("/test2"));
+    }
+
     asyncModeErrorResponsesTest() {
         # Test error responses (4xx, 5xx) with async mode
         # Use error_passthru to get error responses without exceptions
@@ -995,6 +1023,80 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         wsc.send("world-ssl-http1");
         assertEq(0, msgReceived.waitForZero(5s));
         assertEq("ECHO:world-ssl-http1", receivedMsg);
+    }
+
+    asyncModeClientCertTest() {
+        # Test client certificate capture in async mode
+        # Validates that get_remote_certs, ssl_verify_flags, and ssl_accept_all_certs
+        # are properly propagated through the async I/O controller
+
+        Logger certLogger("cert-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            certLogger.addAppender(new StdoutAppender());
+        }
+        HttpServer certServer(<HttpServerOptionInfo>{
+            "logger": certLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+        on_exit certServer.stop();
+        certServer.setDefaultHandler("my-handler", new ReqHandler());
+
+        int certPort = certServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "get_remote_certs": True,
+        }).port;
+
+        # Write cert/key to temp files for client
+        string cert_fn = tmp_location() + DirSep + get_random_string() + ".pem";
+        {
+            File f();
+            f.open2(cert_fn, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(CertPem);
+        }
+        on_exit unlink(cert_fn);
+        string key_fn = tmp_location() + DirSep + get_random_string() + ".pem";
+        {
+            File f();
+            f.open2(key_fn, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(KeyPem);
+        }
+        on_exit unlink(key_fn);
+
+        certServer.waitForAsyncIo(5s);
+
+        # Verify listener info has correct SSL configuration
+        hash<auto> linfo = certServer.getListenerInfo("listener-0");
+        assertTrue(linfo.get_remote_certs, "get_remote_certs should be True");
+        assertEq(("SSL_VERIFY_PEER",), linfo.ssl_verify_flags);
+        assertTrue(linfo.ssl_accept_all_certs, "ssl_accept_all_certs should be True");
+
+        # Test with HTTP/2 (auto) client cert
+        {
+            HTTPClient client({
+                "url": "https://localhost:" + certPort,
+                "timeout": 5s,
+                "ssl_verify_cert": False,
+                "ssl_cert_path": cert_fn,
+                "ssl_key_path": key_fn,
+            });
+            assertEq("GET, test1, /test1", client.get("/test1"));
+        }
+
+        # Test with explicit HTTP/1.1 client cert
+        {
+            HTTPClient client({
+                "url": "https://localhost:" + certPort,
+                "timeout": 5s,
+                "ssl_verify_cert": False,
+                "ssl_cert_path": cert_fn,
+                "ssl_key_path": key_fn,
+                "http_version": "1.1",
+            });
+            assertEq("GET, test2, /test2", client.get("/test2"));
+        }
     }
 
     asyncModeWebSocket401ThenSuccessTest() {

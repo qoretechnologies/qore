@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file HttpSseStreamPollOperation.qc Poll operation for SSE streaming
 
-/** HttpSseStreamPollOperation.qc Copyright 2024 Qore Technologies, s.r.o.
+/** HttpSseStreamPollOperation.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,7 +34,6 @@ public namespace HttpServerAsyncIo {
     SSE connections are persistent and unidirectional (server to client).
     The client receives events in the text/event-stream format.
 
-    @since HttpServerAsyncIo 1.0
 */
 public class HttpSseStreamPollOperation inherits AbstractPollOperation {
     public {
