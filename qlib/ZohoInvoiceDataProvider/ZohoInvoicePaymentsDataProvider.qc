@@ -44,6 +44,18 @@ public class ZohoInvoicePaymentsDataProvider inherits ZohoInvoiceDataProviderBas
 
         #! Search options
         const SearchOptions = {
+            "organization_id": <DataProviderOptionInfo>{
+                "display_name": "Organization",
+                "short_desc": "Zoho Invoice organization",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "The Zoho Invoice organization ID (handled automatically by REST client)",
+            },
+            "payment_id": <DataProviderOptionInfo>{
+                "display_name": "Payment ID",
+                "short_desc": "Get specific payment",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Get a specific payment by ID (for DPAT_FIND_SINGLE)",
+            },
             "customer_id": <DataProviderOptionInfo>{
                 "display_name": "Customer ID",
                 "short_desc": "Filter by customer",
@@ -111,7 +123,13 @@ public class ZohoInvoicePaymentsDataProvider inherits ZohoInvoiceDataProviderBas
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        # Build query parameters
+        # If payment_id is provided, fetch single payment (for DPAT_FIND_SINGLE)
+        if (search_options.payment_id) {
+            hash<auto> response = doGet(sprintf("/customerpayments/%s", search_options.payment_id));
+            return new DefaultRecordIterator(new ListHashIterator((response.customerpayment ?? response.payment,)), where_cond, search_options);
+        }
+
+        # Build query parameters for listing payments
         hash<auto> params;
         if (search_options.customer_id) {
             params.customer_id = search_options.customer_id;

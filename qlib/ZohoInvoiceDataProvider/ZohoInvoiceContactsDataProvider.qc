@@ -44,6 +44,18 @@ public class ZohoInvoiceContactsDataProvider inherits ZohoInvoiceDataProviderBas
 
         #! Search options
         const SearchOptions = {
+            "organization_id": <DataProviderOptionInfo>{
+                "display_name": "Organization",
+                "short_desc": "Zoho Invoice organization",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "The Zoho Invoice organization ID (handled automatically by REST client)",
+            },
+            "contact_id": <DataProviderOptionInfo>{
+                "display_name": "Contact ID",
+                "short_desc": "Get specific contact",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Get a specific contact by ID (for DPAT_FIND_SINGLE)",
+            },
             "status": <DataProviderOptionInfo>{
                 "display_name": "Status",
                 "short_desc": "Filter by status",
@@ -105,7 +117,13 @@ public class ZohoInvoiceContactsDataProvider inherits ZohoInvoiceDataProviderBas
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        # Build query parameters
+        # If contact_id is provided, fetch single contact (for DPAT_FIND_SINGLE)
+        if (search_options.contact_id) {
+            hash<auto> response = doGet(sprintf("/contacts/%s", search_options.contact_id));
+            return new DefaultRecordIterator(new ListHashIterator((response.contact,)), where_cond, search_options);
+        }
+
+        # Build query parameters for listing contacts
         hash<auto> params;
         if (search_options.status) {
             params.status = search_options.status;

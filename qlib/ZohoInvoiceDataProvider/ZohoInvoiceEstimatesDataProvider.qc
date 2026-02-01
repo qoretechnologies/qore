@@ -44,6 +44,18 @@ public class ZohoInvoiceEstimatesDataProvider inherits ZohoInvoiceDataProviderBa
 
         #! Search options
         const SearchOptions = {
+            "organization_id": <DataProviderOptionInfo>{
+                "display_name": "Organization",
+                "short_desc": "Zoho Invoice organization",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "The Zoho Invoice organization ID (handled automatically by REST client)",
+            },
+            "estimate_id": <DataProviderOptionInfo>{
+                "display_name": "Estimate ID",
+                "short_desc": "Get specific estimate",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Get a specific estimate by ID (for DPAT_FIND_SINGLE)",
+            },
             "status": <DataProviderOptionInfo>{
                 "display_name": "Status",
                 "short_desc": "Filter by status",
@@ -111,7 +123,13 @@ public class ZohoInvoiceEstimatesDataProvider inherits ZohoInvoiceDataProviderBa
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        # Build query parameters
+        # If estimate_id is provided, fetch single estimate (for DPAT_FIND_SINGLE)
+        if (search_options.estimate_id) {
+            hash<auto> response = doGet(sprintf("/estimates/%s", search_options.estimate_id));
+            return new DefaultRecordIterator(new ListHashIterator((response.estimate,)), where_cond, search_options);
+        }
+
+        # Build query parameters for listing estimates
         hash<auto> params;
         if (search_options.status) {
             params.status = search_options.status;

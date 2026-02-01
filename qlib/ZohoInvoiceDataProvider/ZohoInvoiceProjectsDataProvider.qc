@@ -44,6 +44,18 @@ public class ZohoInvoiceProjectsDataProvider inherits ZohoInvoiceDataProviderBas
 
         #! Search options
         const SearchOptions = {
+            "organization_id": <DataProviderOptionInfo>{
+                "display_name": "Organization",
+                "short_desc": "Zoho Invoice organization",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "The Zoho Invoice organization ID (handled automatically by REST client)",
+            },
+            "project_id": <DataProviderOptionInfo>{
+                "display_name": "Project ID",
+                "short_desc": "Get specific project",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Get a specific project by ID (for DPAT_FIND_SINGLE)",
+            },
             "status": <DataProviderOptionInfo>{
                 "display_name": "Status",
                 "short_desc": "Filter by status",
@@ -99,7 +111,13 @@ public class ZohoInvoiceProjectsDataProvider inherits ZohoInvoiceDataProviderBas
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        # Build query parameters
+        # If project_id is provided, fetch single project (for DPAT_FIND_SINGLE)
+        if (search_options.project_id) {
+            hash<auto> response = doGet(sprintf("/projects/%s", search_options.project_id));
+            return new DefaultRecordIterator(new ListHashIterator((response.project,)), where_cond, search_options);
+        }
+
+        # Build query parameters for listing projects
         hash<auto> params;
         if (search_options.status) {
             params.status = search_options.status;

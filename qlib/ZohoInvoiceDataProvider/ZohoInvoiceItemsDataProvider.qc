@@ -44,6 +44,18 @@ public class ZohoInvoiceItemsDataProvider inherits ZohoInvoiceDataProviderBase {
 
         #! Search options
         const SearchOptions = {
+            "organization_id": <DataProviderOptionInfo>{
+                "display_name": "Organization",
+                "short_desc": "Zoho Invoice organization",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "The Zoho Invoice organization ID (handled automatically by REST client)",
+            },
+            "item_id": <DataProviderOptionInfo>{
+                "display_name": "Item ID",
+                "short_desc": "Get specific item",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Get a specific item by ID (for DPAT_FIND_SINGLE)",
+            },
             "name": <DataProviderOptionInfo>{
                 "display_name": "Name",
                 "short_desc": "Search by item name",
@@ -99,7 +111,13 @@ public class ZohoInvoiceItemsDataProvider inherits ZohoInvoiceDataProviderBase {
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        # Build query parameters
+        # If item_id is provided, fetch single item (for DPAT_FIND_SINGLE)
+        if (search_options.item_id) {
+            hash<auto> response = doGet(sprintf("/items/%s", search_options.item_id));
+            return new DefaultRecordIterator(new ListHashIterator((response.item,)), where_cond, search_options);
+        }
+
+        # Build query parameters for listing items
         hash<auto> params;
         if (search_options.name) {
             params.name = search_options.name;

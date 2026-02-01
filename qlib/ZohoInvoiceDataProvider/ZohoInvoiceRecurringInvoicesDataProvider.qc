@@ -44,6 +44,18 @@ public class ZohoInvoiceRecurringInvoicesDataProvider inherits ZohoInvoiceDataPr
 
         #! Search options
         const SearchOptions = {
+            "organization_id": <DataProviderOptionInfo>{
+                "display_name": "Organization",
+                "short_desc": "Zoho Invoice organization",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "The Zoho Invoice organization ID (handled automatically by REST client)",
+            },
+            "recurring_invoice_id": <DataProviderOptionInfo>{
+                "display_name": "Recurring Invoice ID",
+                "short_desc": "Get specific recurring invoice",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Get a specific recurring invoice by ID (for DPAT_FIND_SINGLE)",
+            },
             "status": <DataProviderOptionInfo>{
                 "display_name": "Status",
                 "short_desc": "Filter by status",
@@ -99,7 +111,13 @@ public class ZohoInvoiceRecurringInvoicesDataProvider inherits ZohoInvoiceDataPr
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        # Build query parameters
+        # If recurring_invoice_id is provided, fetch single recurring invoice (for DPAT_FIND_SINGLE)
+        if (search_options.recurring_invoice_id) {
+            hash<auto> response = doGet(sprintf("/recurringinvoices/%s", search_options.recurring_invoice_id));
+            return new DefaultRecordIterator(new ListHashIterator((response.recurring_invoice,)), where_cond, search_options);
+        }
+
+        # Build query parameters for listing recurring invoices
         hash<auto> params;
         if (search_options.status) {
             params.status = search_options.status;

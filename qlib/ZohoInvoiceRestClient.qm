@@ -160,6 +160,12 @@ public class ZohoInvoiceRestClient inherits RestClient::RestClient {
         #! Default OAuth2 grant type
         const DefaultGrantType = "authorization_code";
 
+        #! Default OAuth2 auth args to request offline access (refresh tokens)
+        const DefaultAuthArgs = {
+            "access_type": "offline",
+            "prompt": "consent",
+        };
+
         #! Default "data" option value
         const DefaultData = "json";
 
@@ -167,7 +173,8 @@ public class ZohoInvoiceRestClient inherits RestClient::RestClient {
         const DefaultPingMethod = "GET";
 
         #! Default ping path (organizations endpoint doesn't require org_id)
-        const DefaultPingPath = "/organizations";
+        #! Note: No leading slash because base URL includes /invoice/v3 path
+        const DefaultPingPath = "organizations";
 
         #! Default ping headers
         const DefaultPingHeaders = {
@@ -177,6 +184,7 @@ public class ZohoInvoiceRestClient inherits RestClient::RestClient {
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
+            "oauth2_auth_args": DefaultAuthArgs,
             "ping_headers": DefaultPingHeaders,
             "ping_method": DefaultPingMethod,
             "ping_path": DefaultPingPath,
@@ -288,20 +296,26 @@ ZohoInvoiceRestClient zoho({
         # Build API URL from domain
         rv.url = sprintf("https://www.zohoapis%s/invoice/v3", domain);
 
-        # Build OAuth2 URLs from subdomain and domain
-        rv.oauth2_auth_url = opts.oauth2_auth_url ?? sprintf("https://accounts.%s%s/oauth/v2/auth",
-            subdomain, domain);
-        rv.oauth2_token_url = opts.oauth2_token_url ?? sprintf("https://accounts.%s%s/oauth/v2/token",
-            subdomain, domain);
+        # Check if token-only mode (token provided without OAuth2 credentials)
+        bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
+            && !opts.oauth2_refresh_token;
 
-        # Set default scopes if not provided
-        if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = DefaultScopes;
-        }
+        if (!token_only) {
+            # Build OAuth2 URLs from subdomain and domain
+            rv.oauth2_auth_url = opts.oauth2_auth_url ?? sprintf("https://accounts.%s%s/oauth/v2/auth",
+                subdomain, domain);
+            rv.oauth2_token_url = opts.oauth2_token_url ?? sprintf("https://accounts.%s%s/oauth/v2/token",
+                subdomain, domain);
 
-        # Set default grant type
-        if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = DefaultGrantType;
+            # Set default scopes if not provided
+            if (!rv.oauth2_scopes) {
+                rv.oauth2_scopes = DefaultScopes;
+            }
+
+            # Set default grant type
+            if (!rv.oauth2_grant_type) {
+                rv.oauth2_grant_type = DefaultGrantType;
+            }
         }
 
         # Remove custom options that RestClient doesn't understand
@@ -449,8 +463,13 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
                 + <ConnectionOptionInfo>{
                     "default_value": ZohoInvoiceRestClient::DefaultScopes,
                 },
+                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
+                + <ConnectionOptionInfo>{
+                    "default_value": ZohoInvoiceRestClient::DefaultAuthArgs,
+                },
             },
-            "required_options": "subdomain,domain",
+            "required_options": "subdomain,domain,token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
+                "oauth2_client_id,oauth2_client_secret",
             "messages": (
                 <UiMessageInfo>{
                     "title": "Select Your Zoho Region",
@@ -524,22 +543,21 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
     #! Returns connection options with dynamically built OAuth2 URLs
     /** The OAuth2 URLs are built based on the subdomain and domain options
     */
-    hash<auto> getConnectionOptions() {
-        hash<auto> rv = RestConnection::getConnectionOptions();
-        # Build OAuth2 URLs from subdomain and domain
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        # Always build OAuth2 URLs from subdomain and domain to ensure they match current settings
         string subdomain = rv.subdomain ?? ZohoInvoiceRestClient::DefaultSubdomain;
         string domain = rv.domain ?? ZohoInvoiceRestClient::DefaultDomain;
-        if (!rv.oauth2_auth_url) {
-            rv.oauth2_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
-        }
-        if (!rv.oauth2_token_url) {
-            rv.oauth2_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
-        }
+        rv.oauth2_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
+        rv.oauth2_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
         if (!rv.oauth2_grant_type) {
             rv.oauth2_grant_type = ZohoInvoiceRestClient::DefaultGrantType;
         }
         if (!rv.oauth2_scopes) {
             rv.oauth2_scopes = ZohoInvoiceRestClient::DefaultScopes;
+        }
+        if (!rv.oauth2_auth_args) {
+            rv.oauth2_auth_args = ZohoInvoiceRestClient::DefaultAuthArgs;
         }
         return rv;
     }
@@ -584,13 +602,39 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
     */
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
-        # update the URL immediately if necessary
-        if (update_options && url != DefaultConnectionUrl) {
-            # NOTE: do not update the URL or real URL values here, or the external update will fail, because it will
-            # believe that no changes are necessary
-            doUpdateOptions(self, {
-                "url": DefaultConnectionUrl,
-            });
+        # update the URL and OAuth2 URLs immediately if necessary
+        if (update_options) {
+            hash<auto> updates;
+
+            # Fix URL if needed
+            if (url != DefaultConnectionUrl) {
+                updates.url = DefaultConnectionUrl;
+            }
+
+            # Fix OAuth2 URLs to match current subdomain/domain
+            string subdomain = opts.subdomain ?? ZohoInvoiceRestClient::DefaultSubdomain;
+            string domain = opts.domain ?? ZohoInvoiceRestClient::DefaultDomain;
+            string correct_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
+            string correct_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
+
+            if (opts.oauth2_auth_url != correct_auth_url) {
+                updates.oauth2_auth_url = correct_auth_url;
+            }
+            if (opts.oauth2_token_url != correct_token_url) {
+                updates.oauth2_token_url = correct_token_url;
+            }
+
+            # Fix ping_path if it has a leading slash (would bypass base path /invoice/v3)
+            if (opts.ping_path =~ /^\//) {
+                updates.ping_path = opts.ping_path[1..];
+            }
+
+            # Apply updates if any
+            if (updates) {
+                # NOTE: do not update the URL or real URL values here, or the external update will fail, because it will
+                # believe that no changes are necessary
+                doUpdateOptions(self, updates);
+            }
         }
     }
 
