@@ -181,7 +181,9 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     private int runCommand(string cmd, string script_path, int expect_rc = 0) {
         int timeout_s = 120;
         int mem_limit_kb = 4 * 1024 * 1024; # 4 GB virtual memory limit
+        # GNU time uses -v for verbose; macOS/BSD time uses -l
         *string time_bin = path_exists("/usr/bin/time") ? "/usr/bin/time" : NOTHING;
+        string time_flag = PlatformOS == "Darwin" ? "-l" : "-v";
         TmpFile time_log();
         string wrapped_cmd = sprintf("ulimit -v %d >/dev/null 2>&1; exec %s", mem_limit_kb, cmd);
         *string out_path = NOTHING;
@@ -198,8 +200,8 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         if (path_exists("/usr/bin/timeout")) {
             string wrapped = time_bin
-                ? sprintf("/usr/bin/timeout -k 5s %ds %s -v /bin/sh -c %y 2> %s",
-                    timeout_s, time_bin, wrapped_cmd, time_log.path)
+                ? sprintf("/usr/bin/timeout -k 5s %ds %s %s /bin/sh -c %y 2> %s",
+                    timeout_s, time_bin, time_flag, wrapped_cmd, time_log.path)
                 : sprintf("/usr/bin/timeout -k 5s %ds /bin/sh -c %y",
                     timeout_s, wrapped_cmd);
             int rc = system(wrapped);
@@ -208,17 +210,18 @@ class IRExecModeSmokeTest inherits QUnit::Test {
                 printf("CMD: %s\n", cmd);
             }
             if (time_bin && rc != expect_rc) {
-                printf("Resource usage (time -v):\n%s\n",
+                printf("Resource usage (time %s):\n%s\n", time_flag,
                     ReadOnlyFile::readTextFile(time_log.path) ?? "no time output");
                 preserveFailure(cmd, script_path, out_path, err_path, time_log.path);
             }
             return rc;
         }
         if (time_bin) {
-            string wrapped = sprintf("%s -v /bin/sh -c %y 2> %s", time_bin, wrapped_cmd, time_log.path);
+            string wrapped = sprintf("%s %s /bin/sh -c %y 2> %s",
+                time_bin, time_flag, wrapped_cmd, time_log.path);
             int rc = system(wrapped);
             if (rc != expect_rc) {
-                printf("Resource usage (time -v):\n%s\n",
+                printf("Resource usage (time %s):\n%s\n", time_flag,
                     ReadOnlyFile::readTextFile(time_log.path) ?? "no time output");
                 preserveFailure(cmd, script_path, out_path, err_path, time_log.path);
             }

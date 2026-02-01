@@ -1014,34 +1014,33 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
     if (isFloatConstant(left) && isFloatConstant(right)) {
         return float_op;
     }
-    QoreParseAnalysis left_analysis;
-    QoreParseAnalysis right_analysis;
     if (guaranteedIntType(&left) && guaranteedIntType(&right)) {
         return int_op;
     }
     if (guaranteedFloatType(&left) && guaranteedFloatType(&right)) {
         return float_op;
     }
-    if (parse_context && getAnalysis(left, left_analysis) && getAnalysis(right, right_analysis)) {
-        if (analysisIndicatesInt(left_analysis) && analysisIndicatesInt(right_analysis)) {
-            return int_op;
+    if (parse_context) {
+        QoreParseAnalysis left_analysis;
+        QoreParseAnalysis right_analysis;
+        if (getAnalysis(left, left_analysis) && getAnalysis(right, right_analysis)) {
+            if (analysisIndicatesInt(left_analysis) && analysisIndicatesInt(right_analysis)) {
+                return int_op;
+            }
+            if (analysisIndicatesFloat(left_analysis) && analysisIndicatesFloat(right_analysis)) {
+                return float_op;
+            }
+            const QoreTypeInfo* left_known = selectAnalysisType(left_analysis);
+            const QoreTypeInfo* right_known = selectAnalysisType(right_analysis);
+            if (left_known && right_known && QoreTypeInfo::isType(left_known, NT_INT)
+                    && QoreTypeInfo::isType(right_known, NT_INT)) {
+                return int_op;
+            }
+            if (left_known && right_known && QoreTypeInfo::isType(left_known, NT_FLOAT)
+                    && QoreTypeInfo::isType(right_known, NT_FLOAT)) {
+                return float_op;
+            }
         }
-        if (analysisIndicatesFloat(left_analysis) && analysisIndicatesFloat(right_analysis)) {
-            return float_op;
-        }
-        const QoreTypeInfo* left_known = selectAnalysisType(left_analysis);
-        const QoreTypeInfo* right_known = selectAnalysisType(right_analysis);
-        if (left_known && right_known && QoreTypeInfo::isType(left_known, NT_INT)
-                && QoreTypeInfo::isType(right_known, NT_INT)) {
-            return int_op;
-        }
-        if (left_known && right_known && QoreTypeInfo::isType(left_known, NT_FLOAT)
-                && QoreTypeInfo::isType(right_known, NT_FLOAT)) {
-            return float_op;
-        }
-    }
-    if (guaranteedIntType(&left) && guaranteedIntType(&right)) {
-        return int_op;
     }
     return any_op;
 }
@@ -1902,6 +1901,17 @@ const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* e
 
 bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type,
         bool allow_maybe_nothing) const {
+    // Constants are never NOTHING - no guard needed
+    if (expr && !expr->isNothing() && !expr->hasNode()) {
+        return false;
+    }
+    // Non-ParseNode runtime values (QoreBigIntNode, QoreStringNode, etc.) are never NOTHING
+    if (expr && expr->hasNode()) {
+        const AbstractQoreNode* node = expr->getInternalNode();
+        if (node && !dynamic_cast<const ParseNode*>(node)) {
+            return false;
+        }
+    }
     const QoreTypeInfo* type = getGuaranteedTypeForValue(expr, target_type);
     if (type && QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_NOT_EQUAL) {
         if (expr && expr->hasNode()) {
@@ -2838,22 +2848,8 @@ QoreIRValue QoreIRLowering::lowerLogicalEquals(const QoreValue& expr, std::strin
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = QoreIROpcode::EqAny;
-    QoreParseAnalysis left_analysis;
-    QoreParseAnalysis right_analysis;
-    if ((isIntConstant(eq->getLeft()) && isIntConstant(eq->getRight()))
-        || (getAnalysis(eq->getLeft(), left_analysis)
-            && getAnalysis(eq->getRight(), right_analysis)
-            && isNeverNothingInt(left_analysis)
-            && isNeverNothingInt(right_analysis))) {
-        op = QoreIROpcode::EqInt;
-    } else if ((isFloatConstant(eq->getLeft()) && isFloatConstant(eq->getRight()))
-        || (getAnalysis(eq->getLeft(), left_analysis)
-            && getAnalysis(eq->getRight(), right_analysis)
-            && isNeverNothingFloat(left_analysis)
-            && isNeverNothingFloat(right_analysis))) {
-        op = QoreIROpcode::EqFloat;
-    }
+    QoreIROpcode op = selectComparisonOpcode(eq->getLeft(), eq->getRight(),
+        QoreIROpcode::EqInt, QoreIROpcode::EqFloat, QoreIROpcode::EqAny);
     return lowerBinaryOpOrInvoke(op, expr, left, right, eq->loc, error);
 }
 
@@ -2872,22 +2868,8 @@ QoreIRValue QoreIRLowering::lowerLogicalNotEquals(const QoreValue& expr, std::st
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = QoreIROpcode::NeAny;
-    QoreParseAnalysis left_analysis;
-    QoreParseAnalysis right_analysis;
-    if ((isIntConstant(ne->getLeft()) && isIntConstant(ne->getRight()))
-        || (getAnalysis(ne->getLeft(), left_analysis)
-            && getAnalysis(ne->getRight(), right_analysis)
-            && isNeverNothingInt(left_analysis)
-            && isNeverNothingInt(right_analysis))) {
-        op = QoreIROpcode::NeInt;
-    } else if ((isFloatConstant(ne->getLeft()) && isFloatConstant(ne->getRight()))
-        || (getAnalysis(ne->getLeft(), left_analysis)
-            && getAnalysis(ne->getRight(), right_analysis)
-            && isNeverNothingFloat(left_analysis)
-            && isNeverNothingFloat(right_analysis))) {
-        op = QoreIROpcode::NeFloat;
-    }
+    QoreIROpcode op = selectComparisonOpcode(ne->getLeft(), ne->getRight(),
+        QoreIROpcode::NeInt, QoreIROpcode::NeFloat, QoreIROpcode::NeAny);
     return lowerBinaryOpOrInvoke(op, expr, left, right, ne->loc, error);
 }
 
@@ -2942,17 +2924,8 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThan(const QoreValue& expr, std::str
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = QoreIROpcode::LtAny;
-    QoreParseAnalysis left_analysis;
-    QoreParseAnalysis right_analysis;
-    if (getAnalysis(lt->getLeft(), left_analysis)
-        && getAnalysis(lt->getRight(), right_analysis)) {
-        if (isNeverNothingInt(left_analysis) && isNeverNothingInt(right_analysis)) {
-            op = QoreIROpcode::LtInt;
-        } else if (isNeverNothingFloat(left_analysis) && isNeverNothingFloat(right_analysis)) {
-            op = QoreIROpcode::LtFloat;
-        }
-    }
+    QoreIROpcode op = selectComparisonOpcode(lt->getLeft(), lt->getRight(),
+        QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny);
     return lowerBinaryOpOrInvoke(op, expr, left, right, lt->loc, error);
 }
 
@@ -2971,17 +2944,8 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThanOrEquals(const QoreValue& expr, 
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = QoreIROpcode::LeAny;
-    QoreParseAnalysis left_analysis;
-    QoreParseAnalysis right_analysis;
-    if (getAnalysis(le->getLeft(), left_analysis)
-        && getAnalysis(le->getRight(), right_analysis)) {
-        if (isNeverNothingInt(left_analysis) && isNeverNothingInt(right_analysis)) {
-            op = QoreIROpcode::LeInt;
-        } else if (isNeverNothingFloat(left_analysis) && isNeverNothingFloat(right_analysis)) {
-            op = QoreIROpcode::LeFloat;
-        }
-    }
+    QoreIROpcode op = selectComparisonOpcode(le->getLeft(), le->getRight(),
+        QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny);
     return lowerBinaryOpOrInvoke(op, expr, left, right, le->loc, error);
 }
 
@@ -3000,17 +2964,8 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThan(const QoreValue& expr, std::
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = QoreIROpcode::GtAny;
-    QoreParseAnalysis left_analysis;
-    QoreParseAnalysis right_analysis;
-    if (getAnalysis(gt->getLeft(), left_analysis)
-        && getAnalysis(gt->getRight(), right_analysis)) {
-        if (isNeverNothingInt(left_analysis) && isNeverNothingInt(right_analysis)) {
-            op = QoreIROpcode::GtInt;
-        } else if (isNeverNothingFloat(left_analysis) && isNeverNothingFloat(right_analysis)) {
-            op = QoreIROpcode::GtFloat;
-        }
-    }
+    QoreIROpcode op = selectComparisonOpcode(gt->getLeft(), gt->getRight(),
+        QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny);
     return lowerBinaryOpOrInvoke(op, expr, left, right, gt->loc, error);
 }
 
@@ -3029,17 +2984,8 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThanOrEquals(const QoreValue& exp
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = QoreIROpcode::GeAny;
-    QoreParseAnalysis left_analysis;
-    QoreParseAnalysis right_analysis;
-    if (getAnalysis(ge->getLeft(), left_analysis)
-        && getAnalysis(ge->getRight(), right_analysis)) {
-        if (isNeverNothingInt(left_analysis) && isNeverNothingInt(right_analysis)) {
-            op = QoreIROpcode::GeInt;
-        } else if (isNeverNothingFloat(left_analysis) && isNeverNothingFloat(right_analysis)) {
-            op = QoreIROpcode::GeFloat;
-        }
-    }
+    QoreIROpcode op = selectComparisonOpcode(ge->getLeft(), ge->getRight(),
+        QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny);
     return lowerBinaryOpOrInvoke(op, expr, left, right, ge->loc, error);
 }
 
@@ -3058,17 +3004,8 @@ QoreIRValue QoreIRLowering::lowerLogicalComparison(const QoreValue& expr, std::s
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = QoreIROpcode::CmpAny;
-    QoreParseAnalysis left_analysis;
-    QoreParseAnalysis right_analysis;
-    if (getAnalysis(cmp->getLeft(), left_analysis)
-        && getAnalysis(cmp->getRight(), right_analysis)) {
-        if (isNeverNothingInt(left_analysis) && isNeverNothingInt(right_analysis)) {
-            op = QoreIROpcode::CmpInt;
-        } else if (isNeverNothingFloat(left_analysis) && isNeverNothingFloat(right_analysis)) {
-            op = QoreIROpcode::CmpFloat;
-        }
-    }
+    QoreIROpcode op = selectComparisonOpcode(cmp->getLeft(), cmp->getRight(),
+        QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny);
     return lowerBinaryOpOrInvoke(op, expr, left, right, cmp->loc, error);
 }
 

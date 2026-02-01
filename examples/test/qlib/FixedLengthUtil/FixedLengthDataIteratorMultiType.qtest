@@ -186,12 +186,11 @@ class Test inherits QUnit::Test {
     }
 
     private hash cloneHash(hash source) {
-        hash<auto!> result = ();
-        list keys = source.keys();
-        foreach string key in (keys) {
+        hash<auto> result = {};
+        foreach string key in (source.keys()) {
             result{key} = source{key};
         }
-        return cast<hash>(result);
+        return result;
     }
 
     basicTests() {
