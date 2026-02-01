@@ -1948,6 +1948,15 @@ void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreVal
     if (!value.isValid() || !needsNotNothingGuard(expr, target_type, allow_maybe_nothing)) {
         return;
     }
+    // Skip duplicate guard on the same value
+    QoreIRBasicBlock* current_block = builder.getBlock();
+    if (current_block && !current_block->instructions.empty()) {
+        const auto& last = current_block->instructions.back();
+        if (last->opcode == QoreIROpcode::GuardNotNothing
+                && !last->operands.empty() && last->operands[0].id == value.id) {
+            return;
+        }
+    }
     const QoreProgramLocation* guard_loc = loc;
     if (!guard_loc && expr) {
         guard_loc = getExpressionLocation(*expr);
