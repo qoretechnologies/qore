@@ -122,21 +122,25 @@ public class HttpAsyncTarget {
     */
     abstract onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx);
 
-    #! Returns True if this handler can process requests inline in the I/O thread
-    /** When True, onHttpRequest() is called directly in the I/O callback instead of
-        dispatching to the handler thread pool. This eliminates the overhead of queue
-        push + thread wakeup + context switch for trivial handlers.
+    #! Attempts to handle a request inline in the I/O thread
+    /** Returns a result hash if the request was handled inline, or @ref nothing
+        if it should be dispatched to the handler thread pool via onHttpRequest().
 
-        @warning Only return True for handlers that are very fast and non-blocking.
+        This combines the eligibility check and execution into a single call,
+        avoiding redundant handler lookups. The default implementation returns
+        @ref nothing (all requests go to the thread pool).
+
+        @warning Only handle requests inline that are very fast and non-blocking.
         Long-running handlers will block the I/O thread and stall all other connections
         on that I/O thread.
 
         @param info connection and request information
-        @return True to handle inline, False (default) to dispatch to thread pool
+        @return result hash if handled inline, or @ref nothing to dispatch to thread pool
 
+        @since HttpServerAsyncIo 1.0
     */
-    bool canHandleInline(hash<HttpConnectionInfo> info) {
-        return False;
+    *hash<HttpRequestResultInfo> tryInlineRequest(hash<HttpConnectionInfo> info) {
+        return NOTHING;
     }
 }
 
