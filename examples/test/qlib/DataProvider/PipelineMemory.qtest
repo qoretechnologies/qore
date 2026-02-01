@@ -32,7 +32,9 @@
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/GeneratorDataProvider
 
-%requires process
+%try-module process
+%define NoProcess
+%endtry
 
 %exec-class PipelineMemoryTest
 
@@ -90,6 +92,7 @@ class MemorySnapshotCollector inherits DataProvider::AbstractPipelineMetricsColl
     }
 
     reportMetrics(hash<DataProvider::PipelineMetricsSnapshot> snapshot) {
+%ifndef NoProcess
         hash<auto> mem = Process::getMemorySummaryInfo();
         push snapshots, {
             "rss": mem.rss,
@@ -99,6 +102,7 @@ class MemorySnapshotCollector inherits DataProvider::AbstractPipelineMetricsColl
             "threads": num_threads(),
             "time": now_us(),
         };
+%endif
     }
 
     shutdown() {
@@ -246,6 +250,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
         max_rss_growth = m_options."max-rss-growth" ?? (5 * 1024 * 1024);
         verbose_memory = m_options."verbose-memory" ?? False;
 
+%ifndef NoProcess
         addTestCase("single pipeline memory stability", \singlePipelineTest());
         addTestCase("repeated pipelines memory stability", \repeatedPipelinesTest());
         addTestCase("multi-processor pipeline memory stability", \multiProcessorPipelineTest());
@@ -255,6 +260,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
         addTestCase("accumulating metrics collector", \metricsAccumulatingTest());
         addTestCase("repeated pipelines with metrics", \metricsRepeatedPipelinesTest());
         addTestCase("slow metrics callback", \metricsSlowCallbackTest());
+%endif
 
         set_return_value(main());
     }
@@ -291,12 +297,20 @@ public class PipelineMemoryTest inherits QUnit::Test {
 
     #! Returns current memory info
     private hash<auto> getMemInfo() {
+%ifndef NoProcess
         hash<auto> mem = Process::getMemorySummaryInfo();
         return {
             "rss": mem.rss,
             "vsz": mem.vsz,
             "threads": num_threads(),
         };
+%else
+        return {
+            "rss": 0,
+            "vsz": 0,
+            "threads": num_threads(),
+        };
+%endif
     }
 
     #! Logs memory info if verbose mode is enabled
