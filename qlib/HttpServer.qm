@@ -3301,7 +3301,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     #! Returns whether remote (client) certificate capture is enabled
     /** @return True if remote certificates should be captured during the SSL handshake
 
-        @since HttpServer 1.5
+        @since HttpServer 1.6
     */
     bool getGetRemoteCerts() {
         return get_remote_certs;

@@ -28,7 +28,7 @@
 %requires Logger
 
 module HttpServerAsyncIo {
-    version = "1.0";
+    version = "1.2";
     desc = "Async I/O support for HttpServer";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
