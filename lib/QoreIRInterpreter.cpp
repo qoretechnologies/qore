@@ -480,6 +480,129 @@ static QoreListNode* buildArgList(const std::unordered_map<uint32_t, QoreValue>&
     return args;
 }
 
+// Evaluate an invoke instruction by dispatching to the appropriate eval method.
+// Unary/binary computation opcodes use evalUnary/evalBinary with the IR operand
+// values.  Expression opcodes (Call, DotEval, LoadLValue, etc.) use evalExpr
+// which evaluates the original AST expression.
+//
+// This distinction matters because compound assignment opcodes (AddAssignAny, etc.)
+// return NOTHING when evaluated as full AST statements, but the IR expects the
+// computed value as the result.  Using evalBinary with the operand values returns
+// the correct computed value.
+static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
+        const std::unordered_map<uint32_t, QoreValue>& values, ExceptionSink* xsink) {
+    QoreIROpcode op = inv->invoke_opcode;
+    switch (op) {
+        // Unary computation opcodes
+        case QoreIROpcode::ToBool:
+        case QoreIROpcode::Not:
+        case QoreIROpcode::IsNullOrNothing:
+        case QoreIROpcode::UnaryPlusAny:
+        case QoreIROpcode::UnaryMinusInt:
+        case QoreIROpcode::UnaryMinusFloat:
+        case QoreIROpcode::UnaryMinusAny: {
+            QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
+            return QoreIRInterpreter::evalUnary(op, val, xsink);
+        }
+        // Binary computation opcodes (arithmetic, bitwise, compound assignments, comparisons, etc.)
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::AddAny:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::SubFloat:
+        case QoreIROpcode::SubAny:
+        case QoreIROpcode::MulInt:
+        case QoreIROpcode::MulFloat:
+        case QoreIROpcode::MulAny:
+        case QoreIROpcode::DivInt:
+        case QoreIROpcode::DivFloat:
+        case QoreIROpcode::DivAny:
+        case QoreIROpcode::ModInt:
+        case QoreIROpcode::ModAny:
+        case QoreIROpcode::AndInt:
+        case QoreIROpcode::AndAny:
+        case QoreIROpcode::OrInt:
+        case QoreIROpcode::OrAny:
+        case QoreIROpcode::XorInt:
+        case QoreIROpcode::XorAny:
+        case QoreIROpcode::ShlInt:
+        case QoreIROpcode::ShlAny:
+        case QoreIROpcode::ShrInt:
+        case QoreIROpcode::ShrAny:
+        case QoreIROpcode::ShlAssignInt:
+        case QoreIROpcode::ShlAssignAny:
+        case QoreIROpcode::ShrAssignInt:
+        case QoreIROpcode::ShrAssignAny:
+        case QoreIROpcode::AddAssignInt:
+        case QoreIROpcode::AddAssignFloat:
+        case QoreIROpcode::AddAssignAny:
+        case QoreIROpcode::SubAssignInt:
+        case QoreIROpcode::SubAssignFloat:
+        case QoreIROpcode::SubAssignAny:
+        case QoreIROpcode::MulAssignInt:
+        case QoreIROpcode::MulAssignFloat:
+        case QoreIROpcode::MulAssignAny:
+        case QoreIROpcode::DivAssignInt:
+        case QoreIROpcode::DivAssignFloat:
+        case QoreIROpcode::DivAssignAny:
+        case QoreIROpcode::ModAssignInt:
+        case QoreIROpcode::ModAssignAny:
+        case QoreIROpcode::AndAssignInt:
+        case QoreIROpcode::AndAssignAny:
+        case QoreIROpcode::OrAssignInt:
+        case QoreIROpcode::OrAssignAny:
+        case QoreIROpcode::XorAssignInt:
+        case QoreIROpcode::XorAssignAny:
+        case QoreIROpcode::EqInt:
+        case QoreIROpcode::EqFloat:
+        case QoreIROpcode::EqAny:
+        case QoreIROpcode::NeInt:
+        case QoreIROpcode::NeFloat:
+        case QoreIROpcode::NeAny:
+        case QoreIROpcode::EqHard:
+        case QoreIROpcode::NeHard:
+        case QoreIROpcode::LtInt:
+        case QoreIROpcode::LtFloat:
+        case QoreIROpcode::LtAny:
+        case QoreIROpcode::LeInt:
+        case QoreIROpcode::LeFloat:
+        case QoreIROpcode::LeAny:
+        case QoreIROpcode::GtInt:
+        case QoreIROpcode::GtFloat:
+        case QoreIROpcode::GtAny:
+        case QoreIROpcode::GeInt:
+        case QoreIROpcode::GeFloat:
+        case QoreIROpcode::GeAny:
+        case QoreIROpcode::CmpInt:
+        case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::CmpAny:
+        case QoreIROpcode::FoldlAny:
+        case QoreIROpcode::FoldlInt:
+        case QoreIROpcode::FoldlFloat:
+        case QoreIROpcode::FoldrAny:
+        case QoreIROpcode::FoldrInt:
+        case QoreIROpcode::FoldrFloat:
+        case QoreIROpcode::MapAny:
+        case QoreIROpcode::MapInt:
+        case QoreIROpcode::MapFloat:
+        case QoreIROpcode::SelectAny:
+        case QoreIROpcode::SelectInt:
+        case QoreIROpcode::SelectFloat:
+        case QoreIROpcode::RangeAny:
+        case QoreIROpcode::RangeInt:
+        case QoreIROpcode::RangeFloat:
+        case QoreIROpcode::RangeDate: {
+            QoreValue left = inv->operands.size() > 0 ? getIRValue(values, inv->operands[0]) : QoreValue();
+            QoreValue right = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
+            return QoreIRInterpreter::evalBinary(op, left, right, xsink);
+        }
+        // Everything else (Call, DotEval, LoadLValue, expression ops, etc.)
+        // evaluated through the original AST expression
+        default:
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+    }
+}
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated) {
@@ -767,7 +890,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                QoreValue res = QoreIRInterpreter::evalExpr(inv->invoke_opcode, inv->expr, xsink);
+                QoreValue res = evalInvoke(inv, values, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     prev_block = block;
@@ -1822,8 +1945,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                 } else if (xsink) {
                     QoreValue arg = getIRValue(values, inst->operands[0]);
-                    QoreValue owned_arg = arg.hasNode() ? arg.refSelf() : arg;
-                    xsink->raiseExceptionArg("IR-EXEC-THROW", owned_arg, "throw");
+                    // throw args are always a list: (err, desc[, arg])
+                    // use the same raiseException(list) API as the AST path
+                    if (arg.getType() == NT_LIST) {
+                        xsink->raiseException(arg.get<const QoreListNode>());
+                    } else {
+                        QoreValue owned_arg = arg.hasNode() ? arg.refSelf() : arg;
+                        xsink->raiseExceptionArg("IR-EXEC-THROW", owned_arg, "throw");
+                    }
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 if (throw_inst->exception_target) {

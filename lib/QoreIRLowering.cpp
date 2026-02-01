@@ -3645,19 +3645,11 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
     if (!guardLValueBase(lvalue, error)) {
         return QoreIRValue();
     }
-    if (!exception_stack.empty()) {
-        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-        if (!normal_block) {
-            error = "IR builder failed to create invoke continuation block";
-            return QoreIRValue();
-        }
-        QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
-        inst->invoke_opcode = QoreIROpcode::LoadLValue;
-        builder.setBlock(normal_block);
-        return inst->result;
-    }
-    return builder.createLoadLValue(lvalue, op->loc)->result;
+    // Use expression evaluation (Call) instead of LoadLValue so that both
+    // single-key access (h{"x"}) and multi-key slicing (h{("x","z")}) are
+    // handled correctly; LValueHelper only supports single string keys.
+    std::vector<QoreIRValue> operands;
+    return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerShift(const QoreValue& expr, std::string& error) {
