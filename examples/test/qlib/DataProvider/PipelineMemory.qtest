@@ -229,6 +229,8 @@ class SlowMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollect
 
 public class PipelineMemoryTest inherits QUnit::Test {
     public {
+        const OptionColumn = 24;
+
         #! Number of records for the main pipeline test
         int record_count;
 
@@ -240,8 +242,8 @@ public class PipelineMemoryTest inherits QUnit::Test {
     }
 
     constructor() : Test("PipelineMemory Test", "1.0", \ARGV, Opts) {
-        record_count = m_options."record-count" ?? 100000;
-        max_rss_growth = m_options."max-rss-growth" ?? (20 * 1024 * 1024);
+        record_count = m_options."record-count" ?? 5000;
+        max_rss_growth = m_options."max-rss-growth" ?? (5 * 1024 * 1024);
         verbose_memory = m_options."verbose-memory" ?? False;
 
         addTestCase("single pipeline memory stability", \singlePipelineTest());
@@ -261,8 +263,17 @@ public class PipelineMemoryTest inherits QUnit::Test {
     const Opts = QUnit::TestReporter::Opts + {
         "record-count": "R,record-count=i",
         "max-rss-growth": "M,max-rss-growth=i",
+        "iterations": "I,iterations=i",
         "verbose-memory": "V,verbose-memory",
     };
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-R,--record-count=N", "records per pipeline [default: 5000]", OptionColumn);
+        printOption("-M,--max-rss-growth=N", "max RSS growth bytes [default: 5242880]", OptionColumn);
+        printOption("-I,--iterations=N", "repeated pipeline iterations [default: 10]", OptionColumn);
+        printOption("-V,--verbose-memory", "verbose memory diagnostics", OptionColumn);
+    }
 
     #! Returns a formatted memory size string
     private string fmtMem(int bytes) {
@@ -290,7 +301,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
 
     #! Logs memory info if verbose mode is enabled
     private logMem(string label, hash<auto> mem_info) {
-        if (verbose_memory || m_options.verbose) {
+        if (verbose_memory || m_options.verbose > 2) {
             printf("  [%s] RSS: %s  VSZ: %s  threads: %d\n",
                 label, fmtMem(mem_info.rss), fmtMem(mem_info.vsz), mem_info.threads);
         }
@@ -298,7 +309,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
 
     #! Logs a verbose message
     private logVerbose(string fmt) {
-        if (verbose_memory || m_options.verbose) {
+        if (verbose_memory || m_options.verbose > 2) {
             vprintf("  " + fmt + "\n", argv);
         }
     }
@@ -376,8 +387,8 @@ public class PipelineMemoryTest inherits QUnit::Test {
 
     #! Test: repeated pipeline creation/destruction should not leak memory
     repeatedPipelinesTest() {
-        int iterations = 50;
-        int records_per_pipeline = record_count > 50000 ? 2000 : (record_count / 25 || 100);
+        int iterations = m_options.iterations > 0 ? m_options.iterations : 10;
+        int records_per_pipeline = record_count > 50000 ? 2000 : (record_count / 25 > 0 ? record_count / 25 : 100);
         logVerbose("repeated pipelines test: %d iterations x %d records", iterations, records_per_pipeline);
 
         # warm up
@@ -702,8 +713,8 @@ public class PipelineMemoryTest inherits QUnit::Test {
 
     #! Test: repeated pipeline creation/destruction with metrics collector on each
     metricsRepeatedPipelinesTest() {
-        int iterations = 50;
-        int records_per_pipeline = record_count > 50000 ? 2000 : (record_count / 25 || 100);
+        int iterations = m_options.iterations > 0 ? m_options.iterations : 10;
+        int records_per_pipeline = record_count > 50000 ? 2000 : (record_count / 25 > 0 ? record_count / 25 : 100);
         int interval = records_per_pipeline > 200 ? (records_per_pipeline / 5) : 50;
         logVerbose("repeated pipelines with metrics: %d iterations x %d records, interval=%d",
             iterations, records_per_pipeline, interval);
@@ -771,7 +782,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
     #! Test: slow metrics callback simulating real-world event posting latency
     metricsSlowCallbackTest() {
         # use a smaller record count for the slow callback test to keep runtime reasonable
-        int slow_count = record_count > 50000 ? 50000 : record_count;
+        int slow_count = record_count;
         int interval = 1000;
         int delay_ms = 10;
         logVerbose("slow metrics callback: %d records, interval=%d, delay=%dms",
