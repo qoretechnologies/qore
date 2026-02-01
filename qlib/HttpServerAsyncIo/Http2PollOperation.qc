@@ -89,9 +89,11 @@ public class Http2PollOperation inherits AbstractPollOperation {
         return state;
     }
 
-    #! Returns True when a request is ready to be processed
+    #! Returns True when a request is ready to be processed or a send is complete
+    /** The connection state (Http2 vs Http2Sending) distinguishes which completion occurred.
+    */
     bool goalReached() {
-        return state == STATE_REQUEST_READY;
+        return state == STATE_REQUEST_READY || state == STATE_SENT;
     }
 
     #! Returns True if the connection is closed
