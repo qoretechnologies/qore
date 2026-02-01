@@ -990,7 +990,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         wsc.setAsyncIo(async_mode, async_ctrl);
         if (is_http2_ws) {
             @assert(h2_stream_id > 0, "missing HTTP/2 stream id for WebSocket");
-            wsc.setHttp2StreamContext(new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id));
+            # The WebSocket handler thread owns the socket exclusively and must read
+            # HTTP/2 frames directly (no I/O thread is polling this connection)
+            wsc.setHttp2StreamContext(new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, True));
         }
 
         # Set negotiated extensions on the connection

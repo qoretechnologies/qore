@@ -40,7 +40,7 @@ module AsyncSocketIo {
     license = "MIT";
     init = sub () {
         # Pre-initialize the global controller singleton
-        AsyncSocketIo::globalController = new AsyncSocketIo::AsyncSocketIoController(False);
+        AsyncSocketIo::globalController = new AsyncSocketIo::AsyncSocketIoController(True);
     };
 }
 

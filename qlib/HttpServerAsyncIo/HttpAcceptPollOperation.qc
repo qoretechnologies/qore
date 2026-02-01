@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file HttpAcceptPollOperation.qc Composite poll operation for HTTP accept
 
-/** HttpAcceptPollOperation.qc Copyright 2024 Qore Technologies, s.r.o.
+/** HttpAcceptPollOperation.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,7 +35,6 @@ public namespace HttpServerAsyncIo {
     After the operation completes, the caller should handle HTTP header reading
     separately to allow the listener to accept new connections concurrently.
 
-    @since HttpServerAsyncIo 1.0
 */
 public class HttpAcceptPollOperation inherits AbstractPollOperation {
     public {

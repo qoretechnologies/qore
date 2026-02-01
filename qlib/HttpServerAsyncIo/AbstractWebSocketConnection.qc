@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file AbstractWebSocketConnection.qc Abstract WebSocket connection interface
 
-/** AbstractWebSocketConnection.qc Copyright 2025 Qore Technologies, s.r.o.
+/** AbstractWebSocketConnection.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,7 +33,6 @@ public namespace HttpServerAsyncIo {
     - @ref HttpWebSocketPollOperation for HTTP/1.x
     - @ref Http2WebSocketStream for HTTP/2
 
-    @since HttpServerAsyncIo 1.0
 */
 public class AbstractWebSocketConnection {
     #! Returns the underlying transport protocol
@@ -92,7 +91,6 @@ public class AbstractWebSocketConnection {
 /** Wraps HttpWebSocketPollOperation to implement AbstractWebSocketConnection interface.
     This allows existing HTTP/1.x WebSocket code to work with the unified interface.
 
-    @since HttpServerAsyncIo 1.0
 */
 public class Http1WebSocketConnection inherits AbstractWebSocketConnection {
     private {

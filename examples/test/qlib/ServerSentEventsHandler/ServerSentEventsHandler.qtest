@@ -38,6 +38,9 @@ public class Main inherits QUnit::Test {
     constructor() : Test("ServerSentEventsHandlerTest", "1.0") {
         addTestCase("SSE response status", \sseResponseStatusTest());
         addTestCase("main test", \mainTest());
+        addTestCase("SSE deterministic shutdown", \sseDeterministicShutdownTest());
+        addTestCase("SSE multiple connections shutdown", \sseMultipleConnectionsShutdownTest());
+        addTestCase("SSE shutdown during data delivery", \sseShutdownDuringDataTest());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -122,6 +125,176 @@ public class Main inherits QUnit::Test {
         assertEq(200, rh.status_code);
         string ct = rh."content-type" ?? rh."Content-Type";
         assertTrue(ct && ct.lwr().startsWith(MimeTypeSse), "SSE Content-Type expected");
+    }
+
+    #! Verifies that stop() completes deterministically with an active SSE connection.
+    #! Before the stopStreaming() fix, the handler pool's stopWait() would block
+    #! indefinitely because the SSE handler's polling loop was never signaled to stop.
+    sseDeterministicShutdownTest() {
+        checkModule();
+
+        # Create a dedicated server for this test (separate from the shared one)
+        ServerSentEventHandler test_sse({"logger": logger});
+        hash<HttpServerOptionInfo> test_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer test_http(test_opts);
+        on_exit test_http.stop();
+        test_http.setHandler("sse-handler", "", NOTHING, test_sse);
+        test_http.setDefaultHandler("sse-handler", test_sse);
+        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # Establish an SSE connection
+        ServerSentEventClient client({"url": "sse://localhost:" + test_port});
+        on_exit delete client;
+        MyObserver observer();
+        client.registerObserver(observer);
+        client.observersReady();
+
+        # Wait for the server to register the connection
+        int retries = 0;
+        while (!test_sse.getConnectionIds() && retries < 100) {
+            usleep(100ms);
+            ++retries;
+        }
+        assertTrue(test_sse.getConnectionIds().size() > 0, "SSE connection should be registered");
+        observer.waitForConnected();
+
+        # Brief delay so the handler's polling loop is running
+        usleep(250ms);
+
+        # Stop the server in a background thread with a timeout guard;
+        # before the fix this would hang indefinitely
+        Queue stopped();
+        background sub () {
+            test_http.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(10s) != NOTHING,
+            "server.stop() should complete deterministically with active SSE connection");
+    }
+
+    #! Verifies deterministic shutdown with multiple concurrent SSE connections.
+    sseMultipleConnectionsShutdownTest() {
+        checkModule();
+
+        ServerSentEventHandler test_sse({"logger": logger});
+        hash<HttpServerOptionInfo> test_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer test_http(test_opts);
+        on_exit test_http.stop();
+        test_http.setHandler("sse-handler", "", NOTHING, test_sse);
+        test_http.setDefaultHandler("sse-handler", test_sse);
+        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # Establish multiple SSE connections
+        int num_clients = 3;
+        list<ServerSentEventClient> clients;
+        on_exit delete clients;
+        list<MyObserver> observers;
+        for (int i = 0; i < num_clients; ++i) {
+            MyObserver obs();
+            ServerSentEventClient c({"url": "sse://localhost:" + test_port});
+            c.registerObserver(obs);
+            c.observersReady();
+            clients += c;
+            observers += obs;
+        }
+
+        # Wait for all connections to be registered
+        int retries = 0;
+        while (test_sse.getConnectionIds().size() < num_clients && retries < 100) {
+            usleep(100ms);
+            ++retries;
+        }
+        assertEq(num_clients, test_sse.getConnectionIds().size(),
+            "all SSE connections should be registered");
+
+        # Wait for all clients to be connected
+        foreach MyObserver obs in (observers) {
+            obs.waitForConnected();
+        }
+        usleep(250ms);
+
+        # Stop the server — all SSE handlers must exit deterministically
+        Queue stopped();
+        background sub () {
+            test_http.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(10s) != NOTHING,
+            "server.stop() should complete with multiple SSE connections");
+    }
+
+    #! Verifies that stop() works cleanly when an SSE handler is actively sending data.
+    sseShutdownDuringDataTest() {
+        checkModule();
+
+        ServerSentEventHandler test_sse({"logger": logger});
+        hash<HttpServerOptionInfo> test_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer test_http(test_opts);
+        on_exit test_http.stop();
+        test_http.setHandler("sse-handler", "", NOTHING, test_sse);
+        test_http.setDefaultHandler("sse-handler", test_sse);
+        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # Establish an SSE connection
+        ServerSentEventClient client({"url": "sse://localhost:" + test_port});
+        on_exit delete client;
+        MyObserver observer();
+        client.registerObserver(observer);
+        client.observersReady();
+
+        # Wait for connection registration
+        int retries = 0;
+        while (!test_sse.getConnectionIds() && retries < 100) {
+            usleep(100ms);
+            ++retries;
+        }
+        assertTrue(test_sse.getConnectionIds().size() > 0, "SSE connection should be registered");
+        observer.waitForConnected();
+        usleep(250ms);
+
+        # Start sending data in a background thread while stopping the server
+        bool stop_sender = False;
+        Counter sender_done(1);
+        on_exit {
+            stop_sender = True;
+            sender_done.waitForZero(5s);
+        }
+        background sub () {
+            on_exit sender_done.dec();
+            int seq = 0;
+            while (!stop_sender) {
+                try {
+                    test_sse.sendAll(<SseMessageInfo>{
+                        "event": "tick",
+                        "data": string(++seq),
+                    });
+                } catch () {
+                    break;
+                }
+                usleep(50ms);
+            }
+        }();
+
+        # Give the sender a moment to start
+        usleep(100ms);
+
+        # Stop the server while data is being sent
+        Queue stopped();
+        background sub () {
+            test_http.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(10s) != NOTHING,
+            "server.stop() should complete while SSE data is being sent");
     }
 }
 

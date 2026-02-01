@@ -1042,6 +1042,9 @@ struct qore_httpclient_priv {
             if (effective_http2_mode == HTTP2_MODE_H2C_DIRECT && !connect_ssl) {
                 // Direct h2c: start HTTP/2 immediately with prior knowledge
                 http2_active = true;
+                // HTTP/2 sends many small frames as separate writes; enable TCP_NODELAY
+                // to prevent Nagle + delayed ACK interaction causing ~40ms per-request delays
+                msock->socket->setNoDelay(1);
                 setH2Session(Http2Session::createClient(msock->socket->priv, xsink, "http"));
                 if (*xsink) {
                     msock->socket->close();
@@ -1079,6 +1082,9 @@ struct qore_httpclient_priv {
                 }
                 // Create HTTP/2 session if HTTP/2 is active
                 if (http2_active) {
+                    // HTTP/2 sends many small frames as separate writes; enable TCP_NODELAY
+                    // to prevent Nagle + delayed ACK interaction causing ~40ms per-request delays
+                    msock->socket->setNoDelay(1);
                     setH2Session(Http2Session::createClient(msock->socket->priv, xsink));
                     if (*xsink) {
                         msock->socket->close();
@@ -3283,6 +3289,9 @@ int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
     if (!http2_globally_disabled && client->http_priv->msock->socket->isHttp2()) {
         // Set http2_active flag on the client
         client->http_priv->http2_active = true;
+        // HTTP/2 sends many small frames as separate writes; enable TCP_NODELAY
+        // to prevent Nagle + delayed ACK interaction causing ~40ms per-request delays
+        client->http_priv->msock->socket->setNoDelay(1);
 
         // For connect-only mode, we're done after HTTP/2 connection is established
         if (connect_only) {

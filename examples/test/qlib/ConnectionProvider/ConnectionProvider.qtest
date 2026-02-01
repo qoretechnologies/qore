@@ -9,6 +9,7 @@
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/FsUtil.qm
 %requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/ConnectionProvider
 
 %include ../../qore/classes/FtpServer.qc
@@ -37,6 +38,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
         addTestCase("invalid", \invalidConnectionTest());
         addTestCase("custom parseUrl", \customParseUrlTest());
         addTestCase("custom option validation", \customValidateOptions());
+        addTestCase("polling monitor", \pollingMonitorTest());
 
         # Return for compatibility with a test harness that checks the return value
         set_return_value(main());
@@ -290,6 +292,352 @@ public class ConnectionProviderTest inherits QUnit::Test {
         IgnoreOptionsConnection h("foo", "bar", "http://localhost", {}, opts);
         assertEq(opts, h.opts);
     }
+
+    pollingMonitorTest() {
+        SimpleTcpServer server();
+        on_exit server.stop();
+        string url = "http://127.0.0.1:" + server.getPort();
+
+        # Test autostart getters/setters and initial state
+        {
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            assertTrue(pcm.getAutostart());
+            assertFalse(pcm.running());
+            pcm.setAutostart(False);
+            assertFalse(pcm.getAutostart());
+            pcm.setAutostart(True);
+            assertTrue(pcm.getAutostart());
+        }
+
+        # Test getInfo with no connections
+        {
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            hash<auto> info = pcm.getInfo();
+            assertTrue(info.autostart);
+            assertFalse(info.connections.val());
+        }
+
+        # Test stop when not running is a no-op
+        {
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.stop();
+            assertFalse(pcm.running());
+        }
+
+        # Test add with non-polling connection
+        {
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            FilesystemConnection fs("test-fs", "test", Util::tmp_location());
+            assertThrows("MONITOR-CONNECTION-ERROR", \pcm.add(), (fs,));
+        }
+
+        # Test addOrUpdate with non-polling connection
+        {
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            FilesystemConnection fs("test-fs", "test", Util::tmp_location());
+            assertThrows("MONITOR-CONNECTION-ERROR", \pcm.addOrUpdate(), (fs,));
+        }
+
+        # Test double start throws error
+        {
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.setAutostart(False);
+            HttpConnection hc("test-dblstart", "test", url);
+            pcm.add(hc);
+            pcm.start();
+            assertTrue(pcm.running());
+            assertThrows("MONITOR-START-ERROR", \pcm.start());
+        }
+
+        # Test removeConnectionEx with non-existent connection
+        {
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            assertThrows("MONITOR-REMOVE-ERROR", \pcm.removeConnectionEx(), "nonexistent");
+        }
+
+        # Test removeConnection with non-existent connection returns False
+        {
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            assertFalse(pcm.removeConnection("nonexistent"));
+        }
+
+        # Test single ping success
+        {
+            HttpConnection hc("test-success", "test", url);
+            assertTrue(hc.getInfo().up);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc);
+            assertTrue(pcm.running());
+            hash<auto> result = pcm.waitForResult();
+            assertEq("test-success", result.name);
+            assertEq("OK", result.result);
+            assertTrue(hc.getInfo().up);
+        }
+
+        # Test ping failure with connection refused
+        {
+            Socket tmp_sock();
+            tmp_sock.bind("127.0.0.1:0");
+            int bad_port = tmp_sock.getSocketInfo().port;
+            delete tmp_sock;
+
+            HttpConnection hc("test-fail", "test", "http://127.0.0.1:" + bad_port);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc);
+            hash<auto> result = pcm.waitForResult();
+            assertEq("test-fail", result.name);
+            assertEq("error", result.result);
+            assertTrue(exists result.ex);
+            assertFalse(hc.getInfo().up);
+        }
+
+        # Test add duplicate same connection is a no-op
+        {
+            HttpConnection hc("test-dup-same", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.setAutostart(False);
+            pcm.add(hc);
+            pcm.add(hc);
+            assertEq(1, pcm.getInfo().connections.size());
+        }
+
+        # Test add duplicate different connection throws error
+        {
+            HttpConnection hc1("test-dup-diff", "test", url);
+            HttpConnection hc2("test-dup-diff", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.setAutostart(False);
+            pcm.add(hc1);
+            assertThrows("MONITOR-ADD-ERROR", \pcm.add(), (hc2,));
+        }
+
+        # Test addOrUpdate replaces existing connection
+        {
+            HttpConnection hc1("test-update", "test", url);
+            HttpConnection hc2("test-update", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc1);
+            hash<auto> result1 = pcm.waitForResult();
+            assertEq("test-update", result1.name);
+            assertEq("OK", result1.result);
+            pcm.addOrUpdate(hc2);
+            hash<auto> result2 = pcm.waitForResult();
+            assertEq("test-update", result2.name);
+            assertEq("OK", result2.result);
+        }
+
+        # Test addOrUpdate same connection is a no-op
+        {
+            HttpConnection hc("test-update-same", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.setAutostart(False);
+            pcm.addOrUpdate(hc);
+            pcm.addOrUpdate(hc);
+            assertEq(1, pcm.getInfo().connections.size());
+        }
+
+        # Test multiple connections all get pinged
+        {
+            HttpConnection hc1("multi-1", "test", url);
+            HttpConnection hc2("multi-2", "test", url);
+            HttpConnection hc3("multi-3", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc1);
+            pcm.add(hc2);
+            pcm.add(hc3);
+            hash<string, bool> seen;
+            for (int i = 0; i < 3; ++i) {
+                hash<auto> result = pcm.waitForResult();
+                assertEq("OK", result.result);
+                seen{result.name} = True;
+            }
+            assertTrue(seen{"multi-1"});
+            assertTrue(seen{"multi-2"});
+            assertTrue(seen{"multi-3"});
+        }
+
+        # Test stopClear removes all connections and stops
+        {
+            HttpConnection hc1("clear-1", "test", url);
+            HttpConnection hc2("clear-2", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc1);
+            pcm.add(hc2);
+            pcm.waitForResult();
+            assertTrue(pcm.running());
+            pcm.stopClear();
+            assertFalse(pcm.running());
+            assertFalse(pcm.getInfo().connections.val());
+        }
+
+        # Test removeConnection auto-stops timer thread when last connection removed
+        {
+            HttpConnection hc("remove-autostop", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc);
+            pcm.waitForResult();
+            assertTrue(pcm.running());
+            assertTrue(pcm.removeConnection("remove-autostop"));
+            pcm.waitStop();
+            assertFalse(pcm.running());
+        }
+
+        # Test removeConnection does not auto-stop when other connections remain
+        {
+            HttpConnection hc1("remain-1", "test", url);
+            HttpConnection hc2("remain-2", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc1);
+            pcm.add(hc2);
+            pcm.waitForResult();
+            pcm.waitForResult();
+            assertTrue(pcm.running());
+            assertTrue(pcm.removeConnection("remain-1"));
+            assertTrue(pcm.running());
+        }
+
+        # Test explicit controller constructor
+        {
+            AsyncSocketIo::AsyncSocketIoController ctrl(True);
+            HttpConnection hc("ctrl-test", "test", url);
+            TestPollingConnectionMonitor pcm(ctrl);
+            on_exit delete pcm;
+            pcm.add(hc);
+            hash<auto> result = pcm.waitForResult();
+            assertEq("ctrl-test", result.name);
+            assertEq("OK", result.result);
+        }
+
+        # Test getInfo shows tracked connections
+        {
+            HttpConnection hc("info-test", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.setAutostart(False);
+            pcm.add(hc);
+            hash<auto> info = pcm.getInfo();
+            assertEq(1, info.connections.size());
+            assertFalse(info.autostart);
+        }
+
+        # Test ping success updates connection status (was down, now up)
+        {
+            HttpConnection hc("recovery-test", "test", url);
+            # Simulate the connection being marked as down
+            hc.handlePingFailed(0s, "simulated failure");
+            assertFalse(hc.getInfo().up);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc);
+            hash<auto> result = pcm.waitForResult();
+            assertEq("recovery-test", result.name);
+            assertEq("OK", result.result);
+            # oldok should be False since the connection was down before
+            assertFalse(result.oldok ?? True);
+            assertTrue(hc.getInfo().up);
+        }
+
+        # Test waitStop returns immediately when not running
+        {
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            assertFalse(pcm.running());
+            pcm.waitStop();
+            assertFalse(pcm.running());
+        }
+
+        # Test remove-last then immediate add restarts timer thread
+        {
+            HttpConnection hc1("race-first", "test", url);
+            HttpConnection hc2("race-second", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc1);
+            pcm.waitForResult();
+            assertTrue(pcm.running());
+            # Remove last connection (timer will try to exit)
+            pcm.removeConnection("race-first");
+            # Immediately add another — must restart timer
+            pcm.add(hc2);
+            hash<auto> result = pcm.waitForResult();
+            assertEq("race-second", result.name);
+            assertEq("OK", result.result);
+            assertTrue(pcm.running());
+        }
+
+        # Test addOrUpdate replaces connection — old ping result is discarded
+        {
+            HttpConnection hc1("replace-test", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc1);
+            hash<auto> r1 = pcm.waitForResult();
+            assertEq("OK", r1.result);
+            # Replace with a new connection object for the same name
+            HttpConnection hc2("replace-test", "test", url);
+            pcm.addOrUpdate(hc2);
+            hash<auto> r2 = pcm.waitForResult();
+            assertEq("replace-test", r2.name);
+            assertEq("OK", r2.result);
+        }
+
+        # Test stop() completes when add() is called concurrently
+        {
+            HttpConnection hc1("stop-race-1", "test", url);
+            HttpConnection hc2("stop-race-2", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc1);
+            pcm.waitForResult();
+            assertTrue(pcm.running());
+            # Schedule add in a background thread — may race with stop()
+            Counter bg_done(1);
+            background sub () {
+                on_exit bg_done.dec();
+                pcm.add(hc2);
+            }();
+            # stop() must return promptly, not deadlock
+            pcm.stop();
+            bg_done.waitForZero();
+        }
+
+        # Test stop() followed by add() restarts monitoring
+        {
+            HttpConnection hc1("stop-add-1", "test", url);
+            HttpConnection hc2("stop-add-2", "test", url);
+            TestPollingConnectionMonitor pcm();
+            on_exit delete pcm;
+            pcm.add(hc1);
+            pcm.waitForResult();
+            assertTrue(pcm.running());
+            pcm.stop();
+            assertFalse(pcm.running());
+            # After stop completes, adding a new connection must restart monitoring
+            pcm.add(hc2);
+            hash<auto> result = pcm.waitForResult();
+            assertEq("stop-add-2", result.name);
+            assertEq("OK", result.result);
+            assertTrue(pcm.running());
+        }
+    }
 }
 
 class IgnoreOptionsConnection inherits HttpConnection {
@@ -338,6 +686,80 @@ class MyConnection inherits AbstractConnection {
 
     object getImpl(bool _ = True, *hash<auto> __) {
         return new Dir(); # just a silence the missing abtsract method. No use for Dir at all
+    }
+}
+
+class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
+    private {
+        Queue msgq();
+    }
+
+    constructor(*LoggerInterface logger) : PollingConnectionMonitor(logger) {
+        ping_timeout = 5s;
+    }
+
+    constructor(AsyncSocketIo::AsyncSocketIoController controller, *LoggerInterface logger)
+            : PollingConnectionMonitor(controller, logger) {
+        ping_timeout = 5s;
+    }
+
+    hash<auto> waitForResult() {
+        return msgq.get(15s);
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
+    private handlePingSuccess(string name, date delta, *bool oldok) {
+        PollingConnectionMonitor::handlePingSuccess(name, delta, oldok);
+        msgq.push({"name": name, "result": "OK", "oldok": oldok});
+    }
+
+    private handlePingFailed(string name, date delta, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::handlePingFailed(name, delta, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
+    private handlePingTimeout(string name, date delta) {
+        PollingConnectionMonitor::handlePingTimeout(name, delta);
+        msgq.push({"name": name, "result": "timeout"});
+    }
+}
+
+class SimpleTcpServer {
+    private:internal {
+        Socket sock();
+        bool exit_flag;
+    }
+
+    constructor() {
+        if (sock.bind("127.0.0.1:0")) {
+            throw "BIND-ERROR", strerror();
+        }
+        if (sock.listen()) {
+            throw "LISTEN-ERROR", strerror();
+        }
+        background acceptLoop();
+    }
+
+    stop() {
+        exit_flag = True;
+    }
+
+    int getPort() {
+        return sock.getSocketInfo().port;
+    }
+
+    private acceptLoop() {
+        while (!exit_flag) {
+            try {
+                *Socket a = sock.accept(100ms);
+            } catch () {
+                # ignore accept errors during shutdown
+            }
+        }
     }
 }
 

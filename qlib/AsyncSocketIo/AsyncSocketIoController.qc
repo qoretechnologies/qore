@@ -1383,7 +1383,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 }
 
 #! Returns the global async I/O controller singleton
-/** The controller is created during module initialization with autostop disabled.
+/** The controller is created during module initialization with autostop enabled.
 */
 public AsyncSocketIoController sub getGlobalAsyncIoController() {
     return globalController;

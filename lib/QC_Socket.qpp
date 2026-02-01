@@ -740,6 +740,99 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
     return rv.release();
 }
 
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send an HTTP response and then read the next HTTP header in non-blocking mode
+/** This is a fused operation that combines three phases:
+    1. Send the HTTP response (non-blocking write)
+    2. Wait for the next request (idle wait with timeout)
+    3. Read and parse the next HTTP request header
+
+    This eliminates the overhead of separate send, idle connection registration, and header
+    read operations in the HTTP keep-alive path.
+
+    @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
+    @param status_desc the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
+    @param http_version the HTTP version string (e.g. "1.1")
+    @param headers optional HTTP headers to include in the response
+    @param body optional message body to send with the response
+    @param idle_timeout idle timeout for waiting for the next request; when the timeout expires, the
+    operation completes with state "timeout"
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object; when goal is reached:
+    - If \c getState() returns \c "header-complete": \c getOutput() returns a hash with \c "hdr" (parsed
+      headers) and \c "info" (header info) keys
+    - If \c getState() returns \c "timeout": the idle timeout expired; connection should be closed
+
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR invalid status code or unsupported body type
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_desc,
+        string http_version, *hash<auto> headers, *data body, timeout idle_timeout) {
+    // Validate status code (must be between 100 and 599)
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR",
+            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+        return QoreValue();
+    }
+
+    // Build the HTTP response in a buffer
+    QoreString hdr(s->getEncoding());
+
+    // Write HTTP response status line
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.concat("\r\n");
+
+    // Get body data and size
+    const void* body_ptr = nullptr;
+    size_t body_size = 0;
+    if (body) {
+        if (body->getType() == NT_BINARY) {
+            const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
+            body_ptr = b->getPtr();
+            body_size = b->size();
+        } else if (body->getType() == NT_STRING) {
+            const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+            body_ptr = str->c_str();
+            body_size = str->size();
+        } else {
+            xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR",
+                "body must be a string or binary value; got type '%s' instead", body->getTypeName());
+            return QoreValue();
+        }
+    }
+
+    // Add headers
+    qore_socket_private::do_headers(hdr, headers, body_size);
+
+    // Create binary result with header + body
+    SimpleRefHolder<BinaryNode> result(new BinaryNode);
+    result->append(hdr.c_str(), hdr.size());
+    if (body_size) {
+        result->append(body_ptr, body_size);
+    }
+
+    // Compute idle deadline in milliseconds from epoch
+    int us;
+    int64 now_s = q_epoch_us(us);
+    int64 now_ms = now_s * 1000 + us / 1000;
+    int64 idle_timeout_ms = idle_timeout / 1000;  // timeout is in microseconds
+    int64 deadline_ms = now_ms + idle_timeout_ms;
+
+    // Create the fused poll operation
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendAndReadHeaderPollOperation(xsink, result.release(), s, deadline_ms), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("send-and-read-header"), xsink);
+    }
+    return rv.release();
+}
+
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
 /** @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
     connection; the @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns
