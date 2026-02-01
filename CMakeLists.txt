@@ -947,6 +947,22 @@ if (SINGLE_COMPILATION_UNIT)
     # already set. Source files in lib/ are found via the #include ""
     # search of the including file's directory.
     add_library(libqore SHARED ${CMAKE_SOURCE_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_SOURCE_HEADERS})
+
+    # Ensure the SCU object is rebuilt when any of its included .cpp files change.
+    # cmake's compiler-generated .d files track these dependencies, but parallel
+    # builds can race with the dependency scanner and miss changes. Adding explicit
+    # OBJECT_DEPENDS gives make direct file-level prerequisites that work reliably
+    # with -j parallel builds.
+    set(SCU_DEPENDS "")
+    foreach(src ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC})
+        if (IS_ABSOLUTE "${src}")
+            list(APPEND SCU_DEPENDS "${src}")
+        else()
+            list(APPEND SCU_DEPENDS "${CMAKE_SOURCE_DIR}/${src}")
+        endif()
+    endforeach()
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/single-compilation-unit.cpp PROPERTIES
+        OBJECT_DEPENDS "${SCU_DEPENDS}")
 else (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
 endif (SINGLE_COMPILATION_UNIT)

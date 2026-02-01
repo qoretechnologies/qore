@@ -1474,52 +1474,69 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         error = "implicit element reference not supported for IR lowering";
         return QoreIRValue();
     }
-    if (dynamic_cast<const ParseReferenceNode*>(node)) {
-        error = "parse reference node not supported for IR lowering";
-        return QoreIRValue();
+    // Delegate unsupported expression types to AST evaluation via ExprOp.
+    // The interpreter's evalExpr() default case calls evalExprNode() for any opcode,
+    // so we use QoreIROpcode::Call as a generic expression evaluation opcode.
+    if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, closure->loc, error);
+    }
+    if (auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, parse_ref->loc, error);
     }
     if (dynamic_cast<const AbstractCallReferenceNode*>(node)) {
-        error = "call reference expression not supported for IR lowering";
-        return QoreIRValue();
+        std::vector<QoreIRValue> operands;
+        auto* parse_node = dynamic_cast<const ParseNode*>(node);
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands,
+            parse_node ? parse_node->loc : nullptr, error);
     }
     if (dynamic_cast<const ContextrefNode*>(node) || dynamic_cast<const ComplexContextrefNode*>(node)) {
         error = "context reference not supported for IR lowering";
         return QoreIRValue();
     }
-    if (dynamic_cast<const SelfVarrefNode*>(node)) {
-        error = "self variable reference not supported for IR lowering";
-        return QoreIRValue();
+    if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, self_ref->loc, error);
     }
-    if (dynamic_cast<const BackquoteNode*>(node)) {
-        error = "backquote expression not supported for IR lowering";
-        return QoreIRValue();
+    if (auto* backquote = dynamic_cast<const BackquoteNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, backquote->loc, error);
     }
-    if (dynamic_cast<const FindNode*>(node)) {
-        error = "find expression not supported for IR lowering";
-        return QoreIRValue();
+    if (auto* find_node = dynamic_cast<const FindNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, find_node->loc, error);
     }
-    if (dynamic_cast<const RuntimeConstantRefNode*>(node)) {
-        error = "runtime constant reference not supported for IR lowering";
-        return QoreIRValue();
+    if (auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, rt_const->loc, error);
     }
-    if (dynamic_cast<const NewHashDeclNode*>(node)
-        || dynamic_cast<const NewComplexHashNode*>(node)
-        || dynamic_cast<const NewComplexListNode*>(node)
-        || dynamic_cast<const ParseNewComplexTypeNode*>(node)) {
-        error = "complex type constructor not supported for IR lowering";
-        return QoreIRValue();
+    if (auto* new_hd = dynamic_cast<const NewHashDeclNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, new_hd->loc, error);
     }
-    if (dynamic_cast<const ParseNoEvalNode*>(node)) {
+    if (auto* new_ch = dynamic_cast<const NewComplexHashNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, new_ch->loc, error);
+    }
+    if (auto* new_cl = dynamic_cast<const NewComplexListNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, new_cl->loc, error);
+    }
+    // ParseNewComplexTypeNode and ParseNoEvalNode are parse-time-only nodes whose evalImpl()
+    // asserts false — they cannot be delegated to AST evaluation
+    if (dynamic_cast<const ParseNewComplexTypeNode*>(node) || dynamic_cast<const ParseNoEvalNode*>(node)) {
         error = "parse-only node not supported for IR lowering";
         return QoreIRValue();
     }
     if (dynamic_cast<const NewObjectCallNode*>(node)) {
-        error = "new object call not supported for IR lowering";
-        return QoreIRValue();
+        // NewObjectCallNode extends AbstractQoreNode directly (no loc), use nullptr
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
     }
-    if (dynamic_cast<const ScopedObjectCallNode*>(node)) {
-        error = "scoped object call not supported for IR lowering";
-        return QoreIRValue();
+    if (auto* scoped_obj = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, scoped_obj->loc, error);
     }
     error = "unsupported expression node for IR lowering";
     return QoreIRValue();

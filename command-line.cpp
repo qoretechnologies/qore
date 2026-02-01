@@ -97,6 +97,9 @@ static bool no_repl = false;
 // dump IR before execution
 static bool ir_dump = false;
 
+// warn on IR fallback to AST
+static bool ir_fallback_warn = false;
+
 // program text given on the command-line
 static const char* cl_pgm = 0;
 
@@ -158,6 +161,7 @@ static const char helpstr[] =
    "  -e, --exec=arg               execute program given on command-line\n"
    "      --exec-mode=arg          execution mode: ast (default), ir, or jit\n"
    "      --ir-dump                dump IR representation before execution\n"
+   "      --ir-fallback-warn       warn on stderr when IR falls back to AST\n"
    "  -g, --disable-gc             disable the garbage collector\n"
    "  -h, --help                   shows this help text and exit\n"
    "  -i, --list-warnings          list all warnings and quit\n"
@@ -659,6 +663,10 @@ static void set_ir_dump(const char* arg) {
     ir_dump = true;
 }
 
+static void set_ir_fallback_warn(const char* arg) {
+    ir_fallback_warn = true;
+}
+
 static void disable_gc(const char* arg) {
     qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
@@ -698,6 +706,7 @@ static struct opt_struct_s {
    { 'e', "exec",                  ARG_MAND, set_exec },
    { '\0', "exec-mode",            ARG_MAND, set_exec_mode },
    { '\0', "ir-dump",              ARG_NONE, set_ir_dump },
+   { '\0', "ir-fallback-warn",    ARG_NONE, set_ir_fallback_warn },
    { 'g', "disable-gc",            ARG_NONE, disable_gc },
    { 'h', "help",                  ARG_NONE, do_help },
    { 'i', "list-warnings",         ARG_NONE, list_warnings },
@@ -996,6 +1005,9 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
       qpgm->setExecMode(exec_mode);
       if (ir_dump) {
           qpgm->setIRDump(true);
+      }
+      if (ir_fallback_warn) {
+          qpgm->setIRFallbackWarn(true);
       }
 
       // set parse defines

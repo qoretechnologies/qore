@@ -1637,7 +1637,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         parse_node = dynamic_cast<const ParseNode*>(expr_inst->expr.getInternalNode());
                     }
                     const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
-                    QoreListNode* arg_list = buildArgList(values, expr_inst->operands, 0, xsink);
+                    // For CallIndirect, operand[0] is the callee — skip it when building args
+                    size_t arg_start = (inst->opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
+                    QoreListNode* arg_list = buildArgList(values, expr_inst->operands, arg_start, xsink);
                     if (xsink && *xsink) {
                         if (arg_list) {
                             arg_list->deref(xsink);

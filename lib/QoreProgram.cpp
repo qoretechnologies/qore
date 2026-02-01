@@ -2002,6 +2002,14 @@ bool QoreProgram::getIRDump() const {
     return priv->ir_dump;
 }
 
+void QoreProgram::setIRFallbackWarn(bool warn) {
+    priv->ir_fallback_warn = warn;
+}
+
+bool QoreProgram::getIRFallbackWarn() const {
+    return priv->ir_fallback_warn;
+}
+
 void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
     ensureIrExecMode(priv);
     // find class

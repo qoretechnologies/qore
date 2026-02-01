@@ -757,10 +757,24 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         return 0;
                     }
                     // IR execution failed without exception — fall through to AST
+                    printd(1, "IR execution failed without exception, falling back to AST\n");
+                    if (qore_program_private::get(*pgm)->ir_fallback_warn) {
+                        printe("IR exec fallback to AST: execution failed\n");
+                    }
+                } else {
+                    // Verification failed — fall through to AST
+                    printd(1, "IR verification failed: %s\n", error.c_str());
+                    if (qore_program_private::get(*pgm)->ir_fallback_warn) {
+                        printe("IR exec fallback to AST: verification failed: %s\n", error.c_str());
+                    }
                 }
-                // Verification failed — fall through to AST
+            } else {
+                // Lowering failed — fall through to AST
+                printd(1, "IR lowering failed: %s\n", error.c_str());
+                if (qore_program_private::get(*pgm)->ir_fallback_warn) {
+                    printe("IR exec fallback to AST: %s\n", error.c_str());
+                }
             }
-            // Lowering failed — fall through to AST
         }
     }
 

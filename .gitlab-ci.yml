@@ -123,6 +123,36 @@ test-alpine-arm64:
           exit 1
         fi
 
+test-ir-ubuntu-amd64:
+  stage: test
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  variables:
+    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    QORE_TEST_OPTS: '-penable-debug --exec-mode=ir --ir-fallback-warn'
+  allow_failure: true
+  before_script:
+    - |
+        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}-ir\", \"description\": \"Gitlab CI IR Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+    - set +e
+  script:
+    - |
+        if test/docker_test/test-ubuntu.sh; then
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}-ir\", \"description\": \"Gitlab CI IR Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 0
+        else
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-ir\", \"description\": \"Gitlab CI IR Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 1
+        fi
+
 test-macos:
   stage: test
   tags:
