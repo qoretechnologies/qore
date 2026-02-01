@@ -206,38 +206,14 @@ public hashdecl PipelineOptionInfo {
     #! the name of the pipeline for logging purposes; if this key is not included, a generic name will be generated
     *string name;
 
-    #! a closure or call reference for receiving periodic metrics updates
-    /** The callback receives a hash<PipelineMetricsSnapshot> with current pipeline metrics.
-        It is called at intervals determined by @ref metrics_interval_ms or @ref metrics_record_interval,
-        whichever threshold is reached first.
+    #! Optional metrics collector for receiving periodic metrics updates
+    /** The pipeline calls the collector's reportMetrics() method synchronously at intervals
+        determined by the collector's getIntervalMs() and getRecordInterval() methods.
+        The collector owns any async/export behavior.
 
         @since DataProvider 3.1
     */
-    *code<nothing(hash<PipelineMetricsSnapshot>)> metrics_callback;
-
-    #! Metrics update interval in milliseconds (default: 100)
-    /** Metrics callback will be invoked at least this often when the pipeline is processing records.
-        Set to 0 to disable time-based updates (only record-count-based updates will occur).
-
-        @since DataProvider 3.1
-    */
-    int metrics_interval_ms = 100;
-
-    #! Minimum number of records between metrics updates (default: 100)
-    /** Metrics callback will be invoked after processing this many records.
-        Set to 0 to disable record-count-based updates (only time-based updates will occur).
-
-        @since DataProvider 3.1
-    */
-    int metrics_record_interval = 100;
-
-    #! Optional context data to include in metrics snapshots
-    /** This data is passed through to the @ref PipelineMetricsSnapshot.user_context field,
-        allowing correlation of metrics with external user context (e.g., FSM execution IDs).
-
-        @since DataProvider 3.1
-    */
-    *hash<auto> metrics_context;
+    *AbstractPipelineMetricsCollector metrics_collector;
 }
 
 #! Pipeline element
@@ -669,17 +645,11 @@ public class PipelineMetricsCollector {
         #! Records processed since last callback
         int records_since_callback = 0;
 
-        #! Callback configuration
-        *code<nothing(hash<PipelineMetricsSnapshot>)> callback;
+        #! Abstract metrics collector
+        AbstractPipelineMetricsCollector collector;
 
-        #! Callback interval in milliseconds
-        int interval_ms;
-
-        #! Record interval for callbacks
-        int record_interval;
-
-        #! User context data to pass through
-        *hash<auto> user_context;
+        #! Flag to ensure shutdown is only called once
+        bool shut_down = False;
 
         #! Parent pipeline reference (weak to avoid circular reference)
         DataProviderPipeline parent;
@@ -687,20 +657,12 @@ public class PipelineMetricsCollector {
 
     #! Creates the metrics collector
     /** @param parent the parent pipeline
-        @param opts pipeline options containing metrics configuration
+        @param collector the abstract metrics collector implementation
     */
-    constructor(DataProviderPipeline parent, *hash<PipelineOptionInfo> opts) {
+    constructor(DataProviderPipeline parent, AbstractPipelineMetricsCollector collector) {
         self.parent := parent;
-        callback = opts.metrics_callback;
-        interval_ms = opts.metrics_interval_ms ?? 100;
-        record_interval = opts.metrics_record_interval ?? 100;
-        user_context = opts.metrics_context;
+        self.collector = collector;
         collection_start = now_us();
-    }
-
-    #! Returns True if metrics collection is enabled
-    bool isEnabled() {
-        return exists callback;
     }
 
     #! Initializes an element for metrics collection
@@ -765,36 +727,61 @@ public class PipelineMetricsCollector {
             records_out = records_in;
         }
 
-        metrics_lock.lock();
-        on_exit metrics_lock.unlock();
-
-        # Update timestamps
-        if (!element_metrics{element_id}.first_record_time) {
-            element_metrics{element_id}.first_record_time = now_us();
-        }
-        element_metrics{element_id}.last_record_time = now_us();
-
-        # Update record counts
-        element_metrics{element_id}.records_processed += records_in;
-        element_metrics{element_id}.records_output += records_out;
-
-        # Update timing
-        element_metrics{element_id}.processing_time_us += processing_us;
-        element_metrics{element_id}.queue_wait_time_us += queue_wait_us;
-
-        # Calculate per-record processing time for min/max tracking
-        int per_record_us = records_in > 0 ? (processing_us / records_in) : processing_us;
-        if (!element_metrics{element_id}.min_processing_time_us
-                || per_record_us < element_metrics{element_id}.min_processing_time_us) {
-            element_metrics{element_id}.min_processing_time_us = per_record_us;
-        }
-        if (!element_metrics{element_id}.max_processing_time_us
-                || per_record_us > element_metrics{element_id}.max_processing_time_us) {
-            element_metrics{element_id}.max_processing_time_us = per_record_us;
+        # Read collector thresholds before acquiring lock to avoid holding the lock
+        # while calling into collector code that may block or throw
+        int ri;
+        int ims;
+        try {
+            ri = collector.getRecordInterval();
+            ims = collector.getIntervalMs();
+        } catch (hash<ExceptionInfo> ex) {
+            parent.logError("metrics collector error reading thresholds: %s: %s", ex.err, ex.desc);
+            ri = 0;
+            ims = 0;
         }
 
-        records_since_callback += records_in;
-        maybeInvokeCallback();
+        *hash<PipelineMetricsSnapshot> snapshot;
+        {
+            metrics_lock.lock();
+            on_exit metrics_lock.unlock();
+
+            # Update timestamps
+            if (!element_metrics{element_id}.first_record_time) {
+                element_metrics{element_id}.first_record_time = now_us();
+            }
+            element_metrics{element_id}.last_record_time = now_us();
+
+            # Update record counts
+            element_metrics{element_id}.records_processed += records_in;
+            element_metrics{element_id}.records_output += records_out;
+
+            # Update timing
+            element_metrics{element_id}.processing_time_us += processing_us;
+            element_metrics{element_id}.queue_wait_time_us += queue_wait_us;
+
+            # Calculate per-record processing time for min/max tracking
+            int per_record_us = records_in > 0 ? (processing_us / records_in) : processing_us;
+            if (!element_metrics{element_id}.min_processing_time_us
+                    || per_record_us < element_metrics{element_id}.min_processing_time_us) {
+                element_metrics{element_id}.min_processing_time_us = per_record_us;
+            }
+            if (!element_metrics{element_id}.max_processing_time_us
+                    || per_record_us > element_metrics{element_id}.max_processing_time_us) {
+                element_metrics{element_id}.max_processing_time_us = per_record_us;
+            }
+
+            records_since_callback += records_in;
+            snapshot = maybeGetSnapshot(ri, ims);
+        }
+
+        # Call collector outside the lock
+        if (snapshot) {
+            try {
+                collector.reportMetrics(snapshot);
+            } catch (hash<ExceptionInfo> ex) {
+                parent.logError("metrics collector error: %s: %s", ex.err, ex.desc);
+            }
+        }
     }
 
     #! Records records entering the pipeline
@@ -871,27 +858,27 @@ public class PipelineMetricsCollector {
         ++element_metrics{element_id}.error_count;
     }
 
-    #! Checks if callback should be invoked and invokes it if thresholds are met
-    private maybeInvokeCallback() {
-        # Called with lock held
-        if (!callback) {
-            return;
-        }
+    #! Checks if a metrics report is needed and returns the snapshot if so
+    /** @return the snapshot to report, or @ref nothing if no report is needed
 
+        @note Called with lock held; returns with lock held. The caller must invoke
+        collector.reportMetrics() outside the lock with the returned snapshot.
+    */
+    private *hash<PipelineMetricsSnapshot> maybeGetSnapshot(int ri, int ims) {
         date now = now_us();
         bool should_invoke = False;
 
         # Check record interval threshold
-        if (record_interval > 0 && records_since_callback >= record_interval) {
+        if (ri > 0 && records_since_callback >= ri) {
             should_invoke = True;
-        } else if (interval_ms > 0) {
+        } else if (ims > 0) {
             # Check time interval threshold
             if (last_callback_time) {
                 int elapsed_ms = (now - last_callback_time).durationMilliseconds();
-                if (elapsed_ms >= interval_ms) {
+                if (elapsed_ms >= ims) {
                     should_invoke = True;
                 }
-            } else if ((now - collection_start).durationMilliseconds() >= interval_ms) {
+            } else if ((now - collection_start).durationMilliseconds() >= ims) {
                 should_invoke = True;
             }
         }
@@ -899,32 +886,52 @@ public class PipelineMetricsCollector {
         if (should_invoke) {
             last_callback_time = now;
             records_since_callback = 0;
-            # Get snapshot while holding lock
-            hash<PipelineMetricsSnapshot> snapshot = getSnapshotIntern();
-            # Invoke callback in background to avoid blocking pipeline
-            background invokeCallback(snapshot);
+            return getSnapshotIntern();
         }
     }
 
-    #! Forces a callback invocation with the current metrics
+    #! Forces a metrics report with the current metrics
+    /** Does nothing if the collector has already been shut down.
+    */
     forceCallback() {
-        if (!callback) {
+        hash<PipelineMetricsSnapshot> snapshot;
+        {
+            metrics_lock.lock();
+            on_exit metrics_lock.unlock();
+            if (shut_down) {
+                return;
+            }
+            snapshot = getSnapshotIntern();
+            last_callback_time = now_us();
+            records_since_callback = 0;
+        }
+        try {
+            collector.reportMetrics(snapshot);
+        } catch (hash<ExceptionInfo> ex) {
+            parent.logError("metrics collector error: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! Returns True if the collector has been shut down
+    bool isShutDown() {
+        metrics_lock.lock();
+        on_exit metrics_lock.unlock();
+        return shut_down;
+    }
+
+    #! Shuts down the collector; safe to call multiple times
+    shutdown() {
+        metrics_lock.lock();
+        if (shut_down) {
+            metrics_lock.unlock();
             return;
         }
-        metrics_lock.lock();
-        hash<PipelineMetricsSnapshot> snapshot = getSnapshotIntern();
-        last_callback_time = now_us();
-        records_since_callback = 0;
+        shut_down = True;
         metrics_lock.unlock();
-        invokeCallback(snapshot);
-    }
-
-    #! Invokes the metrics callback
-    private invokeCallback(hash<PipelineMetricsSnapshot> snapshot) {
         try {
-            callback(snapshot);
+            collector.shutdown();
         } catch (hash<ExceptionInfo> ex) {
-            parent.logError("metrics callback error: %s: %s", ex.err, ex.desc);
+            parent.logError("metrics collector shutdown error: %s: %s", ex.err, ex.desc);
         }
     }
 
@@ -968,7 +975,6 @@ public class PipelineMetricsCollector {
             "num_queues": parent.getInfo().num_queues,
             "bulk_mode": parent.getInfo().bulk,
             "total_errors": total_errors,
-            "user_context": user_context,
         };
     }
 }
@@ -1056,9 +1062,9 @@ public class DataProviderPipeline {
         thread_callback = opts.thread_callback;
         name = opts.name ?? sprintf("unnamed pipeline %y", self.uniqueHash());
 
-        # Initialize metrics collector if callback is provided
-        if (opts.metrics_callback) {
-            metrics_collector = new PipelineMetricsCollector(self, opts);
+        # Initialize metrics collector if provided
+        if (opts.metrics_collector) {
+            metrics_collector = new PipelineMetricsCollector(self, opts.metrics_collector);
         }
 
         lck.lock();
@@ -1096,6 +1102,10 @@ public class DataProviderPipeline {
     destructor() {
         stopIntern();
         cnt.waitForZero();
+        if (metrics_collector && !metrics_collector.isShutDown()) {
+            metrics_collector.forceCallback();
+            metrics_collector.shutdown();
+        }
         throwPipelineException();
     }
 
@@ -1306,9 +1316,10 @@ public class DataProviderPipeline {
         # set the stop time
         stop_time = now_us();
 
-        # Send final metrics callback if enabled
+        # Send final metrics and shut down collector
         if (metrics_collector) {
             metrics_collector.forceCallback();
+            metrics_collector.shutdown();
         }
 
         logInfo("completed processing %d pipeline%s; status %y errors: %d processing time: %y records processed: %d",
@@ -1346,9 +1357,10 @@ public class DataProviderPipeline {
 
         stop_time = now_us();
 
-        # Send final metrics callback if enabled
+        # Send final metrics and shut down collector
         if (metrics_collector) {
             metrics_collector.forceCallback();
+            metrics_collector.shutdown();
         }
 
         locked = False;

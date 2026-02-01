@@ -582,12 +582,28 @@ public class DpqlCompletionProvider {
     }
 
     #! Gets accessor completions for after a field reference
+    /** Only offers accessor syntax when the corresponding expression operators are available
+        in the expression map. If no expression map is set (generic context), all accessors
+        are offered.
+    */
     private list<hash<DpqlCompletionItem>> getAccessorCompletions(string prefix) {
         list<hash<DpqlCompletionItem>> items = ();
         string lwr_prefix = prefix.lwr();
 
         foreach hash<auto> acc in (AccessorCompletions) {
             if (!prefix || index(acc.label.lwr(), lwr_prefix) == 0) {
+                # Only offer accessor completions if the provider supports the corresponding operator
+                if (expressions) {
+                    if (acc.label == "[" && !expressions{DP_FUNC_INDEX} && !expressions{DP_FUNC_SLICE}) {
+                        continue;
+                    }
+                    if (acc.label == "{" && !expressions{DP_FUNC_KEY}) {
+                        continue;
+                    }
+                    if (acc.label == "." && !expressions{DP_FUNC_KEY}) {
+                        continue;
+                    }
+                }
                 items += cast<hash<DpqlCompletionItem>>(acc);
             }
         }

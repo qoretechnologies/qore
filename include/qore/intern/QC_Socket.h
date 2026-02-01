@@ -56,6 +56,7 @@ public:
     QoreSSLPrivateKey* pk = nullptr;
     mutable QoreThreadLock m;
     bool in_non_block = false;
+    int non_block_accept_count = 0;
     bool valid = true;
 
     DLLLOCAL my_socket_priv(QoreSocket* s, QoreSSLCertificate* c = nullptr, QoreSSLPrivateKey* p = nullptr)
@@ -99,12 +100,12 @@ public:
         return 0;
     }
 
-    //! Throws an exception if the in_non_block flag is set or is not valid
+    //! Throws an exception if any non-blocking operation is in progress or is not valid
     DLLLOCAL int checkNonBlock(ExceptionSink* xsink) {
         // must be called with the lock held
         assert(m.trylock());
 
-        if (in_non_block) {
+        if (in_non_block || non_block_accept_count > 0) {
             xsink->raiseException("SOCKET-NON-BLOCK-ERROR", "a non-blocking operation is currently in progress");
             return -1;
         }
@@ -146,6 +147,30 @@ public:
         if (in_non_block) {
             in_non_block = false;
         }
+    }
+
+    //! Increments accept refcount (concurrent accept ops allowed)
+    DLLLOCAL int setNonBlockAccept(ExceptionSink* xsink) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (in_non_block) {
+            xsink->raiseException("SOCKET-NON-BLOCK-ERROR", "a non-blocking operation is currently in progress");
+            return -1;
+        }
+        if (checkValid(xsink)) {
+            return -1;
+        }
+        ++non_block_accept_count;
+        return 0;
+    }
+
+    //! Decrements accept refcount
+    DLLLOCAL void clearNonBlockAccept() {
+        // must be called with the lock held
+        assert(m.trylock());
+        assert(non_block_accept_count > 0);
+        --non_block_accept_count;
     }
 
     //! sets backwards-compatible members on accept in a new object - will be removed in a future version of qore

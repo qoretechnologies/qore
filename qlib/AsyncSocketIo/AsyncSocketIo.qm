@@ -38,6 +38,10 @@ module AsyncSocketIo {
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
     license = "MIT";
+    init = sub () {
+        # Pre-initialize the global controller singleton
+        AsyncSocketIo::globalController = new AsyncSocketIo::AsyncSocketIoController(False);
+    };
 }
 
 /** @mainpage AsyncSocketIo Module

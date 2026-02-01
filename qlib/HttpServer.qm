@@ -3295,6 +3295,22 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # wait for all connection threads to terminate
         cThreads.waitForZero();
 
+        # Close the listener socket explicitly to release the bound port.
+        #
+        # In non-async mode, mainThread() already called shutdown()/close() before
+        # cThreads reached zero, so this is a safe no-op.
+        #
+        # In async mode, mainThread() never runs (no_start_main_thread = True), so the
+        # socket fd is only closed when the HttpListener destructor runs.  However,
+        # after listenerStopped() -> asyncIo.removeListener() -> cancel(), the cancel
+        # result pushed to the coordinator's resultQueue holds a Socket reference to
+        # this listener (SocketPollResultInfo.sock).  That keeps the HttpListener alive
+        # (and the port bound) until the coordinator thread consumes the queue entry.
+        # Without this explicit close, a subsequent addListener() on the same port can
+        # fail with EADDRINUSE/EBADF depending on getaddrinfo() address order.
+        shutdown();
+        close();
+
         # stop all dedicated socket connections
         {
             *hash<string, AbstractHttpSocketHandlerInterface> shh_copy;
