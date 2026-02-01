@@ -1,7 +1,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -91,6 +91,7 @@
 #include "WeakHashReferenceNode.cpp"
 #include "WeakListReferenceNode.cpp"
 #include "support.cpp"
+#include "QoreParseContext.cpp"
 #ifdef HAVE_SIGNAL_HANDLING
 #include "QoreSignal.cpp"
 #endif
@@ -102,6 +103,7 @@
 #include "QoreXSinkException.cpp"
 #include "QoreClass.cpp"
 #include "TypedHashDecl.cpp"
+#include "QoreEnumDecl.cpp"
 #include "QoreReflection.cpp"
 #include "Context.cpp"
 #include "FindNode.cpp"
@@ -124,6 +126,9 @@
 #include "QoreFile.cpp"
 #include "QoreDir.cpp"
 #include "QoreSocket.cpp"
+#include "QoreEventLoop.cpp"
+#include "QoreEventNotifier.cpp"
+#include "QoreSandboxManager.cpp"
 #include "DateTime.cpp"
 #include "QoreLib.cpp"
 #include "QoreTimeZoneManager.cpp"
@@ -139,6 +144,7 @@
 #include "ConstantList.cpp"
 #include "QoreClassList.cpp"
 #include "HashDeclList.cpp"
+#include "EnumList.cpp"
 #include "RuntimeConfig.cpp"
 #include "thread.cpp"
 #include "AbstractThreadResource.cpp"
@@ -344,6 +350,7 @@
 #include "QC_Mutex.cpp"
 #include "QC_Condition.cpp"
 #include "QC_RWLock.cpp"
+#include "QC_SandboxManager.cpp"
 #include "QC_Gate.cpp"
 #include "QC_Sequence.cpp"
 #include "QC_Counter.cpp"
@@ -390,6 +397,8 @@
 #include "QC_SocketPollOperationBase.cpp"
 #include "QC_SocketPollOperation.cpp"
 #include "QC_FilePollOperation.cpp"
+#include "QC_EventNotifier.cpp"
+#include "QC_EventLoop.cpp"
 
 #include "QorePseudoMethods.cpp"
 
