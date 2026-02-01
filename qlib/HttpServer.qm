@@ -2668,17 +2668,15 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         listener.log("doResponse: async_response_out=%y code=%d is_http2=%y",
             exists async_response_out, rv."code", cx."header-info".http2);
         if (async_response_out) {
-            # For HTTP/2 async mode, preserve InputStream for streaming instead of buffering
+            # Preserve InputStream for async mode so the controller can send it
+            # with proper chunked framing; the controller handles thread reassignment
             *InputStream is;
-            if (cx."header-info".http2 && body instanceof InputStream) {
+            if (body instanceof InputStream) {
                 is = body;
                 # Unassign thread affinity while still on the handler thread
                 # so the I/O controller thread can access it later
                 is.unassignThread();
                 body = NOTHING;
-            } else if (body instanceof InputStream) {
-                # For HTTP/1.1 async, we still need to buffer
-                body = readAllStream(body);
             }
             listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
                 rv."code", body ? body.size() : 0, exists is);

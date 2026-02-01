@@ -183,7 +183,10 @@ stream.close();
             #! Default read timeout
             timeout read_timeout = 30s;
 
-            #! String output stream for SSE parsing when chunked
+            #! Accumulated SSE text buffer for multi-chunk events
+            string sse_buffer = "";
+
+            #! String output stream for SSE decompression
             StringOutputStream ostream;
 
             #! Binary output stream for chunk decompression
@@ -239,17 +242,34 @@ stream.close();
             timeout use_to = to ?? read_timeout;
 
             if (info.chunked) {
-                hash<auto> chunk = client.readHTTPChunk(use_to);
-                if (!chunk.body) {
-                    eof = True;
-                    return;
+                # Accumulate chunks until a complete SSE event (delimited by \n\n) is found
+                while (True) {
+                    # Check if the buffer already has a complete event
+                    int sep = sse_buffer.find("\n\n");
+                    if (sep >= 0) {
+                        string event_text = sse_buffer.substr(0, sep + 2);
+                        sse_buffer = sse_buffer.substr(sep + 2);
+                        return Socket::parseServerSentEvent(event_text);
+                    }
+                    # Read more data from the chunked stream
+                    hash<auto> chunk = client.readHTTPChunk(use_to);
+                    if (!chunk.body) {
+                        eof = True;
+                        # Parse any remaining buffered data
+                        if (sse_buffer.val()) {
+                            string remaining = sse_buffer;
+                            sse_buffer = "";
+                            return Socket::parseServerSentEvent(remaining);
+                        }
+                        return;
+                    }
+                    if (use_decompressor) {
+                        dstream.write(chunk.body);
+                        sse_buffer += ostream.getData();
+                    } else {
+                        sse_buffer += chunk.body.toString();
+                    }
                 }
-                if (use_decompressor) {
-                    dstream.write(chunk.body);
-                } else {
-                    ostream.write(chunk.body);
-                }
-                return client.parseServerSentEvent(ostream.getData());
             }
 
             *hash<SseMessageInfo> evt = client.readServerSentEvent(info.content_encoding, use_to);
@@ -281,16 +301,30 @@ stream.close();
             timeout use_to = to ?? read_timeout;
 
             if (info.chunked) {
-                hash<auto> chunk = client.readHTTPChunk(use_to);
-                if (!chunk.body) {
-                    eof = True;
-                    return;
+                while (True) {
+                    hash<auto> chunk = client.readHTTPChunk(use_to);
+                    if (!chunk.body) {
+                        eof = True;
+                        if (decompress && use_decompressor) {
+                            # Return any remaining decompressed data
+                            *binary remaining = bostream.getData();
+                            if (remaining) {
+                                return remaining;
+                            }
+                        }
+                        return;
+                    }
+                    if (decompress && use_decompressor) {
+                        bdstream.write(chunk.body);
+                        *binary result = bostream.getData();
+                        # Decompressor may need more input before producing output
+                        if (result) {
+                            return result;
+                        }
+                        continue;
+                    }
+                    return chunk.body;
                 }
-                if (decompress && use_decompressor) {
-                    bdstream.write(chunk.body);
-                    return bostream.getData();
-                }
-                return chunk.body;
             }
 
             # For non-chunked, read the entire body at once

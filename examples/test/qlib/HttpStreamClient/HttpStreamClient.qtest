@@ -429,10 +429,13 @@ public class HttpStreamClientTest inherits QUnit::Test {
         assertEq("application/json", resp.content_type);
         assertTrue(resp.chunked);
 
-        # Read the chunk
-        *binary chunk = stream.readChunk(5s);
-        assertEq(True, exists chunk);
-        string body = chunk.toString();
+        # Read all chunks (server may split data across multiple HTTP chunks)
+        binary all_data;
+        while (*binary chunk = stream.readChunk(5s)) {
+            all_data += chunk;
+        }
+        assertEq(True, all_data.val());
+        string body = all_data.toString();
         assertTrue(body.regex("Hello, World!"));
         assertTrue(body.regex("\"count\": 42"));
 
@@ -453,10 +456,13 @@ public class HttpStreamClientTest inherits QUnit::Test {
             assertEq("gzip", resp.content_encoding);
             assertTrue(resp.chunked);
 
-            # Read with automatic decompression (default)
-            *binary chunk = stream.readChunk(5s);
-            assertEq(True, exists chunk);
-            string body = chunk.toString();
+            # Read all chunks with automatic decompression (default)
+            binary all_data;
+            while (*binary chunk = stream.readChunk(5s)) {
+                all_data += chunk;
+            }
+            assertEq(True, all_data.val());
+            string body = all_data.toString();
             assertTrue(body.regex("\"compressed\": true"));
             assertTrue(body.regex("\"algorithm\": \"gzip\""));
 
@@ -470,16 +476,19 @@ public class HttpStreamClientTest inherits QUnit::Test {
             HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/gzip-chunked",
                 NOTHING, NOTHING, \info);
 
-            # Read raw compressed bytes
-            *binary raw_chunk = stream.readRawChunk(5s);
-            assertEq(True, exists raw_chunk);
+            # Read all raw compressed chunks
+            binary raw_data;
+            while (*binary raw_chunk = stream.readRawChunk(5s)) {
+                raw_data += raw_chunk;
+            }
+            assertEq(True, raw_data.val());
 
-            # Raw chunk should be gzip-compressed (starts with gzip magic bytes 1f 8b)
-            assertEq(0x1f, raw_chunk[0]);
-            assertEq(0x8b, raw_chunk[1]);
+            # Raw data should be gzip-compressed (starts with gzip magic bytes 1f 8b)
+            assertEq(0x1f, raw_data[0]);
+            assertEq(0x8b, raw_data[1]);
 
             # Manually decompress and verify
-            string body = gunzip_to_string(raw_chunk);
+            string body = gunzip_to_string(raw_data);
             assertTrue(body.regex("\"algorithm\": \"gzip\""));
 
             stream.close();
@@ -496,10 +505,13 @@ public class HttpStreamClientTest inherits QUnit::Test {
             assertEq(200, resp.status_code);
             assertEq("br", resp.content_encoding);
 
-            # Read with automatic decompression
-            *binary chunk = stream.readChunk(5s);
-            assertEq(True, exists chunk);
-            string body = chunk.toString();
+            # Read all chunks with automatic decompression
+            binary all_data;
+            while (*binary chunk = stream.readChunk(5s)) {
+                all_data += chunk;
+            }
+            assertEq(True, all_data.val());
+            string body = all_data.toString();
             assertTrue(body.regex("\"algorithm\": \"brotli\""));
 
             stream.close();
