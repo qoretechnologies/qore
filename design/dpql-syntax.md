@@ -60,11 +60,11 @@ Within quoted field names, use backslash to escape special characters:
 @"path\\file" == "value"     # Field name contains a backslash
 ```
 
-## Field Accessors
+## Field Reference Operators
 
-Accessors allow extracting specific elements from fields.
+Field reference operators allow extracting specific elements from field values.
 
-### Index Accessor
+### Index Operator
 
 Access list elements by index (0-based, negative indices count from end):
 
@@ -74,46 +74,54 @@ Access list elements by index (0-based, negative indices count from end):
 @items[2] == "third"     # Third element
 ```
 
-### Slice Accessor
+Supports multiple indices and ranges in a single expression:
 
-Extract a range of elements:
+```dpql
+@items[0..2, 5, 7]       # Elements 0-2, 5, and 7
+```
+
+### Slice Operator
+
+Extract a range of elements (inclusive on both ends, Qore-style):
 
 ```dpql
 @items[0..2]             # Elements 0, 1, 2 (inclusive)
 @items[1..-1]            # All except first
+@items[2..]              # From index 2 to end
+@items[..5]              # From start through index 5
 ```
 
-### Key Accessor
+### Key Operator
 
-Access hash keys:
+Access hash values by key:
 
 ```dpql
 @record{name}            # Single key
-@record{name, age}       # Multiple keys (subset)
+@record{name, age}       # Multiple keys (returns hash subset)
 @record{"key with spaces"}  # Quoted key name
+@record{123}             # Numeric key
 ```
 
-### Dot Accessor
+### Dot Operator
 
-Access hash member:
+Access hash member (equivalent to single-key operator):
 
 ```dpql
 @record.name             # Equivalent to @record{name}
 @user.address.city       # Nested access
 ```
 
-### Chained Accessors
+### Chained Operators
 
-Accessors can be chained:
+Field reference operators can be chained:
 
 ```dpql
 @data[0]{user}.name      # First element's user's name
 @records[-1]{addresses}[0]  # Last record's first address
+@matrix[0][1]            # Nested list access
 ```
 
-## Operators
-
-### Comparison Operators
+## Comparison Operators
 
 | Operator | Meaning |
 |----------|---------|
@@ -124,7 +132,7 @@ Accessors can be chained:
 | `<` | Less than |
 | `<=` | Less than or equal |
 
-### Logical Operators
+## Logical Operators
 
 | Operator | Meaning |
 |----------|---------|
@@ -132,34 +140,41 @@ Accessors can be chained:
 | `\|\|` | Logical OR |
 | `!` | Logical NOT |
 
-### Set Operators
+## Set Operators
 
 ```dpql
 @status in ("active", "pending")
-@role not in ("guest", "anonymous")
 ```
 
-### Range Operators
+## Range Operators
 
 ```dpql
 @age between 18 and 65
 ```
 
-### Pattern Matching
+## Pattern Matching
 
 ```dpql
 @name =~ /^John/         # Regex match
-@email like "%@example.com"  # SQL-like pattern
+@name =~ /john/i         # Case-insensitive regex
 ```
+
+Supported regex flags:
+- `i` — case-insensitive
+- `s` — dot matches newlines
+- `m` — multiline mode
+- `x` — extended syntax (ignore whitespace)
+- `u` — Unicode
 
 ## Values
 
 ### String Literals
 
-Use double quotes:
+Double-quoted or single-quoted:
 
 ```dpql
 @name == "John"
+@name == 'John'
 @desc == "Line 1\nLine 2"  # Escape sequences work
 ```
 
@@ -169,6 +184,7 @@ Use double quotes:
 @age == 25
 @score >= 75.5
 @temp < -10
+@rate == 1.5e-3            # Scientific notation
 ```
 
 ### Boolean Literals
@@ -182,6 +198,45 @@ Use double quotes:
 
 ```dpql
 @value != null
+```
+
+### Date Literals
+
+ISO-8601 format:
+
+```dpql
+@created < 2026-01-15
+@updated >= 2026-01-02T15:20:11.123+01:00
+```
+
+### Binary Literals
+
+Hex-encoded:
+
+```dpql
+@checksum == <deadbeef>
+```
+
+### List Literals
+
+```dpql
+@tags == (one, two, three)
+@ids == (1, 2, 3)
+```
+
+### Hash Literals
+
+```dpql
+@meta == {a=1, b=two}
+```
+
+### Unquoted Identifiers
+
+Unquoted identifiers on the right-hand side of an expression are treated as string values:
+
+```dpql
+@domain == omq             # Equivalent to @domain == "omq"
+@status == active          # Equivalent to @status == "active"
 ```
 
 ## Expressions
@@ -202,7 +257,7 @@ Expressions can be grouped with parentheses:
 # Compound condition
 @status == "active" && @age >= 18 && @role in ("admin", "editor")
 
-# With accessors
+# With field reference operators
 @users[0].name == "Admin" && @config{timeout} > 30
 
 # Field name with special characters
@@ -210,4 +265,13 @@ Expressions can be grouped with parentheses:
 
 # Field name with escaped quote
 @"field\"with\"quotes" == "value"
+
+# Date comparison
+@created >= 2026-01-01 && @created < 2026-02-01
+
+# Regex with flags
+@email =~ /example\.com$/i
+
+# Chained field reference operators
+@orders[-1]{items}[0].product_id == 123
 ```
