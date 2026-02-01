@@ -1899,6 +1899,81 @@ const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* e
     return nullptr;
 }
 
+// Returns true if the given opcode is guaranteed to produce a non-NOTHING result
+static bool opcodeNeverReturnsNothing(QoreIROpcode op) {
+    switch (op) {
+        // Typed arithmetic always produces int/float values
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::SubFloat:
+        case QoreIROpcode::MulInt:
+        case QoreIROpcode::MulFloat:
+        case QoreIROpcode::DivInt:
+        case QoreIROpcode::DivFloat:
+        case QoreIROpcode::ModInt:
+        case QoreIROpcode::AndInt:
+        case QoreIROpcode::OrInt:
+        case QoreIROpcode::XorInt:
+        case QoreIROpcode::ShlInt:
+        case QoreIROpcode::ShrInt:
+        // Typed unary always produces values
+        case QoreIROpcode::UnaryMinusInt:
+        case QoreIROpcode::UnaryMinusFloat:
+        // All comparisons always produce bool/int values
+        case QoreIROpcode::EqInt:
+        case QoreIROpcode::EqFloat:
+        case QoreIROpcode::EqAny:
+        case QoreIROpcode::NeInt:
+        case QoreIROpcode::NeFloat:
+        case QoreIROpcode::NeAny:
+        case QoreIROpcode::EqHard:
+        case QoreIROpcode::NeHard:
+        case QoreIROpcode::LtInt:
+        case QoreIROpcode::LtFloat:
+        case QoreIROpcode::LtAny:
+        case QoreIROpcode::LeInt:
+        case QoreIROpcode::LeFloat:
+        case QoreIROpcode::LeAny:
+        case QoreIROpcode::GtInt:
+        case QoreIROpcode::GtFloat:
+        case QoreIROpcode::GtAny:
+        case QoreIROpcode::GeInt:
+        case QoreIROpcode::GeFloat:
+        case QoreIROpcode::GeAny:
+        case QoreIROpcode::CmpInt:
+        case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::CmpAny:
+        // Boolean operations always produce bool
+        case QoreIROpcode::ToBool:
+        case QoreIROpcode::Not:
+        case QoreIROpcode::IsNullOrNothing:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
+        // Typed results from method/member evaluation
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        // Integer-typed operations
+        case QoreIROpcode::ElementsInt:
+        case QoreIROpcode::BackgroundInt:
+        // String-typed operations
+        case QoreIROpcode::RegexSubstString:
+        case QoreIROpcode::TrimString:
+        case QoreIROpcode::ChompString:
+        case QoreIROpcode::TransliterateString:
+            return true;
+        default:
+            return false;
+    }
+}
+
 bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type,
         bool allow_maybe_nothing) const {
     // Constants are never NOTHING - no guard needed
@@ -1948,12 +2023,17 @@ void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreVal
     if (!value.isValid() || !needsNotNothingGuard(expr, target_type, allow_maybe_nothing)) {
         return;
     }
-    // Skip duplicate guard on the same value
+    // Check the last instruction in the current block
     QoreIRBasicBlock* current_block = builder.getBlock();
     if (current_block && !current_block->instructions.empty()) {
         const auto& last = current_block->instructions.back();
+        // Skip duplicate guard on the same value
         if (last->opcode == QoreIROpcode::GuardNotNothing
                 && !last->operands.empty() && last->operands[0].id == value.id) {
+            return;
+        }
+        // Skip guard if the value was produced by an opcode that never returns NOTHING
+        if (last->result.id == value.id && opcodeNeverReturnsNothing(last->opcode)) {
             return;
         }
     }
@@ -4188,7 +4268,9 @@ QoreIRValue QoreIRLowering::lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue
     } else {
         result = builder.createExprOp(op, expr, operands, loc)->result;
     }
-    maybeInsertNotNothingGuard(result, &expr, loc, nullptr);
+    if (!opcodeNeverReturnsNothing(op)) {
+        maybeInsertNotNothingGuard(result, &expr, loc, nullptr);
+    }
     return result;
 }
 
@@ -4210,7 +4292,9 @@ QoreIRValue QoreIRLowering::lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreVal
     } else {
         result = builder.createBinaryOp(op, left, right, loc)->result;
     }
-    maybeInsertNotNothingGuard(result, &expr, loc, nullptr);
+    if (!opcodeNeverReturnsNothing(op)) {
+        maybeInsertNotNothingGuard(result, &expr, loc, nullptr);
+    }
     return result;
 }
 
@@ -4232,7 +4316,9 @@ QoreIRValue QoreIRLowering::lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValu
     } else {
         result = builder.createUnaryOp(op, value, loc)->result;
     }
-    maybeInsertNotNothingGuard(result, &expr, loc, nullptr);
+    if (!opcodeNeverReturnsNothing(op)) {
+        maybeInsertNotNothingGuard(result, &expr, loc, nullptr);
+    }
     return result;
 }
 
