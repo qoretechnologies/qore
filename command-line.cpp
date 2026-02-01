@@ -94,6 +94,9 @@ static bool interactive_mode = false;
 // disable automatic REPL mode when stdin is a tty
 static bool no_repl = false;
 
+// dump IR before execution
+static bool ir_dump = false;
+
 // program text given on the command-line
 static const char* cl_pgm = 0;
 
@@ -153,7 +156,8 @@ static const char helpstr[] =
    "  -c, --charset=arg            sets default character set encoding\n"
    "  -D, --define=arg             sets the value of a parse define\n"
    "  -e, --exec=arg               execute program given on command-line\n"
-   "      --exec-mode=arg          execution mode: ast (default) or ir\n"
+   "      --exec-mode=arg          execution mode: ast (default), ir, or jit\n"
+   "      --ir-dump                dump IR representation before execution\n"
    "  -g, --disable-gc             disable the garbage collector\n"
    "  -h, --help                   shows this help text and exit\n"
    "  -i, --list-warnings          list all warnings and quit\n"
@@ -632,7 +636,7 @@ static void set_exec(const char* arg) {
 
 static void set_exec_mode(const char* arg) {
     if (!arg || !*arg) {
-        printe("error: --exec-mode requires a value (ast or ir)\n");
+        printe("error: --exec-mode requires a value (ast, ir, or jit)\n");
         opt_errors++;
         return;
     }
@@ -644,9 +648,17 @@ static void set_exec_mode(const char* arg) {
         exec_mode = QEM_IR;
         return;
     }
-    printe("error: invalid --exec-mode value '%s' (use ast or ir)\n", arg);
+    if (!strcasecmp(arg, "jit")) {
+        exec_mode = QEM_JIT;
+        return;
+    }
+    printe("error: invalid --exec-mode value '%s' (use ast, ir, or jit)\n", arg);
     opt_errors++;
 }
+static void set_ir_dump(const char* arg) {
+    ir_dump = true;
+}
+
 static void disable_gc(const char* arg) {
     qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
@@ -685,6 +697,7 @@ static struct opt_struct_s {
    { 'c', "charset",               ARG_MAND, set_charset },
    { 'e', "exec",                  ARG_MAND, set_exec },
    { '\0', "exec-mode",            ARG_MAND, set_exec_mode },
+   { '\0', "ir-dump",              ARG_NONE, set_ir_dump },
    { 'g', "disable-gc",            ARG_NONE, disable_gc },
    { 'h', "help",                  ARG_NONE, do_help },
    { 'i', "list-warnings",         ARG_NONE, list_warnings },
@@ -981,6 +994,9 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
       QoreProgramHelper qpgm(parse_options, xsink);
       bool mod_errs = false;
       qpgm->setExecMode(exec_mode);
+      if (ir_dump) {
+          qpgm->setIRDump(true);
+      }
 
       // set parse defines
       qpgm->parseCmdLineDefines(xsink, wsink, warnings, defmap);

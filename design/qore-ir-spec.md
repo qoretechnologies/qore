@@ -41,22 +41,26 @@
 - Functions: signature, argument binding, return conventions.
 - Basic blocks: single terminator per block, no implicit fallthrough.
 - SSA policy:
-  - SSA for expression temporaries and instruction results.
-  - Locals and args are modeled with `load.local` / `store.local` / `load.arg`.
+-  - SSA for expression temporaries and instruction results.
+-  - Locals and args are modeled with `load.local` / `store.local` / `load.arg` and are *not* SSA values; they are mutable slots with explicit loads/stores.
+-  - Dominance information is tracked so `phi` nodes inserted at block entries can merge values from each predecessor; the verifier requires every predecessor to supply a value and enforces that values dominate their use sites.
+-  - `select`/conditional operators that lower to multiple blocks must create `phi` nodes at merge points rather than relying on implicit state.
 - Phi rules:
-  - Phi nodes only at block starts.
-  - Each predecessor provides one value.
-  - Verifier enforces dominance and complete predecessor coverage.
+-  - Phi nodes only at block starts.
+-  - Each predecessor provides one value.
+-  - Verifier enforces dominance and complete predecessor coverage.
 - Exception edges:
-  - `invoke` creates an explicit unwind edge.
-  - Cleanup blocks are explicit and have terminators.
+-  - Terminators that can throw (calls, conversions, arithmetic) either emit vanilla control-flow or an `invoke` with both normal and unwind successors.
+-  - Every unwind successor targets a landing pad (cleanup block) that fully describes how temporaries and local slots are restored or decref'd before rethrowing or transferring control to a catch handler.
+-  - Cleanup blocks themselves are basic blocks with terminators (usually `rethrow`, `br`, or `return`) and may chain to additional landing pads when nested try/catch scopes exist.
 
 ## 5a. Parser Analysis & Guard Semantics
-- `QoreParseContext` is threaded through parsing so every node can note whether a declared local or expression is definitely assigned, still `NOTHING`, or has a statically known type. The context exposes helpers like `isLocalDefinitelyAssigned(LocalVar*)`, `guaranteedType(LocalVar*)`, and expression-level answers (`analysisIndicatesInt/Float`).
-- Typed locals (e.g., `int i;`) begin life as `NOTHING` until the first assignment. Any operation that assumes a non-`NOTHING` payload must either insert a `GuardNotNothing` targeting the current exception unwind block or fall back to the `.any` variant that already accepts `NOTHING`.
-- The lowering visitor consults `selectAnalysisType` and `needsNotNothingGuard` so every use site respects the parse analysis and keeps typed operations exception-safe. `GuardNotNothing` is a first-class opcode in `QoreIROpcode` so the interpreter/JIT can rely on it when deoptimization or fallback is required.
-- `QoreIRVerifier` enforces that typed instructions acting on `NOTHING`-capable locals either follow a guard or are replaced by `.any` opcodes, preventing silent semantic gaps between AST and IR interpretations.
-- Parse analysis also informs exception-awareness (whether an expression can throw) so lowering can emit `invoke`, landing pads, and cleanup sequences that mirror the AST interpreter’s behavior.
+- `QoreParseContext` is threaded through parser nodes so every parse tree visitor can inspect flags such as whether a local is definitely assigned, the type the parser infers for an expression, whether an expression can throw, and whether it can read `NOTHING`. The context exposes helpers like `isLocalDefinitelyAssigned(LocalVar*)`, `analysisGuaranteedType(LocalVar*)`, `needsNotNothingGuard(VarRefNode*)`, and expression helpers such as `analysisIndicatesInt/Float`.
+- Typed locals (e.g., `int i;`) begin life as `NOTHING` until they are assigned. Operators or expressions that rely on a non-`NOTHING` payload must either emit a dedicated `GuardNotNothing` instruction (which traps to the current unwind target and can be lowered to `deopt` for JIT) or use a `.any` opcode that explicitly handles `NOTHING` values.
+- `GuardNotNothing` is a first-class opcode in `QoreIROpcode`; it takes a local slot, the current landing pad label, and the expected type. Lowering runs the guard immediately before the typed operation to make baked-in assumptions explicit and exception-safe. The guard is allowed to decrement temporaries and rethrow when the value is `NOTHING`, keeping refcounts balanced.
+- The lowering visitor uses `selectAnalysisType` and `needsNotNothingGuard` so that each use site consults the parser’s definite assignment data rather than relying on external maps. Values that are known to be assigned and typing alignments can lower to typed variants (e.g., `add.int`), while less certain cases fall back to `.any` operations or include the guard + fallback.
+- `QoreIRVerifier` ensures consistency: typed instructions working on `NOTHING`-capable locals either sit behind a `GuardNotNothing` or are replaced by `.any` helpers. When parser analysis indicates a value may be unassigned, the verifier rejects any IR that lacks the corresponding guard to enforce that the interpreter/JIT cannot silently observe invalid data.
+- The parser analysis data also indicates whether an expression can throw (e.g., division, method calls, conversions). Lowering uses that information to decide between simple control-flow terminators and `invoke`/landing-pad sequences so the IR mirrors the AST interpreter’s exception handling path.
 
 ## 6. Call ABI (IR Interpreter + JIT)
 - Execution entry contract (logical IR ABI):
@@ -279,6 +283,15 @@ Run:
 - The context exposes helpers such as `isLocalDefinitelyAssigned`, `guaranteedType`, and `expressionAnalysisType`, enabling lowering to choose typed arithmetic/comparison opcodes, container access paths, or fall back to runtime helpers when the type is ambiguous. These helpers are defined alongside `QoreParseContextLvarHelper`, `QoreParseContextFlagHelper`, and the `analysis` member so parser passes can preserve and restore the right analysis flags across nodes and scopes.
 - Parser analysis also tracks exception behavior. `QoreParseContext::expressionCanThrow()` (and `QoreIRLowering::expressionCanThrow()` which reads it) indicates whether a node may unwind, so lowering emits `invoke` instructions only when needed and wires landing pads/cleanup blocks that run `decref.nothrow` and rethrow exactly as the AST interpreter would.
 
+### Parse-context hooks for lowering
+
+1. `needsGuardForLocal(LocalVar*)` / `isLocalDefinitelyAssigned(LocalVar*)` – lowering queries these routines before emitting typed stores (`store.local`), lvalue increments/decrements, or range/date arithmetic so `GuardNotNothing` is placed whenever a declared local could still be `NOTHING`. The lowering helpers `markLocalAssignmentFromExpression()` and `markLocalUnassignmentFromExpression()` update the parser-side state after assignments, removes, or reassignments inside catch blocks, keeping the analysis aligned with the generated IR.
+2. `markLocalAssignment(LocalVar*, bool, const QoreTypeInfo*)` – called from `storeVarRef`, pre/post increment/decrement lowering, and other assignment helpers to notify the parser that the local now carries a real value (and to capture any narrowed type when available).
+3. `guaranteedType(LocalVar*)` / `expressionHasKnownType()` – these help the visitor pick typed opcodes (`add.int`, `range.date`, etc.) instead of safe `.any` fallbacks.
+4. `expressionCanThrow()` – drives `lowerExprOpOrInvoke()` so the lowering emits `invoke`/`landingpad` sequences only when the parser analysis reports a possible unwind.
+
+Guard targets must stay in sync with the active parse-context information. Whenever a `try` is active, `GuardNotNothing` should carry the innermost catch block as its handler so typed `date`/`range` expressions (such as `start..end` with `GuardNotNothing` guards on the bounds) unwind into the correct handler. `QoreIRLowering` carries this handler in `guard_exception_target_override`, and RAII scopes keep that override in place while nested expressions (like range bounds or date shifts) still rely on the same catch block. The spec matches this behavior by declaring the guard-or-fallback rule: typed ops that depend on parse-context data must either emit `GuardNotNothing` targeting the surrounding catch or emit a `.any` opcode that can safely fall back to the interpreter.
+
 ## 17. Immediate Next Steps
 - Finalize this spec by codifying the SSA semantics, exception edges, reference-count ops, guard rules, and parser-analysis helper requirements (per the Phase 0 checklist) so downstream passes share a stable contract and the `/tmp/qore-jit.md` checklist remains the single source of outstanding decisions.
 - Ship the IR headers (`QoreIR.h`, `QoreIRBuilder.h`, `QoreIRPrinter.h`, `QoreIRVerifier.h`) with concrete enumerations of typed instructions, guard conventions, landing pads, cleanup semantics, and ownership annotations.
@@ -330,7 +343,7 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
    - Run the expanded exec-mode IR smoke suite and record the first clean `valgrind --leak-check=full qore -b ...` result to serve as the Phase 0 regression baseline.
    - Add a paragraph summarizing the current build/test status and any TODOs (e.g., “needs include fix in QoreParseContext.h before lowering can include the new helper,” “valgrind uncovered handler leaks in GuardNotNothing cleanup”) so the next turn can pick up smoothly.
 
-   **Current status (2026-01-29)**: `qore-ir-smoke` passes under Valgrind with **0 errors** and only expected “still reachable” allocations (mpfr/gmp init + dynamic loader). The exec‑mode IR smoke suite now covers cast/cast‑lvalue, dot‑eval call refs, regex extract/no‑match + subst, typed maybe‑NOTHING guards, range slice with maybe‑NOTHING bounds, op‑assign with maybe‑NOTHING lvalues, ternary mixed types, unary maybe‑NOTHING, and hash/list mixed ops. Re‑run and re‑record this baseline after any further lowering changes.
+   **Current status (2026-01-31)**: `qore-ir-smoke` passes under Valgrind with **0 errors** and only expected “still reachable” allocations (mpfr/gmp init + dynamic loader). The exec‑mode IR smoke suite now covers cast/cast‑lvalue, dot‑eval call refs, regex extract/no‑match + subst, typed maybe‑NOTHING guards, range slice with maybe‑NOTHING bounds, op‑assign with maybe‑NOTHING lvalues, ternary mixed types, unary maybe‑NOTHING, and hash/list mixed ops. Recent guard coverage also exercises assignment plus pre/post increment/decrement lowering so the typed locals behind these expressions are forced through `GuardNotNothing`. Re‑run and re‑record this baseline after any further lowering changes.
 5. **Phase‑1 operator family checklist (execute sequentially)**
    - **Range & date helpers**
      * Emit `RangeInt`/`RangeFloat` when parse analysis confirms the bounds, with `RangeAny` as the conservative fallback.
@@ -362,7 +375,59 @@ Keeping this data bound to `QoreParseContext` avoids ad-hoc external maps and st
        `HashMapSelect` opcodes introduced and lowering now emits them; typed cast opcodes (`CastList`, `CastHash`,
        `CastObject`, `CastEnum`) added for resolved cast nodes; Valgrind baseline recorded.
    - **Range/date + container tests**
-     * Extend `examples/test/ir/IRExecMode*.qtest` with cases that explicitly validate the guard policy and exception handling for each operator family.
-     * After each family is widened, rerun `qore -b --exec-mode=ir` under Valgrind and capture the clean heap baseline so we know no new refcount leaks or unwinding regressions slipped in.
-     * Keep updating this checklist so automation scripts can track the next family and whether its smoke tests/Valgrind results exist.
-     * **Status (2026-01-28):** exec-mode IR smoke suite extended through shift/unshift/splice + lvalue shift-assign; Valgrind baseline recorded after each family (range/date, container, shift).
+  * Extend `examples/test/ir/IRExecMode*.qtest` with cases that explicitly validate the guard policy and exception handling for each operator family.
+  * After each family is widened, rerun `qore -b --exec-mode=ir` under Valgrind and capture the clean heap baseline so we know no new refcount leaks or unwinding regressions slipped in.
+  * Keep updating this checklist so automation scripts can track the next family and whether its smoke tests/Valgrind results exist.
+  * **Status (2026-01-28):** exec-mode IR smoke suite extended through shift/unshift/splice + lvalue shift-assign; Valgrind baseline recorded after each family (range/date, container, shift).
+
+## 19. AST→IR Lowering Wiring Notes
+
+The AST→IR lowering pipeline (`lib/QoreIRLowering.cpp`) must stay tightly coupled to `QoreParseContext` so guard insertion, exception edges, and state tracking mirror the interpreter semantics. We are currently wiring the following paths but additional work remains:
+
+1. **StoreLocal / typed assignments** – `storeVarRef` already calls `maybeInsertNotNothingGuard` and `parse_context->markLocalAssignment`, but we still need to audit every assignment-like AST node (`StoreLocal`, list/hash/object stores, shift-assign operators) to ensure the guard is present before writing a typed local. Once `GuardNotNothing` is emitted, the IR verifier and interpreter can rely on the typed assumption and emit `.any` fallbacks only when the guard is absent.
+2. **Guard chains for lvalue bases** – `guardLValueBase` and `guardVarLValue` exist, yet every path that manipulates a container/date/range must move the guard close to the base load so the IR interpreter does not operate on `NOTHING` data. We must finish wiring these helpers into the remaining lowering methods (e.g., `lowerHashObjectDereference`, shift/push/pop wrappers, fold/map selectors).
+3. **Exception path lowering** – Nodes that can throw (calls, casts, `throw`, arithmetic with `.any`) must lower via `lowerExprOpOrInvoke`/`lowerBinaryOpOrInvoke` so `invoke` edges generate landing pads and cleanup sequences (including `decref.nothrow` for temporaries). `try/catch` lowering needs the new throw-expression lowering path that emits real stack unwinding semantics, and `ExceptionSink` propagation must occur even when the guard fails.
+4. **Pre/post increment & decrement** – These operators must use the completed `StoreLocal` lowering path, insert guards on the lvalue base, and update parse-context assignment flags (`markLocalAssignment/Unassignment`) to keep `NOTHING` tracking correct across loops and conditionals.
+5. **Parse-context propagation helpers** – Whenever a lowering path consumes a `QoreValue` that contains a `VarRefNode`, the parse context must be consulted (`needsGuardForLocal`, `guaranteedType`, `markLocalAssignmentFromExpression`) instead of recomputing state. This ensures typed locales, arrays, and closures share a single source of truth for assignment and exception expectations.
+
+Each bullet above should be considered a mini-workstream with accompanying tests in `examples/test/ir`. Exceptions, guards, and stores should be exercised under Valgrind (`qore -b` with `--exec-mode=ir`) so we know the interpreter maintains refcount invariants even during unwinds.
+
+## 20. Phase 1 Operator Family Checklist
+
+We keep a per-family readiness tracker to know which lowering/test gaps still remain. This list should be reviewed after each development sprint, and new entries may be added as the language surface grows.
+
+| Family | Status | Notes / Next Actions |
+| --- | --- | --- |
+| Arithmetic & comparisons | 🟢 | Typed additions/subtractions/comparisons already produce dedicated opcodes; verify `GuardNotNothing` coverage for typed arithmetic on locals (`int`, `float`, `date`). |
+| Logical operators & control flow | 🟡 | Short-circuit `&&`/`||` lowering is in place but the guard policy needs validation when the condition is a typed local carrying `NOTHING`. Add IR smoke cases for `foldl/foldr` with typed accumulators to prove guard placement. |
+| Range / date helpers | 🟡 | Range constructors and slice operators exist, but need more typed guard coverage and the date shift variants require lowering/invocation parity in `try/catch` contexts. Ensure `GuardNotNothing` is inserted for typed bound locals. |
+| Hash / list / object lvalues | 🟡 | Basic load/store coverage exists; shift/add/mul container assignments still fall back to `.any`. Finish lowering for `hash`, `list`, `object` op-assign, and ensure `GuardNotNothing` guards wrap the dereference before mutation. |
+| Shift/assign family (shift/unshift/splice) | 🟡 | Typed `shl`, `shr`, etc. lowering mostly done but the lvalue shift-assign op coverage (e.g., `<<=`, `>>=`) needs completion plus new smoke tests for `list`/`hash` shift assignments against typed locals. |
+| Fold / map / select | 🟡 | Typed `foldl` already emits accumulator-based opcodes; `foldr/map/select` typed coverage should match and include guard coverage for the lambda/iterator outputs. |
+| Call/cast helpers & deref/call forms | 🟡 | `lowerCast`, `lowerCallArgs`, and `lowerCallReference` lower to typed opcodes, but callables with typed locals need guard instrumentation and `invoke` edges when a callee may throw. Extend exec-mode smoke tests to cover mixed-type calls (e.g., cast to `list` vs `hash`) and guard interactions. |
+| Date/time-specific ops | 🟡 | Date literals and arithmetic are partially covered; add forcing of typed date guards, lower date shift ops closer to `GuardNotNothing`, and build smoke tests for date-specific overflow/error cases. |
+| Regex / string helpers | 🟢 | Regex match/extract/subst and string operations have dedicated IR helpers with guard coverage already in smoke tests, but revisit if any new edge cases surface. |
+| Container helpers (extract/remove) | 🟢 | Already lowered through typed `ExtractString`, `RemoveHash`, etc., and covered in exec-mode `IRExecMode*.qtest`. |
+
+Legend: 🟢 = covered/tested, 🟡 = in progress, 🔴 = not yet implemented.
+
+## 21. Next Steps
+
+1. Address the AST→IR wiring notes (Section 19) by finishing the guard/store lowering paths, stabilizing exception lowering, and ensuring the parse context is passed through every lowering visitor.
+2. After each new operator family is wired, extend `examples/test/ir/IRExecMode*.qtest` with matching cases and rerun `./run_tests.sh --exec-mode=ir` under `valgrind --leak-check=full qore -b ./build/qore`.
+3. Update this checklist (Section 20) whenever a family transitions from 🟡 to 🟢 so the team knows which coverage is complete and where to focus next.
+
+## 22. Guard & Exception Wiring Sub-Checklist
+
+This mini-checklist tracks the concrete lowering mechanisms that need the guard/store/exception work referenced in Section 19. Update the status when a path lands so reviewers can see which wiring steps remain.
+
+| Task | Key locations | Status |
+| --- | --- | --- |
+| Guard `StoreLocal`-style assignments | `lowerAssignment`, `lowerPlusEquals`, `lowerMinusEquals`, `lowerMultiplyEquals`, `lowerDivideEquals`, `lowerModuloEquals`, `lowerAndEquals`, `lowerOrEquals`, `lowerXorEquals` (ensure `storeVarRef`, `maybeInsertNotNothingGuard`, `markLocalAssignment`/`Unassignment`). | 🟢 |
+| Guard container/range lvalues | `guardLValueBase` + `guardVarLValue` usages in `lowerSquareBrackets`, `lowerHashObjectDereference`, `lowerShift`, `lowerUnshift`, `lowerSplice`, `lowerListAssignment`, etc.; ensure try/catch overrides the guard exception target. | 🟢 |
+| Pre/post inc/dec tracking | `lowerPreIncrement`, `lowerPostIncrement`, `lowerPreDecrement`, `lowerPostDecrement` (reuse store flow, guard base, call `markLocalAssignmentFromExpression` after success). | 🟢 |
+| Shift-assign & numeric lvalue ops | `lowerShiftLeftEquals`, `lowerShiftRightEquals`, `lowerShift`, `lowerPop`, `lowerPush`, `lowerSplice` (guard base, run through `lowerExprOpOrInvoke#`, write back via `storeVarRef` for locals). | 🟢 |
+| Try/catch & throw lowering | `lowerStatement` try/catch handling, `guard_exception_target_override`, `builder.createLandingPad`, `createCatchException`, `createThrow`/`createRethrow` ensure exception paths match AST semantics. | 🟢 |
+| Expression-level invokes | `lowerExprOpOrInvoke`, `lowerBinaryOpOrInvoke`, `lowerUnaryOpOrInvoke` (respect `expressionCanThrow`, use `exception_stack` for handlers, run `maybeInsertNotNothingGuard` in guard-aware context). | 🟢 |
+
+Legend: 🟢 = done, 🟡 = in progress, 🔴 = not started.

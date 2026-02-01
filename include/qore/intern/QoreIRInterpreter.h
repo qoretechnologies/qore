@@ -35,9 +35,11 @@
 #include <qore/intern/QoreIR.h>
 
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 class ExceptionSink;
+class LocalVar;
 class QoreValue;
 class AbstractStatement;
 
@@ -65,7 +67,8 @@ public:
             ExceptionSink* xsink);
     static bool execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
             std::vector<std::string>* cleanup_log = nullptr, const std::vector<QoreValue>* args = nullptr,
-            const std::vector<QoreValue>* closure = nullptr);
+            const std::vector<QoreValue>* closure = nullptr,
+            const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr);
 };
 
 #endif

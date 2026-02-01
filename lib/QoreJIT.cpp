@@ -99,27 +99,29 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error) {
 }
 
 bool QoreJIT::executeWithFallback(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
-        std::string& error) {
+        std::string& error, const std::unordered_set<const LocalVar*>* pre_instantiated) {
 #ifdef QORE_JIT_ENABLED
     if (!compileFunction(func, error)) {
         if (deopt_policy == DeoptPolicy::DisableJit) {
             return false;
         }
-        return QoreIRInterpreter::execute(func, return_value, xsink, nullptr);
+        return QoreIRInterpreter::execute(func, return_value, xsink, nullptr, nullptr, nullptr,
+            pre_instantiated);
     }
     // JIT execution will replace this once lowering is implemented.
-    return QoreIRInterpreter::execute(func, return_value, xsink, nullptr);
+    return QoreIRInterpreter::execute(func, return_value, xsink, nullptr, nullptr, nullptr,
+        pre_instantiated);
 #else
     error = "JIT support is not enabled in this build";
     return QoreIRInterpreter::execute(func, return_value, xsink, nullptr);
 #endif
 }
 
-uint64 QoreJIT::recordExecution() {
+uint64_t QoreJIT::recordExecution() {
     return ++exec_count;
 }
 
-bool QoreJIT::shouldJit(uint64 count) const {
+bool QoreJIT::shouldJit(uint64_t count) const {
     return count >= hot_threshold;
 }
 

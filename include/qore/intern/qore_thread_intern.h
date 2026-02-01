@@ -638,6 +638,7 @@ public:
 DLLLOCAL const QoreListNode* thread_get_implicit_args();
 
 DLLLOCAL LocalVarValue* thread_find_lvar(const char* id);
+DLLLOCAL LocalVarValue* thread_find_lvar_maybe(const char* id);
 
 // to get the current runtime object
 DLLLOCAL QoreObject* runtime_get_stack_object();

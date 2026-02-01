@@ -1171,6 +1171,11 @@ LocalVarValue* thread_find_lvar(const char* id) {
     return td->tlpd->lvstack.find(id);
 }
 
+LocalVarValue* thread_find_lvar_maybe(const char* id) {
+    ThreadData* td = thread_data.get();
+    return td->tlpd->lvstack.findMaybe(id);
+}
+
 ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     // Get declaration order for this stack entry (issue #5168)

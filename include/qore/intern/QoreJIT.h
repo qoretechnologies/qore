@@ -36,11 +36,14 @@
 #include <string>
 #include <atomic>
 #include <unordered_map>
+#include <unordered_set>
+#include <cstdint>
 
 #include <qore/QoreValue.h>
 #include <qore/Restrictions.h>
 
 class ExceptionSink;
+class LocalVar;
 
 #ifdef QORE_JIT_ENABLED
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
@@ -59,10 +62,10 @@ public:
     bool canJit(int64 parse_options, std::string& reason) const;
     bool compileFunction(const class QoreIRFunction& func, std::string& error);
     bool executeWithFallback(const class QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
-            std::string& error);
+            std::string& error, const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr);
     void shutdown();
-    uint64 recordExecution();
-    bool shouldJit(uint64 count) const;
+    uint64_t recordExecution();
+    bool shouldJit(uint64_t count) const;
     void recordTypeProfile(const QoreValue& value);
     void setDeoptPolicy(DeoptPolicy policy);
     void setOsrEnabled(bool enable);
@@ -76,9 +79,9 @@ private:
     std::unique_ptr<llvm::orc::LLJIT> jit;
 #endif
     bool initialized = false;
-    std::atomic<uint64> exec_count{0};
-    uint64 hot_threshold = 1000;
-    std::unordered_map<qore_type_t, uint64> type_profile;
+    std::atomic<uint64_t> exec_count{0};
+    uint64_t hot_threshold = 1000;
+    std::unordered_map<qore_type_t, uint64_t> type_profile;
     DeoptPolicy deopt_policy = DeoptPolicy::FallbackToInterpreter;
     bool osr_enabled = false;
 };

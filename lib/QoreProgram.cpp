@@ -1925,7 +1925,8 @@ void QoreProgram::parsePending(const char* code, const char* label, ExceptionSin
 
 static void ensureIrExecMode(qore_program_private* priv) {
     // JIT/IR exec mode only supports PO_MODERN; fallback to AST otherwise.
-    if (priv->exec_mode == QEM_IR && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
+    if ((priv->exec_mode == QEM_IR || priv->exec_mode == QEM_JIT)
+        && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
         if (!priv->ir_fallback_warned) {
             printe("IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
             priv->ir_fallback_warned = true;
@@ -1991,6 +1992,14 @@ void QoreProgram::setExecMode(qore_exec_mode_t mode) {
 
 qore_exec_mode_t QoreProgram::getExecMode() const {
     return priv->exec_mode;
+}
+
+void QoreProgram::setIRDump(bool dump) {
+    priv->ir_dump = dump;
+}
+
+bool QoreProgram::getIRDump() const {
+    return priv->ir_dump;
 }
 
 void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {

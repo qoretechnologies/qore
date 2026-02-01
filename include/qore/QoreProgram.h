@@ -805,6 +805,12 @@ public:
     //! gets the current execution mode for this program
     DLLEXPORT qore_exec_mode_t getExecMode() const;
 
+    //! enables or disables IR dump before execution
+    DLLEXPORT void setIRDump(bool dump);
+
+    //! returns true if IR dump is enabled
+    DLLEXPORT bool getIRDump() const;
+
     //! issues a module command for the given module; the module is loaded into the current %Program object if it is not already present
     /** @param module the module name; must be in the default character encoding (normally UTF-8)
         @param cmd the command string to execute to be parsed by the module (normally UTF-8)

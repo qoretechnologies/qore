@@ -4849,16 +4849,23 @@ int main() {
             return 1;
         }
     }
+    LocalVar guard_local("guard_local", bigIntTypeInfo);
     if (!lowerAndExpectGuard("ir_guard_plus_equals_local",
             QoreValue(new QorePlusEqualsOperatorNode(nullptr,
-                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("guard_local"), &guard_local, false)),
                 QoreValue(1))))) {
         return 1;
     }
     if (!lowerAndExpectGuard("ir_guard_shift_left_equals_local",
             QoreValue(new QoreShiftLeftEqualsOperatorNode(nullptr,
-                QoreValue(new VarRefNode(nullptr, strdup("assign_local"), &assign_local, false)),
+                QoreValue(new VarRefNode(nullptr, strdup("guard_local"), &guard_local, false)),
                 QoreValue(1))))) {
+        return 1;
+    }
+    if (!lowerAndExpectGuard("ir_guard_assignment_local",
+            QoreValue(new QoreAssignmentOperatorNode(nullptr,
+                QoreValue(new VarRefNode(nullptr, strdup("guard_local"), &guard_local, false)),
+                QoreValue(2))))) {
         return 1;
     }
     LocalVar list_var("list_var", autoTypeInfo);

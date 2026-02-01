@@ -433,6 +433,7 @@ public:
         ;
 
     qore_exec_mode_t exec_mode = QEM_AST;
+    bool ir_dump = false;
     bool ir_fallback_warned = false;
 
     typedef std::set<q_exp_t> q_exp_set_t;

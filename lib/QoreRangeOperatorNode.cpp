@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -99,18 +99,21 @@ QoreValue QoreRangeOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
 QoreValue QoreRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     FunctionalValueType value_type;
     std::unique_ptr<FunctionalOperatorInterface> fit(getFunctionalIteratorImpl(rc, value_type, xsink));
-    if (*xsink || value_type != list)
+    if (*xsink || value_type != list) {
         return QoreValue();
+    }
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(fit->getValueType()), xsink);
 
     while (true) {
         ValueOptionalRefHolder val(xsink);
-        if (fit->getNext(val, xsink))
+        if (fit->getNext(val, xsink)) {
             break;
+        }
 
-        if (xsink && *xsink)
+        if (xsink && *xsink) {
             return QoreValue();
+        }
 
         rv->push(val.takeReferencedValue(), xsink);
     }
@@ -127,13 +130,23 @@ FunctionalOperatorInterface* QoreRangeOperatorNode::getFunctionalIteratorImpl(Fu
 FunctionalOperatorInterface* QoreRangeOperatorNode::getFunctionalIteratorImpl(RuntimeConfig& rc,
         FunctionalValueType& value_type, ExceptionSink* xsink) const {
     ValueEvalRefHolder lh(rc, left, xsink);
-    if (*xsink)
+    if (*xsink) {
         return nullptr;
+    }
+    if (lh->isNothing()) {
+        xsink->raiseException("RANGE-ERROR", "the start expression of the range operator (..) evaluated to NOTHING");
+        return nullptr;
+    }
     int64 start = lh->getAsBigInt();
 
     ValueEvalRefHolder rh(rc, right, xsink);
-    if (*xsink)
+    if (*xsink) {
         return nullptr;
+    }
+    if (rh->isNothing()) {
+        xsink->raiseException("RANGE-ERROR", "the end expression of the range operator (..) evaluated to NOTHING");
+        return nullptr;
+    }
     int64 stop = rh->getAsBigInt();
 
     value_type = list;

@@ -144,8 +144,8 @@ private:
     QoreIRValue lowerSelfCall(const QoreValue& expr, std::string& error);
     QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
     QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
-    bool guardVarLValue(const QoreValue& exp, std::string& error);
-    bool guardLValueBase(const QoreValue& exp, std::string& error);
+    bool guardVarLValue(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
+    bool guardLValueBase(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
     bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
@@ -154,6 +154,7 @@ private:
     bool analysisIndicatesDate(const QoreParseAnalysis& analysis) const;
     bool guaranteedIntType(const QoreValue* expr) const;
     bool guaranteedFloatType(const QoreValue* expr) const;
+    bool guaranteedDateType(const QoreValue* expr) const;
     const QoreTypeInfo* selectAnalysisType(const QoreParseAnalysis& analysis) const;
     QoreIROpcode selectNumericOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
@@ -171,6 +172,8 @@ private:
         std::vector<QoreIRValue>& lowered, std::string& error);
     QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue lowerExprOpOrInvokeNoGuard(QoreIROpcode op, const QoreValue& expr,
+        const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left, QoreIRValue right,
         const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue value,
@@ -183,11 +186,14 @@ private:
     void markLocalUnassignmentFromExpression(const QoreValue& exp);
 
     QoreIRBasicBlock* getCurrentExceptionTarget() const;
+    QoreIRBasicBlock* getGuardExceptionTarget() const;
     bool needsNotNothingGuard(const QoreValue& expr) const;
-    bool needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type) const;
+    bool needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type,
+        bool allow_maybe_nothing = false) const;
     void maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue& expr);
     void maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue* expr,
-        const QoreProgramLocation* loc, const QoreTypeInfo* target_type);
+        const QoreProgramLocation* loc, const QoreTypeInfo* target_type,
+        bool allow_maybe_nothing = false);
     const QoreProgramLocation* getExpressionLocation(const QoreValue& expr) const;
     const QoreTypeInfo* getVarRefTypeInfo(const VarRefNode* var) const;
     const QoreProgramLocation* getVarRefLocation(const VarRefNode* var) const;
@@ -195,6 +201,17 @@ private:
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
     uint32_t block_counter = 0;
+    QoreIRBasicBlock* guard_exception_target_override = nullptr;
+
+    class GuardExceptionTargetOverrideScope {
+    public:
+        GuardExceptionTargetOverrideScope(QoreIRLowering& lowering, QoreIRBasicBlock* target);
+        ~GuardExceptionTargetOverrideScope();
+
+    private:
+        QoreIRLowering& lowering;
+        QoreIRBasicBlock* previous;
+    };
 
     struct FlowTarget {
         QoreIRBasicBlock* break_target = nullptr;

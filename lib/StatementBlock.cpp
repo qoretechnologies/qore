@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,11 +36,19 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreIRBuilder.h"
+#include "qore/intern/QoreIRLowering.h"
+#include "qore/intern/QoreIRInterpreter.h"
+#include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreIRPrinter.h"
+#include "qore/intern/QoreJIT.h"
 
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 
 VNode::VNode(LocalVar* lv, const QoreProgramLocation* n_loc, int n_refs, bool n_top_level) :
         lvar(lv), refs(n_refs), loc(n_loc), block_start(false), top_level(n_top_level) {
@@ -291,6 +299,29 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
 void StatementBlock::exec() {
     ExceptionSink xsink;
     exec(&xsink);
+}
+
+static bool isIRTerminatorOpcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::Br:
+        case QoreIROpcode::BrIf:
+        case QoreIROpcode::Invoke:
+        case QoreIROpcode::Return:
+        case QoreIROpcode::ReturnNothing:
+        case QoreIROpcode::Throw:
+        case QoreIROpcode::Rethrow:
+        case QoreIROpcode::ThreadExit:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool irBlockHasTerminator(const QoreIRBasicBlock* block) {
+    if (!block || block->instructions.empty()) {
+        return false;
+    }
+    return isIRTerminatorOpcode(block->instructions.back()->opcode);
 }
 
 static void push_top_level_local_var(LocalVar* lv, const QoreProgramLocation* loc) {
@@ -678,6 +709,60 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // before the program's pwo is initialized (due to C++ member initialization order)
     QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
     int64 runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
+
+    // IR/JIT execution dispatch — only for non-REPARSE mode
+    if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
+        qore_exec_mode_t exec_mode = qore_program_private::get(*pgm)->exec_mode;
+        if (exec_mode == QEM_IR || exec_mode == QEM_JIT) {
+            QoreIRFunction func("_toplevel");
+            QoreIRBuilder builder(&func);
+            auto* entry = func.createBlock("entry");
+            builder.setBlock(entry);
+
+            QoreParseContext parse_context(pgm);
+            QoreIRLowering lowering(builder, &parse_context);
+            std::string error;
+            bool lowered = lowering.lowerStatementBlock(this, error);
+            if (lowered) {
+                if (!irBlockHasTerminator(builder.getBlock())) {
+                    builder.createReturnNothing();
+                }
+                if (QoreIRVerifier::verify(func, error)) {
+                    if (qore_program_private::get(*pgm)->ir_dump) {
+                        QoreIRPrinter::print(func, std::cout);
+                    }
+                    QoreValue ir_return_value;
+                    bool ok;
+                    // Build set of pre-instantiated local variables from the top-level block
+                    std::unordered_set<const LocalVar*> pre_instantiated;
+                    const LVList* lv_list = getLVList();
+                    if (lv_list) {
+                        for (unsigned i = 0; i < lv_list->size(); ++i) {
+                            pre_instantiated.insert(lv_list->lv[i]);
+                        }
+                    }
+                    if (exec_mode == QEM_JIT) {
+                        ok = QoreJIT::instance().executeWithFallback(func, ir_return_value, xsink, error,
+                            &pre_instantiated);
+                    } else {
+                        ok = QoreIRInterpreter::execute(func, ir_return_value, xsink, nullptr,
+                            nullptr, nullptr, &pre_instantiated);
+                    }
+                    if (ok && !*xsink) {
+                        return_value = ir_return_value;
+                        return 0;
+                    }
+                    // If IR execution raised an exception, propagate it
+                    if (*xsink) {
+                        return 0;
+                    }
+                    // IR execution failed without exception — fall through to AST
+                }
+                // Verification failed — fall through to AST
+            }
+            // Lowering failed — fall through to AST
+        }
+    }
 
     // In REPARSE mode (PO_ALLOW_REPARSE), only execute statements that haven't been executed yet
     // This is determined by the execution high water mark (ehwm)

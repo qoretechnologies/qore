@@ -325,6 +325,7 @@ public:
     const QoreProgramLocation* loc = nullptr;
     QoreIRValue result{};
     std::vector<QoreIRValue> operands;
+    QoreIRBasicBlock* exception_target = nullptr;
 };
 
 class QoreIRConstInstruction : public QoreIRInstruction {
