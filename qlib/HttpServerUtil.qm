@@ -1468,7 +1468,27 @@ public class AbstractStreamRequest {
             return rv;
         }
 
-        # HTTP/1.x: send chunked response
+        # In async mode, buffer the response data so it flows through the async response
+        # path; the handler thread must not write directly to the socket because the I/O
+        # controller manages the socket lifecycle (keep-alive registration, idle timeouts).
+        # Writing directly via sendHTTPResponseWithCallback bypasses the controller and
+        # creates a race between the handler thread returning and the controller
+        # re-registering the socket for idle monitoring.
+        if (cx.async_mode) {
+            binary data;
+            auto chunk;
+            while (chunk = send()) {
+                if (chunk.typeCode() == NT_STRING) {
+                    data += binary(chunk);
+                } else if (chunk.typeCode() == NT_BINARY) {
+                    data += chunk;
+                }
+            }
+            rv.body = data;
+            return rv;
+        }
+
+        # HTTP/1.x sync mode: send chunked response directly
         s.sendHTTPResponseWithCallback(\send(), rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr,
             timeout_ms);
         rv.reply_sent = True;
