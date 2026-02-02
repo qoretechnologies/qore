@@ -153,6 +153,66 @@ test-ir-ubuntu-amd64:
           exit 1
         fi
 
+test-jit-ubuntu-amd64:
+  stage: test
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  variables:
+    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    QORE_TEST_OPTS: '-penable-debug --exec-mode=jit'
+  allow_failure: true
+  before_script:
+    - |
+        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}-jit\", \"description\": \"Gitlab CI JIT Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+    - set +e
+  script:
+    - |
+        if test/docker_test/test-ubuntu.sh; then
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}-jit\", \"description\": \"Gitlab CI JIT Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 0
+        else
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-jit\", \"description\": \"Gitlab CI JIT Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 1
+        fi
+
+test-tiered-ubuntu-amd64:
+  stage: test
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  variables:
+    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    QORE_TEST_OPTS: '-penable-debug --exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10'
+  allow_failure: true
+  before_script:
+    - |
+        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}-tiered\", \"description\": \"Gitlab CI Tiered Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+    - set +e
+  script:
+    - |
+        if test/docker_test/test-ubuntu.sh; then
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}-tiered\", \"description\": \"Gitlab CI Tiered Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 0
+        else
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-tiered\", \"description\": \"Gitlab CI Tiered Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 1
+        fi
+
 test-macos:
   stage: test
   tags:

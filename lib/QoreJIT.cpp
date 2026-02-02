@@ -36,6 +36,7 @@
 #include <llvm/Support/Error.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
+#include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupport.h>
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/JITRuntime.h"
 
@@ -66,9 +67,6 @@ bool QoreJIT::canJit(int64 parse_options, std::string& reason) const {
 }
 
 bool QoreJIT::initialize(std::string& error) {
-    if (initialized) {
-        return true;
-    }
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
@@ -80,12 +78,21 @@ bool QoreJIT::initialize(std::string& error) {
     }
     jit = std::move(*jit_or_err);
 
+    // Phase 5c: Enable GDB/LLDB debugger support for JIT-compiled code
+    // NOTE: Disabled for now — enableDebuggerSupport registers a shared object
+    // linking plugin that is not thread-safe for concurrent compilations.
+    // TODO: Re-enable once LLJIT compilation is better isolated or LLVM fixes the
+    // thread-safety of debugger support plugins.
+    //if (auto err = llvm::orc::enableDebuggerSupport(*jit)) {
+    //    printd(1, "QoreJIT::initialize(): failed to enable debugger support: %s\n",
+    //            llvm::toString(std::move(err)).c_str());
+    //}
+
     if (!registerRuntimeSymbols(error)) {
         jit.reset();
         return false;
     }
 
-    initialized = true;
     return true;
 }
 
@@ -201,11 +208,28 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
 }
 
 bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error) {
-    if (!initialized && !initialize(error)) {
+    // Thread-safe initialization using std::call_once
+    std::call_once(init_flag, [this]() {
+        init_success = initialize(init_error);
+    });
+    if (!init_success) {
+        error = init_error;
         return false;
     }
 
-    // Check if already compiled
+    // Check if already compiled (fast path without compile lock)
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        if (compiled_functions.find(func.name) != compiled_functions.end()) {
+            return true;
+        }
+    }
+
+    // Serialize the entire compilation pipeline: LLVM's code generation (MCStreamer,
+    // DWARF emission, debugger support) is not thread-safe for concurrent compilations.
+    std::lock_guard<std::mutex> compile_lock(compile_mutex);
+
+    // Re-check cache under compile lock (another thread may have compiled this function)
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
         if (compiled_functions.find(func.name) != compiled_functions.end()) {
@@ -232,7 +256,7 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error) {
         return false;
     }
 
-    // Look up the compiled function
+    // Look up the compiled function (triggers materialization/code generation inline)
     auto sym = jit->lookup(func.name);
     if (!sym) {
         error = "failed to look up compiled function '" + func.name + "': " + llvm::toString(sym.takeError());
@@ -302,11 +326,12 @@ void QoreJIT::setJITThreshold(uint64_t t) {
 }
 
 void QoreJIT::shutdown() {
+    std::lock_guard<std::mutex> compile_lock(compile_mutex);
     jit.reset();
     symbols_registered = false;
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
         compiled_functions.clear();
     }
-    initialized = false;
+    init_success = false;
 }

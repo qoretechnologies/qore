@@ -94,8 +94,12 @@ private:
     bool registerRuntimeSymbols(std::string& error);
     bool symbols_registered = false;
     mutable std::mutex cache_mutex;
+    // Mutex to serialize JIT compilations (LLJIT operations are not fully thread-safe)
+    std::mutex compile_mutex;
     std::unordered_map<std::string, JitFunctionPtr> compiled_functions;
-    bool initialized = false;
+    std::once_flag init_flag;
+    bool init_success = false;
+    std::string init_error;
     DeoptPolicy deopt_policy = DeoptPolicy::FallbackToInterpreter;
 
     //! Tiered compilation thresholds

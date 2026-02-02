@@ -39,6 +39,8 @@
 
 class LocalVar;
 
+#include <llvm/IR/DIBuilder.h>
+#include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -93,6 +95,26 @@ private:
     // compilation); skip qore_rt_instantiate_local / qore_rt_uninstantiate_local for these.
     const std::unordered_set<const void*>* pre_instantiated_locals = nullptr;
 
+    // Saved on_block_exit handler count at function entry (for LIFO cleanup)
+    llvm::Value* obe_saved_count = nullptr;
+
+    // Entry-block load values for pre-instantiated locals (tiered compilation).
+    // qore_rt_load_local creates +1 ref at entry; these must be decref'd at function exit.
+    std::vector<llvm::Value*> preinstantiated_entry_loads;
+
+    // Allocas for Invoke/ConstString results that need cleanup at function exit.
+    // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they
+    // can be decref'd at exit (matching the IR interpreter's cleanup vector).
+    std::vector<llvm::Value*> invoke_result_allocas;
+    // Map from value ID to invoke-result alloca (for clearing at Return)
+    std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
+
+    // Phase 5c: Debug info (DWARF)
+    std::unique_ptr<llvm::DIBuilder> di_builder;
+    llvm::DICompileUnit* di_cu = nullptr;
+    llvm::DISubprogram* di_sp = nullptr;
+    std::unordered_map<const char*, llvm::DIFile*> di_file_cache;
+
     // Initialize types and helpers
     void initTypes();
 
@@ -129,6 +151,22 @@ private:
     // Emit qore_rt_uninstantiate_local calls for all function locals at current insert point
     void emitLocalUninstantiation(llvm::Module& module);
 
+    // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
+    void emitOnBlockExitExec(llvm::Module& module);
+
+    // Emit qore_rt_decref calls for pre-instantiated local entry loads
+    void emitPreinstantiatedCleanup(llvm::Module& module);
+
+    // Emit qore_rt_decref calls for tracked runtime call results
+    void emitInvokeCleanup(llvm::Module& module);
+
+    // Track a runtime helper result for cleanup at function exit.
+    // Creates an alloca initialized to NOTHING in the entry block, stores the result,
+    // and registers it for decref at exit.  For Return, the alloca can be cleared
+    // via invoke_alloca_map so the returned value isn't decremented.
+    void trackResultForCleanup(llvm::Value* result, uint32_t result_id,
+            llvm::Function* llvm_func);
+
     // Box any typed LLVM value to NaN-boxed i64, handling already-boxed values
     llvm::Value* boxValue(llvm::Value* val, uint32_t id);
 
@@ -145,6 +183,12 @@ private:
     // Returns true if specialized code was emitted, false to fall through to generic path.
     bool tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::Module& module,
             llvm::Function* llvm_func);
+
+    // Phase 5c: Get or create DIFile from a file path
+    llvm::DIFile* getDIFile(const char* file_path);
+
+    // Phase 5c: Set IRBuilder debug location from instruction's source location
+    void setDebugLocation(const QoreIRInstruction* inst);
 
     // Phase 5b: Emit inline LLVM fast-path for .any arithmetic (AddAny/SubAny/MulAny).
     // Type-checks operands for int+int and float+float, falls back to helper for mixed types.

@@ -46,6 +46,9 @@
 #include <qore/intern/AbstractStatement.h>
 #include <qore/intern/qore_thread_intern.h>
 #include <qore/intern/QoreTypeInfo.h>
+#include <qore/intern/OnBlockExitStatement.h>
+#include <qore/intern/QoreException.h>
+#include <qore/intern/StatementBlock.h>
 
 // Helper: bit-cast between uint64_t and QoreValue.
 // QoreValue is NaN-boxed and has the same size as uint64_t.
@@ -206,6 +209,8 @@ extern "C" uint64_t qore_rt_invoke_expr(uint64_t expr_bits, ExceptionSink* xsink
     if (!needs_deref && result.hasNode()) {
         result = result.refSelf();
     }
+    // Release the extra reference taken to keep the expression alive during eval
+    ref_expr.discard(xsink);
     return toBits(result);
 }
 
@@ -531,4 +536,71 @@ extern "C" uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, Excepti
     }
     // Not both strings: fall back to generic add
     return qore_rt_add_any(left, right, xsink);
+}
+
+// --- On-block-exit handler support for JIT ---
+
+struct JITOnBlockExitHandler {
+    obe_type_e type;
+    StatementBlock* code;
+};
+
+static thread_local std::vector<JITOnBlockExitHandler> jit_obe_handlers;
+
+extern "C" void qore_rt_push_on_block_exit(int type, StatementBlock* code) {
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code});
+}
+
+extern "C" int64_t qore_rt_get_on_block_exit_count() {
+    return static_cast<int64_t>(jit_obe_handlers.size());
+}
+
+extern "C" void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink) {
+    size_t start = static_cast<size_t>(saved_count);
+    if (jit_obe_handlers.size() <= start) {
+        return;
+    }
+
+    ExceptionSink obe_xsink;
+    bool error = xsink && xsink->isException();
+
+    // Execute in reverse order (LIFO) — matching the AST's
+    // StatementBlock::execIntern() semantics.
+    for (int i = static_cast<int>(jit_obe_handlers.size()) - 1; i >= static_cast<int>(start); --i) {
+        obe_type_e type = jit_obe_handlers[i].type;
+        if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
+            if (jit_obe_handlers[i].code) {
+                // Instantiate exception for on_error blocks as an implicit arg
+                std::unique_ptr<SingleArgvContextHelper> argv_helper;
+                std::unique_ptr<CatchExceptionHelper> ex_helper;
+                if (type == OBE_Error && xsink) {
+                    QoreException* except = xsink->getException();
+                    if (except) {
+                        ex_helper.reset(new CatchExceptionHelper(except));
+                        argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
+                    }
+                }
+                QoreValue rv;
+                jit_obe_handlers[i].code->exec(rv, &obe_xsink);
+                if (type == OBE_Error) {
+                    if (qore_es_private::get(obe_xsink)->rethrown) {
+                        if (xsink) {
+                            xsink->clear();
+                        }
+                    }
+                }
+                if (obe_xsink) {
+                    if (xsink) {
+                        xsink->assimilate(obe_xsink);
+                    } else {
+                        obe_xsink.clear();
+                    }
+                }
+                rv.discard(nullptr);
+            }
+        }
+    }
+
+    // Remove handlers for this function scope
+    jit_obe_handlers.resize(start);
 }
