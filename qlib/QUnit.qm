@@ -869,7 +869,8 @@ public class TestReporter {
         if (testcase.testcase.getAssertionSkipCount() > 0)
             printf(", %d skipped", testcase.testcase.getAssertionSkipCount());
         print("\n");
-        if (testcase.result != TEST_SUCCESS) {
+        if (testcase.result != TEST_SUCCESS
+                && (testcase.result != TEST_SKIPPED || testcase.error || testcase.pos)) {
             string out = "";
             printf("%s at %s\n", testcase.error, testcase.pos);
             ListIterator errorDescription(testcase.detail ? testcase.detail.split("\n") : ());

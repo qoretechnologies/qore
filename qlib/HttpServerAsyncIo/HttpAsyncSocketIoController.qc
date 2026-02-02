@@ -1240,8 +1240,9 @@ public class HttpAsyncSocketIoController {
         # This bypasses the blocking sendHTTPResponse() on the handler thread and
         # combines send + idle wait + header read into a single non-blocking operation
         # on the I/O thread.
-        # Requirements: has response, not streaming, not using InputStream, returning to idle
-        if (result.code && !result.streaming && !result.input_stream
+        # Requirements: has response, not streaming, not using InputStream or send_callback,
+        # returning to idle
+        if (result.code && !result.streaming && !result.input_stream && !result.send_callback
                 && !result.close && result.return_to_idle) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
@@ -1276,7 +1277,10 @@ public class HttpAsyncSocketIoController {
         if (result.code && !result.streaming) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
-                if (result.input_stream) {
+                if (result.send_callback) {
+                    sock.sendHTTPResponseWithCallback(result.send_callback, result.code,
+                        status_msg, "1.1", result.hdr ?? {}, result.send_timeout ?? -1);
+                } else if (result.input_stream) {
                     result.input_stream.reassignThread();
                     sock.sendHTTPResponse(result.code, status_msg, "1.1",
                         result.hdr ?? {}, result.input_stream);

@@ -150,6 +150,23 @@ public namespace HttpServerAsyncIo {
             without closing the socket. The dedicated handler manages the socket lifecycle.
         */
         bool dedicated = False;
+
+        #! callback for sending chunked response data where each callback return is one HTTP chunk
+        /** When set, the controller calls @ref Qore::Socket::sendHTTPResponseWithCallback()
+            "sendHTTPResponseWithCallback()" with this callback instead of sending the body directly.
+
+            @since Qore 2.3 (HttpServerAsyncIo 1.0)
+
+            @see send_timeout
+        */
+        *code send_callback;
+
+        #! timeout for send_callback responses
+        /** @since Qore 2.3 (HttpServerAsyncIo 1.0)
+
+            @see send_callback
+        */
+        *timeout send_timeout;
     }
 
     #! Connection info passed to callbacks

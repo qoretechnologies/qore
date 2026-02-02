@@ -351,18 +351,28 @@ public hashdecl HttpResponseInfo {
     int code;
 
     #! the message body to return in the response
-    /** if this key is returned, then the reply is sent immediately; a chunked reply is not made, and send() and
-        sendImpl() are not called
+    /** Can be a string or binary for regular (non-chunked) responses, or an @ref InputStream for
+        streaming/chunked responses. When set to an @ref InputStream, the response is automatically sent using
+        chunked transfer encoding.
 
-        @note if both \a body and \a chunked_body are set, then \a body is used, anc \a chunked_body is ignored
+        @note if both \a body and \a chunked_body are set, then \a body takes precedence and \a chunked_body is
+        ignored
+
+        @see chunked_body for an alternative that only accepts @ref InputStream and makes the chunked intent
+        explicit
+        @see send_callback for per-chunk callback-based chunked responses (e.g. DataStream)
     */
-    *data body;
+    *union<string, binary, InputStream> body;
 
-    #! the message body to return in the response as a chunked response
-    /** if this key is returned, then the reply is sent immediately; a chunked reply is not made, and send() and
-        sendImpl() are not called
+    #! an @ref InputStream for chunked transfer-encoded responses
+    /** Equivalent to setting \a body to an @ref InputStream, but makes the chunked intent explicit.
+        Use this field when you want to stream response data from an @ref InputStream using chunked transfer
+        encoding.
 
-        @note if both \a body and \a chunked_body are set, then \a body is used, anc \a chunked_body is ignored
+        @note if both \a body and \a chunked_body are set, then \a body takes precedence and \a chunked_body is
+        ignored
+
+        @see body for the primary response body field that also accepts string and binary data
     */
     *InputStream chunked_body;
 
@@ -395,6 +405,36 @@ public hashdecl HttpResponseInfo {
         @since Qore 2.3 (HttpServerUtil 2.1)
     */
     *string stream_type;
+
+    #! set to @ref True to prevent the HTTP server from applying content encoding (compression) to the response body
+    /** This is set by stream request handlers that manage their own content encoding (e.g. per-chunk compression).
+        When @ref True, the server will not apply compression to the response body, even if the client accepts it and
+        the body exceeds the compression threshold.
+
+        @since Qore 2.3 (HttpServerUtil 2.1)
+    */
+    softbool no_content_encoding = False;
+
+    #! callback for sending chunked response data where each callback return is one HTTP chunk
+    /** When set, the response-sending code calls @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()"
+        with this callback instead of sending the body directly. This preserves per-chunk record boundaries
+        required by protocols like DataStream.
+
+        @since Qore 2.3 (HttpServerUtil 2.1)
+
+        @see send_timeout
+    */
+    *code send_callback;
+
+    #! timeout for send_callback responses
+    /** Used with @ref send_callback to set the send timeout for
+        @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()".
+
+        @since Qore 2.3 (HttpServerUtil 2.1)
+
+        @see send_callback
+    */
+    *timeout send_timeout;
 }
 
 #! the return value of HTTP handler methods with potentially unserialized message bodies
@@ -403,8 +443,11 @@ public hashdecl HttpHandlerResponseInfo {
     int code;
 
     #! the message body to return in the response
-    /** For higher-level handlers this can be any data type that will later be serialized for sending over the HTTP
-        socket
+    /** For higher-level handlers this can be any serializable data type (string, binary, hash, list, date, int,
+        float, bool, number, etc.) that will later be serialized for sending over the HTTP socket.
+
+        @note This field is intentionally \c auto because REST handler serialization accepts any Qore type and
+        converts it to string or binary in the serialization pipeline (JSON, YAML, XML, etc.)
     */
     auto body;
 
@@ -444,6 +487,36 @@ public hashdecl HttpHandlerResponseInfo {
         @since Qore 2.3 (HttpServerUtil 2.1)
     */
     *string stream_type;
+
+    #! set to @ref True to prevent the HTTP server from applying content encoding (compression) to the response body
+    /** This is set by stream request handlers that manage their own content encoding (e.g. per-chunk compression).
+        When @ref True, the server will not apply gzip, deflate, brotli, zstd, or bzip2 compression to the response
+        body, even if the client accepts it and the body exceeds the compression threshold.
+
+        @since Qore 2.3 (HttpServerUtil 2.1)
+    */
+    softbool no_content_encoding = False;
+
+    #! callback for sending chunked response data where each callback return is one HTTP chunk
+    /** When set, the response-sending code calls @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()"
+        with this callback instead of sending the body directly. This preserves per-chunk record boundaries
+        required by protocols like DataStream.
+
+        @since Qore 2.3 (HttpServerUtil 2.1)
+
+        @see send_timeout
+    */
+    *code send_callback;
+
+    #! timeout for send_callback responses
+    /** Used with @ref send_callback to set the send timeout for
+        @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()".
+
+        @since Qore 2.3 (HttpServerUtil 2.1)
+
+        @see send_callback
+    */
+    *timeout send_timeout;
 }
 
 # hashdecl for SSL info
@@ -1402,6 +1475,21 @@ public class AbstractStreamRequest {
         self.body = body;
     }
 
+    #! returns @ref True if the server should apply content encoding (compression) to the response body
+    /** Stream handlers that manage their own content encoding (e.g. per-chunk compression) should override this
+        method and return @ref False to prevent the server from applying additional compression on top.
+
+        The default implementation returns @ref True, meaning the server may compress the response body if the
+        client supports it and the body exceeds the compression threshold.
+
+        @return @ref True if the server should apply content encoding, @ref False if the handler manages its own
+
+        @since Qore 2.3 (HttpServerUtil 2.1)
+    */
+    bool needsContentEncoding() {
+        return True;
+    }
+
     #! handles the request
     hash<HttpHandlerResponseInfo> handleRequest() {
         # handle message body
@@ -1428,12 +1516,13 @@ public class AbstractStreamRequest {
         return sendResponse();
     }
 
-    #! called to either create the response hash or send a chunked response directly
+    #! called to create the response hash with optional chunked streaming setup
     /** This method calls getResponseHeaderMessageImpl() to get the response code, headers and optionally a response
         message body.
 
-        If a \c "Transfer-Encoding: chunked" header is included, then the response is sent chunked using the send()
-        callback; in this case the \c "reply_sent" key in the response is set to @ref True "True".
+        If a \c "Transfer-Encoding: chunked" header is included, the send() callback is wrapped either as a
+        \c send_callback (for handlers that manage their own content encoding) or as a @ref CallbackInputStream in
+        the response \c body field.
 
         Otherwise, any message body is immediately encoded (if accepted by the requestor).
     */
@@ -1447,52 +1536,45 @@ public class AbstractStreamRequest {
             return rv;
         }
 
-        # For HTTP/2 connections, buffer the response data
-        # HTTP/2 doesn't support raw chunked transfer encoding - data must go in DATA frames
+        if (!needsContentEncoding()) {
+            # The handler manages its own per-chunk content encoding (e.g. DataStream protocol
+            # where each chunk is independently compressed). These protocols require that HTTP chunk
+            # boundaries match the per-record boundaries from the send() callback. Using
+            # CallbackInputStream would destroy those boundaries because the HTTP library reads from
+            # the InputStream in arbitrary block sizes.
+            rv.no_content_encoding = True;
+            if (cx."header-info".http2) {
+                # HTTP/2: buffer all chunks and send as a single response body.
+                # HTTP/2 DATA frames do not preserve per-chunk boundaries, and the DataStream
+                # receiver expects either per-chunk delivery (HTTP/1.x) or a complete body (HTTP/2).
+                remove rv.hdr."Transfer-Encoding";
+                binary buf;
+                while (*data chunk = send()) {
+                    buf += binary(chunk);
+                }
+                rv.body = buf;
+            } else {
+                # HTTP/1.x: set callback for the response-sending code to use with
+                # sendHTTPResponseWithCallback, preserving per-chunk record boundaries.
+                # Use a closure that captures 'self' to prevent the stream request object from
+                # being destroyed before the async I/O controller can call the callback
+                AbstractStreamRequest stream_ref = self;
+                rv.send_callback = auto sub() { return stream_ref.send(); };
+                rv.send_timeout = timeout_ms;
+            }
+            return rv;
+        }
+
+        # Normal streaming: wrap the send callback in a CallbackInputStream so that data is
+        # streamed without buffering the entire response in memory. For HTTP/2, the downstream
+        # code sends DATA frames via startPollSendHttp2StreamingResponse; for HTTP/1.x, the
+        # InputStream is sent as a chunked response via sendHTTPResponse. In async mode, both
+        # protocols route through the async I/O controller, freeing the handler thread immediately.
         if (cx."header-info".http2) {
-            # Buffer all the data from the callback (can be string or binary)
-            binary data;
-            auto chunk;
-            while (chunk = send()) {
-                if (chunk.typeCode() == NT_STRING) {
-                    data += binary(chunk);
-                } else if (chunk.typeCode() == NT_BINARY) {
-                    data += chunk;
-                }
-            }
-            # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
+            # HTTP/2 uses DATA frames, not chunked transfer encoding
             remove rv.hdr."Transfer-Encoding";
-            # Don't set Content-Length here - the body may be compressed later in HttpServer::sendReply()
-            # which would change the size. Content-Length will be set correctly by doResponse/startPollSendHttp2Response
-            rv.body = data;
-            return rv;
         }
-
-        # In async mode, buffer the response data so it flows through the async response
-        # path; the handler thread must not write directly to the socket because the I/O
-        # controller manages the socket lifecycle (keep-alive registration, idle timeouts).
-        # Writing directly via sendHTTPResponseWithCallback bypasses the controller and
-        # creates a race between the handler thread returning and the controller
-        # re-registering the socket for idle monitoring.
-        if (cx.async_mode) {
-            binary data;
-            auto chunk;
-            while (chunk = send()) {
-                if (chunk.typeCode() == NT_STRING) {
-                    data += binary(chunk);
-                } else if (chunk.typeCode() == NT_BINARY) {
-                    data += chunk;
-                }
-            }
-            rv.body = data;
-            return rv;
-        }
-
-        # HTTP/1.x sync mode: send chunked response directly
-        s.sendHTTPResponseWithCallback(\send(), rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr,
-            timeout_ms);
-        rv.reply_sent = True;
-        listener.logResponse(cx, rv);
+        rv.body = new CallbackInputStream(\send(), self);
         return rv;
     }
 
@@ -1612,6 +1694,121 @@ private logChunk(bool send, int size) {
         be returned or simply @ref nothing which will close the chunked message
     */
     private auto sendImpl() {
+    }
+}
+
+#! InputStream adapter that wraps a callback providing chunked data
+/** This class adapts a callback that returns string or binary chunks (or @ref nothing to signal
+    end-of-stream) into an @ref Qore::InputStream interface suitable for HTTP/2 DATA frame streaming.
+
+    The callback is called lazily on each read() call, and data is buffered internally so that
+    partial reads return exactly the requested number of bytes.
+
+    @since HttpServerUtil 1.2
+*/
+public class CallbackInputStream inherits InputStream {
+    private {
+        #! the callback that returns string, binary, or NOTHING
+        code callback;
+        #! strong reference to the object that owns the callback, preventing premature garbage collection
+        /** In Qore, method call references created with \\method() do not hold strong references to the
+            owning object. This field ensures the owner stays alive as long as the stream exists.
+        */
+        object owner;
+        #! internal buffer for partially-consumed chunks
+        *binary buf;
+        #! end-of-stream flag
+        bool eof = False;
+    }
+
+    #! Creates the stream from a callback
+    /** @param callback a callback that returns string or binary data for each chunk, or @ref nothing
+        to signal end of stream
+        @param owner the object that owns the callback; a strong reference is held to prevent the owner
+        from being garbage collected while the stream is still in use
+    */
+    constructor(code callback, object owner) {
+        self.callback = callback;
+        self.owner = owner;
+    }
+
+    #! Reads up to \a limit bytes from the stream
+    /** @param limit the maximum number of bytes to read
+
+        @return the data read, or @ref nothing if the end of the stream has been reached
+    */
+    *binary read(int limit) {
+        if (eof) {
+            return NOTHING;
+        }
+        # Fill buffer from callback
+        while (!buf || buf.size() == 0) {
+            auto chunk = callback();
+            if (!exists chunk) {
+                eof = True;
+                return NOTHING;
+            }
+            if (chunk.typeCode() == NT_STRING) {
+                if (!chunk.val()) {
+                    # empty string = end of stream
+                    eof = True;
+                    return NOTHING;
+                }
+                buf = binary(chunk);
+            } else if (chunk.typeCode() == NT_BINARY) {
+                if (!chunk.size()) {
+                    # empty binary = end of stream
+                    eof = True;
+                    return NOTHING;
+                }
+                buf = chunk;
+            } else {
+                throw "CALLBACK-INPUT-STREAM-ERROR",
+                    sprintf("callback returned unexpected type %y; expected string, binary, or NOTHING",
+                        chunk.type());
+            }
+        }
+        if (buf.size() <= limit) {
+            binary rv = buf;
+            remove buf;
+            return rv;
+        }
+        return extract buf, 0, limit;
+    }
+
+    #! Peeks at the next byte in the stream
+    /** @return the next byte as an integer (0-255), or -1 if the end of the stream has been reached
+    */
+    int peek() {
+        if (eof) {
+            return -1;
+        }
+        # Fill buffer from callback
+        while (!buf || buf.size() == 0) {
+            auto chunk = callback();
+            if (!exists chunk) {
+                eof = True;
+                return -1;
+            }
+            if (chunk.typeCode() == NT_STRING) {
+                if (!chunk.val()) {
+                    eof = True;
+                    return -1;
+                }
+                buf = binary(chunk);
+            } else if (chunk.typeCode() == NT_BINARY) {
+                if (!chunk.size()) {
+                    eof = True;
+                    return -1;
+                }
+                buf = chunk;
+            } else {
+                throw "CALLBACK-INPUT-STREAM-ERROR",
+                    sprintf("callback returned unexpected type %y; expected string, binary, or NOTHING",
+                        chunk.type());
+            }
+        }
+        return buf[0];
     }
 }
 

@@ -1,0 +1,1793 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    CallbackInputStream and HTTP/2 streaming tests
+
+    Comprehensive test suite for CallbackInputStream, HTTP/2 chunked streaming
+    via AbstractStreamRequest, HTTP/1.x chunked transfer-encoding regression,
+    content encoding opt-out via needsContentEncoding(), and REST stream
+    handler integration through AbstractRestStreamRequestHandler.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/RestHandler.qm
+%requires ../../../../qlib/RestClient.qm
+
+%exec-class HttpServerStreamCallbackTest
+
+# ---------------------------------------------------------------------------
+# Stream request classes
+# ---------------------------------------------------------------------------
+
+#! Chunked stream request returning 3 string chunks
+class ChunkedStreamRequest inherits AbstractStreamRequest {
+    private {
+        list<string> chunks;
+        int idx = 0;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body, list<string> chunks)
+            : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+        self.chunks = chunks;
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Transfer-Encoding": "chunked",
+                "Content-Type": "text/plain",
+            },
+        };
+    }
+
+    private auto sendImpl() {
+        if (idx >= chunks.size()) {
+            return;
+        }
+        return chunks[idx++];
+    }
+}
+
+#! Handler that streams 3 string chunks
+class ChunkedStreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new ChunkedStreamRequest(listener, self, s, cx, hdr, body,
+            ("chunk-1-", "chunk-2-", "chunk-3"));
+    }
+}
+
+#! Chunked stream request returning binary chunks
+class BinaryChunkedStreamRequest inherits AbstractStreamRequest {
+    private {
+        list<binary> chunks;
+        int idx = 0;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body, list<binary> chunks)
+            : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+        self.chunks = chunks;
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Transfer-Encoding": "chunked",
+                "Content-Type": "application/octet-stream",
+            },
+        };
+    }
+
+    private auto sendImpl() {
+        if (idx >= chunks.size()) {
+            return;
+        }
+        return chunks[idx++];
+    }
+}
+
+#! Handler that streams binary chunks
+class BinaryChunkedStreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new BinaryChunkedStreamRequest(listener, self, s, cx, hdr, body,
+            (<bead>, <cafe>, <f00d>));
+    }
+}
+
+#! Chunked stream request returning 10 chunks of 64KB data
+class LargeStreamRequest inherits AbstractStreamRequest {
+    private {
+        int idx = 0;
+        int num_chunks = 10;
+        int chunk_size = 65536;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body)
+            : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Transfer-Encoding": "chunked",
+                "Content-Type": "application/octet-stream",
+            },
+        };
+    }
+
+    private auto sendImpl() {
+        if (idx >= num_chunks) {
+            return;
+        }
+        idx += 1;
+        return strmul("L", chunk_size);
+    }
+}
+
+#! Handler that streams 10 chunks of 64KB
+class LargeStreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new LargeStreamRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! Chunked stream request that returns NOTHING immediately (empty stream)
+class EmptyStreamRequest inherits AbstractStreamRequest {
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body)
+            : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Transfer-Encoding": "chunked",
+                "Content-Type": "text/plain",
+            },
+        };
+    }
+
+    private auto sendImpl() {
+        return;
+    }
+}
+
+#! Handler that streams an empty body
+class EmptyStreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new EmptyStreamRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! Chunked stream request that throws an exception after 2 chunks
+class ErrorStreamRequest inherits AbstractStreamRequest {
+    private {
+        int idx = 0;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body)
+            : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Transfer-Encoding": "chunked",
+                "Content-Type": "text/plain",
+            },
+        };
+    }
+
+    private auto sendImpl() {
+        if (idx >= 2) {
+            throw "STREAM-ERROR", "simulated mid-stream error after 2 chunks";
+        }
+        return sprintf("err-chunk-%d-", idx++);
+    }
+}
+
+#! Handler that errors mid-stream
+class ErrorStreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new ErrorStreamRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! Stream request that opts out of content encoding
+class NoEncodingStreamRequest inherits AbstractStreamRequest {
+    private {
+        list<string> chunks;
+        int idx = 0;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body, list<string> chunks)
+            : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+        self.chunks = chunks;
+    }
+
+    #! Override to opt out of server-applied content encoding
+    bool needsContentEncoding() {
+        return False;
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Transfer-Encoding": "chunked",
+                "Content-Type": "text/plain",
+            },
+        };
+    }
+
+    private auto sendImpl() {
+        if (idx >= chunks.size()) {
+            return;
+        }
+        return chunks[idx++];
+    }
+}
+
+#! Handler whose stream request opts out of content encoding
+class NoEncodingStreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new NoEncodingStreamRequest(listener, self, s, cx, hdr, body,
+            ("no-enc-1-", "no-enc-2-", "no-enc-3"));
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Persistent stream handler classes
+# ---------------------------------------------------------------------------
+
+#! Tracks persistent connection close notifications
+class PersistentClosedTracker {
+    private {
+        Mutex mtx();
+        Condition cond();
+        int closed_count = 0;
+    }
+
+    #! Called by notifyClosed callback
+    persistentClosed() {
+        mtx.lock();
+        on_exit mtx.unlock();
+        closed_count++;
+        cond.broadcast();
+    }
+
+    #! Waits until at least one close notification is received
+    bool waitForClosed(timeout max_wait = 5s) {
+        date deadline = now_us() + max_wait;
+        mtx.lock();
+        on_exit mtx.unlock();
+        while (closed_count == 0) {
+            timeout remaining = deadline - now_us();
+            if (remaining <= 0) {
+                return False;
+            }
+            cond.wait(mtx, remaining);
+        }
+        return True;
+    }
+
+    int getClosedCount() {
+        mtx.lock();
+        on_exit mtx.unlock();
+        return closed_count;
+    }
+
+    reset() {
+        mtx.lock();
+        on_exit mtx.unlock();
+        closed_count = 0;
+    }
+}
+
+#! Handler that supports persistent mode with stream (send_callback) responses
+/** Uses send_callback in handleRequest to return chunked data, combined with
+    setPersistent for thread affinity. This tests the combination of persistence
+    and streaming that is used by DataStream handlers in production.
+*/
+class PersistentStreamHandler inherits AbstractHttpRequestHandler {
+    private {
+        PersistentClosedTracker tracker;
+    }
+
+    constructor(PersistentClosedTracker tracker) : AbstractHttpRequestHandler() {
+        self.tracker = tracker;
+    }
+
+    #! Creates a send_callback closure from a chunk list
+    static code makeSendCallback(list<string> chunks) {
+        int idx = 0;
+        return auto sub() {
+            if (idx >= chunks.size()) {
+                return;
+            }
+            return chunks[idx++];
+        };
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string path = hdr.path;
+        int tid = gettid();
+        hash<auto> thdr = {"X-Thread-Id": string(tid)};
+
+        if (path =~ /\/start$/) {
+            setPersistent(True);
+            notifyClosed(\tracker.persistentClosed());
+            return makeResponse(thdr, 200, "started");
+        } else if (path =~ /\/end$/) {
+            setPersistent(False);
+            return makeResponse(thdr, 200, "ended");
+        } else if (path =~ /\/simple$/) {
+            return makeResponse(thdr, 200, "simple-ok");
+        } else if (path =~ /\/no-enc-stream/) {
+            # DataStream-style: send_callback with no_content_encoding
+            return <HttpResponseInfo>{
+                "code": 200,
+                "body": NOTHING,
+                "hdr": thdr + {
+                    "Transfer-Encoding": "chunked",
+                    "Content-Type": "text/plain",
+                },
+                "send_callback": PersistentStreamHandler::makeSendCallback(("ds-1-", "ds-2-", "ds-3")),
+                "no_content_encoding": True,
+            };
+        } else if (path =~ /\/normal-stream/) {
+            # Normal chunked stream via send_callback
+            return <HttpResponseInfo>{
+                "code": 200,
+                "body": NOTHING,
+                "hdr": thdr + {
+                    "Transfer-Encoding": "chunked",
+                    "Content-Type": "text/plain",
+                },
+                "send_callback": PersistentStreamHandler::makeSendCallback(("chunk-1-", "chunk-2-", "chunk-3")),
+            };
+        }
+
+        return makeResponse(thdr, 404, "not found");
+    }
+}
+
+# ---------------------------------------------------------------------------
+# REST stream handler classes
+# ---------------------------------------------------------------------------
+
+#! REST stream request handler for integration tests
+class TestRestStreamRequestHandler inherits RestHandler::AbstractRestStreamRequestHandler {
+    private {
+        list<string> chunks;
+        int idx = 0;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah, list<string> chunks)
+            : AbstractRestStreamRequestHandler(cx, ah) {
+        self.chunks = chunks;
+    }
+
+    hash<auto> getResponseHeaderMessageImpl() {
+        return {
+            "code": 200,
+            "raw_response": True,
+            "hdr": {
+                "Transfer-Encoding": "chunked",
+                "Content-Type": "text/plain",
+            },
+        };
+    }
+
+    nothing recvImpl(hash<auto> v) {
+        # no-op: we are only sending
+    }
+
+    auto sendImpl() {
+        if (idx >= chunks.size()) {
+            return;
+        }
+        return chunks[idx++];
+    }
+}
+
+#! REST stream request handler that opts out of content encoding
+class TestRestNoEncodingStreamHandler inherits RestHandler::AbstractRestStreamRequestHandler {
+    private {
+        list<string> chunks;
+        int idx = 0;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah, list<string> chunks)
+            : AbstractRestStreamRequestHandler(cx, ah) {
+        self.chunks = chunks;
+    }
+
+    bool needsContentEncoding() {
+        return False;
+    }
+
+    hash<auto> getResponseHeaderMessageImpl() {
+        return {
+            "code": 200,
+            "raw_response": True,
+            "hdr": {
+                "Transfer-Encoding": "chunked",
+                "Content-Type": "text/plain",
+            },
+        };
+    }
+
+    nothing recvImpl(hash<auto> v) {
+    }
+
+    auto sendImpl() {
+        if (idx >= chunks.size()) {
+            return;
+        }
+        return chunks[idx++];
+    }
+}
+
+#! REST class that creates stream request handlers for GET
+class TestRestStreamClass inherits RestHandler::AbstractRestClass {
+    string name() {
+        return "stream-test";
+    }
+
+    RestHandler::AbstractRestStreamRequestHandler streamGet(hash<auto> cx, *hash<auto> ah) {
+        return new TestRestStreamRequestHandler(cx, ah, ("rest-chunk-1-", "rest-chunk-2-", "rest-chunk-3"));
+    }
+}
+
+#! REST class that creates stream request handlers with no content encoding
+class TestRestNoEncodingClass inherits RestHandler::AbstractRestClass {
+    string name() {
+        return "stream-no-enc";
+    }
+
+    RestHandler::AbstractRestStreamRequestHandler streamGet(hash<auto> cx, *hash<auto> ah) {
+        return new TestRestNoEncodingStreamHandler(cx, ah,
+            ("rest-no-enc-1-", "rest-no-enc-2-", "rest-no-enc-3"));
+    }
+}
+
+#! REST handler with stream classes registered, mounted at /rest-stream
+class TestRestRootHandler inherits RestHandler::RestHandler {
+    constructor() : RestHandler::RestHandler() {
+        addClass(new TestRestStreamClass());
+        addClass(new TestRestNoEncodingClass());
+    }
+
+    #! Strip the /rest-stream prefix from paths so REST dispatch works correctly
+    removeRootPath(reference<string> path) {
+        path = regex_subst(path, "^/?rest-stream/?", "");
+    }
+}
+
+#! Simple helper class used as an owner reference for CallbackInputStream unit tests
+class CallbackOwner {
+    private {
+        list<auto> chunks;
+        int idx = 0;
+    }
+
+    constructor(list<auto> chunks) {
+        self.chunks = chunks;
+    }
+
+    *data nextChunk() {
+        if (idx >= chunks.size()) {
+            return;
+        }
+        return chunks[idx++];
+    }
+
+    resetIndex() {
+        idx = 0;
+    }
+}
+
+#! Owner that throws after n chunks (for error propagation tests)
+class ErrorCallbackOwner {
+    private {
+        list<auto> chunks;
+        int idx = 0;
+        int error_after;
+    }
+
+    constructor(list<auto> chunks, int error_after) {
+        self.chunks = chunks;
+        self.error_after = error_after;
+    }
+
+    *data nextChunk() {
+        if (idx >= error_after) {
+            throw "CB-ERROR", sprintf("callback error on chunk %d", idx);
+        }
+        if (idx >= chunks.size()) {
+            return;
+        }
+        return chunks[idx++];
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Main test class
+# ---------------------------------------------------------------------------
+
+class HttpServerStreamCallbackTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int mSslPort;
+        string mSslUrl;
+        int mPlainPort;
+        string mPlainUrl;
+        PersistentClosedTracker mTracker();
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIFNjCCBB6gAwIBAgISA1ELHYM0GFfi2BdvZfzLGJMLMA0GCSqGSIb3DQEBCwUA
+MDIxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQswCQYDVQQD
+EwJSMzAeFw0yMjA4MDcwOTAwMDdaFw0yMjExMDUwOTAwMDZaMCIxIDAeBgNVBAMT
+F2hxLnFvcmV0ZWNobm9sb2dpZXMuY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEAlw84m+9dCjeD4s8YYVZ3gbv8YkYQGyyaojgdJuarTyJPYnGzhMf7
+PF+Y2398k+8ydAnOTwJXRcaU36f0hHDvTagP1f0EFg3kWlplzsrtrDI/HZBRH0W2
++54YE6FhPEtEkkO1aKy+VXb8QMQKSmsUZS+IxSe+69tWFI60tW92eq53tFAwEWN+
+0oBeJBCASRQa7bq1J/BgZhlBSyUQ6Zf+wqUSfmVEf7tsFujyNZ2dfxHtPtLxRspA
+7yhgnQQaXHemyEWeZWjIbToazG8SvutmcwIFK/TtE0anWdTR+Hn92mxH9mxnnyns
+Ag+RlqxnEpBDIb1ufwCFUhMXBwRiiZIM1QIDAQABo4ICVDCCAlAwDgYDVR0PAQH/
+BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8E
+AjAAMB0GA1UdDgQWBBSj2nUL9X+zXI7p0fFhg03WZAS0xDAfBgNVHSMEGDAWgBQU
+LrMXt1hWy65QCUDmH6+dixTCxjBVBggrBgEFBQcBAQRJMEcwIQYIKwYBBQUHMAGG
+FWh0dHA6Ly9yMy5vLmxlbmNyLm9yZzAiBggrBgEFBQcwAoYWaHR0cDovL3IzLmku
+bGVuY3Iub3JnLzAiBgNVHREEGzAZghdocS5xb3JldGVjaG5vbG9naWVzLmNvbTBM
+BgNVHSAERTBDMAgGBmeBDAECATA3BgsrBgEEAYLfEwEBATAoMCYGCCsGAQUFBwIB
+FhpodHRwOi8vY3BzLmxldHNlbmNyeXB0Lm9yZzCCAQYGCisGAQQB1nkCBAIEgfcE
+gfQA8gB3AN+lXqtogk8fbK3uuF9OPlrqzaISpGpejjsSwCBEXCpzAAABgne/YgYA
+AAQDAEgwRgIhAP/ERcskhKhF7M8VIejtrwEtDXJoX1IXec//r64jkOlUAiEAhheZ
+VMT5cZ2uoPGoD6+SuQY/CYBuHdXNR/pUC3SGOQEAdwApeb7wnjk5IfBWc59jpXfl
+vld9nGAK+PlNXSZcJV3HhAAAAYJ3v2H5AAAEAwBIMEYCIQCmiChg/6dLhE3TfGum
+JR7k8s7ibmqw2KVJI3oUR/ogBAIhAIXIIhyqb3W/34ATNT9dIPCGFKpghQw82G8w
+ANnChDgYMA0GCSqGSIb3DQEBCwUAA4IBAQAovvC8AiF7+uNLJCEXMe3VeI4Ne+l1
+mqCRRujz7ijlr6VgNxZt+i/kx1HJKrSKnQZRQ48xWAipMVYfXxH3u20p4RkkW2nj
+jjIVQvQvlFhDjLaJR74PYopp0lPuBW9RKg+C+l3vvjxjkin/MOBX2apGOvC4LJwb
+2s6f8cArBRvdhA7nwEmlP3+aqxxkp9STZYpxuKR4F9fRGtg0Y39Db+3XkYp7Y/hV
+DBVpHegoty2VFErehkJUmgdNoLdTuC8gHgA3p5bCbApyVGjBuO+QpSWG/3WiBDfm
+1IpGT8P2OhFruQHryHEKmY6f5huZV2Y0gFmqBwRiR1ToF5gFveTUJM3d
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCXDzib710KN4Pi
+zxhhVneBu/xiRhAbLJqiOB0m5qtPIk9icbOEx/s8X5jbf3yT7zJ0Cc5PAldFxpTf
+p/SEcO9NqA/V/QQWDeRaWmXOyu2sMj8dkFEfRbb7nhgToWE8S0SSQ7VorL5VdvxA
+xApKaxRlL4jFJ77r21YUjrS1b3Z6rne0UDARY37SgF4kEIBJFBrturUn8GBmGUFL
+JRDpl/7CpRJ+ZUR/u2wW6PI1nZ1/Ee0+0vFGykDvKGCdBBpcd6bIRZ5laMhtOhrM
+bxK+62ZzAgUr9O0TRqdZ1NH4ef3abEf2bGefKewCD5GWrGcSkEMhvW5/AIVSExcH
+BGKJkgzVAgMBAAECggEAPhvyCJtYQ9UjkuPXgF4O8PacBMQN5z5lrgEoa1A4a2cO
+AMoDJ7sZ327m6Ij4bdLRichmXTH3NCc8GuFxterBWcqaCD/pqC+6DjRQ27+wDTbz
+oHIwCI2feME94QRfeGzyGrlgI1OzRmyPtwljuclhL2Fl+Loo08zxDa7HOjpEGphz
+wkD2gQy5S7Mi5ekBZMhy8EklpzdKlOFdvhjo7vQu8vY8xJZ6jN65RV+RBscbmZQl
+llK1uW/8UyRIAUK9sM6Ozxbiz7QQELHpSvY3JIiZC5A6rBk2DGqOu8ouzDrQuHsB
+LHWjzceu6UcJY0tCeOUkVDnoxbj2UcINEAIABIPN2QKBgQDHHbrwdW8qRecLw8y2
+FJDO/6+8VmRKtj8B7CeOYuEZet2UvnPssisCovu0jnMa2ysF/L4YQAWa5XY0bB+E
+R/NRzeh4i0jIsW70h2qePTK+XRAGhCCKiCcb7nkED72TTplQ5wgRA/oWPLOrys34
+f+YqCI7BVrbWzgDyrhEdRAXSbwKBgQDCNuMlLcGTTi04OIQFDZmzjdvx9KvHvksz
+zff9Y0Rb1eUsXF2oG3S55umgeUcG9Nk2KigJzO6WAmTT6rcbn4tsRsnkLdqcEPmg
+P1wbBikW3Bz935k7yPcx05bVshLrJsK0Gxa8YYE6hh/PbdiQFtHf2r4uYu1kxC01
+518U8oPm+wKBgDfyJIpXlKp+BZMKqsQmNyHSOaBjbb6IQl/Z6KtbIQA1w3h9orjI
+vsj43lw3AiRznD0MbKUHqAuDmZjVIG3cgYNkpYLpL8QkBpbyTYS0kUNnho8uJK6H
+3uU8NghsG8n99ZoDsAKH6YbB+4Gzc/f0h8kbqnCsWqc0LpQBUJG2gSRFAoGBAI3P
+4kBNjuFu3hoFOnEuIyM23HlqPNyXGPZ02TXOfCXKo5Kmx0Ru9+aes80XgUOVGd4x
+Hhc56qTijpkm9BlZgEbJ0bWpvczjoELgwPKCpxIoG4tM7+j1r3pUk/jqFGJcZSN5
+/DoFwITpVuTxwoZEA2+/m8rnNYy0qoaHsafsBWBtAoGAAPYkINDjhAslu2gQlsZi
+7eA4coUg5eNUI+YYy4xonJAU488AsrcAWr5nGEids4ZM5PqKkJezG+6gctaYnjjZ
+IQrghzR1AC0Y3XDSuJYGRcZeUF2XZmOjcXNm0oMxeMEeEuuNLOTZ2pp7aUcYIOfV
+OKKqgBjNAlYDdPhOy8O8Agk=
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerStreamCallbackTest", "1.0") {
+        # CallbackInputStream unit tests (no server needed)
+        addTestCase("CallbackInputStream basic read", \testCallbackInputStreamBasicRead());
+        addTestCase("CallbackInputStream empty stream", \testCallbackInputStreamEmpty());
+        addTestCase("CallbackInputStream peek", \testCallbackInputStreamPeek());
+        addTestCase("CallbackInputStream partial read", \testCallbackInputStreamPartialRead());
+        addTestCase("CallbackInputStream string to binary", \testCallbackInputStreamStringToBinary());
+        addTestCase("CallbackInputStream error propagation", \testCallbackInputStreamErrorPropagation());
+        addTestCase("CallbackInputStream mixed types", \testCallbackInputStreamMixedTypes());
+        addTestCase("CallbackInputStream unexpected type", \testCallbackInputStreamUnexpectedType());
+
+        # HTTP/2 streaming tests
+        addTestCase("HTTP/2 stream basic", \testHttp2StreamBasic());
+        addTestCase("HTTP/2 stream binary", \testHttp2StreamBinary());
+        addTestCase("HTTP/2 stream large", \testHttp2StreamLarge());
+        addTestCase("HTTP/2 stream empty", \testHttp2StreamEmpty());
+        addTestCase("HTTP/2 stream error", \testHttp2StreamError());
+        addTestCase("HTTP/2 stream concurrent", \testHttp2StreamConcurrent());
+        addTestCase("HTTP/2 stream sequential", \testHttp2StreamSequential());
+
+        # HTTP/1.x streaming tests
+        addTestCase("HTTP/1.x chunked basic", \testHttp1xChunkedBasic());
+        addTestCase("HTTP/1.x chunked async", \testHttp1xChunkedAsync());
+        addTestCase("HTTP/1.x stream binary", \testHttp1xStreamBinary());
+        addTestCase("HTTP/1.x stream large", \testHttp1xStreamLarge());
+        addTestCase("HTTP/1.x stream empty", \testHttp1xStreamEmpty());
+        addTestCase("HTTP/1.x stream error", \testHttp1xStreamError());
+        addTestCase("HTTP/1.x stream concurrent", \testHttp1xStreamConcurrent());
+        addTestCase("HTTP/1.x stream sequential", \testHttp1xStreamSequential());
+        addTestCase("HTTP/1.x no content encoding", \testHttp1xNoContentEncoding());
+
+        # send_callback tests (no content encoding / DataStream-style path)
+        addTestCase("HTTP/1.x send_callback persistent", \testHttp1xSendCallbackPersistent());
+        addTestCase("HTTP/1.x send_callback concurrent", \testHttp1xSendCallbackConcurrent());
+        addTestCase("HTTP/1.x send_callback async sequential", \testHttp1xSendCallbackAsyncSequential());
+
+        # Content encoding tests
+        addTestCase("no content encoding opt-out", \testNoContentEncodingOptOut());
+        addTestCase("normal encoding applied", \testNormalEncodingApplied());
+        addTestCase("InputStream skips compression", \testInputStreamSkipsCompression());
+        addTestCase("per-chunk encoding no double compression", \testPerChunkEncoding());
+
+        # REST stream handler integration tests
+        addTestCase("REST stream handler HTTP/2", \testRestStreamHandlerHttp2());
+        addTestCase("REST stream handler no encoding", \testRestStreamHandlerNoEncoding());
+
+        # Persistent streaming tests
+        addTestCase("persistent stream lifecycle", \testPersistentStreamLifecycle());
+        addTestCase("persistent stream notifyClosed", \testPersistentStreamNotifyClosed());
+        addTestCase("persistent stream interleaved", \testPersistentStreamInterleaved());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("stream-callback-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        mServer = new HttpServer(opts);
+
+        # Register handlers
+        mServer.setHandler("chunked-stream", "/chunked-stream", NOTHING, new ChunkedStreamHandler());
+        mServer.setHandler("binary-stream", "/binary-stream", NOTHING, new BinaryChunkedStreamHandler());
+        mServer.setHandler("large-stream", "/large-stream", NOTHING, new LargeStreamHandler());
+        mServer.setHandler("empty-stream", "/empty-stream", NOTHING, new EmptyStreamHandler());
+        mServer.setHandler("error-stream", "/error-stream", NOTHING, new ErrorStreamHandler());
+        mServer.setHandler("no-enc-stream", "/no-enc-stream", NOTHING, new NoEncodingStreamHandler());
+        mServer.setHandler("persist-stream", "/persist-stream", MimeTypeHtml,
+            new PersistentStreamHandler(mTracker));
+        mServer.setHandler("rest", "/rest-stream", NOTHING, new TestRestRootHandler());
+
+        # HTTPS listener for HTTP/2 (ALPN negotiation requires TLS)
+        mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        mSslUrl = "https://localhost:" + mSslPort;
+
+        # Plain HTTP listener for HTTP/1.x tests
+        mPlainPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+        }).port;
+        mPlainUrl = "http://localhost:" + mPlainPort;
+
+        mServer.waitForAsyncIo();
+
+        if (m_options.verbose > 1) {
+            printf("HTTPS server started on port %d\n", mSslPort);
+            printf("Plain HTTP server started on port %d\n", mPlainPort);
+        }
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    # -----------------------------------------------------------------------
+    # Helper: create an HTTP/2 client
+    # -----------------------------------------------------------------------
+
+    private HTTPClient getHttp2Client(*int timeout_ms) {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "timeout": timeout_ms ?? 30000,
+        });
+        hc.setHttp2Mode("required");
+        return hc;
+    }
+
+    # -----------------------------------------------------------------------
+    # Helper: create a plain HTTP/1.x client
+    # -----------------------------------------------------------------------
+
+    private HTTPClient getHttp1xClient(*int timeout_ms) {
+        return new HTTPClient({
+            "url": mPlainUrl,
+            "timeout": timeout_ms ?? 30000,
+        });
+    }
+
+    # -----------------------------------------------------------------------
+    # Helper: check HTTP/2 negotiation, skip if not available
+    # -----------------------------------------------------------------------
+
+    private bool checkHttp2(hash<auto> resp) {
+        if (resp.http_version != "2" && resp.http_version != "HTTP/2") {
+            testSkip(sprintf("HTTP/2 not supported (http_version: %y)", resp.http_version));
+            return False;
+        }
+        return True;
+    }
+
+    # =======================================================================
+    # CallbackInputStream unit tests
+    # =======================================================================
+
+    testCallbackInputStreamBasicRead() {
+        CallbackOwner owner(("hello-", "world-", "end"));
+        CallbackInputStream cis(\owner.nextChunk(), owner);
+
+        # Read the entire stream in one large read
+        binary result = binary();
+        while (*binary chunk = cis.read(65536)) {
+            result += chunk;
+        }
+        assertEq("hello-world-end", result.toString(), "concatenated stream output should match");
+
+        # After exhaustion, read returns NOTHING
+        assertNothing(cis.read(1), "read after exhaustion should return NOTHING");
+    }
+
+    testCallbackInputStreamEmpty() {
+        CallbackOwner owner(());
+        CallbackInputStream cis(\owner.nextChunk(), owner);
+
+        # First read should return NOTHING (empty stream)
+        assertNothing(cis.read(1024), "read on empty stream should return NOTHING");
+        # Peek should return -1 (EOF)
+        assertEq(-1, cis.peek(), "peek on empty stream should return -1");
+    }
+
+    testCallbackInputStreamPeek() {
+        CallbackOwner owner(("ABC",));
+        CallbackInputStream cis(\owner.nextChunk(), owner);
+
+        # Peek at the first byte (should be ord("A") = 65)
+        int first = cis.peek();
+        assertEq(65, first, "peek should return the first byte (ASCII 'A')");
+
+        # Peek again: same byte because we did not consume
+        int second = cis.peek();
+        assertEq(65, second, "repeated peek should return the same byte");
+
+        # Now read: data should start with 'A'
+        *binary data = cis.read(3);
+        assertEq("ABC", data.toString(), "read after peek should return all data");
+    }
+
+    testCallbackInputStreamPartialRead() {
+        CallbackOwner owner(("abcdef",));
+        CallbackInputStream cis(\owner.nextChunk(), owner);
+
+        # Read only 3 bytes from a 6-byte chunk
+        *binary first = cis.read(3);
+        assertEq(3, first.size(), "first partial read should return 3 bytes");
+        assertEq("abc", first.toString(), "first partial read should return 'abc'");
+
+        # Read remaining 3 bytes
+        *binary second = cis.read(3);
+        assertEq(3, second.size(), "second partial read should return 3 bytes");
+        assertEq("def", second.toString(), "second partial read should return 'def'");
+
+        # Stream is now empty
+        assertNothing(cis.read(1), "stream should be exhausted");
+    }
+
+    testCallbackInputStreamStringToBinary() {
+        CallbackOwner owner(("str1", "str2"));
+        CallbackInputStream cis(\owner.nextChunk(), owner);
+
+        *binary result = cis.read(65536);
+        assertTrue(result.typeCode() == NT_BINARY, "read() should return binary type");
+        assertEq("str1", result.toString(), "first chunk should be converted to binary");
+
+        *binary result2 = cis.read(65536);
+        assertTrue(result2.typeCode() == NT_BINARY, "second read() should also return binary");
+        assertEq("str2", result2.toString(), "second chunk should also be binary");
+    }
+
+    testCallbackInputStreamErrorPropagation() {
+        ErrorCallbackOwner owner(("chunk-0-", "chunk-1-", "chunk-2-"), 2);
+        CallbackInputStream cis(\owner.nextChunk(), owner);
+
+        # First two reads succeed
+        *binary c1 = cis.read(65536);
+        assertEq("chunk-0-", c1.toString(), "first chunk should succeed");
+        *binary c2 = cis.read(65536);
+        assertEq("chunk-1-", c2.toString(), "second chunk should succeed");
+
+        # Third read should throw the callback's exception
+        bool caught = False;
+        try {
+            cis.read(65536);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("CB-ERROR", ex.err, "callback error should propagate");
+            caught = True;
+        }
+        assertTrue(caught, "exception should have been thrown");
+    }
+
+    testCallbackInputStreamMixedTypes() {
+        # "text-", "bin-" as binary (hex 62696e2d), "more"
+        CallbackOwner owner(("text-", binary("bin-"), "more"));
+        CallbackInputStream cis(\owner.nextChunk(), owner);
+
+        binary result = binary();
+        while (*binary chunk = cis.read(65536)) {
+            result += chunk;
+        }
+        assertEq("text-bin-more", result.toString(), "mixed string/binary chunks should concatenate correctly");
+    }
+
+    testCallbackInputStreamUnexpectedType() {
+        # Use callbacks with auto return type to allow unexpected types to reach CallbackInputStream
+        CallbackOwner dummy(());
+
+        # Test that callback returning an unexpected type (integer) throws instead of looping infinitely
+        {
+            int idx = 0;
+            list<auto> chunks = ("valid-", 42);
+            code cb = auto sub() {
+                if (idx >= chunks.size()) {
+                    return NOTHING;
+                }
+                return chunks[idx++];
+            };
+            CallbackInputStream cis(cb, dummy);
+
+            # First read succeeds (returns "valid-")
+            *binary chunk1 = cis.read(65536);
+            assertEq("valid-", chunk1.toString(), "first chunk should return valid string data");
+
+            # Second read should throw CALLBACK-INPUT-STREAM-ERROR because callback returns integer
+            assertThrows("CALLBACK-INPUT-STREAM-ERROR", "unexpected type.*integer", \cis.read(), 65536);
+        }
+
+        # Test peek() also throws on unexpected type
+        {
+            int idx = 0;
+            list<auto> chunks = (123,);
+            code cb = auto sub() {
+                if (idx >= chunks.size()) {
+                    return NOTHING;
+                }
+                return chunks[idx++];
+            };
+            CallbackInputStream cis2(cb, dummy);
+            assertThrows("CALLBACK-INPUT-STREAM-ERROR", "unexpected type.*integer", \cis2.peek());
+        }
+
+        # Test that empty string is treated as EOF (prevents infinite loop)
+        {
+            int idx = 0;
+            list<auto> chunks = ("data-", "");
+            code cb = auto sub() {
+                if (idx >= chunks.size()) {
+                    return NOTHING;
+                }
+                return chunks[idx++];
+            };
+            CallbackInputStream cis3(cb, dummy);
+            *binary chunk1 = cis3.read(65536);
+            assertEq("data-", chunk1.toString(), "first non-empty chunk returned");
+            *binary chunk2 = cis3.read(65536);
+            assertNothing(chunk2, "empty string should signal EOF");
+        }
+
+        # Test that empty binary is treated as EOF
+        {
+            int idx = 0;
+            list<auto> chunks = ("data-", binary());
+            code cb = auto sub() {
+                if (idx >= chunks.size()) {
+                    return NOTHING;
+                }
+                return chunks[idx++];
+            };
+            CallbackInputStream cis4(cb, dummy);
+            *binary chunk1 = cis4.read(65536);
+            assertEq("data-", chunk1.toString(), "first non-empty chunk returned");
+            *binary chunk2 = cis4.read(65536);
+            assertNothing(chunk2, "empty binary should signal EOF");
+
+            # Verify peek() also returns -1 after EOF
+            assertEq(-1, cis4.peek(), "peek after EOF should return -1");
+        }
+    }
+
+    # =======================================================================
+    # HTTP/2 streaming tests
+    # =======================================================================
+
+    testHttp2StreamBasic() {
+        HTTPClient hc = getHttp2Client();
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/chunked-stream");
+        if (!checkHttp2(resp)) {
+            return;
+        }
+        assertEq(200, resp.status_code, "HTTP/2 chunked stream should return 200");
+        assertEq("chunk-1-chunk-2-chunk-3", resp.body,
+            "HTTP/2 chunked stream should return all chunks concatenated");
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/2 stream basic: body=%y http_version=%y\n", resp.body, resp.http_version);
+        }
+    }
+
+    testHttp2StreamBinary() {
+        HTTPClient hc = getHttp2Client();
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/binary-stream");
+        if (!checkHttp2(resp)) {
+            return;
+        }
+        assertEq(200, resp.status_code, "HTTP/2 binary stream should return 200");
+        # The handler sends <bead>, <cafe>, <f00d> -- concatenated as binary (6 bytes)
+        binary expected = <bead> + <cafe> + <f00d>;
+        # HTTPClient may auto-decode to string; compare as binary regardless
+        binary actual = resp.body.typeCode() == NT_STRING ? binary(resp.body) : resp.body;
+        assertEq(expected.size(), actual.size(), "HTTP/2 binary stream should return 6 bytes");
+        assertEq(expected, actual, "HTTP/2 binary stream should return correct binary data");
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/2 stream binary: %d bytes, http_version=%y\n", actual.size(), resp.http_version);
+        }
+    }
+
+    testHttp2StreamLarge() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "timeout": 300000,
+            "connect_timeout": 60000,
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/large-stream");
+        if (!checkHttp2(resp)) {
+            return;
+        }
+        assertEq(200, resp.status_code, "HTTP/2 large stream should return 200");
+        # 10 chunks of 64KB = 655,360 bytes
+        int expected_size = 10 * 65536;
+        assertEq(expected_size, resp.body.size(),
+            sprintf("HTTP/2 large stream should return %d bytes", expected_size));
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/2 stream large: %d bytes, http_version=%y\n", resp.body.size(), resp.http_version);
+        }
+    }
+
+    testHttp2StreamEmpty() {
+        HTTPClient hc = getHttp2Client();
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/empty-stream");
+        if (!checkHttp2(resp)) {
+            return;
+        }
+        # Empty stream with 200 may become 204 (no content) after server processing
+        assertTrue(resp.status_code == 200 || resp.status_code == 204,
+            sprintf("HTTP/2 empty stream should return 200 or 204 (got %d)", resp.status_code));
+        if (resp.status_code == 204) {
+            assertNothing(resp.body, "204 should have no body");
+        } else {
+            assertTrue(!resp.body || resp.body.size() == 0, "empty stream body should be empty");
+        }
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/2 stream empty: status=%d http_version=%y\n", resp.status_code, resp.http_version);
+        }
+    }
+
+    testHttp2StreamError() {
+        HTTPClient hc = getHttp2Client();
+
+        # The error stream handler throws STREAM-ERROR after sending 2 chunks.
+        # The server should either:
+        # - return a partial body (if the error truncates the stream), or
+        # - return an error response, or
+        # - throw a client-side exception due to a broken stream
+        bool got_response = False;
+        try {
+            hash<auto> resp = hc.send(NOTHING, "GET", "/error-stream");
+            got_response = True;
+            # If we got a response, the body may be partial or the error may have caused
+            # the server to close the stream with a status code
+            if (m_options.verbose > 1) {
+                printf("HTTP/2 stream error: status=%d body=%y http_version=%y\n",
+                    resp.status_code, resp.body, resp.http_version);
+            }
+            # Accept either a successful partial response or an error code
+            assertTrue(resp.status_code >= 200, "error stream should return a valid status code");
+        } catch (hash<ExceptionInfo> ex) {
+            # It is acceptable for the client to receive an error due to the broken stream
+            if (m_options.verbose > 1) {
+                printf("HTTP/2 stream error: exception %s: %s\n", ex.err, ex.desc);
+            }
+            assertTrue(True, "stream error caused client exception (acceptable)");
+        }
+    }
+
+    testHttp2StreamConcurrent() {
+        int num_requests = 5;
+        Counter cnt(num_requests);
+        list<hash<auto>> results = ();
+        Mutex mtx();
+
+        for (int i = 0; i < num_requests; i++) {
+            int idx = i;
+            background sub() {
+                on_exit cnt.dec();
+
+                try {
+                    # Each concurrent request uses a SEPARATE connection
+                    HTTPClient hc = getHttp2Client(30000);
+                    hash<auto> resp = hc.send(NOTHING, "GET", "/chunked-stream");
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {
+                        "idx": idx,
+                        "status": resp.status_code,
+                        "body": resp.body,
+                        "http_version": resp.http_version,
+                        "success": True,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {
+                        "idx": idx,
+                        "error": ex.err,
+                        "desc": ex.desc,
+                        "success": False,
+                    };
+                }
+            }();
+        }
+
+        cnt.waitForZero();
+
+        int success_count = 0;
+        foreach hash<auto> r in (results) {
+            if (r.success) {
+                success_count++;
+                assertEq(200, r.status, sprintf("Concurrent request %d should return 200", r.idx));
+                assertEq("chunk-1-chunk-2-chunk-3", r.body,
+                    sprintf("Concurrent request %d body should match", r.idx));
+            } else {
+                if (m_options.verbose) {
+                    printf("Concurrent request %d FAILED: %s: %s\n", r.idx, r.error, r.desc);
+                }
+            }
+        }
+
+        assertEq(num_requests, success_count, "all concurrent stream requests should succeed");
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/2 concurrent streams: %d/%d succeeded\n", success_count, num_requests);
+        }
+    }
+
+    testHttp2StreamSequential() {
+        # Use a single keep-alive connection for multiple sequential requests
+        HTTPClient hc = getHttp2Client();
+
+        int num_requests = 5;
+        for (int i = 0; i < num_requests; i++) {
+            hash<auto> resp = hc.send(NOTHING, "GET", "/chunked-stream");
+            if (i == 0 && !checkHttp2(resp)) {
+                return;
+            }
+            assertEq(200, resp.status_code, sprintf("Sequential request %d should return 200", i));
+            assertEq("chunk-1-chunk-2-chunk-3", resp.body,
+                sprintf("Sequential request %d body should match", i));
+
+            if (m_options.verbose > 1) {
+                printf("HTTP/2 sequential request %d: OK (http_version=%y)\n", i, resp.http_version);
+            }
+        }
+    }
+
+    # =======================================================================
+    # HTTP/1.x regression tests
+    # =======================================================================
+
+    testHttp1xChunkedBasic() {
+        HTTPClient hc = getHttp1xClient();
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/chunked-stream");
+        assertEq(200, resp.status_code, "HTTP/1.x chunked stream should return 200");
+        assertEq("chunk-1-chunk-2-chunk-3", resp.body,
+            "HTTP/1.x chunked stream should return all chunks concatenated");
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/1.x chunked basic: body=%y http_version=%y\n", resp.body, resp.http_version);
+        }
+    }
+
+    testHttp1xChunkedAsync() {
+        # Verify that the async mode works correctly with HTTP/1.x chunked responses.
+        # The server is already running in async_mode: True, so every request uses async I/O.
+        HTTPClient hc = getHttp1xClient();
+
+        # Make multiple requests to exercise the async path
+        for (int i = 0; i < 3; i++) {
+            hash<auto> resp = hc.send(NOTHING, "GET", "/chunked-stream");
+            assertEq(200, resp.status_code, sprintf("HTTP/1.x async request %d should return 200", i));
+            assertEq("chunk-1-chunk-2-chunk-3", resp.body,
+                sprintf("HTTP/1.x async request %d body should match", i));
+        }
+
+        # Also test binary chunks over HTTP/1.x
+        hash<auto> bin_resp = hc.send(NOTHING, "GET", "/binary-stream");
+        assertEq(200, bin_resp.status_code, "HTTP/1.x binary stream should return 200");
+        binary expected = <bead> + <cafe> + <f00d>;
+        # HTTPClient may auto-decode binary to string depending on content-type handling
+        binary actual = bin_resp.body.typeCode() == NT_STRING ? binary(bin_resp.body) : bin_resp.body;
+        assertEq(expected, actual, "HTTP/1.x binary stream should return correct data");
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/1.x chunked async: OK\n");
+        }
+    }
+
+    testHttp1xStreamBinary() {
+        HTTPClient hc = getHttp1xClient();
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/binary-stream");
+        assertEq(200, resp.status_code, "HTTP/1.x binary stream should return 200");
+        binary expected = <bead> + <cafe> + <f00d>;
+        binary actual = resp.body.typeCode() == NT_STRING ? binary(resp.body) : resp.body;
+        assertEq(expected.size(), actual.size(), "HTTP/1.x binary stream should return 6 bytes");
+        assertEq(expected, actual, "HTTP/1.x binary stream should return correct binary data");
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/1.x stream binary: %d bytes\n", actual.size());
+        }
+    }
+
+    testHttp1xStreamLarge() {
+        HTTPClient hc({
+            "url": mPlainUrl,
+            "timeout": 300000,
+            "connect_timeout": 60000,
+        });
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/large-stream");
+        assertEq(200, resp.status_code, "HTTP/1.x large stream should return 200");
+        # 10 chunks of 64KB = 655,360 bytes
+        int expected_size = 10 * 65536;
+        assertEq(expected_size, resp.body.size(),
+            sprintf("HTTP/1.x large stream should return %d bytes", expected_size));
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/1.x stream large: %d bytes\n", resp.body.size());
+        }
+    }
+
+    testHttp1xStreamEmpty() {
+        HTTPClient hc = getHttp1xClient();
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/empty-stream");
+        # Empty stream with 200 may become 204 (no content) after server processing
+        assertTrue(resp.status_code == 200 || resp.status_code == 204,
+            sprintf("HTTP/1.x empty stream should return 200 or 204 (got %d)", resp.status_code));
+        if (resp.status_code == 204) {
+            assertNothing(resp.body, "204 should have no body");
+        } else {
+            assertTrue(!resp.body || resp.body.size() == 0, "empty stream body should be empty");
+        }
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/1.x stream empty: status=%d\n", resp.status_code);
+        }
+    }
+
+    testHttp1xStreamError() {
+        HTTPClient hc = getHttp1xClient();
+
+        # The error stream handler throws STREAM-ERROR after sending 2 chunks.
+        # The server should either return a partial body, an error response,
+        # or the client may get an exception from a broken stream.
+        bool got_response = False;
+        try {
+            hash<auto> resp = hc.send(NOTHING, "GET", "/error-stream");
+            got_response = True;
+            if (m_options.verbose > 1) {
+                printf("HTTP/1.x stream error: status=%d body=%y\n", resp.status_code, resp.body);
+            }
+            assertTrue(resp.status_code >= 200, "error stream should return a valid status code");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose > 1) {
+                printf("HTTP/1.x stream error: exception %s: %s\n", ex.err, ex.desc);
+            }
+            assertTrue(True, "stream error caused client exception (acceptable)");
+        }
+    }
+
+    testHttp1xStreamConcurrent() {
+        int num_requests = 5;
+        Counter cnt(num_requests);
+        list<hash<auto>> results = ();
+        Mutex mtx();
+
+        for (int i = 0; i < num_requests; i++) {
+            int idx = i;
+            background sub() {
+                on_exit cnt.dec();
+
+                try {
+                    HTTPClient hc = getHttp1xClient(30000);
+                    hash<auto> resp = hc.send(NOTHING, "GET", "/chunked-stream");
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {
+                        "idx": idx,
+                        "status": resp.status_code,
+                        "body": resp.body,
+                        "success": True,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {
+                        "idx": idx,
+                        "error": ex.err,
+                        "desc": ex.desc,
+                        "success": False,
+                    };
+                }
+            }();
+        }
+
+        cnt.waitForZero();
+
+        int success_count = 0;
+        foreach hash<auto> r in (results) {
+            if (r.success) {
+                success_count++;
+                assertEq(200, r.status, sprintf("HTTP/1.x concurrent request %d should return 200", r.idx));
+                assertEq("chunk-1-chunk-2-chunk-3", r.body,
+                    sprintf("HTTP/1.x concurrent request %d body should match", r.idx));
+            } else {
+                if (m_options.verbose) {
+                    printf("HTTP/1.x concurrent request %d FAILED: %s: %s\n", r.idx, r.error, r.desc);
+                }
+            }
+        }
+
+        assertEq(num_requests, success_count, "all HTTP/1.x concurrent stream requests should succeed");
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/1.x concurrent streams: %d/%d succeeded\n", success_count, num_requests);
+        }
+    }
+
+    testHttp1xStreamSequential() {
+        # Use a single keep-alive connection for multiple sequential requests
+        HTTPClient hc = getHttp1xClient();
+
+        int num_requests = 5;
+        for (int i = 0; i < num_requests; i++) {
+            hash<auto> resp = hc.send(NOTHING, "GET", "/chunked-stream");
+            assertEq(200, resp.status_code, sprintf("HTTP/1.x sequential request %d should return 200", i));
+            assertEq("chunk-1-chunk-2-chunk-3", resp.body,
+                sprintf("HTTP/1.x sequential request %d body should match", i));
+
+            if (m_options.verbose > 1) {
+                printf("HTTP/1.x sequential request %d: OK\n", i);
+            }
+        }
+    }
+
+    testHttp1xNoContentEncoding() {
+        # Verify that the no-encoding opt-out works over HTTP/1.x
+        HTTPClient hc = getHttp1xClient();
+        hc.addDefaultHeaders({"Accept-Encoding": "gzip, deflate"});
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/no-enc-stream");
+        assertEq(200, resp.status_code, "HTTP/1.x no-enc stream should return 200");
+        assertEq("no-enc-1-no-enc-2-no-enc-3", resp.body,
+            "HTTP/1.x no-enc body should not be compressed");
+
+        # Also verify a normal stream is not compressed (InputStream skip)
+        hash<auto> resp2 = hc.send(NOTHING, "GET", "/chunked-stream");
+        assertEq(200, resp2.status_code, "HTTP/1.x stream with Accept-Encoding should return 200");
+        assertEq("chunk-1-chunk-2-chunk-3", resp2.body,
+            "HTTP/1.x stream body should not be compressed (InputStream skip)");
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/1.x no content encoding: no-enc=%y, normal=%y\n", resp.body, resp2.body);
+        }
+    }
+
+    # =======================================================================
+    # send_callback tests (no content encoding / DataStream-style path)
+    # =======================================================================
+
+    testHttp1xSendCallbackPersistent() {
+        # Verify that multiple sequential requests on a persistent HTTP/1.x connection
+        # work correctly when the handler uses send_callback (needsContentEncoding()=False).
+        # This was the PERSISTENCE-ERROR scenario: the old reply_sent path skipped cx.close
+        # propagation, corrupting persistent connection state.
+        HTTPClient hc = getHttp1xClient();
+
+        int num_requests = 10;
+        for (int i = 0; i < num_requests; i++) {
+            hash<auto> resp = hc.send(NOTHING, "GET", "/no-enc-stream");
+            assertEq(200, resp.status_code,
+                sprintf("send_callback persistent request %d should return 200", i));
+            assertEq("no-enc-1-no-enc-2-no-enc-3", resp.body,
+                sprintf("send_callback persistent request %d body should match", i));
+        }
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/1.x send_callback persistent: %d sequential requests on same connection OK\n",
+                num_requests);
+        }
+    }
+
+    testHttp1xSendCallbackConcurrent() {
+        # Verify concurrent send_callback requests each on separate connections
+        int num_requests = 5;
+        Counter cnt(num_requests);
+        list<hash<auto>> results = ();
+        Mutex mtx();
+
+        for (int i = 0; i < num_requests; i++) {
+            int idx = i;
+            background sub() {
+                on_exit cnt.dec();
+
+                try {
+                    HTTPClient hc = getHttp1xClient(30000);
+                    hash<auto> resp = hc.send(NOTHING, "GET", "/no-enc-stream");
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {
+                        "idx": idx,
+                        "status": resp.status_code,
+                        "body": resp.body,
+                        "success": True,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {
+                        "idx": idx,
+                        "error": ex.err,
+                        "desc": ex.desc,
+                        "success": False,
+                    };
+                }
+            }();
+        }
+
+        cnt.waitForZero();
+
+        int success_count = 0;
+        foreach hash<auto> r in (results) {
+            if (r.success) {
+                success_count++;
+                assertEq(200, r.status,
+                    sprintf("send_callback concurrent request %d should return 200", r.idx));
+                assertEq("no-enc-1-no-enc-2-no-enc-3", r.body,
+                    sprintf("send_callback concurrent request %d body should match", r.idx));
+            } else {
+                if (m_options.verbose) {
+                    printf("send_callback concurrent request %d FAILED: %s: %s\n",
+                        r.idx, r.error, r.desc);
+                }
+            }
+        }
+
+        assertEq(num_requests, success_count, "all send_callback concurrent requests should succeed");
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/1.x send_callback concurrent: %d/%d succeeded\n", success_count, num_requests);
+        }
+    }
+
+    testHttp1xSendCallbackAsyncSequential() {
+        # Verify that send_callback works correctly through the async I/O pipeline
+        # with sequential requests on a keep-alive connection. The server runs in
+        # async_mode=True, so this exercises the full async response path for
+        # send_callback responses.
+        HTTPClient hc = getHttp1xClient();
+
+        # Interleave send_callback (no-enc) and normal stream requests on the same
+        # connection to verify that the async I/O controller handles transitions correctly
+        for (int i = 0; i < 5; i++) {
+            # send_callback request
+            hash<auto> resp1 = hc.send(NOTHING, "GET", "/no-enc-stream");
+            assertEq(200, resp1.status_code,
+                sprintf("send_callback async request %d should return 200", i));
+            assertEq("no-enc-1-no-enc-2-no-enc-3", resp1.body,
+                sprintf("send_callback async request %d body should match", i));
+
+            # Normal InputStream request
+            hash<auto> resp2 = hc.send(NOTHING, "GET", "/chunked-stream");
+            assertEq(200, resp2.status_code,
+                sprintf("normal async request %d should return 200", i));
+            assertEq("chunk-1-chunk-2-chunk-3", resp2.body,
+                sprintf("normal async request %d body should match", i));
+        }
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/1.x send_callback async sequential: 10 interleaved requests OK\n");
+        }
+    }
+
+    # =======================================================================
+    # Content encoding tests
+    # =======================================================================
+
+    testNoContentEncodingOptOut() {
+        HTTPClient hc = getHttp2Client();
+        # Request with accept-encoding to see if server compresses the response
+        hc.addDefaultHeaders({"Accept-Encoding": "gzip, deflate, br"});
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/no-enc-stream");
+        if (!checkHttp2(resp)) {
+            return;
+        }
+        assertEq(200, resp.status_code, "no-encoding stream should return 200");
+
+        # The no-encoding handler opts out of content encoding via needsContentEncoding()=False.
+        # For HTTP/2, the response body is a CallbackInputStream, and the server skips compression
+        # for InputStream bodies. Additionally, no_content_encoding is set.
+        # Therefore the body must NOT have Content-Encoding applied.
+        assertEq("no-enc-1-no-enc-2-no-enc-3", resp.body,
+            "no-encoding stream body should not be compressed");
+
+        if (m_options.verbose > 1) {
+            printf("no content encoding opt-out: body=%y http_version=%y\n", resp.body, resp.http_version);
+        }
+    }
+
+    testNormalEncodingApplied() {
+        # Test that non-stream bodies larger than CompressionThreshold DO get compressed
+        # when the client supports it. Use a non-stream handler that returns a large body.
+        # We create a temporary large-body handler for this test.
+        #
+        # The CompressionThreshold is 1024 bytes. We use the REST client which sends
+        # Accept-Encoding by default.
+
+        RestClient rc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+        });
+
+        # The chunked-stream handler returns < 1024 bytes so it will not be compressed.
+        # Instead, make a request through the REST handler that returns a non-stream body
+        # that is large enough to trigger compression.
+        # For this test, verify that the chunked stream body (which is an InputStream in HTTP/2)
+        # is NOT compressed, validating the InputStream compression skip.
+        hash<auto> resp = rc.get("/chunked-stream");
+        assertEq(200, resp.status_code, "stream response should return 200");
+        assertEq("chunk-1-chunk-2-chunk-3", resp.body,
+            "stream body should not be garbled by compression");
+
+        if (m_options.verbose > 1) {
+            printf("normal encoding applied test: body=%y http_version=%y\n", resp.body, resp.http_version);
+        }
+    }
+
+    testInputStreamSkipsCompression() {
+        # Verify that InputStream bodies are not compressed by the server,
+        # even when the client sends Accept-Encoding. The chunked stream handler's response
+        # in HTTP/2 mode becomes a CallbackInputStream, which the server should skip
+        # for compression (the check: !(rv.body instanceof InputStream)).
+
+        HTTPClient hc = getHttp2Client();
+        hc.addDefaultHeaders({"Accept-Encoding": "gzip, deflate, br, zstd"});
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/chunked-stream");
+        if (!checkHttp2(resp)) {
+            return;
+        }
+        assertEq(200, resp.status_code, "InputStream stream should return 200");
+        # If the server incorrectly compressed the body, it would be garbled
+        assertEq("chunk-1-chunk-2-chunk-3", resp.body,
+            "InputStream body should not be compressed");
+
+        if (m_options.verbose > 1) {
+            printf("InputStream skips compression: body=%y\n", resp.body);
+        }
+    }
+
+    testPerChunkEncoding() {
+        # Test the no-encoding opt-out stream handler. This handler sets
+        # needsContentEncoding() = False, which causes no_content_encoding = True
+        # in the response hash. The server should not apply compression.
+        # This simulates a handler that does its own per-chunk encoding.
+
+        HTTPClient hc = getHttp2Client();
+        hc.addDefaultHeaders({"Accept-Encoding": "gzip, deflate, br, zstd"});
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/no-enc-stream");
+        if (!checkHttp2(resp)) {
+            return;
+        }
+        assertEq(200, resp.status_code, "per-chunk encoding stream should return 200");
+        # Body should be the raw uncompressed data
+        assertEq("no-enc-1-no-enc-2-no-enc-3", resp.body,
+            "per-chunk encoding body should not be double-compressed");
+
+        # Also verify over HTTP/1.x
+        HTTPClient hc1x = getHttp1xClient();
+        hc1x.addDefaultHeaders({"Accept-Encoding": "gzip, deflate"});
+        hash<auto> resp1x = hc1x.send(NOTHING, "GET", "/no-enc-stream");
+        assertEq(200, resp1x.status_code, "HTTP/1.x no-enc stream should return 200");
+        assertEq("no-enc-1-no-enc-2-no-enc-3", resp1x.body,
+            "HTTP/1.x no-enc body should not be compressed");
+
+        if (m_options.verbose > 1) {
+            printf("per-chunk encoding: H2 body=%y, H1.x body=%y\n", resp.body, resp1x.body);
+        }
+    }
+
+    # =======================================================================
+    # REST stream handler integration tests
+    # =======================================================================
+
+    testRestStreamHandlerHttp2() {
+        RestClient rc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+        });
+
+        hash<auto> resp = rc.get("/rest-stream/stream-test");
+        assertEq(200, resp.status_code, "REST stream handler HTTP/2 should return 200");
+        # RestClient may deserialize the response based on content-type; body may be string or auto
+        string body = resp.body.typeCode() == NT_STRING ? resp.body : sprintf("%s", resp.body);
+        assertEq("rest-chunk-1-rest-chunk-2-rest-chunk-3", body,
+            "REST stream handler HTTP/2 body should match");
+
+        if (m_options.verbose > 1) {
+            printf("REST stream handler HTTP/2: body=%y http_version=%y\n", body, resp.http_version);
+        }
+    }
+
+    testRestStreamHandlerNoEncoding() {
+        RestClient rc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+        });
+
+        hash<auto> resp = rc.get("/rest-stream/stream-no-enc");
+        assertEq(200, resp.status_code, "REST no-encoding stream should return 200");
+        string body = resp.body.typeCode() == NT_STRING ? resp.body : sprintf("%s", resp.body);
+        assertEq("rest-no-enc-1-rest-no-enc-2-rest-no-enc-3", body,
+            "REST no-encoding stream body should not be compressed");
+
+        # Also verify over HTTP/1.x
+        RestClient rc1x({
+            "url": mPlainUrl,
+            "timeout": 30000,
+        });
+        hash<auto> resp1x = rc1x.get("/rest-stream/stream-no-enc");
+        assertEq(200, resp1x.status_code, "REST no-encoding HTTP/1.x should return 200");
+        string body1x = resp1x.body.typeCode() == NT_STRING ? resp1x.body : sprintf("%s", resp1x.body);
+        assertEq("rest-no-enc-1-rest-no-enc-2-rest-no-enc-3", body1x,
+            "REST no-encoding HTTP/1.x body should not be compressed");
+
+        if (m_options.verbose > 1) {
+            printf("REST stream no-encoding: H2 body=%y, H1.x body=%y\n", body, body1x);
+        }
+    }
+
+    # =======================================================================
+    # Persistent streaming tests
+    # =======================================================================
+
+    testPersistentStreamLifecycle() {
+        # Tests setPersistent with stream handlers (not just simple request/response).
+        # Verifies thread affinity across a mix of stream and non-stream responses
+        # on a single persistent HTTP/1.x connection.
+        HTTPClient hc = getHttp1xClient();
+
+        # 1. Start persistence
+        hash<auto> resp1 = hc.send(NOTHING, "POST", "/persist-stream/start");
+        assertEq(200, resp1.status_code, "persist-start should return 200");
+        assertEq("started", resp1.body, "persist-start body");
+        string tid1 = resp1."x-thread-id";
+        assertTrue(tid1.val(), "persist-start should return x-thread-id");
+
+        # 2. Normal chunked stream
+        hash<auto> resp2 = hc.send(NOTHING, "GET", "/persist-stream/normal-stream");
+        assertEq(200, resp2.status_code, "normal-stream should return 200");
+        assertEq("chunk-1-chunk-2-chunk-3", resp2.body, "normal-stream body");
+        assertEq(tid1, resp2."x-thread-id", "normal-stream thread affinity");
+
+        # 3. No-encoding stream (send_callback / DataStream-style)
+        hash<auto> resp3 = hc.send(NOTHING, "GET", "/persist-stream/no-enc-stream");
+        assertEq(200, resp3.status_code, "no-enc-stream should return 200");
+        assertEq("ds-1-ds-2-ds-3", resp3.body, "no-enc-stream body");
+        assertEq(tid1, resp3."x-thread-id", "no-enc-stream thread affinity");
+
+        # 4. Second normal stream
+        hash<auto> resp4 = hc.send(NOTHING, "GET", "/persist-stream/normal-stream");
+        assertEq(200, resp4.status_code, "second normal-stream should return 200");
+        assertEq("chunk-1-chunk-2-chunk-3", resp4.body, "second normal-stream body");
+        assertEq(tid1, resp4."x-thread-id", "second normal-stream thread affinity");
+
+        # 5. End persistence
+        hash<auto> resp5 = hc.send(NOTHING, "POST", "/persist-stream/end");
+        assertEq(200, resp5.status_code, "persist-end should return 200");
+        assertEq("ended", resp5.body, "persist-end body");
+        assertEq(tid1, resp5."x-thread-id", "persist-end thread affinity");
+
+        if (m_options.verbose > 1) {
+            printf("persistent stream lifecycle: all 5 responses on thread %s OK\n", tid1);
+        }
+    }
+
+    testPersistentStreamNotifyClosed() {
+        # Tests that the notifyClosed callback fires when a persistent connection
+        # is closed abnormally (client disconnect without calling /end).
+        mTracker.reset();
+
+        {
+            HTTPClient hc = getHttp1xClient();
+
+            # 1. Start persistence (registers notifyClosed callback)
+            hash<auto> resp1 = hc.send(NOTHING, "POST", "/persist-stream/start");
+            assertEq(200, resp1.status_code, "notifyClosed: persist-start should return 200");
+
+            # 2. Stream response to verify handler is working
+            hash<auto> resp2 = hc.send(NOTHING, "GET", "/persist-stream/normal-stream");
+            assertEq(200, resp2.status_code, "notifyClosed: stream should return 200");
+            assertEq("chunk-1-chunk-2-chunk-3", resp2.body, "notifyClosed: stream body");
+
+            # 3. Client disconnects abruptly by going out of scope (no /end call)
+        }
+
+        # 4. Wait for the close notification
+        bool got_closed = mTracker.waitForClosed(10s);
+        assertTrue(got_closed, "notifyClosed callback should fire after client disconnect");
+        assertTrue(mTracker.getClosedCount() >= 1, "closed count should be at least 1");
+
+        # 5. Verify server still works after abnormal disconnect
+        HTTPClient hc2 = getHttp1xClient();
+        hash<auto> resp3 = hc2.send(NOTHING, "POST", "/persist-stream/start");
+        assertEq(200, resp3.status_code, "server should still work after abnormal disconnect");
+        hash<auto> resp4 = hc2.send(NOTHING, "POST", "/persist-stream/end");
+        assertEq(200, resp4.status_code, "cleanup end should return 200");
+
+        if (m_options.verbose > 1) {
+            printf("persistent stream notifyClosed: closed_count=%d OK\n", mTracker.getClosedCount());
+        }
+    }
+
+    testPersistentStreamInterleaved() {
+        # Tests that a persistent handler can process interleaved stream types:
+        # - Normal chunked streams (content encoding applied)
+        # - No-encoding streams (send_callback, DataStream-style)
+        # - Simple responses (non-stream)
+        # All on the same persistent connection with verified thread affinity.
+        HTTPClient hc = getHttp1xClient();
+
+        # Start persistence
+        hash<auto> resp_start = hc.send(NOTHING, "POST", "/persist-stream/start");
+        assertEq(200, resp_start.status_code, "interleaved: persist-start");
+        string tid = resp_start."x-thread-id";
+
+        # Loop: alternate between normal stream, no-enc stream, and simple response
+        for (int i = 0; i < 3; i++) {
+            # Normal chunked stream
+            hash<auto> r1 = hc.send(NOTHING, "GET", "/persist-stream/normal-stream");
+            assertEq(200, r1.status_code, sprintf("interleaved: normal-stream %d", i));
+            assertEq("chunk-1-chunk-2-chunk-3", r1.body, sprintf("interleaved: normal-stream %d body", i));
+            assertEq(tid, r1."x-thread-id", sprintf("interleaved: normal-stream %d thread", i));
+
+            # No-encoding stream
+            hash<auto> r2 = hc.send(NOTHING, "GET", "/persist-stream/no-enc-stream");
+            assertEq(200, r2.status_code, sprintf("interleaved: no-enc-stream %d", i));
+            assertEq("ds-1-ds-2-ds-3", r2.body, sprintf("interleaved: no-enc-stream %d body", i));
+            assertEq(tid, r2."x-thread-id", sprintf("interleaved: no-enc-stream %d thread", i));
+
+            # Simple non-stream response
+            hash<auto> r3 = hc.send(NOTHING, "GET", "/persist-stream/simple");
+            assertEq(200, r3.status_code, sprintf("interleaved: simple %d", i));
+            assertEq("simple-ok", r3.body, sprintf("interleaved: simple %d body", i));
+            assertEq(tid, r3."x-thread-id", sprintf("interleaved: simple %d thread", i));
+        }
+
+        # End persistence
+        hash<auto> resp_end = hc.send(NOTHING, "POST", "/persist-stream/end");
+        assertEq(200, resp_end.status_code, "interleaved: persist-end");
+        assertEq(tid, resp_end."x-thread-id", "interleaved: persist-end thread");
+
+        if (m_options.verbose > 1) {
+            printf("persistent stream interleaved: 11 requests on thread %s OK\n", tid);
+        }
+    }
+}

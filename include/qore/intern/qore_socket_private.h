@@ -3442,7 +3442,7 @@ struct qore_socket_private {
             int64 r;
             {
                 AutoUnlocker al(l);
-                r = is->read((void*)buf->getPtr(), sizeof(max_chunk_size), xsink);
+                r = is->read((void*)buf->getPtr(), max_chunk_size, xsink);
                 if (*xsink)
                     return;
             }

@@ -2376,7 +2376,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         if (!head && rv."code" == 200 && hdr.method != "OPTIONS" && !rv.streaming && !is_sse
-            && !rv.hasKey("chunked_body")) {
+            && !rv.hasKey("chunked_body") && !(rv.body instanceof InputStream) && !rv.send_callback) {
             bool empty_body = !rv.hasKey("body");
             if (!empty_body) {
                 int body_tc = rv.body.typeCode();
@@ -2420,8 +2420,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             #printf("**** RESPONSE: %d ct: %s (te: %y) encoding: %y: %N\n", rv."code", rv.hdr."Content-Type",
             #    rv.hdr."Transfer-Encoding", cx.encoding, rv.body);
 
-            # compress body if eligible for compression
-            if (rv.body && !rv.hdr."Content-Encoding" && rv.body.size() > CompressionThreshold) {
+            # compress body if eligible for compression; skip InputStream bodies (streaming),
+            # send_callback responses, and handlers that manage their own content encoding
+            if (rv.body && !(rv.body instanceof InputStream) && !rv.send_callback
+                && !rv.no_content_encoding && !rv.hdr."Content-Encoding"
+                && rv.body.size() > CompressionThreshold) {
                 int orig_size = rv.body.size();
                 if (cx.encoding == "br") {
                     rv.hdr."Content-Encoding" = "br";
@@ -2445,7 +2448,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 }
             }
 
-            if ((rv.body.val() || rv.chunked_body.val()) && !rv.hdr."Content-Type") {
+            if ((rv.body instanceof InputStream || rv.send_callback || rv.body.val()
+                || rv.chunked_body.val()) && !rv.hdr."Content-Type") {
                 rv.hdr."Content-Type" = MimeTypeHtml + ";charset=" + (cx."response-encoding"
                     ?? s.getEncoding().lwr());
             }
@@ -2648,6 +2652,37 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv,
             *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        # Handle send_callback responses (e.g. DataStream protocol)
+        if (rv.send_callback) {
+            if (async_response_out) {
+                # Async mode: capture callback for the response-sending code
+                async_response_out = <HttpAsyncResponseInfo>{
+                    "code": rv."code",
+                    "hdr": rv.hdr ?? {},
+                    "send_callback": rv.send_callback,
+                    "send_timeout": rv.send_timeout,
+                    "close": cx.close ?? False,
+                    "cx": cx,
+                    "listener": listener,
+                };
+                listener.logResponse(cx, rv);
+                return;
+            }
+            # Sync mode: send directly using the callback
+            try {
+                s.sendHTTPResponseWithCallback(rv.send_callback, rv."code",
+                    HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr, rv.send_timeout ?? -1);
+            } catch (hash<ExceptionInfo> ex) {
+                listener.logResponseError(cx, rv, ex);
+                rethrow;
+            }
+            listener.logResponse(cx, rv);
+            if (rv."code" >= 200) {
+                cx."response-sent" = True;
+            }
+            return;
+        }
+
         bool chunked = rv.chunked_body || (rv.body && (rv.hdr."Transfer-Encoding" || rv.body instanceof InputStream));
         auto body = rv.body;
 
@@ -4020,9 +4055,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # Check if handler opted into persistence - if so, we need thread affinity
         # and must switch to synchronous mode for this connection
         if (!request_helper.isDedicated() && phi.handler && phi.handler.isPersistent()) {
-            @debug {
-                log("DEBUG: cid %d: handler opted into persistence, switching to sync mode", cx.id);
-            }
+            log("cid %d: handler opted into persistence for %s %s, switching to sync mode",
+                cx.id, hdr.method, cx.masked_path);
             # Handler requires thread affinity - send current response synchronously first
             if (async_response.code) {
                 sendResponseSync(s, async_response);
@@ -4073,6 +4107,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "hdr": hdr,
                 "body": async_response.body,
                 "input_stream": async_response.input_stream,
+                "send_callback": async_response.send_callback,
+                "send_timeout": async_response.send_timeout,
                 "chunked": async_response.chunked && !is_http2,
                 "close": do_close,
                 "return_to_idle": !do_close,
@@ -4138,8 +4174,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         response.body);
                 }
                 serv.execHttp2PollOperation(s, op);
+            } else if (response.send_callback) {
+                # HTTP/1.x: send callback-based chunked response (e.g. DataStream protocol)
+                s.sendHTTPResponseWithCallback(response.send_callback, response.code,
+                    HttpServer::HttpCodes{response.code}, "1.1",
+                    response.hdr ?? {}, response.send_timeout ?? -1);
+            } else if (response.input_stream) {
+                # HTTP/1.x: send InputStream-based chunked response
+                response.input_stream.reassignThread();
+                s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
+                    response.hdr ?? {}, response.input_stream);
             } else {
-                # Send HTTP/1.x response (chunked data has already been read into memory in async_response)
+                # HTTP/1.x: send normal response
                 s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
                     response.hdr ?? {}, response.body);
             }
@@ -4171,20 +4217,23 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # Static listener context template
         hash<auto> cx_listener = getContextTemplate(info);
 
+        # Clean up persistent handler state and thread-local data when this function
+        # exits for any reason.  This is critical because this runs on a handler pool
+        # thread that will be reused - stale thread-local data from a persistent
+        # session (e.g., from an abnormal disconnect) would corrupt subsequent requests.
+        on_exit {
+            phi.clear();
+            removeUserThreadContext();
+            remove_thread_data("svc_listener");
+        }
+
         try {
             while (!exit && s.isOpen()) {
-                # Check if persistence has ended - if so, return to async I/O
-                if (!phi.handler || !phi.handler.isPersistent()) {
-                    @debug {
-                        log("DEBUG: cid %d: persistence ended, handler=%y isPersistent=%y", cx.id,
-                            phi.handler ? True : False, phi.handler ? phi.handler.isPersistent() : False);
-                    }
-                    log("cid %d: persistence ended, returning to async I/O", cx.id);
-                    if (!cx.close && s.isOpen()) {
-                        serv.returnConnectionToAsyncIo(s, cx, self);
-                    }
-                    return;
-                }
+                # NOTE: persistence may have ended between requests (e.g., between
+                # DataStream SELECT and ROLLBACK), but we continue processing on this
+                # thread to preserve thread affinity for thread-bound resources (e.g.,
+                # database transactions).  The idle timeout in the wait loop below
+                # handles the case where no more requests arrive after persistence ends.
 
                 # Wait for next request with idle timeout
                 date poll_interval = HttpServer::PollTimeout;
@@ -4199,7 +4248,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     # (persistent connections have no idle timeout while active)
                     if (!phi.handler || !phi.handler.isPersistent()) {
                         if ((now_us() - start) > ttl) {
-                            log("cid %d: idle timeout, closing connection", cx.id);
+                            log("cid %d: persistent sync idle timeout, returning to async I/O",
+                                cx.id);
+                            if (!cx.close && s.isOpen()) {
+                                serv.returnConnectionToAsyncIo(s, cx, self);
+                            }
                             return;
                         }
                     }
@@ -4885,6 +4938,20 @@ hashdecl HttpAsyncResponseInfo {
 
     #! Listener reference
     HttpListener listener;
+
+    #! callback for sending chunked response data where each callback return is one HTTP chunk
+    /** @since Qore 2.3 (HttpServer 1.6)
+
+        @see send_timeout
+    */
+    *code send_callback;
+
+    #! timeout for send_callback responses
+    /** @since Qore 2.3 (HttpServer 1.6)
+
+        @see send_callback
+    */
+    *timeout send_timeout;
 }
 } # namespace Priv
 
