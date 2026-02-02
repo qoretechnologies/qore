@@ -630,6 +630,7 @@ protected:
     mutable std::once_flag jit_compile_once;
     mutable bool ir_lower_failed = false;
     mutable bool jit_compile_failed = false;
+    bool is_closure = false;  //!< true for closure variants; JIT not yet supported
 
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
             ExceptionSink* xsink) const;
@@ -1433,6 +1434,7 @@ class UserClosureVariant : public UserFunctionVariant {
 protected:
 public:
     DLLLOCAL UserClosureVariant(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : UserFunctionVariant(b, n_sig_first_line, n_sig_last_line, params, rv, synced, n_flags) {
+        is_closure = true;
     }
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);

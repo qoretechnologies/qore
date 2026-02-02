@@ -38,6 +38,8 @@ class TieredSmokeTest inherits QUnit::Test {
         addTestCase("tiered any arith fast-path promotion", \testTieredAnyArithPromotion());
         addTestCase("tiered any comparison fast-path promotion", \testTieredAnyCmpPromotion());
         addTestCase("tiered hash/list/string fast-path promotion", \testTieredAccessOpsPromotion());
+        # Phase 5c debug info test
+        addTestCase("tiered debug info promotion", \testTieredDebugInfo());
         set_return_value(main());
     }
 
@@ -563,5 +565,43 @@ printf(\"%s\\n\", results.join(\",\"));
             assertEq(expected.toString(), parts[i],
                 sprintf("access ops promotion: access_ops(%d) = %d", i, expected));
         }
+    }
+
+    # --- Phase 5c debug info test ---
+
+    testTieredDebugInfo() {
+        # Function called enough times to promote through tiers;
+        # verify debug info doesn't break tier transitions
+        string code = "%modern
+int sub compute_with_locals(int n) {
+    int a = n * 2;
+    int b = n + 3;
+    int result = 0;
+    if (a > b) {
+        result = a - b;
+    } else {
+        result = b - a;
+    }
+    return result;
+}
+list<int> results = ();
+for (int i = 0; i < 50; i++) {
+    results += compute_with_locals(i);
+}
+# Verify all results are correct
+bool all_ok = True;
+for (int i = 0; i < 50; i++) {
+    int a = i * 2;
+    int b = i + 3;
+    int expected = a > b ? a - b : b - a;
+    if (results[i] != expected) {
+        all_ok = False;
+        printf(\"ERROR: i=%d got=%d expected=%d\\n\", i, results[i], expected);
+    }
+}
+printf(\"%s:%d\\n\", all_ok ? \"OK\" : \"FAIL\", results.size());
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=3 --jit-jit-threshold=10"));
+        assertEq("OK:50", result, "debug info: correct across tier promotions");
     }
 }

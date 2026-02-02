@@ -240,6 +240,24 @@ uint64_t qore_rt_exec_statement(int opcode, const AbstractStatement* stmt, Excep
 //! Signal thread exit via ExceptionSink
 void qore_rt_thread_exit(ExceptionSink* xsink);
 
+// --- On-block-exit handler helpers ---
+// These manage deferred on_error/on_exit/on_success handlers for JIT-compiled
+// functions.  Each JIT function saves the handler count at entry and executes
+// (in LIFO order) any handlers registered during its execution at return time.
+
+class StatementBlock;
+
+//! Register an on_block_exit handler for deferred execution.
+//! type: OBE_Unconditional=0, OBE_Success=1, OBE_Error=2
+void qore_rt_push_on_block_exit(int type, StatementBlock* code);
+
+//! Get current handler count (called at function entry to save base).
+int64_t qore_rt_get_on_block_exit_count();
+
+//! Execute on_block_exit handlers registered since saved_count, in LIFO order.
+//! Removes executed handlers from the stack.
+void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
+
 // --- Guard type helper ---
 
 //! Check if value matches the given type; returns 1 if match, 0 otherwise

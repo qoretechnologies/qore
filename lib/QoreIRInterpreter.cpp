@@ -25,6 +25,11 @@
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/OnBlockExitStatement.h>
+#include <qore/intern/QoreRegex.h>
+#include <qore/intern/QoreRegexMatchOperatorNode.h>
+#include <qore/intern/QoreRegexNMatchOperatorNode.h>
+#include <qore/intern/StatementBlock.h>
+#include <qore/intern/QoreException.h>
 #include <qore/intern/qore_thread_intern.h>
 #include <qore/intern/Variable.h>
 #include <qore/intern/QoreTypeInfo.h>
@@ -446,6 +451,38 @@ static void assignLocalVarValue(LocalVar* var, const QoreValue& value, Exception
     helper.assign(stored);
 }
 
+// Write-through for closure variable stores: writes the value to the actual
+// ClosureVarValue so that changes are visible outside the IR interpreter.
+static void assignClosureVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
+    if (!var) {
+        return;
+    }
+    ClosureVarValue* cv = thread_get_runtime_closure_var(var);
+    if (!cv) {
+        return;
+    }
+    LValueHelper helper(xsink);
+    if (cv->getLValue(helper, false)) {
+        return;
+    }
+    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+    helper.assign(stored);
+}
+
+// Write-through for global variable stores: writes the value to the actual
+// global Var so that changes are visible outside the IR interpreter.
+static void assignGlobalVarValue(Var* var, const QoreValue& value, ExceptionSink* xsink) {
+    if (!var) {
+        return;
+    }
+    LValueHelper helper(xsink);
+    if (var->getLValue(helper, false)) {
+        return;
+    }
+    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+    helper.assign(stored);
+}
+
 static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>& locals,
         std::unordered_set<const LocalVar*>& instantiated_locals, const QoreValue& lvalue,
         const QoreValue& value, ExceptionSink* xsink,
@@ -596,11 +633,90 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             QoreValue right = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
             return QoreIRInterpreter::evalBinary(op, left, right, xsink);
         }
+        // Regex match/nmatch: use operand value instead of AST expression's left operand
+        case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool: {
+            if (!inv->operands.empty()) {
+                QoreValue str_val = getIRValue(values, inv->operands[0]);
+                QoreRegex* regex = nullptr;
+                if (auto* match_node = dynamic_cast<const QoreRegexMatchOperatorNode*>(
+                        inv->expr.getInternalNode())) {
+                    regex = match_node->getRegex();
+                } else if (auto* nmatch_node = dynamic_cast<const QoreRegexNMatchOperatorNode*>(
+                        inv->expr.getInternalNode())) {
+                    regex = nmatch_node->getRegex();
+                }
+                if (regex) {
+                    QoreStringNodeValueHelper str(str_val);
+                    bool match = regex->exec(*str, xsink);
+                    if (op == QoreIROpcode::RegexNMatchBool) {
+                        match = !match;
+                    }
+                    return QoreValue(match);
+                }
+            }
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
         // Everything else (Call, DotEval, LoadLValue, expression ops, etc.)
         // evaluated through the original AST expression
         default:
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
     }
+}
+
+// IR on_block_exit handler entry: records the type and code block for deferred execution
+struct IROnBlockExitHandler {
+    obe_type_e type;
+    StatementBlock* code;
+};
+
+// Execute on_block_exit handlers in reverse order (LIFO), matching the AST's
+// StatementBlock::execIntern() semantics.  Returns the last non-zero return code, if any.
+static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handlers, ExceptionSink* xsink) {
+    if (handlers.empty()) {
+        return 0;
+    }
+    ExceptionSink obe_xsink;
+    int nrc = 0;
+    bool error = xsink && xsink->isException();
+    // Execute in reverse order (most recently registered first)
+    for (int i = (int)handlers.size() - 1; i >= 0; --i) {
+        obe_type_e type = handlers[i].type;
+        if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
+            if (handlers[i].code) {
+                {
+                    // Instantiate exception for on_error blocks as an implicit arg
+                    std::unique_ptr<SingleArgvContextHelper> argv_helper;
+                    std::unique_ptr<CatchExceptionHelper> ex_helper;
+                    if (type == OBE_Error && xsink) {
+                        QoreException* except = xsink->getException();
+                        if (except) {
+                            ex_helper.reset(new CatchExceptionHelper(except));
+                            argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
+                        }
+                    }
+                    QoreValue rv;
+                    nrc = handlers[i].code->exec(rv, &obe_xsink);
+                    if (type == OBE_Error) {
+                        if (qore_es_private::get(obe_xsink)->rethrown) {
+                            if (xsink) {
+                                xsink->clear();
+                            }
+                        }
+                    }
+                }
+                if (obe_xsink) {
+                    if (xsink) {
+                        xsink->assimilate(obe_xsink);
+                    }
+                    if (!error) {
+                        error = true;
+                    }
+                }
+            }
+        }
+    }
+    return nrc;
 }
 
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
@@ -613,6 +729,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     std::unordered_map<const void*, QoreValue> globals;
     std::unordered_map<const void*, QoreValue> threadlocals;
     std::unordered_map<const void*, QoreValue> closures;
+    // on_block_exit handlers collected during IR execution
+    std::vector<IROnBlockExitHandler> on_block_exit_handlers;
     struct LocalInstantiationCleanup {
         std::unordered_set<const LocalVar*>& locals;
         ExceptionSink* xsink;
@@ -999,7 +1117,26 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                 } else {
                     auto it = closures.find(local_inst->local);
-                    val = it != closures.end() ? it->second : QoreValue();
+                    if (it != closures.end()) {
+                        val = it->second;
+                    } else if (local_inst->local) {
+                        // Read from the runtime closure environment (set by
+                        // ThreadSafeLocalVarRuntimeEnvironmentHelper in
+                        // UserClosureFunction::evalClosure)
+                        ClosureVarValue* cv = thread_get_runtime_closure_var(local_inst->local);
+                        if (cv) {
+                            val = cv->eval(xsink);
+                            if (xsink && *xsink) {
+                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                cleanupStoredValues(locals, nullptr);
+                                cleanupStoredValues(globals, nullptr);
+                                cleanupStoredValues(threadlocals, nullptr);
+                                cleanupStoredValues(closures, nullptr);
+                                return false;
+                            }
+                            storeValue(closures, local_inst->local, val, nullptr);
+                        }
+                    }
                 }
                 QoreValue out = val.hasNode() ? val.refSelf() : val;
                 values[local_inst->result.id] = out;
@@ -1058,14 +1195,37 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 QoreValue val = getIRValue(values, local_inst->operands.front());
                 storeValue(closures, local_inst->local, val, xsink);
+                // Write-through: update the actual closure variable so changes
+                // are visible outside the IR interpreter's local cache.
+                assignClosureVarValue(local_inst->local, val, xsink);
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
                 ++ip;
                 break;
             }
             case QoreIROpcode::LoadGlobal: {
                 auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
+                QoreValue out;
                 auto it = globals.find(var_inst->var);
-                QoreValue val = it != globals.end() ? it->second : QoreValue();
-                QoreValue out = val.hasNode() ? val.refSelf() : val;
+                if (it != globals.end()) {
+                    QoreValue val = it->second;
+                    out = val.hasNode() ? val.refSelf() : val;
+                } else {
+                    // Read from the actual global variable when not in the local cache
+                    out = var_inst->var->eval();
+                }
                 values[var_inst->result.id] = out;
                 if (out.hasNode()) {
                     cleanup.push_back(var_inst->result.id);
@@ -1088,14 +1248,37 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 QoreValue val = getIRValue(values, var_inst->operands.front());
                 storeValue(globals, var_inst->var, val, xsink);
+                // Write-through: update the actual global variable so changes
+                // are visible outside the IR interpreter's local cache.
+                assignGlobalVarValue(var_inst->var, val, xsink);
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
                 ++ip;
                 break;
             }
             case QoreIROpcode::LoadThreadLocal: {
                 auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
+                QoreValue out;
                 auto it = threadlocals.find(var_inst->var);
-                QoreValue val = it != threadlocals.end() ? it->second : QoreValue();
-                QoreValue out = val.hasNode() ? val.refSelf() : val;
+                if (it != threadlocals.end()) {
+                    QoreValue val = it->second;
+                    out = val.hasNode() ? val.refSelf() : val;
+                } else {
+                    // Read from the actual thread-local variable when not in the local cache
+                    out = var_inst->var->eval();
+                }
                 values[var_inst->result.id] = out;
                 if (out.hasNode()) {
                     cleanup.push_back(var_inst->result.id);
@@ -1118,6 +1301,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 QoreValue val = getIRValue(values, var_inst->operands.front());
                 storeValue(threadlocals, var_inst->var, val, xsink);
+                // Write-through: update the actual thread-local variable.
+                assignGlobalVarValue(var_inst->var, val, xsink);
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
                 ++ip;
                 break;
             }
@@ -1267,6 +1466,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "on-block-exit requires a statement");
                     }
+                    executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, nullptr);
                     cleanupStoredValues(globals, nullptr);
@@ -1274,20 +1474,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                QoreValue stmt_return;
-                int rc = const_cast<OnBlockExitStatement*>(obe_inst->stmt)->exec(stmt_return, xsink);
-                if (rc || (xsink && *xsink)) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
-                    return false;
-                }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                // Record the handler for deferred execution at block/function exit.
+                // Don't call exec() here - the AST's exec() calls advance_on_block_exit()
+                // which requires the thread on_block_exit stack to be set up by StatementBlock,
+                // but the IR interpreter doesn't go through StatementBlock::execIntern().
+                on_block_exit_handlers.push_back({obe_inst->stmt->getType(), obe_inst->stmt->getCode()});
                 ++ip;
                 break;
             }
@@ -1842,6 +2033,52 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ++ip;
                 break;
             }
+        case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool: {
+            // Handle regex match/nmatch using the IR operand (the actual runtime value)
+            // rather than falling back to evalExprNode, which would evaluate the AST
+            // expression's left operand (which may be NOTHING for switch-generated regex cases).
+            auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+            QoreValue res;
+            if (!expr_inst->operands.empty()) {
+                QoreValue str_val = getIRValue(values, expr_inst->operands[0]);
+                QoreRegex* regex = nullptr;
+                if (auto* match_node = dynamic_cast<const QoreRegexMatchOperatorNode*>(
+                        expr_inst->expr.getInternalNode())) {
+                    regex = match_node->getRegex();
+                } else if (auto* nmatch_node = dynamic_cast<const QoreRegexNMatchOperatorNode*>(
+                        expr_inst->expr.getInternalNode())) {
+                    regex = nmatch_node->getRegex();
+                }
+                if (regex) {
+                    QoreStringNodeValueHelper str(str_val);
+                    bool match = regex->exec(*str, xsink);
+                    if (inst->opcode == QoreIROpcode::RegexNMatchBool) {
+                        match = !match;
+                    }
+                    res = QoreValue(match);
+                } else {
+                    res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                }
+            } else {
+                res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+            }
+            if (xsink && *xsink) {
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                return false;
+            }
+            values[expr_inst->result.id] = res;
+            if (res.hasNode()) {
+                cleanup.push_back(expr_inst->result.id);
+            }
+            ++ip;
+            break;
+        }
         case QoreIROpcode::ExtractAny:
         case QoreIROpcode::ExtractList:
         case QoreIROpcode::ExtractString:
@@ -1856,8 +2093,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         case QoreIROpcode::KeysList:
         case QoreIROpcode::KeysHash:
         case QoreIROpcode::RegexMatchAny:
-            case QoreIROpcode::RegexMatchBool:
-            case QoreIROpcode::RegexNMatchBool:
             case QoreIROpcode::RegexExtractAny:
             case QoreIROpcode::RegexExtractList:
             case QoreIROpcode::RegexSubstAny:
@@ -2007,6 +2242,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 } else {
                     return_value = QoreValue();
                 }
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                 cleanupValues(values, cleanup, xsink, false, cleanup_log);
                 cleanupStoredValues(locals, xsink);
                 cleanupStoredValues(globals, xsink);
@@ -2016,6 +2252,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             case QoreIROpcode::ReturnNothing:
                 return_value = QoreValue();
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                 cleanupValues(values, cleanup, xsink, false, cleanup_log);
                 cleanupStoredValues(locals, xsink);
                 cleanupStoredValues(globals, xsink);

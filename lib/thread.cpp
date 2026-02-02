@@ -1236,7 +1236,8 @@ void thread_set_closure_parse_env(ClosureParseEnvironment* cenv) {
 }
 
 ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id) {
-    return thread_data.get()->closure_rt_env->find(id);
+    const QoreClosureBase* rt_env = thread_data.get()->closure_rt_env;
+    return rt_env ? rt_env->find(id) : nullptr;
 }
 
 ClosureParseEnvironment* thread_get_closure_parse_env() {

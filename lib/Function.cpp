@@ -2259,6 +2259,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         name, (int)tier, exec_count.load(), (void*)cached_jit_fn, (void*)cached_ir);
     // JIT tier: execute native function
     if (tier == TIER_JIT && cached_jit_fn) {
+        printd(3, "evalTiered JIT '%s' exec_count=%lu\n",
+            name, exec_count.load());
         // self might be 0 if instantiated by a constructor call
         if (self && signature.selfid) {
             signature.selfid->instantiateSelf(self);
@@ -2334,7 +2336,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
                 // Build set of pre-instantiated local variables for the IR interpreter.
                 // Parameter locals are already instantiated by setupCall() in eval().
-                // argvid/selfid are instantiated above in this function.
+                // argvid/selfid are instantiated above in this function or by the caller
+                //   (e.g. UserConstructorVariant::evalConstructor() pushes selfid before
+                //    calling evalIntern() with self=0).
                 // Body locals are instantiated just above.
                 // All must be in pre_instantiated so the IR interpreter doesn't
                 // re-instantiate them (which would push a new frame with value 0).
@@ -2345,7 +2349,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (signature.argvid) {
                     pre_instantiated.insert(signature.argvid);
                 }
-                if (self && signature.selfid) {
+                // Always add selfid to pre_instantiated when it exists; even when
+                // self==nullptr (constructor case), the caller has already pushed
+                // selfid onto the thread-local variable stack.
+                if (signature.selfid) {
                     pre_instantiated.insert(signature.selfid);
                 }
                 for (LocalVar* lv : cached_ir->all_body_locals) {
@@ -2382,9 +2389,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             signature.selfid->uninstantiateSelf();
         }
 
-        // Check for JIT promotion while on IR tier
+        // Check for JIT promotion while on IR tier (skip for closures — JIT local
+        // variable access doesn't yet handle closure calling conventions correctly)
         uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
-        if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed) {
+        printd(3, "evalTiered IR '%s' exec_count=%lu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
+            name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure, (int)jit_compile_failed);
+        if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed && !is_closure) {
             std::call_once(jit_compile_once, [this]() {
                 attemptJITCompilation();
             });
@@ -2405,7 +2415,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
 
     // Check for JIT promotion (IR already cached from a previous call)
-    if (count >= QoreJIT::getJITThreshold() && cached_ir && !jit_compile_failed) {
+    if (count >= QoreJIT::getJITThreshold() && cached_ir && !jit_compile_failed && !is_closure) {
         std::call_once(jit_compile_once, [this]() {
             attemptJITCompilation();
         });

@@ -714,22 +714,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
 
             QoreIRValue match_value;
-            if (auto* regex_case = dynamic_cast<const CaseNodeRegex*>(node)) {
-                QoreRegex* regex = regex_case->getRegex();
-                if (!regex) {
-                    error = "switch regex case missing regex";
-                    return false;
-                }
-                QoreValue regex_expr(new QoreRegexMatchOperatorNode(node->loc, QoreValue(), regex->refSelf()));
-                ValueHolder regex_holder(regex_expr, nullptr);
-                std::vector<QoreIRValue> operands{switch_val};
-                match_value = lowerExprOpOrInvoke(QoreIROpcode::RegexMatchBool, regex_expr, operands, node->loc, error);
-                if (!match_value.isValid()) {
-                    return false;
-                }
-                if (dynamic_cast<const CaseNodeNegRegex*>(regex_case)) {
-                    match_value = builder.createUnaryOp(QoreIROpcode::Not, match_value)->result;
-                }
+            if (dynamic_cast<const CaseNodeRegex*>(node)) {
+                // Bail out: regex switch cases cannot be lowered to IR because the
+                // lowering process creates a temporary QoreRegexMatchOperatorNode
+                // that corrupts the AST switch statement's regex case nodes, making
+                // subsequent AST execution fail
+                error = "switch regex case not supported in IR lowering";
+                return false;
             } else if (auto* op_case = dynamic_cast<const CaseNodeWithOperator*>(node)) {
                 QoreIRValue case_val = lowerExpression(node->val, error);
                 if (!case_val.isValid()) {
@@ -2195,6 +2186,16 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     bool force_int = dynamic_cast<const QoreIntPlusEqualsOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Object += hash changes semantics in the load -> add -> store decomposition:
+    // object + hash = hash (not object), so storing the result back to the
+    // object-typed variable would fail with RUNTIME-TYPE-ERROR.  The AST
+    // QorePlusEqualsOperatorNode handles this as an in-place lvalue member merge,
+    // so fall back to AST evaluation for object-typed variables.
+    if (left_var && left_var->getTypeInfo()
+            && QoreTypeInfo::getUniqueReturnClass(left_var->getTypeInfo())) {
+        error = "object plus-equals not supported for IR lowering";
+        return QoreIRValue();
+    }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
@@ -3607,35 +3608,12 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
     if (!op) {
         return QoreIRValue();
     }
-    QoreValue lvalue(expr);
-    if (!lvalue.hasNode()) {
-        error = "unsupported lvalue for square brackets IR lowering";
-        return QoreIRValue();
-    }
-    if (isRangeLValue(lvalue)) {
-        error = "unsupported lvalue range for square brackets IR lowering";
-        return QoreIRValue();
-    }
-    if (!guardLValueBase(lvalue, error)) {
-        return QoreIRValue();
-    }
-    QoreIRValue result;
-    if (!exception_stack.empty()) {
-        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-        if (!normal_block) {
-            error = "IR builder failed to create invoke continuation block";
-            return QoreIRValue();
-        }
-        QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
-        inst->invoke_opcode = QoreIROpcode::LoadLValue;
-        builder.setBlock(normal_block);
-        result = inst->result;
-    } else {
-        result = builder.createLoadLValue(lvalue, op->loc)->result;
-    }
-    maybeInsertNotNothingGuard(result, &expr, op->loc, nullptr);
-    return result;
+    // Use expression evaluation (Call) instead of LoadLValue so that
+    // reading from non-list types (binary, string, hash) works correctly;
+    // LValueHelper only supports list-type lvalue access and would reject
+    // binary[index] or string[index] with a RUNTIME-TYPE-ERROR.
+    std::vector<QoreIRValue> operands;
+    return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, std::string& error) {

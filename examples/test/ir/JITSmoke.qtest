@@ -56,6 +56,9 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("JIT any comparison fast-path", \testJitAnyCmpFastPath());
         addTestCase("JIT any arithmetic mixed types", \testJitAnyArithMixed());
         addTestCase("JIT Phase 5b cross-mode correctness", \testJitPhase5bCrossMode());
+        # Phase 5c debug info tests
+        addTestCase("JIT debug info compile", \testJitDebugInfoCompile());
+        addTestCase("JIT debug info multi-line", \testJitDebugInfoMultiLine());
         set_return_value(main());
     }
 
@@ -659,5 +662,49 @@ printf(\"%s\\n\", (map $1.toString(), results).join(\",\"));
         string jit_result = trim(runScript(code, "jit"));
         assertEq(ast_result, ir_result, "Phase 5b cross-mode: IR matches AST");
         assertEq(ast_result, jit_result, "Phase 5b cross-mode: JIT matches AST");
+    }
+
+    # --- Phase 5c debug info tests ---
+
+    testJitDebugInfoCompile() {
+        # Simple function with local variables; verify correct result under JIT
+        # (exercises DIBuilder code path for every JIT compilation)
+        string code = "%modern
+int sub add_locals(int a, int b) {
+    int x = a + 1;
+    int y = b + 2;
+    int result = x + y;
+    return result;
+}
+printf(\"%d\\n\", add_locals(10, 20));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("33", ast_result, "debug info compile AST");
+        assertEq(ast_result, jit_result, "debug info compile JIT matches AST");
+    }
+
+    testJitDebugInfoMultiLine() {
+        # Multi-line function with branches and loops; verify correct result
+        # (exercises per-instruction debug locations across blocks)
+        string code = "%modern
+int sub multi_line(int n) {
+    int total = 0;
+    for (int i = 0; i < n; i++) {
+        if (i % 3 == 0) {
+            total += i * 2;
+        } else if (i % 3 == 1) {
+            total -= 1;
+        } else {
+            total += i;
+        }
+    }
+    return total;
+}
+printf(\"%d\\n\", multi_line(15));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq(ast_result, jit_result, "debug info multi-line JIT matches AST");
     }
 }

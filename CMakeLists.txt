@@ -949,11 +949,10 @@ set(LIBQORE_SOURCE_HEADERS ${LIBQORE_SOURCE_HEADERS} include/qore/qlist include/
 # prepare libqore target
 if (SINGLE_COMPILATION_UNIT)
     # Generate the SCU dynamically from LIBQORE_CPP_SRC and LIBQORE_QPP_CPP_SRC.
-    # Using absolute paths lets cmake's built-in .d file scanner track all
-    # includes correctly, so no OBJECT_DEPENDS workaround is needed.
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
 
     set(SCU_CONTENT "/* Auto-generated single compilation unit - do not edit */\n")
+    set(SCU_ALL_DEPS "")
     foreach(src ${LIBQORE_CPP_SRC})
         # Resolve to absolute path
         if (IS_ABSOLUTE "${src}")
@@ -962,6 +961,7 @@ if (SINGLE_COMPILATION_UNIT)
             set(abs_src "${CMAKE_SOURCE_DIR}/${src}")
         endif()
 
+        list(APPEND SCU_ALL_DEPS "${abs_src}")
         get_filename_component(basename "${src}" NAME)
         if (basename STREQUAL "parser.cpp")
             string(APPEND SCU_CONTENT
@@ -985,6 +985,7 @@ if (SINGLE_COMPILATION_UNIT)
     # QPP-generated files (already absolute paths in CMAKE_BINARY_DIR)
     foreach(src ${LIBQORE_QPP_CPP_SRC})
         string(APPEND SCU_CONTENT "#include \"${src}\"\n")
+        list(APPEND SCU_ALL_DEPS "${src}")
     endforeach()
 
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
@@ -993,6 +994,14 @@ if (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED
         ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
         ${LIBQORE_SOURCE_HEADERS})
+
+    # Explicitly tell cmake that the SCU object depends on all included .cpp
+    # files.  The .d file scanner should handle this, but the Unix Makefiles
+    # generator does not reliably trigger rebuilds from .d-tracked includes.
+    set_source_files_properties(
+        ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+        PROPERTIES OBJECT_DEPENDS "${SCU_ALL_DEPS}"
+    )
 else (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
 endif (SINGLE_COMPILATION_UNIT)
