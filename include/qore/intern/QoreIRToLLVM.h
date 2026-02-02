@@ -128,6 +128,37 @@ private:
 
     // Emit qore_rt_uninstantiate_local calls for all function locals at current insert point
     void emitLocalUninstantiation(llvm::Module& module);
+
+    // Box any typed LLVM value to NaN-boxed i64, handling already-boxed values
+    llvm::Value* boxValue(llvm::Value* val, uint32_t id);
+
+    // Emit exception check: if xsink has exception, branch to exception_target
+    void emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst);
+
+    // Phase 5b: Try to emit a specialized hash key access instead of qore_rt_invoke_expr.
+    // Returns true if specialized code was emitted, false to fall through to generic path.
+    bool tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Module& module,
+            llvm::Function* llvm_func);
+
+    // Phase 5b: Try to emit a specialized list index access instead of qore_rt_invoke_expr.
+    // Returns true if specialized code was emitted, false to fall through to generic path.
+    bool tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::Module& module,
+            llvm::Function* llvm_func);
+
+    // Phase 5b: Emit inline LLVM fast-path for .any arithmetic (AddAny/SubAny/MulAny).
+    // Type-checks operands for int+int and float+float, falls back to helper for mixed types.
+    llvm::Value* emitAnyArithFastPath(llvm::Instruction::BinaryOps int_op,
+            llvm::Instruction::BinaryOps float_op, const char* slow_helper,
+            llvm::Value* lhs, llvm::Value* rhs,
+            llvm::Function* llvm_func, llvm::Module& module);
+
+    // Phase 5b: Emit inline LLVM fast-path for .any comparisons (EqAny/NeAny/etc).
+    // Type-checks operands for int-vs-int and float-vs-float, falls back to helper for mixed types.
+    llvm::Value* emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
+            llvm::CmpInst::Predicate float_pred, int opcode,
+            llvm::Value* lhs, llvm::Value* rhs,
+            llvm::Function* llvm_func, llvm::Module& module);
 };
 
 #endif

@@ -38,6 +38,24 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("JIT while loop", \testJitWhileLoop());
         addTestCase("JIT do-while loop", \testJitDoWhileLoop());
         addTestCase("JIT correctness across modes", \testJitCorrectnessAcrossModes());
+        addTestCase("JIT hash construction and access", \testJitHashAccess());
+        addTestCase("JIT list construction and access", \testJitListOps());
+        addTestCase("JIT string concatenation", \testJitStringConcat());
+        addTestCase("JIT dynamic comparison ops", \testJitDynamicComparisons());
+        addTestCase("JIT dynamic bitwise ops", \testJitDynamicBitwise());
+        addTestCase("JIT dynamic unary ops", \testJitDynamicUnary());
+        addTestCase("JIT compound assignment ops", \testJitCompoundAssign());
+        addTestCase("JIT throw with list args", \testJitThrowList());
+        addTestCase("JIT multiple exceptions", \testJitMultipleExceptions());
+        addTestCase("JIT scoped object construction", \testJitScopedObjectConstruction());
+        # Phase 5b optimization tests
+        addTestCase("JIT hash key access fast-path", \testJitHashKeyFastPath());
+        addTestCase("JIT list index access fast-path", \testJitListIndexFastPath());
+        addTestCase("JIT string concat fast-path", \testJitStringConcatFastPath());
+        addTestCase("JIT any arithmetic fast-path", \testJitAnyArithFastPath());
+        addTestCase("JIT any comparison fast-path", \testJitAnyCmpFastPath());
+        addTestCase("JIT any arithmetic mixed types", \testJitAnyArithMixed());
+        addTestCase("JIT Phase 5b cross-mode correctness", \testJitPhase5bCrossMode());
         set_return_value(main());
     }
 
@@ -363,5 +381,283 @@ printf(\"%d\\n\", compute(20));
         string jit_result = trim(runScript(code, "jit"));
         assertEq(ast_result, ir_result, "IR produces same result as AST");
         assertEq(ast_result, jit_result, "JIT produces same result as AST");
+    }
+
+    testJitHashAccess() {
+        string code = "%modern
+hash<auto> h = {\"key\": \"value\", \"num\": 42};
+printf(\"%s:%d\\n\", h.key, h.num);
+";
+        string result = trim(runScript(code));
+        assertEq("value:42", result, "hash construction and dot-access");
+    }
+
+    testJitListOps() {
+        string code = "%modern
+list<int> l = (10, 20, 30, 40, 50);
+int sum = 0;
+for (int i = 0; i < l.size(); i++) {
+    sum += l[i];
+}
+printf(\"%d:%d\\n\", l.size(), sum);
+";
+        string result = trim(runScript(code));
+        assertEq("5:150", result, "list construction, indexing, and size");
+    }
+
+    testJitStringConcat() {
+        string code = "%modern
+string a = \"hello\";
+string b = \" world\";
+string c = a + b;
+printf(\"%s:%d\\n\", c, c.size());
+";
+        string result = trim(runScript(code));
+        assertEq("hello world:11", result, "string concatenation and size");
+    }
+
+    testJitDynamicComparisons() {
+        string code = "%modern
+auto a = 5;
+auto b = 10;
+list<string> results = ();
+if (a < b) { results += \"lt\"; }
+if (a <= b) { results += \"le\"; }
+if (b > a) { results += \"gt\"; }
+if (b >= a) { results += \"ge\"; }
+if (a == a) { results += \"eq\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("lt,le,gt,ge,eq,ne", result, "dynamic auto comparison operators");
+    }
+
+    testJitDynamicBitwise() {
+        string code = "%modern
+auto a = 0xFF;
+auto b = 0x0F;
+auto and_r = a & b;
+auto or_r = a | b;
+auto xor_r = a ^ b;
+auto shl_r = 1 << 8;
+auto shr_r = 256 >> 4;
+printf(\"%d,%d,%d,%d,%d\\n\", and_r, or_r, xor_r, shl_r, shr_r);
+";
+        string result = trim(runScript(code));
+        assertEq("15,255,240,256,16", result, "dynamic auto bitwise operators");
+    }
+
+    testJitDynamicUnary() {
+        string code = "%modern
+auto a = 42;
+auto neg = -a;
+auto f = 3.14;
+auto fneg = -f;
+printf(\"%d,%.2f\\n\", neg, fneg);
+";
+        string result = trim(runScript(code));
+        assertEq("-42,-3.14", result, "dynamic auto unary negation");
+    }
+
+    testJitCompoundAssign() {
+        string code = "%modern
+int a = 10;
+a += 5;
+int b = 20;
+b -= 3;
+int c = 4;
+c *= 3;
+int d = 15;
+d /= 3;
+int e = 17;
+e %= 5;
+printf(\"%d,%d,%d,%d,%d\\n\", a, b, c, d, e);
+";
+        string result = trim(runScript(code));
+        assertEq("15,17,12,5,2", result, "compound assignment operators");
+    }
+
+    testJitThrowList() {
+        string code = "%modern
+try {
+    throw \"MY-ERROR\", \"my description\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%s\\n\", ex.err, ex.desc);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("MY-ERROR:my description", result, "throw with err and desc args");
+    }
+
+    testJitMultipleExceptions() {
+        string code = "%modern
+list<string> results = ();
+for (int i = 0; i < 5; i++) {
+    try {
+        if (i % 2 == 0) {
+            throw \"EVEN-ERROR\", sprintf(\"i=%d\", i);
+        } else {
+            results += sprintf(\"ok:%d\", i);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        results += sprintf(\"%s:%s\", ex.err, ex.desc);
+    }
+}
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("EVEN-ERROR:i=0,ok:1,EVEN-ERROR:i=2,ok:3,EVEN-ERROR:i=4", result, "multiple exceptions in loop");
+    }
+
+    testJitScopedObjectConstruction() {
+        # Test "ClassName var(args)" syntax (VarRefNewObjectNode)
+        string code = "%modern
+class Point {
+    public {
+        int x;
+        int y;
+    }
+    constructor(int a, int b) {
+        x = a;
+        y = b;
+    }
+}
+Point p(3, 7);
+printf(\"%d:%d\\n\", p.x, p.y);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("3:7", ast_result, "scoped object construction AST");
+        assertEq(ast_result, ir_result, "scoped object construction IR matches AST");
+        assertEq(ast_result, jit_result, "scoped object construction JIT matches AST");
+    }
+
+    # --- Phase 5b optimization tests ---
+
+    testJitHashKeyFastPath() {
+        # Test hash key access via DotEvalHash with constant string key
+        string code = "%modern
+hash<auto> h = {\"name\": \"alice\", \"age\": 30, \"score\": 99.5};
+printf(\"%s:%d:%.1f\\n\", h.name, h.age, h.score);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("alice:30:99.5", ast_result, "hash key access AST");
+        assertEq(ast_result, jit_result, "hash key access JIT matches AST");
+    }
+
+    testJitListIndexFastPath() {
+        # Test list index access with integer index
+        string code = "%modern
+list<auto> l = (\"alpha\", 42, 3.14, True);
+printf(\"%s:%d:%.2f:%s\\n\", l[0], l[1], l[2], l[3] ? \"true\" : \"false\");
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("alpha:42:3.14:true", ast_result, "list index access AST");
+        assertEq(ast_result, jit_result, "list index access JIT matches AST");
+    }
+
+    testJitStringConcatFastPath() {
+        # Test string concatenation through AddAny (auto-typed)
+        string code = "%modern
+auto a = \"hello\";
+auto b = \" world\";
+auto c = a + b;
+printf(\"%s\\n\", c);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("hello world", ast_result, "string concat AST");
+        assertEq(ast_result, jit_result, "string concat JIT matches AST");
+    }
+
+    testJitAnyArithFastPath() {
+        # Test inline int+int and float+float fast-paths for .any arithmetic
+        string code = "%modern
+auto a = 10;
+auto b = 20;
+auto sum = a + b;
+auto diff = a - b;
+auto prod = a * b;
+auto fa = 1.5;
+auto fb = 2.5;
+auto fsum = fa + fb;
+auto fdiff = fa - fb;
+auto fprod = fa * fb;
+printf(\"%d:%d:%d:%.1f:%.1f:%.2f\\n\", sum, diff, prod, fsum, fdiff, fprod);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("30:-10:200:4.0:-1.0:3.75", ast_result, "any arith AST");
+        assertEq(ast_result, jit_result, "any arith JIT matches AST");
+    }
+
+    testJitAnyCmpFastPath() {
+        # Test inline int-vs-int and float-vs-float fast-paths for comparisons
+        string code = "%modern
+auto a = 5;
+auto b = 10;
+list<string> r = ();
+if (a == a) { r += \"eq\"; }
+if (a != b) { r += \"ne\"; }
+if (a < b) { r += \"lt\"; }
+if (a <= b) { r += \"le\"; }
+if (b > a) { r += \"gt\"; }
+if (b >= a) { r += \"ge\"; }
+auto fa = 1.5;
+auto fb = 2.5;
+if (fa == fa) { r += \"feq\"; }
+if (fa != fb) { r += \"fne\"; }
+if (fa < fb) { r += \"flt\"; }
+if (fb > fa) { r += \"fgt\"; }
+printf(\"%s\\n\", r.join(\",\"));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("eq,ne,lt,le,gt,ge,feq,fne,flt,fgt", ast_result, "any cmp AST");
+        assertEq(ast_result, jit_result, "any cmp JIT matches AST");
+    }
+
+    testJitAnyArithMixed() {
+        # Test .any arithmetic with mixed types (int+float should fall to slow path)
+        string code = "%modern
+auto a = 10;
+auto b = 2.5;
+auto result = a + b;
+printf(\"%.1f\\n\", result);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("12.5", ast_result, "mixed any arith AST");
+        assertEq(ast_result, jit_result, "mixed any arith JIT matches AST");
+    }
+
+    testJitPhase5bCrossMode() {
+        # Comprehensive test exercising hash, list, string, arith, and comparison
+        # across all execution modes
+        string code = "%modern
+auto sub compute(auto n) {
+    hash<auto> h = {\"val\": n, \"doubled\": n * 2};
+    list<auto> l = (h.val, h.doubled);
+    auto sum = l[0] + l[1];
+    if (sum > 10) {
+        return sum;
+    }
+    return 0;
+}
+list<auto> results = ();
+for (int i = 0; i < 10; i++) {
+    results += compute(i);
+}
+printf(\"%s\\n\", (map $1.toString(), results).join(\",\"));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq(ast_result, ir_result, "Phase 5b cross-mode: IR matches AST");
+        assertEq(ast_result, jit_result, "Phase 5b cross-mode: JIT matches AST");
     }
 }

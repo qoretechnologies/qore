@@ -37,10 +37,15 @@
 #include <qore/QoreValue.h>
 #include <qore/QoreStringNode.h>
 #include <qore/QoreHashNode.h>
+#include <qore/QoreListNode.h>
+#include <qore/DateTimeNode.h>
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreIR.h>
 #include <qore/intern/LocalVar.h>
+#include <qore/intern/Variable.h>
+#include <qore/intern/AbstractStatement.h>
 #include <qore/intern/qore_thread_intern.h>
+#include <qore/intern/QoreTypeInfo.h>
 
 // Helper: bit-cast between uint64_t and QoreValue.
 // QoreValue is NaN-boxed and has the same size as uint64_t.
@@ -171,6 +176,19 @@ extern "C" void qore_rt_throw(ExceptionSink* xsink, const char* err, const char*
     }
 }
 
+extern "C" void qore_rt_throw_value(ExceptionSink* xsink, uint64_t val) {
+    if (!xsink) {
+        return;
+    }
+    QoreValue arg = fromBits(val);
+    if (arg.getType() == NT_LIST) {
+        xsink->raiseException(arg.get<const QoreListNode>());
+    } else {
+        QoreValue owned_arg = arg.hasNode() ? arg.refSelf() : arg;
+        xsink->raiseExceptionArg("THROW-ERROR", owned_arg, "throw");
+    }
+}
+
 extern "C" int64_t qore_rt_has_exception(ExceptionSink* xsink) {
     return (xsink && *xsink) ? 1 : 0;
 }
@@ -273,4 +291,244 @@ extern "C" uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink) {
 
 extern "C" void qore_rt_uninstantiate_local(ExceptionSink* xsink) {
     thread_uninstantiate_lvar(xsink);
+}
+
+// --- Generic opcode dispatch helpers ---
+
+extern "C" uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    QoreValue result = QoreIRInterpreter::evalBinary(static_cast<QoreIROpcode>(opcode), lv, rv, xsink);
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_unary_op(int opcode, uint64_t operand, ExceptionSink* xsink) {
+    QoreValue val = fromBits(operand);
+    QoreValue result = QoreIRInterpreter::evalUnary(static_cast<QoreIROpcode>(opcode), val, xsink);
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_expr_op(int opcode, uint64_t expr_bits, ExceptionSink* xsink) {
+    QoreValue expr = fromBits(expr_bits);
+    QoreValue result = QoreIRInterpreter::evalExpr(static_cast<QoreIROpcode>(opcode), expr, xsink);
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_comparison_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    QoreValue result = QoreIRInterpreter::evalComparison(static_cast<QoreIROpcode>(opcode), lv, rv, xsink);
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_ternary_op(int opcode, uint64_t a, uint64_t b, uint64_t c, ExceptionSink* xsink) {
+    QoreValue va = fromBits(a);
+    QoreValue vb = fromBits(b);
+    QoreValue vc = fromBits(c);
+    QoreValue result = QoreIRInterpreter::evalTernary(static_cast<QoreIROpcode>(opcode), va, vb, vc, xsink);
+    return toBits(result);
+}
+
+// --- Variable access helpers ---
+
+extern "C" uint64_t qore_rt_load_global(Var* var, ExceptionSink* xsink) {
+    if (!var) {
+        return toBits(QoreValue());
+    }
+    // Var::eval() returns an already-referenced value
+    QoreValue result = var->eval();
+    return toBits(result);
+}
+
+extern "C" void qore_rt_store_global(Var* var, uint64_t value, ExceptionSink* xsink) {
+    if (!var) {
+        return;
+    }
+    QoreValue val = fromBits(value);
+    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+    LValueHelper helper(xsink);
+    if (!var->getLValue(helper, false)) {
+        helper.assign(stored);
+    }
+}
+
+extern "C" uint64_t qore_rt_load_closure(ClosureVarValue* var, ExceptionSink* xsink) {
+    if (!var) {
+        return toBits(QoreValue());
+    }
+    bool needs_deref = true;
+    QoreValue result = var->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
+extern "C" void qore_rt_store_closure(ClosureVarValue* var, uint64_t value, ExceptionSink* xsink) {
+    if (!var) {
+        return;
+    }
+    QoreValue val = fromBits(value);
+    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+    LValueHelper helper(xsink);
+    if (!var->getLValue(helper, false)) {
+        helper.assign(stored);
+    }
+}
+
+extern "C" uint64_t qore_rt_load_thread_local(Var* var, ExceptionSink* xsink) {
+    // Thread-local variables use the same Var class; eval() resolves per-thread
+    if (!var) {
+        return toBits(QoreValue());
+    }
+    QoreValue result = var->eval();
+    return toBits(result);
+}
+
+extern "C" void qore_rt_store_thread_local(Var* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_store_global(var, value, xsink);
+}
+
+// --- LValue operation helpers ---
+
+extern "C" uint64_t qore_rt_lvalue_load(uint64_t lvalue_bits, ExceptionSink* xsink) {
+    QoreValue lvalue = fromBits(lvalue_bits);
+    QoreValue result = QoreIRInterpreter::evalLValueLoad(lvalue, xsink);
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_lvalue_store(uint64_t lvalue_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue lvalue = fromBits(lvalue_bits);
+    QoreValue value = fromBits(value_bits);
+    QoreValue result = QoreIRInterpreter::evalLValueStore(lvalue, value, xsink);
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_lvalue_unary(int opcode, uint64_t lvalue_bits, ExceptionSink* xsink) {
+    QoreValue lvalue = fromBits(lvalue_bits);
+    QoreValue result = QoreIRInterpreter::evalLValueUnary(static_cast<QoreIROpcode>(opcode), lvalue, xsink);
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_lvalue_binary(int opcode, uint64_t lvalue_bits, uint64_t value_bits,
+        ExceptionSink* xsink) {
+    QoreValue lvalue = fromBits(lvalue_bits);
+    QoreValue value = fromBits(value_bits);
+    QoreValue result = QoreIRInterpreter::evalLValueBinary(static_cast<QoreIROpcode>(opcode), lvalue, value, xsink);
+    return toBits(result);
+}
+
+// --- Container construction helpers ---
+
+extern "C" uint64_t qore_rt_make_list(uint64_t* vals, int count, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+    for (int i = 0; i < count; i++) {
+        QoreValue v = fromBits(vals[i]);
+        if (v.hasNode()) {
+            v.refSelf();
+        }
+        list->push(v, xsink);
+    }
+    return toBits(QoreValue(list.release()));
+}
+
+extern "C" uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
+    // count is the number of key-value pairs; kv_pairs has 2*count elements
+    for (int i = 0; i < count; i++) {
+        QoreValue key = fromBits(kv_pairs[i * 2]);
+        QoreValue val = fromBits(kv_pairs[i * 2 + 1]);
+        QoreStringValueHelper key_str(key);
+        if (val.hasNode()) {
+            val.refSelf();
+        }
+        hash->setKeyValue(key_str->c_str(), val, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    return toBits(QoreValue(hash.release()));
+}
+
+// --- Statement execution helpers ---
+
+extern "C" uint64_t qore_rt_exec_statement(int opcode, const AbstractStatement* stmt, ExceptionSink* xsink) {
+    if (!stmt) {
+        return toBits(QoreValue());
+    }
+    QoreValue return_value;
+    QoreIRInterpreter::execStatement(static_cast<QoreIROpcode>(opcode), stmt, return_value, xsink);
+    return toBits(return_value);
+}
+
+extern "C" void qore_rt_thread_exit(ExceptionSink* xsink) {
+    if (xsink) {
+        xsink->raiseThreadExit();
+    }
+}
+
+// --- Guard type helper ---
+
+extern "C" int64_t qore_rt_guard_type(uint64_t val, const QoreTypeInfo* type_info) {
+    QoreValue v = fromBits(val);
+    return QoreTypeInfo::runtimeAcceptsValue(type_info, v) != QTI_NOT_EQUAL ? 1 : 0;
+}
+
+// --- Date construction helper ---
+
+extern "C" uint64_t qore_rt_make_date(int64_t date_microseconds, int64_t is_relative) {
+    DateTimeNode* dt;
+    if (is_relative) {
+        dt = new DateTimeNode(true);
+        dt->setRelativeDateSeconds(date_microseconds / 1000000,
+            static_cast<int>(date_microseconds % 1000000));
+    } else {
+        int64_t epoch_seconds = date_microseconds / 1000000;
+        int ms = static_cast<int>((date_microseconds % 1000000) / 1000);
+        dt = new DateTimeNode(epoch_seconds, ms);
+    }
+    return toBits(QoreValue(dt));
+}
+
+// --- Specialized access helpers (Phase 5b optimizations) ---
+
+extern "C" uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink) {
+    QoreValue v = fromBits(hash_val);
+    if (v.getType() == NT_HASH) {
+        const QoreHashNode* h = v.get<const QoreHashNode>();
+        QoreValue result = h->getKeyValue(key);
+        return toBits(result.refSelf());
+    }
+    // Not a hash (or NOTHING/NULL): return NOTHING
+    return toBits(QoreValue());
+}
+
+extern "C" uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() == NT_LIST) {
+        const QoreListNode* l = v.get<const QoreListNode>();
+        if (index >= 0 && static_cast<size_t>(index) < l->size()) {
+            return toBits(l->getReferencedEntry(static_cast<size_t>(index)));
+        }
+    }
+    // Not a list, or index out of bounds: return NOTHING
+    return toBits(QoreValue());
+}
+
+extern "C" uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    if (lv.getType() == NT_STRING && rv.getType() == NT_STRING) {
+        const QoreStringNode* ls = lv.get<const QoreStringNode>();
+        const QoreStringNode* rs = rv.get<const QoreStringNode>();
+        QoreStringNode* result = new QoreStringNode(*ls);
+        result->concat(rs, xsink);
+        if (xsink && *xsink) {
+            result->deref();
+            return toBits(QoreValue());
+        }
+        return toBits(QoreValue(result));
+    }
+    // Not both strings: fall back to generic add
+    return qore_rt_add_any(left, right, xsink);
 }

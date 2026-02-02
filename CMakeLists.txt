@@ -948,28 +948,51 @@ set(LIBQORE_SOURCE_HEADERS ${LIBQORE_SOURCE_HEADERS} include/qore/qlist include/
 
 # prepare libqore target
 if (SINGLE_COMPILATION_UNIT)
-    # Use the source tree's single-compilation-unit.cpp directly.
-    # Generated files (parser.cpp, scanner.cpp, qpp output) are found via
-    # the build directory include path (-I${CMAKE_BINARY_DIR}) which is
-    # already set. Source files in lib/ are found via the #include ""
-    # search of the including file's directory.
-    add_library(libqore SHARED ${CMAKE_SOURCE_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_SOURCE_HEADERS})
+    # Generate the SCU dynamically from LIBQORE_CPP_SRC and LIBQORE_QPP_CPP_SRC.
+    # Using absolute paths lets cmake's built-in .d file scanner track all
+    # includes correctly, so no OBJECT_DEPENDS workaround is needed.
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
 
-    # Ensure the SCU object is rebuilt when any of its included .cpp files change.
-    # cmake's compiler-generated .d files track these dependencies, but parallel
-    # builds can race with the dependency scanner and miss changes. Adding explicit
-    # OBJECT_DEPENDS gives make direct file-level prerequisites that work reliably
-    # with -j parallel builds.
-    set(SCU_DEPENDS "")
-    foreach(src ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC})
+    set(SCU_CONTENT "/* Auto-generated single compilation unit - do not edit */\n")
+    foreach(src ${LIBQORE_CPP_SRC})
+        # Resolve to absolute path
         if (IS_ABSOLUTE "${src}")
-            list(APPEND SCU_DEPENDS "${src}")
+            set(abs_src "${src}")
         else()
-            list(APPEND SCU_DEPENDS "${CMAKE_SOURCE_DIR}/${src}")
+            set(abs_src "${CMAKE_SOURCE_DIR}/${src}")
+        endif()
+
+        get_filename_component(basename "${src}" NAME)
+        if (basename STREQUAL "parser.cpp")
+            string(APPEND SCU_CONTENT
+                "#if defined(__GNUC__)\n"
+                "#pragma GCC diagnostic push\n"
+                "#pragma GCC diagnostic ignored \"-Wfree-nonheap-object\"\n"
+                "#endif\n"
+                "#include \"${abs_src}\"\n"
+                "#if defined(__GNUC__)\n"
+                "#pragma GCC diagnostic pop\n"
+                "#endif\n")
+        elseif (basename STREQUAL "scanner.cpp")
+            string(APPEND SCU_CONTENT
+                "#include \"${abs_src}\"\n"
+                "#undef ECHO\n")
+        else()
+            string(APPEND SCU_CONTENT "#include \"${abs_src}\"\n")
         endif()
     endforeach()
-    set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/single-compilation-unit.cpp PROPERTIES
-        OBJECT_DEPENDS "${SCU_DEPENDS}")
+
+    # QPP-generated files (already absolute paths in CMAKE_BINARY_DIR)
+    foreach(src ${LIBQORE_QPP_CPP_SRC})
+        string(APPEND SCU_CONTENT "#include \"${src}\"\n")
+    endforeach()
+
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+        "${SCU_CONTENT}")
+
+    add_library(libqore SHARED
+        ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+        ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
 endif (SINGLE_COMPILATION_UNIT)
@@ -1025,7 +1048,7 @@ if (QORE_BUILD_IR_SMOKE)
     if (SINGLE_COMPILATION_UNIT)
         add_executable(qore-ir-smoke
             test/ir/ir_smoke.cpp
-            ${CMAKE_SOURCE_DIR}/lib/single-compilation-unit.cpp
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
         )
     else()
         add_executable(qore-ir-smoke

@@ -173,6 +173,31 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     JIT compilation is transparent and preserves %Qore semantics including exception handling,
     NaN-boxed values, and reference counting.  Non-@ref modern "%modern" code automatically
     falls back to the AST interpreter.
+
+    All IR opcodes have LLVM lowering support, ensuring universal JIT coverage for any function
+    that can be lowered to IR.  Operations not yet natively implemented in LLVM IR use generic
+    runtime helpers that delegate to the IR interpreter, providing functional correctness while
+    allowing future native optimizations.  This includes object member access, closures, method
+    calls, dynamic type operations, compound assignments, regex operations, higher-order
+    functions (map, select, fold), and all statement types (foreach, on_block_exit, context,
+    etc.).
+
+    Several common operations now have specialized native implementations that bypass the
+    generic runtime dispatch path:
+    - <b>Hash key access</b>: \c h.key and \c h{"key"} are lowered to direct hash node lookups
+      when the key is a compile-time constant string, avoiding AST node creation and dispatch
+    - <b>List index access</b>: \c l[i] is lowered to direct array access with bounds checking,
+      bypassing the full expression evaluation path
+    - <b>String concatenation</b>: string \c + string is handled by a specialized helper that
+      avoids the generic operator dispatch for the common case of two string operands
+    - <b>Inline arithmetic fast-paths</b>: dynamic-typed (\c auto) addition, subtraction, and
+      multiplication emit inline LLVM IR that checks for int+int and float+float at the
+      machine-code level, executing native CPU instructions for the common cases and falling
+      back to runtime helpers only for mixed-type or complex-type operands
+    - <b>Inline comparison fast-paths</b>: dynamic-typed equality, inequality, less-than,
+      less-or-equal, greater-than, and greater-or-equal comparisons emit inline type checks
+      for int-vs-int and float-vs-float, using native CPU comparison instructions for the
+      common cases
     @endparblock
 
     - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>

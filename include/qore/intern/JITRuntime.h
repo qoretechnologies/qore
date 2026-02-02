@@ -105,6 +105,9 @@ void qore_rt_decref_nothrow(uint64_t val);
 //! Raise a Qore exception; err and desc are C strings
 void qore_rt_throw(ExceptionSink* xsink, const char* err, const char* desc);
 
+//! Raise a Qore exception from a NaN-boxed QoreValue (list of err, desc[, arg])
+void qore_rt_throw_value(ExceptionSink* xsink, uint64_t val);
+
 //! Check if an exception has been raised
 int64_t qore_rt_has_exception(ExceptionSink* xsink);
 
@@ -145,6 +148,10 @@ int64_t qore_rt_guard_float(uint64_t val);
 // callbacks (via qore_rt_invoke_expr) can resolve local variables.
 
 class LocalVar;
+class Var;
+class ClosureVarValue;
+class AbstractStatement;
+class QoreTypeInfo;
 
 //! Instantiate a local variable on the Qore thread-local variable stack.
 //! Must be called once per local at JIT function entry before any loads/stores.
@@ -162,6 +169,100 @@ uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
 //! Uninstantiate a local variable from the Qore thread-local variable stack.
 //! Must be called once per local at JIT function exit.
 void qore_rt_uninstantiate_local(ExceptionSink* xsink);
+
+// --- Generic opcode dispatch helpers ---
+// These delegate to QoreIRInterpreter eval methods for opcodes that don't
+// have dedicated native LLVM implementations.
+
+//! Generic binary op: delegates to QoreIRInterpreter::evalBinary()
+uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink);
+
+//! Generic unary op: delegates to QoreIRInterpreter::evalUnary()
+uint64_t qore_rt_unary_op(int opcode, uint64_t operand, ExceptionSink* xsink);
+
+//! Generic expression op: delegates to QoreIRInterpreter::evalExpr()
+uint64_t qore_rt_expr_op(int opcode, uint64_t expr_bits, ExceptionSink* xsink);
+
+//! Generic comparison op: delegates to QoreIRInterpreter::evalComparison()
+uint64_t qore_rt_comparison_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink);
+
+//! Generic ternary op: delegates to QoreIRInterpreter::evalTernary()
+uint64_t qore_rt_ternary_op(int opcode, uint64_t a, uint64_t b, uint64_t c, ExceptionSink* xsink);
+
+// --- Variable access helpers ---
+
+//! Load from a global variable; returns NaN-boxed QoreValue
+uint64_t qore_rt_load_global(Var* var, ExceptionSink* xsink);
+
+//! Store a NaN-boxed QoreValue to a global variable
+void qore_rt_store_global(Var* var, uint64_t value, ExceptionSink* xsink);
+
+//! Load from a closure variable; returns NaN-boxed QoreValue
+uint64_t qore_rt_load_closure(ClosureVarValue* var, ExceptionSink* xsink);
+
+//! Store a NaN-boxed QoreValue to a closure variable
+void qore_rt_store_closure(ClosureVarValue* var, uint64_t value, ExceptionSink* xsink);
+
+//! Load from a thread-local variable; returns NaN-boxed QoreValue
+uint64_t qore_rt_load_thread_local(Var* var, ExceptionSink* xsink);
+
+//! Store a NaN-boxed QoreValue to a thread-local variable
+void qore_rt_store_thread_local(Var* var, uint64_t value, ExceptionSink* xsink);
+
+// --- LValue operation helpers ---
+
+//! LValue load: evaluates lvalue expression, returns NaN-boxed value
+uint64_t qore_rt_lvalue_load(uint64_t lvalue_bits, ExceptionSink* xsink);
+
+//! LValue store: assigns value to lvalue, returns NaN-boxed result
+uint64_t qore_rt_lvalue_store(uint64_t lvalue_bits, uint64_t value_bits, ExceptionSink* xsink);
+
+//! LValue unary op (++, --): returns NaN-boxed result
+uint64_t qore_rt_lvalue_unary(int opcode, uint64_t lvalue_bits, ExceptionSink* xsink);
+
+//! LValue binary op (+=, -=, etc.): returns NaN-boxed result
+uint64_t qore_rt_lvalue_binary(int opcode, uint64_t lvalue_bits, uint64_t value_bits, ExceptionSink* xsink);
+
+// --- Container construction helpers ---
+
+//! MakeList: takes array of NaN-boxed values, returns NaN-boxed list
+uint64_t qore_rt_make_list(uint64_t* values, int count, ExceptionSink* xsink);
+
+//! MakeHash: takes array of key-value pairs (alternating), returns NaN-boxed hash
+uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, ExceptionSink* xsink);
+
+// --- Statement execution helpers ---
+
+//! Execute a statement (foreach, on_block_exit, context, etc.)
+//! Returns NaN-boxed result (NOTHING for void statements)
+uint64_t qore_rt_exec_statement(int opcode, const AbstractStatement* stmt, ExceptionSink* xsink);
+
+//! Signal thread exit via ExceptionSink
+void qore_rt_thread_exit(ExceptionSink* xsink);
+
+// --- Guard type helper ---
+
+//! Check if value matches the given type; returns 1 if match, 0 otherwise
+int64_t qore_rt_guard_type(uint64_t val, const QoreTypeInfo* type_info);
+
+// --- Date construction helper ---
+
+//! Create a DateTimeNode from epoch microseconds and relative flag; returns NaN-boxed
+uint64_t qore_rt_make_date(int64_t date_microseconds, int64_t is_relative);
+
+// --- Specialized access helpers (Phase 5b optimizations) ---
+
+//! Look up a key in a hash value; returns NaN-boxed result (with ref).
+//! Falls back to NOTHING if value is not a hash or key doesn't exist.
+uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink);
+
+//! Index into a list value; returns NaN-boxed result (with ref).
+//! Returns NOTHING if value is not a list or index is out of bounds.
+uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink);
+
+//! Concatenate two string values; returns NaN-boxed new string (with ref).
+//! Falls back to qore_rt_add_any if either operand is not a string.
+uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
 } // extern "C"
 

@@ -128,6 +128,7 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
 
     // Exception helpers
     addSymbol("qore_rt_throw", reinterpret_cast<void*>(&qore_rt_throw));
+    addSymbol("qore_rt_throw_value", reinterpret_cast<void*>(&qore_rt_throw_value));
     addSymbol("qore_rt_has_exception", reinterpret_cast<void*>(&qore_rt_has_exception));
 
     // Invoke helpers
@@ -148,6 +149,46 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_assign_local", reinterpret_cast<void*>(&qore_rt_assign_local));
     addSymbol("qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local));
     addSymbol("qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local));
+
+    // Generic opcode dispatch helpers
+    addSymbol("qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op));
+    addSymbol("qore_rt_unary_op", reinterpret_cast<void*>(&qore_rt_unary_op));
+    addSymbol("qore_rt_expr_op", reinterpret_cast<void*>(&qore_rt_expr_op));
+    addSymbol("qore_rt_comparison_op", reinterpret_cast<void*>(&qore_rt_comparison_op));
+    addSymbol("qore_rt_ternary_op", reinterpret_cast<void*>(&qore_rt_ternary_op));
+
+    // Variable access helpers
+    addSymbol("qore_rt_load_global", reinterpret_cast<void*>(&qore_rt_load_global));
+    addSymbol("qore_rt_store_global", reinterpret_cast<void*>(&qore_rt_store_global));
+    addSymbol("qore_rt_load_closure", reinterpret_cast<void*>(&qore_rt_load_closure));
+    addSymbol("qore_rt_store_closure", reinterpret_cast<void*>(&qore_rt_store_closure));
+    addSymbol("qore_rt_load_thread_local", reinterpret_cast<void*>(&qore_rt_load_thread_local));
+    addSymbol("qore_rt_store_thread_local", reinterpret_cast<void*>(&qore_rt_store_thread_local));
+
+    // LValue operation helpers
+    addSymbol("qore_rt_lvalue_load", reinterpret_cast<void*>(&qore_rt_lvalue_load));
+    addSymbol("qore_rt_lvalue_store", reinterpret_cast<void*>(&qore_rt_lvalue_store));
+    addSymbol("qore_rt_lvalue_unary", reinterpret_cast<void*>(&qore_rt_lvalue_unary));
+    addSymbol("qore_rt_lvalue_binary", reinterpret_cast<void*>(&qore_rt_lvalue_binary));
+
+    // Container construction helpers
+    addSymbol("qore_rt_make_list", reinterpret_cast<void*>(&qore_rt_make_list));
+    addSymbol("qore_rt_make_hash", reinterpret_cast<void*>(&qore_rt_make_hash));
+
+    // Statement execution helpers
+    addSymbol("qore_rt_exec_statement", reinterpret_cast<void*>(&qore_rt_exec_statement));
+    addSymbol("qore_rt_thread_exit", reinterpret_cast<void*>(&qore_rt_thread_exit));
+
+    // Guard type helper
+    addSymbol("qore_rt_guard_type", reinterpret_cast<void*>(&qore_rt_guard_type));
+
+    // Date construction helper
+    addSymbol("qore_rt_make_date", reinterpret_cast<void*>(&qore_rt_make_date));
+
+    // Specialized access helpers (Phase 5b)
+    addSymbol("qore_rt_hash_key_access", reinterpret_cast<void*>(&qore_rt_hash_key_access));
+    addSymbol("qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access));
+    addSymbol("qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat));
 
     auto err = jd.define(llvm::orc::absoluteSymbols(std::move(symbols)));
     if (err) {

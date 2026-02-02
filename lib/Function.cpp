@@ -2255,6 +2255,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     assert(statements);
 
     ExecutionTier tier = current_tier.load(std::memory_order_acquire);
+    printd(3, "evalTiered '%s': tier=%d exec_count=%lu cached_jit=%p cached_ir=%p\n",
+        name, (int)tier, exec_count.load(), (void*)cached_jit_fn, (void*)cached_ir);
     // JIT tier: execute native function
     if (tier == TIER_JIT && cached_jit_fn) {
         // self might be 0 if instantiated by a constructor call
@@ -2461,6 +2463,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     // Tiered compilation dispatch
     if (pgm && statements) {
         qore_exec_mode_t mode = pgm->getExecMode();
+        printd(3, "evalIntern '%s': mode=%d pgm=%p statements=%p\n", name, (int)mode, (void*)pgm, (void*)statements);
         if (mode == QEM_TIERED) {
             // Only attempt tiered promotion for %modern code
             int64 po = pgm->getParseOptions64();

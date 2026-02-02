@@ -115,18 +115,8 @@ parser.cpp: parser.ypp
 	BISON_REAL="$(YACC)" $(top_srcdir)/tools/bison-wrapper.sh --defines=parser.h --output=$@ $<
 scanner.cpp: scanner.lpp
 
-if COND_SINGLE_COMPILATION_UNIT
-libqore_la_SOURCES = \
-	single-compilation-unit.cpp
-
-single-compilation-unit.cpp: parser.cpp parser.hpp scanner.cpp $(QORE_ALL_SRC)
-
-else
-nodist_libqore_la_SOURCES = $(QORE_GENERATED_SOURCES)
-
-libqore_la_SOURCES = \
-	parser.ypp \
-	scanner.lpp \
+# Regular (non-generated) C++ source files - shared by SCU and non-SCU builds
+QORE_REGULAR_CPP_SRC = \
 	BarewordNode.cpp \
 	SelfVarrefNode.cpp \
 	StaticClassVarRefNode.cpp \
@@ -176,6 +166,7 @@ libqore_la_SOURCES = \
 	WeakHashReferenceNode.cpp \
 	WeakListReferenceNode.cpp \
 	support.cpp \
+	QoreParseContext.cpp \
 	QoreType.cpp \
 	ModuleManager.cpp \
 	QoreException.cpp \
@@ -184,6 +175,7 @@ libqore_la_SOURCES = \
 	QoreXSinkException.cpp \
 	QoreClass.cpp \
 	TypedHashDecl.cpp \
+	QoreEnumDecl.cpp \
 	QoreReflection.cpp \
 	Context.cpp \
 	FindNode.cpp \
@@ -193,15 +185,23 @@ libqore_la_SOURCES = \
 	ThreadLocalVariableData.cpp \
 	QoreProgram.cpp \
 	QoreProgramHelper.cpp \
+	QoreIRBuilder.cpp \
+	QoreIRInterpreter.cpp \
+	QoreIRLowering.cpp \
+	QoreIRPrinter.cpp \
+	QoreIRToLLVM.cpp \
+	QoreIRVerifier.cpp \
+	QoreJIT.cpp \
+	JITRuntime.cpp \
 	QoreNamespace.cpp \
 	QoreNet.cpp \
 	QoreURL.cpp \
 	QoreFile.cpp \
 	QoreDir.cpp \
 	QoreSocket.cpp \
-	InputStream.cpp \
-	OutputStream.cpp \
-	Http2Session.cpp \
+	QoreEventLoop.cpp \
+	QoreEventNotifier.cpp \
+	QoreSandboxManager.cpp \
 	DateTime.cpp \
 	QoreLib.cpp \
 	QoreTimeZoneManager.cpp \
@@ -224,6 +224,8 @@ libqore_la_SOURCES = \
 	ConstantList.cpp \
 	QoreClassList.cpp \
 	HashDeclList.cpp \
+	EnumList.cpp \
+	RuntimeConfig.cpp \
 	ThreadResourceList.cpp \
 	AbstractThreadResource.cpp \
 	thread.cpp \
@@ -231,6 +233,7 @@ libqore_la_SOURCES = \
 	VLock.cpp \
 	QoreRWLock.cpp \
 	AbstractSmartLock.cpp \
+	SmartMutex.cpp \
 	ExecArgList.cpp \
 	NamedScope.cpp \
 	RWLock.cpp \
@@ -248,7 +251,6 @@ libqore_la_SOURCES = \
 	Sequence.cpp \
 	QoreReferenceCounter.cpp \
 	SystemEnvironment.cpp \
-	SmartMutex.cpp \
 	QoreCounter.cpp \
 	CallReferenceNode.cpp \
 	QoreParseHashNode.cpp \
@@ -338,6 +340,7 @@ libqore_la_SOURCES = \
 	QoreMultiplicationOperatorNode.cpp \
 	QoreBackgroundOperatorNode.cpp \
 	QoreRangeOperatorNode.cpp \
+	QoreLazyRangeNode.cpp \
 	QoreSquareBracketsRangeOperatorNode.cpp \
 	QorePseudoMethods.cpp \
 	QoreHTTPClient.cpp \
@@ -353,10 +356,75 @@ libqore_la_SOURCES = \
 	FunctionalOperatorInterface.cpp \
 	FunctionalOperator.cpp \
 	QoreSerializable.cpp \
-    UnicodeCharacterIterator.cpp \
-    QoreEllipsesNode.cpp \
-    QoreRegexInterface.cpp \
-    QoreThreadLocalStorage.cpp
+	UnicodeCharacterIterator.cpp \
+	QoreEllipsesNode.cpp \
+	QoreRegexInterface.cpp \
+	QoreThreadLocalStorage.cpp
+
+if COND_SINGLE_COMPILATION_UNIT
+nodist_libqore_la_SOURCES = generated-scu.cpp
+BUILT_SOURCES += generated-scu.cpp
+
+# Dependencies: all source files (regular + conditional + generated + parser/scanner)
+QORE_SCU_DEPS = parser.cpp scanner.cpp $(QORE_ALL_SRC) \
+	$(addprefix $(srcdir)/,$(QORE_REGULAR_CPP_SRC)) \
+	$(srcdir)/QoreSignal.cpp $(srcdir)/ql_debug.cpp \
+	$(srcdir)/glob.cpp $(srcdir)/inet_ntop.cpp $(srcdir)/inet_pton.cpp \
+	$(srcdir)/InputStream.cpp $(srcdir)/OutputStream.cpp \
+	$(srcdir)/Http2Session.cpp
+
+generated-scu.cpp: $(QORE_SCU_DEPS)
+	@echo "  GEN      $@"
+	@{ \
+	  echo '/* Auto-generated single compilation unit - do not edit */'; \
+	  echo '#if defined(__GNUC__)'; \
+	  echo '#pragma GCC diagnostic push'; \
+	  echo '#pragma GCC diagnostic ignored "-Wfree-nonheap-object"'; \
+	  echo '#endif'; \
+	  echo '#include "parser.cpp"'; \
+	  echo '#if defined(__GNUC__)'; \
+	  echo '#pragma GCC diagnostic pop'; \
+	  echo '#endif'; \
+	  echo '#include "scanner.cpp"'; \
+	  echo '#undef ECHO'; \
+	  for f in $(QORE_REGULAR_CPP_SRC); do \
+	    echo "#include \"$(srcdir)/$$f\""; \
+	  done; \
+	  echo '#ifdef HAVE_SIGNAL_HANDLING'; \
+	  echo '#include "$(srcdir)/QoreSignal.cpp"'; \
+	  echo '#endif'; \
+	  echo '#ifdef DEBUG'; \
+	  echo '#include "$(srcdir)/ql_debug.cpp"'; \
+	  echo '#endif'; \
+	  echo '#ifndef HAVE_GLOB'; \
+	  echo '#include "$(srcdir)/glob.cpp"'; \
+	  echo '#endif'; \
+	  echo '#ifndef HAVE_INET_NTOP'; \
+	  echo '#include "$(srcdir)/inet_ntop.cpp"'; \
+	  echo '#endif'; \
+	  echo '#ifndef HAVE_INET_PTON'; \
+	  echo '#include "$(srcdir)/inet_pton.cpp"'; \
+	  echo '#endif'; \
+	  echo '#include "$(srcdir)/InputStream.cpp"'; \
+	  echo '#include "$(srcdir)/OutputStream.cpp"'; \
+	  echo '#include "$(srcdir)/Http2Session.cpp"'; \
+	  for f in $(QORE_ALL_SRC); do \
+	    echo "#include \"$$f\""; \
+	  done; \
+	} > $@.tmp && mv $@.tmp $@
+
+CLEANFILES += generated-scu.cpp
+
+else
+nodist_libqore_la_SOURCES = $(QORE_GENERATED_SOURCES)
+
+libqore_la_SOURCES = \
+	parser.ypp \
+	scanner.lpp \
+	$(QORE_REGULAR_CPP_SRC) \
+	InputStream.cpp \
+	OutputStream.cpp \
+	Http2Session.cpp
 
 if COND_SIGNAL_HANDLING
 libqore_la_SOURCES += QoreSignal.cpp

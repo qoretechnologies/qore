@@ -1746,6 +1746,13 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
     if (!var) {
         return QoreIRValue();
     }
+    // Handle VarRefNewObjectNode (e.g., "Foo f("hello")") — a variable declaration
+    // with implicit constructor call. eval() on this node both constructs the object
+    // and assigns it to the variable.
+    if (dynamic_cast<const VarRefNewObjectNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, var->loc, error);
+    }
     return loadVarRef(var, error, "variable reference", expr);
 }
 

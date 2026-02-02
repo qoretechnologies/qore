@@ -171,9 +171,79 @@ Deliverables:
 
 ## Phase 5: Feature Expansion
 
-- [ ] Strings, hash/list access, object ops, closures, method calls.
-- [ ] Full operator coverage and mixed-type specialization.
-- [ ] Debug info and source mapping.
+### Phase 5a: Universal LLVM Opcode Coverage — COMPLETE ✓
+
+All IR opcodes now have LLVM lowering support via generic runtime helpers that delegate
+to `QoreIRInterpreter` eval methods. This ensures every function that can be lowered to
+IR can also be JIT-compiled.
+
+- [x] Generic runtime dispatch helpers: `qore_rt_binary_op`, `qore_rt_unary_op`,
+      `qore_rt_expr_op`, `qore_rt_comparison_op`, `qore_rt_ternary_op`.
+- [x] Variable access helpers: `qore_rt_load_global`, `qore_rt_store_global`,
+      `qore_rt_load_closure`, `qore_rt_store_closure`, `qore_rt_load_thread_local`,
+      `qore_rt_store_thread_local`.
+- [x] LValue operation helpers: `qore_rt_lvalue_load`, `qore_rt_lvalue_store`,
+      `qore_rt_lvalue_unary`, `qore_rt_lvalue_binary`.
+- [x] Container construction: `qore_rt_make_list`, `qore_rt_make_hash`.
+- [x] Statement execution: `qore_rt_exec_statement`, `qore_rt_thread_exit`.
+- [x] Guard/type helpers: `qore_rt_guard_type`, `qore_rt_make_date`, `qore_rt_throw_value`.
+- [x] All remaining opcodes handled in `QoreIRToLLVM::lowerInstruction()`: dynamic
+      comparisons, bitwise, unary, variable access, lvalue ops, container construction,
+      compound assignments, higher-order ops, expression ops, statement ops, guards.
+- [x] Bug fix: Boolean Not/ToBool with NaN-boxed values (VAL_FALSE != 0).
+- [x] Bug fix: Throw opcode handles list-based args via `qore_rt_throw_value`.
+- [x] Bug fix: `VarRefNewObjectNode` (scoped object construction `Foo f("hello")`)
+      now properly lowered to IR as a constructor call + assignment.
+- [x] Tiered mode with low thresholds (ir=3, jit=10) passes all 137 IRExecModeSmoke tests.
+
+Deliverables:
+- [x] `include/qore/intern/JITRuntime.h` / `lib/JITRuntime.cpp` — 20+ new runtime helpers
+- [x] `lib/QoreJIT.cpp` — symbol registration for all new helpers
+- [x] `lib/QoreIRToLLVM.cpp` — universal opcode coverage in `lowerInstruction()`
+- [x] `lib/QoreIRLowering.cpp` — `VarRefNewObjectNode` scoped construction fix
+- [x] `examples/test/ir/JITSmoke.qtest` — 32 test cases (35 assertions)
+- [x] `examples/test/ir/TieredSmoke.qtest` — 16 test cases (190 assertions)
+- [x] Valgrind clean: 0 errors, 0 leaks on all test suites including tiered with low thresholds
+
+### Phase 5b: Native LLVM Optimizations — COMPLETE ✓
+
+Replace generic runtime helper calls with specialized C ABI helpers and inline LLVM
+fast-paths for the most common operations, eliminating AST dispatch and dynamic type
+checking overhead where types are known or cheaply checkable.
+
+- [x] Specialized hash key access: `qore_rt_hash_key_access` for compile-time constant
+      string keys on `QoreHashObjectDereferenceOperatorNode`, bypassing `qore_rt_invoke_expr`.
+- [x] Specialized list index access: `qore_rt_list_index_access` for
+      `QoreSquareBracketsOperatorNode`, direct array access with bounds checking.
+- [x] Specialized string concatenation: `qore_rt_string_concat` for string+string via
+      `AddAny`, with fallback to `qore_rt_add_any` for non-string types.
+- [x] Inline LLVM fast-paths for `.any` arithmetic (`AddAny`, `SubAny`, `MulAny`):
+      emit inline NaN-boxing tag checks to detect int+int and float+float, execute native
+      CPU instructions (add/sub/mul/fadd/fsub/fmul), fall back to runtime helpers for
+      mixed/complex types. `DivAny`/`ModAny` remain on generic path (division-by-zero).
+- [x] Inline LLVM fast-paths for `.any` comparisons (`EqAny`, `NeAny`, `LtAny`, `LeAny`,
+      `GtAny`, `GeAny`): same inline tag-check pattern for int-vs-int and float-vs-float
+      comparisons, with native `icmp`/`fcmp` instructions and bool boxing.
+- [x] Float detection fix: double-encoded values require both lower bound
+      (`> DOUBLE_ENCODE_OFFSET`) and upper bound (`< TAG_INT48`) checks, since int48-tagged
+      values have bit patterns above the double encode offset.
+
+Deliverables:
+- [x] `include/qore/intern/JITRuntime.h` / `lib/JITRuntime.cpp` — 3 specialized helpers
+- [x] `lib/QoreJIT.cpp` — symbol registration for new helpers
+- [x] `include/qore/intern/QoreIRToLLVM.h` / `lib/QoreIRToLLVM.cpp` — specialized lowering
+      + `emitAnyArithFastPath()` + `emitAnyCmpFastPath()` + `tryEmitHashKeyAccess()` +
+      `tryEmitListIndexAccess()`
+- [x] `examples/test/ir/JITSmoke.qtest` — 39 test cases (49 assertions)
+- [x] `examples/test/ir/TieredSmoke.qtest` — 19 test cases (283 assertions)
+- [x] Valgrind clean: 0 errors, 0 leaks on all test suites
+- [x] Debug traces converted from `fprintf(stderr, ...)` to `printd(3, ...)` in
+      `Function.cpp` (`evalIntern`/`evalTiered`) and `QoreIRToLLVM.cpp`
+      (`lowerInstruction`/`BranchIf`) to avoid polluting test output captured via `2>&1`
+
+### Phase 5c: Debug Info (future)
+
+- [ ] Debug info and source mapping (DWARF debug info, source locations).
 
 ---
 
