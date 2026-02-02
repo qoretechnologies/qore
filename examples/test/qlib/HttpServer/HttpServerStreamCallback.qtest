@@ -659,6 +659,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("CallbackInputStream error propagation", \testCallbackInputStreamErrorPropagation());
         addTestCase("CallbackInputStream mixed types", \testCallbackInputStreamMixedTypes());
         addTestCase("CallbackInputStream unexpected type", \testCallbackInputStreamUnexpectedType());
+        addTestCase("CallbackInputStream hash trailers", \testCallbackInputStreamHashTrailers());
 
         # HTTP/2 streaming tests
         addTestCase("HTTP/2 stream basic", \testHttp2StreamBasic());
@@ -974,6 +975,99 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
             # Verify peek() also returns -1 after EOF
             assertEq(-1, cis4.peek(), "peek after EOF should return -1");
+        }
+    }
+
+    #! Tests that CallbackInputStream treats hash returns (HTTP chunked trailers) as end-of-stream
+    testCallbackInputStreamHashTrailers() {
+        CallbackOwner dummy(());
+
+        # Test 1: empty hash signals EOF in read() - this is the pattern used by sendImpl()
+        # returning {} to signal end of stream
+        {
+            int idx = 0;
+            list<auto> chunks = ("chunk1-", "chunk2-", {});
+            code cb = auto sub() {
+                if (idx >= chunks.size()) {
+                    return NOTHING;
+                }
+                return chunks[idx++];
+            };
+            CallbackInputStream cis(cb, dummy);
+            binary result = binary();
+            while (*binary chunk = cis.read(65536)) {
+                result += chunk;
+            }
+            assertEq("chunk1-chunk2-", result.toString(), "data before empty hash trailer");
+            # Verify subsequent reads also return NOTHING
+            *binary extra = cis.read(65536);
+            assertNothing(extra, "reads after hash EOF should return NOTHING");
+        }
+
+        # Test 2: hash with trailer data also signals EOF
+        {
+            int idx = 0;
+            list<auto> chunks = ("data-", {"X-Trailer": "value", "X-Checksum": "abc123"});
+            code cb = auto sub() {
+                if (idx >= chunks.size()) {
+                    return NOTHING;
+                }
+                return chunks[idx++];
+            };
+            CallbackInputStream cis(cb, dummy);
+            *binary chunk1 = cis.read(65536);
+            assertEq("data-", chunk1.toString(), "data before non-empty trailer hash");
+            *binary chunk2 = cis.read(65536);
+            assertNothing(chunk2, "non-empty trailer hash should signal EOF");
+        }
+
+        # Test 3: hash as the very first callback return signals immediate EOF
+        {
+            int idx = 0;
+            list<auto> chunks = ({},);
+            code cb = auto sub() {
+                if (idx >= chunks.size()) {
+                    return NOTHING;
+                }
+                return chunks[idx++];
+            };
+            CallbackInputStream cis(cb, dummy);
+            *binary chunk1 = cis.read(65536);
+            assertNothing(chunk1, "hash as first return should signal immediate EOF");
+        }
+
+        # Test 4: peek() returns -1 when the next callback value is a hash
+        {
+            int idx = 0;
+            list<auto> chunks = ({},);
+            code cb = auto sub() {
+                if (idx >= chunks.size()) {
+                    return NOTHING;
+                }
+                return chunks[idx++];
+            };
+            CallbackInputStream cis(cb, dummy);
+            assertEq(-1, cis.peek(), "peek should return -1 when callback returns hash");
+        }
+
+        # Test 5: peek() returns -1 after data followed by hash
+        {
+            int idx = 0;
+            list<auto> chunks = ("X",);
+            code cb = auto sub() {
+                if (idx >= chunks.size()) {
+                    return NOTHING;
+                }
+                return chunks[idx++];
+            };
+            CallbackInputStream cis(cb, dummy);
+            # Peek should see the first byte of "X"
+            assertEq(88, cis.peek(), "peek should return 'X' (88)");
+            # Read the data
+            *binary chunk1 = cis.read(65536);
+            assertEq("X", chunk1.toString(), "read returns the data");
+            # Now EOF
+            assertEq(-1, cis.peek(), "peek after all data consumed should return -1");
         }
     }
 

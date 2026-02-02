@@ -892,8 +892,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         try {
                             delivery.callback(delivery.result);
                         } catch (hash<ExceptionInfo> cbex) {
-                            log(LoggerLevel::ERROR, "%s: callback exception: %s: %s",
-                                delivery.key, cbex.err, cbex.desc);
+                            log(LoggerLevel::ERROR, "%s: callback exception: %s",
+                                delivery.key, get_exception_string(cbex));
                         }
                     } else if (delivery.q) {
                         delivery.q.push(delivery.result);
@@ -1195,8 +1195,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             try {
                 cinfo.callback(cancel_result);
             } catch (hash<ExceptionInfo> cbex) {
-                log(LoggerLevel::ERROR, "cancel callback exception for sock %s: %s: %s",
-                    cinfo.sock.uniqueHash(), cbex.err, cbex.desc);
+                log(LoggerLevel::ERROR, "cancel callback exception for sock %s: %s",
+                    cinfo.sock.uniqueHash(), get_exception_string(cbex));
             }
         } else {
             cinfo.q.push(cancel_result);

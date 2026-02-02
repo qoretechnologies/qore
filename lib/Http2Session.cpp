@@ -341,6 +341,17 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     // Check if this is a CONNECT request with :protocol (extended CONNECT)
     bool is_extended_connect = (method_str == "CONNECT" && !protocol.empty());
 
+    // RFC 8441: Client SHOULD NOT send extended CONNECT if server hasn't advertised
+    // SETTINGS_ENABLE_CONNECT_PROTOCOL.  Only check if we've already received remote settings
+    // (remote_settings_received is set when we process the peer's SETTINGS frame).
+    if (is_extended_connect && remote_settings_received
+            && !remote_settings.enable_connect_protocol) {
+        xsink->raiseException("HTTP2-CONNECT-ERROR",
+            "server does not support extended CONNECT protocol (RFC 8441); "
+            "SETTINGS_ENABLE_CONNECT_PROTOCOL was not advertised");
+        return -1;
+    }
+
     bool has_body = false;
     BodyData pending_data;
     if (body && body_len > 0) {
@@ -1198,6 +1209,7 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                 // Our settings have been acknowledged
             } else {
                 // Received remote settings
+                h2->remote_settings_received = true;
                 if (http2DebugEnabled()) {
                     fprintf(stderr, "HTTP2 DEBUG: received SETTINGS niv=%zu\n", frame->settings.niv);
                     fflush(stderr);
@@ -1300,11 +1312,9 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
         if (error_code != 0) {
             stream->reset = true;
         }
-        // Mark as complete even if there was an error
+        // Mark as complete even if there was an error (including RST_STREAM without headers)
         stream->body_complete = true;
-        if (stream->headers_complete) {
-            h2->markStreamComplete(stream_id);
-        }
+        h2->markStreamComplete(stream_id);
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);

@@ -465,6 +465,25 @@ public hashdecl HttpServerOptionInfo {
     */
     int max_idle_handler_threads = 0;
 
+    #! Reject HTTP/2 WebSocket CONNECT so the client falls back to HTTP/1.1
+    /** When enabled, the server does not advertise \c ENABLE_CONNECT_PROTOCOL in its HTTP/2
+        SETTINGS frame, so compliant clients will not attempt extended CONNECT (RFC 8441).
+        Clients that do attempt it receive a RST_STREAM (PROTOCOL_ERROR) from the HTTP/2
+        layer. Clients that set \c http_version to \c "auto" (the default) will automatically
+        fall back to HTTP/1.1 for WebSocket.
+
+        This also activates the multiplexed HTTP/2 request path where requests are dispatched
+        to handler threads while the I/O thread retains the HTTP/2 poll operation. In this mode
+        SSE streaming responses are not yet supported and will receive a 501 (Not Implemented);
+        SSE clients should use HTTP/1.1.
+
+        When \c False (the default), WebSocket CONNECT is handled via the legacy path where
+        the HTTP/2 poll operation is given to the handler exclusively, which works correctly
+        for single-purpose WebSocket connections. SSE streaming is also supported in this mode.
+
+        @since HttpServer 1.6
+    */
+    bool reject_http2_websocket = False;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -1827,6 +1846,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 "max_handler_threads": opts.max_handler_threads,
                 "min_idle_handler_threads": opts.min_idle_handler_threads,
                 "max_idle_handler_threads": opts.max_idle_handler_threads,
+                "reject_http2_websocket": opts.reject_http2_websocket,
             });
             asyncIo.start();
         }

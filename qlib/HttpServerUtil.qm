@@ -1698,17 +1698,21 @@ private logChunk(bool send, int size) {
 }
 
 #! InputStream adapter that wraps a callback providing chunked data
-/** This class adapts a callback that returns string or binary chunks (or @ref nothing to signal
-    end-of-stream) into an @ref Qore::InputStream interface suitable for HTTP/2 DATA frame streaming.
+/** This class adapts a callback that returns string or binary chunks (or @ref nothing or a hash of
+    trailers to signal end-of-stream) into an @ref Qore::InputStream interface suitable for chunked
+    HTTP responses and HTTP/2 DATA frame streaming.
 
     The callback is called lazily on each read() call, and data is buffered internally so that
     partial reads return exactly the requested number of bytes.
+
+    @note When the callback returns a hash (HTTP chunked trailers), it is treated as end-of-stream
+    since the @ref Qore::InputStream API has no way to express HTTP trailers.
 
     @since HttpServerUtil 1.2
 */
 public class CallbackInputStream inherits InputStream {
     private {
-        #! the callback that returns string, binary, or NOTHING
+        #! the callback that returns string, binary, hash (trailers), or NOTHING
         code callback;
         #! strong reference to the object that owns the callback, preventing premature garbage collection
         /** In Qore, method call references created with \\method() do not hold strong references to the
@@ -1722,8 +1726,8 @@ public class CallbackInputStream inherits InputStream {
     }
 
     #! Creates the stream from a callback
-    /** @param callback a callback that returns string or binary data for each chunk, or @ref nothing
-        to signal end of stream
+    /** @param callback a callback that returns string or binary data for each chunk, a hash of
+        trailers, or @ref nothing to signal end of stream
         @param owner the object that owns the callback; a strong reference is held to prevent the owner
         from being garbage collected while the stream is still in use
     */
@@ -1762,9 +1766,14 @@ public class CallbackInputStream inherits InputStream {
                     return NOTHING;
                 }
                 buf = chunk;
+            } else if (chunk.typeCode() == NT_HASH) {
+                # hash = HTTP chunked trailers; treat as end of stream since the
+                # InputStream API has no way to express HTTP trailers
+                eof = True;
+                return NOTHING;
             } else {
                 throw "CALLBACK-INPUT-STREAM-ERROR",
-                    sprintf("callback returned unexpected type %y; expected string, binary, or NOTHING",
+                    sprintf("callback returned unexpected type %y; expected string, binary, hash, or NOTHING",
                         chunk.type());
             }
         }
@@ -1802,9 +1811,13 @@ public class CallbackInputStream inherits InputStream {
                     return -1;
                 }
                 buf = chunk;
+            } else if (chunk.typeCode() == NT_HASH) {
+                # hash = HTTP chunked trailers; treat as end of stream
+                eof = True;
+                return -1;
             } else {
                 throw "CALLBACK-INPUT-STREAM-ERROR",
-                    sprintf("callback returned unexpected type %y; expected string, binary, or NOTHING",
+                    sprintf("callback returned unexpected type %y; expected string, binary, hash, or NOTHING",
                         chunk.type());
             }
         }
