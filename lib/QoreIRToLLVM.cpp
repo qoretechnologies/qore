@@ -1295,9 +1295,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::Return: {
             const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
-            // If returning an Invoke/ConstString result, clear its cleanup alloca
-            // so emitInvokeCleanup won't decref the value we're returning to the caller.
+            // Box the return value BEFORE cleanup so we can incref it.  Cleanup
+            // (invoke cleanup, local uninstantiation) may deref values that the
+            // return value references — e.g. a CatchException result stored into
+            // a local.  We must take our own reference first, mirroring the IR
+            // interpreter's val.refSelf() in its Return handler.
+            llvm::Value* boxed_ret = nullptr;
             if (ret->has_value) {
+                auto* val = getVal(ret->value.id, error);
+                if (!val) { return false; }
+                if (nanboxed_values.count(ret->value.id)) {
+                    boxed_ret = val;
+                } else if (val->getType() == i64_type) {
+                    boxed_ret = boxInt(val);
+                } else if (val->getType() == double_type) {
+                    boxed_ret = boxFloat(val);
+                } else if (val->getType() == i1_type) {
+                    boxed_ret = boxBool(val);
+                } else {
+                    error = "unsupported return value type for LLVM lowering";
+                    return false;
+                }
+                // Take a reference to the return value before cleanup.
+                auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
+                        llvm::FunctionType::get(void_type, {i64_type}, false));
+                builder->CreateCall(incref_fn, {boxed_ret});
+
+                // If returning an Invoke/ConstString result directly, clear its
+                // cleanup alloca so emitInvokeCleanup won't double-decref.
                 auto alloca_it = invoke_alloca_map.find(ret->value.id);
                 if (alloca_it != invoke_alloca_map.end()) {
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
@@ -1312,24 +1337,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitInvokeCleanup(module);
             // Uninstantiate locals before returning (pre-instantiated locals are skipped internally)
             emitLocalUninstantiation(module);
-            if (ret->has_value) {
-                auto* val = getVal(ret->value.id, error);
-                if (!val) { return false; }
-                // Box the return value to NaN-boxed i64
-                llvm::Value* boxed;
-                if (nanboxed_values.count(ret->value.id)) {
-                    boxed = val;  // Already NaN-boxed
-                } else if (val->getType() == i64_type) {
-                    boxed = boxInt(val);
-                } else if (val->getType() == double_type) {
-                    boxed = boxFloat(val);
-                } else if (val->getType() == i1_type) {
-                    boxed = boxBool(val);
-                } else {
-                    error = "unsupported return value type for LLVM lowering";
-                    return false;
-                }
-                builder->CreateRet(boxed);
+            if (boxed_ret) {
+                builder->CreateRet(boxed_ret);
             } else {
                 builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
             }

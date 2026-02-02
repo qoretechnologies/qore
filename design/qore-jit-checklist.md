@@ -278,11 +278,9 @@ memory safety verification, and CI integration.
 | Tiered (aggressive 3/10) | 220/223 | 3 known issues (see below) |
 
 Known issues at aggressive thresholds only (pass at default thresholds):
-- `HTTPClient.qtest` — network timeout under valgrind/slow execution (not a code bug)
+- `HTTPClient.qtest` / `FtpClient.qtest` — network timeout (not a code bug)
 - `test-debug.qtest` — debug introspection traces differ when functions execute via JIT
-  (debug hooks don't observe JIT-compiled execution steps)
-- `exception-location.qtest` — intermittent: exception callstack source location info
-  may be absent for JIT-compiled frames (passes at default thresholds)
+  (debug hooks don't observe JIT-compiled execution steps; 1/97 assertions)
 
 ### Thread Safety Fixes
 
@@ -318,17 +316,25 @@ Known issues at aggressive thresholds only (pass at default thresholds):
 |------|------|----------------|-------|
 | JITSmoke.qtest | JIT | 0 bytes | clean |
 | TieredSmoke.qtest | Tiered (3/10) | 0 bytes | clean |
-| gc.qtest | Tiered (3/10) | 192 bytes (2 blocks) | parser-level, not JIT |
+| gc.qtest | Tiered (3/10) | 0 bytes | fixed: invoke_expr leak |
 | gc.qtest | AST/IR/JIT | 0 bytes | clean |
+| exception-location.qtest | Tiered (3/10) | 0 bytes | fixed: Return incref |
 | operators.qtest | JIT | 0 bytes | clean |
 | operators.qtest | Tiered (3/10) | 0 bytes | clean |
 | sort.qtest | JIT | 0 bytes | clean |
 | sort.qtest | Tiered (3/10) | 0 bytes | clean |
 
-The gc.qtest 192-byte leak in aggressive tiered mode is in the bison parser
-(`parseResolveBarewordIntern`, `processCall`), not in JIT code. It only appears
-when running all test cases without `--method` filter and only at aggressive
-thresholds. All other modes are clean.
+### Memory Safety Fixes
+
+- [x] **invoke_expr reference leak** (`JITRuntime.cpp`): `qore_rt_invoke_expr` called
+      `expr.refSelf()` but never balanced with `discard()`. Each JIT execution of an
+      `Invoke` opcode leaked one reference. Fixed with `ref_expr.discard(xsink)` after eval.
+- [x] **Return use-after-free** (`QoreIRToLLVM.cpp`): JIT Return handler did cleanup
+      (emitInvokeCleanup, emitLocalUninstantiation) before reading the return value.
+      When CatchException results were stored into pre-instantiated locals, cleanup
+      deref'd the intermediate value, and evalTiered deref'd the local copy, leaving
+      the return value pointing to freed memory. Fixed by incref'ing the return value
+      before cleanup, matching the IR interpreter's `val.refSelf()` semantics.
 
 ### Thread Safety Verification
 
@@ -351,7 +357,9 @@ Deliverables:
       disabled `enableDebuggerSupport`
 - [x] `include/qore/intern/QoreIRToLLVM.h` — `trackResultForCleanup`, `invoke_result_allocas`,
       `invoke_alloca_map` members
-- [x] `lib/QoreIRToLLVM.cpp` — targeted cleanup tracking for GC correctness
+- [x] `lib/QoreIRToLLVM.cpp` — targeted cleanup tracking for GC correctness; Return
+      incref before cleanup to prevent use-after-free
+- [x] `lib/JITRuntime.cpp` — invoke_expr discard fix, catch_exception runtime
 - [x] `.gitlab-ci.yml` — `test-jit-ubuntu-amd64` and `test-tiered-ubuntu-amd64` jobs
 
 ---
