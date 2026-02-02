@@ -714,6 +714,17 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
     int64 runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
 
+    // AOT pre-compiled top-level function — execute directly if registered
+    if (cached_toplevel_jit_fn && !(runtime_parse_options & PO_ALLOW_REPARSE)) {
+        uint64_t result_bits = cached_toplevel_jit_fn(xsink);
+        QoreValue result;
+        std::memcpy(&result, &result_bits, sizeof(result));
+        if (!*xsink) {
+            return_value = result;
+        }
+        return 0;
+    }
+
     // IR/JIT/Tiered execution dispatch — only for non-REPARSE mode
     if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
         qore_exec_mode_t exec_mode = qore_program_private::get(*pgm)->exec_mode;

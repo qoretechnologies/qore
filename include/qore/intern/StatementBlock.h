@@ -259,6 +259,16 @@ protected:
     mutable QoreIRFunction* cached_toplevel_ir = nullptr;
     mutable std::once_flag toplevel_ir_once;
     mutable bool toplevel_ir_failed = false;
+
+    // AOT pre-compiled top-level function pointer
+    using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
+    mutable JitFunctionPtr cached_toplevel_jit_fn = nullptr;
+
+public:
+    //! Register a pre-compiled AOT function pointer for top-level code
+    DLLLOCAL void registerPrecompiledTopLevel(JitFunctionPtr fn) {
+        cached_toplevel_jit_fn = fn;
+    }
 };
 
 // parse variable stack

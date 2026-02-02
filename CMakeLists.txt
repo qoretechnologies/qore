@@ -88,6 +88,7 @@ else()
     llvm_map_components_to_libnames(LLVM_LIBS
         Core
         OrcJIT
+        Passes
         ${LLVM_NATIVE_ARCH}
         Support
     )
@@ -733,6 +734,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreJIT.cpp
     lib/QoreIRToLLVM.cpp
     lib/JITRuntime.cpp
+    lib/QoreAOT.cpp
+    lib/QoreAOTRuntime.cpp
     lib/QoreClass.cpp
     lib/TypedHashDecl.cpp
     lib/QoreEnumDecl.cpp
@@ -1014,6 +1017,7 @@ target_compile_definitions(libqore PRIVATE MODULE_DIR="${MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}")
+target_compile_definitions(libqore PRIVATE QORE_LIBDIR="${CMAKE_INSTALL_FULL_LIBDIR}")
 if (WIN32 OR MINGW OR MSYS)
     target_compile_definitions(libqore PUBLIC BUILDING_DLL)
 endif (WIN32 OR MINGW OR MSYS)

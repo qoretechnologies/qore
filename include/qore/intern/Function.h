@@ -685,6 +685,12 @@ public:
     }
 
     DLLLOCAL void parseCommit();
+
+    //! Register a pre-compiled AOT function pointer, promoting directly to JIT tier
+    DLLLOCAL void registerPrecompiledFunction(JitFunctionPtr fn) {
+        cached_jit_fn = fn;
+        current_tier.store(TIER_JIT, std::memory_order_release);
+    }
 };
 
 // the following defines the pure virtual functions that are common to all user variants

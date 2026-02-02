@@ -1,0 +1,266 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class AOTSmokeTest
+
+class AOTSmokeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("AOTSmokeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("AOT hello world", \testHelloWorld());
+        addTestCase("AOT arithmetic", \testArithmetic());
+        addTestCase("AOT control flow", \testControlFlow());
+        addTestCase("AOT functions", \testFunctions());
+        addTestCase("AOT string operations", \testStringOps());
+        addTestCase("AOT exit code", \testExitCode());
+        addTestCase("AOT ARGV passthrough", \testArgvPassthrough());
+        addTestCase("AOT error handling", \testErrorHandling());
+        addTestCase("AOT compile missing file", \testCompileMissingFile());
+        addTestCase("AOT compile default output", \testCompileDefaultOutput());
+        set_return_value(main());
+    }
+
+    #! Write code to a temp .q file and return {src_path, out_path}
+    private hash<auto> writeTempScript(string code) {
+        # Use a unique name with proper .q extension
+        string base = sprintf("/tmp/aot_test_%d_%d", getpid(), rand());
+        string src_path = base + ".q";
+        string out_path = base;
+
+        File f();
+        f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+
+        return {
+            "src": src_path,
+            "out": out_path,
+        };
+    }
+
+    #! Compile a script to a standalone executable, run it, and return stdout
+    private string compileAndRun(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile
+        string compile_cmd = sprintf("%s -b --compile %s --output %s 2>&1",
+            qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Verify the executable was created
+        if (!is_file(paths.out)) {
+            return "COMPILE_FAILED: " + compile_out;
+        }
+
+        # Run the compiled executable
+        string run_cmd = paths.out + " -b";
+        if (run_args) {
+            for (int i = 0; i < run_args.size(); ++i) {
+                run_cmd += " " + run_args[i];
+            }
+        }
+        run_cmd += " 2>&1";
+        return backquote(run_cmd);
+    }
+
+    #! Run a script with the interpreter and return stdout
+    private string runInterpreted(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string cmd = sprintf("%s -b --enable-debug %s", qore_bin, paths.src);
+        if (run_args) {
+            for (int i = 0; i < run_args.size(); ++i) {
+                cmd += " " + run_args[i];
+            }
+        }
+        cmd += " 2>&1";
+        return backquote(cmd);
+    }
+
+    testHelloWorld() {
+        string code = "%modern\nprintf(\"Hello, World!\\n\");\n";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT hello world output matches interpreter");
+    }
+
+    testArithmetic() {
+        string code = "%modern
+int sum = 0;
+for (int i = 0; i < 10; ++i) {
+    sum += i;
+}
+printf(\"sum: %d\\n\", sum);
+
+int a = 100;
+int b = 37;
+printf(\"add: %d\\n\", a + b);
+printf(\"sub: %d\\n\", a - b);
+printf(\"mul: %d\\n\", a * b);
+printf(\"div: %d\\n\", a / b);
+printf(\"mod: %d\\n\", a % b);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT arithmetic output matches interpreter");
+    }
+
+    testControlFlow() {
+        string code = "%modern
+int x = 42;
+if (x > 40) {
+    printf(\"big\\n\");
+} else {
+    printf(\"small\\n\");
+}
+
+int count = 0;
+while (count < 5) {
+    ++count;
+}
+printf(\"count: %d\\n\", count);
+
+int total = 0;
+int i = 0;
+do {
+    total += i;
+    ++i;
+} while (i < 5);
+printf(\"total: %d\\n\", total);
+
+switch (x) {
+    case 42:
+        printf(\"matched\\n\");
+        break;
+    default:
+        printf(\"no match\\n\");
+        break;
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT control flow output matches interpreter");
+    }
+
+    testFunctions() {
+        string code = "%modern
+int sub factorial(int n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+int sub fibonacci(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+printf(\"fact(10): %d\\n\", factorial(10));
+printf(\"fib(10): %d\\n\", fibonacci(10));
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT function output matches interpreter");
+    }
+
+    testStringOps() {
+        string code = "%modern
+string s = \"Hello\";
+s += \", World!\";
+printf(\"%s\\n\", s);
+printf(\"len: %d\\n\", s.size());
+printf(\"upper: %s\\n\", s.upr());
+printf(\"lower: %s\\n\", s.lwr());
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT string ops output matches interpreter");
+    }
+
+    testExitCode() {
+        # AOT binary should return 0 on success
+        hash<auto> paths = writeTempScript("%modern\nprintf(\"ok\\n\");\n");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        string compile_cmd = sprintf("%s -b --compile %s --output %s 2>&1",
+            qore_bin, paths.src, paths.out);
+        backquote(compile_cmd);
+
+        assertTrue(is_file(paths.out), "AOT executable was created");
+        int rc = system(paths.out + " -b > /dev/null 2>&1");
+        assertEq(0, rc, "AOT binary exits with code 0");
+    }
+
+    testArgvPassthrough() {
+        string code = "%modern
+list<auto> args = ARGV;
+for (int i = 0; i < args.size(); ++i) {
+    printf(\"arg%d: %s\\n\", i, args[i]);
+}
+";
+        list<string> args = ("foo", "bar", "baz");
+        string aot_out = compileAndRun(code, args);
+        string interp_out = runInterpreted(code, args);
+        assertEq(interp_out, aot_out, "AOT ARGV passthrough matches interpreter");
+    }
+
+    testErrorHandling() {
+        string code = "%modern
+try {
+    throw \"TEST-ERROR\", \"test message\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught: %s: %s\\n\", ex.err, ex.desc);
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT error handling matches interpreter");
+    }
+
+    testCompileMissingFile() {
+        # Compiling a non-existent file should fail
+        string cmd = sprintf("%s -b --compile /tmp/nonexistent_file_12345.q --output /tmp/nonexistent_out 2>&1",
+            qore_bin);
+        string out = backquote(cmd);
+        assertTrue(out.size() > 0, "error message for missing source file");
+    }
+
+    testCompileDefaultOutput() {
+        # Test that --output can be omitted (default output name derived from source)
+        hash<auto> paths = writeTempScript("%modern\nprintf(\"default\\n\");\n");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile without --output
+        string compile_cmd = sprintf("%s -b --compile %s 2>&1", qore_bin, paths.src);
+        backquote(compile_cmd);
+
+        assertTrue(is_file(paths.out), "AOT default output file was created");
+        string out = backquote(paths.out + " -b 2>&1");
+        assertEq("default\n", out, "default output binary runs correctly");
+    }
+}

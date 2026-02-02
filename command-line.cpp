@@ -36,6 +36,7 @@
 #include <qore/ParseOptionMap.h>
 #include <qore/safe_dslist>
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreAOT.h"
 
 #include "command-line.h"
 
@@ -46,6 +47,7 @@
 #include <ctype.h>
 #include <strings.h>
 #include <unistd.h>
+#include <cerrno>
 
 #include <string>
 #include <map>
@@ -104,6 +106,12 @@ static bool ir_fallback_warn = false;
 // tiered compilation thresholds (0 = use defaults)
 static uint64_t jit_ir_threshold = 0;
 static uint64_t jit_jit_threshold = 0;
+
+// AOT compilation mode
+static bool compile_mode = false;
+
+// AOT output file
+static const char* aot_output = nullptr;
 
 // program text given on the command-line
 static const char* cl_pgm = 0;
@@ -204,6 +212,11 @@ static const char helpstr[] =
    "  -z, --time-zone=arg          sets the time zone from the argument; can be\n"
    "                               either a region name (ex: 'Europe/Prague') or a\n"
    "                               UTC offset with format S[DD[:DD[:DD]]], S=+ or -\n"
+   "\n"
+   " AOT COMPILATION:\n"
+   "      --compile                compile to a standalone executable\n"
+   "      --output=file            set output file for --compile (default: strip\n"
+   "                               extension from input file)\n"
    "\n"
    " REPL OPTIONS:\n"
    "      --interactive            force interactive REPL mode\n"
@@ -699,6 +712,14 @@ static void set_jit_jit_threshold(const char* arg) {
     jit_jit_threshold = strtoull(arg, nullptr, 10);
 }
 
+static void set_compile_mode(const char* arg) {
+    compile_mode = true;
+}
+
+static void set_aot_output(const char* arg) {
+    aot_output = arg;
+}
+
 static void disable_gc(const char* arg) {
     qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
@@ -804,6 +825,9 @@ static struct opt_struct_s {
    { '\0', "module-api",           ARG_NONE, show_module_api },
    { '\0', "module-apis",          ARG_NONE, show_module_apis },
    { '\0', "latest-module-api",    ARG_NONE, show_latest_module_api },
+   // AOT compilation
+   { '\0', "compile",              ARG_NONE, set_compile_mode },
+   { '\0', "output",               ARG_MAND, set_aot_output },
    // debugging options
    { 'b', "disable-signals",       ARG_NONE, disable_signals },
    { 'd', "debug",                 ARG_MAND, do_debug },
@@ -1131,6 +1155,64 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             rc = 2; // set return code to 2 if there were parse warnings to be treated as errors
             goto exit;
          }
+      }
+
+      // AOT compilation mode: compile to standalone executable
+      if (compile_mode && !xsink.isException()) {
+         if (!program_file_name && !cl_pgm) {
+            fprintf(stderr, "error: --compile requires a source file or -e argument\n");
+            rc = 1;
+            goto exit;
+         }
+
+         // Read source text
+         std::string source_text;
+         std::string source_label;
+         if (cl_pgm) {
+            source_text = cl_pgm;
+            source_label = "<command-line>";
+         } else {
+            // Read the source file
+            FILE* f = fopen(program_file_name, "rb");
+            if (!f) {
+               fprintf(stderr, "error: cannot open '%s': %s\n", program_file_name, strerror(errno));
+               rc = 1;
+               goto exit;
+            }
+            fseek(f, 0, SEEK_END);
+            long fsize = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            source_text.resize(fsize);
+            size_t nread = fread(&source_text[0], 1, fsize, f);
+            fclose(f);
+            source_text.resize(nread);
+            source_label = program_file_name;
+         }
+
+         // Determine output path
+         std::string output_path;
+         if (aot_output) {
+            output_path = aot_output;
+         } else if (program_file_name) {
+            output_path = program_file_name;
+            // Strip extension
+            size_t dot = output_path.rfind('.');
+            if (dot != std::string::npos && dot > 0) {
+               output_path = output_path.substr(0, dot);
+            }
+         } else {
+            output_path = "a.out";
+         }
+
+         std::string error;
+         if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
+                  source_label.c_str(), output_path, parse_options, error)) {
+            fprintf(stderr, "AOT compilation failed: %s\n", error.c_str());
+            rc = 1;
+         } else {
+            printf("compiled: %s\n", output_path.c_str());
+         }
+         goto exit;
       }
 
       // if there were no parse exceptions, execute the program
