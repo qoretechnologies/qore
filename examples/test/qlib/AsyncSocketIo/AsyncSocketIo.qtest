@@ -55,6 +55,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("shared socket custom keys", \sharedSocketCustomKeysTest());
         addTestCase("callback exception safety", \callbackExceptionSafetyTest());
         addTestCase("submit from callback", \submitFromCallbackTest());
+        addTestCase("addListener after stop", \addListenerAfterStopTest());
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("%Y\n", get_all_thread_call_stacks());
@@ -66,6 +67,12 @@ public class AsyncSocketIoTest inherits QUnit::Test {
     }
 
     setUp() {
+        # Clear any pending interrupt window from a previous test's tearDown() so that
+        # interruptibleSleep() will actually block in this test (otherwise a 2-second
+        # window from a prior interruptSleep(False) can cause Wait-Forever handlers to
+        # return immediately, leading to flaky cancel-by-owner assertions)
+        SimpleStringHandler::resetInterruptWindow();
+
         LoggerLevel lvl = m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo;
         logger = new Logger("test", lvl);
         if (m_options.verbose > 2) {
@@ -821,6 +828,62 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertTrue(submit_ok, "submit from callback should succeed without LOCK-ERROR");
 
         ctrl.cancelByOwner("submit-cb-test");
+    }
+
+    #! Tests that addListener throws after the controller has been stopped
+    addListenerAfterStopTest() {
+        HttpAsyncSocketIoController ctrl(logger);
+        on_exit delete ctrl;
+
+        # Create a listener socket
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+
+        StubAsyncTarget target();
+
+        # Add a listener — should succeed
+        ctrl.addListener(listener, target);
+
+        # Stop the controller
+        ctrl.stop();
+
+        # Create a new listener socket
+        Socket listener2();
+        listener2.bind("127.0.0.1:0");
+        listener2.listen();
+        on_exit listener2.close();
+
+        # Adding a listener after stop should throw
+        assertThrows("CONTROLLER-ADD-LISTENER-ERROR", \ctrl.addListener(),
+            (listener2, target));
+    }
+}
+
+#! Stub implementation of HttpAsyncTarget for unit tests
+class StubAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
+    hash<HttpServerAsyncIo::HttpRequestResultInfo> onHttpRequest(
+            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
+    }
+
+    onIdleTimeout(Socket sock, object listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onSseDisconnect(Socket sock, object listener, hash<auto> cx) {
+    }
+
+    onWebSocketFrame(Socket sock, hash<HttpServerAsyncIo::WebSocketFrameInfo> frame,
+            object listener, hash<auto> cx) {
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx) {
     }
 }
 

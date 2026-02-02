@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Http2WebSocketStream.qc WebSocket over HTTP/2 (RFC 8441)
 
-/** Http2WebSocketStream.qc Copyright 2025 Qore Technologies, s.r.o.
+/** Http2WebSocketStream.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,7 +39,6 @@ public namespace HttpServerAsyncIo {
     - Multiplexing: multiple WebSocket connections can share one TCP connection
     - Header compression via HPACK
 
-    @since HttpServerAsyncIo 1.0
 */
 public class Http2WebSocketStream inherits AbstractWebSocketConnection {
     public {

@@ -43,10 +43,14 @@ public enum HttpConnectionState : string {
     WebSocket = "websocket",
     #! HTTP/2 multiplexed connection
     Http2 = "http2",
+    #! HTTP/2 sending response (async send via I/O thread)
+    Http2Sending = "http2_sending",
     #! HTTP/2 Server-Sent Events
     Http2Sse = "http2_sse",
     #! HTTP/2 WebSocket (RFC 8441)
     Http2WebSocket = "http2_websocket",
+    #! Fused send response + idle wait + read next header (HTTP/1.x keep-alive optimization)
+    SendAndReadHeader = "send_and_read_header",
 }
 
 #! HTTP poll operation type
@@ -106,7 +110,6 @@ public enum HttpVersionMode : string {
     The controller uses a callback pattern to notify the target about HTTP events.
     Implementations of @ref HttpAsyncTarget handle the actual request processing.
 
-    @since HttpServerAsyncIo 1.0
 */
 public class HttpAsyncSocketIoController {
     public {
@@ -116,6 +119,9 @@ public class HttpAsyncSocketIoController {
             connection rates.
         */
         const DefaultAcceptOps = 2;
+
+        #! Timeout for synchronous poll loops (e.g., HTTP/2 response send on handler thread)
+        const SyncPollTimeout = 30s;
     }
 
     private {
@@ -142,6 +148,9 @@ public class HttpAsyncSocketIoController {
 
         #! Shutdown flag; prevents handler tasks from submitting new operations during stop()
         bool stopping = False;
+
+        #! True after stop() has been called; prevents new listeners from being added
+        bool has_been_stopped = False;
 
         #! Registered listeners: listener unique hash -> listener info
         hash<string, hash<HttpListenerInfo>> listeners;
@@ -209,6 +218,10 @@ public class HttpAsyncSocketIoController {
 
     #! Starts the I/O controllers
     start() {
+        {
+            AutoLock al(m);
+            has_been_stopped = False;
+        }
         foreach AsyncSocketIoController c in (controllers) {
             if (!c.running()) {
                 c.start();
@@ -233,10 +246,16 @@ public class HttpAsyncSocketIoController {
         # to avoid deadlock with I/O thread callbacks that also acquire m
         *list<string> listener_keys;
         *list<hash<auto>> conn_cancel_info;
+        *list<HttpAsyncTarget> streaming_targets;
         {
             AutoLock al(m);
             stopping = True;
+            has_been_stopped = True;
             listener_keys = keys listeners;
+            # Collect targets before clearing so we can signal streaming handlers to stop
+            if (listeners) {
+                streaming_targets = map $1.target, listeners.iterator();
+            }
             if (connections) {
                 conn_cancel_info = map (
                     {"sock": connections{$1}.sock} + {"controller_idx": connections{$1}.controller_idx}
@@ -257,6 +276,10 @@ public class HttpAsyncSocketIoController {
                 # ignore - operation may have already completed
             }
         }
+        # Signal streaming handlers (SSE, WebSocket) to stop their polling loops
+        # before waiting for the handler pool; this sets handler-level stop flags
+        # (lsh{lid}) so handler tasks exit within one poll interval
+        map $1.stopStreaming(), streaming_targets;
         # Wait for in-flight handler tasks to complete; the stopping flag prevents
         # them from submitting new operations to the controllers
         handler_pool.stopWait();
@@ -317,12 +340,17 @@ public class HttpAsyncSocketIoController {
     /** @param listener the listener socket
         @param target the target to receive HTTP events
         @param ssl True if this is an HTTPS listener
-        @param cert SSL certificate data (required if ssl)
-        @param key SSL private key data (required if ssl)
+        @param cert SSL certificate (SSLCertificate object or PEM/DER data, required if ssl)
+        @param key SSL private key (SSLPrivateKey object or PEM/DER data, required if ssl)
         @param http_version HTTP version mode: "auto" (default), "1.0", "1.1", or "2.0"
+        @param ssl_verify_flags SSL verify flags for client certificate verification
+        @param ssl_accept_all_certs if True, accept all client certificates including self-signed
+        @param get_remote_certs if True, capture remote (client) certificates
     */
-    addListener(Socket listener, HttpAsyncTarget target, bool ssl = False, *data cert, *data key,
-            string http_version = HttpVersionMode::Auto) {
+    addListener(Socket listener, HttpAsyncTarget target, bool ssl = False, auto cert = NOTHING,
+            auto key = NOTHING, string http_version = HttpVersionMode::Auto,
+            int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
+            bool get_remote_certs = False) {
         @assert(listener, "listener socket cannot be null");
         @assert(target, "target cannot be null");
         @assert(!ssl || (cert && key), "SSL mode requires certificate and key");
@@ -330,6 +358,10 @@ public class HttpAsyncSocketIoController {
 
         {
             AutoLock al(m);
+            if (has_been_stopped) {
+                throw "CONTROLLER-ADD-LISTENER-ERROR",
+                    sprintf("cannot add listener %s: controller has been stopped", lhash);
+            }
             @assert(!listeners{lhash}, "listener already registered: %s", lhash);
             listeners{lhash} = <HttpListenerInfo>{
                 "listener": listener,
@@ -338,6 +370,9 @@ public class HttpAsyncSocketIoController {
                 "cert": cert,
                 "key": key,
                 "http_version": http_version,
+                "ssl_verify_flags": ssl_verify_flags,
+                "ssl_accept_all_certs": ssl_accept_all_certs,
+                "get_remote_certs": get_remote_certs,
             };
         }
 
@@ -424,12 +459,19 @@ public class HttpAsyncSocketIoController {
 
     #! Submits an accept operation to the controller
     private submitAcceptOp(Socket listener, HttpAsyncTarget target, bool ssl,
-            *data cert, *data key, string http_version, string owner) {
+            auto cert, auto key, string http_version, string owner) {
         int seq;
+        int ssl_verify_flags = SSL_VERIFY_NONE;
+        bool ssl_accept_all_certs = True;
         {
             AutoLock al(m);
             seq = ++accept_seq;
             accept_counts{owner} = (accept_counts{owner} ?? 0) + 1;
+            # Get SSL params from listener info for consistent handshake behavior
+            if (listeners{owner}) {
+                ssl_verify_flags = listeners{owner}.ssl_verify_flags;
+                ssl_accept_all_certs = listeners{owner}.ssl_accept_all_certs;
+            }
         }
         on_error {
             AutoLock al(m);
@@ -443,8 +485,8 @@ public class HttpAsyncSocketIoController {
         # Get the effective HTTP version - respect global HTTP/2 mode at runtime
         string eff_http_version = getEffectiveHttpVersion(http_version);
 
-        HttpAcceptPollOperation op(listener, ssl, cert, key, SSL_VERIFY_NONE,
-            True, eff_http_version, False);
+        HttpAcceptPollOperation op(listener, ssl, cert, key, ssl_verify_flags,
+            ssl_accept_all_certs, eff_http_version, False);
 
         @debug {
             if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
@@ -468,7 +510,7 @@ public class HttpAsyncSocketIoController {
 
     #! Handles accept operation result from the controller
     private handleAcceptResult(hash<SocketPollResultInfo> result, Socket listener,
-            HttpAsyncTarget target, bool ssl, *data cert, *data key,
+            HttpAsyncTarget target, bool ssl, auto cert, auto key,
             string http_version, string owner) {
         # Decrement accept count
         {
@@ -506,14 +548,24 @@ public class HttpAsyncSocketIoController {
         }
 
         hash<auto> output = result.spop.getOutput();
-        handleAcceptComplete(<HttpListenerInfo>{
-            "listener": listener,
-            "target": target,
-            "ssl": ssl,
-            "cert": cert,
-            "key": key,
-            "http_version": http_version,
-        }, output);
+        # Use stored listener info to preserve all configuration (SSL verify flags, etc.)
+        *hash<HttpListenerInfo> linfo;
+        {
+            AutoLock al(m);
+            linfo = listeners{owner};
+        }
+        if (!linfo) {
+            # Listener was removed; use the parameters we have
+            linfo = <HttpListenerInfo>{
+                "listener": listener,
+                "target": target,
+                "ssl": ssl,
+                "cert": cert,
+                "key": key,
+                "http_version": http_version,
+            };
+        }
+        handleAcceptComplete(linfo, output);
     }
 
     #! Handles accept completion
@@ -532,14 +584,6 @@ public class HttpAsyncSocketIoController {
             }
         }
 
-        # Assign this connection to an I/O thread via round-robin
-        int cidx;
-        {
-            AutoLock al(m);
-            cidx = next_controller_idx;
-            next_controller_idx = (next_controller_idx + 1) % controllers.size();
-        }
-
         if (output.ssl && !sock.isSecure()) {
             hash<auto> cx = {
                 "peer": sock.getPeerInfo(),
@@ -552,8 +596,11 @@ public class HttpAsyncSocketIoController {
             if (linfo.key) {
                 sock.setPrivateKey(linfo.key);
             }
-            sock.setSslVerifyMode(SSL_VERIFY_NONE);
-            sock.acceptAllCertificates(True);
+            sock.setSslVerifyMode(linfo.ssl_verify_flags);
+            sock.acceptAllCertificates(linfo.ssl_accept_all_certs);
+            if (linfo.get_remote_certs) {
+                sock.captureRemoteCertificates();
+            }
 
             list<string> alpn;
             if (output.http_version == HttpVersionMode::Auto) {
@@ -568,24 +615,30 @@ public class HttpAsyncSocketIoController {
             SocketPollOperation ssl_op = sock.startPollUpgradeServerToSSL();
             @debug {
                 if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
-                    log(LoggerLevel::INFO, "SSL handshake start: sock=%s alpn=%y io_thread=%d", uh, alpn, cidx);
+                    log(LoggerLevel::INFO, "SSL handshake start: sock=%s alpn=%y", uh, alpn);
                 }
             }
 
+            # Opt #5/#7: Merge round-robin + connection creation into single lock scope
+            # Prepare connection info outside lock
+            hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+                "sock": sock,
+                "listener": linfo.listener,
+                "cx": cx,
+                "target": linfo.target,
+                "state": HttpConnectionState::SslHandshake,
+                "ssl_op": ssl_op,
+                "http_version": output.http_version,
+                "is_http2": False,
+            };
+            int cidx;
             hash<HttpActiveConnectionInfo> cinfo;
             {
                 AutoLock al(m);
-                cinfo = connections{uh} = <HttpActiveConnectionInfo>{
-                    "sock": sock,
-                    "listener": linfo.listener,
-                    "cx": cx,
-                    "target": linfo.target,
-                    "state": HttpConnectionState::SslHandshake,
-                    "ssl_op": ssl_op,
-                    "http_version": output.http_version,
-                    "is_http2": False,
-                    "controller_idx": cidx,
-                };
+                cidx = next_controller_idx;
+                next_controller_idx = (next_controller_idx + 1) % controllers.size();
+                new_cinfo.controller_idx = cidx;
+                cinfo = connections{uh} = new_cinfo;
             }
 
             # Submit SSL handshake operation on the assigned I/O thread
@@ -595,7 +648,6 @@ public class HttpAsyncSocketIoController {
 
         # Check if this is an HTTP/2 connection
         if (output.is_http2) {
-            log(LoggerLevel::DEBUG, "Starting HTTP/2 connection handling for %y (io_thread=%d)", uh, cidx);
             hash<auto> cx = {
                 "peer": sock.getPeerInfo(),
                 "socket": sock.getSocketInfo(),
@@ -603,48 +655,58 @@ public class HttpAsyncSocketIoController {
 
             Http2PollOperation h2op(sock);
 
+            # Opt #5/#7: Merge round-robin + connection creation into single lock scope
+            hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+                "sock": sock,
+                "listener": linfo.listener,
+                "cx": cx,
+                "target": linfo.target,
+                "state": HttpConnectionState::Http2,
+                "stream_op": h2op,
+                "is_http2": True,
+            };
+            int cidx;
             hash<HttpActiveConnectionInfo> cinfo;
             {
                 AutoLock al(m);
-                cinfo = connections{uh} = <HttpActiveConnectionInfo>{
-                    "sock": sock,
-                    "listener": linfo.listener,
-                    "cx": cx,
-                    "target": linfo.target,
-                    "state": HttpConnectionState::Http2,
-                    "stream_op": h2op,
-                    "is_http2": True,
-                    "controller_idx": cidx,
-                };
+                cidx = next_controller_idx;
+                next_controller_idx = (next_controller_idx + 1) % controllers.size();
+                new_cinfo.controller_idx = cidx;
+                cinfo = connections{uh} = new_cinfo;
             }
 
+            log(LoggerLevel::DEBUG, "Starting HTTP/2 connection handling for %y (io_thread=%d)", uh, cidx);
             submitConnectionOp(uh, cinfo);
             return;
         }
 
-        # HTTP/1.x path
+        # HTTP/1.x path (SSL already complete)
         hash<auto> cx = {
             "peer": sock.getPeerInfo(),
             "socket": sock.getSocketInfo(),
         };
 
-        log(LoggerLevel::DEBUG, "Starting HTTP/1.x header reading for %y (io_thread=%d)", uh, cidx);
-
+        # Opt #5/#7: Merge round-robin + connection creation into single lock scope
+        hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+            "sock": sock,
+            "listener": linfo.listener,
+            "cx": cx,
+            "target": linfo.target,
+            "state": HttpConnectionState::ReadHeader,
+            "http_version": output.http_version,
+            "is_http2": False,
+        };
+        int cidx;
         hash<HttpActiveConnectionInfo> cinfo;
         {
             AutoLock al(m);
-            cinfo = connections{uh} = <HttpActiveConnectionInfo>{
-                "sock": sock,
-                "listener": linfo.listener,
-                "cx": cx,
-                "target": linfo.target,
-                "state": HttpConnectionState::ReadHeader,
-                "http_version": output.http_version,
-                "is_http2": False,
-                "controller_idx": cidx,
-            };
+            cidx = next_controller_idx;
+            next_controller_idx = (next_controller_idx + 1) % controllers.size();
+            new_cinfo.controller_idx = cidx;
+            cinfo = connections{uh} = new_cinfo;
         }
 
+        log(LoggerLevel::DEBUG, "Starting HTTP/1.x header reading for %y (io_thread=%d)", uh, cidx);
         submitConnectionOp(uh, cinfo);
     }
 
@@ -684,7 +746,6 @@ public class HttpAsyncSocketIoController {
     private handleSslResult(hash<SocketPollResultInfo> result, string uh,
             hash<HttpListenerInfo> linfo, string http_version) {
         if (result.canceled) {
-            @debug(log(LoggerLevel::DEBUG, "SSL handshake canceled: %s", uh));
             {
                 AutoLock al(m);
                 remove connections{uh};
@@ -715,7 +776,7 @@ public class HttpAsyncSocketIoController {
         # SSL handshake complete
         Socket sock = result.sock;
 
-        string negotiated = sock.getAlpnProtocol();
+        *string negotiated = sock.getAlpnProtocol();
         bool is_http2 = (negotiated == "h2");
 
         if ((http_version == HttpVersionMode::Http20 || http_version == "2") && !is_http2) {
@@ -787,7 +848,7 @@ public class HttpAsyncSocketIoController {
             }
             case HttpConnectionState::KeepAlive: {
                 op = cinfo.keep_alive_op;
-                timeout = milliseconds(cinfo.ttl);
+                timeout = milliseconds(cinfo.ttl) + AsyncSocketIoController::DefaultIoOperationTimeout;
                 break;
             }
             case HttpConnectionState::ReadHeader: {
@@ -801,6 +862,20 @@ public class HttpAsyncSocketIoController {
                 }
                 op = cinfo.stream_op;
                 timeout = -1s;
+                break;
+            }
+            case HttpConnectionState::Http2Sending: {
+                if (!cinfo.stream_op) {
+                    return;
+                }
+                op = cinfo.stream_op;
+                timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
+                break;
+            }
+            case HttpConnectionState::SendAndReadHeader: {
+                if (!cinfo.stream_op) return;
+                op = cinfo.stream_op;
+                timeout = milliseconds(cinfo.ttl) + AsyncSocketIoController::DefaultIoOperationTimeout;
                 break;
             }
             default:
@@ -859,10 +934,9 @@ public class HttpAsyncSocketIoController {
             }
             case HttpConnectionState::KeepAlive: {
                 # Opt 1: combined idle + header operation
-                # Use negative timeout to disable the outer AsyncSocketIoController timeout;
-                # the operation manages its own deadlines (idle TTL + header read timeout)
+                # TTL covers idle wait; safety margin covers header-read phase
                 op = cinfo.keep_alive_op;
-                timeout = -1s;
+                timeout = milliseconds(cinfo.ttl) + AsyncSocketIoController::DefaultIoOperationTimeout;
                 break;
             }
             case HttpConnectionState::ReadHeader: {
@@ -876,6 +950,14 @@ public class HttpAsyncSocketIoController {
                 }
                 op = cinfo.stream_op;
                 timeout = -1s;  # no timeout for HTTP/2 connections
+                break;
+            }
+            case HttpConnectionState::Http2Sending: {
+                if (!cinfo.stream_op) {
+                    return;
+                }
+                op = cinfo.stream_op;
+                timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
                 break;
             }
             case HttpConnectionState::Sse: {
@@ -900,6 +982,13 @@ public class HttpAsyncSocketIoController {
                 if (!cinfo.stream_op) return;
                 op = cinfo.stream_op;
                 timeout = -1s;
+                break;
+            }
+            case HttpConnectionState::SendAndReadHeader: {
+                if (!cinfo.stream_op) return;
+                op = cinfo.stream_op;
+                # TTL covers idle wait after send; safety margin covers send + header-read phases
+                timeout = milliseconds(cinfo.ttl) + AsyncSocketIoController::DefaultIoOperationTimeout;
                 break;
             }
             default:
@@ -932,7 +1021,7 @@ public class HttpAsyncSocketIoController {
     private handleConnectionResult(hash<SocketPollResultInfo> result, string uh,
             string orig_state) {
         if (result.canceled) {
-            @debug(log(LoggerLevel::DEBUG, "connection op canceled: %s state=%y", uh, orig_state));
+            log(LoggerLevel::DEBUG, "connection op canceled: %s state=%y", uh, orig_state);
             return;
         }
 
@@ -943,12 +1032,14 @@ public class HttpAsyncSocketIoController {
         }
 
         if (!cinfo) {
-            @debug(log(LoggerLevel::DEBUG, "connection gone for %s during %y callback", uh, orig_state));
+            log(LoggerLevel::DEBUG, "connection gone for %s during %y callback", uh, orig_state);
             return;
         }
 
         if (result.ex) {
             # Handle error
+            log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s",
+                uh, orig_state, result.ex.err, result.ex.desc);
             handleConnectionError(uh, cinfo, orig_state, result.ex);
             return;
         }
@@ -1008,6 +1099,15 @@ public class HttpAsyncSocketIoController {
                 }
                 break;
             }
+            case HttpConnectionState::Http2Sending: {
+                Http2PollOperation h2op = result.spop;
+                if (h2op.goalReached()) {
+                    handleHttp2SendComplete(uh, cinfo, h2op);
+                } else if (h2op.isClosed() || h2op.hasError()) {
+                    handleHttp2ConnectionClosed(uh, cinfo, h2op);
+                }
+                break;
+            }
             case HttpConnectionState::Http2Sse: {
                 Http2SseStream sse_stream = cast<Http2SseStream>(result.spop);
                 if (sse_stream.isDisconnected()) {
@@ -1020,6 +1120,28 @@ public class HttpAsyncSocketIoController {
                 if (!ws_stream.isOpen()) {
                     handleHttp2WebSocketClose(uh, cinfo, ws_stream);
                 }
+                break;
+            }
+            case HttpConnectionState::SendAndReadHeader: {
+                # Fused send+idle+read header operation
+                AbstractPollOperation fused_op = result.spop;
+                string state = fused_op.getState();
+                if (state == "header-complete") {
+                    # Headers fully read — dispatch to handler
+                    hash<auto> output = fused_op.getOutput();
+                    handleHeaderComplete(uh, cinfo, output);
+                } else if (state == "timeout") {
+                    # Idle timeout expired
+                    handleIdleTimeout(uh, cinfo);
+                } else {
+                    # Error or unexpected state — close connection
+                    handleConnectionClosed(uh, cinfo);
+                }
+                break;
+            }
+            default: {
+                log(LoggerLevel::ERROR, "Unhandled connection state %y for %y", orig_state, uh);
+                handleConnectionClosed(uh, cinfo);
                 break;
             }
         }
@@ -1037,7 +1159,9 @@ public class HttpAsyncSocketIoController {
         }
 
         if ((state == HttpConnectionState::Idle || state == HttpConnectionState::KeepAlive
-                || state == HttpConnectionState::ReadHeader)
+                || state == HttpConnectionState::ReadHeader
+                || state == HttpConnectionState::SendAndReadHeader
+                || state == HttpConnectionState::Http2Sending)
             && ex.err == "SOCKET-HTTP-ERROR"
             && ex.desc =~ /remote end closed connection/) {
             log(LoggerLevel::DEBUG, "Connection closed by peer during read: %y", uh);
@@ -1078,16 +1202,17 @@ public class HttpAsyncSocketIoController {
             remove connections{uh};
         }
 
-        # Opt 2: check if handler can run inline in I/O thread
-        if (cinfo.target.canHandleInline(conn_info)) {
-            try {
-                hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
-                handleRequestResult(cinfo.sock, cinfo, cinfo.cx, result, cinfo.target);
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "Error handling inline request: %s: %s", ex.err, ex.desc);
-                cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                try { cinfo.sock.close(); } catch () {}
+        # Opt 2: try to handle inline in the I/O thread (single handler lookup)
+        try {
+            *hash<HttpRequestResultInfo> inline_result = cinfo.target.tryInlineRequest(conn_info);
+            if (inline_result) {
+                handleRequestResult(cinfo.sock, cinfo, cinfo.cx, inline_result, cinfo.target);
+                return;
             }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error handling inline request: %s: %s", ex.err, ex.desc);
+            cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
+            try { cinfo.sock.close(); } catch () {}
             return;
         }
 
@@ -1110,6 +1235,62 @@ public class HttpAsyncSocketIoController {
         string uh = sock.uniqueHash();
         # Preserve the I/O thread assignment from the original connection
         int cidx = linfo.controller_idx ?? 0;
+
+        # Opt #3: Use fused send+idle+read operation when possible
+        # This bypasses the blocking sendHTTPResponse() on the handler thread and
+        # combines send + idle wait + header read into a single non-blocking operation
+        # on the I/O thread.
+        # Requirements: has response, not streaming, not using InputStream, returning to idle
+        if (result.code && !result.streaming && !result.input_stream
+                && !result.close && result.return_to_idle) {
+            try {
+                string status_msg = result.status_message ?? "Unknown";
+                timeout ttl = result.ttl ?? DefaultIdleTimeout;
+                AbstractPollOperation fused_op = sock.startPollSendHttpResponseAndReadHeader(
+                    result.code, status_msg, "1.1", result.hdr ?? {}, result.body, ttl);
+                hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+                    "sock": sock,
+                    "listener": linfo.listener ?? linfo,
+                    "cx": cx,
+                    "target": target,
+                    "state": HttpConnectionState::SendAndReadHeader,
+                    "stream_op": fused_op,
+                    "ttl": ttl,
+                };
+                hash<HttpActiveConnectionInfo> cinfo;
+                {
+                    AutoLock al(m);
+                    new_cinfo.controller_idx = cidx;
+                    cinfo = connections{uh} = new_cinfo;
+                }
+                submitConnectionOp(uh, cinfo);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Error starting fused send+read for %y: %s: %s",
+                    uh, ex.err, ex.desc);
+                try { sock.close(); } catch () {}
+            }
+            return;
+        }
+
+        # Send HTTP/1.x response if response data is present and not streaming
+        if (result.code && !result.streaming) {
+            try {
+                string status_msg = result.status_message ?? "Unknown";
+                if (result.input_stream) {
+                    result.input_stream.reassignThread();
+                    sock.sendHTTPResponse(result.code, status_msg, "1.1",
+                        result.hdr ?? {}, result.input_stream);
+                } else {
+                    sock.sendHTTPResponse(result.code, status_msg, "1.1",
+                        result.hdr ?? {}, result.body);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Error sending HTTP/1.x response for %y: %s: %s",
+                    uh, ex.err, ex.desc);
+                try { sock.close(); } catch () {}
+                return;
+            }
+        }
 
         if (result.close) {
             try { sock.close(); } catch () {}
@@ -1255,24 +1436,26 @@ public class HttpAsyncSocketIoController {
         bool is_websocket_connect = request.method == "CONNECT" &&
             request.headers.":protocol" == "websocket";
 
+        # Opt #6: Build header hash incrementally to avoid allocating a merged hash
+        hash<auto> hdr = request.headers;
+        hdr.method = request.method;
+        hdr.path = request.path;
+        hdr.":authority" = request.authority;
+        hdr.":scheme" = request.scheme;
+        hdr.host = request.authority;
+        hdr.http_version = "HTTP/2";
+
         # Parse accept-encoding header for compression support
         *list<string> accept_encoding;
-        if (request.headers."accept-encoding") {
+        if (hdr."accept-encoding") {
             accept_encoding = map trim($1.split(";")[0]),
-                request.headers."accept-encoding".split(",");
+                hdr."accept-encoding".split(",");
         }
 
         # Convert HTTP/2 request to HttpConnectionInfo format
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": cinfo.sock,
-            "hdr": request.headers + {
-                "method": request.method,
-                "path": request.path,
-                ":authority": request.authority,
-                ":scheme": request.scheme,
-                "host": request.authority,
-                "http_version": "HTTP/2",
-            },
+            "hdr": hdr,
             "header_info": {
                 "http2": True,
                 "stream_id": request.stream_id,
@@ -1280,6 +1463,7 @@ public class HttpAsyncSocketIoController {
                 "push_resource": h2op.getPushResourceCallback(),
                 "h2op": h2op,
                 "accept-encoding": accept_encoding,
+                "body": request.body,
             },
             "listener": cinfo.listener,
             "cx": cinfo.cx,
@@ -1314,12 +1498,18 @@ public class HttpAsyncSocketIoController {
             hash<auto> request, hash<HttpRequestResultInfo> result, bool is_websocket_connect = False) {
         string uh = cinfo.sock.uniqueHash();
 
-        if (result.close) {
+        # Opt #4: Single lock scope for close/dedicated early exits
+        if (result.close || result.dedicated) {
+            if (result.dedicated) {
+                log(LoggerLevel::DEBUG, "HTTP/2 connection %y handed to dedicated handler", uh);
+            }
             {
                 AutoLock al(m);
                 remove connections{uh};
             }
-            try { cinfo.sock.close(); } catch () {}
+            if (result.close) {
+                try { cinfo.sock.close(); } catch () {}
+            }
             return;
         }
 
@@ -1337,10 +1527,16 @@ public class HttpAsyncSocketIoController {
                     h2op.startSendResponse(result.code ?? 200, result.hdr);
 
                     # Drive the send operation to completion
+                    date deadline = now_us() + SyncPollTimeout;
                     while (True) {
                         *hash<SocketPollInfo> poll_info = h2op.continuePoll();
                         if (!poll_info) {
                             break;
+                        }
+                        if (now_us() > deadline) {
+                            throw "HTTP2-SEND-TIMEOUT",
+                                sprintf("HTTP/2 WebSocket response send timed out after %y for %y",
+                                    SyncPollTimeout, uh);
                         }
                         Socket::poll((poll_info,), 100ms);
                     }
@@ -1374,25 +1570,93 @@ public class HttpAsyncSocketIoController {
             }
         }
 
-        # Prepare for next request
+        # Send regular HTTP/2 response through h2op (response data from processNativeRequest)
+        # This is required because the h2op state machine must transition through
+        # SENDING -> SENT before startReadNextRequest() can be called
+        if (result.code && !result.streaming) {
+            # Async send for data-body responses: submit to I/O thread, freeing the handler thread
+            if (!result.input_stream) {
+                try {
+                    h2op.startSendResponse(result.code, result.hdr, result.body);
+                    hash<HttpActiveConnectionInfo> new_cinfo;
+                    {
+                        AutoLock al(m);
+                        connections{uh}.stream_op = h2op;
+                        connections{uh}.state = HttpConnectionState::Http2Sending;
+                        new_cinfo = connections{uh};
+                    }
+                    submitConnectionOp(uh, new_cinfo);
+                    return;
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR,
+                        "Error starting HTTP/2 async send for %y: %s: %s",
+                        uh, ex.err, ex.desc);
+                    {
+                        AutoLock al(m);
+                        remove connections{uh};
+                    }
+                    try { cinfo.sock.close(); } catch () {}
+                    return;
+                }
+            }
+
+            # InputStream responses: synchronous send (thread affinity requirement)
+            try {
+                result.input_stream.reassignThread();
+                h2op.startSendResponse(result.code, result.hdr, result.input_stream);
+                date deadline = now_us() + SyncPollTimeout;
+                while (True) {
+                    *hash<SocketPollInfo> poll_info = h2op.continuePoll();
+                    if (!poll_info) {
+                        break;
+                    }
+                    if (now_us() > deadline) {
+                        throw "HTTP2-SEND-TIMEOUT",
+                            sprintf("HTTP/2 response send timed out after %y for %y",
+                                SyncPollTimeout, uh);
+                    }
+                    Socket::poll((poll_info,), 100ms);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Error sending HTTP/2 response for %y: %s: %s",
+                    uh, ex.err, ex.desc);
+                {
+                    AutoLock al(m);
+                    remove connections{uh};
+                }
+                try { cinfo.sock.close(); } catch () {}
+                return;
+            }
+        }
+
+        # Keep-alive/close transition for InputStream responses and non-response results
+        # (streaming, close, dedicated cases are handled above)
+        # For data-body responses, handleHttp2SendComplete() handles this transition
+        # on the I/O thread after the async send completes
+        bool do_close = False;
+        hash<HttpActiveConnectionInfo> new_cinfo;
         if (h2op.shouldKeepAlive()) {
             log(LoggerLevel::DEBUG, "HTTP/2 connection %y waiting for next request", uh);
             h2op.startReadNextRequest();
-            hash<HttpActiveConnectionInfo> new_cinfo;
             {
                 AutoLock al(m);
                 connections{uh}.stream_op = h2op;
                 connections{uh}.state = HttpConnectionState::Http2;
                 new_cinfo = connections{uh};
             }
-            submitConnectionOp(uh, new_cinfo);
         } else {
             log(LoggerLevel::DEBUG, "HTTP/2 connection %y closing", uh);
+            do_close = True;
             {
                 AutoLock al(m);
                 remove connections{uh};
             }
+        }
+        # Actions outside lock
+        if (do_close) {
             try { cinfo.sock.close(); } catch () {}
+        } else {
+            submitConnectionOp(uh, new_cinfo);
         }
     }
 
@@ -1416,6 +1680,34 @@ public class HttpAsyncSocketIoController {
         {
             AutoLock al(m);
             remove connections{uh};
+        }
+    }
+
+    #! Handles HTTP/2 async send completion (called on I/O thread)
+    /** After the I/O thread drives h2op through SENDING -> SENT, this method
+        handles the keep-alive/close transition — the same logic that was
+        previously done synchronously on the handler thread.
+    */
+    private handleHttp2SendComplete(string uh, hash<HttpActiveConnectionInfo> cinfo,
+            Http2PollOperation h2op) {
+        if (h2op.shouldKeepAlive()) {
+            log(LoggerLevel::DEBUG, "HTTP/2 async send complete, waiting for next request: %y", uh);
+            h2op.startReadNextRequest();
+            hash<HttpActiveConnectionInfo> new_cinfo;
+            {
+                AutoLock al(m);
+                connections{uh}.stream_op = h2op;
+                connections{uh}.state = HttpConnectionState::Http2;
+                new_cinfo = connections{uh};
+            }
+            submitConnectionOp(uh, new_cinfo);
+        } else {
+            log(LoggerLevel::DEBUG, "HTTP/2 async send complete, closing: %y", uh);
+            {
+                AutoLock al(m);
+                remove connections{uh};
+            }
+            try { cinfo.sock.close(); } catch () {}
         }
     }
 
@@ -1491,14 +1783,23 @@ hashdecl HttpListenerInfo {
     #! True for SSL listeners
     bool ssl = False;
 
-    #! SSL certificate
-    *data cert;
+    #! SSL certificate (SSLCertificate object or PEM/DER data)
+    auto cert;
 
-    #! SSL private key
-    *data key;
+    #! SSL private key (SSLPrivateKey object or PEM/DER data)
+    auto key;
 
     #! HTTP version mode
     string http_version = HttpVersionMode::Auto;
+
+    #! SSL verify flags for client certificate verification
+    int ssl_verify_flags = SSL_VERIFY_NONE;
+
+    #! Accept all certificates (including self-signed)
+    bool ssl_accept_all_certs = True;
+
+    #! True to capture remote (client) certificates
+    bool get_remote_certs = False;
 }
 
 #! Internal hashdecl for active connection info

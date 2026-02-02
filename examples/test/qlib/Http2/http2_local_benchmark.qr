@@ -92,6 +92,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         int iterations;
         int concurrent;
         bool verbose = False;
+        bool async_mode = False;
         HttpServer server;
         string server_url;
     }
@@ -106,11 +107,23 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     private processArgs() {
         iterations = (shift ARGV ?? string(DefaultIterations)).toInt();
         concurrent = (shift ARGV ?? string(DefaultConcurrent)).toInt();
-        verbose = (shift ARGV ?? "") == "-v";
+        string arg3 = shift ARGV ?? "";
+        if (arg3 == "-v") {
+            verbose = True;
+        } else if (arg3 == "--async") {
+            async_mode = True;
+        }
+        string arg4 = shift ARGV ?? "";
+        if (arg4 == "-v") {
+            verbose = True;
+        } else if (arg4 == "--async") {
+            async_mode = True;
+        }
 
         printf("=== HTTP/2 vs HTTP/1.1 Local Benchmark ===\n\n");
         printf("Iterations: %d\n", iterations);
         printf("Concurrent: %d\n", concurrent);
+        printf("Server mode: %s\n", async_mode ? "async" : "sync");
         printf("\n");
     }
 
@@ -119,6 +132,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": logger,
+            "async_mode": async_mode,
         });
 
         # Create SSL certificate and key objects
@@ -156,11 +170,14 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Test 2: Connection reuse
         benchmarkConnectionReuse();
 
-        # Test 3: Concurrent requests
+        # Test 3: Concurrent requests (single HTTP/2 connection)
         benchmarkConcurrent();
 
         # Test 4: Large body
         benchmarkLargeBody();
+
+        # Test 5: Multi-connection throughput (handler thread contention)
+        benchmarkMultiConnectionThroughput();
 
         printf("=== Benchmark Complete ===\n");
     }
@@ -451,6 +468,89 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             float avg = listAvg(latencies);
             printf("    Throughput: %.1f MB/s\n", (body_size / 1048576.0) / (avg / 1000.0));
             printf("    HTTP/2 active: %s\n", h2.isHttp2Active() ? "yes" : "no");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/2: FAILED (%s: %s)\n", ex.err, ex.desc);
+        }
+
+        printf("\n");
+    }
+
+    private benchmarkMultiConnectionThroughput() {
+        printf("Test 5: Multi-Connection Throughput (handler thread contention)\n");
+        int num_connections = concurrent;
+        int reqs_per_conn = min(iterations, 50);
+        printf("  %d connections x %d requests each = %d total requests\n",
+            num_connections, reqs_per_conn, num_connections * reqs_per_conn);
+
+        # HTTP/1.1 - multiple connections, each making sequential requests
+        try {
+            date start = now_us();
+            Counter cnt(num_connections);
+            int success_count = 0;
+            Mutex m();
+
+            for (int i = 0; i < num_connections; ++i) {
+                background sub() {
+                    on_exit cnt.dec();
+                    try {
+                        HTTPClient h1({
+                            "url": server_url,
+                            "http_version": "1.1",
+                            "timeout": 30s,
+                        });
+                        h1.acceptAllCertificates(True);
+                        for (int j = 0; j < reqs_per_conn; ++j) {
+                            h1.send("", "GET", "/", NOTHING, True);
+                            m.lock();
+                            on_exit m.unlock();
+                            ++success_count;
+                        }
+                    } catch () {}
+                }();
+            }
+            cnt.waitForZero();
+            float total = (now_us() - start).durationMicroseconds() / 1000.0;
+            float rps = success_count * 1000.0 / total;
+
+            printf("  HTTP/1.1 (%d connections):\n", num_connections);
+            printf("    Total: %.1f ms, %d requests, %.0f req/s\n", total, success_count, rps);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("  HTTP/1.1: FAILED (%s: %s)\n", ex.err, ex.desc);
+        }
+
+        # HTTP/2 - multiple separate connections, each making sequential requests
+        # This is the scenario where async send frees handler threads to serve other connections
+        try {
+            date start = now_us();
+            Counter cnt(num_connections);
+            int success_count = 0;
+            Mutex m();
+
+            for (int i = 0; i < num_connections; ++i) {
+                background sub() {
+                    on_exit cnt.dec();
+                    try {
+                        HTTPClient h2({
+                            "url": server_url,
+                            "http_version": "2.0",
+                            "timeout": 30s,
+                        });
+                        h2.acceptAllCertificates(True);
+                        for (int j = 0; j < reqs_per_conn; ++j) {
+                            h2.send("", "GET", "/", NOTHING, True);
+                            m.lock();
+                            on_exit m.unlock();
+                            ++success_count;
+                        }
+                    } catch () {}
+                }();
+            }
+            cnt.waitForZero();
+            float total = (now_us() - start).durationMicroseconds() / 1000.0;
+            float rps = success_count * 1000.0 / total;
+
+            printf("  HTTP/2 (%d separate connections):\n", num_connections);
+            printf("    Total: %.1f ms, %d requests, %.0f req/s\n", total, success_count, rps);
         } catch (hash<ExceptionInfo> ex) {
             printf("  HTTP/2: FAILED (%s: %s)\n", ex.err, ex.desc);
         }

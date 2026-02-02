@@ -30,20 +30,43 @@ public namespace AsyncSocketIo {
 #! HTTP/2 stream I/O helper
 /** Provides stream-scoped send/receive helpers for HTTP/2 sockets.
 
+    When \c direct_io is @ref True "True", the context manages HTTP/2 frame reading from the
+    TCP socket itself (via @ref Qore::Socket::isDataAvailable() "Socket::isDataAvailable()"
+    which triggers HTTP/2 frame processing). This is required when no I/O thread polls the
+    socket for incoming HTTP/2 frames (e.g., dedicated WebSocket handler threads).
+
+    When \c direct_io is @ref False "False" (default), an external I/O thread is expected to
+    read HTTP/2 frames and populate the stream buffer. The context only reads from the buffer
+    via @ref Qore::Socket::readHttp2StreamData() "Socket::readHttp2StreamData()".
+
     @since AsyncSocketIo 2.1
 */
 public class Http2StreamContext {
     private {
         Socket sock;
         int stream_id;
+        #! When True, readData() triggers HTTP/2 frame reading from TCP
+        bool direct_io;
     }
 
-    constructor(Socket sock, int stream_id) {
+    #! Creates an HTTP/2 stream context
+    /** @param sock the HTTP/2 socket
+        @param stream_id the HTTP/2 stream ID (must be positive)
+        @param direct_io when @ref True "True", the context reads HTTP/2 frames directly from
+        the TCP socket (for cases where no I/O thread manages frame reading)
+    */
+    constructor(Socket sock, int stream_id, bool direct_io = False) {
         @assert(sock, "socket cannot be null");
         @assert(sock.isOpen(), "socket must be open");
         @assert(stream_id > 0, "stream_id must be positive");
         self.sock = sock;
         self.stream_id = stream_id;
+        self.direct_io = direct_io;
+        if (direct_io) {
+            # Set the active stream so isDataAvailable() knows which stream to check
+            # and can trigger HTTP/2 frame reading from TCP
+            sock.setHttp2ActiveStream(stream_id);
+        }
     }
 
     int getStreamId() {
@@ -77,13 +100,26 @@ public class Http2StreamContext {
     #! Read data from this HTTP/2 stream.
     /** Reads data for this stream from the underlying HTTP/2 socket.
 
+        In direct I/O mode, this method first calls
+        @ref Qore::Socket::isDataAvailable() "Socket::isDataAvailable()" with a zero timeout
+        to trigger non-blocking HTTP/2 frame reading from the TCP socket. This populates the
+        per-stream buffer that @ref Qore::Socket::readHttp2StreamData()
+        "Socket::readHttp2StreamData()" reads from.
+
         @param max_bytes
         the maximum number of bytes to read; if 0, the socket decides how much data to return
 
         @return
-        the binary data returned by Socket::readHttp2StreamData()
+        the binary data returned by Socket::readHttp2StreamData(), or @ref nothing if no data
+        is available
     */
     *binary readData(int max_bytes = 0) {
+        if (direct_io) {
+            # Trigger HTTP/2 frame reading from TCP. isDataAvailable() with the active
+            # stream set will: check the stream buffer, and if empty, read HTTP/2 frames
+            # from the TCP socket (non-blocking with 0ms timeout) to populate the buffer.
+            sock.isDataAvailable(0ms);
+        }
         return sock.readHttp2StreamData(stream_id, max_bytes);
     }
 }

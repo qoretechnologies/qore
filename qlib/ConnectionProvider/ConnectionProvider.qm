@@ -30,11 +30,12 @@
 %requires(reexport) Util
 %requires Logger
 %requires(reexport) DataProvider
+%requires AsyncSocketIo
 %requires reflection
 %requires ProviderIndexUtil
 
 module ConnectionProvider {
-    version = "2.2";
+    version = "2.3";
     desc    = "API for pluggable connection providers to Qore";
     author  = "David Nichols <david.nichols@qoretechnologies.com>";
     url     = "http://qore.org";
@@ -112,6 +113,15 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @endverbatim
 
     @section connectionproviderrelnotes Release Notes
+
+    @subsection connectionprovider_2_3 ConnectionProvider 2.3
+    - refactored @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor" to delegate I/O to
+      an \c AsyncSocketIoController; the internal \c Socket::poll() event loop and pipe-based signaling have been
+      removed in favor of a lightweight timer thread
+    - added a new @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor" constructor
+      accepting an explicit \c AsyncSocketIoController; the original constructor signature is preserved and uses
+      the global async I/O controller singleton
+    - added \c AsyncSocketIo module dependency
 
     @subsection connectionprovider_2_2 ConnectionProvider 2.2
     - added async HTTP ping polling support for HTTP and HTTP-based connections
