@@ -53,6 +53,8 @@
 #include <qore/intern/QoreLogicalLessThanOperatorNode.h>
 #include <qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreOperatorNode.h>
+#include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
 
 static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const QoreTypeInfo* type_info) {
     switch (opcode) {
@@ -481,6 +483,68 @@ static void assignGlobalVarValue(Var* var, const QoreValue& value, ExceptionSink
     }
     QoreValue stored = value.hasNode() ? value.refSelf() : value;
     helper.assign(stored);
+}
+
+// Walk a compound lvalue expression (e.g., rv.body, obj.member) to find the root
+// variable reference, then invalidate it from the stored values cache.  This is
+// necessary because LValueHelper may trigger copy-on-write (COW) on the container,
+// replacing the object on the thread-local variable stack with a new copy.  The cached
+// version in locals/globals/closures maps would then be stale.
+static void invalidateLvalueRoot(const QoreValue& lvalue,
+        std::unordered_map<const void*, QoreValue>& locals,
+        std::unordered_map<const void*, QoreValue>& globals,
+        std::unordered_map<const void*, QoreValue>& threadlocals,
+        std::unordered_map<const void*, QoreValue>& closures) {
+    if (!lvalue.hasNode()) {
+        return;
+    }
+    const AbstractQoreNode* node = lvalue.getInternalNode();
+    // Walk through binary operator nodes (like . or {} dereference) to find
+    // the root VarRefNode
+    while (node) {
+        if (auto* var_ref = dynamic_cast<const VarRefNode*>(node)) {
+            qore_var_t type = var_ref->getType();
+            if (type == VT_LOCAL || type == VT_LOCAL_TS) {
+                auto it = locals.find(var_ref->ref.id);
+                if (it != locals.end()) {
+                    it->second.discard(nullptr);
+                    locals.erase(it);
+                }
+            } else if (type == VT_GLOBAL) {
+                auto it = globals.find(var_ref->ref.id);
+                if (it != globals.end()) {
+                    it->second.discard(nullptr);
+                    globals.erase(it);
+                }
+            } else if (type == VT_THREAD_LOCAL) {
+                auto it = threadlocals.find(var_ref->ref.id);
+                if (it != threadlocals.end()) {
+                    it->second.discard(nullptr);
+                    threadlocals.erase(it);
+                }
+            } else if (type == VT_CLOSURE || type == VT_LOCAL_TS) {
+                auto it = closures.find(var_ref->ref.id);
+                if (it != closures.end()) {
+                    it->second.discard(nullptr);
+                    closures.erase(it);
+                }
+            }
+            return;
+        }
+        // Binary operators (., {}, [], etc.) have left and right operands.
+        // The root variable is on the left side.
+        if (auto* bin_op = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+            QoreValue left_val = bin_op->getLeft();
+            node = left_val.hasNode() ? left_val.getInternalNode() : nullptr;
+        } else {
+            // Can't identify the root variable — fall back to full invalidation
+            cleanupStoredValues(locals, nullptr);
+            cleanupStoredValues(globals, nullptr);
+            cleanupStoredValues(threadlocals, nullptr);
+            cleanupStoredValues(closures, nullptr);
+            return;
+        }
+    }
 }
 
 static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>& locals,
@@ -1789,8 +1853,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                // Update local var cache before potentially discarding the result
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated);
+                // Invalidate the root variable's cached value — evalLValueStore
+                // may trigger COW on the thread-local stack, making the cached
+                // value stale (the next LoadLocal will re-read from the stack)
+                invalidateLvalueRoot(lval_inst->lvalue, locals, globals, threadlocals, closures);
                 // StoreLValue has no result register (result.id == 0); discard
                 // the returned reference to avoid storing into values[0] which
                 // causes double-free when multiple stores accumulate in cleanup

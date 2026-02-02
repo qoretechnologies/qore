@@ -248,6 +248,14 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error) {
         return false;
     }
 
+    // Dump LLVM IR if requested
+    if (getenv("QORE_DUMP_LLVM_IR")) {
+        llvm::raw_fd_ostream llvm_dump(2, false);
+        llvm_dump << "=== LLVM IR for " << func.name << " ===\n";
+        module->print(llvm_dump, nullptr);
+        llvm_dump << "=== END LLVM IR ===\n";
+    }
+
     // Add the module to the JIT
     auto tsm = llvm::orc::ThreadSafeModule(std::move(module), std::move(ctx));
     auto err = jit->addIRModule(std::move(tsm));

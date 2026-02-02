@@ -260,6 +260,48 @@ Deliverables:
 - [x] `examples/test/ir/TieredSmoke.qtest` — 20 test cases (284 assertions)
 - [x] Valgrind clean: 0 errors, 0 leaks on all test suites
 
+### Phase 5d: Lvalue Correctness Fixes — COMPLETE ✓
+
+Fixed two correctness bugs where lvalue operations left stale cached values in both
+the LLVM JIT (alloca caches) and IR interpreter (stored value caches), causing
+infinite loops and incorrect data after copy-on-write mutations.
+
+- [x] **LLVM JIT alloca-staleness** (`QoreIRToLLVM.cpp`): Lvalue operations
+      (`PostInc`/`PreInc`/`PostDec`/`PreDec`, `StoreLvalue`, compound assignments)
+      call runtime helpers that modify the Qore thread-local variable stack, but
+      the LLVM alloca cache for the affected local was never updated. This caused
+      for-loops with `++i` to read a stale alloca value every iteration, producing
+      infinite loops. Fixed with a reload tracker mechanism: after lvalue ops and
+      `Invoke` calls, `reloadLocalFromRuntime()` reloads the affected local's alloca
+      from the runtime stack via `qore_rt_load_local`. Each reload tracker alloca
+      holds the most recent reload value (+1 ref) and is registered with
+      `invoke_result_allocas` for cleanup at function exit.
+      `reloadAllLocalsFromRuntime()` reloads all local allocas after `Invoke` calls
+      (which may execute arbitrary code that modifies any local via closures).
+- [x] **IR interpreter COW cache invalidation** (`QoreIRInterpreter.cpp`): The IR
+      interpreter caches loaded variable values in `locals`/`globals`/`threadlocals`/
+      `closures` maps. When `StoreLvalue` modifies a hash field on a copy-on-write
+      `QoreHashNode` (refcount > 1), the hash is copied and the thread-local stack
+      gets the new hash, but the cached reference points to the old (pre-COW) hash.
+      Subsequent reads return stale data. Fixed with `invalidateLvalueRoot()` which
+      walks the lvalue AST tree (through `QoreHashObjectDereferenceOperatorNode` and
+      other binary operators) to find the root `VarRefNode`, then erases its cached
+      value from the appropriate cache map, forcing a fresh load on next access.
+- [x] **LLVM IR diagnostic** (`QoreJIT.cpp`): Added `QORE_DUMP_LLVM_IR` environment
+      variable to dump generated LLVM IR modules to stderr during compilation for
+      debugging.
+
+Deliverables:
+- [x] `include/qore/intern/QoreIRToLLVM.h` — `local_reload_trackers` map,
+      `reloadLocalFromRuntime()`, `reloadAllLocalsFromRuntime()` declarations
+- [x] `lib/QoreIRToLLVM.cpp` — `findLvalueRootLocalKey()` static helper, reload
+      tracker implementation with decref-before-replace semantics, reload calls after
+      all lvalue ops and `Invoke` instructions
+- [x] `lib/QoreIRInterpreter.cpp` — `invalidateLvalueRoot()` function replacing
+      `updateLocalVarFromLvalue()` in `StoreLvalue` handler
+- [x] `lib/QoreJIT.cpp` — `QORE_DUMP_LLVM_IR` diagnostic support
+- [x] Valgrind clean: 0 definite leaks on JIT and tiered smoke tests
+
 ---
 
 ## Phase 6: Hardening — COMPLETE ✓

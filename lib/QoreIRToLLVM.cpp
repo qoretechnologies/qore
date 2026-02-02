@@ -36,6 +36,8 @@
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/VarRefNode.h"
+#include "qore/intern/QoreOperatorNode.h"
 #include <qore/QoreStringNode.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -383,6 +385,78 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
     invoke_alloca_map[result_id] = cleanup_alloca;
 }
 
+// Walk a lvalue AST expression to find the root LocalVar* key (for alloca lookup).
+// Returns nullptr if the root is not a local variable.
+static const void* findLvalueRootLocalKey(const QoreValue& lvalue) {
+    if (!lvalue.hasNode()) {
+        return nullptr;
+    }
+    const AbstractQoreNode* node = lvalue.getInternalNode();
+    while (node) {
+        if (auto* var_ref = dynamic_cast<const VarRefNode*>(node)) {
+            qore_var_t type = var_ref->getType();
+            if (type == VT_LOCAL || type == VT_LOCAL_TS) {
+                return reinterpret_cast<const void*>(var_ref->ref.id);
+            }
+            return nullptr;
+        }
+        // Walk through binary operators (e.g., rv.body → walk left to find rv)
+        if (auto* bin_op = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+            QoreValue left = bin_op->getLeft();
+            node = left.hasNode() ? left.getInternalNode() : nullptr;
+        } else {
+            return nullptr;
+        }
+    }
+    return nullptr;
+}
+
+void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    auto alloca_it = local_allocas.find(key);
+    if (alloca_it == local_allocas.end()) {
+        return;
+    }
+
+    auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+
+    // Get or create the reload tracker alloca for this local
+    auto tracker_it = local_reload_trackers.find(key);
+    if (tracker_it == local_reload_trackers.end()) {
+        llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+        llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+        llvm::AllocaInst* tracker = alloca_builder.CreateAlloca(i64_type,
+                nullptr, "reload_tracker");
+        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker);
+        local_reload_trackers[key] = tracker;
+        // Register for cleanup at function exit
+        invoke_result_allocas.push_back(tracker);
+        tracker_it = local_reload_trackers.find(key);
+    }
+
+    // Decref the previous reload value (no-op for ints/floats/bools/nothing)
+    llvm::Value* old_reload = builder->CreateLoad(i64_type, tracker_it->second);
+    builder->CreateCall(decref_fn, {old_reload, xsink_arg});
+
+    // Load new value from runtime stack
+    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(key));
+    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+    llvm::Value* reloaded = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+
+    // Update both the local alloca cache and the reload tracker
+    builder->CreateStore(reloaded, alloca_it->second);
+    builder->CreateStore(reloaded, tracker_it->second);
+}
+
+void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func) {
+    for (auto& [key, alloca] : local_allocas) {
+        reloadLocalFromRuntime(key, module, llvm_func);
+    }
+}
+
 llvm::Value* QoreIRToLLVM::boxValue(llvm::Value* val, uint32_t id) {
     if (nanboxed_values.count(id)) {
         return val;  // Already NaN-boxed
@@ -558,6 +632,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     preinstantiated_entry_loads.clear();
     invoke_result_allocas.clear();
     invoke_alloca_map.clear();
+    local_reload_trackers.clear();
 
     // Collect all unique LocalVar* pointers from the function and emit
     // instantiation calls at the start of the entry block so the Qore
@@ -1385,6 +1460,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
 
+            // Reload all local allocas from runtime — Invoke evaluates an AST
+            // expression that can modify any local variable through side effects
+            // (analogous to cleanupStoredValues in the IR interpreter)
+            reloadAllLocalsFromRuntime(module, llvm_func);
+
             // Check for exception and branch accordingly
             auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
                     llvm::FunctionType::get(i64_type, {ptr_type}, false));
@@ -1779,6 +1859,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            // Reload the affected local's alloca from runtime (StoreLvalue modifies
+            // the runtime stack via AST LValueHelper, which may trigger COW)
+            {
+                const void* local_key = findLvalueRootLocalKey(lvinst->lvalue);
+                if (local_key) {
+                    reloadLocalFromRuntime(local_key, module, llvm_func);
+                }
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -1803,6 +1891,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            // Reload the affected local's alloca from runtime (unary lvalue ops
+            // modify the runtime stack without updating the LLVM alloca cache)
+            {
+                const void* local_key = findLvalueRootLocalKey(lvinst->lvalue);
+                if (local_key) {
+                    reloadLocalFromRuntime(local_key, module, llvm_func);
+                }
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -1835,6 +1931,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            // Reload the affected local's alloca from runtime (binary lvalue ops
+            // modify the runtime stack without updating the LLVM alloca cache)
+            {
+                const void* local_key = findLvalueRootLocalKey(lvinst->lvalue);
+                if (local_key) {
+                    reloadLocalFromRuntime(local_key, module, llvm_func);
+                }
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

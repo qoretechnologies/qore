@@ -109,6 +109,11 @@ private:
     // Map from value ID to invoke-result alloca (for clearing at Return)
     std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
 
+    // Reload tracker allocas for local variables modified by lvalue operations.
+    // Each tracker alloca holds the most recent qore_rt_load_local reload value
+    // (+1 ref) so it can be decref'd before being replaced or at function exit.
+    std::unordered_map<const void*, llvm::Value*> local_reload_trackers;
+
     // Phase 5c: Debug info (DWARF)
     std::unique_ptr<llvm::DIBuilder> di_builder;
     llvm::DICompileUnit* di_cu = nullptr;
@@ -196,6 +201,15 @@ private:
             llvm::Instruction::BinaryOps float_op, const char* slow_helper,
             llvm::Value* lhs, llvm::Value* rhs,
             llvm::Function* llvm_func, llvm::Module& module);
+
+    // Reload a specific local variable's alloca from the Qore runtime stack.
+    // Called after lvalue operations (PostInc, StoreLvalue, etc.) that modify the
+    // runtime stack without updating the LLVM alloca cache.
+    void reloadLocalFromRuntime(const void* key, llvm::Module& module, llvm::Function* llvm_func);
+
+    // Reload all local variable allocas from the Qore runtime stack.
+    // Called after Invoke instructions (which can modify any local via AST evaluation).
+    void reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func);
 
     // Phase 5b: Emit inline LLVM fast-path for .any comparisons (EqAny/NeAny/etc).
     // Type-checks operands for int-vs-int and float-vs-float, falls back to helper for mixed types.
