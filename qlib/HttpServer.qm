@@ -4960,14 +4960,14 @@ hashdecl HttpAsyncResponseInfo {
     HttpListener listener;
 
     #! callback for sending chunked response data where each callback return is one HTTP chunk
-    /** @since Qore 2.3 (HttpServer 1.6)
+    /** @since HttpServer 1.6
 
         @see send_timeout
     */
     *code send_callback;
 
     #! timeout for send_callback responses
-    /** @since Qore 2.3 (HttpServer 1.6)
+    /** @since HttpServer 1.6
 
         @see send_callback
     */

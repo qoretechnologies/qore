@@ -155,14 +155,14 @@ public namespace HttpServerAsyncIo {
         /** When set, the controller calls @ref Qore::Socket::sendHTTPResponseWithCallback()
             "sendHTTPResponseWithCallback()" with this callback instead of sending the body directly.
 
-            @since Qore 2.3 (HttpServerAsyncIo 1.0)
+            @since HttpServerAsyncIo 1.0
 
             @see send_timeout
         */
         *code send_callback;
 
         #! timeout for send_callback responses
-        /** @since Qore 2.3 (HttpServerAsyncIo 1.0)
+        /** @since HttpServerAsyncIo 1.0
 
             @see send_callback
         */

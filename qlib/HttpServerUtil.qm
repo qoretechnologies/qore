@@ -351,7 +351,7 @@ public hashdecl HttpResponseInfo {
     int code;
 
     #! the message body to return in the response
-    /** Can be a string or binary for regular (non-chunked) responses, or an @ref InputStream for
+    /** Can be a string or binary for regular responses, or an @ref InputStream for
         streaming/chunked responses. When set to an @ref InputStream, the response is automatically sent using
         chunked transfer encoding.
 
@@ -396,13 +396,13 @@ public hashdecl HttpResponseInfo {
 
     #! set to @ref True to indicate this is a streaming response (SSE or WebSocket)
     /** When this is set, the connection will be handled as a dedicated socket.
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
     */
     softbool streaming = False;
 
     #! the type of streaming connection: "sse" or "websocket"
     /** Only used when \c streaming is @ref True.
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
     */
     *string stream_type;
 
@@ -411,7 +411,7 @@ public hashdecl HttpResponseInfo {
         When @ref True, the server will not apply compression to the response body, even if the client accepts it and
         the body exceeds the compression threshold.
 
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
     */
     softbool no_content_encoding = False;
 
@@ -420,7 +420,7 @@ public hashdecl HttpResponseInfo {
         with this callback instead of sending the body directly. This preserves per-chunk record boundaries
         required by protocols like DataStream.
 
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
 
         @see send_timeout
     */
@@ -430,7 +430,7 @@ public hashdecl HttpResponseInfo {
     /** Used with @ref send_callback to set the send timeout for
         @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()".
 
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
 
         @see send_callback
     */
@@ -478,13 +478,13 @@ public hashdecl HttpHandlerResponseInfo {
 
     #! set to @ref True to indicate this is a streaming response (SSE or WebSocket)
     /** When this is set, the connection will be handled as a dedicated socket.
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
     */
     softbool streaming = False;
 
     #! the type of streaming connection: "sse" or "websocket"
     /** Only used when \c streaming is @ref True.
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
     */
     *string stream_type;
 
@@ -493,7 +493,7 @@ public hashdecl HttpHandlerResponseInfo {
         When @ref True, the server will not apply gzip, deflate, brotli, zstd, or bzip2 compression to the response
         body, even if the client accepts it and the body exceeds the compression threshold.
 
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
     */
     softbool no_content_encoding = False;
 
@@ -502,7 +502,7 @@ public hashdecl HttpHandlerResponseInfo {
         with this callback instead of sending the body directly. This preserves per-chunk record boundaries
         required by protocols like DataStream.
 
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
 
         @see send_timeout
     */
@@ -512,7 +512,7 @@ public hashdecl HttpHandlerResponseInfo {
     /** Used with @ref send_callback to set the send timeout for
         @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()".
 
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
 
         @see send_callback
     */
@@ -1482,9 +1482,9 @@ public class AbstractStreamRequest {
         The default implementation returns @ref True, meaning the server may compress the response body if the
         client supports it and the body exceeds the compression threshold.
 
-        @return @ref True if the server should apply content encoding, @ref False if the handler manages its own
+        @return @ref True if the server should apply content encoding, @ref False if the handler manages its own encoding
 
-        @since Qore 2.3 (HttpServerUtil 2.1)
+        @since HttpServerUtil 2.1
     */
     bool needsContentEncoding() {
         return True;
@@ -1708,7 +1708,7 @@ private logChunk(bool send, int size) {
     @note When the callback returns a hash (HTTP chunked trailers), it is treated as end-of-stream
     since the @ref Qore::InputStream API has no way to express HTTP trailers.
 
-    @since HttpServerUtil 1.2
+    @since HttpServerUtil 2.1
 */
 public class CallbackInputStream inherits InputStream {
     private {
