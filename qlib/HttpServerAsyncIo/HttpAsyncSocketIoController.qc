@@ -162,7 +162,11 @@ public class HttpAsyncSocketIoController {
         hash<string, int> accept_counts;
         int accept_seq = 0;
 
-        #! Reject HTTP/2 WebSocket CONNECT with 501
+        #! Reject HTTP/2 WebSocket CONNECT with 501; also enables multiplexed HTTP/2 request
+        #! handling where h2op stays on the I/O thread.  When False (default), all HTTP/2
+        #! requests use the legacy single-stream path where the handler gets exclusive h2op
+        #! access — this is a temporary restriction until streaming (SSE, chunked) and
+        #! InputStream responses are supported in multiplexed mode.
         bool reject_http2_websocket = False;
     }
 
@@ -579,6 +583,15 @@ public class HttpAsyncSocketIoController {
         string uh = sock.uniqueHash();
         # Ensure the accepted socket is closed on any unexpected exception
         on_error try { sock.close(); } catch () {}
+
+        # Check stopping flag — reject new connections during shutdown
+        {
+            AutoLock al(m);
+            if (stopping) {
+                try { sock.close(); } catch () {}
+                return;
+            }
+        }
 
         log(LoggerLevel::DEBUG, "Accept complete: %y (SSL: %y, HTTP/2: %y)", uh, output.ssl, output.is_http2);
         @debug {
@@ -1230,16 +1243,22 @@ public class HttpAsyncSocketIoController {
         }
 
         # Dispatch to thread pool so the I/O thread returns immediately
-        handler_pool.submit(sub () {
-            try {
-                hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
-                handleRequestResult(cinfo.sock, cinfo, cinfo.cx, result, cinfo.target);
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "Error handling keep-alive request: %s: %s", ex.err, ex.desc);
-                cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                try { cinfo.sock.close(); } catch () {}
-            }
-        });
+        try {
+            handler_pool.submit(sub () {
+                try {
+                    hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
+                    handleRequestResult(cinfo.sock, cinfo, cinfo.cx, result, cinfo.target);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "Error handling keep-alive request: %s: %s",
+                        ex.err, ex.desc);
+                    cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
+                    try { cinfo.sock.close(); } catch () {}
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Failed to submit handler for %y: %s: %s", uh, ex.err, ex.desc);
+            try { cinfo.sock.close(); } catch () {}
+        }
     }
 
     #! Handles the result of request processing
@@ -1421,7 +1440,15 @@ public class HttpAsyncSocketIoController {
     }
 
     #! Handles HTTP/2 request ready
-    /** @par h2op multiplexing model
+    /** Two modes of operation:
+
+        @par Legacy single-stream mode (default, \c reject_http2_websocket = \c False)
+        h2op is given exclusively to the handler thread.  This supports all response
+        types (streaming, InputStream, chunked, SSE) but restricts the connection to
+        one request at a time.  This is a @b temporary restriction until the multiplexed
+        path supports streaming and InputStream responses.
+
+        @par Multiplexed mode (\c reject_http2_websocket = \c True)
         h2op stays on the I/O thread at all times.  When a request completes:
         1. The I/O thread extracts the request data and immediately re-submits h2op
            for continued reading (via continueReading() + submitConnectionOp).
@@ -1433,7 +1460,8 @@ public class HttpAsyncSocketIoController {
 
         This allows true HTTP/2 multiplexing: multiple requests can be in flight
         concurrently on the same connection.  The handler thread pool provides
-        parallelism, and the I/O thread serializes socket I/O.
+        parallelism, and the I/O thread serializes socket I/O.  Streaming responses
+        (SSE, chunked) are not yet supported in this mode and are rejected with 501.
     */
     private handleHttp2RequestReady(string uh, hash<HttpActiveConnectionInfo> cinfo,
             Http2PollOperation h2op) {
@@ -1466,6 +1494,78 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
+        if (!reject_http2_websocket) {
+            # TEMPORARY: Legacy single-stream path — handler gets exclusive h2op access so all
+            # response types work (streaming, InputStream, chunked, SSE).  This will be removed
+            # once the multiplexed path below supports these response types.
+            log(LoggerLevel::DEBUG, "HTTP/2 request ready (legacy path): %y stream=%d %s %s",
+                uh, stream_id, request.method, request.path);
+
+            # Build header hash
+            hash<auto> hdr = request.headers;
+            hdr.method = request.method;
+            hdr.path = request.path;
+            hdr.":authority" = request.authority;
+            hdr.":scheme" = request.scheme;
+            hdr.host = request.authority;
+            hdr.http_version = "HTTP/2";
+
+            # Parse accept-encoding header for compression support
+            *list<string> accept_encoding;
+            if (hdr."accept-encoding") {
+                accept_encoding = map trim($1.split(";")[0]),
+                    hdr."accept-encoding".split(",");
+            }
+
+            # h2op is given to the handler exclusively — NOT returned to the I/O thread
+            hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
+                "sock": cinfo.sock,
+                "hdr": hdr,
+                "header_info": {
+                    "http2": True,
+                    "stream_id": stream_id,
+                    "accept-encoding": accept_encoding,
+                    "body": request.body,
+                },
+                "listener": cinfo.listener,
+                "cx": cinfo.cx,
+                "keep_alive": True,
+                "ssl": cinfo.sock.isSecure(),
+            };
+
+            # Dispatch to handler thread pool — handler has exclusive h2op access
+            try {
+                handler_pool.submit(sub () {
+                    try {
+                        hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
+                        handleHttp2RequestResult(h2op, cinfo, request, result);
+                    } catch (hash<ExceptionInfo> ex) {
+                        log(LoggerLevel::ERROR, "Error handling HTTP/2 request stream=%d: %s: %s",
+                            stream_id, ex.err, ex.desc);
+                        try {
+                            cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
+                        } catch () {}
+                        {
+                            AutoLock al(m);
+                            remove connections{uh};
+                        }
+                        try { cinfo.sock.close(); } catch () {}
+                    }
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Failed to submit HTTP/2 legacy handler for stream=%d "
+                    "on %y: %s: %s", stream_id, uh, ex.err, ex.desc);
+                {
+                    AutoLock al(m);
+                    remove connections{uh};
+                }
+                try { cinfo.sock.close(); } catch () {}
+            }
+            return;
+        }
+
+        # Multiplexed path: h2op stays on the I/O thread, handler sends response via
+        # submitHttp2Response() — supports true HTTP/2 multiplexing but not streaming
         log(LoggerLevel::DEBUG, "HTTP/2 request ready: %y stream=%d %s %s",
             uh, stream_id, request.method, request.path);
 
@@ -1514,19 +1614,25 @@ public class HttpAsyncSocketIoController {
         };
 
         # Dispatch to handler thread pool
-        handler_pool.submit(sub () {
-            try {
-                hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
-                handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "Error handling HTTP/2 request stream=%d: %s: %s",
-                    stream_id, ex.err, ex.desc);
+        try {
+            handler_pool.submit(sub () {
                 try {
-                    cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                } catch () {}
-                # Do NOT close the connection — h2op is still reading other streams
-            }
-        });
+                    hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
+                    handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "Error handling HTTP/2 request stream=%d: %s: %s",
+                        stream_id, ex.err, ex.desc);
+                    try {
+                        cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
+                    } catch () {}
+                    # Do NOT close the connection — h2op is still reading other streams
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Failed to submit HTTP/2 multiplexed handler for stream=%d "
+                "on %y: %s: %s", stream_id, uh, ex.err, ex.desc);
+            # h2op is still on the I/O thread reading — do not close the connection
+        }
     }
 
     #! Handles WebSocket CONNECT over HTTP/2 (RFC 8441)
@@ -1605,23 +1711,33 @@ public class HttpAsyncSocketIoController {
         };
 
         # Dispatch to handler thread pool — handler has exclusive h2op access
-        handler_pool.submit(sub () {
-            try {
-                hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
-                handleHttp2RequestResult(h2op, cinfo, request, result, True);
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "Error handling HTTP/2 WebSocket CONNECT stream=%d: %s: %s",
-                    stream_id, ex.err, ex.desc);
+        try {
+            handler_pool.submit(sub () {
                 try {
-                    cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                } catch () {}
-                {
-                    AutoLock al(m);
-                    remove connections{uh};
+                    hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
+                    handleHttp2RequestResult(h2op, cinfo, request, result, True);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "Error handling HTTP/2 WebSocket CONNECT stream=%d: "
+                        "%s: %s", stream_id, ex.err, ex.desc);
+                    try {
+                        cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
+                    } catch () {}
+                    {
+                        AutoLock al(m);
+                        remove connections{uh};
+                    }
+                    try { cinfo.sock.close(); } catch () {}
                 }
-                try { cinfo.sock.close(); } catch () {}
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Failed to submit HTTP/2 WebSocket handler for stream=%d "
+                "on %y: %s: %s", stream_id, uh, ex.err, ex.desc);
+            {
+                AutoLock al(m);
+                remove connections{uh};
             }
-        });
+            try { cinfo.sock.close(); } catch () {}
+        }
     }
 
     #! Handles the result of an HTTP/2 request (legacy path — kept for InputStream responses)
@@ -1730,6 +1846,11 @@ public class HttpAsyncSocketIoController {
     /** Called on a handler_pool worker thread.  h2op remains on the I/O thread
         reading frames.  Responses are sent via separate send operations submitted
         to the I/O controller, allowing multiple concurrent requests per connection.
+
+        @note Streaming responses (SSE, chunked) are not yet supported in this mode
+        and are temporarily rejected with 501.  Once streaming support is added here,
+        the legacy single-stream path in handleHttp2RequestReady() can be removed and
+        multiplexed mode can become the default.
     */
     private handleHttp2MultiplexedResult(string uh, hash<HttpActiveConnectionInfo> cinfo,
             int stream_id, hash<HttpRequestResultInfo> result) {
@@ -1803,7 +1924,8 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # Streaming modes (SSE) — not yet supported in multiplexed mode.
+        # TEMPORARY: Streaming modes (SSE, chunked) are not yet supported in multiplexed
+        # mode because the handler needs to drive h2op for ongoing data frames.
         # WebSocket CONNECT is handled separately via handleHttp2WebSocketConnect().
         # Send a 501 so the client can retry on a different connection.
         log(LoggerLevel::DEBUG, "HTTP/2 streaming response requested for stream=%d on %y "
