@@ -48,6 +48,14 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("immediate timeout", \immediateTimeoutTest());
         addTestCase("autostop", \autostopTest());
         addTestCase("debug closed socket log", \debugClosedSocketLogTest());
+        addTestCase("concurrent submit", \concurrentSubmitTest());
+        addTestCase("submit racing stop", \submitRacingStopTest());
+        addTestCase("cancel by key", \cancelByKeyTest());
+        addTestCase("callback mode concurrent", \callbackConcurrentTest());
+        addTestCase("shared socket custom keys", \sharedSocketCustomKeysTest());
+        addTestCase("callback exception safety", \callbackExceptionSafetyTest());
+        addTestCase("submit from callback", \submitFromCallbackTest());
+        addTestCase("addListener after stop", \addListenerAfterStopTest());
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("%Y\n", get_all_thread_call_stacks());
@@ -59,6 +67,12 @@ public class AsyncSocketIoTest inherits QUnit::Test {
     }
 
     setUp() {
+        # Clear any pending interrupt window from a previous test's tearDown() so that
+        # interruptibleSleep() will actually block in this test (otherwise a 2-second
+        # window from a prior interruptSleep(False) can cause Wait-Forever handlers to
+        # return immediately, leading to flaky cancel-by-owner assertions)
+        SimpleStringHandler::resetInterruptWindow();
+
         LoggerLevel lvl = m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo;
         logger = new Logger("test", lvl);
         if (m_options.verbose > 2) {
@@ -501,6 +515,375 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             }
             client.close();
         }
+    }
+
+    #! Tests concurrent submit from multiple threads
+    concurrentSubmitTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        int num_threads = 8;
+        Queue results();
+        Counter cnt(num_threads);
+
+        for (int i = 0; i < num_threads; ++i) {
+            int tid = i;
+            background sub () {
+                on_exit cnt.dec();
+                try {
+                    RestClient rest({"url": "http://127.0.0.1:" + port});
+                    AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+                    hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+                        "sock": rest,
+                        "spop": spop,
+                        "to": 10s,
+                        "owner": sprintf("concurrent-%d", tid),
+                    });
+                    results.push({"tid": tid, "ok": !info.ex});
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push({"tid": tid, "error": ex.err + ": " + ex.desc});
+                }
+            }();
+        }
+
+        cnt.waitForZero(15s);
+        int ok_count = 0;
+        while (results.size()) {
+            hash<auto> r = results.get();
+            if (r.ok) {
+                ++ok_count;
+            }
+        }
+        assertEq(num_threads, ok_count, "all concurrent submits should succeed");
+    }
+
+    #! Tests submit racing with stop — ensures no deadlock or crash
+    submitRacingStopTest() {
+        # Run multiple iterations to increase chance of hitting race windows
+        for (int iter = 0; iter < 5; ++iter) {
+            AsyncSocketIoController io_controller(logger);
+
+            # Submit several operations
+            list<Queue> queues;
+            list<AbstractPollOperation> ops;
+            for (int i = 0; i < 4; ++i) {
+                RestClient rest({"url": "http://127.0.0.1:" + port});
+                AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text",
+                    NOTHING, {"Wait-Forever": 1});
+                Queue q = io_controller.submit(<SocketPollOperationInfo>{
+                    "sock": rest,
+                    "spop": spop,
+                    "owner": sprintf("race-%d-%d", iter, i),
+                });
+                push queues, q;
+                push ops, spop;
+            }
+
+            # Stop from a background thread while main thread also calls cancelByOwner
+            Counter done(2);
+            background sub () {
+                on_exit done.dec();
+                io_controller.stop();
+            }();
+            background sub () {
+                on_exit done.dec();
+                # Try to cancel — may race with stop
+                try {
+                    io_controller.cancelByOwner(sprintf("race-%d-0", iter));
+                } catch () {
+                    # Expected if controller already stopped
+                }
+            }();
+
+            done.waitForZero(10s);
+
+            # Drain queues — all ops should have completed or been canceled
+            foreach Queue q in (queues) {
+                *hash<SocketPollResultInfo> info = q.get(2s);
+                assertTrue(exists info, sprintf("iter %d: all queued ops should deliver a result", iter));
+            }
+
+            foreach AbstractPollOperation op in (ops) {
+                op.abort();
+            }
+            SimpleStringHandler::interruptSleep(False);
+        }
+        assertTrue(True, "submit racing stop completed without deadlock");
+    }
+
+    #! Tests cancelByKey for operations with custom keys
+    cancelByKeyTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text",
+            NOTHING, {"Wait-Forever": 1});
+        string custom_key = "my-custom-key-1";
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "key": custom_key,
+            "owner": "custom-key-owner",
+        });
+
+        # cancel(sock) should NOT find it (different key)
+        bool found = io_controller.cancel(rest);
+        assertFalse(found, "cancel(sock) should not find custom-keyed operation");
+
+        # cancelByKey should find it
+        found = io_controller.cancelByKey(custom_key);
+        assertTrue(found, "cancelByKey should find the operation");
+
+        hash<SocketPollResultInfo> info = q.get(2s);
+        assertTrue(info.canceled, "operation should be canceled via cancelByKey");
+
+        # cancelByKey on non-existent key
+        found = io_controller.cancelByKey("non-existent-key");
+        assertFalse(found, "cancelByKey should return False for non-existent key");
+
+        spop.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    #! Tests callback mode with multiple concurrent completions
+    callbackConcurrentTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        int num_ops = 6;
+        Mutex cb_m();
+        list<hash<auto>> callback_results;
+        Counter cb_cnt(num_ops);
+
+        for (int i = 0; i < num_ops; ++i) {
+            RestClient rest({"url": "http://127.0.0.1:" + port});
+            AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+            io_controller.submit(<SocketPollOperationInfo>{
+                "sock": rest,
+                "spop": spop,
+                "to": 10s,
+                "owner": sprintf("cb-concurrent-%d", i),
+                "callback": code sub (hash<SocketPollResultInfo> result) {
+                    {
+                        AutoLock al(cb_m);
+                        push callback_results, {
+                            "index": i,
+                            "ok": !result.ex,
+                            "tid": gettid(),
+                        };
+                    }
+                    cb_cnt.dec();
+                },
+            });
+        }
+
+        cb_cnt.waitForZero(15s);
+        {
+            AutoLock al(cb_m);
+            assertEq(num_ops, callback_results.size(),
+                "all callback operations should complete");
+            int ok_count = (select callback_results, $1.ok).size();
+            assertEq(num_ops, ok_count, "all callbacks should report success");
+        }
+    }
+
+    #! Tests custom key operations with cancelByKey and cancelByOwner
+    sharedSocketCustomKeysTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        # Use separate sockets with custom keys under the same owner
+        # This tests that cancelByOwner works correctly with custom-keyed operations
+        RestClient rest1({"url": "http://127.0.0.1:" + port});
+        RestClient rest2({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop1 = rest1.startPollSendRecv("GET", "/api_text",
+            NOTHING, {"Wait-Forever": 1});
+        AbstractPollOperation spop2 = rest2.startPollSendRecv("GET", "/api_text",
+            NOTHING, {"Wait-Forever": 1});
+
+        string owner = "custom-key-owner";
+        Queue q1 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest1,
+            "spop": spop1,
+            "key": "custom:op:1",
+            "owner": owner,
+            "to": -1s,
+        });
+        Queue q2 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest2,
+            "spop": spop2,
+            "key": "custom:op:2",
+            "owner": owner,
+            "to": -1s,
+        });
+
+        # cancel(sock) should NOT find either — they have custom keys
+        assertFalse(io_controller.cancel(rest1), "cancel(sock) should miss custom-keyed op");
+
+        # cancelByOwner should cancel both
+        int canceled = io_controller.cancelByOwner(owner);
+        assertEq(2, canceled, "cancelByOwner should cancel both custom-keyed ops");
+
+        hash<SocketPollResultInfo> r1 = q1.get(5s);
+        hash<SocketPollResultInfo> r2 = q2.get(5s);
+        assertTrue(r1.canceled, "first custom-keyed op should be canceled");
+        assertTrue(r2.canceled, "second custom-keyed op should be canceled");
+
+        spop1.abort();
+        spop2.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    #! Tests that a throwing callback does not crash the I/O thread or double-deliver
+    callbackExceptionSafetyTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        Mutex cb_m();
+        int callback_count = 0;
+        Counter done(1);
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+        io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 10s,
+            "owner": "exception-safety-owner",
+            "callback": code sub (hash<SocketPollResultInfo> result) {
+                {
+                    AutoLock al(cb_m);
+                    ++callback_count;
+                }
+                done.dec();
+                # Throw from callback — must not cause double delivery or crash
+                throw "TEST-CALLBACK-ERROR", "intentional test exception";
+            },
+        });
+
+        done.waitForZero(10s);
+        usleep(200ms);  # Give time for any spurious re-delivery
+
+        {
+            AutoLock al(cb_m);
+            assertEq(1, callback_count, "callback should be invoked exactly once despite throwing");
+        }
+
+        # Verify the controller is still functional after a throwing callback
+        RestClient rest2({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop2 = rest2.startPollSendRecv("GET", "/api_text");
+        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+            "sock": rest2,
+            "spop": spop2,
+            "to": 10s,
+            "owner": "post-exception-owner",
+        });
+        assertFalse(exists info.ex, "controller should still work after callback exception");
+    }
+
+    #! Tests that submit() can be called from within a callback without deadlock
+    submitFromCallbackTest() {
+        AsyncSocketIoController ctrl(logger);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int listen_port = server.getSocketInfo().port;
+        on_exit server.close();
+
+        bool submit_ok = False;
+        Counter done(1);
+
+        AbstractPollOperation op = server.startPollAccept();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": server,
+            "spop": op,
+            "key": "submit-cb-accept-1",
+            "owner": "submit-cb-test",
+            "to": 5s,
+            "callback": sub (hash<SocketPollResultInfo> result) {
+                # Submit a new accept from within the callback — previously caused LOCK-ERROR
+                AbstractPollOperation op2 = server.startPollAccept();
+                ctrl.submit(<SocketPollOperationInfo>{
+                    "sock": server,
+                    "spop": op2,
+                    "key": "submit-cb-accept-2",
+                    "owner": "submit-cb-test",
+                    "to": 5s,
+                });
+                submit_ok = True;
+                done.dec();
+            },
+        });
+
+        # Connect a client to trigger the accept
+        Socket client();
+        client.connect("127.0.0.1:" + listen_port, 2s);
+        client.close();
+
+        done.waitForZero(5s);
+        assertTrue(submit_ok, "submit from callback should succeed without LOCK-ERROR");
+
+        ctrl.cancelByOwner("submit-cb-test");
+    }
+
+    #! Tests that addListener throws after the controller has been stopped
+    addListenerAfterStopTest() {
+        HttpAsyncSocketIoController ctrl(logger);
+        on_exit delete ctrl;
+
+        # Create a listener socket
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+
+        StubAsyncTarget target();
+
+        # Add a listener — should succeed
+        ctrl.addListener(listener, target);
+
+        # Stop the controller
+        ctrl.stop();
+
+        # Create a new listener socket
+        Socket listener2();
+        listener2.bind("127.0.0.1:0");
+        listener2.listen();
+        on_exit listener2.close();
+
+        # Adding a listener after stop should throw
+        assertThrows("CONTROLLER-ADD-LISTENER-ERROR", \ctrl.addListener(),
+            (listener2, target));
+    }
+}
+
+#! Stub implementation of HttpAsyncTarget for unit tests
+class StubAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
+    hash<HttpServerAsyncIo::HttpRequestResultInfo> onHttpRequest(
+            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
+    }
+
+    onIdleTimeout(Socket sock, object listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onSseDisconnect(Socket sock, object listener, hash<auto> cx) {
+    }
+
+    onWebSocketFrame(Socket sock, hash<HttpServerAsyncIo::WebSocketFrameInfo> frame,
+            object listener, hash<auto> cx) {
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx) {
     }
 }
 

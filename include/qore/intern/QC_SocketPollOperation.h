@@ -358,9 +358,10 @@ public:
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) {
         // NOTE: we do not close the socket here in any case
-        if (set_non_block) {
-            set_non_block = false;
-            sock->clearNonBlock();
+        if (set_non_block_accept) {
+            set_non_block_accept = false;
+            AutoLocker al(sock->priv->m);
+            sock->priv->clearNonBlockAccept();
             state = SPS_NONE;
         }
     }
@@ -368,7 +369,7 @@ public:
 protected:
     QoreSocketObject* sock = nullptr;
     int state = SPS_NONE;
-    bool set_non_block = false;
+    bool set_non_block_accept = false;
 
     DLLLOCAL virtual bool abortNeedsClose() const {
         return true;
@@ -381,8 +382,9 @@ public:
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
-            if (set_non_block) {
-                sock->clearNonBlock();
+            if (set_non_block_accept) {
+                AutoLocker al(sock->priv->m);
+                sock->priv->clearNonBlockAccept();
             }
             sock->deref(xsink);
             delete this;
@@ -686,6 +688,67 @@ private:
     SimpleRefHolder<BinaryNode> current_chunk;
 
     DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+};
+
+//! Fused send HTTP response + idle wait + read next HTTP header poll operation
+/** This operation combines three phases into a single poll operation:
+    1. SENDING: Non-blocking write of the HTTP response
+    2. IDLE: Wait for the next request (POLLIN) with a configurable timeout
+    3. READING_HEADER: Read and parse the next HTTP header
+
+    This eliminates the overhead of separate send, addIdleConnection, and header
+    read operations in the keep-alive path.
+
+    @since %Qore 2.3
+*/
+class SocketSendAndReadHeaderPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketSendAndReadHeaderPollOperation(ExceptionSink* xsink, BinaryNode* response_data,
+        QoreSocketObject* sock, int64 idle_timeout_ms);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const {
+        return phase == Phase::Complete || phase == Phase::Timeout;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const;
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreValue getOutput() const;
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Clear buffers to prevent memory accumulation on abort
+        send_data.discard();
+        header_output = nullptr;
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
+private:
+    enum class Phase { Sending, Idle, ReadingHeader, Complete, Timeout, Error };
+    Phase phase = Phase::Sending;
+
+    // Sending phase: holds the pre-serialized HTTP response
+    SimpleRefHolder<SimpleValueQoreNode> send_data;
+    const char* buf;
+    size_t size;
+
+    // Idle phase: timeout deadline in milliseconds from epoch
+    int64 idle_timeout_ms;
+
+    // Header reading phase: parsed HTTP headers output
+    mutable ReferenceHolder<QoreHashNode> header_output;
+
+    DLLLOCAL virtual bool abortNeedsClose() const {
+        return true;
+    }
 };
 
 DLLLOCAL QoreClass* initSocketPollOperationClass(QoreNamespace& qorens);

@@ -1574,6 +1574,7 @@ qore_user_module("qlib/MewsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/NetSuiteRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/ZohoBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/AwsRestClient.qm" "ConnectionProvider;RestClient;RestSchemaValidator")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/AsyncApiDataProvider" "AsyncApi;WebSocketClient;DataProvider")
@@ -1583,6 +1584,7 @@ qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestCli
 qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider" "webhook-logo.svg")
 qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;DataProvider" "elastic-logo.svg")
 qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;DataProvider" "Haltian-EmpathicBuilding.svg")
+qore_user_module("qlib/GeneratorDataProvider" "DataProvider" "generator-logo.svg")
 qore_user_module("qlib/MemcachedDataProvider" "DataProvider" "memcached-logo.svg")
 qore_user_module("qlib/MongoDbDataProvider" "DataProvider;ConnectionProvider" "mongodb-logo.svg")
 qore_user_module("qlib/RedisDataProvider" "DataProvider;ConnectionProvider" "redis-logo.svg")
@@ -1600,6 +1602,7 @@ qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;
 # base 9 modules
 qore_user_module("qlib/GoogleCalendarDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "google-calendar-logo.svg")
 qore_user_module("qlib/GmailDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "gmail-logo.svg")
+qore_user_module("qlib/ZohoBooksDataProvider" "ZohoBooksRestClient;RestClient;DataProvider" "zohobooks-logo.svg")
 
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
     if (DOXYGEN_FOUND)

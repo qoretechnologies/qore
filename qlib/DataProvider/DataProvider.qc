@@ -93,6 +93,7 @@ public class DataProvider {
             "ftpclient": "FtpClientDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
+            "generator": "GeneratorDataProvider",
             "gmail": "GmailDataProvider",
             "httpclient": "HttpClientDataProvider",
             "jotform": "JotformDataProvider",
@@ -149,6 +150,8 @@ public class DataProvider {
 
             # provided by the zip module
             "zip": "ZipDataProvider",
+
+            "zohobooks": "ZohoBooksDataProvider",
         };
 
         #! Map of known type path prefixes to modules

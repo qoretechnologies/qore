@@ -683,34 +683,10 @@ public hashdecl DataProviderRangeSpec {
     *int end;
 }
 
-#! Field accessor specification for DPQL
-/** Represents a single accessor operation (index, slice, or key access).
-
-    @since DataProvider 3.4
-*/
-public hashdecl DataProviderFieldAccessor {
-    #! Accessor type (one of the DPQL_ACCESSOR_* constants)
-    int type;
-    #! Accessor value
-    /** - For \c DPQL_ACCESSOR_INDEX: \c int (single index)
-        - For \c DPQL_ACCESSOR_SLICE: \c list<int|hash<DataProviderRangeSpec>> (indices and/or ranges)
-        - For \c DPQL_ACCESSOR_KEY: \c list<string> (key names)
-    */
-    auto value;
-}
-
 #! Data provider field reference
 public hashdecl DataProviderFieldReference {
     #! The name of the field being referenced
     string field;
-
-    #! Optional accessor chain for sophisticated data access
-    /** A list of accessors applied in sequence, e.g., \c \@items[0]{name} would have two accessors:
-        an index accessor and a key accessor.
-
-        @since DataProvider 3.4
-    */
-    *list<hash<DataProviderFieldAccessor>> accessors;
 }
 
 #! Data provider expression
@@ -1573,7 +1549,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "name": DP_EXPR_VALUE,
                     "display_name": "value",
                     "short_desc": "Evaluates and returns a field reference value",
-                    "desc": "Evaluates the given field reference (with optional accessors) and returns its value. "
+                    "desc": "Evaluates the given field reference and returns its value. "
                         "This allows field references to be used as standalone expressions.",
                     "symbol": "",
                     "args": (DataProviderSignatureAnyType,),
@@ -1581,6 +1557,98 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
                     return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                },
+            },
+            DP_FUNC_INDEX: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "role": ER_All,
+                    "name": DP_FUNC_INDEX,
+                    "display_name": "index",
+                    "short_desc": "Returns a single element from a list by index",
+                    "desc": "Returns a single element from a list by index; supports negative indices",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureIntType),
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                    int index = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                    if (value.typeCode() != NT_LIST) {
+                        throw "INVALID-OPERATION", sprintf("index accessor [%d] applied to non-list value of "
+                            "type %y", index, value.fullType());
+                    }
+                    int len = value.size();
+                    int idx = index >= 0 ? index : len + index;
+                    if (idx < 0 || idx >= len) {
+                        return NOTHING;
+                    }
+                    return value[idx];
+                },
+            },
+            DP_FUNC_SLICE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "role": ER_All,
+                    "name": DP_FUNC_SLICE,
+                    "display_name": "slice",
+                    "short_desc": "Returns a sub-list from a list by indices and/or ranges",
+                    "desc": "Returns a sub-list from a list by indices and/or ranges; supports negative indices "
+                        "and open-ended ranges",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "varargs": True,
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                    if (value.typeCode() != NT_LIST) {
+                        throw "INVALID-OPERATION", sprintf("slice accessor applied to non-list value of "
+                            "type %y", value.fullType());
+                    }
+                    int len = value.size();
+                    list<auto> result = ();
+                    for (int i = 1; i < exp.args.size(); ++i) {
+                        auto item = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[i]);
+                        if (item.typeCode() == NT_HASH) {
+                            hash<auto> range = item;
+                            int start = exists range.start
+                                ? (range.start >= 0 ? range.start : len + range.start) : 0;
+                            int end = exists range.end
+                                ? (range.end >= 0 ? range.end : len + range.end) : len - 1;
+                            if (start < 0) start = 0;
+                            if (end >= len) end = len - 1;
+                            for (int j = start; j <= end; ++j) {
+                                result += value[j];
+                            }
+                        } else {
+                            int idx = item >= 0 ? item : len + item;
+                            if (idx >= 0 && idx < len) {
+                                result += value[idx];
+                            }
+                        }
+                    }
+                    return result;
+                },
+            },
+            DP_FUNC_KEY: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "role": ER_All,
+                    "name": DP_FUNC_KEY,
+                    "display_name": "key",
+                    "short_desc": "Returns hash values by key",
+                    "desc": "Returns hash values by one or more keys; for a single key returns the value directly; "
+                        "for multiple keys returns a hash subset; when applied to a list, maps over each element",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureStringType),
+                    "varargs": True,
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                    list<string> key_list = ();
+                    for (int i = 1; i < exp.args.size(); ++i) {
+                        key_list += AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[i]);
+                    }
+                    return AbstractDataProvider::applyKeyAccessorImpl(value, key_list);
                 },
             },
         };
@@ -2080,6 +2148,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return searchFirstRecord(options.where_cond, options - "where_cond");
     }
 
+    #! Returns the first record matching the DPQL search expression
+    /** @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @throw INVALID-OPERATION the data provider does not support reading
+        @throw NO-DATA the \c required_result search option was set and no record was found
+
+        @since DataProvider 3.5
+    */
+    *hash<auto> searchFirstRecord(string dpql_where, *hash<auto> search_options) {
+        return searchFirstRecord(DataProvider::parseDpqlExpression(dpql_where), search_options);
+    }
+
     #! Returns the first record matching the search options
     /** @param where_cond the search criteria; will be processed by processSearchParameters()
         @param search_options the search options; will be processed by validateSearchOptions()
@@ -2127,6 +2208,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<auto> searchSingleRecordWithOptions(*hash<auto> options) {
         return searchSingleRecord(options.where_cond, options - "where_cond");
+    }
+
+    #! Returns a single record matching the DPQL search expression
+    /** @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @throw INVALID-OPERATION the data provider does not support reading
+        @throw MULTIPLE-RECORDS-ERROR multiple records found
+        @throw NO-DATA the \c required_result search option was set and no record was found
+
+        @since DataProvider 3.5
+    */
+    *hash<auto> searchSingleRecord(string dpql_where, *hash<auto> search_options) {
+        return searchSingleRecord(DataProvider::parseDpqlExpression(dpql_where), search_options);
     }
 
     #! Returns a single record matching the search options
@@ -2206,6 +2301,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return searchRecordsBulk(options.block_size, options.where_cond, options - ("block_size", "where_cond"));
     }
 
+    #! Returns an iterator for zero or more records matching the DPQL search expression
+    /** @param block_size the number of records in a read block; must be a positive number
+        @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @return a bulk record interface object that will return the records in bulk format
+
+        @throw INVALID-BLOCK-SIZE the block size must be a positive number
+        @throw INVALID-OPERATION the data provider does not support reading
+
+        @since DataProvider 3.5
+    */
+    AbstractDataProviderBulkRecordInterface searchRecordsBulk(int block_size = 1000,
+            string dpql_where, *hash<auto> search_options) {
+        return searchRecordsBulk(block_size, DataProvider::parseDpqlExpression(dpql_where), search_options);
+    }
+
     #! Returns an iterator for zero or more records matching the search options
     /** @param block_size the number of records in a read block; must be a positive number
         @param where_cond the search criteria; will be processed by processSearchParameters()
@@ -2260,6 +2372,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     AbstractDataProviderRecordIterator searchRecordsWithOptions(*hash<auto> options) {
         return searchRecords(options.where_cond, options - "where_cond");
+    }
+
+    #! Returns an iterator for zero or more records matching the DPQL search expression
+    /** @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @throw INVALID-OPERATION the data provider does not support reading
+
+        @since DataProvider 3.5
+    */
+    AbstractDataProviderRecordIterator searchRecords(string dpql_where, *hash<auto> search_options) {
+        return searchRecords(DataProvider::parseDpqlExpression(dpql_where), search_options);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -2397,6 +2521,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return updateRecords(options.set, options.where_cond, options - ("set", "where_cond"));
     }
 
+    #! Updates zero or more records matching the DPQL search expression
+    /** @param set the hash of field data to set
+        @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @return the number of records updated
+
+        @throw INVALID-OPERATION the data provider does not support record updating
+        @throw UPDATE-RECORDS-ERROR error updating records
+
+        @since DataProvider 3.5
+    */
+    int updateRecords(hash<auto> set, string dpql_where, *hash<auto> search_options) {
+        return updateRecords(set, DataProvider::parseDpqlExpression(dpql_where), search_options);
+    }
+
     #! Updates zero or more records matching the search options
     /** @param set the hash of field data to set
         @param where_cond a hash for identifying the record(s) to be updated; will be processed by
@@ -2464,6 +2604,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     int deleteRecordsWithOptions(*hash<auto> options) {
         return deleteRecords(options.where_cond, options - "where_cond");
+    }
+
+    #! Deletes zero or more records matching the DPQL search expression
+    /**
+        @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @return the number of records deleted
+
+        @throw INVALID-OPERATION the data provider does not support record deletion
+        @throw DELETE-RECORDS-ERROR error deleting records
+
+        @since DataProvider 3.5
+    */
+    int deleteRecords(string dpql_where, *hash<auto> search_options) {
+        return deleteRecords(DataProvider::parseDpqlExpression(dpql_where), search_options);
     }
 
     #! Deletes zero or more records
@@ -4425,10 +4581,6 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 }
                 rv = new_rv;
             }
-            # Apply accessor chain if present
-            if (val.accessors) {
-                rv = AbstractDataProvider::applyAccessorChain(rv, val.accessors, val.field);
-            }
             return rv;
         }
         if (val instanceof hash<DataProviderExpression>) {
@@ -4437,134 +4589,27 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return val;
     }
 
-    #! Applies an accessor chain to a value
-    /** @param value the value to access
-        @param accessors the list of accessors to apply
-        @param field_name the original field name for error messages
-
-        @return the accessed value
-
-        @since DataProvider 3.4
-    */
-    static auto applyAccessorChain(auto value, list<hash<DataProviderFieldAccessor>> accessors, string field_name) {
-        auto rv = value;
-        foreach hash<DataProviderFieldAccessor> acc in (accessors) {
-            rv = AbstractDataProvider::applySingleAccessor(rv, acc, field_name);
-        }
-        return rv;
-    }
-
-    #! Applies a single accessor to a value
-    /** @param value the value to access
-        @param acc the accessor to apply
-        @param field_name the original field name for error messages
-
-        @return the accessed value
-
-        @since DataProvider 3.4
-    */
-    static auto applySingleAccessor(auto value, hash<DataProviderFieldAccessor> acc, string field_name) {
-        switch (acc.type) {
-            case DPQL_ACCESSOR_INDEX:
-                return AbstractDataProvider::applyIndexAccessor(value, acc.value, field_name);
-            case DPQL_ACCESSOR_SLICE:
-                return AbstractDataProvider::applySliceAccessor(value, acc.value, field_name);
-            case DPQL_ACCESSOR_KEY:
-                return AbstractDataProvider::applyKeyAccessor(value, acc.value, field_name);
-            default:
-                throw "INVALID-OPERATION", sprintf("unknown accessor type %d in field reference %y",
-                    acc.type, field_name);
-        }
-    }
-
-    #! Applies an index accessor to a value
-    /** @param value the value to access (must be a list)
-        @param index the index to access (supports negative indices)
-        @param field_name the original field name for error messages
-
-        @return the accessed element, or NOTHING if out of bounds
-
-        @since DataProvider 3.4
-    */
-    static auto applyIndexAccessor(auto value, int index, string field_name) {
-        if (value.typeCode() != NT_LIST) {
-            throw "INVALID-OPERATION", sprintf("index accessor [%d] applied to non-list value of type %y "
-                "in field reference %y", index, value.fullType(), field_name);
-        }
-        int len = value.size();
-        # Normalize negative index
-        int idx = index >= 0 ? index : len + index;
-        # Return NOTHING for out-of-bounds (graceful)
-        if (idx < 0 || idx >= len) {
-            return NOTHING;
-        }
-        return value[idx];
-    }
-
-    #! Applies a slice accessor to a value
-    /** @param value the value to access (must be a list)
-        @param items the slice specification (indices and/or ranges)
-        @param field_name the original field name for error messages
-
-        @return the sliced list
-
-        @since DataProvider 3.4
-    */
-    static auto applySliceAccessor(auto value, list<auto> items, string field_name) {
-        if (value.typeCode() != NT_LIST) {
-            throw "INVALID-OPERATION", sprintf("slice accessor applied to non-list value of type %y "
-                "in field reference %y", value.fullType(), field_name);
-        }
-        int len = value.size();
-        list<auto> result = ();
-
-        foreach auto item in (items) {
-            if (item.typeCode() == NT_HASH) {
-                # Range specification
-                hash<auto> range = item;
-                int start = exists range.start ? (range.start >= 0 ? range.start : len + range.start) : 0;
-                int end = exists range.end ? (range.end >= 0 ? range.end : len + range.end) : len - 1;
-                # Clamp to valid range
-                if (start < 0) start = 0;
-                if (end >= len) end = len - 1;
-                # Inclusive range
-                for (int i = start; i <= end; ++i) {
-                    result += value[i];
-                }
-            } else {
-                # Single index
-                int idx = item >= 0 ? item : len + item;
-                if (idx >= 0 && idx < len) {
-                    result += value[idx];
-                }
-            }
-        }
-
-        return result;
-    }
-
-    #! Applies a key accessor to a value
-    /** @param value the value to access (must be a hash)
-        @param keys the keys to access
-        @param field_name the original field name for error messages
+    #! Applies key access to a value (used by DP_FUNC_KEY expression operator)
+    /** @param value the value to access (must be a hash, or a list to map over)
+        @param key_list the keys to access
 
         @return for a single key, the value; for multiple keys, a hash subset
 
         @since DataProvider 3.4
     */
-    static auto applyKeyAccessor(auto value, list<string> key_list, string field_name) {
+    static auto applyKeyAccessorImpl(auto value, list<string> key_list) {
         # Handle list values by mapping key accessor over each element
         # Use push to preserve nesting (avoid flattening nested lists)
         if (value.typeCode() == NT_LIST) {
             list<auto> result = ();
             foreach auto elem in (value) {
-                push result, applyKeyAccessor(elem, key_list, field_name);
+                push result, applyKeyAccessorImpl(elem, key_list);
             }
             return result;
         }
         if (value.typeCode() != NT_HASH && value.typeCode() != NT_OBJECT) {
-            throw "INVALID-OPERATION", sprintf("key accessor applied to non-hash value of type %y "
-                "in field reference %y", value.fullType(), field_name);
+            throw "INVALID-OPERATION", sprintf("key accessor applied to non-hash value of type %y",
+                value.fullType());
         }
         if (key_list.size() == 1) {
             # Single key: return value directly

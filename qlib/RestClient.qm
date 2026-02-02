@@ -491,6 +491,8 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 
         #! Option requirements per OAuth2 grant type
         /** @note the \c authorization_code grant type cannot be handled automatically
+            @note the \c implicit grant type returns the token directly in the redirect URL fragment,
+            so no token URL is required
         */
         const OAuth2GrantOptions = {
             "authorization_code": (
@@ -499,6 +501,11 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
                 "oauth2_client_secret",
                 "oauth2_redirect_url",
                 "oauth2_token_url",
+            ),
+            "implicit": (
+                "oauth2_auth_url",
+                "oauth2_client_id",
+                "oauth2_redirect_url",
             ),
             "client_credentials": (
                 "oauth2_client_id",
@@ -1751,7 +1758,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         if (custom_token_auth) {
             return customGetTokenIntern(\info);
         }
-        if (oauth2_grant_type == "authorization_code") {
+        if (oauth2_grant_type == "authorization_code" || oauth2_grant_type == "implicit") {
             throw "REST-TOKEN-ERROR", sprintf("The current token is invalid; no refresh token is in place, and the "
                 "grant type is %y", oauth2_grant_type);
         }
@@ -2287,9 +2294,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     /** @since %RestClient 2.0
     */
     private hash<auto> getOAuth2LoginInfo(string grant_type) {
-        if (grant_type == "authorization_code") {
-            throw "OAUTH2-ERROR", "This connection is using the 'authorization_code' grant type and must be manually "
-                "authorized before it can be used";
+        if (grant_type == "authorization_code" || grant_type == "implicit") {
+            throw "OAUTH2-ERROR", sprintf("This connection is using the '%s' grant type and must be manually "
+                "authorized before it can be used", grant_type);
         }
         hash<auto> login = {
             "client_id": oauth2_client_id,
@@ -2874,6 +2881,14 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                                 "`oauth2_auth_url` must be set to inform external code where to request "
                                 "authorization from the external authorization server",
                         }, <AllowedValueInfo>{
+                            "value": "implicit",
+                            "desc": "OAuth2 2.0 implicit grant "
+                                "([RFC 6749 implicit grant]"
+                                "(https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); this grant type "
+                                "returns the access token directly in the redirect URL fragment without a code "
+                                "exchange step; requires external user authorization; the `oauth2_auth_url` must "
+                                "be set; no `oauth2_token_url` is required",
+                        }, <AllowedValueInfo>{
                             "value": "client_credentials",
                             "desc": "OAuth2 2.0 client credentials grant "
                                 "([RFC 6749 client credentials grant]"
@@ -2987,6 +3002,16 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "type": "bool",
                     "desc": "Use basic authorization with the client ID and client secret when making token "
                         "requests",
+                },
+                "oauth2_redirect_passthrough_state": <ConnectionOptionInfo>{
+                    "display_name": "OAuth2 Redirect Passthrough State?",
+                    "short_desc": "If False, embed state in redirect_uri for non-compliant OAuth2 providers",
+                    "type": "bool",
+                    "default_value": True,
+                    "desc": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the "
+                        "authorization server. Some providers (like Trello) do not pass through the state "
+                        "parameter. Set this to False to embed the state in the redirect_uri as a workaround "
+                        "for non-compliant providers. Default: True (spec-compliant behavior).",
                 },
                 "openapi3": <ConnectionOptionInfo>{
                     "display_name": "OpenApi 3 Schema",
@@ -3137,12 +3162,22 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         #! object connection option list
         const OptionList = keys ConnectionScheme.options;
 
-        #! Options required for an OAuth2 authorization request
+        #! Options required for an OAuth2 authorization_code authorization request
         const OAuth2AuthRequestOptions = (
             "oauth2_auth_url",
             "oauth2_token_url",
             "oauth2_client_id",
             "oauth2_client_secret",
+            "oauth2_redirect_url",
+        );
+
+        #! Options required for an OAuth2 implicit authorization request
+        /** @note oauth2_token_url and oauth2_client_secret are not required for implicit grant
+            since the token is returned directly in the URL fragment
+        */
+        const OAuth2ImplicitAuthRequestOptions = (
+            "oauth2_auth_url",
+            "oauth2_client_id",
             "oauth2_redirect_url",
         );
 
@@ -3156,8 +3191,10 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             "oauth2_auth_url",
             "oauth2_client_id",
             "oauth2_client_secret",
+            "oauth2_grant_type",
             "oauth2_pkce",
             "oauth2_redirect_url",
+            "oauth2_redirect_passthrough_state",
             "oauth2_refresh_token",
             "oauth2_scopes",
             "oauth2_token_args",
@@ -3175,6 +3212,21 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             flow
         */
         const RCF_OAUTH2_AUTH_CODE = "oauth2-auth-code";
+
+        #! RestClient feature: OAuth2 Implicit Grant support
+        /** Returned as a connection feature if the connection is configured for the oauth2 implicit grant flow
+
+            @since %RestClient 2.3.3
+        */
+        const RCF_OAUTH2_IMPLICIT = "oauth2-implicit";
+
+        #! RestClient feature: OAuth2 Authorization support (any grant type requiring user authorization)
+        /** Returned as a connection feature if the connection is configured for oauth2 authorization_code or
+            implicit grant flow
+
+            @since %RestClient 2.3.3
+        */
+        const RCF_OAUTH2_AUTH = "oauth2-auth";
 
         #! Validator options
         const ValOpts = (
@@ -3257,8 +3309,9 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         @since RestClient 2.2
     */
     bool needsAuth() {
-        return needs_auth || (opts.oauth2_grant_type == "authorization_code"
-            && (!opts.token.val() || (opts.oauth2_token_expiry > now_us()))
+        return needs_auth || ((opts.oauth2_grant_type == "authorization_code"
+                || opts.oauth2_grant_type == "implicit")
+            && (!opts.token.val() || (opts.oauth2_token_expiry && now_us() > opts.oauth2_token_expiry))
             && (!opts.oauth2_refresh_token.val() || !opts.oauth2_auto_refresh));
     }
 
@@ -3276,6 +3329,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     hash<auto> getExtendedInfo(*hash<auto> opts) {
         return AbstractConnection::getExtendedInfo(opts) + {
             "oauth2_auth_code": features{RCF_OAUTH2_AUTH_CODE} ? True : False,
+            "oauth2_implicit": features{RCF_OAUTH2_IMPLICIT} ? True : False,
+            "oauth2_auth": features{RCF_OAUTH2_AUTH} ? True : False,
         };
     }
 
@@ -3292,6 +3347,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     hash<auto> getExtendedInfoAsData(*hash<auto> opts) {
         return AbstractConnection::getExtendedInfoAsData(opts) + {
             "oauth2_auth_code": features{RCF_OAUTH2_AUTH_CODE} ? True : False,
+            "oauth2_implicit": features{RCF_OAUTH2_IMPLICIT} ? True : False,
+            "oauth2_auth": features{RCF_OAUTH2_AUTH} ? True : False,
         };
     }
 
@@ -3300,7 +3357,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         @since RestClient 2.2
     */
     authFailure() {
-        if (!needs_auth && opts.oauth2_grant_type == "authorization_code") {
+        if (!needs_auth && (opts.oauth2_grant_type == "authorization_code"
+                || opts.oauth2_grant_type == "implicit")) {
             needs_auth = True;
         }
     }
@@ -3310,7 +3368,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         @since RestClient 2.2
     */
     authSuccess() {
-        if (needs_auth && opts.oauth2_grant_type == "authorization_code") {
+        if (needs_auth && (opts.oauth2_grant_type == "authorization_code"
+                || opts.oauth2_grant_type == "implicit")) {
             remove needs_auth;
         }
     }
@@ -3483,26 +3542,36 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         return rv;
     }
 
-    #! Returns a URI for an authorization code request
-    /** The \c oauth2_grant_type must be \c authorization_code, and \c oauth2_client_id, \c oauth2_auth_url,
-        \c oauth2_redirect_url must set if the \c redirect_uri option is not used
+    #! Returns a URI for an OAuth2 authorization request
+    /** The \c oauth2_grant_type must be \c authorization_code or \c implicit.
 
-        @param info context information for the authorization code request; the PKCE verifier must be set by the
+        For \c authorization_code: \c oauth2_client_id, \c oauth2_auth_url, \c oauth2_token_url,
+        \c oauth2_client_secret, and \c oauth2_redirect_url must be set.
+
+        For \c implicit: \c oauth2_client_id, \c oauth2_auth_url, and \c oauth2_redirect_url must be set.
+        The \c oauth2_token_url and \c oauth2_client_secret are not required for implicit grant since the
+        token is returned directly in the URL fragment.
+
+        @param info context information for the authorization request; the PKCE verifier must be set by the
         caller if the \c oauth2_pkce option is set to a value other than \c none; the @ref generatePkceChallenge()
         method can be used to generate a valid verifier value
 
         @since %RestClient 2.0
     */
     string getAuthorizationCodeRequest(hash<AuthCodeInfo> info = <AuthCodeInfo>{}) {
-        if (opts.oauth2_grant_type != "authorization_code") {
-            throw "OAUTH2-ERROR", sprintf("oauth2_grant_type is %y; must be \"authorization_code\" to get an "
-                "authorization code request URI", opts.oauth2_grant_type);
+        if (opts.oauth2_grant_type != "authorization_code" && opts.oauth2_grant_type != "implicit") {
+            throw "OAUTH2-ERROR", sprintf("oauth2_grant_type is %y; must be \"authorization_code\" or \"implicit\" "
+                "to get an authorization request URI", opts.oauth2_grant_type);
         }
-        foreach string key in (OAuth2AuthRequestOptions) {
+        # Use appropriate options list based on grant type
+        list<string> req_opts = opts.oauth2_grant_type == "implicit"
+            ? OAuth2ImplicitAuthRequestOptions
+            : OAuth2AuthRequestOptions;
+        foreach string key in (req_opts) {
             string optname = getOAuth2OptionName(key);
             if (!opts{optname}.val()) {
                 throw "OAUTH2-ERROR", sprintf("option %y is not set; this option must be set to retrieve an "
-                    "authorization code request URI", optname);
+                    "authorization request URI", optname);
             }
         }
         # get local names for options
@@ -3518,12 +3587,59 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         } else {
             uri += "?";
         }
+        # For implicit grant, response_type should be "token" per RFC 6749 section 4.2.1
+        # Default to "token" if the caller hasn't explicitly set a different value
+        string response_type = info.response_type;
+        if (opts.oauth2_grant_type == "implicit" && response_type == "code") {
+            response_type = "token";
+        }
+        # For implicit grant with non-compliant providers, embed state in the redirect_uri
+        # since some providers (like Trello) don't pass through the state parameter.
+        # This is controlled by oauth2_redirect_passthrough_state option (default: True = spec-compliant)
+        string redirect_uri = info.redirect_uri ?? opts.oauth2_redirect_url;
+        bool embed_state = opts.oauth2_grant_type == "implicit"
+            && !(opts.oauth2_redirect_passthrough_state ?? True);
+        if (embed_state && info.state) {
+            # Append state as a query parameter to the redirect_uri (URL-encoded for safety)
+            string encoded_state = encode_url(info.state, True);
+            if (redirect_uri =~ /\?/) {
+                redirect_uri += "&state=" + encoded_state;
+            } else {
+                redirect_uri += "?state=" + encoded_state;
+            }
+        }
         uri += sprintf("scope=%s&redirect_uri=%s&client_id=%s&response_type=%s", scope,
-            encode_url(info.redirect_uri ?? opts.oauth2_redirect_url, True), opts{oauth2_client_id_opt},
-            info.response_type);
-        # add any optional auth args
-        map uri += sprintf("&%s=%s", $1.key, getUriValue($1.value, real_opts.oauth2_scope_separator_char)),
-            opts.oauth2_auth_args.pairIterator();
+            encode_url(redirect_uri, True), opts{oauth2_client_id_opt},
+            response_type);
+        # For implicit grant, also add return_url since some providers (like Trello) use that instead of redirect_uri
+        if (opts.oauth2_grant_type == "implicit") {
+            uri += sprintf("&return_url=%s", encode_url(redirect_uri, True));
+        }
+        # add any optional auth args (skip return_url if we already added it for implicit grant)
+        foreach hash<auto> arg in (opts.oauth2_auth_args.pairIterator()) {
+            if (opts.oauth2_grant_type == "implicit" && arg.key == "return_url") {
+                continue;
+            }
+            # Handle template substitution for oauth2_auth_args values
+            # Template format: {{option_name}} - substitutes with the option value
+            auto val = arg.value;
+            if (val.typeCode() == NT_STRING) {
+                # Check for {{option_name}} template pattern
+                *list<*string> match = (val =~ x/^\{\{(\w+)\}\}$/);
+                if (match) {
+                    string opt_name = match[0];
+                    # Try to get the option value (check both with and without oauth2_ prefix)
+                    if (opts{opt_name}.val()) {
+                        val = opts{opt_name};
+                    } else if (opts{"oauth2_" + opt_name}.val()) {
+                        val = opts{"oauth2_" + opt_name};
+                    }
+                }
+            }
+            uri += sprintf("&%s=%s", arg.key, getUriValue(val, real_opts.oauth2_scope_separator_char));
+        }
+        # Always add state as a separate parameter per RFC 6749 for CSRF protection
+        # For implicit grant with non-compliant providers, state is also embedded in redirect_uri above
         if (info.state) {
             uri += sprintf("&state=%s", info.state);
         }
@@ -3631,7 +3747,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         if ((opts.oauth2_grant_type && opts.oauth2_grant_type != "none") || (opts.custom_token_auth)) {
             features{CF_UPDATE_OPTIONS} = True;
         }
-        if (opts.oauth2_grant_type == "authorization_code") {
+        if (opts.oauth2_grant_type == "authorization_code" || opts.oauth2_grant_type == "implicit") {
             checkAuthCodeFeature();
         }
     }
@@ -3659,7 +3775,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 }
 
                 switch (opts.oauth2_grant_type) {
-                    case "authorization_code": {
+                    case "authorization_code":
+                    case "implicit": {
                         if (!opts.token && (!opts.oauth2_refresh_token || !opts.oauth2_auto_refresh)) {
                             throw "OAUTH2-ERROR", sprintf("connection %y uses OAuth2 grant type %y but is not yet "
                                 "authorized to communicate with the server", name, opts.oauth2_grant_type);
@@ -3758,10 +3875,23 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         return new_opts;
     }
 
-    #! Sets the auth code feature if supported
+    #! Sets the OAuth2 authorization features if supported
+    /** Sets the appropriate feature flags based on grant type:
+        - \c RCF_OAUTH2_AUTH_CODE for authorization_code grant
+        - \c RCF_OAUTH2_IMPLICIT for implicit grant
+        - \c RCF_OAUTH2_AUTH for either grant type (general authorization support)
+
+        @since %RestClient 2.3.3 added RCF_OAUTH2_IMPLICIT and RCF_OAUTH2_AUTH features
+    */
     private checkAuthCodeFeature() {
-        if (opts{OAuth2AuthRequestOptions}.size() == OAuth2AuthRequestOptions.size()) {
+        if (opts.oauth2_grant_type == "authorization_code"
+                && opts{OAuth2AuthRequestOptions}.size() == OAuth2AuthRequestOptions.size()) {
             features{RCF_OAUTH2_AUTH_CODE} = True;
+            features{RCF_OAUTH2_AUTH} = True;
+        } else if (opts.oauth2_grant_type == "implicit"
+                && opts{OAuth2ImplicitAuthRequestOptions}.size() == OAuth2ImplicitAuthRequestOptions.size()) {
+            features{RCF_OAUTH2_IMPLICIT} = True;
+            features{RCF_OAUTH2_AUTH} = True;
         }
     }
 

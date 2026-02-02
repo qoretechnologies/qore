@@ -1,0 +1,865 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/GeneratorDataProvider
+
+%try-module process
+%define NoProcess
+%endtry
+
+%exec-class PipelineMemoryTest
+
+#! Simple passthrough processor that forwards records without accumulation
+class PassthroughProcessor inherits DataProvider::AbstractDataProcessor {
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        enqueue(_data);
+    }
+}
+
+#! Processor that transforms records without accumulating data
+class TransformProcessor inherits DataProvider::AbstractDataProcessor {
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        if (_data.typeCode() == NT_HASH) {
+            enqueue(_data + {"processed": True});
+        } else {
+            enqueue(_data);
+        }
+    }
+}
+
+#! Metrics collector that takes periodic memory snapshots during pipeline execution
+class MemorySnapshotCollector inherits DataProvider::AbstractPipelineMetricsCollector {
+    public {
+        #! Memory snapshots taken during pipeline execution: list of {rss, vsz, records, threads}
+        list<hash<auto>> snapshots();
+
+        #! Whether shutdown was called
+        bool shutdown_called = False;
+    }
+
+    private {
+        #! Record interval for snapshot collection
+        int record_interval;
+    }
+
+    constructor(int record_interval = 10000) {
+        self.record_interval = record_interval;
+    }
+
+    int getIntervalMs() {
+        return 0;
+    }
+
+    int getRecordInterval() {
+        return record_interval;
+    }
+
+    reportMetrics(hash<DataProvider::PipelineMetricsSnapshot> snapshot) {
+%ifndef NoProcess
+        hash<auto> mem = Process::getMemorySummaryInfo();
+        push snapshots, {
+            "rss": mem.rss,
+            "vsz": mem.vsz,
+            "records_submitted": snapshot.total_records_submitted,
+            "records_completed": snapshot.total_records_completed,
+            "threads": num_threads(),
+            "time": now_us(),
+        };
+%endif
+    }
+
+    shutdown() {
+        shutdown_called = True;
+    }
+}
+
+#! Lightweight metrics collector that discards snapshot data -- tests pure collection overhead
+class LightweightMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollector {
+    public {
+        #! Number of times reportMetrics was called
+        int callback_count = 0;
+
+        #! Whether shutdown was called
+        bool shutdown_called = False;
+    }
+
+    private {
+        int record_interval;
+        int interval_ms;
+    }
+
+    constructor(int record_interval = 1000, int interval_ms = 0) {
+        self.record_interval = record_interval;
+        self.interval_ms = interval_ms;
+    }
+
+    int getIntervalMs() {
+        return interval_ms;
+    }
+
+    int getRecordInterval() {
+        return record_interval;
+    }
+
+    reportMetrics(hash<DataProvider::PipelineMetricsSnapshot> snapshot) {
+        ++callback_count;
+    }
+
+    shutdown() {
+        shutdown_called = True;
+    }
+}
+
+#! Metrics collector that retains all snapshots -- tests accumulation memory impact
+class AccumulatingMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollector {
+    public {
+        #! All received snapshots
+        list<hash<DataProvider::PipelineMetricsSnapshot>> snapshots();
+
+        #! Whether shutdown was called
+        bool shutdown_called = False;
+    }
+
+    private {
+        int record_interval;
+    }
+
+    constructor(int record_interval = 1000) {
+        self.record_interval = record_interval;
+    }
+
+    int getIntervalMs() {
+        return 0;
+    }
+
+    int getRecordInterval() {
+        return record_interval;
+    }
+
+    reportMetrics(hash<DataProvider::PipelineMetricsSnapshot> snapshot) {
+        push snapshots, snapshot;
+    }
+
+    shutdown() {
+        shutdown_called = True;
+    }
+}
+
+#! Metrics collector that simulates slow callback processing (e.g., event posting)
+class SlowMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollector {
+    public {
+        #! Number of times reportMetrics was called
+        int callback_count = 0;
+
+        #! Maximum concurrent threads observed during callbacks
+        int max_threads = 0;
+
+        #! Whether shutdown was called
+        bool shutdown_called = False;
+    }
+
+    private {
+        int record_interval;
+        int delay_us;
+    }
+
+    #! @param record_interval record interval for reporting
+    #! @param delay_ms delay in milliseconds to simulate slow callback work
+    constructor(int record_interval = 1000, int delay_ms = 10) {
+        self.record_interval = record_interval;
+        self.delay_us = delay_ms * 1000;
+    }
+
+    int getIntervalMs() {
+        return 0;
+    }
+
+    int getRecordInterval() {
+        return record_interval;
+    }
+
+    reportMetrics(hash<DataProvider::PipelineMetricsSnapshot> snapshot) {
+        ++callback_count;
+        int t = num_threads();
+        if (t > max_threads) {
+            max_threads = t;
+        }
+        if (delay_us > 0) {
+            usleep(delay_us);
+        }
+    }
+
+    shutdown() {
+        shutdown_called = True;
+    }
+}
+
+public class PipelineMemoryTest inherits QUnit::Test {
+    public {
+        const OptionColumn = 24;
+
+        #! Number of records for the main pipeline test
+        int record_count;
+
+        #! Maximum allowed RSS growth in bytes
+        int max_rss_growth;
+
+        #! Whether to enable verbose memory reporting
+        bool verbose_memory;
+    }
+
+    constructor() : Test("PipelineMemory Test", "1.0", \ARGV, Opts) {
+        record_count = m_options."record-count" ?? 5000;
+        max_rss_growth = m_options."max-rss-growth" ?? (5 * 1024 * 1024);
+        verbose_memory = m_options."verbose-memory" ?? False;
+
+%ifndef NoProcess
+        addTestCase("single pipeline memory stability", \singlePipelineTest());
+        addTestCase("repeated pipelines memory stability", \repeatedPipelinesTest());
+        addTestCase("multi-processor pipeline memory stability", \multiProcessorPipelineTest());
+        addTestCase("pipeline record count validation", \recordCountValidationTest());
+        addTestCase("metrics vs baseline comparison", \metricsVsBaselineTest());
+        addTestCase("high-frequency metrics collection", \metricsHighFrequencyTest());
+        addTestCase("accumulating metrics collector", \metricsAccumulatingTest());
+        addTestCase("repeated pipelines with metrics", \metricsRepeatedPipelinesTest());
+        addTestCase("slow metrics callback", \metricsSlowCallbackTest());
+%endif
+
+        set_return_value(main());
+    }
+
+    #! Test options: extends base QUnit opts with pipeline memory test options
+    const Opts = QUnit::TestReporter::Opts + {
+        "record-count": "R,record-count=i",
+        "max-rss-growth": "M,max-rss-growth=i",
+        "iterations": "I,iterations=i",
+        "verbose-memory": "V,verbose-memory",
+    };
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-R,--record-count=N", "records per pipeline [default: 5000]", OptionColumn);
+        printOption("-M,--max-rss-growth=N", "max RSS growth bytes [default: 5242880]", OptionColumn);
+        printOption("-I,--iterations=N", "repeated pipeline iterations [default: 10]", OptionColumn);
+        printOption("-V,--verbose-memory", "verbose memory diagnostics", OptionColumn);
+    }
+
+    #! Returns a formatted memory size string
+    private string fmtMem(int bytes) {
+        if (bytes < 0) {
+            return "-" + fmtMem(-bytes);
+        }
+        if (bytes >= 1024 * 1024 * 1024) {
+            return sprintf("%.2f GiB", bytes / (1024.0 * 1024.0 * 1024.0));
+        }
+        if (bytes >= 1024 * 1024) {
+            return sprintf("%.2f MiB", bytes / (1024.0 * 1024.0));
+        }
+        return sprintf("%.2f KiB", bytes / 1024.0);
+    }
+
+    #! Returns current memory info
+    private hash<auto> getMemInfo() {
+%ifndef NoProcess
+        hash<auto> mem = Process::getMemorySummaryInfo();
+        return {
+            "rss": mem.rss,
+            "vsz": mem.vsz,
+            "threads": num_threads(),
+        };
+%else
+        return {
+            "rss": 0,
+            "vsz": 0,
+            "threads": num_threads(),
+        };
+%endif
+    }
+
+    #! Logs memory info if verbose mode is enabled
+    private logMem(string label, hash<auto> mem_info) {
+        if (verbose_memory || m_options.verbose > 2) {
+            printf("  [%s] RSS: %s  VSZ: %s  threads: %d\n",
+                label, fmtMem(mem_info.rss), fmtMem(mem_info.vsz), mem_info.threads);
+        }
+    }
+
+    #! Logs a verbose message
+    private logVerbose(string fmt) {
+        if (verbose_memory || m_options.verbose > 2) {
+            vprintf("  " + fmt + "\n", argv);
+        }
+    }
+
+    #! Creates a GeneratorDataProvider record iterator with the given count
+    private DataProvider::AbstractDataProviderRecordIterator getGeneratorIterator(int count) {
+        GeneratorDataProvider::GeneratorGenerateRecordsDataProvider provider({
+            "count": count,
+            "strategy": "sequential",
+        });
+        return provider.searchRecords();
+    }
+
+    #! Test: single pipeline with large record count should have stable memory
+    singlePipelineTest() {
+        logVerbose("single pipeline test: %d records", record_count);
+
+        # warm up: run a small pipeline first to initialize internal structures
+        {
+            DataProviderPipeline warmup_pipe(<PipelineOptionInfo>{"name": "warmup"});
+            warmup_pipe.append(new PassthroughProcessor());
+            warmup_pipe.submit(getGeneratorIterator(100));
+            warmup_pipe.waitDone();
+        }
+
+        hash<auto> mem_before = getMemInfo();
+        logMem("before", mem_before);
+
+        MemorySnapshotCollector collector(record_count > 10000 ? (record_count / 10) : 1000);
+
+        hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+            "name": "single-pipeline-memory-test",
+            "metrics_collector": collector,
+        };
+
+        DataProviderPipeline pipe(opts);
+        pipe.append(new PassthroughProcessor());
+
+        pipe.submit(getGeneratorIterator(record_count));
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(record_count, info.record_count);
+        assertTrue(collector.shutdown_called, "metrics collector shutdown should be called");
+
+        hash<auto> mem_after = getMemInfo();
+        logMem("after", mem_after);
+
+        int rss_growth = mem_after.rss - mem_before.rss;
+        logVerbose("RSS growth: %s (limit: %s)", fmtMem(rss_growth), fmtMem(max_rss_growth));
+        logVerbose("throughput: %.1f records/sec", info.recs_per_sec);
+
+        # report periodic snapshots if verbose
+        if (collector.snapshots) {
+            logVerbose("memory snapshots during pipeline execution (%d snapshots):", collector.snapshots.size());
+            int base_rss = mem_before.rss;
+            foreach hash<auto> snap in (collector.snapshots) {
+                logVerbose("  records: %d  RSS delta: %s  threads: %d",
+                    snap.records_submitted, fmtMem(snap.rss - base_rss), snap.threads);
+            }
+
+            # check that memory does not grow linearly: compare first and last snapshot RSS growth
+            if (collector.snapshots.size() >= 3) {
+                int mid_idx = collector.snapshots.size() / 2;
+                int mid_growth = collector.snapshots[mid_idx].rss - mem_before.rss;
+                int final_growth = collector.snapshots[collector.snapshots.size() - 1].rss - mem_before.rss;
+                logVerbose("midpoint RSS growth: %s, final RSS growth: %s", fmtMem(mid_growth), fmtMem(final_growth));
+            }
+        }
+
+        # assert bounded memory growth
+        assertTrue(rss_growth < max_rss_growth,
+            sprintf("RSS growth %s should be less than %s", fmtMem(rss_growth), fmtMem(max_rss_growth)));
+    }
+
+    #! Test: repeated pipeline creation/destruction should not leak memory
+    repeatedPipelinesTest() {
+        int iterations = m_options.iterations > 0 ? m_options.iterations : 10;
+        int records_per_pipeline = record_count > 50000 ? 2000 : (record_count / 25 > 0 ? record_count / 25 : 100);
+        logVerbose("repeated pipelines test: %d iterations x %d records", iterations, records_per_pipeline);
+
+        # warm up
+        {
+            DataProviderPipeline warmup_pipe(<PipelineOptionInfo>{"name": "warmup"});
+            warmup_pipe.append(new PassthroughProcessor());
+            warmup_pipe.submit(getGeneratorIterator(100));
+            warmup_pipe.waitDone();
+        }
+
+        hash<auto> mem_before = getMemInfo();
+        logMem("before", mem_before);
+
+        list<int> rss_samples();
+
+        for (int iter = 0; iter < iterations; ++iter) {
+            {
+                DataProviderPipeline pipe(<PipelineOptionInfo>{
+                    "name": sprintf("repeated-pipeline-%d", iter),
+                });
+                pipe.append(new PassthroughProcessor());
+                pipe.submit(getGeneratorIterator(records_per_pipeline));
+                pipe.waitDone();
+
+                assertEq(records_per_pipeline, pipe.getInfo().record_count);
+            }
+
+            if ((iter + 1) % 10 == 0) {
+                hash<auto> mem_now = getMemInfo();
+                push rss_samples, mem_now.rss;
+                logMem(sprintf("iter %d", iter + 1), mem_now);
+            }
+        }
+
+        hash<auto> mem_after = getMemInfo();
+        logMem("after", mem_after);
+
+        int rss_growth = mem_after.rss - mem_before.rss;
+        logVerbose("RSS growth over %d iterations: %s (limit: %s)",
+            iterations, fmtMem(rss_growth), fmtMem(max_rss_growth));
+
+        # assert bounded memory growth across all iterations
+        assertTrue(rss_growth < max_rss_growth,
+            sprintf("RSS growth %s across %d pipeline iterations should be less than %s",
+                fmtMem(rss_growth), iterations, fmtMem(max_rss_growth)));
+
+        # check that late samples are not significantly larger than early samples
+        if (rss_samples.size() >= 4) {
+            int early_avg = (rss_samples[0] + rss_samples[1]) / 2;
+            int late_avg = (rss_samples[rss_samples.size() - 2] + rss_samples[rss_samples.size() - 1]) / 2;
+            int late_growth = late_avg - early_avg;
+            logVerbose("early avg RSS: %s, late avg RSS: %s, late growth: %s",
+                fmtMem(early_avg), fmtMem(late_avg), fmtMem(late_growth));
+        }
+    }
+
+    #! Test: multi-processor pipeline should have stable memory with chained processors
+    multiProcessorPipelineTest() {
+        logVerbose("multi-processor pipeline test: %d records, 3 processors", record_count);
+
+        # warm up
+        {
+            DataProviderPipeline warmup_pipe(<PipelineOptionInfo>{"name": "warmup"});
+            warmup_pipe.append(new PassthroughProcessor());
+            warmup_pipe.submit(getGeneratorIterator(100));
+            warmup_pipe.waitDone();
+        }
+
+        hash<auto> mem_before = getMemInfo();
+        logMem("before", mem_before);
+
+        MemorySnapshotCollector collector(record_count > 10000 ? (record_count / 10) : 1000);
+
+        hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+            "name": "multi-processor-memory-test",
+            "metrics_collector": collector,
+        };
+
+        DataProviderPipeline pipe(opts);
+        pipe.append(new PassthroughProcessor());
+        pipe.append(new TransformProcessor());
+        pipe.append(new PassthroughProcessor());
+
+        pipe.submit(getGeneratorIterator(record_count));
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(record_count, info.record_count);
+        assertTrue(collector.shutdown_called, "metrics collector shutdown should be called");
+
+        hash<auto> mem_after = getMemInfo();
+        logMem("after", mem_after);
+
+        int rss_growth = mem_after.rss - mem_before.rss;
+        logVerbose("RSS growth: %s (limit: %s)", fmtMem(rss_growth), fmtMem(max_rss_growth));
+        logVerbose("throughput: %.1f records/sec", info.recs_per_sec);
+
+        # report snapshots if verbose
+        if (collector.snapshots) {
+            logVerbose("memory snapshots (%d snapshots):", collector.snapshots.size());
+            foreach hash<auto> snap in (collector.snapshots) {
+                logVerbose("  records: %d  RSS delta: %s  threads: %d",
+                    snap.records_submitted, fmtMem(snap.rss - mem_before.rss), snap.threads);
+            }
+        }
+
+        # assert bounded memory growth
+        assertTrue(rss_growth < max_rss_growth,
+            sprintf("RSS growth %s should be less than %s with multiple processors",
+                fmtMem(rss_growth), fmtMem(max_rss_growth)));
+    }
+
+    #! Test: validate that pipeline actually processes the correct number of records from the generator
+    recordCountValidationTest() {
+        int test_count = 1000;
+        logVerbose("record count validation test: %d records", test_count);
+
+        # use a counting processor to verify exact record count
+        CountingProcessor counter();
+
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "record-count-validation",
+        });
+        pipe.append(counter);
+
+        pipe.submit(getGeneratorIterator(test_count));
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(test_count, info.record_count, "pipeline should report correct record count");
+        assertEq(test_count, counter.count, "processor should receive exactly the right number of records");
+
+        # verify record content from sequential generator
+        assertTrue(counter.first_record.hasKey("id"), "generated record should have 'id' field");
+        assertTrue(counter.first_record.hasKey("name"), "generated record should have 'name' field");
+        assertTrue(counter.first_record.hasKey("value"), "generated record should have 'value' field");
+        assertTrue(counter.first_record.hasKey("active"), "generated record should have 'active' field");
+        assertTrue(counter.first_record.hasKey("created"), "generated record should have 'created' field");
+        assertEq(0, counter.first_record.id, "first record id should be 0 for sequential strategy");
+    }
+
+    # =====================================================================
+    # Metrics collection memory impact tests
+    # =====================================================================
+
+    #! Runs a pipeline with a passthrough processor and optional metrics collector, returns RSS delta
+    private hash<auto> runPipelineAndMeasure(string name, int count, *AbstractPipelineMetricsCollector collector) {
+        hash<auto> mem_before = getMemInfo();
+
+        hash<PipelineOptionInfo> opts = <PipelineOptionInfo>{
+            "name": name,
+        };
+        if (collector) {
+            opts.metrics_collector = collector;
+        }
+
+        DataProviderPipeline pipe(opts);
+        pipe.append(new PassthroughProcessor());
+        pipe.submit(getGeneratorIterator(count));
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        hash<auto> mem_after = getMemInfo();
+
+        return {
+            "rss_before": mem_before.rss,
+            "rss_after": mem_after.rss,
+            "rss_growth": mem_after.rss - mem_before.rss,
+            "record_count": info.record_count,
+            "recs_per_sec": info.recs_per_sec,
+        };
+    }
+
+    #! Test: compare same workload with and without metrics to isolate collection overhead
+    metricsVsBaselineTest() {
+        logVerbose("metrics vs baseline: %d records", record_count);
+
+        # warm up both paths
+        {
+            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup"});
+            warmup.append(new PassthroughProcessor());
+            warmup.submit(getGeneratorIterator(1000));
+            warmup.waitDone();
+        }
+        {
+            LightweightMetricsCollector wc(500);
+            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup-metrics", "metrics_collector": wc});
+            warmup.append(new PassthroughProcessor());
+            warmup.submit(getGeneratorIterator(1000));
+            warmup.waitDone();
+        }
+
+        # run without metrics
+        hash<auto> baseline = runPipelineAndMeasure("baseline-no-metrics", record_count);
+        logVerbose("baseline (no metrics): RSS growth %s, %.1f rec/s",
+            fmtMem(baseline.rss_growth), baseline.recs_per_sec);
+        assertEq(record_count, baseline.record_count);
+
+        # run with lightweight metrics collector (every 1000 records)
+        LightweightMetricsCollector lw_collector(1000);
+        hash<auto> with_metrics = runPipelineAndMeasure("with-lightweight-metrics", record_count, lw_collector);
+        logVerbose("with metrics (interval=1000): RSS growth %s, %.1f rec/s, %d callbacks",
+            fmtMem(with_metrics.rss_growth), with_metrics.recs_per_sec, lw_collector.callback_count);
+        assertEq(record_count, with_metrics.record_count);
+        assertTrue(lw_collector.shutdown_called, "collector shutdown should be called");
+        assertTrue(lw_collector.callback_count > 0, "should have received metrics callbacks");
+
+        # the metrics overhead should not exceed the threshold
+        assertTrue(with_metrics.rss_growth < max_rss_growth,
+            sprintf("metrics-enabled RSS growth %s should be less than %s",
+                fmtMem(with_metrics.rss_growth), fmtMem(max_rss_growth)));
+
+        # report the delta between the two runs
+        int overhead = with_metrics.rss_growth - baseline.rss_growth;
+        logVerbose("metrics overhead (RSS delta): %s", fmtMem(overhead));
+    }
+
+    #! Test: high-frequency metrics reporting to stress snapshot creation and GC
+    metricsHighFrequencyTest() {
+        # report every 100 records -- creates many snapshots
+        int interval = 100;
+        logVerbose("high-frequency metrics: %d records, interval=%d", record_count, interval);
+
+        # warm up
+        {
+            LightweightMetricsCollector wc(interval);
+            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup-hf", "metrics_collector": wc});
+            warmup.append(new PassthroughProcessor());
+            warmup.submit(getGeneratorIterator(1000));
+            warmup.waitDone();
+        }
+
+        hash<auto> mem_before = getMemInfo();
+        logMem("before", mem_before);
+
+        LightweightMetricsCollector collector(interval);
+
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "high-frequency-metrics",
+            "metrics_collector": collector,
+        });
+        pipe.append(new PassthroughProcessor());
+        pipe.submit(getGeneratorIterator(record_count));
+        pipe.waitDone();
+
+        hash<auto> mem_after = getMemInfo();
+        logMem("after", mem_after);
+
+        int rss_growth = mem_after.rss - mem_before.rss;
+        logVerbose("RSS growth: %s (limit: %s)", fmtMem(rss_growth), fmtMem(max_rss_growth));
+        logVerbose("callbacks: %d (expected ~%d)", collector.callback_count, record_count / interval);
+        logVerbose("throughput: %.1f rec/s", pipe.getInfo().recs_per_sec);
+
+        assertEq(record_count, pipe.getInfo().record_count);
+        assertTrue(collector.shutdown_called);
+        # should have roughly record_count/interval callbacks (may vary due to timing)
+        assertTrue(collector.callback_count >= record_count / interval / 2,
+            sprintf("expected at least %d callbacks, got %d", record_count / interval / 2,
+                collector.callback_count));
+
+        assertTrue(rss_growth < max_rss_growth,
+            sprintf("high-frequency metrics RSS growth %s should be less than %s",
+                fmtMem(rss_growth), fmtMem(max_rss_growth)));
+    }
+
+    #! Test: accumulating metrics collector that retains all snapshots
+    metricsAccumulatingTest() {
+        # report every 500 records; all snapshots are retained in memory
+        int interval = 500;
+        logVerbose("accumulating metrics: %d records, interval=%d", record_count, interval);
+
+        # warm up
+        {
+            AccumulatingMetricsCollector wc(interval);
+            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup-accum", "metrics_collector": wc});
+            warmup.append(new PassthroughProcessor());
+            warmup.submit(getGeneratorIterator(1000));
+            warmup.waitDone();
+        }
+
+        hash<auto> mem_before = getMemInfo();
+        logMem("before", mem_before);
+
+        AccumulatingMetricsCollector collector(interval);
+
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "accumulating-metrics",
+            "metrics_collector": collector,
+        });
+        pipe.append(new PassthroughProcessor());
+        pipe.submit(getGeneratorIterator(record_count));
+        pipe.waitDone();
+
+        hash<auto> mem_after = getMemInfo();
+        logMem("after", mem_after);
+
+        int rss_growth = mem_after.rss - mem_before.rss;
+        logVerbose("RSS growth: %s (limit: %s)", fmtMem(rss_growth), fmtMem(max_rss_growth));
+        logVerbose("snapshots retained: %d", collector.snapshots.size());
+
+        assertEq(record_count, pipe.getInfo().record_count);
+        assertTrue(collector.shutdown_called);
+        assertTrue(collector.snapshots.size() > 0, "should have accumulated snapshots");
+
+        # verify snapshot data is consistent
+        hash<PipelineMetricsSnapshot> last = collector.snapshots[collector.snapshots.size() - 1];
+        assertTrue(last.total_records_submitted > 0);
+        assertEq("accumulating-metrics", last.pipeline_name);
+
+        assertTrue(rss_growth < max_rss_growth,
+            sprintf("accumulating metrics RSS growth %s should be less than %s",
+                fmtMem(rss_growth), fmtMem(max_rss_growth)));
+
+        # now release the snapshots and measure RSS to see if memory is recovered
+        int snapshot_count = collector.snapshots.size();
+        remove collector.snapshots;
+        collector.snapshots = ();
+        hash<auto> mem_released = getMemInfo();
+        logVerbose("after releasing %d snapshots: RSS delta %s",
+            snapshot_count, fmtMem(mem_released.rss - mem_after.rss));
+    }
+
+    #! Test: repeated pipeline creation/destruction with metrics collector on each
+    metricsRepeatedPipelinesTest() {
+        int iterations = m_options.iterations > 0 ? m_options.iterations : 10;
+        int records_per_pipeline = record_count > 50000 ? 2000 : (record_count / 25 > 0 ? record_count / 25 : 100);
+        int interval = records_per_pipeline > 200 ? (records_per_pipeline / 5) : 50;
+        logVerbose("repeated pipelines with metrics: %d iterations x %d records, interval=%d",
+            iterations, records_per_pipeline, interval);
+
+        # warm up
+        {
+            LightweightMetricsCollector wc(interval);
+            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup-rep", "metrics_collector": wc});
+            warmup.append(new PassthroughProcessor());
+            warmup.submit(getGeneratorIterator(100));
+            warmup.waitDone();
+        }
+
+        hash<auto> mem_before = getMemInfo();
+        logMem("before", mem_before);
+
+        list<int> rss_samples();
+        int total_callbacks = 0;
+
+        for (int iter = 0; iter < iterations; ++iter) {
+            {
+                LightweightMetricsCollector collector(interval);
+                DataProviderPipeline pipe(<PipelineOptionInfo>{
+                    "name": sprintf("repeated-metrics-pipeline-%d", iter),
+                    "metrics_collector": collector,
+                });
+                pipe.append(new PassthroughProcessor());
+                pipe.submit(getGeneratorIterator(records_per_pipeline));
+                pipe.waitDone();
+
+                assertEq(records_per_pipeline, pipe.getInfo().record_count);
+                assertTrue(collector.shutdown_called);
+                total_callbacks += collector.callback_count;
+            }
+
+            if ((iter + 1) % 10 == 0) {
+                hash<auto> mem_now = getMemInfo();
+                push rss_samples, mem_now.rss;
+                logMem(sprintf("iter %d", iter + 1), mem_now);
+            }
+        }
+
+        hash<auto> mem_after = getMemInfo();
+        logMem("after", mem_after);
+
+        int rss_growth = mem_after.rss - mem_before.rss;
+        logVerbose("RSS growth over %d iterations: %s (limit: %s)",
+            iterations, fmtMem(rss_growth), fmtMem(max_rss_growth));
+        logVerbose("total callbacks across all pipelines: %d", total_callbacks);
+
+        assertTrue(rss_growth < max_rss_growth,
+            sprintf("repeated pipelines with metrics RSS growth %s should be less than %s",
+                fmtMem(rss_growth), fmtMem(max_rss_growth)));
+
+        # check for upward trend in RSS samples
+        if (rss_samples.size() >= 4) {
+            int early_avg = (rss_samples[0] + rss_samples[1]) / 2;
+            int late_avg = (rss_samples[rss_samples.size() - 2] + rss_samples[rss_samples.size() - 1]) / 2;
+            int late_growth = late_avg - early_avg;
+            logVerbose("early avg RSS: %s, late avg RSS: %s, trend: %s",
+                fmtMem(early_avg), fmtMem(late_avg), fmtMem(late_growth));
+        }
+    }
+
+    #! Test: slow metrics callback simulating real-world event posting latency
+    metricsSlowCallbackTest() {
+        # use a smaller record count for the slow callback test to keep runtime reasonable
+        int slow_count = record_count;
+        int interval = 1000;
+        int delay_ms = 10;
+        logVerbose("slow metrics callback: %d records, interval=%d, delay=%dms",
+            slow_count, interval, delay_ms);
+
+        # warm up
+        {
+            SlowMetricsCollector wc(interval, delay_ms);
+            DataProviderPipeline warmup(<PipelineOptionInfo>{"name": "warmup-slow", "metrics_collector": wc});
+            warmup.append(new PassthroughProcessor());
+            warmup.submit(getGeneratorIterator(1000));
+            warmup.waitDone();
+        }
+
+        hash<auto> mem_before = getMemInfo();
+        logMem("before", mem_before);
+
+        SlowMetricsCollector collector(interval, delay_ms);
+
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "slow-callback-metrics",
+            "metrics_collector": collector,
+        });
+        pipe.append(new PassthroughProcessor());
+        pipe.submit(getGeneratorIterator(slow_count));
+        pipe.waitDone();
+
+        hash<auto> mem_after = getMemInfo();
+        logMem("after", mem_after);
+
+        int rss_growth = mem_after.rss - mem_before.rss;
+        logVerbose("RSS growth: %s (limit: %s)", fmtMem(rss_growth), fmtMem(max_rss_growth));
+        logVerbose("callbacks: %d, max threads: %d", collector.callback_count, collector.max_threads);
+        logVerbose("throughput: %.1f rec/s", pipe.getInfo().recs_per_sec);
+
+        assertEq(slow_count, pipe.getInfo().record_count);
+        assertTrue(collector.shutdown_called);
+        assertTrue(collector.callback_count > 0, "should have received callbacks");
+
+        assertTrue(rss_growth < max_rss_growth,
+            sprintf("slow callback metrics RSS growth %s should be less than %s",
+                fmtMem(rss_growth), fmtMem(max_rss_growth)));
+    }
+}
+
+#! Processor that counts records without accumulating them
+class CountingProcessor inherits DataProvider::AbstractDataProcessor {
+    public {
+        int count = 0;
+        *hash<auto> first_record;
+        *hash<auto> last_record;
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        if (!count) {
+            first_record = _data;
+        }
+        last_record = _data;
+        ++count;
+        enqueue(_data);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}

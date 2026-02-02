@@ -379,8 +379,21 @@ public hashdecl DataProviderActionInfo {
     /** This is for the case when there is no application \c scheme and the application is not implied by the context.
 
         It is an error to supply both application \c scheme and \c cls.
+
+        If the class is provided by a module that must be loaded at runtime, set \c cls_mod to the module name so
+        that \c load_module() can be called before \c Class::forName() to ensure the class is available in the
+        calling program's context.
     */
     *string cls;
+
+    #! The module that provides the class in \c cls
+    /** If set, \c load_module() will be called with this value before resolving the class with
+        \c Class::forName().
+
+        This is necessary because \c Class::forName() resolves in the calling program's context, and the module
+        providing the class may not yet be loaded into that context.
+    */
+    *string cls_mod;
 
     #! Values to add to any "where" argument for record-based actions
     *hash<auto> where_add;
@@ -694,6 +707,11 @@ public class DataProviderActionCatalog {
 
         if (action.get_dynamic_options && !action.has_dynamic_options) {
             action.has_dynamic_options = True;
+        }
+
+        # auto-detect the module providing the class so callers can load it before Class::forName()
+        if (action.cls && !action.cls_mod) {
+            action.cls_mod = get_module_context_name();
         }
 
         if (!action.input_data_types) {
@@ -1149,6 +1167,12 @@ public class DataProviderActionCatalog {
             *reference<hash<auto>> options) {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
+        }
+        # load the module into this program's context so Class::forName() can resolve the class;
+        # load_module() in ProviderIndexUtil loads into ProviderIndexUtil's program context,
+        # but Class::forName() resolves in the calling program's context
+        if (action.cls_mod) {
+            load_module(action.cls_mod);
         }
         hash<auto> constructor_opts;
         map constructor_opts{$1.key} = remove options{$1.key}, action.options.pairIterator(),

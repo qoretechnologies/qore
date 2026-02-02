@@ -222,17 +222,18 @@ public class AsyncApiTest inherits QUnit::Test {
     publicSchemasTest() {
         checkModules();
 
-        # Official AsyncAPI 3.0 example schemas from the spec repository
+        # Official AsyncAPI example schemas from the spec repository
+        # Pinned to v3.0.0 tag to avoid breakage when upstream bumps the spec version
         list<hash<auto>> publicSchemas = (
             {
                 "name": "simple-asyncapi",
-                "url": "https://raw.githubusercontent.com/asyncapi/spec/master/examples/simple-asyncapi.yml",
+                "url": "https://raw.githubusercontent.com/asyncapi/spec/v3.0.0/examples/simple-asyncapi.yml",
                 "expectedTitle": "Account Service",
                 "expectedApiVersion": "1.0.0",
             },
             {
                 "name": "streetlights-mqtt-asyncapi",
-                "url": "https://raw.githubusercontent.com/asyncapi/spec/master/examples/streetlights-mqtt-asyncapi.yml",
+                "url": "https://raw.githubusercontent.com/asyncapi/spec/v3.0.0/examples/streetlights-mqtt-asyncapi.yml",
                 "expectedTitle": "Streetlights MQTT API",
                 "expectedApiVersion": "1.0.0",
             },

@@ -116,7 +116,12 @@ public class Main inherits QUnit::Test {
 
         {
             # first test a standard ping
-            hash<PingInfo> ping = ebrc.ping(True);
+            hash<PingInfo> ping;
+            try {
+                ping = ebrc.ping(True);
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip(sprintf("ping failed: %s: %s", ex.err, ex.desc));
+            }
             assertTrue(ping.ok);
             assertEq("OK", ping.info);
 

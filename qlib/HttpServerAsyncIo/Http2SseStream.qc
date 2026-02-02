@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Http2SseStream.qc SSE streaming over HTTP/2
 
-/** Http2SseStream.qc Copyright 2025 Qore Technologies, s.r.o.
+/** Http2SseStream.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,7 +33,6 @@ public namespace HttpServerAsyncIo {
     The stream is kept open (no END_STREAM flag) until explicitly closed,
     allowing the server to send events incrementally.
 
-    @since HttpServerAsyncIo 1.0
 */
 public class Http2SseStream inherits AbstractSseConnection {
     private {

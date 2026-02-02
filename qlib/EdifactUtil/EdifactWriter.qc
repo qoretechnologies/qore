@@ -191,7 +191,6 @@ w.close();
         */
         constructor(string path, *hash<auto> opts) : EdifactAbstractWriter(opts) {
             @assert(path.val(), "file path cannot be empty");
-            @debug(printf("EdifactFileWriter::constructor(): writing to %y\n", path));
             m_path = path;
             openFile(opts);
         }
@@ -204,7 +203,6 @@ w.close();
         constructor(string path, EdifactDelimiters delim, *hash<auto> opts)
                 : EdifactAbstractWriter(delim, opts) {
             @assert(path.val(), "file path cannot be empty");
-            @debug(printf("EdifactFileWriter::constructor(): writing to %y\n", path));
             m_path = path;
             openFile(opts);
         }

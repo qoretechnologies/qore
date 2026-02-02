@@ -1,0 +1,2088 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ZohoBooksDataProvider module definition
+
+/*  ZohoBooksDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# strict argument handling
+%strict-args
+# enable all warnings
+%enable-all-warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) ZohoBooksRestClient
+%requires json
+
+module ZohoBooksDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Zoho Books accounting and invoicing";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new ZohoBooksDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ZohoBooksDataProvider::AppName,
+            "display_name": "Zoho Books",
+            "short_desc": "Zoho Books online accounting software",
+            "desc": "Zoho Books is online accounting software that manages your finances, "
+                "automates business workflows, and helps you work collectively across departments.\n\n"
+                "This integration supports invoices, bills, payments, contacts, expenses, estimates, "
+                "sales orders, purchase orders, and items.",
+            "scheme": "zohobooks",
+            "logo": ZohoBooksLogo,
+            "logo_file_name": "zohobooks-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AccountingErp,),
+        });
+
+        # ========== INVOICE ACTIONS ==========
+
+        # Create Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/create-invoice",
+            "action": "create-invoice",
+            "groups": "Invoices",
+            "display_name": "Create Invoice",
+            "short_desc": "Create a new invoice",
+            "desc": "Create a new invoice in Zoho Books for a customer",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the invoice",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "invoice_number": <ActionOptionInfo>{
+                    "display_name": "Invoice Number",
+                    "short_desc": "Unique invoice identifier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A unique sequential identifier for the invoice",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Invoice Date",
+                    "short_desc": "Invoice issue date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Invoice issue date in yyyy-mm-dd format",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Payment due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment due date in yyyy-mm-dd format",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of days within which payment must be made",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Invoice line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, tax_id",
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Invoice discount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                    "desc": "Discount amount or percentage applied to invoice",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Notes visible to the customer on the invoice",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Terms and conditions for the invoice",
+                },
+            },
+        });
+
+        # Update Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/update-invoice",
+            "action": "update-invoice",
+            "groups": "Invoices",
+            "display_name": "Update Invoice",
+            "short_desc": "Update an existing invoice",
+            "desc": "Update an existing invoice in Zoho Books",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the invoice",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "invoice_number": <ActionOptionInfo>{
+                    "display_name": "Invoice Number",
+                    "short_desc": "Unique invoice identifier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Invoice Date",
+                    "short_desc": "Invoice issue date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Invoice issue date in yyyy-mm-dd format",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Payment due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment due date in yyyy-mm-dd format",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Invoice line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, tax_id",
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Invoice discount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/delete-invoice",
+            "action": "delete-invoice",
+            "groups": "Invoices",
+            "display_name": "Delete Invoice",
+            "short_desc": "Delete an invoice",
+            "desc": "Delete an invoice from Zoho Books",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+        });
+
+        # Get Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-invoice",
+            "action": "get-invoice",
+            "groups": "Invoices",
+            "display_name": "Get Invoice",
+            "short_desc": "Get invoice details",
+            "desc": "Retrieve details of a specific invoice",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+        });
+
+        # List Invoices
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/invoices",
+            "action": "list-invoices",
+            "groups": "Invoices",
+            "display_name": "List Invoices",
+            "short_desc": "List all invoices",
+            "desc": "Retrieve a list of invoices with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by invoice status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "draft", "desc": "Draft invoices"},
+                        <AllowedValueInfo>{"value": "sent", "desc": "Sent invoices"},
+                        <AllowedValueInfo>{"value": "overdue", "desc": "Overdue invoices"},
+                        <AllowedValueInfo>{"value": "paid", "desc": "Paid invoices"},
+                        <AllowedValueInfo>{"value": "void", "desc": "Voided invoices"},
+                        <AllowedValueInfo>{"value": "unpaid", "desc": "Unpaid invoices"},
+                        <AllowedValueInfo>{"value": "partially_paid", "desc": "Partially paid invoices"},
+                    ),
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Email Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/email-invoice",
+            "action": "email-invoice",
+            "groups": "Invoices",
+            "display_name": "Email Invoice",
+            "short_desc": "Send an invoice by email",
+            "desc": "Send an invoice to the customer via email",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to email",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+                "to_mail_ids": <ActionOptionInfo>{
+                    "display_name": "To",
+                    "short_desc": "Recipient email addresses",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "Email addresses to send the invoice to",
+                },
+                "subject": <ActionOptionInfo>{
+                    "display_name": "Subject",
+                    "short_desc": "Email subject",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Body",
+                    "short_desc": "Email body",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # ========== BILL ACTIONS ==========
+
+        # Create Bill
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/create-bill",
+            "action": "create-bill",
+            "groups": "Bills",
+            "display_name": "Create Bill",
+            "short_desc": "Create a new bill",
+            "desc": "Create a new bill from a vendor in Zoho Books",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "vendor_id": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "The vendor for the bill",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "vendors",
+                },
+                "bill_number": <ActionOptionInfo>{
+                    "display_name": "Bill Number",
+                    "short_desc": "Unique bill identifier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A unique sequential identifier for the bill",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Bill Date",
+                    "short_desc": "Bill issue date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Bill issue date in yyyy-mm-dd format",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Payment due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment due date in yyyy-mm-dd format",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "External vendor reference",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Vendor's reference number for this bill",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Bill line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, account_id, tax_id",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Additional notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Payment and delivery terms",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Update Bill
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/update-bill",
+            "action": "update-bill",
+            "groups": "Bills",
+            "display_name": "Update Bill",
+            "short_desc": "Update an existing bill",
+            "desc": "Update an existing bill in Zoho Books",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "bill_id": <ActionOptionInfo>{
+                    "display_name": "Bill ID",
+                    "short_desc": "The bill to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "bills",
+                },
+                "vendor_id": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "The vendor for the bill",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "vendors",
+                },
+                "bill_number": <ActionOptionInfo>{
+                    "display_name": "Bill Number",
+                    "short_desc": "Unique bill identifier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Bill Date",
+                    "short_desc": "Bill issue date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Bill issue date in yyyy-mm-dd format",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Payment due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment due date in yyyy-mm-dd format",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "External vendor reference",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Bill line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, account_id, tax_id",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Additional notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Payment and delivery terms",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Bill
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/delete-bill",
+            "action": "delete-bill",
+            "groups": "Bills",
+            "display_name": "Delete Bill",
+            "short_desc": "Delete a bill",
+            "desc": "Delete a bill from Zoho Books",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "bill_id": <ActionOptionInfo>{
+                    "display_name": "Bill ID",
+                    "short_desc": "The bill to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "bills",
+                },
+            },
+        });
+
+        # Get Bill
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-bill",
+            "action": "get-bill",
+            "groups": "Bills",
+            "display_name": "Get Bill",
+            "short_desc": "Get bill details",
+            "desc": "Retrieve details of a specific bill",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "bill_id": <ActionOptionInfo>{
+                    "display_name": "Bill ID",
+                    "short_desc": "The bill to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "bills",
+                },
+            },
+        });
+
+        # List Bills
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/bills",
+            "action": "list-bills",
+            "groups": "Bills",
+            "display_name": "List Bills",
+            "short_desc": "List all bills",
+            "desc": "Retrieve a list of bills with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by bill status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "open", "desc": "Open bills"},
+                        <AllowedValueInfo>{"value": "overdue", "desc": "Overdue bills"},
+                        <AllowedValueInfo>{"value": "paid", "desc": "Paid bills"},
+                        <AllowedValueInfo>{"value": "void", "desc": "Voided bills"},
+                        <AllowedValueInfo>{"value": "partially_paid", "desc": "Partially paid bills"},
+                    ),
+                },
+                "vendor_id": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "Filter by vendor",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "vendors",
+                },
+            },
+        });
+
+        # ========== PAYMENT ACTIONS ==========
+
+        # Create Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/create-payment",
+            "action": "create-payment",
+            "groups": "Payments",
+            "display_name": "Create Payment",
+            "short_desc": "Create a new payment",
+            "desc": "Record a payment received from a customer",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer making the payment",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Payment amount",
+                    "type": AbstractDataProviderTypeMap."float",
+                    "required": True,
+                    "preselected": True,
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Payment Date",
+                    "short_desc": "Date of payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment date in yyyy-mm-dd format",
+                },
+                "payment_mode": <ActionOptionInfo>{
+                    "display_name": "Payment Mode",
+                    "short_desc": "Mode of payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Mode of payment (e.g., Cash, Check, Bank Transfer, Credit Card)",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Transaction reference",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Reference number for the payment transaction",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Payment description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "invoices": <ActionOptionInfo>{
+                    "display_name": "Invoices",
+                    "short_desc": "Invoices to apply payment to",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of invoices with fields: invoice_id, amount_applied",
+                },
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Deposit Account",
+                    "short_desc": "Account to deposit payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "ID of the account where the payment will be deposited",
+                },
+            },
+        });
+
+        # Update Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/update-payment",
+            "action": "update-payment",
+            "groups": "Payments",
+            "display_name": "Update Payment",
+            "short_desc": "Update an existing payment",
+            "desc": "Update an existing payment record",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "payment_id": <ActionOptionInfo>{
+                    "display_name": "Payment ID",
+                    "short_desc": "The payment to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "payments",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer making the payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Payment amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Payment Date",
+                    "short_desc": "Date of payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment date in yyyy-mm-dd format",
+                },
+                "payment_mode": <ActionOptionInfo>{
+                    "display_name": "Payment Mode",
+                    "short_desc": "Mode of payment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Transaction reference",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Payment description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "invoices": <ActionOptionInfo>{
+                    "display_name": "Invoices",
+                    "short_desc": "Invoices to apply payment to",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of invoices with fields: invoice_id, amount_applied",
+                },
+            },
+        });
+
+        # Delete Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/delete-payment",
+            "action": "delete-payment",
+            "groups": "Payments",
+            "display_name": "Delete Payment",
+            "short_desc": "Delete a payment",
+            "desc": "Delete a payment record from Zoho Books",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "payment_id": <ActionOptionInfo>{
+                    "display_name": "Payment ID",
+                    "short_desc": "The payment to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "payments",
+                },
+            },
+        });
+
+        # Get Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-payment",
+            "action": "get-payment",
+            "groups": "Payments",
+            "display_name": "Get Payment",
+            "short_desc": "Get payment details",
+            "desc": "Retrieve details of a specific payment",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "payment_id": <ActionOptionInfo>{
+                    "display_name": "Payment ID",
+                    "short_desc": "The payment to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "payments",
+                },
+            },
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # Create Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/create-contact",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new customer or vendor contact in Zoho Books",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_name": <ActionOptionInfo>{
+                    "display_name": "Contact Name",
+                    "short_desc": "Name of the contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "contact_type": <ActionOptionInfo>{
+                    "display_name": "Contact Type",
+                    "short_desc": "Type of contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "customer", "desc": "Customer contact"},
+                        <AllowedValueInfo>{"value": "vendor", "desc": "Vendor contact"},
+                    ),
+                },
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Legal company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Legal name of the company (max 200 characters)",
+                },
+                "contact_persons": <ActionOptionInfo>{
+                    "display_name": "Contact Persons",
+                    "short_desc": "List of contact persons",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of contact persons with fields: salutation, first_name, last_name, email, phone, mobile, designation, department, is_primary_contact",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Contact website URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "billing_address": <ActionOptionInfo>{
+                    "display_name": "Billing Address",
+                    "short_desc": "Billing address details",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Billing address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                },
+                "shipping_address": <ActionOptionInfo>{
+                    "display_name": "Shipping Address",
+                    "short_desc": "Shipping address details",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Shipping address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of days within which payment must be made",
+                },
+                "currency_id": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Currency for transactions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Currency ID for transactions with this contact",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Additional notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Update Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/update-contact",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update an existing contact's information",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "contact_name": <ActionOptionInfo>{
+                    "display_name": "Contact Name",
+                    "short_desc": "Name of the contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "contact_type": <ActionOptionInfo>{
+                    "display_name": "Contact Type",
+                    "short_desc": "Type of contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "customer", "desc": "Customer contact"},
+                        <AllowedValueInfo>{"value": "vendor", "desc": "Vendor contact"},
+                    ),
+                },
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Legal company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "contact_persons": <ActionOptionInfo>{
+                    "display_name": "Contact Persons",
+                    "short_desc": "List of contact persons",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of contact persons with fields: salutation, first_name, last_name, email, phone, mobile, designation, department, is_primary_contact",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Contact website URL",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "billing_address": <ActionOptionInfo>{
+                    "display_name": "Billing Address",
+                    "short_desc": "Billing address details",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Billing address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                },
+                "shipping_address": <ActionOptionInfo>{
+                    "display_name": "Shipping Address",
+                    "short_desc": "Shipping address details",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Shipping address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "currency_id": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Currency for transactions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Additional notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # List Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/contacts",
+            "action": "list-contacts",
+            "groups": "Contacts",
+            "display_name": "List Contacts",
+            "short_desc": "List all contacts",
+            "desc": "Retrieve a list of contacts (customers and vendors)",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_type": <ActionOptionInfo>{
+                    "display_name": "Contact Type",
+                    "short_desc": "Filter by contact type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "customer", "desc": "Customer contacts only"},
+                        <AllowedValueInfo>{"value": "vendor", "desc": "Vendor contacts only"},
+                    ),
+                },
+            },
+        });
+
+        # Get Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-contact",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get Contact",
+            "short_desc": "Get a contact by ID",
+            "desc": "Retrieve details of a specific contact",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # ========== EXPENSE ACTIONS ==========
+
+        # Create Expense
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/create-expense",
+            "action": "create-expense",
+            "groups": "Expenses",
+            "display_name": "Create Expense",
+            "short_desc": "Create a new expense",
+            "desc": "Record a new expense in Zoho Books",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account",
+                    "short_desc": "Expense account",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Expense amount",
+                    "type": AbstractDataProviderTypeMap."float",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Update Expense
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/update-expense",
+            "action": "update-expense",
+            "groups": "Expenses",
+            "display_name": "Update Expense",
+            "short_desc": "Update an existing expense",
+            "desc": "Update an existing expense record",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "expense_id": <ActionOptionInfo>{
+                    "display_name": "Expense ID",
+                    "short_desc": "The expense to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "expenses",
+                },
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account",
+                    "short_desc": "Expense account",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Expense amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Expense date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in yyyy-mm-dd format",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Expense description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "vendor_id": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "Vendor for the expense",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "vendors",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "is_billable": <ActionOptionInfo>{
+                    "display_name": "Billable",
+                    "short_desc": "Is this expense billable",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Customer to bill",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # List Expenses
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/expenses",
+            "action": "list-expenses",
+            "groups": "Expenses",
+            "display_name": "List Expenses",
+            "short_desc": "List all expenses",
+            "desc": "Retrieve a list of expenses",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Get Expense
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-expense",
+            "action": "get-expense",
+            "groups": "Expenses",
+            "display_name": "Get Expense",
+            "short_desc": "Get an expense by ID",
+            "desc": "Retrieve details of a specific expense",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "expense_id": <ActionOptionInfo>{
+                    "display_name": "Expense ID",
+                    "short_desc": "The expense to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "expenses",
+                },
+            },
+        });
+
+        # ========== ITEM ACTIONS ==========
+
+        # Create Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/create-item",
+            "action": "create-item",
+            "groups": "Items",
+            "display_name": "Create Item",
+            "short_desc": "Create a new item",
+            "desc": "Create a new product or service item in Zoho Books",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Item Name",
+                    "short_desc": "Name of the item",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "rate": <ActionOptionInfo>{
+                    "display_name": "Rate",
+                    "short_desc": "Price/rate of the item",
+                    "type": AbstractDataProviderTypeMap."float",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # List Items
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/items",
+            "action": "list-items",
+            "groups": "Items",
+            "display_name": "List Items",
+            "short_desc": "List all items",
+            "desc": "Retrieve a list of items (products and services)",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Get Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-item",
+            "action": "get-item",
+            "groups": "Items",
+            "display_name": "Get Item",
+            "short_desc": "Get an item by ID",
+            "desc": "Retrieve details of a specific item",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "item_id": <ActionOptionInfo>{
+                    "display_name": "Item ID",
+                    "short_desc": "The item to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "items",
+                },
+            },
+        });
+
+        # ========== ESTIMATE ACTIONS ==========
+
+        # Create Estimate
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/create-estimate",
+            "action": "create-estimate",
+            "groups": "Estimates",
+            "display_name": "Create Estimate",
+            "short_desc": "Create a new estimate",
+            "desc": "Create a new quote/estimate for a customer",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the estimate",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Update Estimate
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/update-estimate",
+            "action": "update-estimate",
+            "groups": "Estimates",
+            "display_name": "Update Estimate",
+            "short_desc": "Update an existing estimate",
+            "desc": "Update an existing quote/estimate",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "estimate_id": <ActionOptionInfo>{
+                    "display_name": "Estimate ID",
+                    "short_desc": "The estimate to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "estimates",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the estimate",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Estimate date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in yyyy-mm-dd format",
+                },
+                "expiry_date": <ActionOptionInfo>{
+                    "display_name": "Expiry Date",
+                    "short_desc": "Estimate expiry date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in yyyy-mm-dd format",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Estimate line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items",
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Discount amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # List Estimates
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/estimates",
+            "action": "list-estimates",
+            "groups": "Estimates",
+            "display_name": "List Estimates",
+            "short_desc": "List all estimates",
+            "desc": "Retrieve a list of estimates/quotes",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Get Estimate
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-estimate",
+            "action": "get-estimate",
+            "groups": "Estimates",
+            "display_name": "Get Estimate",
+            "short_desc": "Get an estimate by ID",
+            "desc": "Retrieve details of a specific estimate",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "estimate_id": <ActionOptionInfo>{
+                    "display_name": "Estimate ID",
+                    "short_desc": "The estimate to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "estimates",
+                },
+            },
+        });
+
+        # ========== SALES ORDER ACTIONS ==========
+
+        # Create Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/create-salesorder",
+            "action": "create-salesorder",
+            "groups": "Sales Orders",
+            "display_name": "Create Sales Order",
+            "short_desc": "Create a new sales order",
+            "desc": "Create a new sales order for a customer",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the sales order",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Update Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/update-salesorder",
+            "action": "update-salesorder",
+            "groups": "Sales Orders",
+            "display_name": "Update Sales Order",
+            "short_desc": "Update an existing sales order",
+            "desc": "Update an existing sales order",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order ID",
+                    "short_desc": "The sales order to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "salesorders",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the sales order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Sales order date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in yyyy-mm-dd format",
+                },
+                "shipment_date": <ActionOptionInfo>{
+                    "display_name": "Shipment Date",
+                    "short_desc": "Expected shipment date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in yyyy-mm-dd format",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Sales order line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items",
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Discount amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "delivery_method": <ActionOptionInfo>{
+                    "display_name": "Delivery Method",
+                    "short_desc": "Delivery method",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/delete-salesorder",
+            "action": "delete-salesorder",
+            "groups": "Sales Orders",
+            "display_name": "Delete Sales Order",
+            "short_desc": "Delete a sales order",
+            "desc": "Delete a sales order from Zoho Books",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order ID",
+                    "short_desc": "The sales order to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "salesorders",
+                },
+            },
+        });
+
+        # List Sales Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/salesorders",
+            "action": "list-salesorders",
+            "groups": "Sales Orders",
+            "display_name": "List Sales Orders",
+            "short_desc": "List all sales orders",
+            "desc": "Retrieve a list of sales orders",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Get Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-salesorder",
+            "action": "get-salesorder",
+            "groups": "Sales Orders",
+            "display_name": "Get Sales Order",
+            "short_desc": "Get a sales order by ID",
+            "desc": "Retrieve details of a specific sales order",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order ID",
+                    "short_desc": "The sales order to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "salesorders",
+                },
+            },
+        });
+
+        # ========== PURCHASE ORDER ACTIONS ==========
+
+        # List Purchase Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/purchaseorders",
+            "action": "list-purchaseorders",
+            "groups": "Purchase Orders",
+            "display_name": "List Purchase Orders",
+            "short_desc": "List all purchase orders",
+            "desc": "Retrieve a list of purchase orders",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Get Purchase Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/get-purchaseorder",
+            "action": "get-purchaseorder",
+            "groups": "Purchase Orders",
+            "display_name": "Get Purchase Order",
+            "short_desc": "Get a purchase order by ID",
+            "desc": "Retrieve details of a specific purchase order",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "purchaseorder_id": <ActionOptionInfo>{
+                    "display_name": "Purchase Order ID",
+                    "short_desc": "The purchase order to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "purchaseorders",
+                },
+            },
+        });
+
+        # ========== PAYMENT ACTIONS ==========
+
+        # List Payments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/payments",
+            "action": "list-payments",
+            "groups": "Payments",
+            "display_name": "List Payments",
+            "short_desc": "List all payments",
+            "desc": "Retrieve a list of customer payments",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # ========== TRIGGER ACTIONS (POLLING) ==========
+
+        # New Invoice Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/events/new-invoice",
+            "action": EVENT_NEW_INVOICE,
+            "groups": "Triggers",
+            "display_name": "New Invoice",
+            "short_desc": "Trigger when a new invoice is created",
+            "desc": "Fires when a new invoice is created in Zoho Books. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_INVOICE,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new invoices (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Bill Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/events/new-bill",
+            "action": EVENT_NEW_BILL,
+            "groups": "Triggers",
+            "display_name": "New Bill",
+            "short_desc": "Trigger when a new bill is created",
+            "desc": "Fires when a new bill is created in Zoho Books. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_BILL,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new bills (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Payment Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/events/new-payment",
+            "action": EVENT_NEW_PAYMENT,
+            "groups": "Triggers",
+            "display_name": "New Payment",
+            "short_desc": "Trigger when a new payment is received",
+            "desc": "Fires when a new payment is recorded in Zoho Books. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_PAYMENT,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new payments (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Customer Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/events/new-customer",
+            "action": EVENT_NEW_CUSTOMER,
+            "groups": "Triggers",
+            "display_name": "New Customer",
+            "short_desc": "Trigger when a new customer is created",
+            "desc": "Fires when a new customer contact is created in Zoho Books. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_CUSTOMER,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new customers (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Expense Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/events/new-expense",
+            "action": EVENT_NEW_EXPENSE,
+            "groups": "Triggers",
+            "display_name": "New Expense",
+            "short_desc": "Trigger when a new expense is created",
+            "desc": "Fires when a new expense is recorded in Zoho Books. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_EXPENSE,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new expenses (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Sales Order Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/events/new-salesorder",
+            "action": EVENT_NEW_SALESORDER,
+            "groups": "Triggers",
+            "display_name": "New Sales Order",
+            "short_desc": "Trigger when a new sales order is created",
+            "desc": "Fires when a new sales order is created in Zoho Books. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_SALESORDER,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new sales orders (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Estimate Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/events/new-estimate",
+            "action": EVENT_NEW_ESTIMATE,
+            "groups": "Triggers",
+            "display_name": "New Estimate",
+            "short_desc": "Trigger when a new estimate is created",
+            "desc": "Fires when a new estimate/quote is created in Zoho Books. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_ESTIMATE,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new estimates (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Item Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/events/new-item",
+            "action": EVENT_NEW_ITEM,
+            "groups": "Triggers",
+            "display_name": "New Item",
+            "short_desc": "Trigger when a new item is created",
+            "desc": "Fires when a new product/service item is created in Zoho Books. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_ITEM,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new items (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Purchase Order Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/events/new-purchaseorder",
+            "action": EVENT_NEW_PURCHASEORDER,
+            "groups": "Triggers",
+            "display_name": "New Purchase Order",
+            "short_desc": "Trigger when a new purchase order is created",
+            "desc": "Fires when a new purchase order is created in Zoho Books. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_PURCHASEORDER,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new purchase orders (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Vendor Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoBooksDataProvider::AppName,
+            "path": "/events/new-vendor",
+            "action": EVENT_NEW_VENDOR,
+            "groups": "Triggers",
+            "display_name": "New Vendor",
+            "short_desc": "Trigger when a new vendor is created",
+            "desc": "Fires when a new vendor contact is created in Zoho Books. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_VENDOR,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Books organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new vendors (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage ZohoBooksDataProvider Module
+
+    @tableofcontents
+
+    @section zohobooksdataproviderintro ZohoBooksDataProvider Introduction
+
+    The %ZohoBooksDataProvider module provides a data provider API for Zoho Books accounting
+    and invoicing through the Zoho Books REST API.
+
+    To use this module, use \c "%requires ZohoBooksDataProvider" in your code.
+
+    All the public symbols in the module are defined in the ZohoBooksDataProvider namespace.
+
+    The main classes are:
+    - @ref ZohoBooksDataProvider::ZohoBooksDataProvider "ZohoBooksDataProvider":
+      the root data provider for Zoho Books with child providers for invoices, bills, payments, etc.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ZohoBooksDataProvider
+%requires ZohoBooksRestClient
+
+# Create a REST client with credentials
+ZohoBooksRestClient rest({
+    "oauth2_client_id": ENV.ZOHOBOOKS_CLIENT_ID,
+    "oauth2_client_secret": ENV.ZOHOBOOKS_CLIENT_SECRET,
+    "oauth2_refresh_token": ENV.ZOHOBOOKS_REFRESH_TOKEN,
+    "organization_id": ENV.ZOHOBOOKS_ORGANIZATION_ID,
+    "subdomain": "zoho",
+    "domain": ".com",
+});
+
+# Create a data provider from the REST client
+ZohoBooksDataProvider zoho(rest);
+
+# List invoices
+map printf("Invoice: %s - %s\n", $1.invoice_number, $1.total),
+    zoho.getChildProvider("invoices").searchRecords();
+    @endcode
+
+    @section zohobooksdataproviderrelnotes Release Notes
+
+    @subsection zohobooksdataproviderv1_0 ZohoBooksDataProvider v1.0
+    - the initial version of the %ZohoBooksDataProvider module
+*/
+
+#! Contains all public definitions in the ZohoBooksDataProvider module
+public namespace ZohoBooksDataProvider {
+}

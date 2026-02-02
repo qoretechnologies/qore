@@ -4796,16 +4796,16 @@ SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreS
     if (preVerify(xsink)) {
         return;
     }
-    if (!sock->priv->setNonBlock(xsink)) {
-        set_non_block = true;
+    if (!sock->priv->setNonBlockAccept(xsink)) {
+        set_non_block_accept = true;
         poll_state.reset(sock->priv->socket->startAccept(xsink));
         if (!*xsink) {
             assert(poll_state);
             state = SPS_ACCEPTING;
         }
         if (*xsink) {
-            sock->priv->clearNonBlock();
-            set_non_block = false;
+            sock->priv->clearNonBlockAccept();
+            set_non_block_accept = false;
         }
     }
 }
@@ -4879,7 +4879,8 @@ QoreHashNode* SocketAcceptPollOperation::continuePoll(ExceptionSink* xsink) {
         } else {
             accepted();
         }
-        sock->priv->clearNonBlock();
+        sock->priv->clearNonBlockAccept();
+        set_non_block_accept = false;
     } else {
         assert(!*xsink);
     }
@@ -5321,6 +5322,168 @@ bool SocketReadHttpHeaderPollOperation::abortNeedsClose() const {
         return reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() ? true : false;
     }
     return true;
+}
+
+// SocketSendAndReadHeaderPollOperation implementation
+
+SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(ExceptionSink* xsink,
+        BinaryNode* response_data, QoreSocketObject* sock, int64 idle_timeout_ms)
+        : SocketPollSocketOperationBase(sock), send_data(response_data),
+          buf(reinterpret_cast<const char*>(response_data->getPtr())),
+          size(response_data->size()),
+          idle_timeout_ms(idle_timeout_ms), header_output(xsink) {
+    AutoLocker al(sock->priv->m);
+
+    // throw an exception and exit if the object is no longer open or valid
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    if (!sock->priv->setNonBlock(xsink)) {
+        poll_state.reset(sock->priv->socket->startSend(xsink, buf, size));
+        if (!poll_state) {
+            sock->priv->clearNonBlock();
+        } else {
+            set_non_block = true;
+        }
+    }
+}
+
+const char* SocketSendAndReadHeaderPollOperation::getStateImpl() const {
+    switch (phase) {
+        case Phase::Sending: return "sending";
+        case Phase::Idle: return "idle";
+        case Phase::ReadingHeader: return "reading-header";
+        case Phase::Complete: return "header-complete";
+        case Phase::Timeout: return "timeout";
+        case Phase::Error: return "error";
+        default: return "unknown";
+    }
+}
+
+QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+    if (sock->priv->checkOpen(xsink)) {
+        phase = Phase::Error;
+        return nullptr;
+    }
+
+    switch (phase) {
+        case Phase::Sending: {
+            if (!poll_state) {
+                phase = Phase::Error;
+                return nullptr;
+            }
+            // Drive the send poll state
+            int rc = poll_state->continuePoll(xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                poll_state.reset();
+                return nullptr;
+            }
+            if (rc) {
+                // Need more I/O for sending
+                return getSocketPollInfoHash(xsink, rc);
+            }
+            // Send complete — free send data and poll state, transition to idle
+            poll_state.reset();
+            send_data.discard();
+            phase = Phase::Idle;
+            // Return POLLIN to wait for incoming data
+            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        }
+
+        case Phase::Idle: {
+            // Check idle timeout
+            int us;
+            int64 now_s = q_epoch_us(us);
+            int64 now_ms = now_s * 1000 + us / 1000;
+            if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
+                phase = Phase::Timeout;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+            // Data is available (we were woken by POLLIN) — transition to header reading
+            poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+            if (*xsink || !poll_state) {
+                phase = Phase::Error;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+            phase = Phase::ReadingHeader;
+        }
+        // fall through to drive header read immediately
+
+        case Phase::ReadingHeader: {
+            if (!poll_state) {
+                phase = Phase::Error;
+                return nullptr;
+            }
+            int rc = poll_state->continuePoll(xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                poll_state.reset();
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+            if (rc) {
+                // Need more I/O for header reading
+                return getSocketPollInfoHash(xsink, rc);
+            }
+            // Header read complete — parse it
+            SimpleRefHolder<BinaryNode> raw(poll_state->takeOutput().get<BinaryNode>());
+            poll_state.reset();
+
+            // Convert binary to string for HTTP header parsing
+            size_t len = raw->size();
+            char* buf = reinterpret_cast<char*>(raw->giveBuffer());
+            char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+            if (!nbuf) {
+                free(buf);
+                xsink->outOfMemory();
+                phase = Phase::Error;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+            nbuf[len] = '\0';
+            SimpleRefHolder<QoreStringNode> hdrstr(new QoreStringNode(nbuf, len, len + 1, sock->getEncoding()));
+
+            // Parse HTTP headers
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+            ReferenceHolder<QoreHashNode> hdr(sock->priv->socket->priv->processHttpHeaderString(xsink, hdrstr,
+                *info, QORE_SOURCE_SOCKET), xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+
+            // Store result for getOutput()
+            header_output = new QoreHashNode(autoTypeInfo);
+            header_output->setKeyValue("hdr", hdr.release(), xsink);
+            header_output->setKeyValue("info", info.release(), xsink);
+
+            // Clear non-block mode now that we're done
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+
+            phase = Phase::Complete;
+            return nullptr;
+        }
+
+        default:
+            return nullptr;
+    }
+}
+
+QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
+    AutoLocker al(sock->priv->m);
+    return header_output.release();
 }
 
 #include "qore/intern/Http2Session.h"

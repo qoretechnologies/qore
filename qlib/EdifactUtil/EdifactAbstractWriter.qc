@@ -195,8 +195,6 @@ w.writeInterchangeHeader(<EdifactInterchangeInfo>{
             @assert(info.sender_id.val(), "sender_id is required");
             @assert(info.recipient_id.val(), "recipient_id is required");
             @assert(info.control_reference.val(), "control_reference is required");
-            @debug(printf("EdifactAbstractWriter::writeInterchangeHeader(): sender=%y recipient=%y ref=%y\n",
-                info.sender_id, info.recipient_id, info.control_reference));
             # Write UNA first if configured
             if (m_write_una && !m_una_written) {
                 writeUna();
@@ -293,8 +291,6 @@ w.writeMessageHeader(<EdifactMessageInfo>{
             @assert(info.message_type.val(), "message_type is required");
             @assert(info.message_version.val(), "message_version is required");
             @assert(info.message_release.val(), "message_release is required");
-            @debug(printf("EdifactAbstractWriter::writeMessageHeader(): ref=%y type=%y version=%y release=%y\n",
-                info.message_reference, info.message_type, info.message_version, info.message_release));
             if (!m_interchange_started) {
                 throw "EDIFACT-WRITE-ERROR", "cannot write message header without interchange header";
             }
@@ -354,7 +350,6 @@ w.writeSegment("DTM", (("137", "20260122", "102"),));
         writeSegment(string tag, list<auto> elems) {
             @assert(tag.val(), "segment tag cannot be empty");
             @assert(tag.regex("^[A-Z]{3}$"), sprintf("segment tag must be 3 uppercase letters: %y", tag));
-            @debug(printf("EdifactAbstractWriter::writeSegment(): tag=%y elems=%d\n", tag, elems.size()));
             string segment = generateSegment(tag, elems, True);
             writeOutput(segment);
             if (m_line_break) {

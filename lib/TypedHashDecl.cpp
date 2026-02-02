@@ -483,6 +483,11 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
                 return -1;
             }
 
+            // ensure the value is referenced before type acceptance, since the accept handler
+            // may discard the old value during type conversion (e.g. timeout: date -> int)
+            if (QoreTypeInfo::mayRequireFilter(i.second->getTypeInfo(), *val)) {
+                val.ensureReferencedValue();
+            }
             QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *val, xsink);
             if (*xsink) {
                 return -1;
