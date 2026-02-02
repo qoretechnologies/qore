@@ -337,6 +337,10 @@ public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProv
             "currencies": True,
             "taxes": True,
             "projects": True,
+            "invoices": True,
+            "estimates": True,
+            "expenses": True,
+            "payments": True,
         };
     }
 
@@ -355,6 +359,10 @@ public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProv
             case "currencies": return getReferenceCurrencies();
             case "taxes": return getReferenceTaxes();
             case "projects": return getReferenceProjects();
+            case "invoices": return getReferenceInvoices();
+            case "estimates": return getReferenceEstimates();
+            case "expenses": return getReferenceExpenses();
+            case "payments": return getReferencePayments();
         }
     }
 
@@ -492,6 +500,103 @@ public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProv
                         "value": project.project_id,
                     };
                 }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
+    #! Returns available invoices for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceInvoices() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("/invoices");
+            if (response.invoices) {
+                foreach hash<auto> invoice in (response.invoices) {
+                    string display_name = invoice.invoice_number ?? sprintf("Invoice %s", invoice.invoice_id);
+                    string customer = invoice.customer_name ?? "";
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": customer,
+                        "desc": sprintf("%s - %s (Status: %s, ID: %s)", display_name, customer,
+                            invoice.status ?? "N/A", invoice.invoice_id),
+                        "value": invoice.invoice_id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
+    #! Returns available estimates for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceEstimates() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("/estimates");
+            if (response.estimates) {
+                foreach hash<auto> estimate in (response.estimates) {
+                    string display_name = estimate.estimate_number ?? sprintf("Estimate %s", estimate.estimate_id);
+                    string customer = estimate.customer_name ?? "";
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": customer,
+                        "desc": sprintf("%s - %s (Status: %s, ID: %s)", display_name, customer,
+                            estimate.status ?? "N/A", estimate.estimate_id),
+                        "value": estimate.estimate_id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
+    #! Returns available expenses for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceExpenses() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("/expenses");
+            if (response.expenses) {
+                foreach hash<auto> expense in (response.expenses) {
+                    string display_name = expense.description ?? sprintf("Expense %s", expense.expense_id);
+                    string amount = expense.total ? sprintf("%s %s", expense.currency_code ?? "",
+                        expense.total) : "";
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": amount,
+                        "desc": sprintf("%s (%s, Status: %s, ID: %s)", display_name, amount,
+                            expense.status ?? "N/A", expense.expense_id),
+                        "value": expense.expense_id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
+    #! Returns available payments for reference data
+    private *list<hash<AllowedValueInfo>> getReferencePayments() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("/customerpayments");
+            list<auto> payments = response.customerpayments ?? response.payments ?? ();
+            foreach hash<auto> payment in (payments) {
+                string display_name = payment.payment_number ?? sprintf("Payment %s", payment.payment_id);
+                string customer = payment.customer_name ?? "";
+                string amount = payment.amount ? sprintf("%s %s", payment.currency_code ?? "",
+                    payment.amount) : "";
+                rv += <AllowedValueInfo>{
+                    "display_name": display_name,
+                    "short_desc": sprintf("%s - %s", customer, amount),
+                    "desc": sprintf("%s - %s (%s, ID: %s)", display_name, customer, amount, payment.payment_id),
+                    "value": payment.payment_id,
+                };
             }
         } catch (hash<ExceptionInfo> ex) {
             # Silently ignore errors when fetching reference data

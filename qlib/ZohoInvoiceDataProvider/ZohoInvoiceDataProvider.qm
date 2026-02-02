@@ -184,6 +184,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "invoices",
                 },
                 "reference_number": <ActionOptionInfo>{
                     "display_name": "Reference Number",
@@ -277,6 +278,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "invoices",
                 },
             },
         });
@@ -306,6 +308,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "invoices",
                 },
             },
         });
@@ -395,6 +398,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "invoices",
                 },
                 "to_mail_ids": <ActionOptionInfo>{
                     "display_name": "To",
@@ -440,6 +444,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "invoices",
                 },
                 "status": <ActionOptionInfo>{
                     "display_name": "Status",
@@ -1167,6 +1172,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "expenses",
                 },
                 "date": <ActionOptionInfo>{
                     "display_name": "Expense Date",
@@ -1249,6 +1255,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "expenses",
                 },
             },
         });
@@ -1278,6 +1285,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "expenses",
                 },
             },
         });
@@ -1290,7 +1298,7 @@ module ZohoInvoiceDataProvider {
             "groups": "Expenses",
             "display_name": "List Expenses",
             "short_desc": "List all expenses",
-            "desc": "Retrieve a list of expenses",
+            "desc": "Retrieve a list of expenses with optional filtering",
             "action_code": DPAT_FIND,
             "options": {
                 "organization_id": <ActionOptionInfo>{
@@ -1300,6 +1308,37 @@ module ZohoInvoiceDataProvider {
                     "required": True,
                     "preselected": True,
                     "ref_data": "organizations",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by expense status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "unbilled", "desc": "Unbilled expenses"},
+                        <AllowedValueInfo>{"value": "invoiced", "desc": "Invoiced expenses"},
+                        <AllowedValueInfo>{"value": "reimbursed", "desc": "Reimbursed expenses"},
+                        <AllowedValueInfo>{"value": "billable", "desc": "Billable expenses"},
+                        <AllowedValueInfo>{"value": "non-billable", "desc": "Non-billable expenses"},
+                    ),
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter expenses by customer (for billable expenses)",
+                    "ref_data": "customers",
+                },
+                "date_start": <ActionOptionInfo>{
+                    "display_name": "Date Start",
+                    "short_desc": "Filter from this date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter expenses on or after this date (YYYY-MM-DD)",
+                },
+                "date_end": <ActionOptionInfo>{
+                    "display_name": "Date End",
+                    "short_desc": "Filter to this date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter expenses on or before this date (YYYY-MM-DD)",
                 },
             },
         });
@@ -1641,6 +1680,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "payments",
                 },
                 "date": <ActionOptionInfo>{
                     "display_name": "Payment Date",
@@ -1716,6 +1756,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "payments",
                 },
             },
         });
@@ -1745,6 +1786,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "payments",
                 },
             },
         });
@@ -1757,7 +1799,7 @@ module ZohoInvoiceDataProvider {
             "groups": "Payments",
             "display_name": "List Payments",
             "short_desc": "List all payments",
-            "desc": "Retrieve a list of customer payments",
+            "desc": "Retrieve a list of customer payments with optional filtering",
             "action_code": DPAT_FIND,
             "options": {
                 "organization_id": <ActionOptionInfo>{
@@ -1773,6 +1815,37 @@ module ZohoInvoiceDataProvider {
                     "short_desc": "Filter by customer",
                     "type": AbstractDataProviderTypeMap."*string",
                     "ref_data": "customers",
+                },
+                "date_start": <ActionOptionInfo>{
+                    "display_name": "Date Start",
+                    "short_desc": "Filter from this date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter payments on or after this date (YYYY-MM-DD)",
+                },
+                "date_end": <ActionOptionInfo>{
+                    "display_name": "Date End",
+                    "short_desc": "Filter to this date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter payments on or before this date (YYYY-MM-DD)",
+                },
+                "payment_mode": <ActionOptionInfo>{
+                    "display_name": "Payment Mode",
+                    "short_desc": "Filter by payment method",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "cash", "desc": "Cash payment"},
+                        <AllowedValueInfo>{"value": "check", "desc": "Check"},
+                        <AllowedValueInfo>{"value": "creditcard", "desc": "Credit card"},
+                        <AllowedValueInfo>{"value": "banktransfer", "desc": "Bank transfer"},
+                        <AllowedValueInfo>{"value": "paypal", "desc": "PayPal"},
+                        <AllowedValueInfo>{"value": "other", "desc": "Other payment method"},
+                    ),
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Search by reference",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Search payments by check number, transaction ID, or other reference",
                 },
             },
         });
@@ -1802,6 +1875,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "payments",
                 },
                 "amount": <ActionOptionInfo>{
                     "display_name": "Amount",
@@ -1935,6 +2009,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "estimates",
                 },
                 "reference_number": <ActionOptionInfo>{
                     "display_name": "Reference Number",
@@ -2029,6 +2104,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "estimates",
                 },
             },
         });
@@ -2058,6 +2134,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "estimates",
                 },
             },
         });
@@ -2127,6 +2204,7 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "estimates",
                 },
                 "status": <ActionOptionInfo>{
                     "display_name": "Status",
