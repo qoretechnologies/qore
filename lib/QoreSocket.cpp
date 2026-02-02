@@ -3157,6 +3157,34 @@ int32_t QoreSocket::submitHttp2PushPromise(int32_t stream_id, const char* path,
     return priv->h2_session->submitPushPromise(stream_id, path, h2_headers, xsink);
 }
 
+int QoreSocket::submitHttp2Response(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    // Convert Qore headers hash to std::map
+    std::map<std::string, std::string> h2_headers;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    return priv->h2_session->submitResponse(stream_id, status_code, h2_headers, body, body_len, xsink);
+}
+
+void QoreSocket::setHttp2ConnectProtocolEnabled(bool enable) {
+    priv->h2_enable_connect_protocol = enable;
+}
+
 int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, int timeout_ms, ExceptionSink* xsink) {
     (void)timeout_ms;
@@ -5537,6 +5565,8 @@ int SocketHttp2ServerPollOperation::initSession(ExceptionSink* xsink) {
     if (!h2_session) {
         return -1;
     }
+    // Apply socket-level HTTP/2 settings before the connection preface is sent
+    h2_session->setEnableConnectProtocol(sock->priv->socket->priv->h2_enable_connect_protocol);
     // Store session on socket for shared access
     sock->priv->socket->priv->h2_session = h2_session;
     return 0;
@@ -5578,14 +5608,30 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                     return nullptr;
                 }
                 if (rv == -1) {
-                    // Would block - need to poll for read
-                    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    // Would block on recv - also try to send pending response data
+                    // (responses may have been queued by handler threads via submitResponse)
+                    int srv = h2_session->sendPendingData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == SOCK_POLLIN || srv == SOCK_POLLOUT) {
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN | srv);
+                    }
+                    // Always read; add write if there are pending sends
+                    int events = SOCK_POLLIN;
+                    if (h2_session->hasPendingData() || h2_session->wantWrite()) {
+                        events |= SOCK_POLLOUT;
+                    }
+                    return getSocketPollInfoHash(xsink, events);
                 }
                 if (rv == 1) {
                     // Connection closed by peer - check if we have a completed request first
                     if (!h2_session->hasCompletedStreams()) {
                         peer_closed = true;
-                        h2_state = H2S_REQUEST_READY;
+                        // Do NOT set H2S_REQUEST_READY: there are no completed streams to
+                        // return, so goalReached() should return false.  The caller will see
+                        // continuePoll() -> nullptr with goalReached() == false and handle
+                        // the connection closure.
                         if (set_non_block) {
                             set_non_block = false;
                             sock->priv->clearNonBlock();
@@ -5625,20 +5671,36 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                     h2_state = H2S_READING;
                 }
 
-                // Poll based on what the session wants (check buffer + nghttp2 state)
-                if (h2_session->hasPendingData() || h2_session->wantWrite()) {
-                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                // Always include POLLIN to continue reading new requests.
+                // Add POLLOUT when there are pending response sends.
+                {
+                    int events = SOCK_POLLIN;
+                    if (h2_session->hasPendingData() || h2_session->wantWrite()) {
+                        events |= SOCK_POLLOUT;
+                    }
+                    return getSocketPollInfoHash(xsink, events);
                 }
-                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
             }
 
             case H2S_REQUEST_READY:
-                // Goal reached - clear non-block flag so subsequent operations can proceed
-                if (set_non_block) {
-                    set_non_block = false;
-                    sock->priv->clearNonBlock();
+                // If there are more completed streams, stay in REQUEST_READY
+                if (h2_session->hasCompletedStreams()) {
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
                 }
-                return nullptr;
+                // All completed streams consumed - transition back to reading
+                // so the same operation can be reused for multiplexing
+                h2_state = H2S_READING;
+                if (!set_non_block) {
+                    if (sock->priv->setNonBlock(xsink)) {
+                        return nullptr;
+                    }
+                    set_non_block = true;
+                }
+                continue;
 
             default:
                 xsink->raiseException("HTTP2-ERROR", "unexpected state: %d", h2_state);
@@ -6069,6 +6131,25 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                     continue;
                 }
 
+                // Check if the flow control window is exhausted.  If so, we
+                // need to receive a WINDOW_UPDATE from the client before we can
+                // send more data or declare completion.
+                //
+                // getStreamRemoteWindowSize() returns -1 when the stream no
+                // longer exists (already closed after END_STREAM was sent and
+                // acknowledged).  A negative value does NOT mean the window is
+                // exhausted — it means the stream is gone, so we must NOT
+                // enter SS_RECV_WINDOW (which would loop forever waiting for a
+                // WINDOW_UPDATE that will never arrive).
+                {
+                    int32_t stream_window = session->getStreamRemoteWindowSize(stream_id);
+                    int32_t conn_window = session->getStreamRemoteWindowSize(0);
+                    if ((stream_window >= 0 && stream_window == 0) || conn_window == 0) {
+                        ss_state = SS_RECV_WINDOW;
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    }
+                }
+
                 if (eof) {
                     // All done
                     ss_state = SS_DONE;
@@ -6081,6 +6162,30 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
 
                 // More data to read
                 ss_state = SS_READ_CHUNK;
+                continue;
+            }
+
+            case SS_RECV_WINDOW: {
+                // Read incoming data from client (WINDOW_UPDATE, PING, etc.)
+                // to update flow control windows so we can continue sending.
+                int rv = session->receiveData(0, xsink);
+                if (*xsink) return nullptr;
+                if (rv == -1) {
+                    // Would block - poll for read
+                    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                }
+                if (rv == 1) {
+                    // Peer closed connection during streaming response
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    ss_state = SS_DONE;
+                    return nullptr;
+                }
+                // Data received - WINDOW_UPDATE may have been processed.
+                // Try to flush buffered data now that the window may be open.
+                ss_state = SS_FLUSH;
                 continue;
             }
 

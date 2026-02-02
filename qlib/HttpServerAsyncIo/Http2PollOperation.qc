@@ -42,10 +42,14 @@ public class Http2PollOperation inherits AbstractPollOperation {
         #! State constants
         const STATE_INIT = "init";
         const STATE_READING = "reading";
+        const STATE_WAIT_READ = "wait_read";
         const STATE_REQUEST_READY = "request_ready";
         const STATE_SENDING = "sending";
         const STATE_SENT = "sent";
         const STATE_CLOSED = "closed";
+
+        #! Maximum consecutive empty reads (goalReached with no request) before closing
+        const MAX_EMPTY_READS = 100;
     }
 
     private {
@@ -66,6 +70,9 @@ public class Http2PollOperation inherits AbstractPollOperation {
 
         #! Error info if an error occurred
         *hash<auto> error_info;
+
+        #! Counter for consecutive empty reads to prevent infinite poll loops
+        int empty_read_count = 0;
     }
 
     #! Creates the poll operation
@@ -116,10 +123,12 @@ public class Http2PollOperation inherits AbstractPollOperation {
     */
     *hash<SocketPollInfo> continuePoll() {
         while (True) {
+
             switch (state) {
                 case STATE_INIT:
                 case STATE_READING: {
                     if (!current_op) {
+
                         state = STATE_CLOSED;
                         return NOTHING;
                     }
@@ -131,8 +140,31 @@ public class Http2PollOperation inherits AbstractPollOperation {
                         # Read complete
                         if (current_op.goalReached()) {
                             request = current_op.getOutput();
-                            state = STATE_REQUEST_READY;
-                            return NOTHING;
+                            if (request) {
+                                empty_read_count = 0;
+                                state = STATE_REQUEST_READY;
+
+                                return NOTHING;
+                            }
+                            # goalReached but no request: HTTP/2 control frames were processed
+                            # (WINDOW_UPDATE, PING, SETTINGS ACK, etc.) without a new request.
+                            # Wait for new socket data before retrying.
+                            ++empty_read_count;
+                            if (empty_read_count > MAX_EMPTY_READS) {
+                                error_info = {
+                                    "err": "HTTP2-EMPTY-READ",
+                                    "desc": sprintf("max consecutive empty reads (%d) exceeded",
+                                        MAX_EMPTY_READS),
+                                };
+                                state = STATE_CLOSED;
+                                return NOTHING;
+                            }
+                            state = STATE_WAIT_READ;
+
+                            return <SocketPollInfo>{
+                                "events": SOCK_POLLIN,
+                                "socket": sock,
+                            };
                         } else {
                             # Operation failed
                             state = STATE_CLOSED;
@@ -146,6 +178,15 @@ public class Http2PollOperation inherits AbstractPollOperation {
                         state = STATE_CLOSED;
                         return NOTHING;
                     }
+                }
+
+                case STATE_WAIT_READ: {
+                    # Socket has new data available; start a fresh read operation
+
+                    startReadRequest();
+                    # Use continue to restart the while loop (avoids potential
+                    # fall-through to STATE_SENDING in Qore's switch statement)
+                    continue;
                 }
 
                 case STATE_SENDING: {
@@ -344,15 +385,31 @@ if (push) {
     }
 
     #! Starts reading the next HTTP/2 request on this connection
-    /** After sending a response, call this to wait for the next request
-        on the persistent HTTP/2 connection.
+    /** After sending a response or when goalReached indicated a request was ready but
+        getOutput() returned NOTHING (e.g., after processing HTTP/2 control frames),
+        call this to wait for the next request on the persistent HTTP/2 connection.
     */
     startReadNextRequest() {
-        if (state != STATE_SENT) {
+        if (state != STATE_SENT && state != STATE_REQUEST_READY) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot read next request in state: %y", state);
         }
         remove request;
         startReadRequest();
+    }
+
+    #! Continues reading without creating a new C++ read operation
+    /** Called after a request has been dispatched in multiplexing mode.  The same
+        underlying C++ SocketHttp2ServerPollOperation continues reading frames.
+        This avoids the overhead of creating a new operation and preserves the
+        nghttp2 session state (including any already-received frames).
+    */
+    continueReading() {
+        if (state != STATE_REQUEST_READY) {
+            throw "HTTP2-STATE-ERROR", sprintf("cannot continue reading in state: %y", state);
+        }
+        remove request;
+        empty_read_count = 0;
+        state = STATE_READING;
     }
 
     #! Aborts the operation
