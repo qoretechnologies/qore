@@ -3734,12 +3734,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 if (!start) {
                     start = now_us();
                 }
+                # Read TTL once per iteration to avoid races with setTtl() from other threads
+                date ttl = serv.getTtl();
                 date poll_interval = HttpServer::PollTimeout;
-                if (!persistent && poll_interval > (date ttl = serv.getTtl())) {
+                if (!persistent && poll_interval > ttl) {
                     poll_interval = ttl;
                 }
                 if (!s.isDataAvailable(poll_interval)) {
-                    if (!persistent && ((date delta = now_us() - start) > (date ttl = serv.getTtl()))) {
+                    if (!persistent && ((now_us() - start) > ttl)) {
                         log("Disconnecting idle connection after: %y", ttl);
                         break;
                     }

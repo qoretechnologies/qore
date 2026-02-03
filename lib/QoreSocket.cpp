@@ -5595,6 +5595,15 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
             case H2S_READING: {
                 // If another thread already completed a stream, return it immediately
                 if (h2_session->hasCompletedStreams()) {
+                    // Flush any pending output (RST_STREAM, SETTINGS_ACK, etc.) before returning
+                    int srv = h2_session->sendPendingData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == SOCK_POLLIN || srv == SOCK_POLLOUT) {
+                        // Socket buffer full; poll and retry before completing the operation
+                        return getSocketPollInfoHash(xsink, srv);
+                    }
                     h2_state = H2S_REQUEST_READY;
                     if (set_non_block) {
                         set_non_block = false;
@@ -5643,6 +5652,15 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
 
                 // Check if we have a completed request
                 if (h2_session->hasCompletedStreams()) {
+                    // Flush any pending output (RST_STREAM, SETTINGS_ACK, etc.) before returning
+                    int srv = h2_session->sendPendingData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == SOCK_POLLIN || srv == SOCK_POLLOUT) {
+                        // Socket buffer full; poll and retry before completing the operation
+                        return getSocketPollInfoHash(xsink, srv);
+                    }
                     h2_state = H2S_REQUEST_READY;
                     // Goal reached - clear non-block flag so subsequent operations can proceed
                     if (set_non_block) {

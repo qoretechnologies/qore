@@ -1631,7 +1631,13 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/2 multiplexed handler for stream=%d "
                 "on %y: %s: %s", stream_id, uh, ex.err, ex.desc);
-            # h2op is still on the I/O thread reading — do not close the connection
+            # h2op is still on the I/O thread reading — send error response for this stream
+            try {
+                cinfo.sock.submitHttp2Response(stream_id, 503,
+                    {"content-type": "text/plain"},
+                    "Service Unavailable");
+            } catch () {}
+            controllers[cinfo.controller_idx].wake();
         }
     }
 
@@ -1665,11 +1671,12 @@ public class HttpAsyncSocketIoController {
                 cinfo.sock.submitHttp2Response(stream_id, 501,
                     {"content-type": "text/plain"},
                     "WebSocket over HTTP/2 not supported; use HTTP/1.1");
-                controllers[cinfo.controller_idx].wake();
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "Error rejecting HTTP/2 WebSocket stream=%d on %y: %s: %s",
                     stream_id, uh, ex.err, ex.desc);
             }
+            # Always wake the I/O thread to flush pending data (e.g. RST_STREAM)
+            controllers[cinfo.controller_idx].wake();
             return;
         }
 
