@@ -630,6 +630,20 @@ public namespace RestHandler {
             return timeout_ms;
         }
 
+        #! returns @ref True if the server should apply content encoding to the response body
+        /** Subclasses that manage per-chunk content encoding (e.g. the DataStream protocol) should
+            override this to return @ref False so that the server preserves per-chunk boundaries
+            and does not apply additional compression.
+
+            @return @ref True if the server should apply content encoding, @ref False if the handler
+            manages its own encoding
+
+            @since RestHandler 1.6.6
+        */
+        bool needsContentEncoding() {
+            return True;
+        }
+
         #! registers stream errors in the send operation with the stream handler if no error is already present
         streamError(hash<auto> ex) {
             if (!self.ex)
@@ -711,6 +725,14 @@ public namespace RestHandler {
                 handler.notifyClosed();
                 handler.setPersistent(False);
             }
+        }
+
+        #! delegates to the stream handler's needsContentEncoding() method
+        /** @see AbstractRestStreamRequestHandler::needsContentEncoding()
+            @since RestHandler 1.6.6
+        */
+        bool needsContentEncoding() {
+            return stream.needsContentEncoding();
         }
 
         # callback method for the response header; this calls @ref RestHandler::AbstractRestStreamRequestHandler::getResponseHeaderMessage() and returns the result
@@ -1453,7 +1475,15 @@ public namespace RestHandler {
             }
 
             if (!rv.reply_sent) {
-                bool raw_response = exists rv.raw_response && rv.raw_response;
+                # InputStream bodies (e.g. CallbackInputStream from AbstractStreamRequest),
+                # chunked_body InputStream responses, and send_callback responses are streaming
+                # responses that must not be serialized; treat them like raw_response
+                # NOTE: rv may be HttpHandlerResponseInfo which lacks chunked_body, so use
+                # hasKeyValue() for that field
+                bool raw_response = (exists rv.raw_response && rv.raw_response)
+                    || rv.body instanceof InputStream
+                    || rv.hasKeyValue("chunked_body")
+                    || rv.send_callback;
                 if (raw_response) {
                     if (!rv.hdr) {
                         rv.hdr = {};

@@ -4195,7 +4195,15 @@ protected:
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
-        // union types generally cannot be converted to scalars unless all members can
+        // a union can convert to scalar if any of its members can; at runtime, the operation
+        // succeeds when the actual value is a scalar-convertible type (e.g. string in a
+        // union<string, binary, InputStream>)
+        for (const auto& rt : return_vec) {
+            const QoreTypeInfo* ti = rt.spec.getBaseTypeInfo();
+            if (ti && ti != nothingTypeInfo && QoreTypeInfo::canConvertToScalar(ti)) {
+                return true;
+            }
+        }
         return false;
     }
 

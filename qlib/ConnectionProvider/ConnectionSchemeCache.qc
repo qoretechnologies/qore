@@ -215,6 +215,7 @@ public class ConnectionSchemeCache {
             "zeyosrests": "ZeyosRestClient",
 
             "zohobooks": "ZohoBooksRestClient",
+            "zohoinvoice": "ZohoInvoiceRestClient",
         };
 
         #! Type alias map
