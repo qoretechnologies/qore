@@ -1682,6 +1682,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     return false;
                 }
                 QoreValue value = getIRValue(values, guard_inst->operands.front());
+                // Record type profile for this guard point
+                if (guard_inst->guard_id < func.guard_profile_count) {
+                    func.guard_profiles[guard_inst->guard_id].record(value);
+                }
                 if (!guardPredicate(inst->opcode, value, guard_inst->type_info)) {
                     if (guard_inst->deopt_target) {
                         // Guard has a deopt target (e.g. catch block) — route to it

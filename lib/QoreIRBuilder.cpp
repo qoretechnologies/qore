@@ -396,6 +396,7 @@ QoreIRGuardInstruction* QoreIRBuilder::createGuardInt(QoreIRValue value, QoreIRB
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->deopt_target = exception_target;
+    inst->guard_id = func->num_guards++;
     return inst;
 }
 
@@ -405,6 +406,7 @@ QoreIRGuardInstruction* QoreIRBuilder::createGuardFloat(QoreIRValue value, QoreI
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->deopt_target = exception_target;
+    inst->guard_id = func->num_guards++;
     return inst;
 }
 
@@ -415,6 +417,7 @@ QoreIRGuardInstruction* QoreIRBuilder::createGuardType(QoreIRValue value, const 
     inst->operands.push_back(value);
     inst->type_info = type;
     inst->deopt_target = exception_target;
+    inst->guard_id = func->num_guards++;
     return inst;
 }
 
@@ -424,6 +427,7 @@ QoreIRGuardInstruction* QoreIRBuilder::createGuardNotNothing(QoreIRValue value, 
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->deopt_target = exception_target;
+    inst->guard_id = func->num_guards++;
     return inst;
 }
 

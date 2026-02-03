@@ -47,6 +47,7 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_ostream.h>
@@ -666,6 +667,7 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
 }
 
 bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error) {
+    current_ir_func = &func;
     initTypes();
     declareRuntimeHelpers(module);
 
@@ -1416,12 +1418,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     boxed = boxBool(val);
                 }
             }
-            // Call guard helper
-            auto helper = module.getOrInsertFunction("qore_rt_guard_not_nothing",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-            llvm::Value* guard_result = builder->CreateCall(helper, {boxed});
-            llvm::Value* guard_pass = builder->CreateICmpNE(guard_result,
-                    llvm::ConstantInt::get(i64_type, 0));
+            // Profile-informed: use inline check when profile shows value is rarely NOTHING
+            llvm::Value* guard_pass;
+            bool profile_hot = false;
+            if (current_ir_func && ginst->guard_id < current_ir_func->guard_profile_count) {
+                const TypeProfile& prof = current_ir_func->guard_profiles[ginst->guard_id];
+                if (prof.total() >= 50 && prof.nothing_count.load(std::memory_order_relaxed) == 0) {
+                    profile_hot = true;
+                }
+            }
+            if (profile_hot) {
+                // Inline check: NOTHING is represented as 0
+                guard_pass = builder->CreateICmpNE(boxed,
+                    llvm::ConstantInt::get(i64_type, VAL_NOTHING), "guard_not_nothing_inline");
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_guard_not_nothing",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                llvm::Value* guard_result = builder->CreateCall(helper, {boxed});
+                guard_pass = builder->CreateICmpNE(guard_result,
+                        llvm::ConstantInt::get(i64_type, 0));
+            }
             // Branch: pass → continue (next instruction in same block),
             //         fail → deopt_target
             if (ginst->deopt_target) {
@@ -1432,7 +1448,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 // Create a continuation block
                 llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "guard_pass", llvm_func);
-                builder->CreateCondBr(guard_pass, cont, deopt_it->second);
+                if (profile_hot) {
+                    auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
+                    builder->CreateCondBr(guard_pass, cont, deopt_it->second, weights);
+                } else {
+                    builder->CreateCondBr(guard_pass, cont, deopt_it->second);
+                }
                 builder->SetInsertPoint(cont);
             }
             if (inst->result.isValid()) {
@@ -1452,11 +1473,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     boxed = boxBool(val);
                 }
             }
-            auto helper = module.getOrInsertFunction("qore_rt_guard_int",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-            llvm::Value* guard_result = builder->CreateCall(helper, {boxed});
-            llvm::Value* guard_pass = builder->CreateICmpNE(guard_result,
-                    llvm::ConstantInt::get(i64_type, 0));
+            // Profile-informed: use inline NaN-boxing check instead of runtime call
+            // Int check: value < TAG_INT48 (int values are in the lower range)
+            llvm::Value* guard_pass;
+            bool profile_hot = false;
+            if (current_ir_func && ginst->guard_id < current_ir_func->guard_profile_count) {
+                const TypeProfile& prof = current_ir_func->guard_profiles[ginst->guard_id];
+                if (prof.total() >= 50 && prof.dominantType() == NT_INT) {
+                    profile_hot = true;
+                }
+            }
+            if (profile_hot || boxed->getType() == i64_type) {
+                // Inline check: NaN-boxed int has bits < TAG_INT48
+                guard_pass = builder->CreateICmpULT(boxed,
+                    llvm::ConstantInt::get(i64_type, TAG_INT48), "guard_int_inline");
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_guard_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                llvm::Value* guard_result = builder->CreateCall(helper, {boxed});
+                guard_pass = builder->CreateICmpNE(guard_result,
+                        llvm::ConstantInt::get(i64_type, 0));
+            }
             if (ginst->deopt_target) {
                 auto deopt_it = block_map.find(ginst->deopt_target);
                 if (deopt_it == block_map.end()) {
@@ -1464,7 +1501,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "guard_pass", llvm_func);
-                builder->CreateCondBr(guard_pass, cont, deopt_it->second);
+                // Use branch weights when profile data is available
+                if (profile_hot) {
+                    auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
+                    builder->CreateCondBr(guard_pass, cont, deopt_it->second, weights);
+                } else {
+                    builder->CreateCondBr(guard_pass, cont, deopt_it->second);
+                }
                 builder->SetInsertPoint(cont);
             }
             if (inst->result.isValid()) {
@@ -1484,11 +1527,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     boxed = boxBool(val);
                 }
             }
-            auto helper = module.getOrInsertFunction("qore_rt_guard_float",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-            llvm::Value* guard_result = builder->CreateCall(helper, {boxed});
-            llvm::Value* guard_pass = builder->CreateICmpNE(guard_result,
-                    llvm::ConstantInt::get(i64_type, 0));
+            // Profile-informed: use inline NaN-boxing check for float
+            llvm::Value* guard_pass;
+            bool profile_hot = false;
+            if (current_ir_func && ginst->guard_id < current_ir_func->guard_profile_count) {
+                const TypeProfile& prof = current_ir_func->guard_profiles[ginst->guard_id];
+                if (prof.total() >= 50 && prof.dominantType() == NT_FLOAT) {
+                    profile_hot = true;
+                }
+            }
+            if (profile_hot) {
+                // Inline check: NaN-boxed float: bits > DOUBLE_ENCODE_OFFSET && bits < TAG_INT48
+                llvm::Value* above_offset = builder->CreateICmpUGT(boxed,
+                    llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET));
+                llvm::Value* below_int = builder->CreateICmpULT(boxed,
+                    llvm::ConstantInt::get(i64_type, TAG_INT48));
+                guard_pass = builder->CreateAnd(above_offset, below_int, "guard_float_inline");
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_guard_float",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                llvm::Value* guard_result = builder->CreateCall(helper, {boxed});
+                guard_pass = builder->CreateICmpNE(guard_result,
+                        llvm::ConstantInt::get(i64_type, 0));
+            }
             if (ginst->deopt_target) {
                 auto deopt_it = block_map.find(ginst->deopt_target);
                 if (deopt_it == block_map.end()) {
@@ -1496,7 +1557,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "guard_pass", llvm_func);
-                builder->CreateCondBr(guard_pass, cont, deopt_it->second);
+                if (profile_hot) {
+                    auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
+                    builder->CreateCondBr(guard_pass, cont, deopt_it->second, weights);
+                } else {
+                    builder->CreateCondBr(guard_pass, cont, deopt_it->second);
+                }
                 builder->SetInsertPoint(cont);
             }
             if (inst->result.isValid()) {

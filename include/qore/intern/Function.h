@@ -635,6 +635,10 @@ protected:
     mutable bool ir_lower_failed = false;
     mutable bool jit_compile_failed = false;
     bool is_closure = false;  //!< true for closure variants
+    //! Deopt counter: incremented on JIT guard failure, triggers recompilation
+    mutable std::atomic<uint32_t> deopt_count{0};
+    //! Flag to allow a single recompilation attempt after deopt
+    mutable std::once_flag jit_recompile_once;
 
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
             ExceptionSink* xsink) const;
@@ -650,6 +654,8 @@ protected:
     DLLLOCAL void attemptIRLowering(const char* name) const;
     //! Attempt JIT compilation; called via std::call_once
     DLLLOCAL void attemptJITCompilation() const;
+    //! Attempt JIT recompilation with updated type profiles after deopt
+    DLLLOCAL void attemptJITRecompilation() const;
 
 public:
     DLLLOCAL UserVariantBase(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params,

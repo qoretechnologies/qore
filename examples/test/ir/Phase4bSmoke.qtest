@@ -1,0 +1,273 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class Phase4bSmokeTest
+
+class Phase4bSmokeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("Phase4bSmokeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        # Type profiling tests
+        addTestCase("type profiling int correctness", \testTypeProfilingInt());
+        addTestCase("type profiling float correctness", \testTypeProfilingFloat());
+        addTestCase("type profiling mixed types", \testTypeProfilingMixed());
+        addTestCase("type profiling guard promotion", \testTypeProfilingGuardPromotion());
+        # Profile-informed JIT guard tests
+        addTestCase("profiled guard int fast-path", \testProfiledGuardIntFastPath());
+        addTestCase("profiled guard float fast-path", \testProfiledGuardFloatFastPath());
+        addTestCase("profiled guard not-nothing fast-path", \testProfiledGuardNotNothingFastPath());
+        # Deopt and correctness tests
+        addTestCase("deopt mixed type correctness", \testDeoptMixedTypeCorrectness());
+        addTestCase("deopt type change mid-execution", \testDeoptTypeChangeMidExecution());
+        addTestCase("profiled tiered promotion correctness", \testProfiledTieredPromotionCorrectness());
+        set_return_value(main());
+    }
+
+    private string runScript(string code, *string exec_mode, *string extra_opts) {
+        string mode = exec_mode ?? "tiered";
+        TmpFile tmp(".q");
+        tmp.file.write(code);
+        tmp.file.close();
+        string path = tmp.path;
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s 2>&1",
+            qore_bin, mode, extra_opts ?? "", path);
+        return backquote(cmd);
+    }
+
+    # --- Type profiling basic tests ---
+
+    testTypeProfilingInt() {
+        # Function called many times with int args in tiered mode.
+        # Type profiles should accumulate int counts; result must be correct.
+        string code = "%modern
+auto sub add_any(auto a, auto b) {
+    return a + b;
+}
+int total = 0;
+for (int i = 0; i < 200; i++) {
+    total += add_any(i, 1);
+}
+printf(\"%d\\n\", total);
+";
+        # Tiered mode with low thresholds to trigger IR and JIT quickly
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=10 --jit-jit-threshold=50"));
+        assertEq("20100", result, "type profiling int: sum correct after tiered promotion");
+    }
+
+    testTypeProfilingFloat() {
+        # Function called many times with float args.
+        string code = "%modern
+auto sub mul_any(auto a, auto b) {
+    return a * b;
+}
+float total = 0.0;
+for (int i = 0; i < 200; i++) {
+    total += mul_any(2.5, float(i));
+}
+printf(\"%.1f\\n\", total);
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=10 --jit-jit-threshold=50"));
+        assertEq("49750.0", result, "type profiling float: product sum correct");
+    }
+
+    testTypeProfilingMixed() {
+        # Function called with mixed types: ints first, then floats, then strings.
+        # No single type should dominate, so guards remain generic.
+        string code = "%modern
+auto sub identity(auto v) {
+    return v;
+}
+list results = ();
+# Call with ints
+for (int i = 0; i < 100; i++) {
+    push results, identity(i);
+}
+# Call with floats
+for (int i = 0; i < 100; i++) {
+    push results, identity(float(i));
+}
+# Call with strings
+for (int i = 0; i < 100; i++) {
+    push results, identity(string(i));
+}
+printf(\"%d %s %s\\n\", results[0], string(results[100]), results[200]);
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=10 --jit-jit-threshold=50"));
+        assertEq("0 0.0 0", result, "type profiling mixed: correct results for mixed types");
+    }
+
+    testTypeProfilingGuardPromotion() {
+        # Verify that a function with typed int params runs correctly through
+        # all three tiers (AST → IR with profiling → JIT with profiled guards).
+        string code = "%modern
+int sub square(int n) {
+    return n * n;
+}
+int total = 0;
+for (int i = 0; i < 500; i++) {
+    total += square(i);
+}
+printf(\"%d\\n\", total);
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=100"));
+        # Sum of i^2 from 0 to 499 = 499*500*999/6 = 41541750
+        assertEq("41541750", result, "type profiling guard promotion: sum of squares correct");
+    }
+
+    # --- Profile-informed guard fast-path tests ---
+
+    testProfiledGuardIntFastPath() {
+        # Test that functions consistently called with ints produce correct results
+        # when JIT uses profiled inline guard checks.
+        # Compare IR vs tiered to ensure profile-informed JIT matches.
+        string code = "%modern
+int sub fib(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+printf(\"%d\\n\", fib(20));
+";
+        string ir_result = trim(runScript(code, "ir"));
+        string tiered_result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=20"));
+        assertEq("6765", ir_result, "profiled guard int: IR fib(20) correct");
+        assertEq(ir_result, tiered_result,
+            "profiled guard int: tiered (with profiled JIT) matches IR");
+    }
+
+    testProfiledGuardFloatFastPath() {
+        # Function consistently called with floats; verify profile-informed float guards.
+        string code = "%modern
+float sub area(float r) {
+    return 3.14159265 * r * r;
+}
+float total = 0.0;
+for (int i = 0; i < 300; i++) {
+    total += area(float(i));
+}
+printf(\"%.2f\\n\", total);
+";
+        string ir_result = trim(runScript(code, "ir"));
+        string tiered_result = trim(runScript(code, "tiered", "--jit-ir-threshold=10 --jit-jit-threshold=50"));
+        assertEq(ir_result, tiered_result,
+            "profiled guard float: tiered matches IR for float-heavy function");
+    }
+
+    testProfiledGuardNotNothingFastPath() {
+        # Function with 'auto' params that are never NOTHING; profile should
+        # show never-NOTHING and enable inline guard.
+        string code = "%modern
+auto sub process(auto val) {
+    if (val.typeCode() == NT_INT) {
+        return val * 2;
+    }
+    return val;
+}
+int total = 0;
+for (int i = 0; i < 300; i++) {
+    total += process(i);
+}
+printf(\"%d\\n\", total);
+";
+        string ir_result = trim(runScript(code, "ir"));
+        string tiered_result = trim(runScript(code, "tiered", "--jit-ir-threshold=10 --jit-jit-threshold=50"));
+        assertEq(ir_result, tiered_result,
+            "profiled guard not-nothing: tiered matches IR for non-nothing args");
+    }
+
+    # --- Deopt and type change tests ---
+
+    testDeoptMixedTypeCorrectness() {
+        # Function JIT'd with int profile, then called with different types.
+        # The guard should fail and the deopt path should produce correct results.
+        string code = "%modern
+auto sub double_it(auto v) {
+    return v + v;
+}
+# Warm up with ints to build profile and trigger JIT
+list results = ();
+for (int i = 0; i < 200; i++) {
+    push results, double_it(i);
+}
+# Now call with float — guard may fail but result must be correct
+push results, double_it(3.14);
+# Call with string
+push results, double_it(\"hello\");
+printf(\"%d %.2f %s\\n\", results[5], results[200], results[201]);
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=10 --jit-jit-threshold=50"));
+        assertEq("10 6.28 hellohello", result,
+            "deopt mixed types: correct results after type change");
+    }
+
+    testDeoptTypeChangeMidExecution() {
+        # Function that receives ints for many calls, then floats, then strings.
+        # Each type change may trigger guard failures; results must remain correct.
+        string code = "%modern
+auto sub negate(auto v) {
+    return -v;
+}
+list results = ();
+# Phase 1: ints (build profile, trigger JIT)
+for (int i = 1; i <= 200; i++) {
+    push results, negate(i);
+}
+# Phase 2: floats (guard may fail for first float call)
+for (int i = 1; i <= 50; i++) {
+    push results, negate(float(i) + 0.5);
+}
+printf(\"%d %.1f\\n\", results[0], results[200]);
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=10 --jit-jit-threshold=50"));
+        assertEq("-1 -1.5", result,
+            "deopt type change: correct results across int→float transition");
+    }
+
+    testProfiledTieredPromotionCorrectness() {
+        # Comprehensive test: function goes through AST → IR (with profiling) → JIT
+        # across all three tiers, with results verified at each stage.
+        string code = "%modern
+int sub collatz_steps(int n) {
+    int steps = 0;
+    while (n != 1) {
+        if (n % 2 == 0) {
+            n = n / 2;
+        } else {
+            n = 3 * n + 1;
+        }
+        steps++;
+    }
+    return steps;
+}
+# Call many times to go through all tiers
+int total = 0;
+for (int i = 1; i <= 300; i++) {
+    total += collatz_steps(i);
+}
+printf(\"%d\\n\", total);
+";
+        # Run in all modes and compare
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string tiered_result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=50"));
+        assertEq(ast_result, ir_result,
+            "profiled tiered promotion: IR matches AST");
+        assertEq(ast_result, tiered_result,
+            "profiled tiered promotion: tiered (profiled JIT) matches AST");
+        # Verify the result is non-trivial (Collatz sequence)
+        assertTrue(ast_result.toInt() > 0,
+            "profiled tiered promotion: Collatz total is positive");
+    }
+}

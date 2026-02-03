@@ -237,11 +237,13 @@ extern "C" uint64_t qore_rt_catch_exception(ExceptionSink* xsink) {
 // --- Deopt helpers ---
 
 extern "C" uint64_t qore_rt_deopt(uint64_t deopt_id, ExceptionSink* xsink) {
-    // Deopt is not yet implemented; raise an exception for now
-    if (xsink) {
-        xsink->raiseException("JIT-DEOPT-ERROR", "deopt not yet implemented (deopt_id=%lld)",
-            static_cast<long long>(deopt_id));
-    }
+    // Record the deopt event; the guard failure will still propagate as an exception
+    // via the deopt_target block. The evalTiered path can check deopt_count to
+    // trigger recompilation with profiled type information.
+    printd(2, "qore_rt_deopt: guard failure at deopt_id=%lld\n",
+        static_cast<long long>(deopt_id));
+    // NOTE: currently guard failures propagate via exception handlers, so no
+    // additional exception is raised here. The deopt_id is logged for diagnostics.
     return toBits(QoreValue());
 }
 

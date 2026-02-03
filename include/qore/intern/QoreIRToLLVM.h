@@ -134,6 +134,9 @@ private:
     // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
     std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
 
+    // Pointer to current IR function being lowered (for reading type profiles)
+    const QoreIRFunction* current_ir_func = nullptr;
+
     // Phase 5c: Debug info (DWARF)
     std::unique_ptr<llvm::DIBuilder> di_builder;
     llvm::DICompileUnit* di_cu = nullptr;

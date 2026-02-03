@@ -524,6 +524,74 @@ public:
     std::vector<QoreIRPhiIncoming> incoming;
 };
 
+//! Type profile for a single guard point: tracks observed runtime types
+struct TypeProfile {
+    std::atomic<uint32_t> int_count{0};
+    std::atomic<uint32_t> float_count{0};
+    std::atomic<uint32_t> string_count{0};
+    std::atomic<uint32_t> bool_count{0};
+    std::atomic<uint32_t> nothing_count{0};
+    std::atomic<uint32_t> other_count{0};
+
+    uint32_t total() const {
+        return int_count.load(std::memory_order_relaxed)
+            + float_count.load(std::memory_order_relaxed)
+            + string_count.load(std::memory_order_relaxed)
+            + bool_count.load(std::memory_order_relaxed)
+            + nothing_count.load(std::memory_order_relaxed)
+            + other_count.load(std::memory_order_relaxed);
+    }
+
+    //! Returns the dominant type if one type accounts for >= threshold of observations,
+    //! or NT_ALL if no single type dominates
+    qore_type_t dominantType(float threshold = 0.95f) const {
+        uint32_t t = total();
+        if (t == 0) {
+            return NT_ALL;
+        }
+        float ft = (float)t;
+        if ((float)int_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return NT_INT;
+        }
+        if ((float)float_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return NT_FLOAT;
+        }
+        if ((float)string_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return NT_STRING;
+        }
+        if ((float)bool_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return NT_BOOLEAN;
+        }
+        if ((float)nothing_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return NT_NOTHING;
+        }
+        return NT_ALL;
+    }
+
+    void record(const QoreValue& v) {
+        switch (v.getType()) {
+            case NT_INT:
+                int_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+            case NT_FLOAT:
+                float_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+            case NT_STRING:
+                string_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+            case NT_BOOLEAN:
+                bool_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+            case NT_NOTHING:
+                nothing_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+            default:
+                other_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+        }
+    }
+};
+
 class QoreIRGuardInstruction : public QoreIRInstruction {
 public:
     explicit QoreIRGuardInstruction(QoreIROpcode op) : QoreIRInstruction(op) {
@@ -531,6 +599,7 @@ public:
 
     QoreIRBasicBlock* deopt_target = nullptr;
     const QoreTypeInfo* type_info = nullptr;
+    uint32_t guard_id = 0;  //!< unique guard ID per function (for type profiling)
 };
 
 class QoreIRReturnInstruction : public QoreIRInstruction {
@@ -715,6 +784,24 @@ public:
     // IR or JIT execution, so that AST Invoke callbacks can find them on the
     // thread-local variable stack.
     std::vector<LocalVar*> all_body_locals;
+
+    //! Type profiles for guards — indexed by guard_id
+    //! Populated during IR interpretation; read during JIT compilation for specialization
+    //! mutable: written during const IR execution (type recording is a side-channel)
+    //! Uses unique_ptr<[]> because TypeProfile contains std::atomic members (non-movable)
+    mutable std::unique_ptr<TypeProfile[]> guard_profiles;
+    mutable uint32_t guard_profile_count = 0;
+
+    //! Number of guards in this function
+    uint32_t num_guards = 0;
+
+    //! Allocate guard profiles array to match num_guards
+    void initGuardProfiles() {
+        if (guard_profile_count < num_guards) {
+            guard_profiles.reset(new TypeProfile[num_guards]());
+            guard_profile_count = num_guards;
+        }
+    }
 
 private:
     uint32_t next_value_id = 1;

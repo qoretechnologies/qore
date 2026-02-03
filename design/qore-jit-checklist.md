@@ -160,12 +160,74 @@ Deliverables:
 - [x] `examples/test/ir/TieredSmoke.qtest` — 12 test cases (66 assertions)
 - [x] Valgrind clean on tiered mode tests
 
-### Phase 4b: Type Profiling, Guard Refinement, OSR (future)
+### Phase 4b: Type Profiling & Guard Refinement — IN PROGRESS
 
-- [ ] Type profiling: record actual runtime types to improve guard placement on recompilation.
+#### Phase 4b-1: Type Profiling Infrastructure — COMPLETE ✓
+
+Runtime type profiling at guard points during IR interpretation, with profile-informed
+guard specialization during JIT compilation.
+
+- [x] **TypeProfile struct** (`QoreIR.h`): Per-guard atomic counters for int/float/string/bool/
+      nothing/other types. `dominantType(threshold)` returns the dominant type when one type
+      accounts for ≥95% of observations. Uses `std::unique_ptr<TypeProfile[]>` to avoid
+      non-movable `std::atomic` issues with `std::vector`.
+- [x] **Guard ID assignment** (`QoreIRBuilder.cpp`): Each guard instruction gets a monotonic
+      `guard_id` from `QoreIRFunction::num_guards`. Profiles are allocated via
+      `initGuardProfiles()` after IR lowering.
+- [x] **Profile recording** (`QoreIRInterpreter.cpp`): At guard execution, records the actual
+      runtime type of the guarded value into `guard_profiles[guard_id]`.
+- [x] **Profile-informed GuardInt** (`QoreIRToLLVM.cpp`): When profile shows ≥50 observations
+      and ≥95% int, emits inline NaN-boxing check (`value < TAG_INT48`) instead of runtime
+      helper call. Adds branch weight metadata (999:1) for LLVM to optimize the cold deopt path.
+- [x] **Profile-informed GuardFloat** (`QoreIRToLLVM.cpp`): Inline NaN-boxing check for float
+      (`value > DOUBLE_ENCODE_OFFSET && value < TAG_INT48`) when profile shows ≥95% float.
+- [x] **Profile-informed GuardNotNothing** (`QoreIRToLLVM.cpp`): Inline check (`value != 0`)
+      when profile shows never-NOTHING (nothing_count == 0 with ≥50 total observations).
+- [x] **Deopt logging** (`JITRuntime.cpp`): `qore_rt_deopt` logs guard failures for diagnostics
+      instead of raising exceptions. Guard failures propagate via deopt_target blocks.
+- [x] **Recompilation infrastructure** (`Function.h`, `Function.cpp`): `deopt_count` atomic
+      counter and `attemptJITRecompilation()` method that demotes to IR, recompiles with
+      accumulated profiles, and re-promotes to JIT tier.
+
+#### Test Results
+
+| Test Suite | Result |
+|-----------|--------|
+| Phase4bSmoke.qtest | 10/10 test cases, 13 assertions |
+| JITSmoke.qtest | 58/58 test cases, 103 assertions |
+| TieredSmoke.qtest | 23/23 test cases, 367 assertions |
+| IRExecModeSmoke.qtest | 137/137 test cases, 416 assertions |
+| AOTSmoke.qtest | 28/28 test cases, 66 assertions |
+| Valgrind (Phase4b) | 0 bytes definitely/indirectly/possibly lost |
+| Valgrind (Tiered) | 0 bytes definitely/indirectly/possibly lost |
+
+Phase4b tests cover: type profiling correctness for int/float/mixed types, profiled guard
+promotion through AST→IR→JIT tiers, profile-informed int/float/not-nothing fast-paths,
+deopt with mixed type changes mid-execution, and cross-mode (AST vs IR vs tiered) correctness.
+
+#### Deliverables
+
+- [x] `include/qore/intern/QoreIR.h` — `TypeProfile` struct, `guard_id` on guards,
+      `guard_profiles`/`guard_profile_count`/`num_guards` on `QoreIRFunction`
+- [x] `include/qore/intern/Function.h` — `deopt_count`, `jit_recompile_once`,
+      `attemptJITRecompilation()` declaration
+- [x] `include/qore/intern/QoreIRToLLVM.h` — `current_ir_func` member pointer
+- [x] `lib/QoreIRBuilder.cpp` — guard_id assignment during IR construction
+- [x] `lib/QoreIRInterpreter.cpp` — type profile recording at guard execution
+- [x] `lib/Function.cpp` — `initGuardProfiles()` call, `attemptJITRecompilation()` implementation
+- [x] `lib/QoreIRToLLVM.cpp` — profile-informed guard lowering with inline checks and
+      branch weight metadata
+- [x] `lib/JITRuntime.cpp` — `qore_rt_deopt` logging implementation
+- [x] `examples/test/ir/Phase4bSmoke.qtest` — 10 test cases (13 assertions)
+
+#### Phase 4b-2: Guard Refinement & Deopt (future)
+
 - [ ] Guard refinement: use deopt feedback to specialize guards.
-- [ ] OSR for hot loops (on-stack replacement: promoting a running loop mid-execution).
 - [ ] Recompilation: re-lowering/re-JITing a function with better type info after deopt.
+
+#### Phase 4b-3: OSR (future)
+
+- [ ] OSR for hot loops (on-stack replacement: promoting a running loop mid-execution).
 
 ---
 

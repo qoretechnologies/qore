@@ -2225,9 +2225,12 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         printd(2, "UserVariantBase::attemptIRLowering() '%s' verification failed: %s\n", name, error.c_str());
         return;
     }
+    // Initialize type profiling for guards
+    func->initGuardProfiles();
     cached_ir = func;
     current_tier.store(TIER_IR, std::memory_order_release);
-    printd(3, "UserVariantBase::attemptIRLowering() '%s' promoted to IR tier\n", name);
+    printd(3, "UserVariantBase::attemptIRLowering() '%s' promoted to IR tier (%d guards)\n",
+        name, func->num_guards);
 }
 
 void UserVariantBase::attemptJITCompilation() const {
@@ -2249,6 +2252,32 @@ void UserVariantBase::attemptJITCompilation() const {
     cached_jit_fn = fn;
     current_tier.store(TIER_JIT, std::memory_order_release);
     printd(3, "UserVariantBase::attemptJITCompilation() '%s' promoted to JIT tier\n", cached_ir->name.c_str());
+}
+
+void UserVariantBase::attemptJITRecompilation() const {
+    assert(cached_ir);
+
+    // Demote to IR tier while recompiling
+    cached_jit_fn = nullptr;
+    current_tier.store(TIER_IR, std::memory_order_release);
+
+    // Recompile with the accumulated type profiles
+    std::string error;
+    if (!QoreJIT::instance().compileFunction(*cached_ir, error)) {
+        printd(2, "UserVariantBase::attemptJITRecompilation() '%s' failed: %s\n",
+            cached_ir->name.c_str(), error.c_str());
+        return;
+    }
+    JitFunctionPtr fn = QoreJIT::instance().lookupFunction(cached_ir->name);
+    if (!fn) {
+        printd(2, "UserVariantBase::attemptJITRecompilation() '%s' lookup failed\n",
+            cached_ir->name.c_str());
+        return;
+    }
+    cached_jit_fn = fn;
+    current_tier.store(TIER_JIT, std::memory_order_release);
+    printd(2, "UserVariantBase::attemptJITRecompilation() '%s' recompiled with profiled guards\n",
+        cached_ir->name.c_str());
 }
 
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
