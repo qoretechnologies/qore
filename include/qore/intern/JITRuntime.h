@@ -333,6 +333,16 @@ uint64_t qore_rt_lvalue_unary_aot(int op, QoreAOTContext* ctx, int32_t idx, Exce
 //! LValue binary op via AOT context slot
 uint64_t qore_rt_lvalue_binary_aot(int op, QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 
+//! Invoke a DotEval expression with a pre-evaluated base value.
+//! expr_bits is the NaN-boxed expression node (QoreDotEvalOperatorNode).
+//! base_bits is the NaN-boxed pre-evaluated base QoreValue.
+//! Returns the NaN-boxed result; sets xsink on exception.
+uint64_t qore_rt_dot_eval_with_base(uint64_t expr_bits, uint64_t base_bits, ExceptionSink* xsink);
+
+//! AOT variant: resolve expression from context slot, then delegate to qore_rt_dot_eval_with_base
+uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    ExceptionSink* xsink);
+
 //! Invoke a call-type expression with pre-evaluated arguments.
 //! expr_bits is the NaN-boxed expression node (FunctionCallNode, SelfFunctionCallNode,
 //! StaticMethodCallNode, or CallReferenceCallNode).

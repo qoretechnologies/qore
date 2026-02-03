@@ -70,6 +70,11 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("int post-increment", \testJitIntPostIncrement());
         addTestCase("int post-decrement", \testJitIntPostDecrement());
         addTestCase("ternary operator", \testJitTernary());
+        # DotEval double-evaluation regression tests
+        addTestCase("dot-eval method call single eval", \testJitDotEvalSingleEval());
+        addTestCase("dot-eval invoke path single eval", \testJitDotEvalInvokeSingleEval());
+        addTestCase("dot-eval chained methods", \testJitDotEvalChained());
+        addTestCase("dot-eval hash member access", \testJitDotEvalHashMember());
         set_return_value(main());
     }
 
@@ -874,6 +879,73 @@ printf(\"%d:%d:%d\\n\", ternary_test(5), ternary_test(0), ternary_test(-3));
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(code, mode));
             assertEq("10:20:20", result, sprintf("ternary operator %s", mode));
+        }
+    }
+
+    testJitDotEvalSingleEval() {
+        # Bug A: DotEval double-evaluation — base expression f() should be called once, not twice
+        string code = "%modern
+our int counter = 0;
+class C {
+    int get() { return 42; }
+}
+C sub f() { counter++; return new C(); }
+int r = f().get();
+printf(\"%d:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42:1", result, sprintf("dot-eval single eval %s", mode));
+        }
+    }
+
+    testJitDotEvalInvokeSingleEval() {
+        # Bug A: DotEval inside try/catch (Invoke path) — base called once
+        string code = "%modern
+our int counter = 0;
+class C {
+    int get() { return 99; }
+}
+C sub f() { counter++; return new C(); }
+int r;
+try { r = f().get(); } catch (hash<auto> ex) { r = -1; }
+printf(\"%d:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("99:1", result, sprintf("dot-eval invoke single eval %s", mode));
+        }
+    }
+
+    testJitDotEvalChained() {
+        # Bug A: chained method calls — each base evaluated once
+        string code = "%modern
+our int counter = 0;
+class C {
+    C next() { return new C(); }
+    int val() { return 7; }
+}
+C sub f() { counter++; return new C(); }
+int r = f().next().val();
+printf(\"%d:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("7:1", result, sprintf("dot-eval chained %s", mode));
+        }
+    }
+
+    testJitDotEvalHashMember() {
+        # Bug A: hash member access on side-effecting base — evaluated once
+        string code = "%modern
+our int counter = 0;
+hash<auto> sub f() { counter++; return {\"key\": \"hello\"}; }
+auto r = f().key;
+printf(\"%s:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello:1", result, sprintf("dot-eval hash member %s", mode));
         }
     }
 }

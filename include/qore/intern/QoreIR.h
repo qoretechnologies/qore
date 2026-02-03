@@ -406,6 +406,23 @@ inline bool isCallInvokeOpcode(QoreIROpcode op) {
     }
 }
 
+//! Returns true if the opcode is a DotEval-type op (method call on expression result)
+inline bool isDotEvalInvokeOpcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+            return true;
+        default:
+            return false;
+    }
+}
+
 struct QoreIRValue {
     uint32_t id = 0;
 

@@ -1619,6 +1619,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {opcode_val, lhs_boxed, rhs_boxed, xsink_arg});
                 // No reloadAllLocalsFromRuntime — pure computation
 
+            } else if (!inv->operands.empty() && isDotEvalInvokeOpcode(inv->invoke_opcode)) {
+                // DotEval invoke: use pre-evaluated base with qore_rt_dot_eval_with_base
+                auto* base = getVal(inv->operands[0].id, error);
+                if (!base) { return false; }
+                llvm::Value* base_boxed = boxValue(base, inv->operands[0].id);
+
+                QoreValue expr_val = inv->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_dot_eval_with_base_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), base_boxed, xsink_arg});
+                } else {
+                    llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_dot_eval_with_base",
+                            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {expr_const, base_boxed, xsink_arg});
+                }
+                // DotEval method calls can modify locals through side effects
+                reloadAllLocalsFromRuntime(module, llvm_func);
+
             } else if (!inv->operands.empty() && isCallInvokeOpcode(inv->invoke_opcode)) {
                 // Call invoke: build args array from pre-evaluated operands
                 int arg_start = (inv->invoke_opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
@@ -2442,23 +2468,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
-        case QoreIROpcode::ElementsInt:
-        // Phase 5b: Try specialized hash key access and list index access before generic path
-        case QoreIROpcode::DotEvalHash:
-        case QoreIROpcode::DotEvalAny: {
-            // Try specialized hash key access
-            if (tryEmitHashKeyAccess(inst, module, llvm_func)) {
-                nanboxed_values.insert(inst->result.id);
-                emitExceptionCheck(module, llvm_func, inst);
-                return true;
-            }
-            // Try specialized list index access
-            if (tryEmitListIndexAccess(inst, module, llvm_func)) {
-                nanboxed_values.insert(inst->result.id);
-                emitExceptionCheck(module, llvm_func, inst);
-                return true;
-            }
-            // Fall through to generic path
+        case QoreIROpcode::ElementsInt: {
+            // Non-DotEval expression ops — delegate to qore_rt_invoke_expr via the AST node
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
             QoreValue expr_val = expr_inst->expr;
             uint64_t expr_bits;
@@ -2478,15 +2489,89 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
+        // DotEval opcodes: use pre-evaluated base to avoid double-evaluation
+        // Phase 5b: Try specialized hash key access and list index access before generic path
+        case QoreIROpcode::DotEvalAny:
         case QoreIROpcode::DotEvalInt:
         case QoreIROpcode::DotEvalFloat:
         case QoreIROpcode::DotEvalString:
         case QoreIROpcode::DotEvalDate:
         case QoreIROpcode::DotEvalList:
-        case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject: {
+            // Try specialized hash key access for DotEvalHash/DotEvalAny
+            if ((inst->opcode == QoreIROpcode::DotEvalHash
+                    || inst->opcode == QoreIROpcode::DotEvalAny)
+                    && tryEmitHashKeyAccess(inst, module, llvm_func)) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(values[inst->result.id], inst->result.id, llvm_func);
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
+            // Try specialized list index access for DotEvalAny
+            if (inst->opcode == QoreIROpcode::DotEvalAny
+                    && tryEmitListIndexAccess(inst, module, llvm_func)) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(values[inst->result.id], inst->result.id, llvm_func);
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
+            // Use pre-evaluated base with qore_rt_dot_eval_with_base
+            const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            QoreValue expr_val = expr_inst->expr;
+            uint64_t expr_bits;
+            std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+            llvm::Value* result;
+            if (!inst->operands.empty()) {
+                std::string dot_err;
+                auto* base = getVal(inst->operands[0].id, dot_err);
+                if (base) {
+                    llvm::Value* base_boxed = boxValue(base, inst->operands[0].id);
+                    if (aot_mode) {
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                        auto helper = module.getOrInsertFunction("qore_rt_dot_eval_with_base_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, i64_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), base_boxed, xsink_arg});
+                    } else {
+                        llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                        auto helper = module.getOrInsertFunction("qore_rt_dot_eval_with_base",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, i64_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {expr_const, base_boxed, xsink_arg});
+                    }
+                    values[inst->result.id] = result;
+                    nanboxed_values.insert(inst->result.id);
+                    trackResultForCleanup(result, inst->result.id, llvm_func);
+                    emitExceptionCheck(module, llvm_func, inst);
+                    return true;
+                }
+            }
+            // Fallback: no operands available, use qore_rt_invoke_expr
+            if (aot_mode) {
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+            } else {
+                llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {expr_const, xsink_arg});
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        // Remaining expression-based ops (non-DotEval)
         case QoreIROpcode::MapSelectList:
         case QoreIROpcode::MapSelectAny:
         case QoreIROpcode::HashMap:
@@ -2519,6 +2604,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

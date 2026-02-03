@@ -540,6 +540,25 @@ extern "C" uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, Excepti
     return qore_rt_add_any(left, right, xsink);
 }
 
+// --- DotEval with pre-evaluated base helper ---
+
+#include "qore/intern/QoreDotEvalOperatorNode.h"
+
+extern "C" uint64_t qore_rt_dot_eval_with_base(uint64_t expr_bits, uint64_t base_bits, ExceptionSink* xsink) {
+    QoreValue expr = fromBits(expr_bits);
+    if (!expr.hasNode()) {
+        return toBits(QoreValue());
+    }
+    auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
+    if (!dot_eval) {
+        // Fallback: shouldn't happen but be safe
+        return qore_rt_invoke_expr(expr_bits, xsink);
+    }
+    QoreValue base = fromBits(base_bits);
+    QoreValue result = dot_eval->evalWithBase(base, xsink);
+    return toBits(result);
+}
+
 // --- Call with pre-evaluated args helper ---
 
 extern "C" uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
@@ -765,4 +784,10 @@ extern "C" uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot
         ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     return qore_rt_call_with_args(ctx->exprs[slot], args, nargs, xsink);
+}
+
+extern "C" uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+        ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    return qore_rt_dot_eval_with_base(ctx->exprs[slot], base_bits, xsink);
 }

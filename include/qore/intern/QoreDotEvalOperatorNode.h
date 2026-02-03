@@ -104,6 +104,12 @@ public:
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const;
+
+    //! Evaluate the method call dispatch on a pre-evaluated base value.
+    /** Used by JIT/IR to avoid double-evaluating the base expression.
+        The caller is responsible for managing the lifetime of @a base.
+    */
+    DLLLOCAL QoreValue evalWithBase(QoreValue base, ExceptionSink* xsink) const;
 };
 
 #endif

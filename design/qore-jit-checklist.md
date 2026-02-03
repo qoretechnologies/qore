@@ -623,9 +623,7 @@ pre-evaluated operands and create call node copies, avoiding double-evaluation.
 
 #### Known Remaining Limitations
 
-- **DotEval Invoke**: Expressions like `f().member` where the object is produced
-  by a function call still double-evaluate `f()` when wrapped in Invoke. Fixing
-  requires reconstructing the dot-eval with a pre-evaluated object reference.
+- ~~**DotEval Invoke**~~: **FIXED** in Phase 7e. See below.
 - **Regex Invoke**: `RegexMatchBool`/`RegexNMatchBool` as Invoke with a pre-evaluated
   string operand — low impact since regex evaluation is idempotent.
 
@@ -765,6 +763,67 @@ LLVM handlers now call `trackResultForCleanup()` to decref +1 ref results at fun
 - [x] `lib/StatementBlock.cpp` — AOT top-level dispatch
 - [x] `examples/test/ir/AOTSmoke.qtest` — 20 test cases (32 assertions) for AOT compilation
 
+### Phase 7e: DotEval Double-Evaluation & Expression Opcode Memory Leak Fix — COMPLETE ✓
+
+Fixed two bugs: DotEval expressions (e.g., `f().method()`) double-evaluated the base
+expression, and expression-based opcode handlers in LLVM lowering leaked node-type results.
+
+#### Bug A: DotEval Double-Evaluation (Functional Correctness)
+
+When a DotEval expression is compiled to IR, `lowerDotEval()` pre-evaluates the base
+expression as `operands[0]`. However, both the LLVM lowering and IR interpreter **ignored
+this operand** and fell through to `qore_rt_invoke_expr`, which re-evaluated the entire
+AST including the base. Side effects (e.g., counter increments, I/O) executed twice.
+
+**Fix**: Added `QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* xsink)`
+which executes the method call dispatch on a pre-evaluated base value, containing the same
+logic as `evalImpl()` minus the base evaluation. Refactored `evalImpl()` to call
+`evalWithBase()`. New runtime helpers `qore_rt_dot_eval_with_base()` /
+`qore_rt_dot_eval_with_base_aot()` extract the `QoreDotEvalOperatorNode*` from the expr
+and call `evalWithBase()`. Both LLVM lowering (Invoke handler + standalone DotEval handler)
+and IR interpreter (`evalInvoke()` + standalone expression handler) now dispatch to these
+helpers using the pre-evaluated `operands[0]` instead of re-evaluating the full AST.
+
+Opcode classifier `isDotEvalInvokeOpcode()` added to `QoreIR.h` matching all 8 DotEval
+opcodes (DotEvalAny through DotEvalObject).
+
+#### Bug B: Expression-Based Opcode Memory Leaks
+
+Multiple standalone expression opcode handlers in LLVM lowering called
+`qore_rt_invoke_expr` (returns +1 ref) or `qore_rt_hash_key_access` /
+`qore_rt_list_index_access` (also +1 ref) but didn't call `trackResultForCleanup()`,
+causing memory leaks for node-type results.
+
+**Fix**: Added `trackResultForCleanup()` calls to:
+- DotEval standalone handler (all 8 opcodes) — both `qore_rt_dot_eval_with_base` and fallback paths
+- Non-DotEval expression ops (PopAny through ElementsInt) — `qore_rt_invoke_expr` path
+- Remaining expression ops (MapSelectList through InvokeSimError) — `qore_rt_invoke_expr` path
+- Specialized hash key access success path inside `tryEmitHashKeyAccess()`
+- Specialized list index access success path inside `tryEmitListIndexAccess()`
+
+#### Deliverables
+
+- [x] `include/qore/intern/QoreDotEvalOperatorNode.h` — `evalWithBase()` declaration
+- [x] `lib/QoreDotEvalOperatorNode.cpp` — `evalWithBase()` implementation, `evalImpl()` refactored
+- [x] `include/qore/intern/QoreIR.h` — `isDotEvalInvokeOpcode()` classifier
+- [x] `include/qore/intern/JITRuntime.h` / `lib/JITRuntime.cpp` — `qore_rt_dot_eval_with_base`,
+      `qore_rt_dot_eval_with_base_aot` helpers
+- [x] `lib/QoreJIT.cpp` — symbol registration for new helpers
+- [x] `lib/QoreIRToLLVM.cpp` — DotEval Invoke dispatch + standalone handler split +
+      `trackResultForCleanup` for all expression-based ops
+- [x] `lib/QoreIRInterpreter.cpp` — DotEval `evalInvoke()` + standalone handler updates
+- [x] `examples/test/ir/JITSmoke.qtest` — 54 test cases (91 assertions), 4 new DotEval regression tests
+- [x] Valgrind clean: 0 bytes definitely lost on all test suites
+
+### Test Results (Phase 7e)
+
+| Test | Result |
+|------|--------|
+| JITSmoke.qtest | 54/54 test cases, 91 assertions |
+| AOTSmoke.qtest | 20/20 test cases, 32 assertions |
+| IRExecModeSmoke.qtest | 135/137 (414/416 assertions) — 2 pre-existing list extract failures |
+| TieredSmoke.qtest | 19/20 (283/284 assertions) — 1 pre-existing concurrent calls issue |
+
 ### Future Extensions (not in this phase)
 
 - [x] ~~**Fix Call double-evaluation**~~: Fixed in Phase 7c. Dispatch based on
@@ -774,6 +833,10 @@ LLVM handlers now call `trackResultForCleanup()` to decref +1 ref results at fun
 - [x] ~~**Fix no-arg function calls**~~: Fixed in Phase 7d.
 - [x] ~~**Fix ternary PHI node**~~: Fixed in Phase 7d.
 - [x] ~~**Fix 192-byte ARGV leak**~~: Fixed in Phase 7d (LoadGlobal/LoadThreadLocal cleanup).
+- [x] ~~**Fix DotEval double-evaluation**~~: Fixed in Phase 7e. `evalWithBase()` method on
+      `QoreDotEvalOperatorNode` with `qore_rt_dot_eval_with_base` runtime helpers.
+- [x] ~~**Fix expression opcode memory leaks**~~: Fixed in Phase 7e. `trackResultForCleanup()`
+      added to all expression-based opcode handlers.
 - [ ] Cross-compilation: target triple selection via `--target` flag
 - [ ] Optimization levels: `-O0` through `-O3` flag for AOT optimization
 - [ ] Static linking: link libqore statically for fully standalone binaries

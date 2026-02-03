@@ -55,6 +55,7 @@
 #include <qore/intern/QoreIR.h>
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
+#include <qore/intern/QoreDotEvalOperatorNode.h>
 
 static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const QoreTypeInfo* type_info) {
     switch (opcode) {
@@ -791,7 +792,27 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
         }
 
-        // Everything else (DotEval, LoadLValue, expression ops, etc.)
+        // DotEval opcodes: use pre-evaluated base to avoid double-evaluation
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject: {
+            if (!inv->operands.empty()) {
+                QoreValue base = getIRValue(values, inv->operands[0]);
+                auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                    inv->expr.getInternalNode());
+                if (dot_eval) {
+                    return dot_eval->evalWithBase(base, xsink);
+                }
+            }
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
+
+        // Everything else (LoadLValue, expression ops, etc.)
         // evaluated through the original AST expression
         default:
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
@@ -2273,14 +2294,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt:
-        case QoreIROpcode::DotEvalAny:
-        case QoreIROpcode::DotEvalInt:
-        case QoreIROpcode::DotEvalFloat:
-        case QoreIROpcode::DotEvalString:
-        case QoreIROpcode::DotEvalDate:
-        case QoreIROpcode::DotEvalList:
-        case QoreIROpcode::DotEvalHash:
-        case QoreIROpcode::DotEvalObject:
         case QoreIROpcode::CastAny:
             case QoreIROpcode::CastList:
             case QoreIROpcode::CastHash:
@@ -2298,7 +2311,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     return false;
                 }
                 // Only invalidate caches for opcodes that modify variables via AST
-                // Pure expression opcodes (Cast, Exists, Elements, DotEval, etc.)
+                // Pure expression opcodes (Cast, Exists, Elements, etc.)
                 // don't modify variables and don't need cache invalidation
                 switch (inst->opcode) {
                     case QoreIROpcode::RemoveAny:
@@ -2326,6 +2339,45 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     default:
                         break;
                 }
+                values[inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+        // DotEval opcodes: use pre-evaluated base to avoid double-evaluation
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject: {
+                auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                QoreValue res;
+                if (!inst->operands.empty()) {
+                    QoreValue base = getIRValue(values, inst->operands[0]);
+                    auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                        expr_inst->expr.getInternalNode());
+                    if (dot_eval) {
+                        res = dot_eval->evalWithBase(base, xsink);
+                    } else {
+                        res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                    }
+                } else {
+                    res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                // DotEval opcodes are pure expression opcodes — no cache invalidation needed
                 values[expr_inst->result.id] = res;
                 if (res.hasNode()) {
                     cleanup.push_back(expr_inst->result.id);

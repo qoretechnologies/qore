@@ -218,6 +218,10 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args));
     addSymbol("qore_rt_call_with_args_aot", reinterpret_cast<void*>(&qore_rt_call_with_args_aot));
 
+    // DotEval with pre-evaluated base helpers
+    addSymbol("qore_rt_dot_eval_with_base", reinterpret_cast<void*>(&qore_rt_dot_eval_with_base));
+    addSymbol("qore_rt_dot_eval_with_base_aot", reinterpret_cast<void*>(&qore_rt_dot_eval_with_base_aot));
+
     auto err = jd.define(llvm::orc::absoluteSymbols(std::move(symbols)));
     if (err) {
         error = "failed to register JIT runtime symbols: " + llvm::toString(std::move(err));
