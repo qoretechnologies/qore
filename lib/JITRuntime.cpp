@@ -49,6 +49,8 @@
 #include <qore/intern/OnBlockExitStatement.h>
 #include <qore/intern/QoreException.h>
 #include <qore/intern/StatementBlock.h>
+#include <qore/intern/FunctionCallNode.h>
+#include <qore/intern/CallReferenceCallNode.h>
 
 // Helper: bit-cast between uint64_t and QoreValue.
 // QoreValue is NaN-boxed and has the same size as uint64_t.
@@ -538,6 +540,80 @@ extern "C" uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, Excepti
     return qore_rt_add_any(left, right, xsink);
 }
 
+// --- Call with pre-evaluated args helper ---
+
+extern "C" uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    QoreValue expr = fromBits(expr_bits);
+    if (!expr.hasNode()) {
+        return toBits(QoreValue());
+    }
+
+    // Build QoreListNode from the NaN-boxed args array
+    ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
+    for (int i = 0; i < nargs; ++i) {
+        QoreValue val = fromBits(args[i]);
+        if (val.hasNode()) {
+            val.refSelf();
+        }
+        arg_list->push(val, xsink);
+    }
+
+    // Determine call type and create a copy with the pre-built arg list
+    bool used_operands = false;
+    QoreValue result;
+
+    if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
+        QoreValue call_expr(new FunctionCallNode(*call, arg_list.release()));
+        ValueHolder call_holder(call_expr, nullptr);
+        bool needs_deref = true;
+        result = call_expr.getInternalNode()->eval(needs_deref, xsink);
+        if (!needs_deref && result.hasNode()) {
+            result = result.refSelf();
+        }
+        used_operands = true;
+    } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(expr.getInternalNode())) {
+        QoreValue call_expr(new SelfFunctionCallNode(*call, arg_list.release()));
+        ValueHolder call_holder(call_expr, nullptr);
+        bool needs_deref = true;
+        result = call_expr.getInternalNode()->eval(needs_deref, xsink);
+        if (!needs_deref && result.hasNode()) {
+            result = result.refSelf();
+        }
+        used_operands = true;
+    } else if (auto* call = dynamic_cast<const StaticMethodCallNode*>(expr.getInternalNode())) {
+        QoreValue call_expr(new StaticMethodCallNode(*call, arg_list.release()));
+        ValueHolder call_holder(call_expr, nullptr);
+        bool needs_deref = true;
+        result = call_expr.getInternalNode()->eval(needs_deref, xsink);
+        if (!needs_deref && result.hasNode()) {
+            result = result.refSelf();
+        }
+        used_operands = true;
+    } else if (auto* call = dynamic_cast<const CallReferenceCallNode*>(expr.getInternalNode())) {
+        const ParseNode* parse_node = dynamic_cast<const ParseNode*>(expr.getInternalNode());
+        const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
+        QoreValue exp = call->getExp();
+        if (exp.hasNode()) {
+            exp = exp.refSelf();
+        }
+        QoreValue call_expr(new CallReferenceCallNode(loc, exp, arg_list.release()));
+        ValueHolder call_holder(call_expr, nullptr);
+        bool needs_deref = true;
+        result = call_expr.getInternalNode()->eval(needs_deref, xsink);
+        if (!needs_deref && result.hasNode()) {
+            result = result.refSelf();
+        }
+        used_operands = true;
+    }
+
+    if (!used_operands) {
+        // Fall back to full AST re-evaluation for unrecognized call types
+        return qore_rt_invoke_expr(expr_bits, xsink);
+    }
+
+    return toBits(result);
+}
+
 // --- On-block-exit handler support for JIT ---
 
 struct JITOnBlockExitHandler {
@@ -683,4 +759,10 @@ extern "C" uint64_t qore_rt_lvalue_binary_aot(int op, QoreAOTContext* ctx, int32
         ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     return qore_rt_lvalue_binary(op, ctx->exprs[idx], val, xsink);
+}
+
+extern "C" uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    return qore_rt_call_with_args(ctx->exprs[slot], args, nargs, xsink);
 }

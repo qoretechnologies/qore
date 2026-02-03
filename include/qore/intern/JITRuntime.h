@@ -333,6 +333,17 @@ uint64_t qore_rt_lvalue_unary_aot(int op, QoreAOTContext* ctx, int32_t idx, Exce
 //! LValue binary op via AOT context slot
 uint64_t qore_rt_lvalue_binary_aot(int op, QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 
+//! Invoke a call-type expression with pre-evaluated arguments.
+//! expr_bits is the NaN-boxed expression node (FunctionCallNode, SelfFunctionCallNode,
+//! StaticMethodCallNode, or CallReferenceCallNode).
+//! args is an array of nargs NaN-boxed QoreValues.
+//! Returns the NaN-boxed result; sets xsink on exception.
+uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! AOT variant: resolve expression from context slot, then delegate to qore_rt_call_with_args
+uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+
 } // extern "C"
 
 #endif

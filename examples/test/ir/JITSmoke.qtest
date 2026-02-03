@@ -59,6 +59,17 @@ class JITSmokeTest inherits QUnit::Test {
         # Phase 5c debug info tests
         addTestCase("JIT debug info compile", \testJitDebugInfoCompile());
         addTestCase("JIT debug info multi-line", \testJitDebugInfoMultiLine());
+        # Double-eval regression tests
+        addTestCase("side-effecting args", \testJitSideEffectingArgs());
+        addTestCase("tracked side effects", \testJitTrackedSideEffects());
+        addTestCase("nested call side effects", \testJitNestedCallSideEffects());
+        addTestCase("binary invoke try/catch", \testJitBinaryInvokeTryCatch());
+        addTestCase("call cross-mode", \testJitCallCrossMode());
+        # Bug fix regression tests
+        addTestCase("no-arg function call", \testJitNoArgCall());
+        addTestCase("int post-increment", \testJitIntPostIncrement());
+        addTestCase("int post-decrement", \testJitIntPostDecrement());
+        addTestCase("ternary operator", \testJitTernary());
         set_return_value(main());
     }
 
@@ -706,5 +717,163 @@ printf(\"%d\\n\", multi_line(15));
         string ast_result = trim(runScript(code, "ast"));
         string jit_result = trim(runScript(code, "jit"));
         assertEq(ast_result, jit_result, "debug info multi-line JIT matches AST");
+    }
+
+    # --- Double-eval regression tests ---
+
+    testJitSideEffectingArgs() {
+        # Verify that side-effecting function args are evaluated exactly once per call
+        string code = "%modern
+int counter = 0;
+int sub side_effect(int v) {
+    counter++;
+    return v;
+}
+int sub add(int a, int b) { return a + b; }
+int result = add(side_effect(10), side_effect(20));
+printf(\"%d:%d\\n\", result, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:2", result, sprintf("side-effecting args %s", mode));
+        }
+    }
+
+    testJitTrackedSideEffects() {
+        # Verify tracked_inc() (a side-effecting call) evaluates once as arg
+        string code = "%modern
+int counter = 0;
+int sub tracked_inc(int v) {
+    counter++;
+    return v;
+}
+int sub identity(int v) { return v; }
+int i = 5;
+int result = identity(tracked_inc(i));
+printf(\"%d:%d\\n\", result, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:1", result, sprintf("tracked side effects %s", mode));
+        }
+    }
+
+    testJitNestedCallSideEffects() {
+        # Verify nested calls with side effects: log should have exactly 3 entries
+        string code = "%modern
+list<int> log = ();
+int sub logged(int v) {
+    log += v;
+    return v;
+}
+int sub add3(int a, int b, int c) { return a + b + c; }
+int result = add3(logged(1), logged(2), logged(3));
+printf(\"%d:%d:%s\\n\", result, log.size(), (map $1.toString(), log).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("6:3:1,2,3", result, sprintf("nested call side effects %s", mode));
+        }
+    }
+
+    testJitBinaryInvokeTryCatch() {
+        # Verify binary ops inside try/catch (Invoke path) work correctly
+        string code = "%modern
+auto a = 10;
+auto b = 0;
+string result;
+try {
+    auto r = a / b;
+    result = \"no-exception\";
+} catch (hash<ExceptionInfo> ex) {
+    result = ex.err;
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("DIVISION-BY-ZERO", result,
+                    sprintf("binary invoke try/catch %s", mode));
+        }
+    }
+
+    testJitCallCrossMode() {
+        # Verify call with side effects produces same results across modes
+        string code = "%modern
+int counter = 0;
+int sub bump() {
+    counter++;
+    return counter;
+}
+int a = bump();
+int b = bump();
+int c = bump();
+printf(\"%d:%d:%d:%d\\n\", a, b, c, counter);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("1:2:3:3", ast_result, "call cross-mode AST");
+        assertEq(ast_result, ir_result, "call cross-mode IR matches AST");
+        assertEq(ast_result, jit_result, "call cross-mode JIT matches AST");
+    }
+
+    # --- Bug fix regression tests ---
+
+    testJitNoArgCall() {
+        # Bug 2: zero-argument function calls failed IR lowering
+        string code = "%modern
+int sub no_arg_func() {
+    return 42;
+}
+printf(\"%d\\n\", no_arg_func());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result, sprintf("no-arg function call %s", mode));
+        }
+    }
+
+    testJitIntPostIncrement() {
+        # Bug 1: int-typed post-increment failed IR lowering (QoreIntPostIncrementOperatorNode
+        # does not inherit from QorePostIncrementOperatorNode)
+        string code = "%modern
+int i = 5;
+int r = i++;
+printf(\"%d:%d\\n\", r, i);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:6", result, sprintf("int post-increment %s", mode));
+        }
+    }
+
+    testJitIntPostDecrement() {
+        # Bug 1: int-typed post-decrement failed IR lowering (QoreIntPostDecrementOperatorNode
+        # does not inherit from QorePostDecrementOperatorNode)
+        string code = "%modern
+int i = 5;
+int r = i--;
+printf(\"%d:%d\\n\", r, i);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:4", result, sprintf("int post-decrement %s", mode));
+        }
+    }
+
+    testJitTernary() {
+        # Bug 3: ternary operator PHI node had zero incoming values in LLVM lowering
+        string code = "%modern
+int sub ternary_test(int x) {
+    int r = (x > 0) ? 10 : 20;
+    return r;
+}
+printf(\"%d:%d:%d\\n\", ternary_test(5), ternary_test(0), ternary_test(-3));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10:20:20", result, sprintf("ternary operator %s", mode));
+        }
     }
 }

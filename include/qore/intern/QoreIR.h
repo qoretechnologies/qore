@@ -281,6 +281,131 @@ enum class QoreIROpcode : uint16_t {
     DecrefNoThrow,
 };
 
+//! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
+inline bool isUnaryInvokeOpcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::ToBool:
+        case QoreIROpcode::Not:
+        case QoreIROpcode::IsNullOrNothing:
+        case QoreIROpcode::UnaryPlusAny:
+        case QoreIROpcode::UnaryMinusInt:
+        case QoreIROpcode::UnaryMinusFloat:
+        case QoreIROpcode::UnaryMinusAny:
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Returns true if the opcode is a binary computation op (used by Invoke dispatch)
+inline bool isBinaryInvokeOpcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::AddAny:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::SubFloat:
+        case QoreIROpcode::SubAny:
+        case QoreIROpcode::MulInt:
+        case QoreIROpcode::MulFloat:
+        case QoreIROpcode::MulAny:
+        case QoreIROpcode::DivInt:
+        case QoreIROpcode::DivFloat:
+        case QoreIROpcode::DivAny:
+        case QoreIROpcode::ModInt:
+        case QoreIROpcode::ModAny:
+        case QoreIROpcode::AndInt:
+        case QoreIROpcode::AndAny:
+        case QoreIROpcode::OrInt:
+        case QoreIROpcode::OrAny:
+        case QoreIROpcode::XorInt:
+        case QoreIROpcode::XorAny:
+        case QoreIROpcode::ShlInt:
+        case QoreIROpcode::ShlAny:
+        case QoreIROpcode::ShrInt:
+        case QoreIROpcode::ShrAny:
+        case QoreIROpcode::ShlAssignInt:
+        case QoreIROpcode::ShlAssignAny:
+        case QoreIROpcode::ShrAssignInt:
+        case QoreIROpcode::ShrAssignAny:
+        case QoreIROpcode::AddAssignInt:
+        case QoreIROpcode::AddAssignFloat:
+        case QoreIROpcode::AddAssignAny:
+        case QoreIROpcode::SubAssignInt:
+        case QoreIROpcode::SubAssignFloat:
+        case QoreIROpcode::SubAssignAny:
+        case QoreIROpcode::MulAssignInt:
+        case QoreIROpcode::MulAssignFloat:
+        case QoreIROpcode::MulAssignAny:
+        case QoreIROpcode::DivAssignInt:
+        case QoreIROpcode::DivAssignFloat:
+        case QoreIROpcode::DivAssignAny:
+        case QoreIROpcode::ModAssignInt:
+        case QoreIROpcode::ModAssignAny:
+        case QoreIROpcode::AndAssignInt:
+        case QoreIROpcode::AndAssignAny:
+        case QoreIROpcode::OrAssignInt:
+        case QoreIROpcode::OrAssignAny:
+        case QoreIROpcode::XorAssignInt:
+        case QoreIROpcode::XorAssignAny:
+        case QoreIROpcode::EqInt:
+        case QoreIROpcode::EqFloat:
+        case QoreIROpcode::EqAny:
+        case QoreIROpcode::NeInt:
+        case QoreIROpcode::NeFloat:
+        case QoreIROpcode::NeAny:
+        case QoreIROpcode::EqHard:
+        case QoreIROpcode::NeHard:
+        case QoreIROpcode::LtInt:
+        case QoreIROpcode::LtFloat:
+        case QoreIROpcode::LtAny:
+        case QoreIROpcode::LeInt:
+        case QoreIROpcode::LeFloat:
+        case QoreIROpcode::LeAny:
+        case QoreIROpcode::GtInt:
+        case QoreIROpcode::GtFloat:
+        case QoreIROpcode::GtAny:
+        case QoreIROpcode::GeInt:
+        case QoreIROpcode::GeFloat:
+        case QoreIROpcode::GeAny:
+        case QoreIROpcode::CmpInt:
+        case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::CmpAny:
+        case QoreIROpcode::FoldlAny:
+        case QoreIROpcode::FoldlInt:
+        case QoreIROpcode::FoldlFloat:
+        case QoreIROpcode::FoldrAny:
+        case QoreIROpcode::FoldrInt:
+        case QoreIROpcode::FoldrFloat:
+        case QoreIROpcode::MapAny:
+        case QoreIROpcode::MapInt:
+        case QoreIROpcode::MapFloat:
+        case QoreIROpcode::SelectAny:
+        case QoreIROpcode::SelectInt:
+        case QoreIROpcode::SelectFloat:
+        case QoreIROpcode::RangeAny:
+        case QoreIROpcode::RangeInt:
+        case QoreIROpcode::RangeFloat:
+        case QoreIROpcode::RangeDate:
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Returns true if the opcode is a call-type op (used by Invoke dispatch)
+inline bool isCallInvokeOpcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallStatic:
+            return true;
+        default:
+            return false;
+    }
+}
+
 struct QoreIRValue {
     uint32_t id = 0;
 

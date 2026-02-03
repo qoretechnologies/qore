@@ -721,7 +721,77 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             }
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
         }
-        // Everything else (Call, DotEval, LoadLValue, expression ops, etc.)
+        // Call-type opcodes: use pre-evaluated operands to avoid double-evaluation
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallStatic: {
+            if (!inv->operands.empty()) {
+                const ParseNode* parse_node = nullptr;
+                if (inv->expr.hasNode()) {
+                    parse_node = dynamic_cast<const ParseNode*>(inv->expr.getInternalNode());
+                }
+                const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
+                size_t arg_start = (op == QoreIROpcode::CallIndirect) ? 1 : 0;
+                QoreListNode* arg_list = buildArgList(values, inv->operands, arg_start, xsink);
+                if (xsink && *xsink) {
+                    if (arg_list) {
+                        arg_list->deref(xsink);
+                    }
+                    return QoreValue();
+                }
+                bool used_operands = false;
+                QoreValue res;
+                if (op == QoreIROpcode::Call) {
+                    if (auto* call = dynamic_cast<const FunctionCallNode*>(
+                            inv->expr.getInternalNode())) {
+                        QoreValue call_expr(new FunctionCallNode(*call, arg_list));
+                        ValueHolder call_holder(call_expr, nullptr);
+                        res = QoreIRInterpreter::evalExpr(op, call_expr, xsink);
+                        used_operands = true;
+                    }
+                } else if (op == QoreIROpcode::CallMethod) {
+                    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                            inv->expr.getInternalNode())) {
+                        QoreValue call_expr(new SelfFunctionCallNode(*call, arg_list));
+                        ValueHolder call_holder(call_expr, nullptr);
+                        res = QoreIRInterpreter::evalExpr(op, call_expr, xsink);
+                        used_operands = true;
+                    }
+                } else if (op == QoreIROpcode::CallStatic) {
+                    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(
+                            inv->expr.getInternalNode())) {
+                        QoreValue call_expr(new StaticMethodCallNode(*call, arg_list));
+                        ValueHolder call_holder(call_expr, nullptr);
+                        res = QoreIRInterpreter::evalExpr(op, call_expr, xsink);
+                        used_operands = true;
+                    }
+                } else {
+                    // CallIndirect
+                    if (auto* call = dynamic_cast<const CallReferenceCallNode*>(
+                            inv->expr.getInternalNode())) {
+                        QoreValue exp = call->getExp();
+                        if (exp.hasNode()) {
+                            exp = exp.refSelf();
+                        }
+                        QoreValue call_expr(new CallReferenceCallNode(loc, exp, arg_list));
+                        ValueHolder call_holder(call_expr, nullptr);
+                        res = QoreIRInterpreter::evalExpr(op, call_expr, xsink);
+                        used_operands = true;
+                    }
+                }
+                if (!used_operands && arg_list) {
+                    arg_list->deref(xsink);
+                }
+                if (used_operands) {
+                    return res;
+                }
+            }
+            // Fall through to evalExpr if no operands or cast failed
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
+
+        // Everything else (DotEval, LoadLValue, expression ops, etc.)
         // evaluated through the original AST expression
         default:
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
@@ -1876,6 +1946,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::PostIncLValue:
             case QoreIROpcode::PostDecLValue: {
                 auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
+                // evalLValueUnary returns the old value for post-inc/dec, new value for pre-inc/dec
                 QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -1889,6 +1960,30 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 cleanupStoredValues(globals, nullptr);
                 cleanupStoredValues(threadlocals, nullptr);
                 cleanupStoredValues(closures, nullptr);
+                // For post-increment/decrement, use the old value (res) as the result;
+                // for pre-increment/decrement, reload the updated value
+                bool is_post = (inst->opcode == QoreIROpcode::PostIncLValue
+                    || inst->opcode == QoreIROpcode::PostDecLValue);
+                QoreValue result_val;
+                if (is_post) {
+                    result_val = res;
+                } else {
+                    res.discard(xsink);
+                    result_val = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, nullptr);
+                        cleanupStoredValues(globals, nullptr);
+                        cleanupStoredValues(threadlocals, nullptr);
+                        cleanupStoredValues(closures, nullptr);
+                        return false;
+                    }
+                }
+                values[lval_inst->result.id] = result_val;
+                if (result_val.hasNode()) {
+                    cleanup.push_back(lval_inst->result.id);
+                }
+                // Always reload the lvalue to update local var cache with new value
                 QoreValue updated = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -1898,11 +1993,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                values[lval_inst->result.id] = updated;
-                if (updated.hasNode()) {
-                    cleanup.push_back(lval_inst->result.id);
-                }
                 updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, updated, xsink, pre_instantiated);
+                // discard the reload value if not used as result (for post ops, it's only for cache update)
+                if (is_post) {
+                    updated.discard(xsink);
+                }
                 ++ip;
                 break;
             }

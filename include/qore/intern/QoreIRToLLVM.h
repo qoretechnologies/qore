@@ -48,6 +48,7 @@ class LocalVar;
 class QoreIRFunction;
 class QoreIRBasicBlock;
 class QoreIRInstruction;
+class QoreIRPhiInstruction;
 struct AOTSlotMap;
 
 class QoreIRToLLVM {
@@ -129,6 +130,9 @@ private:
     // Each tracker alloca holds the most recent qore_rt_load_local reload value
     // (+1 ref) so it can be decref'd before being replaced or at function exit.
     std::unordered_map<const void*, llvm::Value*> local_reload_trackers;
+
+    // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
+    std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
 
     // Phase 5c: Debug info (DWARF)
     std::unique_ptr<llvm::DIBuilder> di_builder;

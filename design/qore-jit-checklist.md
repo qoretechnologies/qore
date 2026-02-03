@@ -566,20 +566,143 @@ struct QoreAOTContext {
 
 #### Known Limitations
 
-Pre-existing IR lowering issues (not introduced by Phase 7b):
+All previously-known IR lowering issues have been fixed (see Phase 7d below).
 
-1. **Int-typed post-increment**: `QoreIntPostIncrementOperatorNode` does not inherit from
-   `QorePostIncrementOperatorNode`. `lowerPostIncrement()` checks for the base class and
-   misses the int-specific variant. Pre-increment `++a` works correctly.
-2. **No-arg function calls**: `lowerCallArgs()` requires non-null `parse_args` or `args`.
-   Functions called with zero arguments (e.g., `hello()`) fail during IR lowering.
-3. **Ternary operator**: LLVM PHI node verification failure with ternary expressions.
-4. **Call double-evaluation**: Call/Invoke IR instructions pass the full expression to
-   `qore_rt_invoke_expr[_aot]()`, which re-evaluates all sub-expressions from the AST,
-   including function calls already evaluated as separate IR instructions. Workaround:
-   store function call results in variables before passing as arguments to other functions.
-   This causes minor memory leaks (72 bytes in string-operation test) from duplicate
-   intermediate values.
+1. ~~**Int-typed post-increment**~~: **FIXED** in Phase 7d.
+2. ~~**No-arg function calls**~~: **FIXED** in Phase 7d.
+3. ~~**Ternary operator**~~: **FIXED** in Phase 7d.
+4. ~~**Call double-evaluation**~~: **FIXED** in Phase 7c. See below.
+5. ~~**192-byte ARGV leak**~~: **FIXED** in Phase 7d.
+
+### Phase 7c: Call/Invoke Double-Evaluation Fix — COMPLETE ✓
+
+Fixed a correctness bug where LLVM lowering for all Invoke and standalone Call
+instructions called `qore_rt_invoke_expr()`, which re-evaluated the entire AST
+expression from scratch, ignoring pre-evaluated operands. Side-effecting arguments
+(function calls, post-increment, I/O) were evaluated twice. The same issue existed
+in the IR interpreter's `evalInvoke()` default case for call-type opcodes.
+
+#### Root Cause
+
+The IR lowering creates Invoke and Call instructions with pre-evaluated operands
+stored in `operands[]`. The LLVM Invoke handler ignored `invoke_opcode` and
+`operands` entirely — always calling `qore_rt_invoke_expr()`. The IR interpreter's
+`evalInvoke()` correctly dispatched unary/binary ops to `evalUnary`/`evalBinary`
+using operands, but fell through to `evalExpr()` for call-type opcodes.
+
+#### Fix: Opcode-Based Dispatch
+
+Dispatch based on `invoke_opcode` and operand availability:
+
+| Category | Operands | Runtime helper | Reload locals? |
+|----------|----------|---------------|---------------|
+| Unary ops | 1 | `qore_rt_unary_op` (existing) | No — pure computation |
+| Binary ops | 2 | `qore_rt_binary_op` (existing) | No — pure computation |
+| Call types | N | `qore_rt_call_with_args` (new) | Yes |
+| LValue/DotEval/other | 0 or N | `qore_rt_invoke_expr` (existing fallback) | Yes |
+
+**Opcode classifiers** (`QoreIR.h`): `isUnaryInvokeOpcode()`, `isBinaryInvokeOpcode()`,
+`isCallInvokeOpcode()` — used by both LLVM lowering and IR interpreter.
+
+**New runtime helper** (`JITRuntime.cpp`): `qore_rt_call_with_args()` builds a
+`QoreListNode` from pre-evaluated NaN-boxed args, creates a copy of the call node
+(`FunctionCallNode`, `SelfFunctionCallNode`, `StaticMethodCallNode`,
+`CallReferenceCallNode`) with the pre-built arg list, and evaluates the copy.
+Falls back to `qore_rt_invoke_expr` if the expression type is not recognized.
+AOT variant `qore_rt_call_with_args_aot()` resolves expression from context slot.
+
+**LLVM fixes** (`QoreIRToLLVM.cpp`):
+- Invoke handler: replaced monolithic `qore_rt_invoke_expr` with dispatch to
+  unary/binary/call/fallback paths based on opcode classification
+- Standalone Call handler: added operand-based dispatch to `qore_rt_call_with_args`
+  with fallback to `qore_rt_invoke_expr` when operands are empty
+
+**IR interpreter fix** (`QoreIRInterpreter.cpp`): Added `Call`/`CallIndirect`/
+`CallMethod`/`CallStatic` cases to `evalInvoke()` that build arg list from
+pre-evaluated operands and create call node copies, avoiding double-evaluation.
+
+#### Known Remaining Limitations
+
+- **DotEval Invoke**: Expressions like `f().member` where the object is produced
+  by a function call still double-evaluate `f()` when wrapped in Invoke. Fixing
+  requires reconstructing the dot-eval with a pre-evaluated object reference.
+- **Regex Invoke**: `RegexMatchBool`/`RegexNMatchBool` as Invoke with a pre-evaluated
+  string operand — low impact since regex evaluation is idempotent.
+
+#### Deliverables
+
+- [x] `include/qore/intern/QoreIR.h` — `isUnaryInvokeOpcode()`, `isBinaryInvokeOpcode()`,
+      `isCallInvokeOpcode()` classifier functions
+- [x] `include/qore/intern/JITRuntime.h` / `lib/JITRuntime.cpp` — `qore_rt_call_with_args`,
+      `qore_rt_call_with_args_aot` helpers
+- [x] `lib/QoreJIT.cpp` — symbol registration for new helpers
+- [x] `lib/QoreIRToLLVM.cpp` — Invoke handler dispatch + standalone Call handler fix
+- [x] `lib/QoreIRInterpreter.cpp` — `evalInvoke()` call-type handling
+- [x] `examples/test/ir/JITSmoke.qtest` — 46 test cases (67 assertions)
+- [x] Valgrind clean: 0 bytes definitely lost on all test suites
+
+### Phase 7d: Bug Fixes — COMPLETE ✓
+
+Fixed five pre-existing bugs in the JIT/IR pipeline.
+
+#### Bug 1: Int-Typed Post-Increment/Decrement IR Lowering Failure
+
+`QoreIntPostIncrementOperatorNode` inherits from
+`QoreSingleExpressionOperatorNode<LValueOperatorNode>`, not from
+`QorePostIncrementOperatorNode`. `lowerPostIncrement()` tried only the base
+class cast and missed the int-specific variant. Same for post-decrement.
+
+**Fix** (`lib/QoreIRLowering.cpp`): Try both `QorePostIncrementOperatorNode*`
+and `QoreIntPostIncrementOperatorNode*` casts via common base
+`QoreSingleExpressionOperatorNode<LValueOperatorNode>*`. Same pattern for
+`lowerPostDecrement()`.
+
+#### Bug 2: No-Arg Function Calls Fail IR Lowering
+
+`lowerCallArgs()` rejected null `parse_args`/`args` with an error. Zero-argument
+calls (e.g., `hello()`) have null args by design.
+
+**Fix** (`lib/QoreIRLowering.cpp`): Return true for null args (empty operands list).
+
+#### Bug 3: Ternary PHI Node LLVM Verification Failure
+
+The LLVM Phi handler created `llvm::PHINode` but never called `addIncoming()`.
+LLVM verification failed because the PHI had zero incoming values. Additionally,
+PHI results were not marked as NaN-boxed in `nanboxed_values`, causing downstream
+`boxValue()` to re-box NaN-boxed booleans as integers.
+
+**Fix** (`lib/QoreIRToLLVM.cpp`, `include/qore/intern/QoreIRToLLVM.h`):
+- Added `pending_phis` member to collect deferred PHI instructions
+- Store PHI/instruction pairs during lowering; fixup pass after all blocks adds
+  incoming values with proper boxing
+- Mark PHI results in `nanboxed_values` since they carry NaN-boxed i64 values
+
+#### Bug 4: 192-Byte Memory Leak with ARGV in JIT/AOT Mode
+
+`LoadGlobal`/`LoadThreadLocal` LLVM handlers called `qore_rt_load_global()` /
+`qore_rt_load_thread_local()` which return +1 ref values, but never tracked
+them for decref at function exit.
+
+**Fix** (`lib/QoreIRToLLVM.cpp`): Added `trackResultForCleanup()` to
+`LoadGlobal` and `LoadThreadLocal` handlers.
+
+#### Bug 5: Post-Increment/Decrement Return Value in IR Interpreter
+
+The IR interpreter's `PostIncLValue`/`PostDecLValue` handler returned the
+new value instead of the old value (post-inc/dec should return pre-operation value).
+
+**Fix** (`lib/QoreIRInterpreter.cpp`): For post operations, use the return value
+from `evalLValueUnary()` (which is the old value) as the result instead of
+reloading the updated value.
+
+#### Deliverables
+
+- [x] `lib/QoreIRLowering.cpp` — Post-inc/dec casts, null args handling
+- [x] `include/qore/intern/QoreIRToLLVM.h` — `pending_phis` member
+- [x] `lib/QoreIRToLLVM.cpp` — PHI fixup pass, PHI nanboxed tracking, LoadGlobal cleanup
+- [x] `lib/QoreIRInterpreter.cpp` — Post-inc/dec return value fix
+- [x] `examples/test/ir/JITSmoke.qtest` — 50 test cases (79 assertions), 4 new regression tests
+- [x] Valgrind clean: 0 bytes definitely lost on all test suites
 
 ### Test Results
 
@@ -587,7 +710,7 @@ Pre-existing IR lowering issues (not introduced by Phase 7b):
 |------|--------|
 | AOTSmoke.qtest | 20/20 test cases, 32 assertions |
 | TieredSmoke.qtest | 20/20 (284 assertions) — no regression |
-| JITSmoke.qtest | 41/41 (52 assertions) — no regression |
+| JITSmoke.qtest | 50/50 (79 assertions) — 4 new bug-fix regression tests |
 | IRExecMode.qtest | 2/2 (4 assertions) — no regression |
 | IRExecModeSmoke.qtest | 137/137 (416 assertions) — no regression |
 | operators.qtest | 25/25 (696 assertions) — no regression |
@@ -609,17 +732,16 @@ compile output inspection using `compileCheckAndRun()` helper.
 
 | Binary | Definitely Lost | Notes |
 |--------|----------------|-------|
+| JITSmoke.qtest | 0 bytes | clean (50 test cases, all modes) |
 | AOTSmoke.qtest | 0 bytes | clean (test suite itself) |
 | hello.q AOT binary | 0 bytes | clean (simple script, no ARGV) |
-| hello_argv.q AOT binary | 192 bytes | pre-existing JIT mode leaks (identical to `qore --exec-mode=jit`) |
-| string-ops AOT binary | 72 bytes | Call double-evaluation of method returns (.upr(), .lwr()) |
+| hello_argv.q AOT binary | 0 bytes | clean (fixed by Phase 7d LoadGlobal cleanup) |
+| string-ops AOT binary | 0 bytes | clean (fixed by Phase 7c call double-evaluation fix) |
 | qore interpreter (AST mode) | 0 bytes | baseline |
-| qore interpreter (JIT mode) | 192 bytes | same leaks as AOT — JIT runtime issue, not AOT-specific |
+| qore interpreter (JIT mode) | 0 bytes | clean (fixed by Phase 7d LoadGlobal cleanup) |
 
-The 72-byte leak in string-ops is from the pre-existing Call double-evaluation issue where
-method call expressions are evaluated once by AOT code and once by the AST re-evaluation
-in `qore_rt_invoke_expr`. Simple scripts without method calls as function arguments are
-valgrind-clean.
+The 192-byte ARGV leak in JIT/AOT mode was fixed in Phase 7d: `LoadGlobal`/`LoadThreadLocal`
+LLVM handlers now call `trackResultForCleanup()` to decref +1 ref results at function exit.
 
 ### Deliverables
 
@@ -645,14 +767,13 @@ valgrind-clean.
 
 ### Future Extensions (not in this phase)
 
-- [ ] **Fix Call double-evaluation**: Modify Call/Invoke IR instructions to avoid passing
-      the full expression to `qore_rt_invoke_expr[_aot]()` when arguments have already been
-      evaluated as separate IR instructions. This will fix the 72-byte leak and eliminate the
-      need for the "store result in variable" workaround.
-- [ ] **Fix int-typed post-increment**: Add `QoreIntPostIncrementOperatorNode` handling to
-      `lowerPostIncrement()` in `QoreIRLowering.cpp`.
-- [ ] **Fix no-arg function calls**: Handle null `parse_args`/`args` in `lowerCallArgs()`.
-- [ ] **Fix ternary PHI node**: Resolve LLVM verification failure with ternary expressions.
+- [x] ~~**Fix Call double-evaluation**~~: Fixed in Phase 7c. Dispatch based on
+      `invoke_opcode` to use pre-evaluated operands via `qore_rt_call_with_args`. The 72-byte
+      string-ops leak is eliminated. DotEval and Regex invoke remain as known limitations.
+- [x] ~~**Fix int-typed post-increment**~~: Fixed in Phase 7d.
+- [x] ~~**Fix no-arg function calls**~~: Fixed in Phase 7d.
+- [x] ~~**Fix ternary PHI node**~~: Fixed in Phase 7d.
+- [x] ~~**Fix 192-byte ARGV leak**~~: Fixed in Phase 7d (LoadGlobal/LoadThreadLocal cleanup).
 - [ ] Cross-compilation: target triple selection via `--target` flag
 - [ ] Optimization levels: `-O0` through `-O3` flag for AOT optimization
 - [ ] Static linking: link libqore statically for fully standalone binaries

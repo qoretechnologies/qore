@@ -2792,14 +2792,17 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
 
 QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node);
-    if (!op) {
+    // QoreIntPostIncrementOperatorNode inherits from QoreSingleExpressionOperatorNode<LValueOperatorNode>
+    // (NOT from QorePostIncrementOperatorNode), so we must try both casts
+    const QoreSingleExpressionOperatorNode<LValueOperatorNode>* base_op =
+        dynamic_cast<const QorePostIncrementOperatorNode*>(node);
+    if (!base_op) {
+        base_op = dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node);
+    }
+    if (!base_op) {
         return QoreIRValue();
     }
-    if (dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
-        // int-specific node uses the same lowering path
-    }
-    QoreValue lvexp = op->getExp();
+    QoreValue lvexp = base_op->getExp();
     if (!lvexp.hasNode()) {
         error = "unsupported lvalue for post-increment IR lowering";
         return QoreIRValue();
@@ -2818,13 +2821,13 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
             return QoreIRValue();
         }
         QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
+        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, base_op->loc);
         inst->invoke_opcode = QoreIROpcode::PostIncLValue;
         builder.setBlock(normal_block);
         markLocalAssignmentFromExpression(lvexp);
         return inst->result;
     }
-    QoreIRValue result = builder.createLValueUnaryOp(QoreIROpcode::PostIncLValue, lvexp, op->loc)->result;
+    QoreIRValue result = builder.createLValueUnaryOp(QoreIROpcode::PostIncLValue, lvexp, base_op->loc)->result;
     markLocalAssignmentFromExpression(lvexp);
     return result;
 }
@@ -2870,14 +2873,17 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
 
 QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node);
-    if (!op) {
+    // QoreIntPostDecrementOperatorNode inherits from QoreIntPostIncrementOperatorNode
+    // (NOT from QorePostDecrementOperatorNode), so we must try both casts
+    const QoreSingleExpressionOperatorNode<LValueOperatorNode>* base_op =
+        dynamic_cast<const QorePostDecrementOperatorNode*>(node);
+    if (!base_op) {
+        base_op = dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node);
+    }
+    if (!base_op) {
         return QoreIRValue();
     }
-    if (dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
-        // int-specific node uses the same lowering path
-    }
-    QoreValue lvexp = op->getExp();
+    QoreValue lvexp = base_op->getExp();
     if (!lvexp.hasNode()) {
         error = "unsupported lvalue for post-decrement IR lowering";
         return QoreIRValue();
@@ -2896,13 +2902,13 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
             return QoreIRValue();
         }
         QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, op->loc);
+        auto* inst = builder.createInvoke(expr, {}, normal_block, handler, base_op->loc);
         inst->invoke_opcode = QoreIROpcode::PostDecLValue;
         builder.setBlock(normal_block);
         markLocalAssignmentFromExpression(lvexp);
         return inst->result;
     }
-    QoreIRValue result = builder.createLValueUnaryOp(QoreIROpcode::PostDecLValue, lvexp, op->loc)->result;
+    QoreIRValue result = builder.createLValueUnaryOp(QoreIROpcode::PostDecLValue, lvexp, base_op->loc)->result;
     markLocalAssignmentFromExpression(lvexp);
     return result;
 }
@@ -4221,8 +4227,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
 bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
         std::vector<QoreIRValue>& lowered, std::string& error) {
     if (!parse_args && !args) {
-        error = "call args missing for IR lowering";
-        return false;
+        return true;  // zero-argument call — valid, no args to lower
     }
     if (parse_args) {
         for (size_t i = 0; i < parse_args->size(); ++i) {
