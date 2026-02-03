@@ -55,26 +55,34 @@ class Issue4816Test inherits QUnit::Test {
         # If the ImplicitModuleTransaction workaround is NOT implemented in FailingModule,
         # these will contain dirty data
         if (types || factories) {
-            printf("\n");
-            printf("=== Issue #4816 Demonstrated ===\n");
-            printf("WARNING: Dirty data detected in foreign module!\n");
-            printf("  Registered types: %y\n", types);
-            printf("  Registered factories: %y\n", factories);
+            if (m_options.verbose > 2) {
+                printf("\n");
+                printf("=== Issue #4816 Demonstrated ===\n");
+                printf("WARNING: Dirty data detected in foreign module!\n");
+                printf("  Registered types: %y\n", types);
+                printf("  Registered factories: %y\n", factories);
+            }
 
             # Attempting to use this dirty data would cause a crash
             # For safety, we just detect and report it rather than crash the test
             foreach string path in (types) {
                 *hash info = ForeignRegistry::Registry::getType(path);
                 if (info) {
-                    printf("  Type %y info exists\n", path);
+                    if (m_options.verbose > 2) {
+                        printf("  Type %y info exists\n", path);
+                    }
                     # With issue #4816 fixed, this should NOT crash because
                     # the Type object keeps the source program alive via depRef()
                     try {
                         string typename = info.type_info.getName();
-                        printf("  Type name: %s (fix is working!)\n", typename);
+                        if (m_options.verbose > 2) {
+                            printf("  Type name: %s (fix is working!)\n", typename);
+                        }
                         # If we get here without crashing, the fix is working
                     } catch (hash<ExceptionInfo> ex) {
-                        printf("  Error accessing type name: %s: %s\n", ex.err, ex.desc);
+                        if (m_options.verbose > 2) {
+                            printf("  Error accessing type name: %s: %s\n", ex.err, ex.desc);
+                        }
                     }
                 }
             }
@@ -88,27 +96,35 @@ class Issue4816Test inherits QUnit::Test {
             foreach string path in (types) {
                 try {
                     string desc = ForeignRegistry::Registry::describeType(path);
-                    printf("  Type was accessible: %s\n", desc);
+                    if (m_options.verbose > 2) {
+                        printf("  Type was accessible: %s\n", desc);
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "PROGRAM-ERROR") {
-                        printf("  Got expected PROGRAM-ERROR for type %y\n", path);
+                        if (m_options.verbose > 2) {
+                            printf("  Got expected PROGRAM-ERROR for type %y\n", path);
+                        }
                         got_program_error = True;
-                    } else {
+                    } else if (m_options.verbose > 2) {
                         printf("  Unexpected error for type %y: %s: %s\n", path, ex.err, ex.desc);
                     }
                 }
             }
 
-            printf("=================================\n\n");
+            if (m_options.verbose > 2) {
+                printf("=================================\n\n");
+            }
 
             # Clean up to prevent issues in other tests
             ForeignRegistry::Registry::clear();
 
             if (got_program_error) {
                 # The fix is working - graceful PROGRAM-ERROR instead of crash
-                printf("Issue #4816 fix verified: Type access fails gracefully with PROGRAM-ERROR.\n");
-                printf("Note: The ImplicitModuleTransaction workaround is recommended\n");
-                printf("      to properly clean up registered data on failure.\n\n");
+                if (m_options.verbose > 2) {
+                    printf("Issue #4816 fix verified: Type access fails gracefully with PROGRAM-ERROR.\n");
+                    printf("Note: The ImplicitModuleTransaction workaround is recommended\n");
+                    printf("      to properly clean up registered data on failure.\n\n");
+                }
                 assertTrue(True, "Type access fails gracefully with PROGRAM-ERROR instead of crash");
             } else {
                 # If no PROGRAM-ERROR, the program data might still be valid
@@ -150,27 +166,35 @@ class Issue4816Test inherits QUnit::Test {
         list<string> factories = ForeignRegistry::Registry::getRegisteredFactories();
 
         if (types || factories) {
-            printf("\n=== Issue #4816 Fix Behavior ===\n");
-            printf("Data from failed module is still registered.\n");
-            printf("  Registered types: %y\n", types);
-            printf("  Registered factories: %y\n", factories);
+            if (m_options.verbose > 2) {
+                printf("\n=== Issue #4816 Fix Behavior ===\n");
+                printf("Data from failed module is still registered.\n");
+                printf("  Registered types: %y\n", types);
+                printf("  Registered factories: %y\n", factories);
+            }
 
             # Verify access fails gracefully with PROGRAM-ERROR instead of crashing
             bool got_program_error = False;
             foreach string path in (types) {
                 try {
                     string desc = ForeignRegistry::Registry::describeType(path);
-                    printf("  Type accessible: %s\n", desc);
+                    if (m_options.verbose > 2) {
+                        printf("  Type accessible: %s\n", desc);
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "PROGRAM-ERROR") {
-                        printf("  Got expected PROGRAM-ERROR for type %y\n", path);
+                        if (m_options.verbose > 2) {
+                            printf("  Got expected PROGRAM-ERROR for type %y\n", path);
+                        }
                         got_program_error = True;
-                    } else {
+                    } else if (m_options.verbose > 2) {
                         printf("  Error for type %y: %s: %s\n", path, ex.err, ex.desc);
                     }
                 }
             }
-            printf("=================================\n\n");
+            if (m_options.verbose > 2) {
+                printf("=================================\n\n");
+            }
 
             ForeignRegistry::Registry::clear();
 
@@ -178,9 +202,11 @@ class Issue4816Test inherits QUnit::Test {
             assertTrue(True, "Type access handled gracefully (PROGRAM-ERROR or accessible)");
         } else {
             # If the ImplicitModuleTransaction cleanup did happen, that's also fine
-            printf("\n=== ImplicitModuleTransaction Workaround Successful ===\n");
-            printf("The workaround properly cleaned up registered data when init() failed.\n");
-            printf("======================================================\n\n");
+            if (m_options.verbose > 2) {
+                printf("\n=== ImplicitModuleTransaction Workaround Successful ===\n");
+                printf("The workaround properly cleaned up registered data when init() failed.\n");
+                printf("======================================================\n\n");
+            }
             assertTrue(True, "ImplicitModuleTransaction workaround cleaned up dirty data");
         }
     }
