@@ -151,6 +151,7 @@ public class DataProvider {
             "zip": "ZipDataProvider",
 
             "zohobooks": "ZohoBooksDataProvider",
+            "zohoinvoice": "ZohoInvoiceDataProvider",
         };
 
         #! Map of known type path prefixes to modules
