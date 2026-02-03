@@ -40,9 +40,11 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT nested function calls", \testNestedFunctionCalls());
         addTestCase("AOT on_exit blocks", \testOnExitBlocks());
         addTestCase("AOT type conversions", \testTypeConversions());
-        # AOT opt-level and cross-compilation tests
+        # AOT opt-level, cross-compilation, and static linking tests
         addTestCase("AOT optimization levels", \testAOTOptLevels());
         addTestCase("AOT target triple", \testAOTTargetTriple());
+        addTestCase("AOT static linking", \testAOTStaticLink());
+        addTestCase("AOT static link not built", \testAOTStaticLinkNotBuilt());
         set_return_value(main());
     }
 
@@ -723,5 +725,67 @@ printf(\"hello\\n\");
         string err_out = compileOnly(code, ("--target=invalid-unknown-triple",));
         assertTrue(err_out.regex("(failed to look up target|error|No available targets)"),
             "invalid target triple produces error: " + err_out);
+    }
+
+    testAOTStaticLink() {
+        # Check if static libqore is available
+        string static_lib = libqore_dir + "/libqore_static.a";
+        if (!is_file(static_lib)) {
+            testSkip("static libqore not built (requires -DBUILD_STATIC_LIBQORE=ON)");
+            return;
+        }
+
+        string code = "%modern
+printf(\"static hello\\n\");
+int sum = 0;
+for (int i = 0; i < 10; ++i) {
+    sum += i;
+}
+printf(\"sum: %d\\n\", sum);
+";
+        # Compile with --static
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --output %s --static %s 2>&1",
+            libqore_dir, qore_bin, paths.out, paths.src);
+        string compile_out = backquote(compile_cmd);
+        assertTrue(is_file(paths.out), "static compilation succeeded: " + compile_out);
+
+        # Run the static binary — still needs transitive .so deps (libjsig, etc.)
+        # but does NOT need libqore.so on LD_LIBRARY_PATH.
+        # Detect extra library paths needed for transitive deps (e.g., libjsig from JVM)
+        string extra_ld = "";
+        *string jsig = backquote("find /usr/lib/jvm -name 'libjsig.so' 2>/dev/null | head -1");
+        if (jsig.val()) {
+            # Remove trailing newline
+            jsig =~ s/\n$//;
+            extra_ld = ":" + dirname(jsig);
+        }
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s%s %s -b 2>&1",
+            libqore_dir, extra_ld, paths.out));
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, run_out, "static binary output matches interpreter");
+
+        # Verify the binary does not dynamically link libqore.so
+        string ldd_out = backquote(sprintf("ldd %s 2>&1", paths.out));
+        assertFalse(ldd_out.regex("libqore\\.so"),
+            "static binary does not link libqore.so dynamically");
+    }
+
+    testAOTStaticLinkNotBuilt() {
+        # Test that --static gives a clear error when libqore_static.a is not available
+        string static_lib = libqore_dir + "/libqore_static.a";
+        if (is_file(static_lib)) {
+            testSkip("static libqore is built — cannot test missing-lib error");
+            return;
+        }
+
+        string code = "%modern\nprintf(\"hello\\n\");\n";
+        string err_out = compileOnly(code, ("--static",));
+        assertTrue(err_out.regex("(static libqore not found|BUILD_STATIC_LIBQORE)"),
+            "missing static lib produces helpful error: " + err_out);
     }
 }

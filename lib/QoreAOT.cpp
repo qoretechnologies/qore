@@ -366,15 +366,84 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     return true;
 }
 
+//! AOT link configuration read from CMake-generated aot-link.conf
+struct AOTLinkConfig {
+    std::string cxx;            //!< C++ compiler path
+    std::string dynamic_libs;   //!< extra libs for dynamic linking (system libs)
+    std::string static_libs;    //!< all transitive deps for static linking
+    bool loaded = false;
+};
+
+//! Load AOT link configuration from the CMake-generated config file
+/** Search order:
+    1. QORE_AOT_LINK_CONF environment variable (explicit override)
+    2. QORE_LIBDIR env var + "/aot-link.conf" (development builds)
+    3. Compiled-in QORE_LIBDIR + "/qore/aot-link.conf" (installed builds)
+*/
+static AOTLinkConfig loadAOTLinkConfig() {
+    AOTLinkConfig config;
+    // Default C++ compiler
+    config.cxx = "c++";
+
+    // Determine config file path
+    std::string conf_path;
+    const char* env_conf = getenv("QORE_AOT_LINK_CONF");
+    if (env_conf) {
+        conf_path = env_conf;
+    } else {
+        const char* env_libdir = getenv("QORE_LIBDIR");
+        if (env_libdir) {
+            // Development builds: config is in the build directory (same as QORE_LIBDIR)
+            conf_path = std::string(env_libdir) + "/aot-link.conf";
+        }
+        if (conf_path.empty() || !std::ifstream(conf_path).good()) {
+            // Installed builds: config is in QORE_LIBDIR/qore/
+            conf_path = std::string(QORE_LIBDIR) + "/qore/aot-link.conf";
+        }
+    }
+
+    std::ifstream f(conf_path);
+    if (!f.is_open()) {
+        printd(2, "AOT: link config not found at '%s' — using defaults\n", conf_path.c_str());
+        return config;
+    }
+
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        auto eq = line.find('=');
+        if (eq == std::string::npos) {
+            continue;
+        }
+        std::string key = line.substr(0, eq);
+        std::string val = line.substr(eq + 1);
+
+        if (key == "cxx") {
+            config.cxx = val;
+        } else if (key == "dynamic_libs") {
+            config.dynamic_libs = val;
+        } else if (key == "static_libs") {
+            config.static_libs = val;
+        }
+    }
+
+    config.loaded = true;
+    printd(2, "AOT: loaded link config from '%s'\n", conf_path.c_str());
+    return config;
+}
+
 //! Link an object file into a standalone executable
 /** @param obj_path path to the object file
     @param exe_path path for the output executable
     @param error error message on failure
     @param target_triple target triple (nullptr = native; non-null = skip linking, emit .o only)
+    @param static_link statically link libqore (requires libqore_static.a)
     @return true on success, false on failure
 */
 static bool linkExecutable(const std::string& obj_path, const std::string& exe_path, std::string& error,
-        const char* target_triple = nullptr) {
+        const char* target_triple = nullptr, bool static_link = false) {
     // For cross-compilation, skip linking — user must link with their cross-toolchain
     if (target_triple) {
         printf("cross-compiled object: %s (link manually for target '%s')\n",
@@ -382,22 +451,46 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         return true;
     }
 
-    // Try the build directory first (for development builds), then installed libqore
-    std::string libqore_dir;
+    // Load CMake-generated link configuration
+    AOTLinkConfig config = loadAOTLinkConfig();
 
-    // Check for override via environment variable (for development builds)
+    // Determine library directory
+    std::string libqore_dir;
     const char* qore_prefix = getenv("QORE_LIBDIR");
     if (qore_prefix) {
         libqore_dir = qore_prefix;
     } else {
-        // Default to the system library path where libqore is installed
         libqore_dir = QORE_LIBDIR;
     }
 
-    std::string cmd = "cc -o " + exe_path + " " + obj_path
-        + " -L" + libqore_dir + " -lqore"
-        + " -Wl,-rpath," + libqore_dir
-        + " -lstdc++ -lpthread -ldl";
+    std::string cmd;
+    if (static_link) {
+        // Check for static libqore
+        std::string static_lib = libqore_dir + "/libqore_static.a";
+        {
+            std::ifstream f(static_lib);
+            if (!f.good()) {
+                error = "static libqore not found at " + static_lib
+                    + " (build with -DBUILD_STATIC_LIBQORE=ON)";
+                return false;
+            }
+        }
+
+        // Static link: use CXX compiler from config, link static lib + all transitive deps
+        cmd = config.cxx + " -o " + exe_path + " " + obj_path
+            + " " + static_lib;
+        if (!config.static_libs.empty()) {
+            cmd += " " + config.static_libs;
+        }
+    } else {
+        // Dynamic link: use CXX compiler from config, link -lqore + system libs
+        cmd = config.cxx + " -o " + exe_path + " " + obj_path
+            + " -L" + libqore_dir + " -lqore"
+            + " -Wl,-rpath," + libqore_dir;
+        if (!config.dynamic_libs.empty()) {
+            cmd += " " + config.dynamic_libs;
+        }
+    }
 
     printd(2, "AOT: link command: %s\n", cmd.c_str());
     int rc = system(cmd.c_str());
@@ -542,7 +635,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
                       int64_t parse_options,
                       std::string& error,
                       int opt_level,
-                      const char* target_triple) {
+                      const char* target_triple,
+                      bool static_link) {
     // Initialize LLVM targets (needed for object emission)
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
@@ -661,7 +755,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     printd(2, "AOT: emitted object file: %s (O%d)\n", obj_path.c_str(), opt_level);
 
     // Step 5: Link executable (skip for cross-compilation)
-    if (!linkExecutable(obj_path, output_path, error, target_triple)) {
+    if (!linkExecutable(obj_path, output_path, error, target_triple, static_link)) {
         // Clean up object file on link failure
         remove(obj_path.c_str());
         return false;

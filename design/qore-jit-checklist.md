@@ -1076,7 +1076,12 @@ correct runtime helpers. The only code-quality fix was a missing `trackResultFor
       initializes all LLVM targets and emits object file for the specified triple.
       Skips native linking; prints `"cross-compiled object: %s.o (link manually)"`.
       Invalid triples produce a clear error message.
-- [ ] Static linking: link libqore statically for fully standalone binaries
+- [x] ~~**Static linking**~~: `--static` flag for AOT compilation. Links libqore statically
+      via `libqore_static.a` (built with `BUILD_STATIC_LIBQORE=ON` CMake option).
+      Transitive dependencies (OpenSSL, LLVM, etc.) remain dynamically linked.
+      CMake-generated `aot-link.conf` provides portable compiler/library configuration
+      (searched via `$QORE_AOT_LINK_CONF` env, `$QORE_LIBDIR/aot-link.conf`, or
+      `QORE_LIBDIR/qore/aot-link.conf`). Helpful error when static lib not built.
 - [ ] Module compilation: compile Qore modules (.qm) to shared libraries
 - [ ] Source stripping: option to not embed source (requires full context coverage first)
 

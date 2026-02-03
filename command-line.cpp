@@ -119,6 +119,9 @@ static int aot_opt_level = 2;
 // AOT target triple for cross-compilation
 static const char* aot_target = nullptr;
 
+// AOT static linking
+static bool aot_static = false;
+
 // program text given on the command-line
 static const char* cl_pgm = 0;
 
@@ -227,6 +230,8 @@ static const char helpstr[] =
    "                               default: 2)\n"
    "      --target=TRIPLE          target triple for cross-compilation\n"
    "                               (default: native host)\n"
+   "      --static                 statically link libqore (requires\n"
+   "                               BUILD_STATIC_LIBQORE=ON in CMake)\n"
    "\n"
    " REPL OPTIONS:\n"
    "      --interactive            force interactive REPL mode\n"
@@ -754,6 +759,10 @@ static void set_aot_target(const char* arg) {
     aot_target = arg;
 }
 
+static void set_aot_static(const char* arg) {
+    aot_static = true;
+}
+
 static void disable_gc(const char* arg) {
     qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
@@ -864,6 +873,7 @@ static struct opt_struct_s {
    { '\0', "output",               ARG_MAND, set_aot_output },
    { '\0', "opt-level",            ARG_MAND, set_opt_level },
    { '\0', "target",               ARG_MAND, set_aot_target },
+   { '\0', "static",               ARG_NONE, set_aot_static },
    // debugging options
    { 'b', "disable-signals",       ARG_NONE, disable_signals },
    { 'd', "debug",                 ARG_MAND, do_debug },
@@ -1243,7 +1253,7 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          std::string error;
          if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
                   source_label.c_str(), output_path, parse_options, error,
-                  aot_opt_level, aot_target)) {
+                  aot_opt_level, aot_target, aot_static)) {
             fprintf(stderr, "AOT compilation failed: %s\n", error.c_str());
             rc = 1;
          } else {
