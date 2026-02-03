@@ -2401,12 +2401,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             signature.selfid->uninstantiateSelf();
         }
 
-        // Check for JIT promotion while on IR tier (skip for closures — JIT local
-        // variable access doesn't yet handle closure calling conventions correctly)
+        // Check for JIT promotion while on IR tier
         uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
         printd(3, "evalTiered IR '%s' exec_count=%lu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
             name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure, (int)jit_compile_failed);
-        if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed && !is_closure) {
+        if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed) {
             std::call_once(jit_compile_once, [this]() {
                 attemptJITCompilation();
             });
@@ -2427,7 +2426,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
 
     // Check for JIT promotion (IR already cached from a previous call)
-    if (count >= QoreJIT::getJITThreshold() && cached_ir && !jit_compile_failed && !is_closure) {
+    if (count >= QoreJIT::getJITThreshold() && cached_ir && !jit_compile_failed) {
         std::call_once(jit_compile_once, [this]() {
             attemptJITCompilation();
         });

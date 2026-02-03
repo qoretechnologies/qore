@@ -40,6 +40,10 @@ class TieredSmokeTest inherits QUnit::Test {
         addTestCase("tiered hash/list/string fast-path promotion", \testTieredAccessOpsPromotion());
         # Phase 5c debug info test
         addTestCase("tiered debug info promotion", \testTieredDebugInfo());
+        # Closure JIT tests
+        addTestCase("tiered closure basic", \testTieredClosureBasic());
+        addTestCase("tiered closure write-back", \testTieredClosureWriteBack());
+        addTestCase("tiered closure multi-capture", \testTieredClosureMultiCapture());
         set_return_value(main());
     }
 
@@ -603,5 +607,74 @@ printf(\"%s:%d\\n\", all_ok ? \"OK\" : \"FAIL\", results.size());
 ";
         string result = trim(runScript(code, "tiered", "--jit-ir-threshold=3 --jit-jit-threshold=10"));
         assertEq("OK:50", result, "debug info: correct across tier promotions");
+    }
+
+    # --- Closure JIT tests ---
+
+    testTieredClosureBasic() {
+        # Simple closure that captures an int and reads it; called enough times
+        # to trigger JIT promotion of the closure body
+        string code = "%modern
+int base = 100;
+code add_base = int sub (int n) {
+    return n + base;
+};
+list<int> results = ();
+for (int i = 0; i < 40; i++) {
+    results += add_base(i);
+}
+printf(\"%s\\n\", (map $1.toString(), results).join(\",\"));
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=20"));
+        list<string> parts = result.split(",");
+        assertEq(40, parts.size(), "closure basic: got 40 results");
+        for (int i = 0; i < 40; i++) {
+            int expected = i + 100;
+            assertEq(expected.toString(), parts[i],
+                sprintf("closure basic: add_base(%d) = %d", i, expected));
+        }
+    }
+
+    testTieredClosureWriteBack() {
+        # Closure modifies a captured variable; verify write-through semantics
+        string code = "%modern
+int counter = 0;
+code increment = sub () {
+    counter += 1;
+};
+for (int i = 0; i < 40; i++) {
+    increment();
+}
+printf(\"%d\\n\", counter);
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=20"));
+        assertEq("40", result, "closure write-back: counter incremented 40 times");
+    }
+
+    testTieredClosureMultiCapture() {
+        # Closure captures multiple variables of different types
+        string code = "%modern
+int offset = 10;
+string prefix = \"val\";
+float scale = 2.5;
+code compute = string sub (int n) {
+    float result = (n + offset) * scale;
+    return sprintf(\"%s=%.1f\", prefix, result);
+};
+list<string> results = ();
+for (int i = 0; i < 40; i++) {
+    results += compute(i);
+}
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=20"));
+        list<string> parts = result.split(",");
+        assertEq(40, parts.size(), "closure multi-capture: got 40 results");
+        for (int i = 0; i < 40; i++) {
+            float expected = (i + 10) * 2.5;
+            string expected_str = sprintf("val=%.1f", expected);
+            assertEq(expected_str, parts[i],
+                sprintf("closure multi-capture: compute(%d) = %s", i, expected_str));
+        }
     }
 }

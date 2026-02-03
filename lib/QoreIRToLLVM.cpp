@@ -2212,6 +2212,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

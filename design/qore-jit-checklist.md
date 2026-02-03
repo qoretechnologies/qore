@@ -986,6 +986,61 @@ after both the pre-evaluated-base DotEval path and its AST fallback path.
 - [x] `lib/QoreIRToLLVM.cpp` — updated `declareRuntimeHelpers` and `emitLocalUninstantiation` for
       two-argument signature; added `reloadAllLocalsFromRuntime` to DotEval handler and fallback path
 
+### Phase 7i: Closure JIT Compilation — COMPLETE ✓
+
+Enabled JIT compilation of closure variants. Previously closures were excluded from JIT
+promotion via `!is_closure` guards, but Phase 7h fixes made closure variable handling
+correct in JIT: `qore_rt_uninstantiate_local` dispatches via `var->uninstantiate(xsink)`
+(correct lvstack/cvstack), `qore_rt_load_local`/`qore_rt_assign_local` dispatch through
+`LocalVar::eval()`/`getLValue()` which handle `closure_use` correctly, and DotEval reload
+ensures alloca freshness after method calls.
+
+#### Analysis
+
+Closure variables use `LoadClosure`/`StoreClosure` IR opcodes, which are NOT collected by
+`collectLocals()` (only `LoadLocal`/`StoreLocal` are). This means:
+- Closure variables are NOT in `function_locals` — no instantiation/uninstantiation by JIT
+- No allocas created for closure variables — loaded fresh via `qore_rt_load_local` each time
+- `reloadAllLocalsFromRuntime` doesn't affect them (no alloca to reload)
+- Closure environment is set up by `evalClosure()` → `ThreadSafeLocalVarRuntimeEnvironmentHelper`
+  BEFORE `evalTiered()` is called
+
+The LLVM handlers for `LoadClosure`/`StoreClosure` in JIT mode already existed and used the
+correct runtime helpers. The only code-quality fix was a missing `trackResultForCleanup` on
+`LoadClosure` (exception-safety leak for +1 ref values).
+
+#### Changes
+
+- [x] **Remove `!is_closure` guards** (`lib/Function.cpp`): Removed `&& !is_closure` from
+      both JIT promotion checks (IR tier at line 2409, AST tier at line 2430). Updated comment
+      to remove the closure exclusion note.
+- [x] **Update `is_closure` member comment** (`include/qore/intern/Function.h`): Changed from
+      "JIT not yet supported" to just "true for closure variants".
+- [x] **Add `trackResultForCleanup` to LoadClosure** (`lib/QoreIRToLLVM.cpp`): Added cleanup
+      tracking for the +1 ref returned by `qore_rt_load_local`/`qore_rt_load_closure_aot`,
+      matching the pattern used by `LoadLocal` and other load handlers.
+- [x] **Closure JIT tests** (`examples/test/ir/TieredSmoke.qtest`): Three new test cases:
+      `testTieredClosureBasic` (simple capture + read), `testTieredClosureWriteBack` (closure
+      modifies captured variable, verifies write-through), `testTieredClosureMultiCapture`
+      (captures int, string, float variables).
+
+#### Test Results
+
+| Test Suite | Result |
+|-----------|--------|
+| TieredSmoke.qtest | 23/23 test cases, 367 assertions |
+| JITSmoke.qtest | 58/58 (103 assertions) |
+| IRExecModeSmoke.qtest | 137/137 (416 assertions) |
+| AOTSmoke.qtest | 20/20 (32 assertions) |
+| Valgrind (TieredSmoke) | 0 bytes definitely/indirectly/possibly lost |
+
+#### Deliverables
+
+- [x] `lib/Function.cpp` — removed `!is_closure` from two JIT promotion guards
+- [x] `include/qore/intern/Function.h` — updated `is_closure` member comment
+- [x] `lib/QoreIRToLLVM.cpp` — added `trackResultForCleanup` to LoadClosure handler
+- [x] `examples/test/ir/TieredSmoke.qtest` — 23 test cases (367 assertions), 3 new closure tests
+
 ### Future Extensions (not in this phase)
 
 - [x] ~~**Fix Call double-evaluation**~~: Fixed in Phase 7c. Dispatch based on

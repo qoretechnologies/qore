@@ -634,7 +634,7 @@ protected:
     mutable std::once_flag jit_compile_once;
     mutable bool ir_lower_failed = false;
     mutable bool jit_compile_failed = false;
-    bool is_closure = false;  //!< true for closure variants; JIT not yet supported
+    bool is_closure = false;  //!< true for closure variants
 
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
             ExceptionSink* xsink) const;
