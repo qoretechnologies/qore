@@ -70,6 +70,14 @@ public:
         aot_slots = slots;
     }
 
+    //! Set deopt counter pointer for profile-informed guard failure tracking.
+    //! When set, profiled guard failure paths emit a call to qore_rt_deopt()
+    //! that increments this counter. The evalTiered() path checks the counter
+    //! to trigger JIT recompilation with updated type profiles.
+    void setDeoptCounter(void* counter) {
+        deopt_counter_ptr = counter;
+    }
+
 private:
     llvm::LLVMContext& ctx;
 
@@ -88,6 +96,9 @@ private:
     bool aot_mode = false;
     const AOTSlotMap* aot_slots = nullptr;
     llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
+
+    // Deopt counter: pointer to variant's deopt_count atomic for guard failure tracking
+    void* deopt_counter_ptr = nullptr;
 
     // IR builder
     std::unique_ptr<llvm::IRBuilder<>> builder;

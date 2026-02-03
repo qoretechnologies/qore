@@ -127,10 +127,10 @@ uint64_t qore_rt_catch_exception(ExceptionSink* xsink);
 
 // --- Deopt helpers ---
 
-//! Deopt entrypoint: transfer back to IR interpreter.
-//! deopt_id identifies the deopt point metadata.
-//! Returns the result of IR interpreter execution as a NaN-boxed QoreValue.
-uint64_t qore_rt_deopt(uint64_t deopt_id, ExceptionSink* xsink);
+//! Atomically increment the deopt counter for a variant.
+//! Called from JIT-compiled profiled guard failure paths.
+//! The evalTiered path checks this counter to trigger JIT recompilation.
+void qore_rt_deopt(void* deopt_counter_ptr);
 
 // --- Guard helpers ---
 

@@ -67,7 +67,8 @@ public:
 
     //! Compile an IR function to native code and cache the result.
     //! Returns true on success; on failure, sets error message.
-    bool compileFunction(const QoreIRFunction& func, std::string& error);
+    bool compileFunction(const QoreIRFunction& func, std::string& error,
+            void* deopt_counter = nullptr);
 
     //! Look up a previously compiled function by name.
     //! Returns nullptr if not found.

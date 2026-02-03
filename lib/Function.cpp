@@ -2237,7 +2237,9 @@ void UserVariantBase::attemptJITCompilation() const {
     assert(cached_ir);
 
     std::string error;
-    if (!QoreJIT::instance().compileFunction(*cached_ir, error)) {
+    // Pass deopt_count address so JIT-compiled code can track guard failures
+    if (!QoreJIT::instance().compileFunction(*cached_ir, error,
+            const_cast<void*>(static_cast<const void*>(&deopt_count)))) {
         jit_compile_failed = true;
         printd(2, "UserVariantBase::attemptJITCompilation() '%s' failed: %s\n",
             cached_ir->name.c_str(), error.c_str());
@@ -2261,23 +2263,33 @@ void UserVariantBase::attemptJITRecompilation() const {
     cached_jit_fn = nullptr;
     current_tier.store(TIER_IR, std::memory_order_release);
 
-    // Recompile with the accumulated type profiles
+    // Reset deopt counter before recompilation
+    deopt_count.store(0, std::memory_order_relaxed);
+
+    // Use a versioned name so LLVM ORC creates a new symbol (old one stays in memory)
+    std::string orig_name = cached_ir->name;
+    cached_ir->name = orig_name + "_reopt";
+
+    // Recompile with the accumulated type profiles and deopt tracking
     std::string error;
-    if (!QoreJIT::instance().compileFunction(*cached_ir, error)) {
+    if (!QoreJIT::instance().compileFunction(*cached_ir, error,
+            const_cast<void*>(static_cast<const void*>(&deopt_count)))) {
+        cached_ir->name = orig_name;
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' failed: %s\n",
-            cached_ir->name.c_str(), error.c_str());
+            orig_name.c_str(), error.c_str());
         return;
     }
     JitFunctionPtr fn = QoreJIT::instance().lookupFunction(cached_ir->name);
+    cached_ir->name = orig_name;
     if (!fn) {
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' lookup failed\n",
-            cached_ir->name.c_str());
+            orig_name.c_str());
         return;
     }
     cached_jit_fn = fn;
     current_tier.store(TIER_JIT, std::memory_order_release);
     printd(2, "UserVariantBase::attemptJITRecompilation() '%s' recompiled with profiled guards\n",
-        cached_ir->name.c_str());
+        orig_name.c_str());
 }
 
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
@@ -2341,6 +2353,15 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         signature.argvid->uninstantiate(xsink);
         if (self && signature.selfid) {
             signature.selfid->uninstantiateSelf();
+        }
+
+        // Check if profiled guards triggered deopts; if so, attempt recompilation
+        // with updated type profiles (one-time, via std::call_once)
+        uint32_t deopts = deopt_count.load(std::memory_order_relaxed);
+        if (deopts >= 10 && cached_ir) {
+            std::call_once(jit_recompile_once, [this]() {
+                attemptJITRecompilation();
+            });
         }
 
         if (!*xsink && val.isNothing()) {

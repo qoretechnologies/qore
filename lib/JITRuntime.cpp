@@ -236,15 +236,16 @@ extern "C" uint64_t qore_rt_catch_exception(ExceptionSink* xsink) {
 
 // --- Deopt helpers ---
 
-extern "C" uint64_t qore_rt_deopt(uint64_t deopt_id, ExceptionSink* xsink) {
-    // Record the deopt event; the guard failure will still propagate as an exception
-    // via the deopt_target block. The evalTiered path can check deopt_count to
-    // trigger recompilation with profiled type information.
-    printd(2, "qore_rt_deopt: guard failure at deopt_id=%lld\n",
-        static_cast<long long>(deopt_id));
-    // NOTE: currently guard failures propagate via exception handlers, so no
-    // additional exception is raised here. The deopt_id is logged for diagnostics.
-    return toBits(QoreValue());
+extern "C" void qore_rt_deopt(void* deopt_counter_ptr) {
+    // Atomically increment the deopt counter for the variant.
+    // The evalTiered path checks this counter and triggers JIT recompilation
+    // with updated type profiles when it exceeds a threshold.
+    if (deopt_counter_ptr) {
+        auto* counter = static_cast<std::atomic<uint32_t>*>(deopt_counter_ptr);
+        counter->fetch_add(1, std::memory_order_relaxed);
+        printd(2, "qore_rt_deopt: guard failure, deopt_count now %u\n",
+            counter->load(std::memory_order_relaxed));
+    }
 }
 
 // --- Guard helpers ---

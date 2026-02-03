@@ -217,13 +217,52 @@ deopt with mixed type changes mid-execution, and cross-mode (AST vs IR vs tiered
 - [x] `lib/Function.cpp` — `initGuardProfiles()` call, `attemptJITRecompilation()` implementation
 - [x] `lib/QoreIRToLLVM.cpp` — profile-informed guard lowering with inline checks and
       branch weight metadata
-- [x] `lib/JITRuntime.cpp` — `qore_rt_deopt` logging implementation
-- [x] `examples/test/ir/Phase4bSmoke.qtest` — 10 test cases (13 assertions)
+- [x] `lib/JITRuntime.cpp` — `qore_rt_deopt` deopt counter implementation
+- [x] `examples/test/ir/Phase4bSmoke.qtest` — 12 test cases (15 assertions)
 
-#### Phase 4b-2: Guard Refinement & Deopt (future)
+#### Phase 4b-2: Guard Refinement & Deopt — COMPLETE ✓
 
-- [ ] Guard refinement: use deopt feedback to specialize guards.
-- [ ] Recompilation: re-lowering/re-JITing a function with better type info after deopt.
+Deopt tracking and profile-informed recompilation. When profiled guards fail (e.g., a
+function JIT'd for int receives float), the failure is counted via `qore_rt_deopt()`.
+After 10+ deopts, `evalTiered()` triggers one-time JIT recompilation with updated profiles.
+
+- [x] **Deopt counter** (`JITRuntime.cpp`): `qore_rt_deopt(void* counter_ptr)` atomically
+      increments the variant's deopt counter. Called from JIT guard failure paths.
+- [x] **Guard failure tracking** (`QoreIRToLLVM.cpp`): Profiled guards (`profile_hot`) emit
+      intermediate "guard_deopt" blocks that call `qore_rt_deopt` before branching to the
+      deopt target. Counter pointer is embedded as a constant in JIT code.
+- [x] **Deopt counter propagation** (`QoreIRToLLVM.h`, `QoreJIT.h`, `QoreJIT.cpp`):
+      `setDeoptCounter()` on lowerer, `deopt_counter` parameter on `compileFunction()`.
+- [x] **Recompilation trigger** (`Function.cpp`): `evalTiered()` checks `deopt_count >= 10`
+      after JIT execution and triggers one-time `attemptJITRecompilation()` via `std::call_once`.
+      Recompilation uses versioned function names (`_reopt` suffix) for new LLVM ORC symbols.
+- [x] **Deopt counter reset**: Counter is reset to 0 before recompilation so the recompiled
+      version starts with a clean slate.
+
+#### Test Results (Phase 4b-2)
+
+| Test Suite | Result |
+|-----------|--------|
+| Phase4bSmoke.qtest | 12/12 test cases, 15 assertions |
+| JITSmoke.qtest | 58/58 test cases, 103 assertions |
+| TieredSmoke.qtest | 23/23 test cases, 367 assertions |
+| Valgrind (Phase4b) | 0 bytes definitely/indirectly/possibly lost |
+
+New tests: deopt recompilation correctness (int→float transition with many calls),
+deopt heavy type change (rapid alternating int/float calls).
+
+#### Deliverables (Phase 4b-2)
+
+- [x] `include/qore/intern/JITRuntime.h` — updated `qore_rt_deopt` signature
+- [x] `include/qore/intern/QoreIRToLLVM.h` — `setDeoptCounter()`, `deopt_counter_ptr` member
+- [x] `include/qore/intern/QoreJIT.h` — `deopt_counter` parameter on `compileFunction()`
+- [x] `lib/JITRuntime.cpp` — atomic counter increment implementation
+- [x] `lib/QoreIRToLLVM.cpp` — intermediate deopt blocks with counter calls, updated
+      declaration signature
+- [x] `lib/QoreJIT.cpp` — pass deopt counter to lowerer
+- [x] `lib/Function.cpp` — pass deopt counter to compilation, deopt check in evalTiered,
+      versioned recompilation with counter reset
+- [x] `examples/test/ir/Phase4bSmoke.qtest` — 2 new recompilation test cases
 
 #### Phase 4b-3: OSR (future)
 

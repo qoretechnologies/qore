@@ -236,7 +236,8 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     return true;
 }
 
-bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error) {
+bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
+        void* deopt_counter) {
     // Thread-safe initialization using std::call_once
     std::call_once(init_flag, [this]() {
         init_success = initialize(init_error);
@@ -273,6 +274,9 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error) {
 
     // Lower IR to LLVM IR
     QoreIRToLLVM lowering(*ctx);
+    if (deopt_counter) {
+        lowering.setDeoptCounter(deopt_counter);
+    }
     if (!lowering.lowerFunction(func, *module, error)) {
         return false;
     }
