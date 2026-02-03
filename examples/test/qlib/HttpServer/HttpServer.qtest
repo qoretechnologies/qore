@@ -1024,8 +1024,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         string wssUrl = "wss://localhost:" + rejectSslPort + "/ws";
 
-        # Part 1: Explicit HTTP/2 should get rejection (server's nghttp2 sends RST_STREAM
-        # because ENABLE_CONNECT_PROTOCOL is not advertised)
+        # Part 1: Explicit HTTP/2 should get rejection (client detects that
+        # ENABLE_CONNECT_PROTOCOL is not advertised in server's SETTINGS)
         {
             code callback = sub (*data msg) { };
             WebSocketClient wsc(callback, {
@@ -1034,7 +1034,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 "ssl_verify_cert": False,
                 "http_version": "2.0",
             });
-            assertThrows("HTTP2-CONNECT-ERROR", "stream reset", \wsc.connect());
+            assertThrows("HTTP2-CONNECT-ERROR", "ENABLE_CONNECT_PROTOCOL", \wsc.connect());
         }
 
         # Part 2: Auto mode should fall back to HTTP/1.1 successfully

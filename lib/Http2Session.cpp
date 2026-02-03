@@ -1502,10 +1502,18 @@ int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
         frame->hd.stream_id, hdr_name.c_str(), hdr_val.c_str());
 
     // RFC 8441: When :protocol is rejected as invalid (e.g., ENABLE_CONNECT_PROTOCOL not set),
-    // reset the stream rather than silently dropping the header — dropping it causes the CONNECT
-    // to be processed without :protocol, and no response is ever sent to the client.
+    // store the value so onFrameRecvCallback can reject the stream with RST_STREAM via the
+    // Layer 2 extended CONNECT rejection check.  We cannot rely on
+    // NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE here because some nghttp2 versions do not honor
+    // this return value from on_invalid_header_callback (they treat it as 0, silently dropping
+    // the header and causing the CONNECT to be processed without :protocol).
     if (hdr_name == ":protocol") {
-        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+        Http2Session* h2 = static_cast<Http2Session*>(user_data);
+        Http2StreamInfo* stream = h2->getStream(frame->hd.stream_id);
+        if (stream) {
+            stream->connect_protocol = hdr_val;
+        }
+        return 0;
     }
 
     return 0;
