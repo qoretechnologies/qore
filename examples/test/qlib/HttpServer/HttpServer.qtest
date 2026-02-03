@@ -278,6 +278,12 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     constructor() : Test("HttpServerTest", "1.0") {
+        # Install signal handler early to debug hangs
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
         addTestCase("idle test", \idleTest());
         addTestCase("issue 4312", \issue4312());
         addTestCase("issue 3397", \issue3397());
@@ -327,12 +333,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode WebSocket streaming shutdown", \asyncModeWebSocketShutdownTest());
         addTestCase("async mode multiple WebSocket shutdown", \asyncModeMultipleWebSocketShutdownTest());
         addTestCase("async mode mixed streaming shutdown", \asyncModeMixedStreamingShutdownTest());
-
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("%Y\n", get_all_thread_call_stacks());
-            });
-        }
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -997,8 +997,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     asyncModeWebSocketHttp2RejectTest() {
-        # Test reject_http2_websocket option: server rejects HTTP/2 WebSocket CONNECT with 501,
-        # client with http_version "auto" falls back to HTTP/1.1
+        # Test that reject_http2_websocket option is deprecated and ignored.
+        # Server now always supports HTTP/2 WebSocket via the multiplexed path.
 
         Logger rejectLogger("ws-reject-test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -1007,7 +1007,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         HttpServer rejectServer(<HttpServerOptionInfo>{
             "logger": rejectLogger,
             "debug": True,
-            "reject_http2_websocket": True,
+            "reject_http2_websocket": True,  # Deprecated, ignored
         });
         on_exit rejectServer.stop();
 
@@ -1024,45 +1024,32 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         string wssUrl = "wss://localhost:" + rejectSslPort + "/ws";
 
-        # Part 1: Explicit HTTP/2 should get rejection (client detects that
-        # ENABLE_CONNECT_PROTOCOL is not advertised in server's SETTINGS)
-        {
-            code callback = sub (*data msg) { };
-            WebSocketClient wsc(callback, {
-                "url": wssUrl,
-                "timeout": 10s,
-                "ssl_verify_cert": False,
-                "http_version": "2.0",
-            });
-            assertThrows("HTTP2-CONNECT-ERROR", "ENABLE_CONNECT_PROTOCOL", \wsc.connect());
-        }
+        # Since reject_http2_websocket is now deprecated and ignored, HTTP/2 WebSocket
+        # should work normally (server always advertises ENABLE_CONNECT_PROTOCOL)
+        Counter msgReceived(1);
+        string receivedMsg;
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",  # Explicitly use HTTP/2
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
 
-        # Part 2: Auto mode should fall back to HTTP/1.1 successfully
-        {
-            Counter msgReceived(1);
-            string receivedMsg;
-            code callback = sub (*data msg) {
-                if (msg.typeCode() == NT_STRING) {
-                    receivedMsg = msg;
-                    msgReceived.dec();
-                }
-            };
-            WebSocketClient wsc(callback, {
-                "url": wssUrl,
-                "timeout": 10s,
-                "ssl_verify_cert": False,
-                "http_version": "auto",
-            });
-            wsc.connect();
-            on_exit wsc.disconnect();
+        # HTTP/2 WebSocket should work even with deprecated option set
+        assertTrue(wsc.isHttp2(), "WebSocket should use HTTP/2 (deprecated option ignored)");
+        assertTrue(wsc.isOpen(), "WebSocket should be open");
 
-            assertFalse(wsc.isHttp2(), "WebSocket should fall back to HTTP/1.1");
-            assertTrue(wsc.isOpen(), "WebSocket should be open");
-
-            wsc.send("hello-reject-test");
-            assertEq(0, msgReceived.waitForZero(5s));
-            assertEq("ECHO:hello-reject-test", receivedMsg);
-        }
+        wsc.send("hello-reject-test");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:hello-reject-test", receivedMsg);
     }
 
     asyncModeWebSocketSslHttp1Test() {

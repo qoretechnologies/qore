@@ -1008,15 +1008,23 @@ Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
 }
 
 void Http2Session::markStreamComplete(int32_t stream_id) {
-    std::lock_guard<std::recursive_mutex> lg(m);
-    auto it = streams.find(stream_id);
-    if (it != streams.end()) {
+    Http2StreamInfo* stream_ptr = nullptr;
+    StreamCompleteCallback callback_copy;
+
+    {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        auto it = streams.find(stream_id);
+        if (it == streams.end()) {
+            return;
+        }
+
         // Prevent duplicate entries in completed_streams
         if (it->second->marked_complete) {
             printd(5, "markStreamComplete(%d) already marked complete, skipping\n", stream_id);
             return;
         }
         it->second->marked_complete = true;
+        stream_ptr = it->second.get();
 
         bool is_connect = it->second->is_connect;
         // For CONNECT streams on the server, we need to keep the stream in the map so we can respond
@@ -1035,6 +1043,18 @@ void Http2Session::markStreamComplete(int32_t stream_id) {
                 stream_id, is_connect ? 1 : 0, completed_streams.size());
             fflush(stderr);
         }
+
+        // Copy callback to invoke outside the lock
+        callback_copy = stream_complete_callback;
+    }
+
+    // Invoke stream completion callback outside the lock to avoid deadlocks
+    // Note: stream_ptr may be invalidated if client code calls takeCompletedStream()
+    // from the callback, but the callback receives a copy of the stream data
+    if (callback_copy) {
+        ExceptionSink xsink;
+        callback_copy(stream_id, stream_ptr, &xsink);
+        // Ignore any exceptions from the callback
     }
 }
 

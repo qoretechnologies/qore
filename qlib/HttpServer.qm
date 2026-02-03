@@ -465,23 +465,15 @@ public hashdecl HttpServerOptionInfo {
     */
     int max_idle_handler_threads = 0;
 
-    #! Reject HTTP/2 WebSocket CONNECT so the client falls back to HTTP/1.1
-    /** When enabled, the server does not advertise \c ENABLE_CONNECT_PROTOCOL in its HTTP/2
-        SETTINGS frame, so compliant clients will not attempt extended CONNECT (RFC 8441).
-        Clients that do attempt it receive a RST_STREAM (PROTOCOL_ERROR) from the HTTP/2
-        layer. Clients that set \c http_version to \c "auto" (the default) will automatically
-        fall back to HTTP/1.1 for WebSocket.
-
-        This also activates the multiplexed HTTP/2 request path where requests are dispatched
-        to handler threads while the I/O thread retains the HTTP/2 poll operation. In this mode
-        SSE streaming responses are not yet supported and will receive a 501 (Not Implemented);
-        SSE clients should use HTTP/1.1.
-
-        When \c False (the default), WebSocket CONNECT is handled via the legacy path where
-        the HTTP/2 poll operation is given to the handler exclusively, which works correctly
-        for single-purpose WebSocket connections. SSE streaming is also supported in this mode.
+    #! @deprecated Ignored; all HTTP/2 connections now use the multiplexed path with full
+    #! support for WebSocket (RFC 8441), SSE, and streaming responses.
+    /** This option is kept for backwards compatibility but has no effect.
+        The server always advertises \c ENABLE_CONNECT_PROTOCOL in HTTP/2 SETTINGS
+        and supports WebSocket, SSE, and streaming responses multiplexed on a single
+        HTTP/2 connection.
 
         @since HttpServer 1.6
+        @deprecated since HttpServer 1.7
     */
     bool reject_http2_websocket = False;
 }
@@ -2515,23 +2507,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     try {
                         int stream_id = cx."header-info".stream_id;
                         hash<auto> ws_hdr = rv.hdr ?? {};
-                        AbstractPollOperation op = s.startPollSendHttp2ConnectResponse(stream_id,
-                            rv."code" ?? 200, ws_hdr);
-                        execHttp2PollOperation(s, op);
 
-                        # In async mode, the controller manages the HTTP/2 connection
-                        # lifecycle via h2op - do not add as idle, as that would conflict
-                        # with the h2op state and intercept WebSocket frames meant for the
-                        # handler. In sync mode, return to async I/O for other streams.
-                        if (asyncMode && !cx."async_mode") {
-                            try {
-                                returnConnectionToAsyncIo(s, cx, listener);
-                            } catch (hash<ExceptionInfo> ex) {
-                                @debug {
-                                    listener.log("cid %d: HTTP/2 WebSocket returnConnectionToAsyncIo skipped: %s: %s",
-                                        cx.id, ex.err, ex.desc);
-                                }
+                        if (cx.async_mode) {
+                            # Multiplexed mode: submit CONNECT response directly to the
+                            # nghttp2 session.  h2op on the I/O thread will flush it.
+                            s.submitHttp2ConnectResponse(stream_id, rv."code" ?? 200, ws_hdr);
+                            # Wake the I/O controller so h2op's continuePoll() flushes
+                            # the pending CONNECT response
+                            *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                            if (ctrl) {
+                                ctrl.wake();
                             }
+                        } else {
+                            # Sync mode: use poll operation
+                            AbstractPollOperation op = s.startPollSendHttp2ConnectResponse(
+                                stream_id, rv."code" ?? 200, ws_hdr);
+                            execHttp2PollOperation(s, op);
                         }
 
                         hash<auto> ws_cx = cx + {"listener": listener, "id": ws_id};

@@ -1613,10 +1613,21 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 op = sock.startPollSend(frame);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "SOCKET-NON-BLOCK-ERROR") {
-                    # Another async send is already in progress
+                    # Another async send is already in progress on this socket.
+                    # This can happen in HTTP/1.1 async mode when multiple threads or callbacks
+                    # try to send frames concurrently (e.g., application message + control frame).
+                    #
                     # WARNING: Dropping frames can cause protocol issues, especially for control frames
-                    # (ping/pong/close). This is a known limitation of the current async implementation.
-                    # TODO: Consider implementing a message queue for proper frame ordering
+                    # (ping/pong/close). WebSocket clients may timeout waiting for pong responses or
+                    # close acknowledgments.
+                    #
+                    # NOTE: HTTP/2 WebSocket doesn't have this issue since it uses a different code path
+                    # (Http2StreamContext.sendData()) that handles multiplexing at the protocol level.
+                    #
+                    # A proper fix would require implementing a per-connection send queue and ensuring
+                    # frames are sent in order after the current async operation completes. This is
+                    # complex because exec() blocks waiting for the operation, so queued frames would
+                    # need to be sent from the main I/O loop, not from within sendFrame().
                     log(LoggerLevel::WARN,
                         "WebSocketHandler::sendFrame(): async send already in progress; dropping frame "
                         "(size=%d bytes)", frame.size());

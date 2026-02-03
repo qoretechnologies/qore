@@ -3181,6 +3181,60 @@ int QoreSocket::submitHttp2Response(int32_t stream_id, int status_code,
     return priv->h2_session->submitResponse(stream_id, status_code, h2_headers, body, body_len, xsink);
 }
 
+int QoreSocket::submitHttp2ConnectResponse(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    // Convert Qore headers hash to std::map
+    std::map<std::string, std::string> h2_headers;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    return priv->h2_session->submitConnectResponse(stream_id, status_code, h2_headers, xsink);
+}
+
+int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* body,
+        size_t body_len, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    // Convert Qore headers hash to std::map
+    std::map<std::string, std::string> h2_headers;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    return priv->h2_session->submitRequest(nullptr, nullptr, h2_headers, body, body_len, xsink);
+}
+
+void QoreSocket::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return;
+    }
+    priv->h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+}
+
 void QoreSocket::setHttp2ConnectProtocolEnabled(bool enable) {
     priv->h2_enable_connect_protocol = enable;
 }
@@ -6221,6 +6275,252 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
 
             default:
                 xsink->raiseException("HTTP2-ERROR", "unexpected streaming state: %d", ss_state);
+                return nullptr;
+        }
+    }
+}
+
+// HTTP/2 Client Multiplex Poll Operation implementation
+
+SocketHttp2ClientMultiplexPollOperation::SocketHttp2ClientMultiplexPollOperation(ExceptionSink* xsink,
+        QoreSocketObject* sock)
+        : SocketPollSocketOperationBase(sock) {
+    AutoLocker al(sock->priv->m);
+
+    // Check if socket is open and valid
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    // Set non-blocking mode
+    if (sock->priv->setNonBlock(xsink)) {
+        return;
+    }
+    set_non_block = true;
+
+    // Check if there's already an HTTP/2 session stored in the socket (from a previous request)
+    bool reused_session = false;
+    if (sock->priv->socket->priv->h2_session) {
+        // Reuse existing session (socket owns it)
+        h2_session = sock->priv->socket->priv->h2_session;
+        reused_session = true;
+    } else {
+        // Initialize new HTTP/2 client session and store it on the socket
+        if (initSession(xsink)) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+            return;
+        }
+    }
+
+    // Set up stream completion callback to queue responses
+    h2_session->setStreamCompleteCallback(
+        [this](int32_t stream_id, Http2StreamInfo* stream, ExceptionSink* xsink) {
+            this->onStreamComplete(stream_id, stream, xsink);
+        });
+
+    // Set initial state based on whether we reused a session
+    if (reused_session) {
+        // Session already established - go directly to reading frames
+        h2_state = H2C_READING;
+    } else {
+        // New session - need to exchange connection preface
+        h2_state = H2C_SEND_PREFACE;
+    }
+}
+
+SocketHttp2ClientMultiplexPollOperation::~SocketHttp2ClientMultiplexPollOperation() {
+    // Clear stream completion callback
+    if (h2_session) {
+        h2_session->clearStreamCompleteCallback();
+    }
+
+    // Deref any queued responses
+    AutoLocker al(response_lock);
+    for (QoreHashNode* h : completed_responses) {
+        h->deref(nullptr);
+    }
+    completed_responses.clear();
+}
+
+int SocketHttp2ClientMultiplexPollOperation::initSession(ExceptionSink* xsink) {
+    // Determine scheme from socket state (secure = https, otherwise http)
+    const char* scheme = sock->priv->socket->priv->ssl ? "https" : "http";
+
+    // Create client-side HTTP/2 session using the underlying QoreSocket's priv
+    h2_session = Http2Session::createClient(sock->priv->socket->priv, xsink, scheme);
+    if (!h2_session) {
+        return -1;
+    }
+    // Store session on socket for shared access
+    sock->priv->socket->priv->h2_session = h2_session;
+    return 0;
+}
+
+void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id, Http2StreamInfo* stream,
+        ExceptionSink* xsink) {
+    // Build response hash from stream info
+    ReferenceHolder<QoreHashNode> response(new QoreHashNode(autoTypeInfo), xsink);
+
+    response->setKeyValue("stream_id", stream_id, xsink);
+    response->setKeyValue("status_code", stream->status_code, xsink);
+
+    // Convert headers map to Qore hash
+    if (!stream->headers.empty()) {
+        ReferenceHolder<QoreHashNode> headers(new QoreHashNode(autoTypeInfo), xsink);
+        for (const auto& h : stream->headers) {
+            headers->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), xsink);
+        }
+        response->setKeyValue("headers", headers.release(), xsink);
+    }
+
+    // Convert body vector to Qore binary
+    if (!stream->body.empty()) {
+        SimpleRefHolder<BinaryNode> body(new BinaryNode);
+        body->append(stream->body.data(), stream->body.size());
+        response->setKeyValue("body", body.release(), xsink);
+    }
+
+    // Queue the response
+    {
+        AutoLocker al(response_lock);
+        completed_responses.push_back(response.release());
+    }
+}
+
+void SocketHttp2ClientMultiplexPollOperation::cancelStream(int32_t stream_id, ExceptionSink* xsink) {
+    if (!h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
+        return;
+    }
+    h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+}
+
+int32_t SocketHttp2ClientMultiplexPollOperation::submitRequest(const char* method, const char* path,
+        const std::map<std::string, std::string>& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink) {
+    if (!h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
+        return -1;
+    }
+    if (h2_state == H2C_CLOSED) {
+        xsink->raiseException("HTTP2-ERROR", "connection is closed");
+        return -1;
+    }
+    return h2_session->submitRequest(method, path, headers, body, body_len, xsink);
+}
+
+QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    while (true) {
+        switch (h2_state) {
+            case H2C_SEND_PREFACE: {
+                // Send client connection preface (SETTINGS frame)
+                int rv = h2_session->sendConnectionPreface(xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (rv == -1) {
+                    // Would block - need to poll for write
+                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                }
+                h2_state = H2C_RECV_PREFACE;
+                // Fall through to receive preface
+            }
+
+            case H2C_RECV_PREFACE:
+            case H2C_READING: {
+                // Check if there are completed streams - dispatch via callback
+                if (h2_session->hasCompletedStreams()) {
+                    // Flush any pending output before dispatching
+                    int srv = h2_session->sendPendingData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == SOCK_POLLIN || srv == SOCK_POLLOUT) {
+                        // Socket buffer full; poll and retry
+                        return getSocketPollInfoHash(xsink, srv);
+                    }
+                    // Callbacks are invoked by the session via StreamCompleteCallback
+                    // Continue reading for more responses
+                }
+
+                // First try to send any pending data (requests submitted from other threads)
+                if (h2_session->wantWrite()) {
+                    int srv = h2_session->sendPendingData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == SOCK_POLLOUT) {
+                        // Need to poll for write
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN | SOCK_POLLOUT);
+                    }
+                }
+
+                // Receive and process HTTP/2 frames
+                int rv = h2_session->receiveData(0, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (rv == 1) {
+                    // Connection closed by peer
+                    peer_closed = true;
+                    h2_state = H2C_CLOSED;
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
+                }
+                if (rv == -1) {
+                    // Would block - poll for read (and write if we have pending data)
+                    int events = SOCK_POLLIN;
+                    if (h2_session->wantWrite() || h2_session->hasPendingData()) {
+                        events |= SOCK_POLLOUT;
+                    }
+                    return getSocketPollInfoHash(xsink, events);
+                }
+
+                // Data received - check for completed streams
+                if (h2_session->hasCompletedStreams()) {
+                    // Responses are dispatched via callback mechanism
+                    // Continue the loop to process more frames
+                    continue;
+                }
+
+                // No completed streams yet - check if we're past the preface stage
+                if (h2_state == H2C_RECV_PREFACE) {
+                    h2_state = H2C_READING;
+                }
+
+                // Check for GOAWAY
+                if (h2_session->isGoawayReceived()) {
+                    h2_state = H2C_CLOSED;
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
+                }
+
+                // Poll for more data (and write if we have pending data)
+                int events = SOCK_POLLIN;
+                if (h2_session->wantWrite() || h2_session->hasPendingData()) {
+                    events |= SOCK_POLLOUT;
+                }
+                return getSocketPollInfoHash(xsink, events);
+            }
+
+            case H2C_CLOSED:
+                if (set_non_block) {
+                    set_non_block = false;
+                    sock->priv->clearNonBlock();
+                }
+                return nullptr;
+
+            default:
+                xsink->raiseException("HTTP2-ERROR", "unexpected client multiplex state: %d", h2_state);
                 return nullptr;
         }
     }

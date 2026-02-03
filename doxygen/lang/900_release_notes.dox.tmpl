@@ -277,6 +277,13 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
       - new @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" class for HTTP/2 server connection handling
       - \c HttpAsyncSocketIoController supports HTTP/2 via \c http_version option
+    - @ref http2clientio_intro "Http2ClientIo" module
+      - new module providing HTTP/2 multiplexed client I/O support
+      - enables multiple concurrent streams on a single TCP connection
+      - new @ref Http2ClientIo::Http2ClientConnectionManager "Http2ClientConnectionManager" class for connection pooling
+      - new @ref Http2ClientIo::Http2ClientConnection "Http2ClientConnection" class for single TCP connections with multiple streams
+      - new @ref Http2ClientIo::Http2ClientStreamHandle "Http2ClientStreamHandle" class for per-request handles with sync/async API
+      - new @ref Http2ClientIo::Http2ClientPollOperation "Http2ClientPollOperation" class for continuous frame reading
     - @ref httpserverutilintro "HttpServerUtil" module
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design

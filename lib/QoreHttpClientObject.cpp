@@ -1173,9 +1173,9 @@ struct qore_httpclient_priv {
         }
     }
 
-    // FIXME: redirects reset the connection URL for all further connections - they need to reset it only for the next
-    // connection
     // issue #3474: process redirect messages correctly
+    // NOTE: callers pass a local copy of `connection` (e.g., `this_connection` in send_internal),
+    // so redirects only affect the current request chain, not the client's base URL
     DLLLOCAL int redirectUrlUnlocked(const char* str, con_info& connection, ExceptionSink* xsink) {
         QoreURL url(str);
         if (!url.isValid()) {
@@ -4966,7 +4966,10 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                 info->setKeyValue(tmp.c_str(), mess ? mess->refSelf() : 0, xsink);
             }
 
-            // FIXME: reset send callback and send_aborted here
+            // NOTE: Per RFC 7231, 301/302/303 redirects should change POST/PUT to GET (dropping the body),
+            // while 307/308 should preserve the method and body. Currently we always resend with the same
+            // method and body, which is incorrect for 301/302/303. The send_callback and body parameters
+            // should be cleared for those redirect codes.
 
             // set mpath to NULL so that the new path will be taken
             mpath = nullptr;

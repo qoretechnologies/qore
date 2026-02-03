@@ -1518,6 +1518,7 @@ qore_user_module("qlib/DebugCmdLine.qm" "ConnectionProvider;DebugUtil;DebugProgr
 qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/HttpServer.qm" "HttpServerUtil;Mime;Util")
 qore_user_module("qlib/HttpServerAsyncIo" "HttpServer")
+qore_user_module("qlib/Http2ClientIo" "Logger")
 qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime")
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")
 qore_user_module("qlib/SewioWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
