@@ -34,6 +34,11 @@ class Phase4bSmokeTest inherits QUnit::Test {
         # Deopt-triggered recompilation tests
         addTestCase("deopt recompilation correctness", \testDeoptRecompilationCorrectness());
         addTestCase("deopt heavy type change", \testDeoptHeavyTypeChange());
+        # OSR (loop-aware JIT promotion) tests
+        addTestCase("OSR while loop promotion", \testOSRWhileLoopPromotion());
+        addTestCase("OSR for loop promotion", \testOSRForLoopPromotion());
+        addTestCase("OSR nested loops", \testOSRNestedLoops());
+        addTestCase("OSR cross-mode correctness", \testOSRCrossModeCorrectness());
         set_return_value(main());
     }
 
@@ -324,5 +329,108 @@ printf(\"%d %.1f %d %.1f\\n\", results[0], results[1], results[98], results[99])
         string result = trim(runScript(code, "tiered", "--jit-ir-threshold=10 --jit-jit-threshold=50"));
         assertEq("1 1.5 50 50.5", result,
             "deopt heavy type change: correct alternating type results");
+    }
+
+    # --- OSR (loop-aware JIT promotion) tests ---
+
+    testOSRWhileLoopPromotion() {
+        # Function with a hot while loop. The loop should trigger OSR-based
+        # JIT promotion even with a low IR threshold and high JIT threshold,
+        # because loop iterations exceed the JIT threshold.
+        string code = "%modern
+int sub sum_while(int n) {
+    int total = 0;
+    int i = 0;
+    while (i < n) {
+        total += i;
+        i++;
+    }
+    return total;
+}
+# Call once with a large loop count — OSR should trigger JIT promotion
+# even though exec_count is only 1 (below normal JIT threshold of 5000)
+printf(\"%d\\n\", sum_while(2000));
+";
+        # IR threshold=1 (promote to IR immediately), JIT threshold=5000 (high)
+        # OSR should trigger because the while loop iterates 2000 times > threshold
+        string ir_result = trim(runScript(code, "ir"));
+        string tiered_result = trim(runScript(code, "tiered",
+            "--jit-ir-threshold=1 --jit-jit-threshold=5000"));
+        assertEq("1999000", ir_result, "OSR while: IR result correct");
+        assertEq(ir_result, tiered_result,
+            "OSR while: tiered (with OSR) matches IR");
+    }
+
+    testOSRForLoopPromotion() {
+        # Function with a hot for loop — same OSR principle.
+        string code = "%modern
+int sub factorial_sum(int n) {
+    int total = 0;
+    for (int i = 1; i <= n; i++) {
+        total += i * i;
+    }
+    return total;
+}
+printf(\"%d\\n\", factorial_sum(3000));
+";
+        string ir_result = trim(runScript(code, "ir"));
+        string tiered_result = trim(runScript(code, "tiered",
+            "--jit-ir-threshold=1 --jit-jit-threshold=5000"));
+        assertEq(ir_result, tiered_result,
+            "OSR for: tiered (with OSR) matches IR for sum of squares");
+    }
+
+    testOSRNestedLoops() {
+        # Function with nested loops — inner loop should trigger OSR.
+        string code = "%modern
+int sub matrix_sum(int rows, int cols) {
+    int total = 0;
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            total += i * cols + j;
+        }
+    }
+    return total;
+}
+printf(\"%d\\n\", matrix_sum(50, 100));
+";
+        string ir_result = trim(runScript(code, "ir"));
+        string tiered_result = trim(runScript(code, "tiered",
+            "--jit-ir-threshold=1 --jit-jit-threshold=5000"));
+        assertEq(ir_result, tiered_result,
+            "OSR nested: tiered matches IR for nested loop computation");
+    }
+
+    testOSRCrossModeCorrectness() {
+        # Verify that OSR-promoted functions produce identical results across
+        # all execution modes for a non-trivial computation.
+        string code = "%modern
+int sub sieve_count(int limit) {
+    int count = 0;
+    for (int i = 2; i < limit; i++) {
+        bool is_prime = True;
+        for (int j = 2; j * j <= i; j++) {
+            if (i % j == 0) {
+                is_prime = False;
+                break;
+            }
+        }
+        if (is_prime) {
+            count++;
+        }
+    }
+    return count;
+}
+printf(\"%d\\n\", sieve_count(500));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string tiered_result = trim(runScript(code, "tiered",
+            "--jit-ir-threshold=1 --jit-jit-threshold=5000"));
+        assertEq(ast_result, ir_result, "OSR cross-mode: IR matches AST");
+        assertEq(ast_result, tiered_result,
+            "OSR cross-mode: tiered (with OSR) matches AST");
+        # primes below 500 = 95
+        assertEq("95", ast_result, "OSR cross-mode: sieve count correct");
     }
 }

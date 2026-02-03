@@ -471,6 +471,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             error = "IR builder failed to create blocks for do-while";
             return false;
         }
+        // Mark condition block as loop header for OSR detection
+        cond_block->is_loop_header = true;
         if (!blockHasTerminator(builder.getBlock())) {
             builder.createBranch(body_block);
         }
@@ -504,6 +506,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             error = "IR builder failed to create blocks for while";
             return false;
         }
+        // Mark condition block as loop header for OSR detection
+        cond_block->is_loop_header = true;
         if (!blockHasTerminator(builder.getBlock())) {
             builder.createBranch(cond_block);
         }
@@ -538,6 +542,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             error = "IR builder failed to create blocks for for";
             return false;
         }
+        // Mark condition block as loop header for OSR detection
+        cond_block->is_loop_header = true;
         QoreValue init = for_stmt->getAssignment();
         if (init && !init.isNothing()) {
             QoreIRValue lowered = lowerExpression(init, error);

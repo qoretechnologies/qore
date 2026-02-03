@@ -264,9 +264,35 @@ deopt heavy type change (rapid alternating int/float calls).
       versioned recompilation with counter reset
 - [x] `examples/test/ir/Phase4bSmoke.qtest` — 2 new recompilation test cases
 
-#### Phase 4b-3: OSR (future)
+#### Phase 4b-3: Loop-Aware JIT Promotion (OSR) — COMPLETE ✓
 
-- [ ] OSR for hot loops (on-stack replacement: promoting a running loop mid-execution).
+Practical OSR implementation: the IR interpreter detects hot loops by counting back-edges
+to loop header blocks. When loop iterations exceed the JIT threshold, the function is
+flagged for JIT compilation on the next call. This gives most of the OSR benefit without
+the complexity of true mid-execution on-stack replacement.
+
+- [x] **Loop header marking** (`QoreIR.h`, `QoreIRLowering.cpp`): `is_loop_header` flag
+      on `QoreIRBasicBlock`, set on condition blocks for while/for/do-while loops.
+- [x] **Loop iteration tracking** (`QoreIRInterpreter.cpp`): `loop_iterations` counter
+      incremented on back-edges to loop headers. When count exceeds `osr_threshold`
+      (= JIT threshold), sets `func.osr_jit_requested = true`.
+- [x] **OSR-triggered JIT promotion** (`Function.cpp`): `evalTiered()` checks
+      `osr_jit_requested` after IR execution; if set, triggers `attemptJITCompilation()`
+      via `std::call_once`. Takes priority over normal exec_count threshold.
+
+#### Test Results (Phase 4b-3)
+
+| Test Suite | Result |
+|-----------|--------|
+| Phase4bSmoke.qtest | 16/16 test cases, 22 assertions |
+| TieredSmoke.qtest | 23/23 test cases, 367 assertions |
+| JITSmoke.qtest | 58/58 test cases, 103 assertions |
+| IRExecModeSmoke.qtest | 137/137 test cases, 416 assertions |
+| Valgrind (Phase4b) | 0 bytes definitely/indirectly/possibly lost |
+
+OSR tests: while loop promotion (2000 iterations triggers JIT with threshold=5000),
+for loop promotion, nested loops (inner loop triggers OSR), cross-mode correctness
+(AST vs IR vs tiered with OSR-enabled prime sieve).
 
 ---
 

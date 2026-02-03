@@ -2455,7 +2455,15 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
         printd(3, "evalTiered IR '%s' exec_count=%lu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
             name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure, (int)jit_compile_failed);
-        if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed) {
+        // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
+        if (cached_ir->osr_jit_requested && !jit_compile_failed) {
+            cached_ir->osr_jit_requested = false;  // Reset flag
+            std::call_once(jit_compile_once, [this]() {
+                printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
+                    cached_ir->name.c_str());
+                attemptJITCompilation();
+            });
+        } else if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed) {
             std::call_once(jit_compile_once, [this]() {
                 attemptJITCompilation();
             });

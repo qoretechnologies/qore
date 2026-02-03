@@ -54,6 +54,7 @@
 #include <qore/intern/QoreLogicalLessThanOperatorNode.h>
 #include <qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreJIT.h>
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
 #include <qore/intern/QoreDotEvalOperatorNode.h>
@@ -922,6 +923,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     QoreIRBasicBlock* prev_block = nullptr;
     size_t ip = 0;
 
+    // OSR: loop iteration counter for loop-aware JIT promotion
+    uint32_t loop_iterations = 0;
+    const uint32_t osr_threshold = static_cast<uint32_t>(QoreJIT::getJITThreshold());
+
     while (block) {
         if (ip >= block->instructions.size()) {
             if (xsink) {
@@ -1223,6 +1228,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 prev_block = block;
                 block = br->target;
                 ip = 0;
+                // OSR: count back-edges to loop headers
+                if (block->is_loop_header) {
+                    ++loop_iterations;
+                    if (!func.osr_jit_requested && loop_iterations >= osr_threshold) {
+                        func.osr_jit_requested = true;
+                        printd(2, "QoreIRInterpreter: OSR triggered for '%s' "
+                            "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
+                    }
+                }
                 break;
             }
             case QoreIROpcode::BrIf: {
@@ -1231,6 +1245,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 prev_block = block;
                 block = cond.getAsBool() ? br->true_target : br->false_target;
                 ip = 0;
+                // OSR: count back-edges to loop headers
+                if (block->is_loop_header) {
+                    ++loop_iterations;
+                    if (!func.osr_jit_requested && loop_iterations >= osr_threshold) {
+                        func.osr_jit_requested = true;
+                        printd(2, "QoreIRInterpreter: OSR triggered for '%s' "
+                            "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
+                    }
+                }
                 break;
             }
             case QoreIROpcode::LoadLocal: {

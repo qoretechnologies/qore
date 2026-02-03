@@ -751,6 +751,10 @@ public:
 
     std::string name;
     std::vector<std::unique_ptr<QoreIRInstruction>> instructions;
+
+    //! True if this block is a loop header (condition block for while/for/do-while).
+    //! Used by the IR interpreter for loop-aware JIT promotion (OSR).
+    bool is_loop_header = false;
 };
 
 class QoreIRFunction {
@@ -802,6 +806,11 @@ public:
             guard_profile_count = num_guards;
         }
     }
+
+    //! OSR flag: set by the IR interpreter when a hot loop is detected.
+    //! Checked by evalTiered() after IR execution to trigger JIT compilation.
+    //! mutable: written during const IR execution.
+    mutable bool osr_jit_requested = false;
 
 private:
     uint32_t next_value_id = 1;
