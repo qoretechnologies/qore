@@ -736,6 +736,7 @@ set(LIBQORE_CPP_SRC
     lib/JITRuntime.cpp
     lib/QoreAOT.cpp
     lib/QoreAOTRuntime.cpp
+    lib/QoreAOTBinary.cpp
     lib/QoreClass.cpp
     lib/TypedHashDecl.cpp
     lib/QoreEnumDecl.cpp

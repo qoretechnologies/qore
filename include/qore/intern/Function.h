@@ -238,6 +238,25 @@ public:
 
     DLLLOCAL UserSignature(int n_first_line, int n_last_line, QoreValue params, RetTypeInfo* retTypeInfo, int64 po);
 
+    //! Set up a fully-resolved signature from AOT binary metadata (no parsing required)
+    /** Used during AOT binary deserialization to construct a variant with known parameter types
+        without going through the parse-time path.
+
+        @param pgm the QoreProgram that owns the LocalVar objects
+        @param retType the resolved return type info
+        @param paramNames parameter names
+        @param paramTypes resolved parameter type info pointers
+        @param defaults default argument values (ref'd for storage)
+        @param hasVarargs true if the function has varargs
+    */
+    DLLLOCAL void setupFromAOTMetadata(
+        QoreProgram* pgm,
+        const QoreTypeInfo* retType,
+        const std::vector<std::string>& paramNames,
+        const std::vector<const QoreTypeInfo*>& paramTypes,
+        const std::vector<QoreValue>& defaults,
+        bool hasVarargs);
+
     DLLLOCAL virtual ~UserSignature() {
         for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)
             delete* i;

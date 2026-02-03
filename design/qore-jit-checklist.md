@@ -1299,7 +1299,23 @@ error handling for non-module files.
       re-parses embedded source, registers pre-compiled functions; `qore_aot_module_ns_init`
       copies module namespaces to the program's root namespace with AOT function registration
       on the copies. Output defaults to `<name>.qmod`; custom output via `--output`.
-- [ ] Source stripping: option to not embed source (requires full context coverage first)
+- [x] ~~**Source stripping**~~: `--strip-source` flag for AOT compilation. Instead of embedding the
+      full source text, serializes a compact binary metadata blob (QORD format) containing the
+      namespace tree, function/method signatures, type information, and per-function slot maps.
+      At runtime, `qore_aot_run_v2()` deserializes this metadata to reconstruct the namespace
+      tree and build `QoreAOTContext` slot arrays — without re-parsing source or re-lowering IR.
+      **Binary format**: magic `"QORD"` (0x514F5244), section-based with string pool deduplication.
+      Sections: STRINGS, NAMESPACES, CLASSES, HASHDECLS, ENUMS, TYPEDEFS, CONSTANTS, GLOBALS,
+      FUNCTIONS, METHODS, SLOT_MAPS, TOPLEVEL, FUNC_SOURCES.
+      **Type resolution**: `QoreAOTTypeResolver` maps serialized type path strings (e.g., `"int"`,
+      `"*string"`, `"hash<MyDecl>"`, `"Ns::MyClass"`) back to `const QoreTypeInfo*` at runtime.
+      **Per-function source fallback**: functions with unsupported expression types (complex
+      operator trees) keep a source fragment in the FUNC_SOURCES section for fallback
+      context building via IR re-lowering.
+      **Backward compatibility**: old binaries call `qore_aot_run()` (unchanged); new stripped
+      binaries call `qore_aot_run_v2()`. Both entry points coexist in libqore.
+      **New files**: `include/qore/intern/QoreAOTBinary.h`, `lib/QoreAOTBinary.cpp`.
+      Output message: `"compiled (O%d, source-stripped): %s"`.
 
 ---
 

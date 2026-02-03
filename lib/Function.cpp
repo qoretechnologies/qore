@@ -735,6 +735,59 @@ int UserSignature::pushParam(VarRefNode* v, QoreValue defArg, bool needs_types) 
     return err;
 }
 
+void UserSignature::setupFromAOTMetadata(
+        QoreProgram* pgm,
+        const QoreTypeInfo* retType,
+        const std::vector<std::string>& paramNames,
+        const std::vector<const QoreTypeInfo*>& paramTypes,
+        const std::vector<QoreValue>& defaults,
+        bool hasVarargs) {
+    // Set return type
+    returnTypeInfo = retType;
+
+    // Set parameter types and names
+    typeList = paramTypes;
+    names = paramNames;
+
+    // Set default arguments (ref values for storage)
+    defaultArgList.resize(paramTypes.size());
+    for (size_t i = 0; i < defaults.size() && i < paramTypes.size(); ++i) {
+        defaultArgList[i] = defaults[i].refSelf();
+    }
+
+    // Create LocalVar* for each parameter via the program's local var allocator
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    lv.resize(paramTypes.size());
+    for (size_t i = 0; i < paramTypes.size(); ++i) {
+        const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
+        lv[i] = pp->createLocalVar(pname, paramTypes[i]);
+    }
+
+    // Create argv local var - always created (matches parseInitPushLocalVars behavior)
+    // evalTiered() unconditionally instantiates argvid
+    argvid = pp->createLocalVar("argv", autoListOrNothingTypeInfo);
+
+    // Set flags
+    varargs = hasVarargs;
+    resolved = true;
+
+    // Count param types
+    num_param_types = 0;
+    min_param_types = 0;
+    for (size_t i = 0; i < typeList.size(); ++i) {
+        if (typeList[i]) {
+            ++num_param_types;
+            if (i >= defaultArgList.size() || !defaultArgList[i]) {
+                ++min_param_types;
+            }
+        }
+    }
+
+    // Build signature string
+    str.clear();
+    addAbstractParameterSignature(str);
+}
+
 void UserSignature::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
     lv.reserve(parseTypeList.size());
 
@@ -2295,7 +2348,8 @@ void UserVariantBase::attemptJITRecompilation() const {
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink) const {
     assert(pgm);
-    assert(statements);
+    // Note: statements can be null for AOT-only functions (deserialized from binary metadata)
+    // assert(statements);
 
     ExecutionTier tier = current_tier.load(std::memory_order_acquire);
     printd(3, "evalTiered '%s': tier=%d exec_count=%lu cached_jit=%p cached_aot=%p cached_ir=%p\n",
@@ -2540,14 +2594,19 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     //QORE_TRACE("UserVariantBase::evalIntern()");
 
     // Tiered compilation dispatch
-    if (pgm && statements) {
-        qore_exec_mode_t mode = pgm->getExecMode();
-        printd(3, "evalIntern '%s': mode=%d pgm=%p statements=%p\n", name, (int)mode, (void*)pgm, (void*)statements);
-        if (mode == QEM_TIERED) {
-            // Only attempt tiered promotion for %modern code
-            int64 po = pgm->getParseOptions64();
-            if ((po & PO_MODERN) == PO_MODERN) {
-                return evalTiered(name, argv, self, xsink);
+    // Also dispatch to evalTiered for AOT-only functions (no AST body) that are already at TIER_JIT
+    if (pgm) {
+        bool has_aot = current_tier.load(std::memory_order_acquire) == TIER_JIT && cached_aot_fn;
+        if (statements || has_aot) {
+            qore_exec_mode_t mode = pgm->getExecMode();
+            printd(3, "evalIntern '%s': mode=%d pgm=%p statements=%p has_aot=%d\n",
+                name, (int)mode, (void*)pgm, (void*)statements, (int)has_aot);
+            if (has_aot || mode == QEM_TIERED) {
+                // Only attempt tiered promotion for %modern code (or direct AOT dispatch)
+                int64 po = pgm->getParseOptions64();
+                if (has_aot || (po & PO_MODERN) == PO_MODERN) {
+                    return evalTiered(name, argv, self, xsink);
+                }
             }
         }
     }

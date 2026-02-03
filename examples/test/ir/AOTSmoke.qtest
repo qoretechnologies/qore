@@ -50,6 +50,15 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
         addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
         addTestCase("AOT module compile error", \testAOTModuleCompileError());
+        # Source stripping tests (Phase 8)
+        addTestCase("AOT strip source basic", \testStripSourceBasic());
+        addTestCase("AOT strip source arithmetic", \testStripSourceArithmetic());
+        addTestCase("AOT strip source strings", \testStripSourceStrings());
+        addTestCase("AOT strip source multiple functions", \testStripSourceMultipleFunctions());
+        addTestCase("AOT strip source binary size", \testStripSourceBinarySize());
+        addTestCase("AOT strip source backward compat", \testStripSourceBackwardCompat());
+        addTestCase("AOT strip source compile output", \testStripSourceCompileOutput());
+        addTestCase("AOT strip source no source in binary", \testStripSourceNoSourceInBinary());
         set_return_value(main());
     }
 
@@ -1019,5 +1028,221 @@ printf(\"not a module\\n\");
         hash<auto> result = compileModuleFile(qm_path);
         assertTrue(result.compile_out.regex("(failed|error|no module declaration)"),
             "non-module file produces error: " + result.compile_out);
+    }
+
+    #! Compile with --strip-source flag and run
+    private hash<auto> compileStripSourceAndRun(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile with --strip-source
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --strip-source %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Parse pre-compile stats
+        bool all_precompiled = False;
+        *list<string> match = (compile_out =~ x/(\d+)\/(\d+) functions pre-compiled/);
+        if (match) {
+            all_precompiled = (match[0] == match[1]);
+        }
+
+        string run_out;
+        int binary_size = 0;
+        if (is_file(paths.out)) {
+            binary_size = hstat(paths.out).size;
+            string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+            if (run_args) {
+                for (int i = 0; i < run_args.size(); ++i) {
+                    run_cmd += " " + run_args[i];
+                }
+            }
+            run_cmd += " 2>&1";
+            run_out = backquote(run_cmd);
+        } else {
+            run_out = "COMPILE_FAILED: " + compile_out;
+        }
+
+        return {
+            "compile_out": compile_out,
+            "run_out": run_out,
+            "all_precompiled": all_precompiled,
+            "binary_size": binary_size,
+            "compiled": is_file(paths.out),
+        };
+    }
+
+    #! Compile with --strip-source and return binary path (caller must clean up)
+    private hash<auto> compileStripSourceGetPath(string code) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --strip-source %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "compile_out": compile_out,
+            "out_path": paths.out,
+            "compiled": is_file(paths.out),
+        };
+    }
+
+    # ---- Source stripping tests (Phase 8) ----
+
+    testStripSourceBasic() {
+        string code = "%modern
+printf(\"Hello, World!\\n\");
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source basic compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("source-stripped"),
+            "compile output mentions source-stripped: " + result.compile_out);
+        assertEq("Hello, World!\n", result.run_out, "strip-source basic output correct");
+    }
+
+    testStripSourceArithmetic() {
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+int sub multiply(int a, int b) { return a * b; }
+int sub subtract(int a, int b) { return a - b; }
+printf(\"%d %d %d\\n\", add(10, 20), multiply(3, 7), subtract(100, 42));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source arithmetic compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "strip-source arithmetic matches interpreter");
+    }
+
+    testStripSourceStrings() {
+        string code = "%modern
+string sub greet(string name) { return \"Hello, \" + name + \"!\"; }
+string sub concat3(string a, string b, string c) { return a + b + c; }
+printf(\"%s\\n\", greet(\"World\"));
+printf(\"%s\\n\", concat3(\"A\", \"B\", \"C\"));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source strings compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "strip-source strings matches interpreter");
+    }
+
+    testStripSourceMultipleFunctions() {
+        string code = "%modern
+int sub square(int x) { return x * x; }
+int sub cube(int x) { return x * x * x; }
+int sub sum_squares(int a, int b) { return square(a) + square(b); }
+printf(\"square(5)=%d\\n\", square(5));
+printf(\"cube(3)=%d\\n\", cube(3));
+printf(\"sum_squares(3,4)=%d\\n\", sum_squares(3, 4));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source multi-func compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "strip-source all functions pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "strip-source multi-func matches interpreter");
+    }
+
+    testStripSourceBinarySize() {
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add(1, 2));
+exit(0);
+";
+        # Compile with strip-source
+        hash<auto> strip_result = compileStripSourceAndRun(code);
+        assertTrue(strip_result.compiled, "strip-source compiled: " + strip_result.compile_out);
+
+        # Compile without strip-source for comparison
+        hash<auto> normal_result = compileCheckAndRun(code);
+        assertTrue(normal_result.run_out.regex("result: 3"), "normal AOT runs correctly");
+
+        # Both should produce correct output
+        assertEq(strip_result.run_out, normal_result.run_out,
+            "strip-source output matches normal AOT output");
+
+        # The strip-source compile output should mention "source-stripped"
+        assertTrue(strip_result.compile_out.regex("source-stripped"),
+            "compile output mentions source-stripped");
+    }
+
+    testStripSourceBackwardCompat() {
+        # Verify that normal (non-stripped) AOT binaries still work after our changes
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add(1, 2));
+exit(0);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "non-stripped AOT still works correctly");
+    }
+
+    testStripSourceCompileOutput() {
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add(1, 2));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source compiled");
+        # Verify compile output shows metadata blob size
+        assertTrue(result.compile_out.regex("metadata blob:.*bytes"),
+            "compile output shows metadata blob size: " + result.compile_out);
+        # Verify compile output shows source-stripped
+        assertTrue(result.compile_out.regex("source-stripped"),
+            "compile output shows source-stripped: " + result.compile_out);
+        # Verify it reports functions pre-compiled
+        assertTrue(result.compile_out.regex("\\d+/\\d+ functions pre-compiled"),
+            "compile output shows pre-compile stats: " + result.compile_out);
+    }
+
+    testStripSourceNoSourceInBinary() {
+        # Verify that the source code string is NOT present in the stripped binary
+        string code = "%modern
+int sub add_unique_marker_12345(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add_unique_marker_12345(1, 2));
+exit(0);
+";
+        # Compile with strip-source
+        hash<auto> strip_paths = compileStripSourceGetPath(code);
+        on_exit {
+            unlink(strip_paths.out_path);
+        }
+        assertTrue(strip_paths.compiled, "strip-source compiled: " + strip_paths.compile_out);
+
+        # Also compile WITHOUT strip-source for comparison
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        backquote(compile_cmd);
+
+        # Use the `strings` command to extract printable strings from both binaries
+        # The source code "int sub add_unique_marker_12345" should appear in the
+        # non-stripped binary (embedded source) but NOT in the stripped binary
+        string strip_strings = backquote(sprintf("strings %s 2>&1", strip_paths.out_path));
+        string normal_strings = backquote(sprintf("strings %s 2>&1", paths.out));
+
+        # The non-stripped binary should contain the source declaration
+        assertTrue(normal_strings.regex("int sub add_unique_marker_12345"),
+            "non-stripped binary contains source function declaration");
+
+        # The stripped binary should NOT contain the source declaration
+        assertFalse(strip_strings.regex("int sub add_unique_marker_12345"),
+            "strip-source binary does not contain source function declaration");
     }
 }

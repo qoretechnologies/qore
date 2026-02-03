@@ -46,6 +46,7 @@ class QoreIRFunction;
 class QoreNamespace;
 class QoreProgram;
 class QoreStringNode;
+class StatementBlock;
 class Var;
 
 //! AOT context: runtime-resolved pointer tables for AOT-compiled functions.
@@ -61,6 +62,8 @@ struct QoreAOTContext {
     int num_globals = 0;
     uint64_t* exprs = nullptr;      //!< NaN-boxed QoreValue for Invoke/Call/CallMethod/CallStatic/LValue
     int num_exprs = 0;
+    StatementBlock** stmts = nullptr;   //!< OnBlockExit statement blocks
+    int num_stmts = 0;
 
     //! All body locals from the fresh IR (needed by evalTiered for instantiation)
     std::vector<LocalVar*> all_body_locals;
@@ -80,6 +83,9 @@ struct QoreAOTContext {
         if (num_exprs > 0) {
             exprs = static_cast<uint64_t*>(calloc(num_exprs, sizeof(uint64_t)));
         }
+        if (num_stmts > 0) {
+            stmts = static_cast<StatementBlock**>(calloc(num_stmts, sizeof(StatementBlock*)));
+        }
     }
 };
 
@@ -93,6 +99,7 @@ struct AOTSlotMap {
     std::unordered_map<const void*, int32_t> local_slots;   //!< LocalVar* -> slot index
     std::unordered_map<const void*, int32_t> global_slots;  //!< Var* -> slot index
     std::unordered_map<uint64_t, int32_t> expr_slots;       //!< NaN-boxed expr bits -> slot index
+    std::unordered_map<const void*, int32_t> stmt_slots;    //!< StatementBlock* -> slot index (OnBlockExit)
 
     //! Get or assign a slot for a LocalVar*
     int32_t getLocalSlot(const void* local) {
@@ -126,6 +133,17 @@ struct AOTSlotMap {
         expr_slots[expr_bits] = slot;
         return slot;
     }
+
+    //! Get or assign a slot for a StatementBlock* (OnBlockExit)
+    int32_t getStmtSlot(const void* stmt) {
+        auto it = stmt_slots.find(stmt);
+        if (it != stmt_slots.end()) {
+            return it->second;
+        }
+        int32_t slot = static_cast<int32_t>(stmt_slots.size());
+        stmt_slots[stmt] = slot;
+        return slot;
+    }
 };
 
 //! AOT function pointer type: takes QoreAOTContext* and ExceptionSink*
@@ -138,6 +156,7 @@ struct QoreAOTFunc {
     int num_locals;                             //!< number of local variable slots
     int num_globals;                            //!< number of global variable slots
     int num_exprs;                              //!< number of expression slots
+    int num_stmts;                              //!< number of statement slots (OnBlockExit)
 };
 
 //! C ABI entry point called by AOT-compiled binaries from their generated main()
@@ -163,6 +182,29 @@ extern "C" int qore_aot_run(
     const QoreAOTFunc* functions, int num_functions
 );
 
+//! C ABI entry point called by source-stripped AOT binaries from their generated main()
+/** Deserializes binary metadata to reconstruct the namespace tree (instead of re-parsing
+    source), builds AOT contexts from slot maps, and runs the program.
+    Functions with unsupported expression types use the embedded fallback source.
+
+    @param argc command-line argument count
+    @param argv command-line argument vector
+    @param metadata serialized binary metadata blob
+    @param metadata_len length of metadata blob in bytes
+    @param label label for the source (e.g. script filename)
+    @param parse_options parse options used during original compilation
+    @param functions array of pre-compiled function descriptors
+    @param num_functions number of entries in functions array
+    @return exit code (0 = success)
+*/
+extern "C" int qore_aot_run_v2(
+    int argc, char** argv,
+    const uint8_t* metadata, int metadata_len,
+    const char* label,
+    int64_t parse_options,
+    const QoreAOTFunc* functions, int num_functions
+);
+
 //! Module metadata extracted from .qm source
 struct QoreAOTModuleInfo {
     std::string name;           //!< module feature name
@@ -179,6 +221,17 @@ struct QoreAOTModuleInfo {
 */
 extern "C" QoreStringNode* qore_aot_module_init(
     const char* source, int source_len,
+    const char* label,
+    int64_t parse_options,
+    const char* mod_name,
+    const QoreAOTFunc* functions, int num_functions
+);
+
+//! C ABI entry point called by source-stripped AOT modules from their generated qore_module_init()
+/** Deserializes binary metadata instead of re-parsing source.
+*/
+extern "C" QoreStringNode* qore_aot_module_init_v2(
+    const uint8_t* metadata, int metadata_len,
     const char* label,
     int64_t parse_options,
     const char* mod_name,
@@ -215,7 +268,8 @@ public:
                        std::string& error,
                        int opt_level = 2,
                        const char* target_triple = nullptr,
-                       bool static_link = false);
+                       bool static_link = false,
+                       bool strip_source = false);
 
     //! Compile a .qm user module to a native shared library (.so) binary module
     /** @param source_text original module source text to embed
@@ -234,7 +288,8 @@ public:
                               int64_t parse_options,
                               std::string& error,
                               int opt_level = 2,
-                              const char* target_triple = nullptr);
+                              const char* target_triple = nullptr,
+                              bool strip_source = false);
 };
 
 //! Build an AOTSlotMap by walking an IR function's instructions in deterministic order.
@@ -251,6 +306,6 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots);
     @param slots the slot map from compile time (used only for validation)
     @return heap-allocated context (caller takes ownership), or nullptr on mismatch
 */
-QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs);
+QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs, int num_stmts);
 
 #endif

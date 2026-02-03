@@ -260,6 +260,11 @@ int64_t qore_rt_get_on_block_exit_count();
 //! Removes executed handlers from the stack.
 void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
 
+struct QoreAOTContext;
+
+//! Register an on_block_exit handler via AOT context slot
+void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type);
+
 // --- Guard type helper ---
 
 //! Check if value matches the given type; returns 1 if match, 0 otherwise

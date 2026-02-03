@@ -709,6 +709,11 @@ extern "C" void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* x
 
 #include "qore/intern/QoreAOT.h"
 
+extern "C" void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type) {
+    assert(ctx && idx >= 0 && idx < ctx->num_stmts);
+    qore_rt_push_on_block_exit(type, ctx->stmts[idx]);
+}
+
 extern "C" uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     return qore_rt_load_local(ctx->locals[idx], xsink);
