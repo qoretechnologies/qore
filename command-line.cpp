@@ -113,6 +113,12 @@ static bool compile_mode = false;
 // AOT output file
 static const char* aot_output = nullptr;
 
+// AOT optimization level (0-3, default 2)
+static int aot_opt_level = 2;
+
+// AOT target triple for cross-compilation
+static const char* aot_target = nullptr;
+
 // program text given on the command-line
 static const char* cl_pgm = 0;
 
@@ -217,6 +223,10 @@ static const char helpstr[] =
    "      --compile                compile to a standalone executable\n"
    "      --output=file            set output file for --compile (default: strip\n"
    "                               extension from input file)\n"
+   "      --opt-level=N            optimization level for --compile (0-3,\n"
+   "                               default: 2)\n"
+   "      --target=TRIPLE          target triple for cross-compilation\n"
+   "                               (default: native host)\n"
    "\n"
    " REPL OPTIONS:\n"
    "      --interactive            force interactive REPL mode\n"
@@ -720,6 +730,30 @@ static void set_aot_output(const char* arg) {
     aot_output = arg;
 }
 
+static void set_opt_level(const char* arg) {
+    if (!arg || !*arg) {
+        printe("error: --opt-level requires a value (0-3)\n");
+        opt_errors++;
+        return;
+    }
+    int level = atoi(arg);
+    if (level < 0 || level > 3 || (strlen(arg) != 1) || !isdigit(arg[0])) {
+        printe("error: invalid --opt-level value '%s' (use 0, 1, 2, or 3)\n", arg);
+        opt_errors++;
+        return;
+    }
+    aot_opt_level = level;
+}
+
+static void set_aot_target(const char* arg) {
+    if (!arg || !*arg) {
+        printe("error: --target requires a target triple\n");
+        opt_errors++;
+        return;
+    }
+    aot_target = arg;
+}
+
 static void disable_gc(const char* arg) {
     qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
@@ -828,6 +862,8 @@ static struct opt_struct_s {
    // AOT compilation
    { '\0', "compile",              ARG_NONE, set_compile_mode },
    { '\0', "output",               ARG_MAND, set_aot_output },
+   { '\0', "opt-level",            ARG_MAND, set_opt_level },
+   { '\0', "target",               ARG_MAND, set_aot_target },
    // debugging options
    { 'b', "disable-signals",       ARG_NONE, disable_signals },
    { 'd', "debug",                 ARG_MAND, do_debug },
@@ -1206,11 +1242,12 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
 
          std::string error;
          if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
-                  source_label.c_str(), output_path, parse_options, error)) {
+                  source_label.c_str(), output_path, parse_options, error,
+                  aot_opt_level, aot_target)) {
             fprintf(stderr, "AOT compilation failed: %s\n", error.c_str());
             rc = 1;
          } else {
-            printf("compiled: %s\n", output_path.c_str());
+            printf("compiled (O%d): %s\n", aot_opt_level, output_path.c_str());
          }
          goto exit;
       }

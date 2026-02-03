@@ -172,6 +172,8 @@ public:
         @param output_path path for the output executable
         @param parse_options parse options to embed
         @param error error message on failure
+        @param opt_level LLVM optimization level 0-3 (default: 2)
+        @param target_triple target triple for cross-compilation (nullptr = native)
         @return true on success, false on failure
     */
     static bool compile(QoreProgram* pgm,
@@ -179,7 +181,9 @@ public:
                        const char* label,
                        const std::string& output_path,
                        int64_t parse_options,
-                       std::string& error);
+                       std::string& error,
+                       int opt_level = 2,
+                       const char* target_triple = nullptr);
 };
 
 //! Build an AOTSlotMap by walking an IR function's instructions in deterministic order.

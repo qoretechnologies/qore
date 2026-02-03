@@ -1069,8 +1069,13 @@ correct runtime helpers. The only code-quality fix was a missing `trackResultFor
       Three bugs: (1) top-level JIT code missing `pre_instantiated_locals` causing double-push,
       (2) `qore_rt_uninstantiate_local` using wrong stack for closure variables,
       (3) DotEval handler missing `reloadAllLocalsFromRuntime` after method calls.
-- [ ] Cross-compilation: target triple selection via `--target` flag
-- [ ] Optimization levels: `-O0` through `-O3` flag for AOT optimization
+- [x] ~~**Optimization levels**~~: `--opt-level=N` (0-3) flag for AOT compilation. Default O2.
+      Maps to `llvm::OptimizationLevel::O0..O3`. O0 skips optimization passes entirely.
+      Output message now shows opt level: `"compiled (O%d): %s"`.
+- [x] ~~**Cross-compilation**~~: `--target=TRIPLE` flag for cross-compilation. When set,
+      initializes all LLVM targets and emits object file for the specified triple.
+      Skips native linking; prints `"cross-compiled object: %s.o (link manually)"`.
+      Invalid triples produce a clear error message.
 - [ ] Static linking: link libqore statically for fully standalone binaries
 - [ ] Module compilation: compile Qore modules (.qm) to shared libraries
 - [ ] Source stripping: option to not embed source (requires full context coverage first)

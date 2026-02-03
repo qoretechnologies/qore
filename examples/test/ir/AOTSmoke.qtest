@@ -40,6 +40,9 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT nested function calls", \testNestedFunctionCalls());
         addTestCase("AOT on_exit blocks", \testOnExitBlocks());
         addTestCase("AOT type conversions", \testTypeConversions());
+        # AOT opt-level and cross-compilation tests
+        addTestCase("AOT optimization levels", \testAOTOptLevels());
+        addTestCase("AOT target triple", \testAOTTargetTriple());
         set_return_value(main());
     }
 
@@ -59,6 +62,65 @@ class AOTSmokeTest inherits QUnit::Test {
             "src": src_path,
             "out": out_path,
         };
+    }
+
+    #! Compile a script with extra compile flags, run it, and return {compile_out, run_out}
+    private hash<auto> compileWithFlags(string code, list<string> compile_flags, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Build compile command with extra flags (flags must come BEFORE the source file)
+        string flags_str = "";
+        for (int i = 0; i < compile_flags.size(); ++i) {
+            flags_str += " " + compile_flags[i];
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --output %s%s %s 2>&1",
+            libqore_dir, qore_bin, paths.out, flags_str, paths.src);
+        string compile_out = backquote(compile_cmd);
+
+        string run_out;
+        if (is_file(paths.out)) {
+            string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+            if (run_args) {
+                for (int i = 0; i < run_args.size(); ++i) {
+                    run_cmd += " " + run_args[i];
+                }
+            }
+            run_cmd += " 2>&1";
+            run_out = backquote(run_cmd);
+        } else {
+            run_out = "";
+        }
+
+        return {
+            "compile_out": compile_out,
+            "run_out": run_out,
+            "compiled": is_file(paths.out),
+        };
+    }
+
+    #! Try to compile with extra flags and return compile output (no run)
+    private string compileOnly(string code, list<string> compile_flags) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+            unlink(paths.out + ".o");
+        }
+
+        # Flags must come BEFORE the source file
+        string flags_str = "";
+        for (int i = 0; i < compile_flags.size(); ++i) {
+            flags_str += " " + compile_flags[i];
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --output %s%s %s 2>&1",
+            libqore_dir, qore_bin, paths.out, flags_str, paths.src);
+        return backquote(compile_cmd);
     }
 
     #! Compile a script to a standalone executable, run it, and return stdout
@@ -609,5 +671,57 @@ printf(\"chain: %d\\n\", x);
         assertTrue(result.all_precompiled, "type conversions: all pre-compiled: " + result.compile_out);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "type conversions output matches interpreter");
+    }
+
+    # ---- AOT Optimization Levels and Cross-Compilation Tests ----
+
+    testAOTOptLevels() {
+        # Test that --opt-level=0 through --opt-level=3 all produce correct output
+        string code = "%modern
+int sub factorial(int n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+printf(\"fact(10): %d\\n\", factorial(10));
+int sum = 0;
+for (int i = 0; i < 100; ++i) {
+    sum += i;
+}
+printf(\"sum: %d\\n\", sum);
+";
+        string interp_out = runInterpreted(code);
+
+        # Test each optimization level
+        for (int level = 0; level <= 3; ++level) {
+            hash<auto> result = compileWithFlags(code, (sprintf("--opt-level=%d", level),));
+            assertTrue(result.compiled, sprintf("O%d: compilation succeeded", level));
+            # Verify output message includes opt level
+            assertTrue(result.compile_out.regex(sprintf("compiled \\(O%d\\)", level)),
+                sprintf("O%d: output shows opt level", level));
+            assertEq(interp_out, result.run_out,
+                sprintf("O%d: output matches interpreter", level));
+        }
+
+        # Test invalid --opt-level value
+        string err_out = compileOnly(code, ("--opt-level=5",));
+        assertTrue(err_out.regex("invalid --opt-level"),
+            "invalid opt-level produces error");
+
+        # Test non-numeric --opt-level value
+        string err_out2 = compileOnly(code, ("--opt-level=abc",));
+        assertTrue(err_out2.regex("invalid --opt-level"),
+            "non-numeric opt-level produces error");
+    }
+
+    testAOTTargetTriple() {
+        string code = "%modern
+printf(\"hello\\n\");
+";
+        # Compile with --target set to an invalid triple — should produce an error
+        string err_out = compileOnly(code, ("--target=invalid-unknown-triple",));
+        assertTrue(err_out.regex("(failed to look up target|error|No available targets)"),
+            "invalid target triple produces error: " + err_out);
     }
 }

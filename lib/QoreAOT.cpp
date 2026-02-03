@@ -287,39 +287,64 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     }
 }
 
+//! Map integer optimization level to LLVM OptimizationLevel
+static llvm::OptimizationLevel getOptimizationLevel(int opt_level) {
+    switch (opt_level) {
+        case 0: return llvm::OptimizationLevel::O0;
+        case 1: return llvm::OptimizationLevel::O1;
+        case 2: return llvm::OptimizationLevel::O2;
+        case 3: return llvm::OptimizationLevel::O3;
+        default: return llvm::OptimizationLevel::O2;
+    }
+}
+
 //! Emit an LLVM module to a native object file
-static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error) {
-    auto triple = llvm::sys::getDefaultTargetTriple();
+static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error,
+        int opt_level = 2, const char* target_triple = nullptr) {
+    std::string triple;
+    if (target_triple) {
+        triple = target_triple;
+        // Initialize all targets for cross-compilation
+        llvm::InitializeAllTargets();
+        llvm::InitializeAllTargetMCs();
+        llvm::InitializeAllAsmPrinters();
+        llvm::InitializeAllAsmParsers();
+    } else {
+        triple = llvm::sys::getDefaultTargetTriple();
+    }
     module.setTargetTriple(triple);
 
     std::string target_error;
     auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
     if (!target) {
-        error = "failed to look up target: " + target_error;
+        error = "failed to look up target '" + triple + "': " + target_error;
         return false;
     }
 
     auto* tm = target->createTargetMachine(triple, "generic", "",
         llvm::TargetOptions{}, llvm::Reloc::PIC_);
     if (!tm) {
-        error = "failed to create target machine";
+        error = "failed to create target machine for '" + triple + "'";
         return false;
     }
     module.setDataLayout(tm->createDataLayout());
 
-    // Run optimization passes (O2)
-    llvm::LoopAnalysisManager LAM;
-    llvm::FunctionAnalysisManager FAM;
-    llvm::CGSCCAnalysisManager CGAM;
-    llvm::ModuleAnalysisManager MAM;
-    llvm::PassBuilder PB(tm);
-    PB.registerModuleAnalyses(MAM);
-    PB.registerCGSCCAnalyses(CGAM);
-    PB.registerFunctionAnalyses(FAM);
-    PB.registerLoopAnalyses(LAM);
-    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
-    auto MPM = PB.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
-    MPM.run(module, MAM);
+    // Run optimization passes at the requested level
+    llvm::OptimizationLevel llvm_opt = getOptimizationLevel(opt_level);
+    if (llvm_opt != llvm::OptimizationLevel::O0) {
+        llvm::LoopAnalysisManager LAM;
+        llvm::FunctionAnalysisManager FAM;
+        llvm::CGSCCAnalysisManager CGAM;
+        llvm::ModuleAnalysisManager MAM;
+        llvm::PassBuilder PB(tm);
+        PB.registerModuleAnalyses(MAM);
+        PB.registerCGSCCAnalyses(CGAM);
+        PB.registerFunctionAnalyses(FAM);
+        PB.registerLoopAnalyses(LAM);
+        PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+        auto MPM = PB.buildPerModuleDefaultPipeline(llvm_opt);
+        MPM.run(module, MAM);
+    }
 
     // Emit object file
     std::error_code EC;
@@ -342,7 +367,21 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
 }
 
 //! Link an object file into a standalone executable
-static bool linkExecutable(const std::string& obj_path, const std::string& exe_path, std::string& error) {
+/** @param obj_path path to the object file
+    @param exe_path path for the output executable
+    @param error error message on failure
+    @param target_triple target triple (nullptr = native; non-null = skip linking, emit .o only)
+    @return true on success, false on failure
+*/
+static bool linkExecutable(const std::string& obj_path, const std::string& exe_path, std::string& error,
+        const char* target_triple = nullptr) {
+    // For cross-compilation, skip linking — user must link with their cross-toolchain
+    if (target_triple) {
+        printf("cross-compiled object: %s (link manually for target '%s')\n",
+            obj_path.c_str(), target_triple);
+        return true;
+    }
+
     // Try the build directory first (for development builds), then installed libqore
     std::string libqore_dir;
 
@@ -501,7 +540,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
                       const char* label,
                       const std::string& output_path,
                       int64_t parse_options,
-                      std::string& error) {
+                      std::string& error,
+                      int opt_level,
+                      const char* target_triple) {
     // Initialize LLVM targets (needed for object emission)
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
@@ -614,21 +655,23 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
     // Step 4: Emit object file
     std::string obj_path = output_path + ".o";
-    if (!emitObjectFile(*module, obj_path, error)) {
+    if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple)) {
         return false;
     }
-    printd(2, "AOT: emitted object file: %s\n", obj_path.c_str());
+    printd(2, "AOT: emitted object file: %s (O%d)\n", obj_path.c_str(), opt_level);
 
-    // Step 5: Link executable
-    if (!linkExecutable(obj_path, output_path, error)) {
+    // Step 5: Link executable (skip for cross-compilation)
+    if (!linkExecutable(obj_path, output_path, error, target_triple)) {
         // Clean up object file on link failure
         remove(obj_path.c_str());
         return false;
     }
     printd(2, "AOT: linked executable: %s\n", output_path.c_str());
 
-    // Clean up object file
-    remove(obj_path.c_str());
+    // Clean up object file (keep for cross-compilation since user needs it)
+    if (!target_triple) {
+        remove(obj_path.c_str());
+    }
 
     return true;
 }
