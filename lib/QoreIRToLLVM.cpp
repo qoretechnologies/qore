@@ -136,7 +136,7 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_load_local",
             llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_uninstantiate_local",
-            llvm::FunctionType::get(void_type, {ptr_type}, false));
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
 
     // Generic opcode dispatch helpers: (i32, i64, i64, ptr) -> i64
     auto* binary_op_ft = llvm::FunctionType::get(i64_type,
@@ -445,13 +445,16 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
         }
     } else {
         auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
-                llvm::FunctionType::get(void_type, {ptr_type}, false));
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
         for (auto it = function_locals.rbegin(); it != function_locals.rend(); ++it) {
             if (pre_instantiated_locals &&
                     pre_instantiated_locals->count(reinterpret_cast<const void*>(*it))) {
                 continue;
             }
-            builder->CreateCall(helper, {xsink_arg});
+            llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                    reinterpret_cast<uint64_t>(*it));
+            llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+            builder->CreateCall(helper, {var_as_ptr, xsink_arg});
         }
     }
 }
@@ -2699,6 +2702,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     {i64_type, i64_type, ptr_type}, false));
                         result = builder->CreateCall(helper, {expr_const, base_boxed, xsink_arg});
                     }
+                    // DotEval method calls can modify locals through side effects
+                    reloadAllLocalsFromRuntime(module, llvm_func);
                     values[inst->result.id] = result;
                     nanboxed_values.insert(inst->result.id);
                     trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -2719,6 +2724,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {expr_const, xsink_arg});
             }
+            // Reload after fallback — AST eval can modify any local
+            reloadAllLocalsFromRuntime(module, llvm_func);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

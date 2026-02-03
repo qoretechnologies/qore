@@ -168,7 +168,9 @@ uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
 
 //! Uninstantiate a local variable from the Qore thread-local variable stack.
 //! Must be called once per local at JIT function exit.
-void qore_rt_uninstantiate_local(ExceptionSink* xsink);
+//! Accepts the LocalVar* to dispatch correctly between lvstack and cvstack
+//! based on the variable's closure_use flag.
+void qore_rt_uninstantiate_local(LocalVar* var, ExceptionSink* xsink);
 
 // --- Generic opcode dispatch helpers ---
 // These delegate to QoreIRInterpreter eval methods for opcodes that don't

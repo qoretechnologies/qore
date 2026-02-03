@@ -822,7 +822,7 @@ causing memory leaks for node-type results.
 | JITSmoke.qtest | 54/54 test cases, 91 assertions |
 | AOTSmoke.qtest | 20/20 test cases, 32 assertions |
 | IRExecModeSmoke.qtest | 135/137 (414/416 assertions) — 2 pre-existing list extract failures |
-| TieredSmoke.qtest | 19/20 (283/284 assertions) — 1 pre-existing concurrent calls issue |
+| TieredSmoke.qtest | 20/20 (284 assertions) — concurrent calls fixed in Phase 7h |
 
 ### Phase 7f: Regex Double-Evaluation & Binary .any Ops Memory Leak Fix — COMPLETE ✓
 
@@ -916,10 +916,75 @@ from the runtime stack; body locals are initialized to NOTHING. This ensures
 |-----------|--------|
 | JITSmoke.qtest | 58/58 (103 assertions) |
 | IRExecModeSmoke.qtest | 137/137 (416 assertions) — previously 135/137 |
-| TieredSmoke.qtest | 19/20 (283/284 assertions) — 1 pre-existing concurrent/closure issue |
+| TieredSmoke.qtest | 20/20 (284 assertions) — concurrent calls fixed in Phase 7h |
 | AOTSmoke.qtest | 20/20 (32 assertions) |
 | Valgrind (JITSmoke) | 0 bytes definitely/indirectly/possibly lost |
 | Valgrind (IRExecModeSmoke) | 0 bytes definitely/indirectly/possibly lost |
+
+### Phase 7h: Top-Level JIT Pre-Instantiation, Uninstantiate Stack Fix & DotEval Reload — COMPLETE ✓
+
+Fixed three bugs causing segfaults and stale variable values when JIT-compiled top-level
+code uses background threads with closures.
+
+#### Bug A: Top-Level JIT Missing pre_instantiated_locals (Segfault)
+
+When top-level code is JIT-compiled via `StatementBlock::execIntern()`, the `QoreIRFunction`
+was created without populating `pre_instantiated_locals`. The caller's `LVListInstantiator`
+had already pushed all top-level locals onto the thread-local variable stack, but the JIT
+compiler didn't know this. Result: `emitLocalInstantiation` double-pushed variables, and
+`emitLocalUninstantiation` double-popped, corrupting the variable stack and causing segfaults.
+
+**Fix** (`lib/StatementBlock.cpp`): Populate `func->pre_instantiated_locals` from
+`getLVList()` during IR function creation, so the JIT compiler skips instantiation/
+uninstantiation for variables already on the stack.
+
+#### Bug B: qore_rt_uninstantiate_local Wrong Stack for Closure Variables (Segfault)
+
+`qore_rt_uninstantiate_local(ExceptionSink* xsink)` unconditionally called
+`thread_uninstantiate_lvar(xsink)` which pops from lvstack. For closure-use variables
+on cvstack, this popped from the wrong stack, causing assertion failures and segfaults.
+
+**Fix** (`lib/JITRuntime.cpp`, `include/qore/intern/JITRuntime.h`): Changed signature to
+`qore_rt_uninstantiate_local(LocalVar* var, ExceptionSink* xsink)` which calls
+`var->uninstantiate(xsink)`, dispatching to the correct stack based on `closure_use`.
+Updated AOT variant to resolve `LocalVar*` from context and delegate.
+
+**Fix** (`lib/QoreIRToLLVM.cpp`): Updated `declareRuntimeHelpers` and
+`emitLocalUninstantiation` to pass `LocalVar*` pointer as first argument via
+`inttoptr` of the compile-time pointer value.
+
+#### Bug C: DotEval Handler Missing reloadAllLocalsFromRuntime (Stale Values)
+
+The DotEval instruction handler's pre-evaluated-base path (`qore_rt_dot_eval_with_base`)
+did not call `reloadAllLocalsFromRuntime` after the method call. When a DotEval like
+`done.waitForZero()` synchronizes with background threads that modify closure-captured
+variables, the JIT alloca for the modified variable remained stale. The concurrent test
+returned `OK:0` because `results.size()` read 0 from the stale alloca instead of 120
+from the updated runtime stack.
+
+**Fix** (`lib/QoreIRToLLVM.cpp`): Added `reloadAllLocalsFromRuntime(module, llvm_func)`
+after both the pre-evaluated-base DotEval path and its AST fallback path.
+
+#### Test Results
+
+| Test Suite | Result |
+|-----------|--------|
+| JITSmoke.qtest | 58/58 (103 assertions) |
+| IRExecModeSmoke.qtest | 137/137 (416 assertions) |
+| TieredSmoke.qtest | 20/20 (284 assertions) — concurrent calls now passing |
+| AOTSmoke.qtest | 20/20 (32 assertions) |
+| Valgrind (JITSmoke) | 0 bytes definitely/indirectly/possibly lost |
+| Valgrind (TieredSmoke) | 0 bytes definitely/indirectly/possibly lost |
+| Valgrind (AOTSmoke) | 0 bytes definitely/indirectly/possibly lost |
+
+#### Deliverables
+
+- [x] `lib/StatementBlock.cpp` — populate `pre_instantiated_locals` from `getLVList()` for top-level IR
+- [x] `include/qore/intern/JITRuntime.h` — updated `qore_rt_uninstantiate_local` signature with `LocalVar*`
+- [x] `lib/JITRuntime.cpp` — `qore_rt_uninstantiate_local` dispatches via `var->uninstantiate(xsink)`;
+      AOT variant updated to resolve `LocalVar*` from context
+- [x] `lib/QoreIRToLLVM.cpp` — updated `declareRuntimeHelpers` and `emitLocalUninstantiation` for
+      two-argument signature; added `reloadAllLocalsFromRuntime` to DotEval handler and fallback path
 
 ### Future Extensions (not in this phase)
 
@@ -945,11 +1010,10 @@ from the runtime stack; body locals are initialized to NOTHING. This ensures
       `preCreateLocalAllocas()` ensures all local variable allocas exist before any
       instruction lowering, so `reloadAllLocalsFromRuntime` can find them after Call
       instructions that assign variables via LValueHelper.
-- [ ] **Fix JIT background thread + closure variable coherence**: JIT-compiled code uses
-      LLVM allocas for local variables, but background threads access closure-captured
-      variables through the runtime variable stack. After threads modify captured variables,
-      the main thread's allocas are stale. Additionally, `qore_rt_uninstantiate_local`
-      crashes when closures interact with the thread-local variable stack.
+- [x] ~~**Fix JIT background thread + closure variable coherence**~~: Fixed in Phase 7h.
+      Three bugs: (1) top-level JIT code missing `pre_instantiated_locals` causing double-push,
+      (2) `qore_rt_uninstantiate_local` using wrong stack for closure variables,
+      (3) DotEval handler missing `reloadAllLocalsFromRuntime` after method calls.
 - [ ] Cross-compilation: target triple selection via `--target` flag
 - [ ] Optimization levels: `-O0` through `-O3` flag for AOT optimization
 - [ ] Static linking: link libqore statically for fully standalone binaries

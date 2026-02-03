@@ -750,6 +750,18 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             if (need_lower) {
                 std::call_once(toplevel_ir_once, [this, pgm]() {
                     QoreIRFunction* func = new QoreIRFunction("_toplevel");
+
+                    // Record top-level locals as pre-instantiated so the JIT
+                    // skips instantiation/uninstantiation (already on the thread-local
+                    // variable stack from the caller's LVListInstantiator).
+                    const LVList* lv_list = getLVList();
+                    if (lv_list) {
+                        for (unsigned i = 0; i < lv_list->size(); ++i) {
+                            func->pre_instantiated_locals.insert(
+                                reinterpret_cast<const void*>(lv_list->lv[i]));
+                        }
+                    }
+
                     QoreIRBuilder builder(func);
                     auto* entry = func->createBlock("entry");
                     builder.setBlock(entry);

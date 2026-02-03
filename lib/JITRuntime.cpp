@@ -296,8 +296,10 @@ extern "C" uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink) {
     return toBits(result);
 }
 
-extern "C" void qore_rt_uninstantiate_local(ExceptionSink* xsink) {
-    thread_uninstantiate_lvar(xsink);
+extern "C" void qore_rt_uninstantiate_local(LocalVar* var, ExceptionSink* xsink) {
+    if (var) {
+        var->uninstantiate(xsink);
+    }
 }
 
 // --- Generic opcode dispatch helpers ---
@@ -721,7 +723,7 @@ extern "C" void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx) 
 
 extern "C" void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
-    qore_rt_uninstantiate_local(xsink);
+    qore_rt_uninstantiate_local(ctx->locals[idx], xsink);
 }
 
 extern "C" uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
