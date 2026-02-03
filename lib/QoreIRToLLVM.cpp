@@ -789,6 +789,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Pre-instantiated locals (tiered compilation) are skipped.
     collectLocals(func);
     obe_saved_count = nullptr;
+    scope_obe_counts.clear();
     if (!func.blocks.empty()) {
         builder->SetInsertPoint(block_map[func.blocks.front().get()]);
         emitLocalInstantiation(module);
@@ -2901,13 +2902,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* type_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
                     static_cast<int>(sinst->stmt->getType()));
             StatementBlock* code = sinst->stmt->getCode();
-            llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,
-                    reinterpret_cast<uint64_t>(code));
-            llvm::Value* code_as_ptr = builder->CreateIntToPtr(code_ptr, ptr_type);
-            auto helper = module.getOrInsertFunction("qore_rt_push_on_block_exit",
-                    llvm::FunctionType::get(void_type,
-                        {llvm::Type::getInt32Ty(ctx), ptr_type}, false));
-            builder->CreateCall(helper, {type_val, code_as_ptr});
+            if (aot_mode) {
+                // AOT mode: use slot index instead of raw pointer
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getStmtSlot(
+                        reinterpret_cast<const void*>(code));
+                auto helper = module.getOrInsertFunction("qore_rt_push_on_block_exit_aot",
+                        llvm::FunctionType::get(void_type,
+                            {ptr_type, i32_type, llvm::Type::getInt32Ty(ctx)}, false));
+                builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), type_val});
+            } else {
+                llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(code));
+                llvm::Value* code_as_ptr = builder->CreateIntToPtr(code_ptr, ptr_type);
+                auto helper = module.getOrInsertFunction("qore_rt_push_on_block_exit",
+                        llvm::FunctionType::get(void_type,
+                            {llvm::Type::getInt32Ty(ctx), ptr_type}, false));
+                builder->CreateCall(helper, {type_val, code_as_ptr});
+            }
             // OnBlockExit produces NOTHING as its result
             values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
             nanboxed_values.insert(inst->result.id);
@@ -3021,6 +3033,41 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             if (inst->result.isValid()) {
                 values[inst->result.id] = guard_pass;
+            }
+            return true;
+        }
+
+        // === Scope enter/exit for on_exit handler management ===
+        case QoreIROpcode::ScopeEnter: {
+            const auto* sinst = static_cast<const QoreIRScopeEnterInstruction*>(inst);
+            // Save the current on_block_exit handler count for this scope
+            auto obe_count_fn = module.getOrInsertFunction("qore_rt_get_on_block_exit_count",
+                    llvm::FunctionType::get(i64_type, {}, false));
+            llvm::Value* count = builder->CreateCall(obe_count_fn, {});
+            scope_obe_counts[sinst->scope_id] = count;
+            // ScopeEnter produces NOTHING as its result
+            if (inst->result.isValid()) {
+                values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                nanboxed_values.insert(inst->result.id);
+            }
+            return true;
+        }
+        case QoreIROpcode::ScopeExit: {
+            const auto* sinst = static_cast<const QoreIRScopeExitInstruction*>(inst);
+            // Execute on_block_exit handlers registered since the matching ScopeEnter
+            auto it = scope_obe_counts.find(sinst->scope_id);
+            if (it != scope_obe_counts.end()) {
+                llvm::Value* saved_count = it->second;
+                // TODO: Handle is_error flag - for now we pass false (normal exit)
+                // The runtime helper executes handlers from current count back to saved_count
+                auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                builder->CreateCall(helper, {saved_count, xsink_arg});
+            }
+            // ScopeExit produces NOTHING as its result
+            if (inst->result.isValid()) {
+                values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                nanboxed_values.insert(inst->result.id);
             }
             return true;
         }

@@ -417,6 +417,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     }
     if (auto* ret_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
         QoreValue expr = ret_stmt->getExpression();
+        // Emit ScopeExit for all active scopes before returning
+        emitScopeExits(0, false);
         if (!expr || expr.isNothing()) {
             builder.createReturnNothing();
             return true;
@@ -478,7 +480,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false});
+        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size()});
         if (!lowerStatementBlock(do_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -520,7 +522,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createBranchIf(cond, body_block, exit_block);
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false});
+        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size()});
         if (!lowerStatementBlock(while_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -569,7 +571,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createBranchIf(cond_value, body_block, exit_block);
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, iter_block, false});
+        flow_stack.push_back({exit_block, iter_block, false, scope_stack.size()});
         if (!lowerStatementBlock(for_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -639,9 +641,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     }
     if (auto* break_stmt = dynamic_cast<const BreakStatement*>(stmt)) {
         QoreIRBasicBlock* target = nullptr;
+        size_t target_scope_depth = 0;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->break_target) {
                 target = it->break_target;
+                target_scope_depth = it->scope_stack_depth;
                 break;
             }
         }
@@ -649,14 +653,18 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             error = "break statement has no active target for IR lowering";
             return false;
         }
+        // Emit ScopeExit for scopes entered since the loop started
+        emitScopeExits(target_scope_depth, false);
         builder.createBranch(target);
         return true;
     }
     if (auto* cont_stmt = dynamic_cast<const ContinueStatement*>(stmt)) {
         QoreIRBasicBlock* target = nullptr;
+        size_t target_scope_depth = 0;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->continue_target) {
                 target = it->continue_target;
+                target_scope_depth = it->scope_stack_depth;
                 break;
             }
         }
@@ -664,6 +672,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             error = "continue statement has no active target for IR lowering";
             return false;
         }
+        // Emit ScopeExit for scopes entered since the loop started
+        emitScopeExits(target_scope_depth, false);
         builder.createBranch(target);
         return true;
     }
@@ -803,7 +813,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(end_block);
         }
 
-        flow_stack.push_back({end_block, nullptr, true});
+        flow_stack.push_back({end_block, nullptr, true, scope_stack.size()});
         for (size_t i = 0; i < cases.size(); ++i) {
             builder.setBlock(cases[i].block);
             if (cases[i].node->code) {
@@ -908,18 +918,54 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     if (!ensureBuilderContext(error)) {
         return false;
     }
+
+    // Check if this block has on_exit/on_success/on_error handlers
+    bool has_on_block_exit = block->hasOnBlockExit();
+    uint32_t scope_id = 0;
+
+    if (has_on_block_exit) {
+        // Allocate a unique scope ID and emit ScopeEnter
+        scope_id = ++scope_counter;
+        scope_stack.push_back(scope_id);
+        builder.createScopeEnter(scope_id);
+    }
+
+    bool terminated = false;
     for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
         if (!*it) {
             continue;
         }
         if (!lowerStatement(*it, error)) {
+            if (has_on_block_exit) {
+                scope_stack.pop_back();
+            }
             return false;
         }
         if (blockHasTerminator(builder.getBlock())) {
+            terminated = true;
             break;
         }
     }
+
+    // Emit ScopeExit if we have on_exit handlers and didn't terminate early
+    // (early termination like return/break/continue will handle ScopeExit themselves)
+    if (has_on_block_exit) {
+        if (!terminated) {
+            builder.createScopeExit(scope_id, false);
+        }
+        scope_stack.pop_back();
+    }
+
     return true;
+}
+
+void QoreIRLowering::emitScopeExits(size_t target_depth, bool is_error) {
+    // Emit ScopeExit instructions from innermost to outermost scope
+    // until we reach the target depth
+    for (size_t i = scope_stack.size(); i > target_depth; --i) {
+        uint32_t scope_id = scope_stack[i - 1];
+        builder.createScopeExit(scope_id, is_error);
+    }
 }
 
 static bool isIntConstant(const QoreValue& value) {

@@ -126,6 +126,10 @@ private:
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
 
+    // Per-scope saved on_block_exit counts (scope_id -> saved count value)
+    // Used by ScopeEnter/ScopeExit for nested on_exit handler execution
+    std::unordered_map<uint32_t, llvm::Value*> scope_obe_counts;
+
     // Entry-block load values for pre-instantiated locals (tiered compilation).
     // qore_rt_load_local creates +1 ref at entry; these must be decref'd at function exit.
     std::vector<llvm::Value*> preinstantiated_entry_loads;

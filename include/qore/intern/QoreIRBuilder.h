@@ -115,6 +115,9 @@ public:
     QoreIRForeachInstruction* createForeach(const ForEachStatement* stmt, const QoreProgramLocation* loc = nullptr);
     QoreIROnBlockExitInstruction* createOnBlockExit(const OnBlockExitStatement* stmt,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRScopeEnterInstruction* createScopeEnter(uint32_t scope_id, const QoreProgramLocation* loc = nullptr);
+    QoreIRScopeExitInstruction* createScopeExit(uint32_t scope_id, bool is_error = false,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRDebugInstruction* createDebug(const DebugStatement* stmt, const QoreProgramLocation* loc = nullptr);
     QoreIRAssertInstruction* createAssert(const AssertStatement* stmt, const QoreProgramLocation* loc = nullptr);
     QoreIRContextInstruction* createContext(const ContextStatement* stmt, const QoreProgramLocation* loc = nullptr);

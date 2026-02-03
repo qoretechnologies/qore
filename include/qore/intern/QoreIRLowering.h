@@ -198,10 +198,21 @@ private:
     const QoreTypeInfo* getVarRefTypeInfo(const VarRefNode* var) const;
     const QoreProgramLocation* getVarRefLocation(const VarRefNode* var) const;
 
+    //! Emit ScopeExit instructions for active scopes down to target depth
+    /** Used by return/break/continue to properly unwind on_exit handlers
+     * @param target_depth the scope_stack depth to unwind to (0 for return, loop's depth for break/continue)
+     * @param is_error true if exiting due to an exception
+     */
+    void emitScopeExits(size_t target_depth, bool is_error = false);
+
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
     uint32_t block_counter = 0;
+    uint32_t scope_counter = 0;  //!< Counter for generating unique scope IDs within a function
     QoreIRBasicBlock* guard_exception_target_override = nullptr;
+
+    //! Stack of active scope IDs for tracking nested on_exit handlers
+    std::vector<uint32_t> scope_stack;
 
     class GuardExceptionTargetOverrideScope {
     public:
@@ -217,6 +228,7 @@ private:
         QoreIRBasicBlock* break_target = nullptr;
         QoreIRBasicBlock* continue_target = nullptr;
         bool is_switch = false;
+        size_t scope_stack_depth = 0;  //!< scope_stack depth when this flow target was created
     };
     std::vector<FlowTarget> flow_stack;
     std::vector<QoreIRBasicBlock*> exception_stack;

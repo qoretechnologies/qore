@@ -444,6 +444,19 @@ QoreIROnBlockExitInstruction* QoreIRBuilder::createOnBlockExit(const OnBlockExit
     return inst;
 }
 
+QoreIRScopeEnterInstruction* QoreIRBuilder::createScopeEnter(uint32_t scope_id, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRScopeEnterInstruction>(scope_id);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRScopeExitInstruction* QoreIRBuilder::createScopeExit(uint32_t scope_id, bool is_error,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRScopeExitInstruction>(scope_id, is_error);
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRDebugInstruction* QoreIRBuilder::createDebug(const DebugStatement* stmt, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRDebugInstruction>(stmt);
     inst->loc = loc;

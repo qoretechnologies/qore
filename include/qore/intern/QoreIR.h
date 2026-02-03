@@ -178,6 +178,8 @@ enum class QoreIROpcode : uint16_t {
     HashMapSelect,
     Foreach,
     OnBlockExit,
+    ScopeEnter,
+    ScopeExit,
     ThreadExit,
     Debug,
     Assert,
@@ -678,6 +680,27 @@ public:
     }
 
     const OnBlockExitStatement* stmt = nullptr;
+};
+
+//! Marks the entry into a new scope that may have on_exit/on_success/on_error handlers
+class QoreIRScopeEnterInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRScopeEnterInstruction(uint32_t n_scope_id)
+            : QoreIRInstruction(QoreIROpcode::ScopeEnter), scope_id(n_scope_id) {
+    }
+
+    uint32_t scope_id = 0;  //!< unique scope ID within function
+};
+
+//! Marks the exit from a scope - triggers execution of on_exit handlers registered since matching ScopeEnter
+class QoreIRScopeExitInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRScopeExitInstruction(uint32_t n_scope_id, bool n_is_error = false)
+            : QoreIRInstruction(QoreIROpcode::ScopeExit), scope_id(n_scope_id), is_error(n_is_error) {
+    }
+
+    uint32_t scope_id = 0;  //!< scope ID from matching ScopeEnter
+    bool is_error = false;  //!< true if exiting due to an exception
 };
 
 class QoreIRDebugInstruction : public QoreIRInstruction {

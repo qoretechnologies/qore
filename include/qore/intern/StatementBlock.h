@@ -164,6 +164,16 @@ public:
         return statement_list;
     }
 
+    //! Returns true if this block has on_exit/on_success/on_error handlers
+    DLLLOCAL bool hasOnBlockExit() const {
+        return !on_block_exit_list.empty();
+    }
+
+    //! Returns the list of on_exit/on_success/on_error handlers
+    DLLLOCAL const block_list_t& getOnBlockExitList() const {
+        return on_block_exit_list;
+    }
+
     DLLLOCAL virtual bool hasFinalReturn() const {
         if (statement_list.empty())
             return false;
