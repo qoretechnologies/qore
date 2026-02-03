@@ -1491,7 +1491,6 @@ int Http2Session::onInvalidFrameRecvCallback(nghttp2_session* session,
 int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
         const nghttp2_frame* frame, const uint8_t* name, size_t namelen,
         const uint8_t* value, size_t valuelen, uint8_t flags, void* user_data) {
-    // Log invalid headers for debugging but don't fail
     std::string hdr_name(reinterpret_cast<const char*>(name), namelen);
     std::string hdr_val(reinterpret_cast<const char*>(value), valuelen);
     if (http2DebugEnabled()) {
@@ -1501,6 +1500,14 @@ int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
     }
     printd(3, "Http2Session::onInvalidHeaderCallback() stream_id: %d header: %s=%s\n",
         frame->hd.stream_id, hdr_name.c_str(), hdr_val.c_str());
+
+    // RFC 8441: When :protocol is rejected as invalid (e.g., ENABLE_CONNECT_PROTOCOL not set),
+    // reset the stream rather than silently dropping the header — dropping it causes the CONNECT
+    // to be processed without :protocol, and no response is ever sent to the client.
+    if (hdr_name == ":protocol") {
+        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+
     return 0;
 }
 
