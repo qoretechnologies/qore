@@ -391,6 +391,44 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* llvm_func) {
+    llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+    for (LocalVar* var : function_locals) {
+        auto key = reinterpret_cast<const void*>(var);
+        if (local_allocas.count(key)) {
+            continue;  // Already created
+        }
+        llvm::AllocaInst* alloca = alloca_builder.CreateAlloca(i64_type, nullptr, "local");
+        if (pre_instantiated_locals && pre_instantiated_locals->count(key)) {
+            // Pre-instantiated: initialize from runtime stack
+            if (aot_mode) {
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                llvm::Value* init_val = alloca_builder.CreateCall(load_fn,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                alloca_builder.CreateStore(init_val, alloca);
+                preinstantiated_entry_loads.push_back(init_val);
+            } else {
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+                    llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                    reinterpret_cast<uint64_t>(var));
+                llvm::Value* var_as_ptr = alloca_builder.CreateIntToPtr(var_ptr, ptr_type);
+                llvm::Value* init_val = alloca_builder.CreateCall(load_fn,
+                    {var_as_ptr, xsink_arg});
+                alloca_builder.CreateStore(init_val, alloca);
+                preinstantiated_entry_loads.push_back(init_val);
+            }
+        } else {
+            // Body local: initialize to NOTHING
+            alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+        }
+        local_allocas[key] = alloca;
+    }
+}
+
 void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
     if (aot_mode) {
         auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
@@ -749,6 +787,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     if (!func.blocks.empty()) {
         builder->SetInsertPoint(block_map[func.blocks.front().get()]);
         emitLocalInstantiation(module);
+        preCreateLocalAllocas(module, llvm_func);
 
         // Save on_block_exit handler count at function entry so we can
         // execute handlers registered during this function at exit.
@@ -2525,7 +2564,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
-        // === Expression-based operations (delegate to runtime via expr) ===
+        // === Lvalue-modifying expression ops (modify variables via AST LValueHelper) ===
         case QoreIROpcode::PopAny:
         case QoreIROpcode::PushAny:
         case QoreIROpcode::ExtractAny:
@@ -2538,25 +2577,53 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::RemoveObject:
         case QoreIROpcode::RemoveString:
         case QoreIROpcode::RemoveBinary:
-        case QoreIROpcode::KeysAny:
-        case QoreIROpcode::KeysList:
-        case QoreIROpcode::KeysHash:
         case QoreIROpcode::RegexSubstAny:
         case QoreIROpcode::RegexSubstString:
-        case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::TrimAny:
         case QoreIROpcode::TrimString:
         case QoreIROpcode::ChompAny:
         case QoreIROpcode::ChompString:
         case QoreIROpcode::TransliterateAny:
         case QoreIROpcode::TransliterateString:
+        case QoreIROpcode::ListAssignAny: {
+            // These ops modify variables via LValueHelper through the runtime variable stack;
+            // reload all local allocas after execution to pick up modified values
+            const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            QoreValue expr_val = expr_inst->expr;
+            uint64_t expr_bits;
+            std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+            llvm::Value* result;
+            if (aot_mode) {
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+            } else {
+                llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {expr_const, xsink_arg});
+            }
+            reloadAllLocalsFromRuntime(module, llvm_func);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+
+        // === Pure expression ops (no variable modification) ===
+        case QoreIROpcode::KeysAny:
+        case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
+        case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::BackgroundInt:
-        case QoreIROpcode::ListAssignAny:
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt: {
-            // Non-DotEval expression ops — delegate to qore_rt_invoke_expr via the AST node
+            // Pure expression ops — delegate to qore_rt_invoke_expr via the AST node
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
             QoreValue expr_val = expr_inst->expr;
             uint64_t expr_bits;

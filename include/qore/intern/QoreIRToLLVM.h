@@ -173,6 +173,9 @@ private:
     // Emit qore_rt_instantiate_local calls for all function locals at current insert point
     void emitLocalInstantiation(llvm::Module& module);
 
+    // Pre-create LLVM allocas for all function locals so reloadAllLocalsFromRuntime can find them
+    void preCreateLocalAllocas(llvm::Module& module, llvm::Function* llvm_func);
+
     // Emit qore_rt_uninstantiate_local calls for all function locals at current insert point
     void emitLocalUninstantiation(llvm::Module& module);
 

@@ -2379,6 +2379,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // Pure expression opcodes (Cast, Exists, Elements, etc.)
                 // don't modify variables and don't need cache invalidation
                 switch (inst->opcode) {
+                    case QoreIROpcode::ExtractAny:
+                    case QoreIROpcode::ExtractList:
+                    case QoreIROpcode::ExtractString:
+                    case QoreIROpcode::ExtractBinary:
                     case QoreIROpcode::RemoveAny:
                     case QoreIROpcode::RemoveList:
                     case QoreIROpcode::RemoveHash:
