@@ -282,6 +282,57 @@ uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSi
 //! Falls back to qore_rt_add_any if either operand is not a string.
 uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
+// --- AOT context-based helpers (Phase 7b) ---
+// These variants take QoreAOTContext* and a slot index instead of raw pointers.
+// At runtime, they resolve ctx->array[idx] and delegate to the existing helpers.
+
+struct QoreAOTContext;
+
+//! Load from a local variable via AOT context slot
+uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! Assign to a local variable via AOT context slot
+void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! Instantiate a local variable via AOT context slot
+void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx);
+
+//! Uninstantiate a local variable via AOT context slot
+void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! Load from a global variable via AOT context slot
+uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! Store to a global variable via AOT context slot
+void qore_rt_store_global_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! Load from a thread-local variable via AOT context slot
+uint64_t qore_rt_load_thread_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! Store to a thread-local variable via AOT context slot
+void qore_rt_store_thread_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! Load from a closure variable via AOT context slot (uses locals array)
+uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! Store to a closure variable via AOT context slot (uses locals array)
+void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! Invoke an expression via AOT context slot
+uint64_t qore_rt_invoke_expr_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! LValue load via AOT context slot
+uint64_t qore_rt_lvalue_load_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! LValue store via AOT context slot
+uint64_t qore_rt_lvalue_store_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! LValue unary op via AOT context slot
+uint64_t qore_rt_lvalue_unary_aot(int op, QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! LValue binary op via AOT context slot
+uint64_t qore_rt_lvalue_binary_aot(int op, QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
 } // extern "C"
 
 #endif

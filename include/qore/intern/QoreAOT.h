@@ -32,16 +32,110 @@
 #ifndef _QORE_QOREAOT_H
 #define _QORE_QOREAOT_H
 
+#include <cassert>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 class ExceptionSink;
+class LocalVar;
+class QoreIRFunction;
 class QoreProgram;
+class Var;
+
+//! AOT context: runtime-resolved pointer tables for AOT-compiled functions.
+/** At compile time, each process-specific pointer (LocalVar*, Var*, QoreValue expr)
+    is assigned a numeric slot index. At runtime, the fresh AST is re-lowered in the
+    same deterministic order to collect fresh pointers into these arrays. The AOT-compiled
+    native code uses index-based lookups instead of embedded pointers.
+*/
+struct QoreAOTContext {
+    LocalVar** locals = nullptr;    //!< LoadLocal/StoreLocal/LoadClosure/StoreClosure/instantiate
+    int num_locals = 0;
+    Var** globals = nullptr;        //!< LoadGlobal/StoreGlobal/LoadThreadLocal/StoreThreadLocal
+    int num_globals = 0;
+    uint64_t* exprs = nullptr;      //!< NaN-boxed QoreValue for Invoke/Call/CallMethod/CallStatic/LValue
+    int num_exprs = 0;
+
+    //! All body locals from the fresh IR (needed by evalTiered for instantiation)
+    std::vector<LocalVar*> all_body_locals;
+
+    //! Destructor: deref all held expression values, then free arrays.
+    //! Implemented in QoreAOT.cpp because it needs QoreValue.
+    ~QoreAOTContext();
+
+    //! Allocate arrays based on slot counts
+    void allocate() {
+        if (num_locals > 0) {
+            locals = static_cast<LocalVar**>(calloc(num_locals, sizeof(LocalVar*)));
+        }
+        if (num_globals > 0) {
+            globals = static_cast<Var**>(calloc(num_globals, sizeof(Var*)));
+        }
+        if (num_exprs > 0) {
+            exprs = static_cast<uint64_t*>(calloc(num_exprs, sizeof(uint64_t)));
+        }
+    }
+};
+
+//! Compile-time slot assignment map for AOT pointer indirection.
+/** Assigns monotonically increasing slot indices to each unique pointer encountered
+    during IR lowering. The same source produces the same AST produces the same IR
+    produces the same walk order, guaranteeing that slot indices match between compile
+    time and runtime.
+*/
+struct AOTSlotMap {
+    std::unordered_map<const void*, int32_t> local_slots;   //!< LocalVar* -> slot index
+    std::unordered_map<const void*, int32_t> global_slots;  //!< Var* -> slot index
+    std::unordered_map<uint64_t, int32_t> expr_slots;       //!< NaN-boxed expr bits -> slot index
+
+    //! Get or assign a slot for a LocalVar*
+    int32_t getLocalSlot(const void* local) {
+        auto it = local_slots.find(local);
+        if (it != local_slots.end()) {
+            return it->second;
+        }
+        int32_t slot = static_cast<int32_t>(local_slots.size());
+        local_slots[local] = slot;
+        return slot;
+    }
+
+    //! Get or assign a slot for a Var* (global or thread-local)
+    int32_t getGlobalSlot(const void* var) {
+        auto it = global_slots.find(var);
+        if (it != global_slots.end()) {
+            return it->second;
+        }
+        int32_t slot = static_cast<int32_t>(global_slots.size());
+        global_slots[var] = slot;
+        return slot;
+    }
+
+    //! Get or assign a slot for an expression (NaN-boxed QoreValue bits)
+    int32_t getExprSlot(uint64_t expr_bits) {
+        auto it = expr_slots.find(expr_bits);
+        if (it != expr_slots.end()) {
+            return it->second;
+        }
+        int32_t slot = static_cast<int32_t>(expr_slots.size());
+        expr_slots[expr_bits] = slot;
+        return slot;
+    }
+};
+
+//! AOT function pointer type: takes QoreAOTContext* and ExceptionSink*
+using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
 //! Descriptor for a pre-compiled AOT function
 struct QoreAOTFunc {
     const char* name;                           //!< unique function identifier (from IR lowering)
-    uint64_t (*fn_ptr)(ExceptionSink*);         //!< pre-compiled native code pointer
+    AotFunctionPtr fn_ptr;                      //!< pre-compiled native code pointer (ctx, xsink)
+    int num_locals;                             //!< number of local variable slots
+    int num_globals;                            //!< number of global variable slots
+    int num_exprs;                              //!< number of expression slots
 };
 
 //! C ABI entry point called by AOT-compiled binaries from their generated main()
@@ -87,5 +181,21 @@ public:
                        int64_t parse_options,
                        std::string& error);
 };
+
+//! Build an AOTSlotMap by walking an IR function's instructions in deterministic order.
+/** Assigns slot indices to each unique LocalVar*, Var*, and expression QoreValue.
+    @param func the IR function to walk
+    @param slots output slot map
+*/
+void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots);
+
+//! Build a QoreAOTContext by walking a freshly-lowered IR function in the same order.
+/** The fresh IR must have been produced from the same source as the compile-time IR,
+    guaranteeing the same walk order and slot index correspondence.
+    @param func the freshly-lowered IR function
+    @param slots the slot map from compile time (used only for validation)
+    @return heap-allocated context (caller takes ownership), or nullptr on mismatch
+*/
+QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs);
 
 #endif

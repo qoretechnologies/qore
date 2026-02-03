@@ -1076,6 +1076,7 @@ if (QORE_BUILD_IR_SMOKE)
     target_compile_definitions(qore-ir-smoke PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
     target_compile_definitions(qore-ir-smoke PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
     target_compile_definitions(qore-ir-smoke PRIVATE USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}")
+    target_compile_definitions(qore-ir-smoke PRIVATE QORE_LIBDIR="${CMAKE_INSTALL_FULL_LIBDIR}")
     target_include_directories(qore-ir-smoke PRIVATE ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include
         ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
         ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})

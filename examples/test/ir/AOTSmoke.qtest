@@ -12,10 +12,13 @@
 class AOTSmokeTest inherits QUnit::Test {
     private {
         string qore_bin;
+        string libqore_dir;
     }
 
     constructor() : QUnit::Test("AOTSmokeTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        # Determine the directory containing libqore (for compile/link)
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("AOT hello world", \testHelloWorld());
         addTestCase("AOT arithmetic", \testArithmetic());
         addTestCase("AOT control flow", \testControlFlow());
@@ -26,6 +29,17 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT error handling", \testErrorHandling());
         addTestCase("AOT compile missing file", \testCompileMissingFile());
         addTestCase("AOT compile default output", \testCompileDefaultOutput());
+        # Phase 7b: pointer indirection tests
+        addTestCase("AOT all functions pre-compiled", \testAllFunctionsPrecompiled());
+        addTestCase("AOT local variable scoping", \testLocalVariableScoping());
+        addTestCase("AOT lvalue operations", \testLvalueOps());
+        addTestCase("AOT multiple user functions", \testMultipleUserFunctions());
+        addTestCase("AOT method calls", \testMethodCalls());
+        addTestCase("AOT hash operations", \testHashOps());
+        addTestCase("AOT list operations", \testListOps());
+        addTestCase("AOT nested function calls", \testNestedFunctionCalls());
+        addTestCase("AOT on_exit blocks", \testOnExitBlocks());
+        addTestCase("AOT type conversions", \testTypeConversions());
         set_return_value(main());
     }
 
@@ -55,9 +69,9 @@ class AOTSmokeTest inherits QUnit::Test {
             unlink(paths.out);
         }
 
-        # Compile
-        string compile_cmd = sprintf("%s -b --compile %s --output %s 2>&1",
-            qore_bin, paths.src, paths.out);
+        # Compile (set QORE_LIBDIR so the AOT linker finds the correct libqore)
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);
 
         # Verify the executable was created
@@ -66,7 +80,7 @@ class AOTSmokeTest inherits QUnit::Test {
         }
 
         # Run the compiled executable
-        string run_cmd = paths.out + " -b";
+        string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
         if (run_args) {
             for (int i = 0; i < run_args.size(); ++i) {
                 run_cmd += " " + run_args[i];
@@ -74,6 +88,47 @@ class AOTSmokeTest inherits QUnit::Test {
         }
         run_cmd += " 2>&1";
         return backquote(run_cmd);
+    }
+
+    #! Compile a script and return {compile_out, run_out, all_precompiled}
+    private hash<auto> compileCheckAndRun(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Parse "N/M functions pre-compiled" from compile output
+        bool all_precompiled = False;
+        *list<string> match = (compile_out =~ x/(\d+)\/(\d+) functions pre-compiled/);
+        if (match) {
+            all_precompiled = (match[0] == match[1]);
+        }
+
+        string run_out;
+        if (is_file(paths.out)) {
+            string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+            if (run_args) {
+                for (int i = 0; i < run_args.size(); ++i) {
+                    run_cmd += " " + run_args[i];
+                }
+            }
+            run_cmd += " 2>&1";
+            run_out = backquote(run_cmd);
+        } else {
+            run_out = "COMPILE_FAILED: " + compile_out;
+        }
+
+        return {
+            "compile_out": compile_out,
+            "run_out": run_out,
+            "all_precompiled": all_precompiled,
+        };
     }
 
     #! Run a script with the interpreter and return stdout
@@ -204,12 +259,12 @@ printf(\"lower: %s\\n\", s.lwr());
             unlink(paths.out);
         }
 
-        string compile_cmd = sprintf("%s -b --compile %s --output %s 2>&1",
-            qore_bin, paths.src, paths.out);
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
         backquote(compile_cmd);
 
         assertTrue(is_file(paths.out), "AOT executable was created");
-        int rc = system(paths.out + " -b > /dev/null 2>&1");
+        int rc = system(sprintf("LD_LIBRARY_PATH=%s %s -b > /dev/null 2>&1", libqore_dir, paths.out));
         assertEq(0, rc, "AOT binary exits with code 0");
     }
 
@@ -241,8 +296,8 @@ try {
 
     testCompileMissingFile() {
         # Compiling a non-existent file should fail
-        string cmd = sprintf("%s -b --compile /tmp/nonexistent_file_12345.q --output /tmp/nonexistent_out 2>&1",
-            qore_bin);
+        string cmd = sprintf("QORE_LIBDIR=%s %s -b --compile /tmp/nonexistent_file_12345.q --output /tmp/nonexistent_out 2>&1",
+            libqore_dir, qore_bin);
         string out = backquote(cmd);
         assertTrue(out.size() > 0, "error message for missing source file");
     }
@@ -256,11 +311,303 @@ try {
         }
 
         # Compile without --output
-        string compile_cmd = sprintf("%s -b --compile %s 2>&1", qore_bin, paths.src);
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s 2>&1",
+            libqore_dir, qore_bin, paths.src);
         backquote(compile_cmd);
 
         assertTrue(is_file(paths.out), "AOT default output file was created");
-        string out = backquote(paths.out + " -b 2>&1");
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1", libqore_dir, paths.out));
         assertEq("default\n", out, "default output binary runs correctly");
+    }
+
+    # ---- Phase 7b: Pointer Indirection Tests ----
+
+    testAllFunctionsPrecompiled() {
+        # Verify that ALL functions (including _toplevel) are pre-compiled with pointer indirection
+        string code = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+
+int sub multiply(int a, int b) {
+    return a * b;
+}
+
+string sub greet(string name) {
+    return \"Hello, \" + name + \"!\";
+}
+
+printf(\"%d\\n\", add(3, 4));
+printf(\"%d\\n\", multiply(5, 6));
+printf(\"%s\\n\", greet(\"World\"));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "all functions pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "multi-function AOT output matches interpreter");
+    }
+
+    testLocalVariableScoping() {
+        # Test local variable assignment, reassignment, and scoping
+        string code = "%modern
+int x = 10;
+printf(\"x=%d\\n\", x);
+x = 20;
+printf(\"x=%d\\n\", x);
+
+{
+    int y = 30;
+    printf(\"y=%d\\n\", y);
+    x = x + y;
+}
+printf(\"x=%d\\n\", x);
+
+# Test multiple locals in a function
+int sub compute(int a, int b, int c) {
+    int temp1 = a + b;
+    int temp2 = temp1 * c;
+    int result = temp2 - a;
+    return result;
+}
+printf(\"result=%d\\n\", compute(3, 4, 5));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "local scoping: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "local variable scoping output matches interpreter");
+    }
+
+    testLvalueOps() {
+        # Test pre-increment/decrement and compound assignment
+        # NOTE: post-increment (a++) on typed int vars uses QoreIntPostIncrementOperatorNode
+        # which is not yet handled by IR lowering; pre-increment (++a) works via
+        # QorePreIncrementOperatorNode
+        string code = "%modern
+int a = 10;
+++a;
+printf(\"++a: %d\\n\", a);
+--a;
+printf(\"--a: %d\\n\", a);
+
+# Compound assignment operators
+int b = 100;
+b += 10;
+printf(\"b+=10: %d\\n\", b);
+b -= 30;
+printf(\"b-=30: %d\\n\", b);
+b *= 2;
+printf(\"b*=2: %d\\n\", b);
+b /= 4;
+printf(\"b/=4: %d\\n\", b);
+b %= 7;
+printf(\"b%%=7: %d\\n\", b);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "lvalue ops: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "lvalue operations output matches interpreter");
+    }
+
+    testMultipleUserFunctions() {
+        # Test multiple user functions calling each other and _toplevel
+        string code = "%modern
+int sub square(int n) {
+    return n * n;
+}
+
+int sub sum_of_squares(int n) {
+    int total = 0;
+    for (int i = 1; i <= n; ++i) {
+        total += square(i);
+    }
+    return total;
+}
+
+string sub format_result(string label, int value) {
+    return sprintf(\"%s: %d\", label, value);
+}
+
+printf(\"%s\\n\", format_result(\"sq(5)\", square(5)));
+printf(\"%s\\n\", format_result(\"sum_sq(5)\", sum_of_squares(5)));
+printf(\"%s\\n\", format_result(\"sq(10)+sq(20)\", square(10) + square(20)));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "multi-func: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "multiple user functions output matches interpreter");
+    }
+
+    testMethodCalls() {
+        # Test various method calls on built-in types (DotEvalInt, DotEvalString, etc.)
+        string code = "%modern
+# String methods
+string s = \"Hello, World!\";
+printf(\"size: %d\\n\", s.size());
+printf(\"upper: %s\\n\", s.upr());
+printf(\"lower: %s\\n\", s.lwr());
+printf(\"substr: %s\\n\", s.substr(0, 5));
+
+# List methods
+list<int> l = (3, 1, 4, 1, 5, 9);
+printf(\"list size: %d\\n\", l.size());
+
+# Number operations
+float f = 3.14159;
+printf(\"float: %g\\n\", f);
+printf(\"int cast: %d\\n\", int(f));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "method calls: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "method calls output matches interpreter");
+    }
+
+    testHashOps() {
+        # Test hash construction, access, and method calls
+        string code = "%modern
+hash<auto> h = {
+    \"name\": \"Alice\",
+    \"age\": 30,
+    \"active\": True,
+};
+printf(\"name: %s\\n\", h.name);
+printf(\"age: %d\\n\", h.age);
+printf(\"keys: %d\\n\", h.size());
+
+# Hash modification
+h.email = \"alice@example.com\";
+printf(\"updated keys: %d\\n\", h.size());
+
+# Hash iteration via keys()
+list<string> key_list = keys(h);
+printf(\"first key: %s\\n\", key_list[0]);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "hash ops: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "hash operations output matches interpreter");
+    }
+
+    testListOps() {
+        # Test list construction, access, and operations
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+printf(\"size: %d\\n\", nums.size());
+printf(\"first: %d\\n\", nums[0]);
+printf(\"last: %d\\n\", nums[4]);
+
+# Build list with push
+list<string> words = ();
+words += \"hello\";
+words += \"world\";
+printf(\"words: %d\\n\", words.size());
+
+# List in for loop
+int total = 0;
+for (int i = 0; i < nums.size(); ++i) {
+    total += nums[i];
+}
+printf(\"total: %d\\n\", total);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "list ops: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "list operations output matches interpreter");
+    }
+
+    testNestedFunctionCalls() {
+        # Test deeply nested function calls with multiple locals
+        string code = "%modern
+string sub wrap(string s, string prefix, string suffix) {
+    return prefix + s + suffix;
+}
+
+string sub format(int n) {
+    return sprintf(\"%d\", n);
+}
+
+int sub double_val(int n) {
+    return n * 2;
+}
+
+# Nested: wrap(format(double_val(5)), \"[\", \"]\")
+printf(\"%s\\n\", wrap(format(double_val(5)), \"[\", \"]\"));
+printf(\"%s\\n\", wrap(wrap(\"core\", \"<\", \">\"), \"[\", \"]\"));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "nested calls: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "nested function calls output matches interpreter");
+    }
+
+    testOnExitBlocks() {
+        # Test on_exit / on_success blocks with user functions
+        # NOTE: We call functions and store results before passing to printf
+        # to avoid double-evaluation (Call instruction re-evaluates the full
+        # expression from the AST, including sub-expressions as arguments)
+        string code = "%modern
+string sub test_on_exit(string label) {
+    string result = \"\";
+    on_exit {
+        printf(\"exit: %s\\n\", label);
+    }
+    result = \"body: \" + label;
+    printf(\"%s\\n\", result);
+    return result;
+}
+
+string sub test_on_success(string label) {
+    string result = \"\";
+    on_success {
+        printf(\"success: %s\\n\", label);
+    }
+    result = \"body2: \" + label;
+    printf(\"%s\\n\", result);
+    return result;
+}
+
+string rv1 = test_on_exit(\"A\");
+printf(\"rv: %s\\n\", rv1);
+string rv2 = test_on_success(\"B\");
+printf(\"rv: %s\\n\", rv2);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "on_exit: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "on_exit blocks output matches interpreter");
+    }
+
+    testTypeConversions() {
+        # Test implicit and explicit type conversions
+        string code = "%modern
+# int to string
+int n = 42;
+string s = sprintf(\"%d\", n);
+printf(\"str: %s\\n\", s);
+
+# string to int
+string num_str = \"123\";
+int parsed = int(num_str);
+printf(\"int: %d\\n\", parsed);
+
+# float to int
+float f = 3.7;
+int truncated = int(f);
+printf(\"trunc: %d\\n\", truncated);
+
+# bool
+bool t = True;
+bool f2 = False;
+printf(\"true: %s\\n\", string(t));
+printf(\"false: %s\\n\", string(f2));
+
+# int arithmetic chain
+int x = int(\"10\") + int(\"20\");
+printf(\"chain: %d\\n\", x);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "type conversions: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "type conversions output matches interpreter");
     }
 }

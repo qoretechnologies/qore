@@ -48,6 +48,7 @@ class LocalVar;
 class QoreIRFunction;
 class QoreIRBasicBlock;
 class QoreIRInstruction;
+struct AOTSlotMap;
 
 class QoreIRToLLVM {
 public:
@@ -56,14 +57,24 @@ public:
 
     //! Lower an entire QoreIRFunction to an LLVM function in the given module.
     //! The generated function has signature: uint64_t fname(ExceptionSink* xsink)
+    //! or in AOT mode: uint64_t fname(QoreAOTContext* ctx, ExceptionSink* xsink)
     //! Returns the NaN-boxed QoreValue as uint64_t.
     bool lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error);
+
+    //! Enable AOT mode with the given slot map.
+    //! When set, process-specific opcodes emit _aot helper calls with slot indices
+    //! instead of inttoptr patterns with embedded pointers.
+    void setAOTMode(const AOTSlotMap* slots) {
+        aot_mode = true;
+        aot_slots = slots;
+    }
 
 private:
     llvm::LLVMContext& ctx;
 
     // Type cache
     llvm::Type* i64_type = nullptr;
+    llvm::Type* i32_type = nullptr;
     llvm::Type* i1_type = nullptr;
     llvm::Type* double_type = nullptr;
     llvm::Type* ptr_type = nullptr;
@@ -71,6 +82,11 @@ private:
 
     // The ExceptionSink* parameter for the current function
     llvm::Value* xsink_arg = nullptr;
+
+    // AOT mode: emit _aot helper calls with slot indices instead of embedded pointers
+    bool aot_mode = false;
+    const AOTSlotMap* aot_slots = nullptr;
+    llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
 
     // IR builder
     std::unique_ptr<llvm::IRBuilder<>> builder;

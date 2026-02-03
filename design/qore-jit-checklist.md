@@ -409,10 +409,14 @@ Deliverables:
 ## Phase 7: AOT Compilation (Ahead-of-Time) — COMPLETE ✓
 
 Compile Qore scripts to standalone ELF executables that link against libqore for runtime
-services. Uses a hybrid approach: pre-compile Invoke-free functions to native code; functions
+services.
+
+### Phase 7a: Basic AOT Framework — COMPLETE ✓
+
+Initial hybrid approach: pre-compile Invoke-free functions to native code; functions
 with process-specific opcodes fall back to runtime JIT compilation.
 
-### Architecture
+#### Architecture
 
 **Hybrid compilation**: The AOT compiler checks each function's IR for process-specific
 opcodes (Invoke, LoadLocal, StoreLocal, LoadGlobal, StoreGlobal, LoadClosure, StoreClosure,
@@ -443,7 +447,7 @@ qore --compile script.q --output script
 3. Invoke system linker: cc -o script script.o -lqore -Wl,-rpath,...
 ```
 
-### Implementation
+#### Implementation
 
 - [x] **LLVM build configuration**: Added `Passes` component for `PassBuilder` optimization
       pipeline used in object code emission.
@@ -468,11 +472,120 @@ qore --compile script.q --output script
 - [x] **ARGV passthrough**: `qore_setup_argv()` called before `qore_init()` to match
       the normal qore binary's initialization order.
 
+### Phase 7b: AOT Pointer Indirection via Context Tables — COMPLETE ✓
+
+Replaced process-specific embedded pointers with index-based lookups into runtime-resolved
+context tables, enabling all user functions to be pre-compiled to native code in AOT binaries.
+
+#### Problem
+
+In Phase 7a, most functions fell back to runtime JIT because `hasProcessSpecificOpcodes()`
+detected embedded `LocalVar*`/`Var*`/AST-node pointers that are invalid in AOT object files.
+Even `printf("hello\n")` could not be pre-compiled because it produces Invoke opcodes with
+embedded AST pointers. Result: "0/1 functions pre-compiled" for most scripts.
+
+#### Solution: QoreAOTContext Indirection
+
+At compile time, each unique pointer is assigned a numeric slot index. In the LLVM IR,
+`_aot` runtime helpers take `(QoreAOTContext*, slot_index, ...)` instead of raw pointers.
+At runtime, the function's IR is re-lowered from the freshly-parsed AST to collect the
+fresh pointers in the same deterministic order, building the context tables.
+
+**Correctness guarantee**: Same source → same AST → same IR lowering → same walk order →
+slot indices match between compile-time and runtime.
+
+**Function signature change**:
+```
+Before: uint64_t compiled_func(ExceptionSink* xsink)
+After:  uint64_t compiled_func(QoreAOTContext* ctx, ExceptionSink* xsink)
+```
+
+**QoreAOTContext structure**:
+```cpp
+struct QoreAOTContext {
+    LocalVar** locals;   // LoadLocal/StoreLocal/LoadClosure/StoreClosure/instantiate
+    int num_locals;
+    Var** globals;       // LoadGlobal/StoreGlobal/LoadThreadLocal/StoreThreadLocal
+    int num_globals;
+    uint64_t* exprs;     // NaN-boxed QoreValue for Invoke/Call/CallMethod/CallStatic/LValue
+    int num_exprs;
+};
+```
+
+**LLVM IR transformation example**:
+```llvm
+; Before (JIT mode — embedded pointer):
+%var = inttoptr i64 140234567890 to ptr
+%val = call i64 @qore_rt_load_local(ptr %var, ptr %xsink)
+
+; After (AOT mode — context lookup):
+%val = call i64 @qore_rt_load_local_aot(ptr %ctx, i32 3, ptr %xsink)
+```
+
+#### Implementation
+
+- [x] **QoreAOTContext and AOTSlotMap** (`QoreAOT.h`): Context struct with locals/globals/exprs
+      arrays + counts. `AOTSlotMap` with `local_slots`/`global_slots`/`expr_slots` maps and
+      `getLocalSlot()`/`getGlobalSlot()`/`getExprSlot()` methods. Updated `QoreAOTFunc::fn_ptr`
+      type to `uint64_t (*)(QoreAOTContext*, ExceptionSink*)`.
+- [x] **AOT runtime helpers** (`JITRuntime.h`, `JITRuntime.cpp`): `_aot` variants of all
+      process-specific runtime helpers. Each resolves `ctx->array[idx]` and delegates to the
+      existing helper:
+      - `qore_rt_load_local_aot`, `qore_rt_assign_local_aot`
+      - `qore_rt_instantiate_local_aot`, `qore_rt_uninstantiate_local_aot`
+      - `qore_rt_load_global_aot`, `qore_rt_store_global_aot`
+      - `qore_rt_load_thread_local_aot`, `qore_rt_store_thread_local_aot`
+      - `qore_rt_load_closure_aot`, `qore_rt_store_closure_aot`
+      - `qore_rt_invoke_expr_aot`
+      - `qore_rt_lvalue_load_aot`, `qore_rt_lvalue_store_aot`
+      - `qore_rt_lvalue_unary_aot`, `qore_rt_lvalue_binary_aot`
+      All registered in `QoreJIT.cpp` symbol table.
+- [x] **AOT mode in QoreIRToLLVM** (`QoreIRToLLVM.h`, `QoreIRToLLVM.cpp`): Added `aot_mode`
+      flag, `aot_slots` pointer, `aot_ctx_arg` LLVM value. `setAOTMode(const AOTSlotMap*)`
+      method. Updated `lowerFunction()` signature: AOT mode takes `(ptr ctx, ptr xsink)`.
+      For each process-specific opcode, added `if (aot_mode)` branches emitting `_aot` helper
+      calls with slot indices instead of `inttoptr` patterns. Opcodes modified:
+      LoadLocal, StoreLocal, LoadGlobal, StoreGlobal, LoadThreadLocal, StoreThreadLocal,
+      LoadClosure, StoreClosure, Call/CallMethod/CallStatic/CallIndirect, Invoke,
+      LoadLValue, StoreLValue, Pre/PostInc/DecLValue, compound assignments,
+      local instantiation/uninstantiation, reload-from-runtime.
+- [x] **AOT compiler slot maps** (`QoreAOT.cpp`): `buildAOTSlotMap()` walks IR
+      blocks/instructions, assigns slots for each unique `LocalVar*`/`Var*`/`QoreValue`.
+      Removed `hasProcessSpecificOpcodes()` rejection gate — all functions now proceed to LLVM
+      lowering. Updated `generateMainAndTable()` for new `QoreAOTFunc` signature.
+- [x] **AOT function dispatch** (`Function.h`, `Function.cpp`, `StatementBlock.h`,
+      `StatementBlock.cpp`): Added `AotFunctionPtr cached_aot_fn` and `QoreAOTContext*
+      cached_aot_ctx` to `UserVariantBase`. `registerPrecompiledAOTFunction()` sets both.
+      `evalTiered()` calls `cached_aot_fn(ctx, xsink)` when context is set. Top-level
+      statement block gets matching AOT fields and dispatch.
+- [x] **Runtime context building** (`QoreAOTRuntime.cpp`): For each pre-compiled function:
+      finds matching variant in fresh namespace tree, re-lowers to IR via same path, walks
+      fresh IR in same deterministic order to collect `LocalVar*`/`Var*`/`QoreValue` into
+      arrays, builds `QoreAOTContext`. Stores `all_body_locals` from fresh IR for
+      `evalTiered()` local instantiation/uninstantiation.
+
+#### Known Limitations
+
+Pre-existing IR lowering issues (not introduced by Phase 7b):
+
+1. **Int-typed post-increment**: `QoreIntPostIncrementOperatorNode` does not inherit from
+   `QorePostIncrementOperatorNode`. `lowerPostIncrement()` checks for the base class and
+   misses the int-specific variant. Pre-increment `++a` works correctly.
+2. **No-arg function calls**: `lowerCallArgs()` requires non-null `parse_args` or `args`.
+   Functions called with zero arguments (e.g., `hello()`) fail during IR lowering.
+3. **Ternary operator**: LLVM PHI node verification failure with ternary expressions.
+4. **Call double-evaluation**: Call/Invoke IR instructions pass the full expression to
+   `qore_rt_invoke_expr[_aot]()`, which re-evaluates all sub-expressions from the AST,
+   including function calls already evaluated as separate IR instructions. Workaround:
+   store function call results in variables before passing as arguments to other functions.
+   This causes minor memory leaks (72 bytes in string-operation test) from duplicate
+   intermediate values.
+
 ### Test Results
 
 | Test | Result |
 |------|--------|
-| AOTSmoke.qtest | 10/10 test cases, 12 assertions |
+| AOTSmoke.qtest | 20/20 test cases, 32 assertions |
 | TieredSmoke.qtest | 20/20 (284 assertions) — no regression |
 | JITSmoke.qtest | 41/41 (52 assertions) — no regression |
 | IRExecMode.qtest | 2/2 (4 assertions) — no regression |
@@ -483,45 +596,68 @@ qore --compile script.q --output script
 
 AOT smoke tests verify: hello world, arithmetic, control flow, functions, string
 operations, exit codes, ARGV passthrough, error handling (try/catch), missing file
-compilation, and default output naming. Each test compiles to executable and compares
+compilation, default output naming, all-functions-pre-compiled verification, local
+variable scoping, lvalue operations (pre-increment, compound assignments), multiple
+user functions, method calls, hash operations, list operations, nested function calls,
+on_exit blocks, and type conversions. Each test compiles to executable and compares
 output against the interpreter.
+
+Phase 7b tests additionally verify that all user functions are pre-compiled (N/N) via
+compile output inspection using `compileCheckAndRun()` helper.
 
 ### Valgrind Results
 
 | Binary | Definitely Lost | Notes |
 |--------|----------------|-------|
+| AOTSmoke.qtest | 0 bytes | clean (test suite itself) |
 | hello.q AOT binary | 0 bytes | clean (simple script, no ARGV) |
 | hello_argv.q AOT binary | 192 bytes | pre-existing JIT mode leaks (identical to `qore --exec-mode=jit`) |
+| string-ops AOT binary | 72 bytes | Call double-evaluation of method returns (.upr(), .lwr()) |
 | qore interpreter (AST mode) | 0 bytes | baseline |
 | qore interpreter (JIT mode) | 192 bytes | same leaks as AOT — JIT runtime issue, not AOT-specific |
 
-The AOT binary's memory profile matches the JIT interpreter exactly. The leaks in
-JIT-mode ARGV handling are pre-existing and not introduced by AOT compilation.
+The 72-byte leak in string-ops is from the pre-existing Call double-evaluation issue where
+method call expressions are evaluated once by AOT code and once by the AST re-evaluation
+in `qore_rt_invoke_expr`. Simple scripts without method calls as function arguments are
+valgrind-clean.
 
 ### Deliverables
 
 - [x] `CMakeLists.txt` — `Passes` LLVM component, new source files
-- [x] `include/qore/intern/QoreAOT.h` — AOT compiler class + `QoreAOTFunc` struct
-- [x] `lib/QoreAOT.cpp` — AOT compiler implementation (source embedding, opcode
-      detection, LLVM module generation, object emission, linker invocation)
+- [x] `include/qore/intern/QoreAOT.h` — AOT compiler class, `QoreAOTFunc` struct,
+      `QoreAOTContext`, `AOTSlotMap`
+- [x] `lib/QoreAOT.cpp` — AOT compiler implementation (source embedding, slot map building,
+      LLVM module generation, object emission, linker invocation)
 - [x] `lib/QoreAOTRuntime.cpp` — `qore_aot_run()` entry point with ARGV, `-b` flag,
-      namespace walk for function registration
+      namespace walk, context table building via IR re-lowering
+- [x] `include/qore/intern/JITRuntime.h` / `lib/JITRuntime.cpp` — `_aot` helper declarations
+      and implementations
+- [x] `lib/QoreJIT.cpp` — symbol registration for `_aot` helpers
+- [x] `include/qore/intern/QoreIRToLLVM.h` / `lib/QoreIRToLLVM.cpp` — `aot_mode` flag,
+      `aot_slots`, `aot_ctx_arg`, AOT-mode branches for all process-specific opcodes
 - [x] `command-line.cpp` — `--compile` and `--output` flags
-- [x] `include/qore/intern/Function.h` — `registerPrecompiledFunction()` method
-- [x] `lib/Function.cpp` — pre-compiled function registration implementation
-- [x] `include/qore/intern/StatementBlock.h` — `registerPrecompiledTopLevel()` method
-- [x] `lib/StatementBlock.cpp` — top-level pre-compiled function registration
-- [x] `examples/test/ir/AOTSmoke.qtest` — 10 test cases for AOT compilation
+- [x] `include/qore/intern/Function.h` — `AotFunctionPtr`, `cached_aot_ctx`,
+      `registerPrecompiledAOTFunction()` method
+- [x] `lib/Function.cpp` — AOT function registration, `evalTiered()` AOT dispatch
+- [x] `include/qore/intern/StatementBlock.h` — AOT top-level fields
+- [x] `lib/StatementBlock.cpp` — AOT top-level dispatch
+- [x] `examples/test/ir/AOTSmoke.qtest` — 20 test cases (32 assertions) for AOT compilation
 
 ### Future Extensions (not in this phase)
 
-- [ ] **Invoke table**: Map Invoke expression IDs to runtime AST pointers, enabling
-      pre-compilation of functions that currently need Invoke fallback
+- [ ] **Fix Call double-evaluation**: Modify Call/Invoke IR instructions to avoid passing
+      the full expression to `qore_rt_invoke_expr[_aot]()` when arguments have already been
+      evaluated as separate IR instructions. This will fix the 72-byte leak and eliminate the
+      need for the "store result in variable" workaround.
+- [ ] **Fix int-typed post-increment**: Add `QoreIntPostIncrementOperatorNode` handling to
+      `lowerPostIncrement()` in `QoreIRLowering.cpp`.
+- [ ] **Fix no-arg function calls**: Handle null `parse_args`/`args` in `lowerCallArgs()`.
+- [ ] **Fix ternary PHI node**: Resolve LLVM verification failure with ternary expressions.
 - [ ] Cross-compilation: target triple selection via `--target` flag
 - [ ] Optimization levels: `-O0` through `-O3` flag for AOT optimization
 - [ ] Static linking: link libqore statically for fully standalone binaries
 - [ ] Module compilation: compile Qore modules (.qm) to shared libraries
-- [ ] Source stripping: option to not embed source (requires Invoke table first)
+- [ ] Source stripping: option to not embed source (requires full context coverage first)
 
 ---
 

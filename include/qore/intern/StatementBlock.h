@@ -47,6 +47,7 @@
 // all definitions in this file are private to the library and subject to change
 class BCAList;
 class QoreIRFunction;
+struct QoreAOTContext;
 class BCList;
 
 class LVList {
@@ -264,10 +265,21 @@ protected:
     using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
     mutable JitFunctionPtr cached_toplevel_jit_fn = nullptr;
 
+    // AOT pre-compiled top-level function with context
+    using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
+    mutable AotFunctionPtr cached_toplevel_aot_fn = nullptr;
+    mutable QoreAOTContext* cached_toplevel_aot_ctx = nullptr;
+
 public:
     //! Register a pre-compiled AOT function pointer for top-level code
     DLLLOCAL void registerPrecompiledTopLevel(JitFunctionPtr fn) {
         cached_toplevel_jit_fn = fn;
+    }
+
+    //! Register a pre-compiled AOT function pointer with context for top-level code
+    DLLLOCAL void registerPrecompiledAOTTopLevel(AotFunctionPtr fn, QoreAOTContext* ctx) {
+        cached_toplevel_aot_fn = fn;
+        cached_toplevel_aot_ctx = ctx;
     }
 };
 

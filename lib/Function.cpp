@@ -48,6 +48,7 @@
 #include "qore/intern/WhileStatement.h"
 #include "qore/intern/TryStatement.h"
 #include "qore/intern/SwitchStatement.h"
+#include "qore/intern/QoreAOT.h"
 
 #include <cassert>
 #include <cctype>
@@ -2029,6 +2030,7 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
 }
 
 UserVariantBase::~UserVariantBase() {
+    delete cached_aot_ctx;
     delete cached_ir;
     delete gate;
     delete statements;
@@ -2255,12 +2257,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     assert(statements);
 
     ExecutionTier tier = current_tier.load(std::memory_order_acquire);
-    printd(3, "evalTiered '%s': tier=%d exec_count=%lu cached_jit=%p cached_ir=%p\n",
-        name, (int)tier, exec_count.load(), (void*)cached_jit_fn, (void*)cached_ir);
-    // JIT tier: execute native function
-    if (tier == TIER_JIT && cached_jit_fn) {
-        printd(3, "evalTiered JIT '%s' exec_count=%lu\n",
-            name, exec_count.load());
+    printd(3, "evalTiered '%s': tier=%d exec_count=%lu cached_jit=%p cached_aot=%p cached_ir=%p\n",
+        name, (int)tier, exec_count.load(), (void*)cached_jit_fn, (void*)cached_aot_fn, (void*)cached_ir);
+    // JIT/AOT tier: execute native function
+    if (tier == TIER_JIT && (cached_jit_fn || cached_aot_fn)) {
+        printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",
+            name, exec_count.load(), (void*)cached_aot_ctx);
         // self might be 0 if instantiated by a constructor call
         if (self && signature.selfid) {
             signature.selfid->instantiateSelf(self);
@@ -2274,21 +2276,31 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             ArgvContextHelper argv_helper(argv.release(), xsink);
 
             if (!gate || (gate->enter(xsink) >= 0)) {
+                // Get body locals from AOT context or cached IR
+                const std::vector<LocalVar*>& body_locals = cached_aot_ctx
+                    ? cached_aot_ctx->all_body_locals
+                    : cached_ir->all_body_locals;
+
                 // Instantiate ALL body locals (top-level + nested blocks) so that
                 // AST Invoke callbacks can find them on the thread-local stack.
                 int64 po = pgm->getParseOptions64();
-                for (LocalVar* lv : cached_ir->all_body_locals) {
+                for (LocalVar* lv : body_locals) {
                     lv->instantiate(po);
                 }
 
-                uint64_t result_bits = cached_jit_fn(xsink);
+                uint64_t result_bits;
+                if (cached_aot_ctx && cached_aot_fn) {
+                    result_bits = cached_aot_fn(cached_aot_ctx, xsink);
+                } else {
+                    result_bits = cached_jit_fn(xsink);
+                }
                 QoreValue result;
                 std::memcpy(&result, &result_bits, sizeof(result));
                 val = result;
 
                 // Uninstantiate in reverse order (LIFO)
-                for (int i = (int)cached_ir->all_body_locals.size() - 1; i >= 0; --i) {
-                    cached_ir->all_body_locals[i]->uninstantiate(xsink);
+                for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+                    body_locals[i]->uninstantiate(xsink);
                 }
 
                 if (gate) {

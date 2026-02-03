@@ -65,58 +65,34 @@
 #include <string>
 #include <vector>
 
+QoreAOTContext::~QoreAOTContext() {
+    // Deref all held expression values (we took a ref in buildAOTContext)
+    for (int i = 0; i < num_exprs; ++i) {
+        QoreValue v;
+        memcpy(&v, &exprs[i], sizeof(v));
+        v.discard(nullptr);
+    }
+    free(locals);
+    free(globals);
+    free(exprs);
+}
+
 //! Descriptor for a function that was successfully compiled to LLVM IR
 struct AOTCompiledFunc {
     std::string name;               //!< function name (e.g. "myFunc", "MyClass::myMethod")
     std::string llvm_symbol;        //!< LLVM symbol name in the module
+    int num_locals = 0;             //!< number of local variable slots in AOT context
+    int num_globals = 0;            //!< number of global variable slots in AOT context
+    int num_exprs = 0;              //!< number of expression slots in AOT context
 };
 
-//! Check if a QoreIRFunction contains opcodes that embed process-specific pointers
-//! Functions with Invoke opcodes embed AST node pointers as immediate constants.
-//! Functions with LoadLocal/StoreLocal/LoadGlobal/StoreGlobal/LoadClosure/StoreClosure/
-//! LoadThreadLocal/StoreThreadLocal embed LocalVar/Var pointers as immediate constants.
-//! These pointers are process-specific and invalid in AOT-compiled object files.
-//! @param func the IR function to check
-//! @return true if the function has process-specific pointer opcodes, false if AOT-safe
-static bool hasProcessSpecificOpcodes(const QoreIRFunction& func) {
-    for (auto& block : func.blocks) {
-        for (auto& inst : block->instructions) {
-            switch (inst->opcode) {
-                case QoreIROpcode::Invoke:
-                case QoreIROpcode::LoadLocal:
-                case QoreIROpcode::StoreLocal:
-                case QoreIROpcode::LoadGlobal:
-                case QoreIROpcode::StoreGlobal:
-                case QoreIROpcode::LoadClosure:
-                case QoreIROpcode::StoreClosure:
-                case QoreIROpcode::LoadThreadLocal:
-                case QoreIROpcode::StoreThreadLocal:
-                case QoreIROpcode::LoadLValue:
-                case QoreIROpcode::StoreLValue:
-                case QoreIROpcode::PreIncLValue:
-                case QoreIROpcode::PreDecLValue:
-                case QoreIROpcode::PostIncLValue:
-                case QoreIROpcode::PostDecLValue:
-                case QoreIROpcode::Call:
-                case QoreIROpcode::CallMethod:
-                case QoreIROpcode::CallStatic:
-                case QoreIROpcode::CallIndirect:
-                    return true;
-                default:
-                    break;
-            }
-        }
-    }
-    return false;
-}
-
-//! Try to lower a user function variant to IR and check for Invoke opcodes
+//! Try to lower a user function variant to IR
 /** @param uvb the user variant base
     @param name the function name for IR lowering
     @param pgm the QoreProgram
     @param ir_func output: the lowered IR function (caller must delete)
     @param error output: error message on failure
-    @return 0 = invoke-free (compiled), 1 = has invoke (skip), -1 = lowering failed
+    @return 0 = success, -1 = lowering failed
 */
 static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram* pgm,
         QoreIRFunction*& ir_func, std::string& error) {
@@ -167,20 +143,14 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
 
-    if (hasProcessSpecificOpcodes(*ir_func)) {
-        delete ir_func;
-        ir_func = nullptr;
-        return 1;  // has process-specific pointers — defer to runtime JIT
-    }
-
-    return 0;  // AOT-safe — can be pre-compiled
+    return 0;
 }
 
-//! Walk a namespace and compile all Invoke-free user functions to LLVM IR
+//! Walk a namespace and compile all user functions to LLVM IR using AOT mode
 static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         std::vector<AOTCompiledFunc>& compiled_funcs,
-        int& total_funcs, int& compiled_count, int& invoke_count, int& failed_count) {
+        int& total_funcs, int& compiled_count, int& failed_count) {
     // Walk functions
     for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
         FunctionEntry* fe = i->second;
@@ -204,21 +174,28 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             int rc = tryLowerFunction(uvb, fname, pgm, ir_func, lower_error);
 
             if (rc == 0 && ir_func) {
-                // Invoke-free: lower to LLVM
+                // Build slot map for AOT pointer indirection
+                AOTSlotMap slots;
+                buildAOTSlotMap(*ir_func, slots);
+
+                // Lower to LLVM with AOT mode
                 QoreIRToLLVM lowerer(ctx);
+                lowerer.setAOTMode(&slots);
                 std::string llvm_error;
                 if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
-                    compiled_funcs.push_back({fname, ir_func->name});
+                    compiled_funcs.push_back({fname, ir_func->name,
+                        static_cast<int>(slots.local_slots.size()),
+                        static_cast<int>(slots.global_slots.size()),
+                        static_cast<int>(slots.expr_slots.size())});
                     ++compiled_count;
-                    printd(2, "AOT: compiled function '%s' to LLVM IR\n", fname);
+                    printd(2, "AOT: compiled function '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
+                        fname, (int)slots.local_slots.size(), (int)slots.global_slots.size(),
+                        (int)slots.expr_slots.size());
                 } else {
                     printd(2, "AOT: LLVM lowering failed for '%s': %s\n", fname, llvm_error.c_str());
                     ++failed_count;
                 }
                 delete ir_func;
-            } else if (rc == 1) {
-                printd(2, "AOT: function '%s' has process-specific opcodes, deferring to runtime JIT\n", fname);
-                ++invoke_count;
             } else {
                 printd(2, "AOT: IR lowering failed for '%s': %s\n", fname, lower_error.c_str());
                 ++failed_count;
@@ -259,21 +236,29 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
 
                 if (rc == 0 && ir_func) {
+                    // Build slot map for AOT pointer indirection
+                    AOTSlotMap slots;
+                    buildAOTSlotMap(*ir_func, slots);
+
+                    // Lower to LLVM with AOT mode
                     QoreIRToLLVM lowerer(ctx);
+                    lowerer.setAOTMode(&slots);
                     std::string llvm_error;
                     if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
-                        compiled_funcs.push_back({method_name, ir_func->name});
+                        compiled_funcs.push_back({method_name, ir_func->name,
+                            static_cast<int>(slots.local_slots.size()),
+                            static_cast<int>(slots.global_slots.size()),
+                            static_cast<int>(slots.expr_slots.size())});
                         ++compiled_count;
-                        printd(2, "AOT: compiled method '%s' to LLVM IR\n", method_name.c_str());
+                        printd(2, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
+                            method_name.c_str(), (int)slots.local_slots.size(),
+                            (int)slots.global_slots.size(), (int)slots.expr_slots.size());
                     } else {
                         printd(2, "AOT: LLVM lowering failed for '%s': %s\n",
                             method_name.c_str(), llvm_error.c_str());
                         ++failed_count;
                     }
                     delete ir_func;
-                } else if (rc == 1) {
-                    printd(2, "AOT: method '%s' has process-specific opcodes, deferring to runtime JIT\n", method_name.c_str());
-                    ++invoke_count;
                 } else {
                     printd(2, "AOT: IR lowering failed for '%s': %s\n",
                         method_name.c_str(), lower_error.c_str());
@@ -297,7 +282,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             compileNamespaceFunctions(qore_ns_private::get(*child_ns), pgm, ctx, module,
-                compiled_funcs, total_funcs, compiled_count, invoke_count, failed_count);
+                compiled_funcs, total_funcs, compiled_count, failed_count);
         }
     }
 }
@@ -408,9 +393,9 @@ static void generateMainAndTable(llvm::LLVMContext& ctx, llvm::Module& module,
         label_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
         label_data, "qore_aot_label");
 
-    // Build the function table: array of {i8*, i8*} (name, fn_ptr)
-    // QoreAOTFunc struct: { const char* name, uint64_t (*fn_ptr)(ExceptionSink*) }
-    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type});
+    // Build the function table: array of {i8*, i8*, i32, i32, i32}
+    // QoreAOTFunc struct: { const char* name, AotFunctionPtr fn_ptr, int num_locals, int num_globals, int num_exprs }
+    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type});
 
     std::vector<llvm::Constant*> func_entries;
     for (auto& cf : compiled_funcs) {
@@ -431,7 +416,10 @@ static void generateMainAndTable(llvm::LLVMContext& ctx, llvm::Module& module,
 
         llvm::Constant* entry = llvm::ConstantStruct::get(func_entry_type, {
             name_gv,
-            fn
+            fn,
+            llvm::ConstantInt::get(i32_type, cf.num_locals),
+            llvm::ConstantInt::get(i32_type, cf.num_globals),
+            llvm::ConstantInt::get(i32_type, cf.num_exprs)
         });
         func_entries.push_back(entry);
     }
@@ -523,19 +511,18 @@ bool QoreAOT::compile(QoreProgram* pgm,
     llvm::LLVMContext ctx;
     auto module = std::make_unique<llvm::Module>("qore_aot_module", ctx);
 
-    // Step 1: Enumerate and compile Invoke-free functions
+    // Step 1: Enumerate and compile all user functions with AOT pointer indirection
     std::vector<AOTCompiledFunc> compiled_funcs;
     int total_funcs = 0;
     int compiled_count = 0;
-    int invoke_count = 0;
     int failed_count = 0;
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     compileNamespaceFunctions(root_ns, pgm, ctx, *module,
-        compiled_funcs, total_funcs, compiled_count, invoke_count, failed_count);
+        compiled_funcs, total_funcs, compiled_count, failed_count);
 
-    // Step 2: Try to compile top-level code
+    // Step 2: Try to compile top-level code with AOT mode
     {
         TopLevelStatementBlock& sb = pp->sb;
         QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
@@ -571,21 +558,25 @@ bool QoreAOT::compile(QoreProgram* pgm,
             }
             std::string verify_error;
             if (QoreIRVerifier::verify(*ir_func, verify_error)) {
-                if (!hasProcessSpecificOpcodes(*ir_func)) {
-                    QoreIRToLLVM llvm_lowerer(ctx);
-                    std::string llvm_error;
-                    if (llvm_lowerer.lowerFunction(*ir_func, *module, llvm_error)) {
-                        compiled_funcs.push_back({"_toplevel", ir_func->name});
-                        ++compiled_count;
-                        toplevel_ok = true;
-                        printd(2, "AOT: compiled _toplevel to LLVM IR\n");
-                    } else {
-                        printd(2, "AOT: LLVM lowering failed for _toplevel: %s\n", llvm_error.c_str());
-                    }
+                // Build slot map for AOT pointer indirection
+                AOTSlotMap slots;
+                buildAOTSlotMap(*ir_func, slots);
+
+                QoreIRToLLVM llvm_lowerer(ctx);
+                llvm_lowerer.setAOTMode(&slots);
+                std::string llvm_error;
+                if (llvm_lowerer.lowerFunction(*ir_func, *module, llvm_error)) {
+                    compiled_funcs.push_back({"_toplevel", ir_func->name,
+                        static_cast<int>(slots.local_slots.size()),
+                        static_cast<int>(slots.global_slots.size()),
+                        static_cast<int>(slots.expr_slots.size())});
+                    ++compiled_count;
+                    toplevel_ok = true;
+                    printd(2, "AOT: compiled _toplevel to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
+                        (int)slots.local_slots.size(), (int)slots.global_slots.size(),
+                        (int)slots.expr_slots.size());
                 } else {
-                    printd(2, "AOT: _toplevel has process-specific opcodes, deferring to runtime JIT\n");
-                    ++invoke_count;
-                    toplevel_ok = true;  // not a failure — deferred to runtime JIT
+                    printd(2, "AOT: LLVM lowering failed for _toplevel: %s\n", llvm_error.c_str());
                 }
             } else {
                 printd(2, "AOT: _toplevel verification failed: %s\n", verify_error.c_str());
@@ -600,8 +591,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
     }
 
     // Report compilation stats
-    printf("AOT compilation: %d/%d functions pre-compiled (%d invoke-fallback, %d failed)\n",
-        compiled_count, total_funcs + 1, invoke_count, failed_count);
+    printf("AOT compilation: %d/%d functions pre-compiled (%d failed)\n",
+        compiled_count, total_funcs + 1, failed_count);
 
     // Step 3: Generate main() and function registration table
     generateMainAndTable(ctx, *module, source_text, source_len, label,
@@ -640,4 +631,344 @@ bool QoreAOT::compile(QoreProgram* pgm,
     remove(obj_path.c_str());
 
     return true;
+}
+
+void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
+    // Walk blocks and instructions in deterministic order (same as LLVM lowering)
+    // to assign slot indices for each unique process-specific pointer.
+    for (auto& block : func.blocks) {
+        for (auto& inst : block->instructions) {
+            switch (inst->opcode) {
+                case QoreIROpcode::LoadLocal:
+                case QoreIROpcode::StoreLocal: {
+                    auto* li = static_cast<QoreIRLocalInstruction*>(inst.get());
+                    slots.getLocalSlot(reinterpret_cast<const void*>(li->local));
+                    break;
+                }
+                case QoreIROpcode::LoadGlobal:
+                case QoreIROpcode::StoreGlobal:
+                case QoreIROpcode::LoadThreadLocal:
+                case QoreIROpcode::StoreThreadLocal: {
+                    auto* vi = static_cast<QoreIRVarInstruction*>(inst.get());
+                    slots.getGlobalSlot(reinterpret_cast<const void*>(vi->var));
+                    break;
+                }
+                case QoreIROpcode::LoadClosure:
+                case QoreIROpcode::StoreClosure: {
+                    // Closure vars use local slots (ClosureVarValue* cast to LocalVar*)
+                    auto* li = static_cast<QoreIRLocalInstruction*>(inst.get());
+                    slots.getLocalSlot(reinterpret_cast<const void*>(li->local));
+                    break;
+                }
+                case QoreIROpcode::Invoke: {
+                    auto* ii = static_cast<QoreIRInvokeInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ii->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::Call:
+                case QoreIROpcode::CallMethod:
+                case QoreIROpcode::CallStatic:
+                case QoreIROpcode::CallIndirect: {
+                    auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ei->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::LoadLValue:
+                case QoreIROpcode::StoreLValue:
+                case QoreIROpcode::PreIncLValue:
+                case QoreIROpcode::PreDecLValue:
+                case QoreIROpcode::PostIncLValue:
+                case QoreIROpcode::PostDecLValue:
+                case QoreIROpcode::AddAssignLValue:
+                case QoreIROpcode::SubAssignLValue:
+                case QoreIROpcode::MulAssignLValue:
+                case QoreIROpcode::DivAssignLValue:
+                case QoreIROpcode::ModAssignLValue:
+                case QoreIROpcode::AndAssignLValue:
+                case QoreIROpcode::OrAssignLValue:
+                case QoreIROpcode::XorAssignLValue:
+                case QoreIROpcode::ShlAssignLValue:
+                case QoreIROpcode::ShrAssignLValue:
+                case QoreIROpcode::ShiftLValue:
+                case QoreIROpcode::UnshiftLValue: {
+                    auto* lvi = static_cast<QoreIRLValueInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &lvi->lvalue, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                // Expression-based opcodes (DotEval*, Map*, Cast*, etc.)
+                case QoreIROpcode::PopAny:
+                case QoreIROpcode::PushAny:
+                case QoreIROpcode::ExtractAny:
+                case QoreIROpcode::ExtractList:
+                case QoreIROpcode::ExtractString:
+                case QoreIROpcode::ExtractBinary:
+                case QoreIROpcode::RemoveAny:
+                case QoreIROpcode::RemoveList:
+                case QoreIROpcode::RemoveHash:
+                case QoreIROpcode::RemoveObject:
+                case QoreIROpcode::RemoveString:
+                case QoreIROpcode::RemoveBinary:
+                case QoreIROpcode::KeysAny:
+                case QoreIROpcode::KeysList:
+                case QoreIROpcode::KeysHash:
+                case QoreIROpcode::RegexMatchAny:
+                case QoreIROpcode::RegexMatchBool:
+                case QoreIROpcode::RegexNMatchBool:
+                case QoreIROpcode::RegexExtractAny:
+                case QoreIROpcode::RegexExtractList:
+                case QoreIROpcode::RegexSubstAny:
+                case QoreIROpcode::RegexSubstString:
+                case QoreIROpcode::InstanceOfBool:
+                case QoreIROpcode::TrimAny:
+                case QoreIROpcode::TrimString:
+                case QoreIROpcode::ChompAny:
+                case QoreIROpcode::ChompString:
+                case QoreIROpcode::TransliterateAny:
+                case QoreIROpcode::TransliterateString:
+                case QoreIROpcode::BackgroundInt:
+                case QoreIROpcode::ListAssignAny:
+                case QoreIROpcode::ExistsAny:
+                case QoreIROpcode::ExistsBool:
+                case QoreIROpcode::ElementsAny:
+                case QoreIROpcode::ElementsInt:
+                case QoreIROpcode::DotEvalHash:
+                case QoreIROpcode::DotEvalAny:
+                case QoreIROpcode::DotEvalInt:
+                case QoreIROpcode::DotEvalFloat:
+                case QoreIROpcode::DotEvalString:
+                case QoreIROpcode::DotEvalDate:
+                case QoreIROpcode::DotEvalList:
+                case QoreIROpcode::DotEvalObject:
+                case QoreIROpcode::MapSelectList:
+                case QoreIROpcode::MapSelectAny:
+                case QoreIROpcode::HashMap:
+                case QoreIROpcode::HashMapSelect:
+                case QoreIROpcode::HashMapAny:
+                case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CastAny:
+                case QoreIROpcode::CastList:
+                case QoreIROpcode::CastHash:
+                case QoreIROpcode::CastObject:
+                case QoreIROpcode::CastEnum:
+                case QoreIROpcode::InvokeSimError: {
+                    auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ei->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+}
+
+QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs) {
+    QoreAOTContext* ctx = new QoreAOTContext();
+    ctx->num_locals = num_locals;
+    ctx->num_globals = num_globals;
+    ctx->num_exprs = num_exprs;
+    ctx->allocate();
+
+    // Copy all_body_locals from the fresh IR
+    ctx->all_body_locals = func.all_body_locals;
+
+    // Walk in the same deterministic order as buildAOTSlotMap to fill arrays
+    int local_idx = 0;
+    int global_idx = 0;
+    int expr_idx = 0;
+    std::unordered_map<const void*, int> seen_locals;
+    std::unordered_map<const void*, int> seen_globals;
+    std::unordered_map<uint64_t, int> seen_exprs;
+
+    for (auto& block : func.blocks) {
+        for (auto& inst : block->instructions) {
+            switch (inst->opcode) {
+                case QoreIROpcode::LoadLocal:
+                case QoreIROpcode::StoreLocal: {
+                    auto* li = static_cast<QoreIRLocalInstruction*>(inst.get());
+                    const void* key = reinterpret_cast<const void*>(li->local);
+                    if (seen_locals.find(key) == seen_locals.end()) {
+                        assert(local_idx < num_locals);
+                        ctx->locals[local_idx] = li->local;
+                        seen_locals[key] = local_idx;
+                        ++local_idx;
+                    }
+                    break;
+                }
+                case QoreIROpcode::LoadGlobal:
+                case QoreIROpcode::StoreGlobal:
+                case QoreIROpcode::LoadThreadLocal:
+                case QoreIROpcode::StoreThreadLocal: {
+                    auto* vi = static_cast<QoreIRVarInstruction*>(inst.get());
+                    const void* key = reinterpret_cast<const void*>(vi->var);
+                    if (seen_globals.find(key) == seen_globals.end()) {
+                        assert(global_idx < num_globals);
+                        ctx->globals[global_idx] = vi->var;
+                        seen_globals[key] = global_idx;
+                        ++global_idx;
+                    }
+                    break;
+                }
+                case QoreIROpcode::LoadClosure:
+                case QoreIROpcode::StoreClosure: {
+                    auto* li = static_cast<QoreIRLocalInstruction*>(inst.get());
+                    const void* key = reinterpret_cast<const void*>(li->local);
+                    if (seen_locals.find(key) == seen_locals.end()) {
+                        assert(local_idx < num_locals);
+                        ctx->locals[local_idx] = li->local;
+                        seen_locals[key] = local_idx;
+                        ++local_idx;
+                    }
+                    break;
+                }
+                case QoreIROpcode::Invoke: {
+                    auto* ii = static_cast<QoreIRInvokeInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ii->expr, sizeof(bits));
+                    if (seen_exprs.find(bits) == seen_exprs.end()) {
+                        assert(expr_idx < num_exprs);
+                        // Take a ref so the expression survives IR function deletion
+                        ii->expr.ref();
+                        ctx->exprs[expr_idx] = bits;
+                        seen_exprs[bits] = expr_idx;
+                        ++expr_idx;
+                    }
+                    break;
+                }
+                case QoreIROpcode::Call:
+                case QoreIROpcode::CallMethod:
+                case QoreIROpcode::CallStatic:
+                case QoreIROpcode::CallIndirect: {
+                    auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ei->expr, sizeof(bits));
+                    if (seen_exprs.find(bits) == seen_exprs.end()) {
+                        assert(expr_idx < num_exprs);
+                        // Take a ref so the expression survives IR function deletion
+                        ei->expr.ref();
+                        ctx->exprs[expr_idx] = bits;
+                        seen_exprs[bits] = expr_idx;
+                        ++expr_idx;
+                    }
+                    break;
+                }
+                case QoreIROpcode::LoadLValue:
+                case QoreIROpcode::StoreLValue:
+                case QoreIROpcode::PreIncLValue:
+                case QoreIROpcode::PreDecLValue:
+                case QoreIROpcode::PostIncLValue:
+                case QoreIROpcode::PostDecLValue:
+                case QoreIROpcode::AddAssignLValue:
+                case QoreIROpcode::SubAssignLValue:
+                case QoreIROpcode::MulAssignLValue:
+                case QoreIROpcode::DivAssignLValue:
+                case QoreIROpcode::ModAssignLValue:
+                case QoreIROpcode::AndAssignLValue:
+                case QoreIROpcode::OrAssignLValue:
+                case QoreIROpcode::XorAssignLValue:
+                case QoreIROpcode::ShlAssignLValue:
+                case QoreIROpcode::ShrAssignLValue:
+                case QoreIROpcode::ShiftLValue:
+                case QoreIROpcode::UnshiftLValue: {
+                    auto* lvi = static_cast<QoreIRLValueInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &lvi->lvalue, sizeof(bits));
+                    if (seen_exprs.find(bits) == seen_exprs.end()) {
+                        assert(expr_idx < num_exprs);
+                        // Take a ref so the lvalue survives IR function deletion
+                        lvi->lvalue.ref();
+                        ctx->exprs[expr_idx] = bits;
+                        seen_exprs[bits] = expr_idx;
+                        ++expr_idx;
+                    }
+                    break;
+                }
+                // Expression-based opcodes (DotEval*, Map*, Cast*, etc.)
+                case QoreIROpcode::PopAny:
+                case QoreIROpcode::PushAny:
+                case QoreIROpcode::ExtractAny:
+                case QoreIROpcode::ExtractList:
+                case QoreIROpcode::ExtractString:
+                case QoreIROpcode::ExtractBinary:
+                case QoreIROpcode::RemoveAny:
+                case QoreIROpcode::RemoveList:
+                case QoreIROpcode::RemoveHash:
+                case QoreIROpcode::RemoveObject:
+                case QoreIROpcode::RemoveString:
+                case QoreIROpcode::RemoveBinary:
+                case QoreIROpcode::KeysAny:
+                case QoreIROpcode::KeysList:
+                case QoreIROpcode::KeysHash:
+                case QoreIROpcode::RegexMatchAny:
+                case QoreIROpcode::RegexMatchBool:
+                case QoreIROpcode::RegexNMatchBool:
+                case QoreIROpcode::RegexExtractAny:
+                case QoreIROpcode::RegexExtractList:
+                case QoreIROpcode::RegexSubstAny:
+                case QoreIROpcode::RegexSubstString:
+                case QoreIROpcode::InstanceOfBool:
+                case QoreIROpcode::TrimAny:
+                case QoreIROpcode::TrimString:
+                case QoreIROpcode::ChompAny:
+                case QoreIROpcode::ChompString:
+                case QoreIROpcode::TransliterateAny:
+                case QoreIROpcode::TransliterateString:
+                case QoreIROpcode::BackgroundInt:
+                case QoreIROpcode::ListAssignAny:
+                case QoreIROpcode::ExistsAny:
+                case QoreIROpcode::ExistsBool:
+                case QoreIROpcode::ElementsAny:
+                case QoreIROpcode::ElementsInt:
+                case QoreIROpcode::DotEvalHash:
+                case QoreIROpcode::DotEvalAny:
+                case QoreIROpcode::DotEvalInt:
+                case QoreIROpcode::DotEvalFloat:
+                case QoreIROpcode::DotEvalString:
+                case QoreIROpcode::DotEvalDate:
+                case QoreIROpcode::DotEvalList:
+                case QoreIROpcode::DotEvalObject:
+                case QoreIROpcode::MapSelectList:
+                case QoreIROpcode::MapSelectAny:
+                case QoreIROpcode::HashMap:
+                case QoreIROpcode::HashMapSelect:
+                case QoreIROpcode::HashMapAny:
+                case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CastAny:
+                case QoreIROpcode::CastList:
+                case QoreIROpcode::CastHash:
+                case QoreIROpcode::CastObject:
+                case QoreIROpcode::CastEnum:
+                case QoreIROpcode::InvokeSimError: {
+                    auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ei->expr, sizeof(bits));
+                    if (seen_exprs.find(bits) == seen_exprs.end()) {
+                        assert(expr_idx < num_exprs);
+                        // Take a ref so the expression survives IR function deletion
+                        ei->expr.ref();
+                        ctx->exprs[expr_idx] = bits;
+                        seen_exprs[bits] = expr_idx;
+                        ++expr_idx;
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+
+    assert(local_idx == num_locals);
+    assert(global_idx == num_globals);
+    assert(expr_idx == num_exprs);
+
+    return ctx;
 }

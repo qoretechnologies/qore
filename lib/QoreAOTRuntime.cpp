@@ -38,18 +38,90 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Function.h"
+#include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreIRBuilder.h"
+#include "qore/intern/QoreIRLowering.h"
+#include "qore/intern/QoreIRVerifier.h"
 
+#include <cassert>
 #include <cstring>
 #include <string>
 #include <unordered_map>
 
-//! Walk a namespace tree and register pre-compiled AOT function pointers
-/** Matches function names from the AOT function table against user function variants
-    in the program's namespace tree. For each match, sets the cached_jit_fn and promotes
-    the variant to TIER_JIT.
+//! Re-lower a user function variant to IR and build an AOT context.
+/** @param uvb the user variant
+    @param name the function name
+    @param pgm the QoreProgram
+    @param aot_func the AOT function descriptor (for slot counts)
+    @return heap-allocated context (caller passes ownership to variant), or nullptr on failure
 */
-static int registerAOTFunctionsInNamespace(qore_ns_private* ns,
-        const std::unordered_map<std::string, uint64_t (*)(ExceptionSink*)>& func_map,
+static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* name,
+        QoreProgram* pgm, const QoreAOTFunc& aot_func) {
+    StatementBlock* statements = uvb->getStatementBlock();
+    if (!statements) {
+        printd(1, "AOT: buildContextForVariant '%s': no statement block\n", name);
+        return nullptr;
+    }
+
+    // Re-lower to IR (fresh AST from re-parsed source → same IR → same walk order)
+    QoreIRFunction* ir_func = new QoreIRFunction(name);
+
+    // Record pre-instantiated locals from signature
+    UserSignature* sig = uvb->getUserSignature();
+    if (sig) {
+        for (unsigned i = 0; i < sig->numParams(); ++i) {
+            ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(sig->lv[i]));
+        }
+        if (sig->argvid) {
+            ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(sig->argvid));
+        }
+        if (sig->selfid) {
+            ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(sig->selfid));
+        }
+    }
+
+    QoreIRBuilder builder(ir_func);
+    auto* entry = ir_func->createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreParseContext parse_context(pgm);
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string lower_error;
+    if (!lowering.lowerStatementBlock(statements, lower_error)) {
+        printd(1, "AOT: buildContextForVariant '%s': IR lowering failed: %s\n", name, lower_error.c_str());
+        delete ir_func;
+        return nullptr;
+    }
+    // Ensure terminator
+    if (ir_func->blocks.back()->instructions.empty() ||
+            (ir_func->blocks.back()->instructions.back()->opcode != QoreIROpcode::Return &&
+             ir_func->blocks.back()->instructions.back()->opcode != QoreIROpcode::ReturnNothing &&
+             ir_func->blocks.back()->instructions.back()->opcode != QoreIROpcode::Br &&
+             ir_func->blocks.back()->instructions.back()->opcode != QoreIROpcode::Rethrow)) {
+        builder.createReturnNothing();
+    }
+
+    std::string verify_error;
+    if (!QoreIRVerifier::verify(*ir_func, verify_error)) {
+        printd(1, "AOT: buildContextForVariant '%s': verification failed: %s\n", name, verify_error.c_str());
+        delete ir_func;
+        return nullptr;
+    }
+
+    // Build the context from the fresh IR (same walk order → same slot indices)
+    QoreAOTContext* ctx = buildAOTContext(*ir_func, aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs);
+    delete ir_func;
+
+    return ctx;
+}
+
+//! Walk a namespace tree and register pre-compiled AOT function pointers with context
+/** Matches function names from the AOT function table against user function variants
+    in the program's namespace tree. For each match, re-lowers to IR to build a
+    QoreAOTContext, then registers via registerPrecompiledAOTFunction().
+*/
+static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pgm,
+        const std::unordered_map<std::string, const QoreAOTFunc*>& func_map,
         int& registered) {
     // Walk functions in this namespace
     for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
@@ -68,13 +140,19 @@ static int registerAOTFunctionsInNamespace(qore_ns_private* ns,
                 continue;
             }
 
-            // Build the name that attemptIRLowering would use
             const char* fname = func->getName();
             auto it = func_map.find(fname);
             if (it != func_map.end()) {
-                uvb->registerPrecompiledFunction(it->second);
-                ++registered;
-                printd(2, "AOT: registered pre-compiled function '%s'\n", fname);
+                const QoreAOTFunc* aot_func = it->second;
+                QoreAOTContext* ctx = buildContextForVariant(uvb, fname, pgm, *aot_func);
+                if (ctx) {
+                    uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                    ++registered;
+                    printd(2, "AOT: registered pre-compiled function '%s' (locals=%d, globals=%d, exprs=%d)\n",
+                        fname, aot_func->num_locals, aot_func->num_globals, aot_func->num_exprs);
+                } else {
+                    printd(1, "AOT: failed to build context for function '%s'\n", fname);
+                }
             }
         }
     }
@@ -89,59 +167,46 @@ static int registerAOTFunctionsInNamespace(qore_ns_private* ns,
         qore_class_private* qcp = qore_class_private::get(*qc);
         const char* class_name = qc->getName();
 
-        // Walk instance methods
+        // Helper lambda for method registration
+        auto processMethod = [&](QoreMethod* meth) {
+            if (!meth->isUser()) {
+                return;
+            }
+            qore_method_private* mp = qore_method_private::get(*meth);
+            MethodFunctionBase* mfb = mp->getFunction();
+
+            QoreFunctionIterator vit(*mfb);
+            while (vit.next()) {
+                const AbstractQoreFunctionVariant* variant = vit.getVariant();
+                UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
+                if (!uvb || !uvb->hasBody()) {
+                    continue;
+                }
+
+                std::string method_name = std::string(class_name) + "::" + meth->getName();
+                auto it = func_map.find(method_name);
+                if (it != func_map.end()) {
+                    const QoreAOTFunc* aot_func = it->second;
+                    QoreAOTContext* ctx = buildContextForVariant(uvb, method_name.c_str(), pgm, *aot_func);
+                    if (ctx) {
+                        uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                        ++registered;
+                        printd(2, "AOT: registered pre-compiled method '%s' (locals=%d, globals=%d, exprs=%d)\n",
+                            method_name.c_str(), aot_func->num_locals, aot_func->num_globals, aot_func->num_exprs);
+                    } else {
+                        printd(1, "AOT: failed to build context for method '%s'\n", method_name.c_str());
+                    }
+                }
+            }
+        };
+
+        // Instance methods
         for (auto mi = qcp->hm.begin(), me = qcp->hm.end(); mi != me; ++mi) {
-            QoreMethod* meth = mi->second;
-            if (!meth->isUser()) {
-                continue;
-            }
-            qore_method_private* mp = qore_method_private::get(*meth);
-            MethodFunctionBase* mfb = mp->getFunction();
-
-            QoreFunctionIterator vit(*mfb);
-            while (vit.next()) {
-                const AbstractQoreFunctionVariant* variant = vit.getVariant();
-                UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
-                if (!uvb || !uvb->hasBody()) {
-                    continue;
-                }
-
-                // Method name format: "ClassName::methodName"
-                std::string method_name = std::string(class_name) + "::" + meth->getName();
-                auto it = func_map.find(method_name);
-                if (it != func_map.end()) {
-                    uvb->registerPrecompiledFunction(it->second);
-                    ++registered;
-                    printd(2, "AOT: registered pre-compiled method '%s'\n", method_name.c_str());
-                }
-            }
+            processMethod(mi->second);
         }
-
-        // Walk static methods
+        // Static methods
         for (auto mi = qcp->shm.begin(), me = qcp->shm.end(); mi != me; ++mi) {
-            QoreMethod* meth = mi->second;
-            if (!meth->isUser()) {
-                continue;
-            }
-            qore_method_private* mp = qore_method_private::get(*meth);
-            MethodFunctionBase* mfb = mp->getFunction();
-
-            QoreFunctionIterator vit(*mfb);
-            while (vit.next()) {
-                const AbstractQoreFunctionVariant* variant = vit.getVariant();
-                UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
-                if (!uvb || !uvb->hasBody()) {
-                    continue;
-                }
-
-                std::string method_name = std::string(class_name) + "::" + meth->getName();
-                auto it = func_map.find(method_name);
-                if (it != func_map.end()) {
-                    uvb->registerPrecompiledFunction(it->second);
-                    ++registered;
-                    printd(2, "AOT: registered pre-compiled static method '%s'\n", method_name.c_str());
-                }
-            }
+            processMethod(mi->second);
         }
     }
 
@@ -149,11 +214,9 @@ static int registerAOTFunctionsInNamespace(qore_ns_private* ns,
     for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
-            registerAOTFunctionsInNamespace(qore_ns_private::get(*child_ns), func_map, registered);
+            registerAOTFunctionsInNamespace(qore_ns_private::get(*child_ns), pgm, func_map, registered);
         }
     }
-
-    return 0;
 }
 
 extern "C" int qore_aot_run(
@@ -208,28 +271,86 @@ extern "C" int qore_aot_run(
             xsink.handleExceptions();
             rc = 2;
         } else {
-            // Register pre-compiled function pointers
+            // Register pre-compiled function pointers with AOT context tables
             if (num_functions > 0 && functions) {
-                // Build lookup map
-                std::unordered_map<std::string, uint64_t (*)(ExceptionSink*)> func_map;
+                // Build lookup map: name → QoreAOTFunc*
+                std::unordered_map<std::string, const QoreAOTFunc*> func_map;
+                const QoreAOTFunc* toplevel_func = nullptr;
                 for (int i = 0; i < num_functions; ++i) {
                     if (functions[i].name && functions[i].fn_ptr) {
-                        func_map[functions[i].name] = functions[i].fn_ptr;
+                        if (strcmp(functions[i].name, "_toplevel") == 0) {
+                            toplevel_func = &functions[i];
+                        } else {
+                            func_map[functions[i].name] = &functions[i];
+                        }
                     }
                 }
 
-                // Walk namespace tree and register
+                // Walk namespace tree and register with context building
                 qore_program_private* pp = qore_program_private::get(**qpgm);
                 int registered = 0;
                 qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
-                registerAOTFunctionsInNamespace(root_ns, func_map, registered);
+                registerAOTFunctionsInNamespace(root_ns, *qpgm, func_map, registered);
 
-                // Also try to register the _toplevel function for pre-compiled top-level code
-                auto toplevel_it = func_map.find("_toplevel");
-                if (toplevel_it != func_map.end()) {
-                    pp->sb.registerPrecompiledTopLevel(toplevel_it->second);
-                    ++registered;
-                    printd(2, "AOT: registered pre-compiled _toplevel function\n");
+                // Register the _toplevel function with context
+                if (toplevel_func) {
+                    TopLevelStatementBlock& sb = pp->sb;
+
+                    // Re-lower top-level code to IR to build context
+                    QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
+
+                    // Top-level locals are pre-instantiated
+                    const LVList* lv_list = sb.getLVList();
+                    if (lv_list) {
+                        for (unsigned i = 0; i < lv_list->size(); ++i) {
+                            ir_func->pre_instantiated_locals.insert(
+                                reinterpret_cast<const void*>(lv_list->lv[i]));
+                        }
+                    }
+
+                    QoreIRBuilder builder(ir_func);
+                    auto* entry = ir_func->createBlock("entry");
+                    builder.setBlock(entry);
+
+                    QoreParseContext parse_context(*qpgm);
+                    QoreIRLowering lowering(builder, &parse_context);
+                    std::string lower_error;
+                    bool ctx_ok = false;
+                    if (lowering.lowerStatementBlock(&sb, lower_error)) {
+                        // Ensure terminator
+                        auto& last_block = ir_func->blocks.back();
+                        if (last_block->instructions.empty() ||
+                                (last_block->instructions.back()->opcode != QoreIROpcode::Return &&
+                                 last_block->instructions.back()->opcode != QoreIROpcode::ReturnNothing &&
+                                 last_block->instructions.back()->opcode != QoreIROpcode::Br &&
+                                 last_block->instructions.back()->opcode != QoreIROpcode::Rethrow)) {
+                            builder.createReturnNothing();
+                        }
+                        std::string verify_error;
+                        if (QoreIRVerifier::verify(*ir_func, verify_error)) {
+                            QoreAOTContext* ctx = buildAOTContext(*ir_func,
+                                toplevel_func->num_locals, toplevel_func->num_globals,
+                                toplevel_func->num_exprs);
+                            if (ctx) {
+                                sb.registerPrecompiledAOTTopLevel(toplevel_func->fn_ptr, ctx);
+                                ++registered;
+                                ctx_ok = true;
+                                printd(2, "AOT: registered pre-compiled _toplevel with context "
+                                    "(locals=%d, globals=%d, exprs=%d)\n",
+                                    toplevel_func->num_locals, toplevel_func->num_globals,
+                                    toplevel_func->num_exprs);
+                            }
+                        } else {
+                            printd(1, "AOT: _toplevel re-verification failed: %s\n", verify_error.c_str());
+                        }
+                    } else {
+                        printd(1, "AOT: _toplevel re-lowering failed: %s\n", lower_error.c_str());
+                    }
+                    delete ir_func;
+
+                    if (!ctx_ok) {
+                        printd(1, "AOT: failed to build context for _toplevel\n");
+                    }
                 }
 
                 printd(1, "AOT: registered %d/%d pre-compiled functions\n", registered, num_functions);

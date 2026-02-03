@@ -46,7 +46,9 @@
 
 class qore_class_private;
 class QoreIRFunction;
+struct QoreAOTContext;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
+using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
 // these data structures are all private to the library
 
@@ -626,6 +628,8 @@ protected:
     mutable std::atomic<ExecutionTier> current_tier{TIER_AST};
     mutable QoreIRFunction* cached_ir = nullptr;
     mutable JitFunctionPtr cached_jit_fn = nullptr;
+    mutable AotFunctionPtr cached_aot_fn = nullptr;
+    mutable QoreAOTContext* cached_aot_ctx = nullptr;
     mutable std::once_flag ir_lower_once;
     mutable std::once_flag jit_compile_once;
     mutable bool ir_lower_failed = false;
@@ -689,6 +693,13 @@ public:
     //! Register a pre-compiled AOT function pointer, promoting directly to JIT tier
     DLLLOCAL void registerPrecompiledFunction(JitFunctionPtr fn) {
         cached_jit_fn = fn;
+        current_tier.store(TIER_JIT, std::memory_order_release);
+    }
+
+    //! Register a pre-compiled AOT function pointer with context, promoting directly to JIT tier
+    DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx) {
+        cached_aot_fn = fn;
+        cached_aot_ctx = ctx;
         current_tier.store(TIER_JIT, std::memory_order_release);
     }
 };

@@ -43,6 +43,7 @@
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/QoreIRPrinter.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreAOT.h"
 
 #include <cassert>
 #include <cstdio>
@@ -697,6 +698,7 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
 }
 
 TopLevelStatementBlock::~TopLevelStatementBlock() {
+    delete cached_toplevel_aot_ctx;
     delete cached_toplevel_ir;
 }
 
@@ -715,14 +717,25 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     int64 runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
 
     // AOT pre-compiled top-level function — execute directly if registered
-    if (cached_toplevel_jit_fn && !(runtime_parse_options & PO_ALLOW_REPARSE)) {
-        uint64_t result_bits = cached_toplevel_jit_fn(xsink);
-        QoreValue result;
-        std::memcpy(&result, &result_bits, sizeof(result));
-        if (!*xsink) {
-            return_value = result;
+    if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
+        if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
+            uint64_t result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+            QoreValue result;
+            std::memcpy(&result, &result_bits, sizeof(result));
+            if (!*xsink) {
+                return_value = result;
+            }
+            return 0;
         }
-        return 0;
+        if (cached_toplevel_jit_fn) {
+            uint64_t result_bits = cached_toplevel_jit_fn(xsink);
+            QoreValue result;
+            std::memcpy(&result, &result_bits, sizeof(result));
+            if (!*xsink) {
+                return_value = result;
+            }
+            return 0;
+        }
     }
 
     // IR/JIT/Tiered execution dispatch — only for non-REPARSE mode

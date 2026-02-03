@@ -197,6 +197,23 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access));
     addSymbol("qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat));
 
+    // AOT context-based helpers (Phase 7b)
+    addSymbol("qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot));
+    addSymbol("qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot));
+    addSymbol("qore_rt_instantiate_local_aot", reinterpret_cast<void*>(&qore_rt_instantiate_local_aot));
+    addSymbol("qore_rt_uninstantiate_local_aot", reinterpret_cast<void*>(&qore_rt_uninstantiate_local_aot));
+    addSymbol("qore_rt_load_global_aot", reinterpret_cast<void*>(&qore_rt_load_global_aot));
+    addSymbol("qore_rt_store_global_aot", reinterpret_cast<void*>(&qore_rt_store_global_aot));
+    addSymbol("qore_rt_load_thread_local_aot", reinterpret_cast<void*>(&qore_rt_load_thread_local_aot));
+    addSymbol("qore_rt_store_thread_local_aot", reinterpret_cast<void*>(&qore_rt_store_thread_local_aot));
+    addSymbol("qore_rt_load_closure_aot", reinterpret_cast<void*>(&qore_rt_load_closure_aot));
+    addSymbol("qore_rt_store_closure_aot", reinterpret_cast<void*>(&qore_rt_store_closure_aot));
+    addSymbol("qore_rt_invoke_expr_aot", reinterpret_cast<void*>(&qore_rt_invoke_expr_aot));
+    addSymbol("qore_rt_lvalue_load_aot", reinterpret_cast<void*>(&qore_rt_lvalue_load_aot));
+    addSymbol("qore_rt_lvalue_store_aot", reinterpret_cast<void*>(&qore_rt_lvalue_store_aot));
+    addSymbol("qore_rt_lvalue_unary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_unary_aot));
+    addSymbol("qore_rt_lvalue_binary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_binary_aot));
+
     auto err = jd.define(llvm::orc::absoluteSymbols(std::move(symbols)));
     if (err) {
         error = "failed to register JIT runtime symbols: " + llvm::toString(std::move(err));

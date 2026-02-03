@@ -604,3 +604,83 @@ extern "C" void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* x
     // Remove handlers for this function scope
     jit_obe_handlers.resize(start);
 }
+
+// --- AOT context-based helpers (Phase 7b) ---
+
+#include "qore/intern/QoreAOT.h"
+
+extern "C" uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_load_local(ctx->locals[idx], xsink);
+}
+
+extern "C" void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_local(ctx->locals[idx], val, xsink);
+}
+
+extern "C" void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_instantiate_local(ctx->locals[idx]);
+}
+
+extern "C" void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_uninstantiate_local(xsink);
+}
+
+extern "C" uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_globals);
+    return qore_rt_load_global(ctx->globals[idx], xsink);
+}
+
+extern "C" void qore_rt_store_global_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_globals);
+    qore_rt_store_global(ctx->globals[idx], val, xsink);
+}
+
+extern "C" uint64_t qore_rt_load_thread_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_globals);
+    return qore_rt_load_thread_local(ctx->globals[idx], xsink);
+}
+
+extern "C" void qore_rt_store_thread_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_globals);
+    qore_rt_store_thread_local(ctx->globals[idx], val, xsink);
+}
+
+extern "C" uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_load_local(ctx->locals[idx], xsink);
+}
+
+extern "C" void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_local(ctx->locals[idx], val, xsink);
+}
+
+extern "C" uint64_t qore_rt_invoke_expr_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    return qore_rt_invoke_expr(ctx->exprs[idx], xsink);
+}
+
+extern "C" uint64_t qore_rt_lvalue_load_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    return qore_rt_lvalue_load(ctx->exprs[idx], xsink);
+}
+
+extern "C" uint64_t qore_rt_lvalue_store_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    return qore_rt_lvalue_store(ctx->exprs[idx], val, xsink);
+}
+
+extern "C" uint64_t qore_rt_lvalue_unary_aot(int op, QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    return qore_rt_lvalue_unary(op, ctx->exprs[idx], xsink);
+}
+
+extern "C" uint64_t qore_rt_lvalue_binary_aot(int op, QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    return qore_rt_lvalue_binary(op, ctx->exprs[idx], val, xsink);
+}
