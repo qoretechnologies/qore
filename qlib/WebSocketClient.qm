@@ -216,6 +216,12 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section websocketclient_relnotes WebSocketClient Module Release History
 
     @subsection wsc_v2_6 v2.6
+    - added async polling API support for WebSocket connections
+      - added \c WebSocketConnectionObject::supportsPollingApi() "WebSocketConnectionObject::supportsPollingApi()"
+        returning @ref True
+      - added \c WebSocketConnectionObject::startPollConnect()
+        "WebSocketConnectionObject::startPollConnect()" for non-blocking connection ping operations
+      - added \c WebSocketPingPollOperation class for async WebSocket handshake verification
     - added support for WebSocket over HTTP/2 (RFC 8441)
       - automatic detection and use of HTTP/2 extended CONNECT when connecting to HTTP/2 servers
       - added \c WebSocketClient::WebSocketClient::isHttp2() "WebSocketClient::isHttp2()" method to check if
@@ -2342,6 +2348,146 @@ class MyObserver inherits Observer {
     }
 }
 
+#! Poll operation for WebSocket connection ping
+/** Performs a WebSocket handshake to verify the connection is working.
+
+    @since WebSocketClient 2.6
+*/
+public class WebSocketPingPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        #! The underlying poll operation
+        *AbstractPollOperation poller;
+
+        #! Logger for this operation
+        *Logger::LoggerInterface logger;
+
+        #! WebSocket key for handshake validation
+        string ws_key;
+
+        #! Whether the goal has been reached
+        bool goal_reached = False;
+
+        #! Output from the operation
+        auto output;
+
+        #! Current state
+        string state = "ws-handshake";
+    }
+
+    #! Creates the poll operation
+    /** @param base_url the WebSocket URL (ws:// or wss://)
+        @param http_opts HTTP client options
+        @param headers additional headers for the request
+        @param logger optional logger
+
+        @since WebSocketClient 2.6
+    */
+    constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers,
+            *Logger::LoggerInterface logger) {
+        self.logger = logger;
+
+        # Convert ws:// to http:// and wss:// to https://
+        string http_url = base_url;
+        if (http_url =~ /^wss:/) {
+            http_url = regex_subst(http_url, "^wss:", "https:");
+        } else if (http_url =~ /^ws:/) {
+            http_url = regex_subst(http_url, "^ws:", "http:");
+        }
+
+        # Generate WebSocket key
+        ws_key = get_random_string(16).toBase64();
+
+        # Build WebSocket upgrade headers
+        hash<auto> ws_headers = {
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": ws_key,
+            "Sec-WebSocket-Version": "13",
+        };
+        ws_headers += headers;
+
+        HTTPClient hc((http_opts ?? {}) + {"url": http_url});
+        log("INFO", "WebSocketConnection async ping start: url=%y", base_url);
+        poller = hc.startPollSendRecv("GET", "", NOTHING, ws_headers);
+    }
+
+    #! Returns the goal of the operation
+    string getGoal() {
+        return "ws-ping";
+    }
+
+    #! Returns the current state
+    string getState() {
+        return state + (poller ? ("-" + poller.getState()) : "");
+    }
+
+    #! Returns True if the goal has been reached
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    #! Continues the poll operation
+    *hash<SocketPollInfo> continuePoll() {
+        if (!poller) {
+            return;
+        }
+        *hash<SocketPollInfo> info = poller.continuePoll();
+        if (info) {
+            return info;
+        }
+
+        # Operation complete - validate the response
+        # Response format from startPollSendRecv:
+        # - code: HTTP response code
+        # - info.response-headers: hash of headers with lowercase keys
+        hash<auto> resp = poller.getOutput();
+        if (resp.code != 101) {
+            *string status_message = resp.info."response-headers".status_message;
+            log("ERROR", "WebSocketConnection async ping failed: expected 101, got code=%y", resp.code);
+            throw "WEBSOCKET-PING-ERROR", sprintf("WebSocket handshake failed: expected 101 Switching Protocols, "
+                "got %d %s", resp.code, status_message ?? "");
+        }
+
+        # Validate Sec-WebSocket-Accept from response-headers
+        *hash<auto> response_headers = resp.info."response-headers";
+        *string accept_key = response_headers."sec-websocket-accept";
+        if (!accept_key) {
+            log("ERROR", "WebSocketConnection async ping failed: missing Sec-WebSocket-Accept header");
+            throw "WEBSOCKET-PING-ERROR", "WebSocket handshake failed: missing Sec-WebSocket-Accept header";
+        }
+        string expected_key = ws_get_response_key(ws_key);
+        if (accept_key != expected_key) {
+            log("ERROR", "WebSocketConnection async ping failed: invalid Sec-WebSocket-Accept: got %y, expected %y",
+                accept_key, expected_key);
+            throw "WEBSOCKET-PING-ERROR", sprintf("WebSocket handshake failed: invalid Sec-WebSocket-Accept "
+                "header: got %y, expected %y", accept_key, expected_key);
+        }
+
+        output = resp;
+        log("INFO", "WebSocketConnection async ping complete: code=%d", resp.code);
+        goal_reached = True;
+    }
+
+    #! Returns the output of the operation
+    auto getOutput() {
+        return output;
+    }
+
+    #! Aborts the operation
+    abort() {
+        if (poller) {
+            poller.abort();
+        }
+    }
+
+    #! Internal logging helper
+    private log(string level, string msg, ...) {
+        if (logger) {
+            logger.logArgs(level, msg, argv);
+        }
+    }
+}
+
 #! class for websocket connections
 /** Returns an object of class @ref WebSocketClient for receiving websocket events from a websocket server; supports
     all @ref ConnectionProvider::HttpConnection "HttpConnection" options.
@@ -2495,6 +2641,32 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
             "yield": True,
             "connect_timeout": True,
         };
+    }
+
+    #! returns @ref True, since this connection type supports the %Qore @ref Qore::Socket "Socket-based" polling API
+    /** @return @ref True
+
+        @since WebSocketClient 2.6
+    */
+    bool supportsPollingApi() {
+        return True;
+    }
+
+    #! Called to start the connection if the connection supports the polling API
+    /** @param logger optional logger for the operation
+
+        @return a socket poll operation object that will allow the connection goal to be reached with polling
+
+        @see supportsPollingApi()
+
+        @since WebSocketClient 2.6
+    */
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        hash<auto> http_opts = opts{keys HttpConnection::ConnectionScheme.options};
+        http_opts.url = url;
+        hash<auto> headers;
+        headers += opts.headers;
+        return new WebSocketPingPollOperation(url, http_opts, headers, logger ?? self.logger);
     }
 
     private hash<PingInfo> pingIntern(hash<PingInfo> rv) {
