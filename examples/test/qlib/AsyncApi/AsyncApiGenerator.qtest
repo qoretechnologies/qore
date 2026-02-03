@@ -73,6 +73,7 @@ class AsyncApiGeneratorTest inherits Test {
         addTestCase("multiple message blocks", \testMultipleMessageBlocks());
         addTestCase("message block field parsing", \testMessageBlockFieldParsing());
         addTestCase("EventData extension fields", \testEventDataExtensions());
+        addTestCase("doxygen ref resolution", \testDoxygenRefResolution());
         set_return_value(main());
     }
 
@@ -973,6 +974,84 @@ trailing code";
         assertTrue(props.hasKey("typed_hash"), "Should have typed_hash");
         assertTrue(props.typed_hash.hasKey("$ref"), "typed_hash should have $ref");
         assertEq("#/components/schemas/EventInfo", props.typed_hash{"$ref"}, "typed_hash $ref");
+    }
+
+    testDoxygenRefResolution() {
+        # Test @ref with display text in field descriptions
+        string block = "@EVENT REF_TEST
+@EVENTSCHEMA
+@summary Event with @ref OMQ::ES_Major \"MAJOR\" severity refs
+@desc Fired when severity is @ref OMQ::ES_Fatal \"FATAL\" or @ref OMQ::ES_Warning \"WARNING\".
+@class TEST
+@severity INFO
+@info
+- severity (string): error severity (@ref OMQ::ES_Fatal \"FATAL\", @ref OMQ::ES_Major \"MAJOR\", @ref OMQ::ES_Minor \"MINOR\")
+- status (string): error status (@ref OMQ::StatError \"ERROR\", @ref OMQ::StatRetry \"RETRY\")
+- level (string): error level (@ref OMQ::ErrLevelAuto \"AUTO\")
+- plain_field (string): no refs here
+@ENDEVENTSCHEMA";
+
+        hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+
+        # @ref tags should be resolved in summary and desc
+        assertEq("Event with MAJOR severity refs", event.summary,
+            "@ref in summary should be resolved to display text");
+        assertEq("Fired when severity is FATAL or WARNING.", event.desc,
+            "@ref in desc should be resolved to display text");
+
+        # @ref tags should be resolved in field descriptions
+        hash<auto> props = event.info_schema.properties;
+        assertEq("error severity (FATAL, MAJOR, MINOR)", props.severity.description,
+            "@ref in field description should be resolved");
+        assertEq("error status (ERROR, RETRY)", props.status.description,
+            "Multiple @ref tags should all be resolved");
+        assertEq("error level (AUTO)", props.level.description,
+            "Single @ref should be resolved");
+        assertEq("no refs here", props.plain_field.description,
+            "Fields without @ref should be unchanged");
+
+        # Test @ref without display text (fallback to identifier)
+        block = "@EVENT REF_NO_DISPLAY
+@EVENTSCHEMA
+@summary Test ref without display text
+@class TEST
+@severity INFO
+@info
+- mode (string): processing mode (@ref OMQ::BatchMode)
+- nested (string): ref @ref NS::Outer::Inner value
+@ENDEVENTSCHEMA";
+
+        event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock(block);
+        props = event.info_schema.properties;
+        assertEq("processing mode (BatchMode)", props.mode.description,
+            "@ref without display text should use last identifier component");
+        assertEq("ref Inner value", props.nested.description,
+            "@ref with nested namespace should use last component");
+
+        # Test @ref in channel summary/desc
+        string content = "/** @WEBSOCKET /ref-channel
+    @ASYNCAPI
+    @summary Channel for @ref OMQ::ES_Major \"MAJOR\" events
+    @desc Streams events with @ref OMQ::ES_Fatal \"FATAL\" severity.
+
+    @subscribe SubMsg
+    - filter (string): filter by @ref OMQ::ES_Warning \"WARNING\" level
+
+    @ENDASYNCAPI
+*/";
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels =
+            AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+        assertEq(1, channels.size(), "Should find 1 channel");
+        assertEq("Channel for MAJOR events", channels[0].summary,
+            "@ref in channel summary should be resolved");
+        assertEq("Streams events with FATAL severity.", channels[0].desc,
+            "@ref in channel desc should be resolved");
+
+        # Check message field descriptions too
+        hash<auto> msg_props = channels[0].subscribe_schemas[0].schema.properties;
+        assertEq("filter by WARNING level", msg_props.filter.description,
+            "@ref in message field description should be resolved");
     }
 
     testEventDataExtensions() {
