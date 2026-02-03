@@ -43,6 +43,9 @@
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
 
+#include "qore/intern/ModuleInfo.h"
+#include "qore/intern/qore_thread_intern.h"
+
 #include <cassert>
 #include <cstring>
 #include <string>
@@ -371,4 +374,143 @@ extern "C" int qore_aot_run(
 
     qore_cleanup();
     return rc;
+}
+
+// ---- AOT Module Runtime Functions ----
+
+//! Global state for the AOT-compiled module (set in init, used in ns_init/delete)
+static QoreProgram* aot_module_pgm = nullptr;
+static std::string aot_module_name;
+static const QoreAOTFunc* aot_module_funcs = nullptr;
+static int aot_module_num_funcs = 0;
+
+extern "C" QoreStringNode* qore_aot_module_init(
+    const char* source, int source_len,
+    const char* label,
+    int64_t parse_options,
+    const char* mod_name,
+    const QoreAOTFunc* functions, int num_functions
+) {
+    ExceptionSink xsink;
+    ExceptionSink wsink;
+
+    // Create a QoreProgram for the module with the embedded parse options
+    aot_module_pgm = new QoreProgram(parse_options);
+    aot_module_name = mod_name;
+    aot_module_funcs = functions;
+    aot_module_num_funcs = num_functions;
+
+    // Set JIT execution mode so functions without pre-compiled code will JIT on demand
+    aot_module_pgm->setExecMode(QEM_JIT);
+
+    // Set up module context for the parser (must be QoreUserModuleDefContextHelper
+    // because the parser static_casts to it)
+    {
+        QoreUserModuleDefContextHelper mod_ctx(mod_name, label, aot_module_pgm, xsink);
+        mod_ctx.setNameInit(mod_name);
+
+        // Parse the embedded source
+        QoreString src_str(source, source_len);
+        aot_module_pgm->parse(src_str.c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
+
+        mod_ctx.close();
+    }
+
+    if (wsink.isException()) {
+        wsink.handleWarnings();
+    }
+
+    if (xsink.isException()) {
+        QoreStringNode* err = new QoreStringNode("AOT module parse error: ");
+        // Get error description
+        QoreValue ex = xsink.getExceptionErr();
+        if (ex.getType() == NT_STRING) {
+            err->concat(ex.get<const QoreStringNode>()->c_str());
+        } else {
+            err->concat("unknown parse error");
+        }
+        xsink.clear();
+        aot_module_pgm->waitForTerminationAndDeref(nullptr);
+        aot_module_pgm = nullptr;
+        return err;
+    }
+
+    // Register pre-compiled AOT functions on the module's namespace tree
+    if (num_functions > 0 && functions) {
+        std::unordered_map<std::string, const QoreAOTFunc*> func_map;
+        for (int i = 0; i < num_functions; ++i) {
+            if (functions[i].name && functions[i].fn_ptr) {
+                func_map[functions[i].name] = &functions[i];
+            }
+        }
+
+        qore_program_private* pp = qore_program_private::get(*aot_module_pgm);
+        int registered = 0;
+        qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+        registerAOTFunctionsInNamespace(root_ns, aot_module_pgm, func_map, registered);
+
+        printd(1, "AOT module '%s': registered %d/%d pre-compiled functions\n",
+            mod_name, registered, num_functions);
+    }
+
+    return nullptr;  // success
+}
+
+extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* qore_ns) {
+    if (!aot_module_pgm) {
+        return;
+    }
+
+    // Get the module program's root namespace
+    QoreNamespace* mod_root = aot_module_pgm->getRootNS();
+    if (!mod_root) {
+        return;
+    }
+
+    // Find the module's namespace by name and add a copy to root_ns
+    // User modules typically define a public namespace matching the module name
+    qore_ns_private* mod_root_priv = qore_ns_private::get(*mod_root);
+
+    // Copy all user-defined child namespaces from the module to root_ns
+    for (auto ni = mod_root_priv->nsl.nsmap.begin(), ne = mod_root_priv->nsl.nsmap.end(); ni != ne; ++ni) {
+        QoreNamespace* child_ns = ni->second;
+        if (!child_ns) {
+            continue;
+        }
+        // Skip system namespaces (Qore::, etc.)
+        const char* ns_name = child_ns->getName();
+        if (!strcmp(ns_name, "Qore") || !strcmp(ns_name, "::")) {
+            continue;
+        }
+
+        // Copy the namespace and add it to root_ns
+        QoreNamespace* ns_copy = child_ns->copy();
+        root_ns->addNamespace(ns_copy);
+
+        // Now register AOT functions on the copied namespace
+        // The copy has fresh function variants that need AOT registration
+        if (aot_module_num_funcs > 0 && aot_module_funcs) {
+            std::unordered_map<std::string, const QoreAOTFunc*> func_map;
+            for (int i = 0; i < aot_module_num_funcs; ++i) {
+                if (aot_module_funcs[i].name && aot_module_funcs[i].fn_ptr) {
+                    func_map[aot_module_funcs[i].name] = &aot_module_funcs[i];
+                }
+            }
+            int registered = 0;
+            registerAOTFunctionsInNamespace(qore_ns_private::get(*ns_copy),
+                aot_module_pgm, func_map, registered);
+            printd(2, "AOT module ns_init: registered %d AOT functions in namespace '%s'\n",
+                registered, ns_name);
+        }
+    }
+}
+
+extern "C" void qore_aot_module_delete() {
+    if (aot_module_pgm) {
+        aot_module_pgm->waitForTerminationAndDeref(nullptr);
+        aot_module_pgm = nullptr;
+    }
+    aot_module_name.clear();
+    aot_module_funcs = nullptr;
+    aot_module_num_funcs = 0;
 }

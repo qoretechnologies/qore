@@ -1031,8 +1031,9 @@ correct runtime helpers. The only code-quality fix was a missing `trackResultFor
 | TieredSmoke.qtest | 23/23 test cases, 367 assertions |
 | JITSmoke.qtest | 58/58 (103 assertions) |
 | IRExecModeSmoke.qtest | 137/137 (416 assertions) |
-| AOTSmoke.qtest | 20/20 (32 assertions) |
+| AOTSmoke.qtest | 28/28 (66 assertions) |
 | Valgrind (TieredSmoke) | 0 bytes definitely/indirectly/possibly lost |
+| Valgrind (AOTSmoke) | 0 bytes definitely/indirectly/possibly lost |
 
 #### Deliverables
 
@@ -1040,6 +1041,85 @@ correct runtime helpers. The only code-quality fix was a missing `trackResultFor
 - [x] `include/qore/intern/Function.h` — updated `is_closure` member comment
 - [x] `lib/QoreIRToLLVM.cpp` — added `trackResultForCleanup` to LoadClosure handler
 - [x] `examples/test/ir/TieredSmoke.qtest` — 23 test cases (367 assertions), 3 new closure tests
+
+### Phase 7j: Module Compilation (`--compile-module`) — COMPLETE ✓
+
+Compile `.qm` user modules to native `.qmod` binary modules loadable via `dlopen()`.
+
+#### Architecture
+
+Reuses the AOT compilation infrastructure but emits a shared library instead of an
+executable. The compiled `.qmod` exports the standard binary module ABI symbols, allowing
+it to be loaded by the Qore module loader identically to hand-written C++ binary modules.
+
+**Pipeline**:
+```
+qore --compile-module Module.qm [--output Module.qmod]
+  |
+  v
+1. Parse module metadata (name/version/desc/author/url/license) from source text
+2. Create QoreProgram with PO_IN_MODULE parse options
+3. Set up QoreUserModuleDefContextHelper for module-aware parsing
+4. Parse module source
+5. Compile namespace functions to LLVM IR with pointer indirection
+6. Generate binary module ABI:
+   - Exported globals: qore_module_name, qore_module_version, qore_module_description,
+     qore_module_author, qore_module_url, qore_module_license, qore_module_api_major/minor
+   - Embedded source text + function table (same format as executable AOT)
+   - qore_module_init() → calls qore_aot_module_init()
+   - qore_module_ns_init(root_ns, qore_ns) → calls qore_aot_module_ns_init()
+   - qore_module_delete() → calls qore_aot_module_delete()
+7. Emit PIC object file (.o) via LLVM TargetMachine
+8. Link shared library: cc -shared -o Module.qmod Module.o -lqore ...
+```
+
+**Runtime loading**: When the `.qmod` is loaded by the module loader:
+- `qore_module_init()` calls `qore_aot_module_init()` which creates a `QoreProgram`,
+  sets up `QoreUserModuleDefContextHelper`, re-parses the embedded source, and registers
+  pre-compiled AOT functions on the parsed namespace tree.
+- `qore_module_ns_init()` copies the module's public namespaces to the program's root
+  namespace, then registers AOT functions on the copies.
+- `qore_module_delete()` cleans up the module's `QoreProgram`.
+
+#### Implementation
+
+- [x] **Module metadata parser** (`QoreAOT.cpp`): `parseModuleMetadata()` scans source
+      for `module NAME { ... }` block, extracts key=value pairs (version, desc, author, url,
+      license).
+- [x] **Module ABI generator** (`QoreAOT.cpp`): `generateModuleABI()` creates LLVM IR for
+      all exported module symbols (globals + init/ns_init/delete functions).
+- [x] **Shared library linker** (`QoreAOT.cpp`): `linkSharedLib()` invokes system linker
+      with `-shared` flag; cross-compilation emits `.o` only.
+- [x] **Module compiler entry** (`QoreAOT.cpp`): `QoreAOT::compileModule()` orchestrates
+      the full pipeline.
+- [x] **Module runtime functions** (`QoreAOTRuntime.cpp`): `qore_aot_module_init()`,
+      `qore_aot_module_ns_init()`, `qore_aot_module_delete()`.
+- [x] **CLI integration** (`command-line.cpp`): `--compile-module` flag sets compile mode,
+      default output uses `.qmod` extension. Skips normal parse (module creates its own
+      `QoreProgram` with `PO_IN_MODULE`).
+- [x] **QoreAOTModuleInfo struct** (`QoreAOT.h`): Holds parsed module metadata.
+
+#### Test Results
+
+| Test Suite | Result |
+|-----------|--------|
+| AOTSmoke.qtest | 28/28 test cases, 66 assertions |
+| Valgrind (AOTSmoke) | 0 bytes definitely/indirectly/possibly lost |
+
+Module compilation tests: compile `.qm` to `.qmod`, load compiled module, verify function
+output matches interpreted module, custom `--output` path, all optimization levels (O0–O3),
+error handling for non-module files.
+
+#### Deliverables
+
+- [x] `include/qore/intern/QoreAOT.h` — `QoreAOTModuleInfo` struct, `compileModule()` method,
+      `qore_aot_module_init/ns_init/delete` declarations
+- [x] `lib/QoreAOT.cpp` — `parseModuleMetadata()`, `generateModuleABI()`, `linkSharedLib()`,
+      `QoreAOT::compileModule()`
+- [x] `lib/QoreAOTRuntime.cpp` — `qore_aot_module_init()`, `qore_aot_module_ns_init()`,
+      `qore_aot_module_delete()`
+- [x] `command-line.cpp` — `--compile-module` flag, `.qmod` default extension, module dispatch
+- [x] `examples/test/ir/AOTSmoke.qtest` — 28 test cases (66 assertions), 4 new module tests
 
 ### Future Extensions (not in this phase)
 
@@ -1082,7 +1162,15 @@ correct runtime helpers. The only code-quality fix was a missing `trackResultFor
       CMake-generated `aot-link.conf` provides portable compiler/library configuration
       (searched via `$QORE_AOT_LINK_CONF` env, `$QORE_LIBDIR/aot-link.conf`, or
       `QORE_LIBDIR/qore/aot-link.conf`). Helpful error when static lib not built.
-- [ ] Module compilation: compile Qore modules (.qm) to shared libraries
+- [x] ~~**Module compilation**~~: `--compile-module` flag compiles `.qm` user modules to native
+      `.qmod` binary modules loadable via `dlopen()`. The pipeline: parse module metadata
+      (name/version/desc/author/url/license) from source, create `QoreProgram` with
+      `PO_IN_MODULE`, compile namespace functions to LLVM IR, generate binary module ABI
+      symbols (`qore_module_name`, `qore_module_version`, `qore_module_init`, etc.), emit
+      PIC object file, link as shared library with `-shared`. At runtime, `qore_aot_module_init`
+      re-parses embedded source, registers pre-compiled functions; `qore_aot_module_ns_init`
+      copies module namespaces to the program's root namespace with AOT function registration
+      on the copies. Output defaults to `<name>.qmod`; custom output via `--output`.
 - [ ] Source stripping: option to not embed source (requires full context coverage first)
 
 ---

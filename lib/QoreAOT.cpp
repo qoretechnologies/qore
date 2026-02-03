@@ -44,6 +44,8 @@
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Function.h"
+#include "qore/intern/ModuleInfo.h"
+#include "qore/intern/qore_thread_intern.h"
 
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -763,6 +765,433 @@ bool QoreAOT::compile(QoreProgram* pgm,
     printd(2, "AOT: linked executable: %s\n", output_path.c_str());
 
     // Clean up object file (keep for cross-compilation since user needs it)
+    if (!target_triple) {
+        remove(obj_path.c_str());
+    }
+
+    return true;
+}
+
+//! Parse module metadata from .qm source text
+/** Extracts name, version, desc, author, url, and license from the module { ... } block.
+    Falls back to deriving the module name from the filename label.
+*/
+static bool parseModuleMetadata(const char* source, int source_len, const char* label,
+        QoreAOTModuleInfo& info, std::string& error) {
+    std::string src(source, source_len);
+
+    // Find "module NAME {" pattern
+    size_t mod_pos = src.find("module");
+    if (mod_pos == std::string::npos) {
+        error = "no 'module' declaration found in source";
+        return false;
+    }
+
+    // Skip whitespace after "module"
+    size_t name_start = mod_pos + 6;
+    while (name_start < src.size() && (src[name_start] == ' ' || src[name_start] == '\t')) {
+        ++name_start;
+    }
+
+    // Read module name (up to whitespace or '{')
+    size_t name_end = name_start;
+    while (name_end < src.size() && src[name_end] != ' ' && src[name_end] != '\t'
+            && src[name_end] != '{' && src[name_end] != '\n') {
+        ++name_end;
+    }
+    if (name_end == name_start) {
+        error = "empty module name in 'module' declaration";
+        return false;
+    }
+    info.name = src.substr(name_start, name_end - name_start);
+
+    // Find the module block: everything between { and matching }
+    size_t brace_start = src.find('{', name_end);
+    if (brace_start == std::string::npos) {
+        error = "missing '{' after module declaration";
+        return false;
+    }
+    size_t brace_end = src.find('}', brace_start);
+    if (brace_end == std::string::npos) {
+        error = "missing '}' in module declaration";
+        return false;
+    }
+    std::string block = src.substr(brace_start + 1, brace_end - brace_start - 1);
+
+    // Parse key = "value" pairs
+    auto extractValue = [&](const std::string& key) -> std::string {
+        std::string pattern = key + " ";
+        size_t kpos = block.find(pattern);
+        if (kpos == std::string::npos) {
+            pattern = key + "=";
+            kpos = block.find(pattern);
+        }
+        if (kpos == std::string::npos) {
+            return "";
+        }
+        // Find '=' after key
+        size_t eq = block.find('=', kpos + key.size());
+        if (eq == std::string::npos) {
+            return "";
+        }
+        // Find opening quote
+        size_t q1 = block.find('"', eq + 1);
+        if (q1 == std::string::npos) {
+            return "";
+        }
+        // Find closing quote
+        size_t q2 = block.find('"', q1 + 1);
+        if (q2 == std::string::npos) {
+            return "";
+        }
+        return block.substr(q1 + 1, q2 - q1 - 1);
+    };
+
+    info.version = extractValue("version");
+    info.desc = extractValue("desc");
+    info.author = extractValue("author");
+    info.url = extractValue("url");
+    info.license = extractValue("license");
+
+    if (info.version.empty()) {
+        error = "module 'version' not found in module block";
+        return false;
+    }
+    if (info.desc.empty()) {
+        error = "module 'desc' not found in module block";
+        return false;
+    }
+    if (info.author.empty()) {
+        error = "module 'author' not found in module block";
+        return false;
+    }
+    if (info.license.empty()) {
+        info.license = "MIT";
+    }
+
+    return true;
+}
+
+//! Generate LLVM IR for binary module ABI symbols and init/ns_init/delete functions
+static void generateModuleABI(llvm::LLVMContext& ctx, llvm::Module& module,
+        const char* source, int source_len, const char* label,
+        int64_t parse_options, const QoreAOTModuleInfo& mod_info,
+        const std::vector<AOTCompiledFunc>& compiled_funcs) {
+    auto* i8_type = llvm::Type::getInt8Ty(ctx);
+    auto* i32_type = llvm::Type::getInt32Ty(ctx);
+    auto* i64_type = llvm::Type::getInt64Ty(ctx);
+    auto* ptr_type = llvm::PointerType::get(ctx, 0);
+    auto* void_type = llvm::Type::getVoidTy(ctx);
+
+    // Helper to create a global exported C string
+    auto createExportedString = [&](const std::string& name, const std::string& value) {
+        auto* str_data = llvm::ConstantDataArray::getString(ctx, value, true);
+        auto* gv = new llvm::GlobalVariable(module, str_data->getType(), true,
+            llvm::GlobalValue::ExternalLinkage, str_data, name);
+        gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+        return gv;
+    };
+
+    // Module descriptor globals (exported symbols for dlsym)
+    createExportedString("qore_module_name", mod_info.name);
+    createExportedString("qore_module_version", mod_info.version);
+    createExportedString("qore_module_description", mod_info.desc);
+    createExportedString("qore_module_author", mod_info.author);
+    createExportedString("qore_module_url", mod_info.url.empty() ? "" : mod_info.url);
+    createExportedString("qore_module_license_str", mod_info.license);
+
+    // Module API version (exported int globals)
+    auto createExportedInt = [&](const std::string& name, int value) {
+        auto* gv = new llvm::GlobalVariable(module, i32_type, true,
+            llvm::GlobalValue::ExternalLinkage,
+            llvm::ConstantInt::get(i32_type, value), name);
+        gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+        return gv;
+    };
+    createExportedInt("qore_module_api_major", QORE_MODULE_API_MAJOR);
+    createExportedInt("qore_module_api_minor", QORE_MODULE_API_MINOR);
+
+    // License enum (QL_MIT = 0)
+    auto* license_gv = new llvm::GlobalVariable(module, i32_type, true,
+        llvm::GlobalValue::ExternalLinkage,
+        llvm::ConstantInt::get(i32_type, 0), "qore_module_license");
+    license_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+    // Embed source as a private global constant
+    llvm::Constant* source_data = llvm::ConstantDataArray::getString(ctx,
+        llvm::StringRef(source, source_len), false);
+    auto* source_gv = new llvm::GlobalVariable(module,
+        source_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
+        source_data, "qore_aot_mod_source");
+
+    // Embed label as a private global constant
+    llvm::Constant* label_data = llvm::ConstantDataArray::getString(ctx,
+        llvm::StringRef(label), true);
+    auto* label_gv = new llvm::GlobalVariable(module,
+        label_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
+        label_data, "qore_aot_mod_label");
+
+    // Embed module name as a private global constant
+    llvm::Constant* modname_data = llvm::ConstantDataArray::getString(ctx,
+        mod_info.name, true);
+    auto* modname_gv = new llvm::GlobalVariable(module,
+        modname_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
+        modname_data, "qore_aot_mod_name");
+
+    // Build function table (same format as executable AOT)
+    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type});
+    std::vector<llvm::Constant*> func_entries;
+    for (auto& cf : compiled_funcs) {
+        llvm::Constant* name_str = llvm::ConstantDataArray::getString(ctx, cf.name, true);
+        auto* name_gv = new llvm::GlobalVariable(module,
+            name_str->getType(), true, llvm::GlobalValue::PrivateLinkage,
+            name_str, "qore_aot_mfname_" + cf.llvm_symbol);
+        llvm::Function* fn = module.getFunction(cf.llvm_symbol);
+        if (!fn) {
+            continue;
+        }
+        llvm::Constant* entry = llvm::ConstantStruct::get(func_entry_type, {
+            name_gv, fn,
+            llvm::ConstantInt::get(i32_type, cf.num_locals),
+            llvm::ConstantInt::get(i32_type, cf.num_globals),
+            llvm::ConstantInt::get(i32_type, cf.num_exprs)
+        });
+        func_entries.push_back(entry);
+    }
+
+    int num_funcs = (int)func_entries.size();
+    llvm::GlobalVariable* func_table_gv = nullptr;
+    if (num_funcs > 0) {
+        auto* table_type = llvm::ArrayType::get(func_entry_type, num_funcs);
+        auto* func_table_init = llvm::ConstantArray::get(table_type, func_entries);
+        func_table_gv = new llvm::GlobalVariable(module,
+            table_type, true, llvm::GlobalValue::PrivateLinkage,
+            func_table_init, "qore_aot_mod_funcs");
+    }
+
+    // Declare qore_aot_module_init: QoreStringNode* (source, source_len, label, parse_options, mod_name, funcs, num_funcs)
+    auto* init_ret_type = ptr_type;  // QoreStringNode*
+    auto* aot_mod_init_type = llvm::FunctionType::get(init_ret_type, {
+        ptr_type, i32_type, ptr_type, i64_type, ptr_type, ptr_type, i32_type
+    }, false);
+    auto aot_mod_init_fn = module.getOrInsertFunction("qore_aot_module_init", aot_mod_init_type);
+
+    // Declare qore_aot_module_ns_init: void (root_ns, qore_ns)
+    auto* aot_mod_ns_init_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
+    auto aot_mod_ns_init_fn = module.getOrInsertFunction("qore_aot_module_ns_init", aot_mod_ns_init_type);
+
+    // Declare qore_aot_module_delete: void ()
+    auto* aot_mod_del_type = llvm::FunctionType::get(void_type, {}, false);
+    auto aot_mod_del_fn = module.getOrInsertFunction("qore_aot_module_delete", aot_mod_del_type);
+
+    // Generate qore_module_init() — exported
+    {
+        auto* fn_type = llvm::FunctionType::get(ptr_type, {}, false);
+        auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, "qore_module_init", module);
+        fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+        llvm::IRBuilder<> builder(entry_bb);
+
+        llvm::Value* src_ptr = builder.CreateInBoundsGEP(
+            source_data->getType(), source_gv,
+            {builder.getInt64(0), builder.getInt64(0)});
+        llvm::Value* lbl_ptr = builder.CreateInBoundsGEP(
+            label_data->getType(), label_gv,
+            {builder.getInt64(0), builder.getInt64(0)});
+        llvm::Value* name_ptr = builder.CreateInBoundsGEP(
+            modname_data->getType(), modname_gv,
+            {builder.getInt64(0), builder.getInt64(0)});
+
+        llvm::Value* funcs_ptr;
+        if (func_table_gv) {
+            auto* table_type = llvm::ArrayType::get(func_entry_type, num_funcs);
+            funcs_ptr = builder.CreateBitCast(
+                builder.CreateInBoundsGEP(table_type, func_table_gv,
+                    {builder.getInt64(0), builder.getInt64(0)}),
+                ptr_type);
+        } else {
+            funcs_ptr = llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0));
+        }
+
+        llvm::Value* result = builder.CreateCall(aot_mod_init_fn, {
+            src_ptr,
+            builder.getInt32(source_len),
+            lbl_ptr,
+            builder.getInt64(parse_options),
+            name_ptr,
+            funcs_ptr,
+            builder.getInt32(num_funcs)
+        });
+        builder.CreateRet(result);
+    }
+
+    // Generate qore_module_ns_init(root_ns, qore_ns) — exported
+    {
+        auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
+        auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, "qore_module_ns_init", module);
+        fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+        llvm::IRBuilder<> builder(entry_bb);
+
+        auto arg_it = fn->arg_begin();
+        llvm::Value* root_ns_val = &*arg_it++;
+        llvm::Value* qore_ns_val = &*arg_it;
+
+        builder.CreateCall(aot_mod_ns_init_fn, {root_ns_val, qore_ns_val});
+        builder.CreateRetVoid();
+    }
+
+    // Generate qore_module_delete() — exported
+    {
+        auto* fn_type = llvm::FunctionType::get(void_type, {}, false);
+        auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, "qore_module_delete", module);
+        fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+        llvm::IRBuilder<> builder(entry_bb);
+
+        builder.CreateCall(aot_mod_del_fn, {});
+        builder.CreateRetVoid();
+    }
+}
+
+//! Link an object file into a shared library
+static bool linkSharedLib(const std::string& obj_path, const std::string& so_path, std::string& error,
+        const char* target_triple = nullptr) {
+    if (target_triple) {
+        printf("cross-compiled module object: %s (link manually for target '%s')\n",
+            obj_path.c_str(), target_triple);
+        return true;
+    }
+
+    AOTLinkConfig config = loadAOTLinkConfig();
+
+    std::string libqore_dir;
+    const char* qore_prefix = getenv("QORE_LIBDIR");
+    if (qore_prefix) {
+        libqore_dir = qore_prefix;
+    } else {
+        libqore_dir = QORE_LIBDIR;
+    }
+
+    std::string cmd = config.cxx + " -shared -o " + so_path + " " + obj_path
+        + " -L" + libqore_dir + " -lqore"
+        + " -Wl,-rpath," + libqore_dir;
+    if (!config.dynamic_libs.empty()) {
+        cmd += " " + config.dynamic_libs;
+    }
+
+    printd(2, "AOT: link shared lib command: %s\n", cmd.c_str());
+    int rc = system(cmd.c_str());
+    if (rc != 0) {
+        error = "linker command failed with exit code " + std::to_string(rc);
+        return false;
+    }
+    return true;
+}
+
+bool QoreAOT::compileModule(const char* source_text, int source_len,
+                             const char* label,
+                             const std::string& output_path,
+                             int64_t parse_options,
+                             std::string& error,
+                             int opt_level,
+                             const char* target_triple) {
+    // Step 1: Parse module metadata from source
+    QoreAOTModuleInfo mod_info;
+    if (!parseModuleMetadata(source_text, source_len, label, mod_info, error)) {
+        return false;
+    }
+    printd(2, "AOT module: name='%s' version='%s' desc='%s'\n",
+        mod_info.name.c_str(), mod_info.version.c_str(), mod_info.desc.c_str());
+
+    // Step 2: Parse the module source to get the namespace tree with functions
+    // We need PO_IN_MODULE for the parser to handle the module block
+    int64_t mod_po = parse_options | PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
+        | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR;
+
+    ExceptionSink xsink;
+    ExceptionSink wsink;
+    QoreProgramHelper qpgm(mod_po, xsink);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "failed to create QoreProgram for module parsing";
+        return false;
+    }
+
+    // Set up module context for the parser (must be QoreUserModuleDefContextHelper
+    // because the parser static_casts to it)
+    {
+        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink);
+        mod_ctx.setNameInit(mod_info.name.c_str());
+
+        qpgm->parse(source_text, label, &xsink, &wsink, QP_WARN_DEFAULT);
+
+        mod_ctx.close();
+    }
+
+    if (wsink.isException()) {
+        wsink.handleWarnings();
+    }
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "module parsing failed";
+        return false;
+    }
+
+    // Step 3: Initialize LLVM and compile functions
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+
+    llvm::LLVMContext ctx;
+    auto module = std::make_unique<llvm::Module>("qore_aot_module_" + mod_info.name, ctx);
+
+    std::vector<AOTCompiledFunc> compiled_funcs;
+    int total_funcs = 0;
+    int compiled_count = 0;
+    int failed_count = 0;
+
+    qore_program_private* pp = qore_program_private::get(**qpgm);
+    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+    compileNamespaceFunctions(root_ns, *qpgm, ctx, *module,
+        compiled_funcs, total_funcs, compiled_count, failed_count);
+
+    printf("AOT module compilation: %d/%d functions pre-compiled (%d failed)\n",
+        compiled_count, total_funcs, failed_count);
+
+    // Step 4: Generate module ABI (instead of main + table)
+    generateModuleABI(ctx, *module, source_text, source_len, label,
+        mod_po, mod_info, compiled_funcs);
+
+    // Verify the module
+    std::string verify_error;
+    llvm::raw_string_ostream verify_os(verify_error);
+    if (llvm::verifyModule(*module, &verify_os)) {
+        verify_os.flush();
+        error = "LLVM module verification failed: " + verify_error;
+        return false;
+    }
+
+    if (getenv("QORE_DUMP_LLVM_IR")) {
+        module->print(llvm::errs(), nullptr);
+    }
+
+    // Step 5: Emit PIC object file
+    std::string obj_path = output_path + ".o";
+    if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple)) {
+        return false;
+    }
+
+    // Step 6: Link as shared library
+    if (!linkSharedLib(obj_path, output_path, error, target_triple)) {
+        remove(obj_path.c_str());
+        return false;
+    }
+
+    // Clean up object file (keep for cross-compilation)
     if (!target_triple) {
         remove(obj_path.c_str());
     }

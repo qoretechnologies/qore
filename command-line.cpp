@@ -122,6 +122,9 @@ static const char* aot_target = nullptr;
 // AOT static linking
 static bool aot_static = false;
 
+// AOT module compilation mode
+static bool compile_module_mode = false;
+
 // program text given on the command-line
 static const char* cl_pgm = 0;
 
@@ -232,6 +235,8 @@ static const char helpstr[] =
    "                               (default: native host)\n"
    "      --static                 statically link libqore (requires\n"
    "                               BUILD_STATIC_LIBQORE=ON in CMake)\n"
+   "      --compile-module         compile a .qm user module to a native\n"
+   "                               shared library (.so) binary module\n"
    "\n"
    " REPL OPTIONS:\n"
    "      --interactive            force interactive REPL mode\n"
@@ -763,6 +768,11 @@ static void set_aot_static(const char* arg) {
     aot_static = true;
 }
 
+static void set_compile_module(const char* arg) {
+    compile_module_mode = true;
+    compile_mode = true;
+}
+
 static void disable_gc(const char* arg) {
     qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
@@ -874,6 +884,7 @@ static struct opt_struct_s {
    { '\0', "opt-level",            ARG_MAND, set_opt_level },
    { '\0', "target",               ARG_MAND, set_aot_target },
    { '\0', "static",               ARG_NONE, set_aot_static },
+   { '\0', "compile-module",       ARG_NONE, set_compile_module },
    // debugging options
    { 'b', "disable-signals",       ARG_NONE, disable_signals },
    { 'd', "debug",                 ARG_MAND, do_debug },
@@ -1180,17 +1191,19 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             }
          }
 
-         // parse the program
-         if (cl_pgm)
+         // parse the program (skip for --compile-module which handles its own parsing)
+         if (compile_module_mode) {
+            // compileModule() creates its own QoreProgram with PO_IN_MODULE
+         } else if (cl_pgm) {
             qpgm->parse(cl_pgm, "<command-line>", &xsink, &wsink, warnings);
-         else if (program_file_name)
+         } else if (program_file_name) {
             qpgm->parseFile(program_file_name, &xsink, &wsink, warnings, only_first_except);
-         else if (interactive_mode || (!no_repl && isatty(STDIN_FILENO))) {
+         } else if (interactive_mode || (!no_repl && isatty(STDIN_FILENO))) {
             // enter REPL mode
             qpgm->parse(repl_pgm, "<repl>", &xsink, &wsink, warnings);
-         }
-         else
+         } else {
             qpgm->parse(stdin, "<stdin>", &xsink, &wsink, warnings);
+         }
       }
 
       // display any warnings now
@@ -1246,18 +1259,33 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             if (dot != std::string::npos && dot > 0) {
                output_path = output_path.substr(0, dot);
             }
+            // For module compilation, add .qmod extension (binary module format)
+            if (compile_module_mode) {
+               output_path += ".qmod";
+            }
          } else {
-            output_path = "a.out";
+            output_path = compile_module_mode ? "module.qmod" : "a.out";
          }
 
          std::string error;
-         if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
-                  source_label.c_str(), output_path, parse_options, error,
-                  aot_opt_level, aot_target, aot_static)) {
-            fprintf(stderr, "AOT compilation failed: %s\n", error.c_str());
-            rc = 1;
+         if (compile_module_mode) {
+            if (!QoreAOT::compileModule(source_text.c_str(), (int)source_text.size(),
+                     source_label.c_str(), output_path, parse_options, error,
+                     aot_opt_level, aot_target)) {
+               fprintf(stderr, "AOT module compilation failed: %s\n", error.c_str());
+               rc = 1;
+            } else {
+               printf("compiled module (O%d): %s\n", aot_opt_level, output_path.c_str());
+            }
          } else {
-            printf("compiled (O%d): %s\n", aot_opt_level, output_path.c_str());
+            if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
+                     source_label.c_str(), output_path, parse_options, error,
+                     aot_opt_level, aot_target, aot_static)) {
+               fprintf(stderr, "AOT compilation failed: %s\n", error.c_str());
+               rc = 1;
+            } else {
+               printf("compiled (O%d): %s\n", aot_opt_level, output_path.c_str());
+            }
          }
          goto exit;
       }

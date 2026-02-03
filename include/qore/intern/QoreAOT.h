@@ -43,7 +43,9 @@
 class ExceptionSink;
 class LocalVar;
 class QoreIRFunction;
+class QoreNamespace;
 class QoreProgram;
+class QoreStringNode;
 class Var;
 
 //! AOT context: runtime-resolved pointer tables for AOT-compiled functions.
@@ -161,6 +163,34 @@ extern "C" int qore_aot_run(
     const QoreAOTFunc* functions, int num_functions
 );
 
+//! Module metadata extracted from .qm source
+struct QoreAOTModuleInfo {
+    std::string name;           //!< module feature name
+    std::string version;        //!< version string
+    std::string desc;           //!< description
+    std::string author;         //!< author
+    std::string url;            //!< URL (optional)
+    std::string license;        //!< license string (optional, default "MIT")
+};
+
+//! C ABI entry point called by AOT-compiled modules from their generated qore_module_init()
+/** Parses the embedded source to build the module namespace tree, registers pre-compiled
+    function pointers, and returns nullptr on success or an error string on failure.
+*/
+extern "C" QoreStringNode* qore_aot_module_init(
+    const char* source, int source_len,
+    const char* label,
+    int64_t parse_options,
+    const char* mod_name,
+    const QoreAOTFunc* functions, int num_functions
+);
+
+//! C ABI entry point called by AOT-compiled modules from their generated qore_module_ns_init()
+extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* qore_ns);
+
+//! C ABI entry point called by AOT-compiled modules from their generated qore_module_delete()
+extern "C" void qore_aot_module_delete();
+
 //! AOT compiler class — compiles a parsed QoreProgram to a standalone executable
 class QoreAOT {
 public:
@@ -186,6 +216,25 @@ public:
                        int opt_level = 2,
                        const char* target_triple = nullptr,
                        bool static_link = false);
+
+    //! Compile a .qm user module to a native shared library (.so) binary module
+    /** @param source_text original module source text to embed
+        @param source_len length of source text
+        @param label source label (filename)
+        @param output_path path for the output shared library
+        @param parse_options parse options to embed
+        @param error error message on failure
+        @param opt_level LLVM optimization level 0-3 (default: 2)
+        @param target_triple target triple for cross-compilation (nullptr = native)
+        @return true on success, false on failure
+    */
+    static bool compileModule(const char* source_text, int source_len,
+                              const char* label,
+                              const std::string& output_path,
+                              int64_t parse_options,
+                              std::string& error,
+                              int opt_level = 2,
+                              const char* target_triple = nullptr);
 };
 
 //! Build an AOTSlotMap by walking an IR function's instructions in deterministic order.

@@ -45,6 +45,11 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT target triple", \testAOTTargetTriple());
         addTestCase("AOT static linking", \testAOTStaticLink());
         addTestCase("AOT static link not built", \testAOTStaticLinkNotBuilt());
+        # Module compilation tests
+        addTestCase("AOT module compile", \testAOTModuleCompile());
+        addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
+        addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
+        addTestCase("AOT module compile error", \testAOTModuleCompileError());
         set_return_value(main());
     }
 
@@ -787,5 +792,232 @@ printf(\"sum: %d\\n\", sum);
         string err_out = compileOnly(code, ("--static",));
         assertTrue(err_out.regex("(static libqore not found|BUILD_STATIC_LIBQORE)"),
             "missing static lib produces helpful error: " + err_out);
+    }
+
+    # ---- Module Compilation Tests ----
+
+    #! Write a .qm module file to temp and return the path
+    private string writeTempModule(string code) {
+        string path = sprintf("/tmp/aot_test_mod_%d_%d.qm", getpid(), rand());
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+        return path;
+    }
+
+    #! Compile a .qm module with --compile-module, return {compile_out, so_path, compiled}
+    private hash<auto> compileModuleFile(string qm_path, *string output_path, *list<string> extra_flags) {
+        string so_path;
+        if (output_path) {
+            so_path = output_path;
+        } else {
+            # Default: strip .qm extension, add .qmod
+            so_path = qm_path;
+            so_path =~ s/\.qm$//;
+            so_path += ".qmod";
+        }
+
+        string flags_str = "";
+        if (extra_flags) {
+            for (int i = 0; i < extra_flags.size(); ++i) {
+                flags_str += " " + extra_flags[i];
+            }
+        }
+
+        string output_flag = "";
+        if (output_path) {
+            output_flag = " --output " + output_path;
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile-module%s%s %s 2>&1",
+            libqore_dir, qore_bin, output_flag, flags_str, qm_path);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "compile_out": compile_out,
+            "so_path": so_path,
+            "compiled": is_file(so_path),
+        };
+    }
+
+    testAOTModuleCompile() {
+        # Use a temp directory so we can control module naming
+        string tmp_dir = sprintf("/tmp/aot_mod_test_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            # Clean up the entire temp directory
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        # Write a test module with a filename matching the module name
+        string mod_code = "%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+module AOTTestMod {
+    version = \"1.0\";
+    desc = \"AOT test module\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTTestMod {
+    public string sub hello(string name) {
+        return \"Hello, \" + name + \"!\";
+    }
+
+    public int sub add(int a, int b) {
+        return a + b;
+    }
+
+    public int sub factorial(int n) {
+        if (n <= 1) {
+            return 1;
+        }
+        return n * factorial(n - 1);
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTTestMod.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        # Compile the module (produces AOTTestMod.qmod by default)
+        string qmod_path = tmp_dir + "/AOTTestMod.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+
+        assertTrue(result.compiled, "module compilation produced .qmod: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compiled module \\(O2\\)"),
+            "compile output shows module compilation: " + result.compile_out);
+        assertTrue(result.compile_out.regex("3/3 functions pre-compiled"),
+            "all module functions pre-compiled: " + result.compile_out);
+
+        # Write a test script that loads the compiled module
+        string test_code = "%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires AOTTestMod
+
+printf(\"%s\\n\", AOTTestMod::hello(\"World\"));
+printf(\"%d\\n\", AOTTestMod::add(10, 20));
+printf(\"%d\\n\", AOTTestMod::factorial(10));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled .qmod binary module
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        # Run with the interpreted .qm user module (remove .qmod so loader picks up .qm)
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module output matches interpreted module");
+        assertEq("Hello, World!\n30\n3628800\n", aot_out, "module functions produce correct results");
+    }
+
+    testAOTModuleCompileCustomOutput() {
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module AOTTestOut {
+    version = \"1.0\";
+    desc = \"Test custom output\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTTestOut {
+    public int sub square(int n) {
+        return n * n;
+    }
+}
+";
+        string qm_path = writeTempModule(mod_code);
+        string custom_path = sprintf("/tmp/aot_custom_out_%d.qmod", getpid());
+        on_exit {
+            unlink(qm_path);
+            unlink(custom_path);
+        }
+
+        # Compile with custom --output
+        hash<auto> result = compileModuleFile(qm_path, custom_path);
+        assertTrue(result.compiled, "custom output module compiled: " + result.compile_out);
+        assertEq(custom_path, result.so_path, "output path matches custom path");
+    }
+
+    testAOTModuleCompileOptLevels() {
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module AOTOptMod {
+    version = \"1.0\";
+    desc = \"Test opt levels\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTOptMod {
+    public int sub compute(int n) {
+        int result = 0;
+        for (int i = 0; i < n; ++i) {
+            result += i * i;
+        }
+        return result;
+    }
+}
+";
+        string qm_path = writeTempModule(mod_code);
+        on_exit {
+            unlink(qm_path);
+        }
+
+        # Test each optimization level
+        for (int level = 0; level <= 3; ++level) {
+            string qmod_path = sprintf("/tmp/aot_opt%d_%d.qmod", level, getpid());
+            on_exit {
+                unlink(qmod_path);
+            }
+
+            hash<auto> result = compileModuleFile(qm_path, qmod_path,
+                (sprintf("--opt-level=%d", level),));
+            assertTrue(result.compiled, sprintf("module O%d compiled: %s", level, result.compile_out));
+            assertTrue(result.compile_out.regex(sprintf("compiled module \\(O%d\\)", level)),
+                sprintf("O%d: shows correct opt level: %s", level, result.compile_out));
+        }
+    }
+
+    testAOTModuleCompileError() {
+        # Test compiling a non-module file with --compile-module
+        string bad_code = "%modern
+printf(\"not a module\\n\");
+";
+        string qm_path = writeTempModule(bad_code);
+        on_exit {
+            unlink(qm_path);
+            # Clean up any .qmod that might have been created
+            string qmod_path = qm_path;
+            qmod_path =~ s/\.qm$/.qmod/;
+            unlink(qmod_path);
+        }
+
+        hash<auto> result = compileModuleFile(qm_path);
+        assertTrue(result.compile_out.regex("(failed|error|no module declaration)"),
+            "non-module file produces error: " + result.compile_out);
     }
 }
