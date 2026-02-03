@@ -108,6 +108,15 @@ public namespace ShipStationRestClient {
     - Base URL: https://ssapi.shipstation.com
     - Rate Limit: 40 requests per minute per credential set
     - Date Format: ISO 8601 (yyyy-mm-dd hh:mm:ss) in PST/PDT timezone
+
+    @par Rate Limit Handling:
+    This client automatically handles HTTP 429 (Too Many Requests) errors by implementing
+    retry logic with exponential backoff:
+    - Maximum total retry time: 75 seconds (1 minute 15 seconds)
+    - Initial retry delay: 1 second
+    - Backoff multiplier: 2x (1s, 2s, 4s, 8s, 16s, 30s, 30s...)
+    - Maximum single retry delay: 30 seconds
+    - Uses Retry-After or X-Rate-Limit-Reset headers when available
 */
 public class ShipStationRestClient inherits RestClient::RestClient {
     public {
@@ -127,6 +136,15 @@ public class ShipStationRestClient inherits RestClient::RestClient {
         const DefaultPingHeaders = {
             "Accept": MimeTypeJson,
         };
+
+        #! Maximum total retry time for 429 errors (75 seconds = 1 minute 15 seconds)
+        const MaxRetryTime = 75s;
+
+        #! Initial retry delay for exponential backoff
+        const InitialRetryDelay = 1s;
+
+        #! Maximum single retry delay
+        const MaxRetryDelay = 30s;
 
         #! Default constructor options
         const DefaultOptions = {
@@ -158,6 +176,86 @@ ShipStationRestClient shipstation({"api_key": "your-api-key", "api_secret": "you
     constructor(hash<auto> opts, *softbool do_not_connect)
             : RestClient(ShipStationRestClient::getOptions(opts), do_not_connect) {
         setAssumedEncoding("UTF-8");
+    }
+
+    #! Makes a REST request with automatic retry on 429 (Too Many Requests) errors
+    /** @param m the HTTP method to use
+        @param path the URI path to use
+        @param body the request body to send (if any)
+        @param hdr any headers to use with the request
+        @param info an optional reference to a hash that will be used as an output variable giving the response info
+
+        @return the response from the server
+
+        This method implements automatic retry with exponential backoff when ShipStation returns
+        HTTP 429 (Too Many Requests). It will retry for up to 75 seconds before giving up.
+    */
+    hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info, softbool decode_errors = True,
+            *hash<auto> hdr) {
+        date start_time = now_us();
+        date current_delay = InitialRetryDelay;
+
+        while (True) {
+            hash<auto> response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
+
+            # Check if we got a 429 error
+            if (info.response_code == 429) {
+                date elapsed = now_us() - start_time;
+                if (elapsed >= MaxRetryTime) {
+                    # Max retry time exceeded, return the 429 error
+                    return response;
+                }
+
+                # Calculate retry delay
+                date retry_delay = getRetryDelay(info, current_delay);
+
+                # Check if waiting would exceed max retry time
+                if (elapsed + retry_delay > MaxRetryTime) {
+                    retry_delay = MaxRetryTime - elapsed;
+                    if (retry_delay <= 0s) {
+                        return response;
+                    }
+                }
+
+                # Wait before retrying
+                sleep(retry_delay);
+
+                # Increase delay for next retry (exponential backoff)
+                current_delay = current_delay * 2;
+                if (current_delay > MaxRetryDelay) {
+                    current_delay = MaxRetryDelay;
+                }
+                continue;
+            }
+
+            return response;
+        }
+    }
+
+    #! Returns the retry delay based on response headers or exponential backoff
+    /** @param info the response info hash
+        @param default_delay the default delay to use if no header is present
+
+        @return the delay to use before retrying
+    */
+    private date getRetryDelay(hash<auto> info, date default_delay) {
+        # Check for Retry-After header (standard HTTP header)
+        if (info.headers."retry-after") {
+            int secs = info.headers."retry-after".toInt();
+            if (secs > 0) {
+                return seconds(secs);
+            }
+        }
+
+        # Check for X-Rate-Limit-Reset header (ShipStation specific)
+        if (info.headers."x-rate-limit-reset") {
+            int secs = info.headers."x-rate-limit-reset".toInt();
+            if (secs > 0) {
+                return seconds(secs);
+            }
+        }
+
+        return default_delay;
     }
 
     #! returns options for @ref ShipStationRestClient::ShipStationRestClient::constructor()

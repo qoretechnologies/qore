@@ -68,25 +68,25 @@ public class ShipStationFulfillmentDataType inherits HashDataType {
         "createDate": {
             "display_name": "Create Date",
             "short_desc": "Date the fulfillment was created",
-            "type": SoftStringOrNothingType,
-            "desc": "The date and time the fulfillment was created (ISO 8601 format)",
+            "type": DateOrNothingType,
+            "desc": "The date and time the fulfillment was created",
         },
         "shipDate": {
             "display_name": "Ship Date",
             "short_desc": "Date the fulfillment was shipped",
-            "type": SoftStringOrNothingType,
-            "desc": "The date and time the fulfillment was shipped (ISO 8601 format)",
+            "type": DateOrNothingType,
+            "desc": "The date and time the fulfillment was shipped",
         },
         "voidDate": {
             "display_name": "Void Date",
             "short_desc": "Date the fulfillment was voided",
-            "type": SoftStringOrNothingType,
+            "type": DateOrNothingType,
             "desc": "The date and time the fulfillment was voided (if applicable)",
         },
         "deliveryDate": {
             "display_name": "Delivery Date",
             "short_desc": "Actual delivery date",
-            "type": SoftStringOrNothingType,
+            "type": DateOrNothingType,
             "desc": "The actual delivery date (if available)",
         },
         "carrierCode": {

@@ -75,38 +75,29 @@ public class ShipStationItemOrderNotifyEventDataProvider inherits ShipStationBas
         return eventDataType;
     }
 
-    #! Returns example event data
+    #! Returns example event data - tries real API data first, falls back to fake data
     private hash<auto> getExampleEventData() {
-        return {
-            "event": EVENT_ITEM_ORDER_NOTIFY,
-            "resource_url": "https://ssapi.shipstation.com/orders?orderNumber=TEST-001",
-            "resource_type": WEBHOOK_ITEM_ORDER_NOTIFY,
-            "orderId": 12345,
-            "orderNumber": "TEST-001",
-            "orderKey": "unique-key-001",
-            "orderDate": "2026-01-15T10:30:00.000Z",
-            "orderStatus": "awaiting_shipment",
-            "customerEmail": "customer@example.com",
-            "shipTo": {
-                "name": "John Doe",
-                "street1": "123 Main St",
-                "city": "Austin",
-                "state": "TX",
-                "postalCode": "78701",
-                "country": "US",
+        # Try to fetch real order data from the API (includes items)
+        if (*hash<auto> order = tryFetchRealOrder(True)) {
+            hash<auto> event_data = mapOrderToEventData(order, EVENT_ITEM_ORDER_NOTIFY, WEBHOOK_ITEM_ORDER_NOTIFY);
+            # Add items from the order
+            event_data.items = order.items;
+            return event_data;
+        }
+        # Fall back to fake example data with items
+        hash<auto> fake = getFakeOrderExampleData();
+        fake.event = EVENT_ITEM_ORDER_NOTIFY;
+        fake.resource_type = WEBHOOK_ITEM_ORDER_NOTIFY;
+        fake.items = (
+            {
+                "lineItemKey": "item-001",
+                "sku": "WIDGET-001",
+                "name": "Widget",
+                "quantity": 2,
+                "unitPrice": 49.99,
             },
-            "orderTotal": 99.99,
-            "storeId": 12345,
-            "items": (
-                {
-                    "lineItemKey": "item-001",
-                    "sku": "WIDGET-001",
-                    "name": "Widget",
-                    "quantity": 2,
-                    "unitPrice": 49.99,
-                },
-            ),
-        };
+        );
+        return fake;
     }
 
     #! Returns event-specific fields from the fetched order data

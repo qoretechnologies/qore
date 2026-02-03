@@ -81,10 +81,10 @@ public class ShipStationOrderNotifyEventDataType inherits ShipStationBaseEventDa
                 "desc": "A unique identifier for the order (for external systems)",
             },
             "orderDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Order Date",
                 "short_desc": "Order creation date",
-                "desc": "The date the order was created (ISO 8601 format)",
+                "desc": "The date the order was created",
             },
             "orderStatus": {
                 "type": StringOrNothingType,
@@ -193,16 +193,16 @@ public class ShipStationShipNotifyEventDataType inherits ShipStationBaseEventDat
                 "desc": "The service code for the shipment",
             },
             "shipDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Ship Date",
                 "short_desc": "Ship date",
-                "desc": "The date the shipment was shipped (ISO 8601 format)",
+                "desc": "The date the shipment was shipped",
             },
             "createDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Create Date",
                 "short_desc": "Label creation date",
-                "desc": "The date the label was created (ISO 8601 format)",
+                "desc": "The date the label was created",
             },
             "shipmentCost": {
                 "type": SoftFloatOrNothingType,

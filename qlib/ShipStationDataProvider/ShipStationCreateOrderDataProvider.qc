@@ -36,13 +36,18 @@ public class ShipStationCreateOrderRequestDataType inherits HashDataType {
                 "desc": "A unique identifier for the order in your system",
                 "required": True,
             },
+            "orderKey": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Order Key",
+                "short_desc": "Unique order key for updates",
+                "desc": "A unique identifier for the order. Used to match orders for updates via the createorder endpoint.",
+            },
             "orderDate": {
-                "type": StringType,
+                "type": DateType,
                 "display_name": "Order Date",
                 "short_desc": "Date the order was placed",
-                "desc": "The date the order was placed (ISO 8601 format)",
+                "desc": "The date the order was placed",
                 "required": True,
-                "example_value": "2026-01-15T12:00:00",
             },
             "orderStatus": {
                 "type": StringType,

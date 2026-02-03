@@ -77,13 +77,10 @@ public class ShipStationMarketplacesDataProvider inherits ShipStationDataProvide
             *hash<auto> search_options) {
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching marketplaces"));
 
-        hash<auto> response = doGet("/stores/marketplaces");
-        list<hash<auto>> records;
-        if (response.typeCode() == NT_LIST) {
-            records = response;
-        } else {
-            records = ();
-        }
+        auto response = doGet("/stores/marketplaces");
+        list<hash<auto>> records = response.typeCode() == NT_LIST
+            ? cast<list<hash<auto>>>(response)
+            : ();
 
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());

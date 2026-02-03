@@ -74,29 +74,14 @@ public class ShipStationOrderNotifyEventDataProvider inherits ShipStationBaseEve
         return eventDataType;
     }
 
-    #! Returns example event data
+    #! Returns example event data - tries real API data first, falls back to fake data
     private hash<auto> getExampleEventData() {
-        return {
-            "event": EVENT_ORDER_NOTIFY,
-            "resource_url": "https://ssapi.shipstation.com/orders?orderNumber=TEST-001",
-            "resource_type": WEBHOOK_ORDER_NOTIFY,
-            "orderId": 12345,
-            "orderNumber": "TEST-001",
-            "orderKey": "unique-key-001",
-            "orderDate": "2026-01-15T10:30:00.000Z",
-            "orderStatus": "awaiting_shipment",
-            "customerEmail": "customer@example.com",
-            "shipTo": {
-                "name": "John Doe",
-                "street1": "123 Main St",
-                "city": "Austin",
-                "state": "TX",
-                "postalCode": "78701",
-                "country": "US",
-            },
-            "orderTotal": 99.99,
-            "storeId": 12345,
-        };
+        # Try to fetch real order data from the API
+        if (*hash<auto> order = tryFetchRealOrder()) {
+            return mapOrderToEventData(order, EVENT_ORDER_NOTIFY, WEBHOOK_ORDER_NOTIFY);
+        }
+        # Fall back to fake example data
+        return getFakeOrderExampleData();
     }
 
     #! Returns event-specific fields from the fetched order data

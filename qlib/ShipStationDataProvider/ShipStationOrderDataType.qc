@@ -52,32 +52,31 @@ public class ShipStationOrderDataType inherits HashDataType {
                 "desc": "A user-provided unique identifier. If not provided, ShipStation generates one.",
             },
             "orderDate": {
-                "type": StringType,
+                "type": DateType,
                 "display_name": "Order Date",
                 "short_desc": "When order was placed",
-                "desc": "The date the order was placed (ISO 8601 format)",
-                "example_value": "2026-01-15T10:30:00.000Z",
+                "desc": "The date the order was placed",
             },
             "createDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Create Date",
                 "short_desc": "When order was created in ShipStation",
                 "desc": "The date the order was created in ShipStation (read-only)",
             },
             "modifyDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Modify Date",
                 "short_desc": "When order was last modified",
                 "desc": "The date the order was last modified (read-only)",
             },
             "paymentDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Payment Date",
                 "short_desc": "When payment was received",
                 "desc": "The date payment was received for this order",
             },
             "shipByDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Ship By Date",
                 "short_desc": "Suggested ship date",
                 "desc": "The date by which this order should be shipped",
@@ -151,12 +150,6 @@ public class ShipStationOrderDataType inherits HashDataType {
                 "display_name": "Ship To",
                 "short_desc": "Shipping address",
                 "desc": "The shipping address for this order",
-            },
-            "items": {
-                "type": new ListDataType("OrderItems", new ShipStationOrderItemDataType(), True),
-                "display_name": "Items",
-                "short_desc": "Order line items",
-                "desc": "The line items in this order",
             },
             "orderTotal": {
                 "type": FloatOrNothingType,
@@ -251,13 +244,13 @@ public class ShipStationOrderDataType inherits HashDataType {
                 ),
             },
             "shipDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Ship Date",
                 "short_desc": "When order was shipped",
                 "desc": "The date the order was actually shipped",
             },
             "holdUntilDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Hold Until Date",
                 "short_desc": "Hold until this date",
                 "desc": "Date to hold the order until before shipping",
@@ -273,30 +266,6 @@ public class ShipStationOrderDataType inherits HashDataType {
                 "display_name": "Dimensions",
                 "short_desc": "Package dimensions",
                 "desc": "The package dimensions for this order",
-            },
-            "insuranceOptions": {
-                "type": AbstractDataProviderTypeMap."hash<auto>",
-                "display_name": "Insurance Options",
-                "short_desc": "Shipping insurance options",
-                "desc": "Insurance options for the shipment",
-            },
-            "internationalOptions": {
-                "type": AbstractDataProviderTypeMap."hash<auto>",
-                "display_name": "International Options",
-                "short_desc": "International shipping options",
-                "desc": "Options for international shipments (customs info, etc.)",
-            },
-            "advancedOptions": {
-                "type": AbstractDataProviderTypeMap."hash<auto>",
-                "display_name": "Advanced Options",
-                "short_desc": "Advanced order options",
-                "desc": "Advanced options including store ID, warehouse ID, etc.",
-            },
-            "tagIds": {
-                "type": new ListDataType("TagIds", AbstractDataProviderTypeMap."int", True),
-                "display_name": "Tag IDs",
-                "short_desc": "Order tags",
-                "desc": "List of tag IDs applied to this order",
             },
             "userId": {
                 "type": StringOrNothingType,
@@ -323,6 +292,48 @@ public class ShipStationOrderDataType inherits HashDataType {
     #! Creates the type
     constructor() {
         addQoreFields(Fields);
+
+        # Add list fields that require runtime initialization
+        addField(new QoreDataField({
+            "name": "items",
+            "display_name": "Items",
+            "short_desc": "Order line items",
+            "desc": "The line items in this order",
+            "type": new ListDataType("OrderItems", new ShipStationOrderItemDataType(), True),
+        }));
+
+        addField(new QoreDataField({
+            "name": "tagIds",
+            "display_name": "Tag IDs",
+            "short_desc": "Order tags",
+            "desc": "List of tag IDs applied to this order",
+            "type": new ListDataType("TagIds", IntOrNothingType, True),
+        }));
+
+        # Add hash fields that require runtime initialization
+        addField(new QoreDataField({
+            "name": "insuranceOptions",
+            "display_name": "Insurance Options",
+            "short_desc": "Shipping insurance options",
+            "desc": "Insurance options for the shipment",
+            "type": AutoHashOrNothingType,
+        }));
+
+        addField(new QoreDataField({
+            "name": "internationalOptions",
+            "display_name": "International Options",
+            "short_desc": "International shipping options",
+            "desc": "Options for international shipments (customs info, etc.)",
+            "type": AutoHashOrNothingType,
+        }));
+
+        addField(new QoreDataField({
+            "name": "advancedOptions",
+            "display_name": "Advanced Options",
+            "short_desc": "Advanced order options",
+            "desc": "Advanced options including store ID, warehouse ID, etc.",
+            "type": AutoHashOrNothingType,
+        }));
     }
 }
 

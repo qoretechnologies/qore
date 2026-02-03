@@ -94,13 +94,10 @@ public class ShipStationUsersDataProvider inherits ShipStationDataProviderBase {
 
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: params=%y", params));
 
-        hash<auto> response = doGet("/users", params);
-        list<hash<auto>> records;
-        if (response.typeCode() == NT_LIST) {
-            records = response;
-        } else {
-            records = ();
-        }
+        auto response = doGet("/users", params);
+        list<hash<auto>> records = response.typeCode() == NT_LIST
+            ? cast<list<hash<auto>>>(response)
+            : ();
 
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());

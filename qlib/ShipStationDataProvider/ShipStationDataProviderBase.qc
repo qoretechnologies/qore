@@ -122,11 +122,11 @@ public class ShipStationDataProviderBase inherits DataProvider::AbstractDataProv
     #! Makes a GET request to the ShipStation API
     /** @param path the API path
         @param params optional query parameters
-        @return the response data
+        @return the response data (can be hash or list depending on endpoint)
 
         @throw SHIPSTATION-API-ERROR if the response indicates an error
     */
-    hash<auto> doGet(string path, *hash<auto> params) {
+    auto doGet(string path, *hash<auto> params) {
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doGet: GET %s with params: %y", path, params));
@@ -280,7 +280,7 @@ public class ShipStationDataProviderBase inherits DataProvider::AbstractDataProv
     private *list<hash<AllowedValueInfo>> getReferenceCarriers() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/carriers");
+            auto response = doGet("/carriers");
             if (response.typeCode() == NT_LIST) {
                 foreach hash<auto> carrier in (response) {
                     string display_name = carrier.name ?? carrier.code;
@@ -302,7 +302,7 @@ public class ShipStationDataProviderBase inherits DataProvider::AbstractDataProv
     private *list<hash<AllowedValueInfo>> getReferenceStores() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/stores");
+            auto response = doGet("/stores");
             if (response.typeCode() == NT_LIST) {
                 foreach hash<auto> store in (response) {
                     string display_name = store.storeName ?? sprintf("Store %d", store.storeId);
@@ -324,7 +324,7 @@ public class ShipStationDataProviderBase inherits DataProvider::AbstractDataProv
     private *list<hash<AllowedValueInfo>> getReferenceTags() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/accounts/listtags");
+            auto response = doGet("/accounts/listtags");
             if (response.typeCode() == NT_LIST) {
                 foreach hash<auto> tag in (response) {
                     string display_name = tag.name ?? sprintf("Tag %d", tag.tagId);
@@ -346,7 +346,7 @@ public class ShipStationDataProviderBase inherits DataProvider::AbstractDataProv
     private *list<hash<AllowedValueInfo>> getReferenceUsers() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/users");
+            auto response = doGet("/users");
             if (response.typeCode() == NT_LIST) {
                 foreach hash<auto> user in (response) {
                     string display_name = user.name ?? user.userName ?? sprintf("User %s", user.userId);
@@ -368,7 +368,7 @@ public class ShipStationDataProviderBase inherits DataProvider::AbstractDataProv
     private *list<hash<AllowedValueInfo>> getReferenceWarehouses() {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/warehouses");
+            auto response = doGet("/warehouses");
             if (response.typeCode() == NT_LIST) {
                 foreach hash<auto> warehouse in (response) {
                     string display_name = warehouse.warehouseName ?? sprintf("Warehouse %d", warehouse.warehouseId);
@@ -393,7 +393,7 @@ public class ShipStationDataProviderBase inherits DataProvider::AbstractDataProv
         }
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/carriers/listservices", {"carrierCode": carrierCode});
+            auto response = doGet("/carriers/listservices", {"carrierCode": carrierCode});
             if (response.typeCode() == NT_LIST) {
                 foreach hash<auto> service in (response) {
                     string display_name = service.name ?? service.code;
@@ -418,7 +418,7 @@ public class ShipStationDataProviderBase inherits DataProvider::AbstractDataProv
         }
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet("/carriers/listpackages", {"carrierCode": carrierCode});
+            auto response = doGet("/carriers/listpackages", {"carrierCode": carrierCode});
             if (response.typeCode() == NT_LIST) {
                 foreach hash<auto> pkg in (response) {
                     string display_name = pkg.name ?? pkg.code;

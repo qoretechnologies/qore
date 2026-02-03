@@ -75,51 +75,29 @@ public class ShipStationItemShipNotifyEventDataProvider inherits ShipStationBase
         return eventDataType;
     }
 
-    #! Returns example event data
+    #! Returns example event data - tries real API data first, falls back to fake data
     private hash<auto> getExampleEventData() {
-        return {
-            "event": EVENT_ITEM_SHIP_NOTIFY,
-            "resource_url": "https://ssapi.shipstation.com/shipments?shipmentId=12345",
-            "resource_type": WEBHOOK_ITEM_SHIP_NOTIFY,
-            "shipmentId": 12345,
-            "orderId": 54321,
-            "orderNumber": "TEST-001",
-            "trackingNumber": "1Z999AA10123456784",
-            "carrierCode": "ups",
-            "serviceCode": "ups_ground",
-            "shipDate": "2026-01-15",
-            "createDate": "2026-01-15T10:30:00.000Z",
-            "shipmentCost": 12.50,
-            "insuranceCost": 0.00,
-            "voided": False,
-            "shipTo": {
-                "name": "John Doe",
-                "street1": "123 Main St",
-                "city": "Austin",
-                "state": "TX",
-                "postalCode": "78701",
-                "country": "US",
+        # Try to fetch real shipment data from the API (with items)
+        if (*hash<auto> shipment = tryFetchRealShipment(True)) {
+            hash<auto> event_data = mapShipmentToEventData(shipment, EVENT_ITEM_SHIP_NOTIFY, WEBHOOK_ITEM_SHIP_NOTIFY);
+            # Add shipment items
+            event_data.shipmentItems = shipment.shipmentItems;
+            return event_data;
+        }
+        # Fall back to fake example data with items
+        hash<auto> fake = getFakeShipmentExampleData();
+        fake.event = EVENT_ITEM_SHIP_NOTIFY;
+        fake.resource_type = WEBHOOK_ITEM_SHIP_NOTIFY;
+        fake.shipmentItems = (
+            {
+                "orderItemId": 67890,
+                "lineItemKey": "item-001",
+                "sku": "WIDGET-001",
+                "name": "Widget",
+                "quantity": 2,
             },
-            "weight": {
-                "value": 2.5,
-                "units": "pounds",
-            },
-            "dimensions": {
-                "length": 10,
-                "width": 8,
-                "height": 4,
-                "units": "inches",
-            },
-            "shipmentItems": (
-                {
-                    "orderItemId": 67890,
-                    "lineItemKey": "item-001",
-                    "sku": "WIDGET-001",
-                    "name": "Widget",
-                    "quantity": 2,
-                },
-            ),
-        };
+        );
+        return fake;
     }
 
     #! Returns event-specific fields from the fetched shipment data

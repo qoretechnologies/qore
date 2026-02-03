@@ -38,14 +38,14 @@ public class ShipStationCustomerDataType inherits HashDataType {
         "createDate": {
             "display_name": "Create Date",
             "short_desc": "Date the customer was created",
-            "type": SoftStringOrNothingType,
-            "desc": "The date and time the customer was first created (ISO 8601 format)",
+            "type": DateOrNothingType,
+            "desc": "The date and time the customer was first created",
         },
         "modifyDate": {
             "display_name": "Modify Date",
             "short_desc": "Date the customer was last modified",
-            "type": SoftStringOrNothingType,
-            "desc": "The date and time the customer was last modified (ISO 8601 format)",
+            "type": DateOrNothingType,
+            "desc": "The date and time the customer was last modified",
         },
         "name": {
             "display_name": "Name",

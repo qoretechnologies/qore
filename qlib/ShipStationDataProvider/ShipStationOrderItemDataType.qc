@@ -102,12 +102,6 @@ public class ShipStationOrderItemDataType inherits HashDataType {
                 "short_desc": "Location in warehouse",
                 "desc": "The location of this item in the warehouse",
             },
-            "options": {
-                "type": new ListDataType("ItemOptions", AbstractDataProviderTypeMap."hash<auto>", True),
-                "display_name": "Options",
-                "short_desc": "Item options",
-                "desc": "Custom options for this item (e.g., size, color)",
-            },
             "productId": {
                 "type": IntOrNothingType,
                 "display_name": "Product ID",
@@ -133,13 +127,13 @@ public class ShipStationOrderItemDataType inherits HashDataType {
                 "desc": "The UPC barcode for this item",
             },
             "createDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Create Date",
                 "short_desc": "When item was created",
                 "desc": "The date this item was created in ShipStation",
             },
             "modifyDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Modify Date",
                 "short_desc": "When item was modified",
                 "desc": "The date this item was last modified",
@@ -150,6 +144,15 @@ public class ShipStationOrderItemDataType inherits HashDataType {
     #! Creates the type
     constructor() {
         addQoreFields(Fields);
+
+        # Add list fields that require runtime initialization
+        addField(new QoreDataField({
+            "name": "options",
+            "display_name": "Options",
+            "short_desc": "Item options",
+            "desc": "Custom options for this item (e.g., size, color)",
+            "type": new ListDataType("ItemOptions", AutoHashOrNothingType, True),
+        }));
     }
 }
 

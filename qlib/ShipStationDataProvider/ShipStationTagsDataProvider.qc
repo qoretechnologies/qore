@@ -77,13 +77,10 @@ public class ShipStationTagsDataProvider inherits ShipStationDataProviderBase {
             *hash<auto> search_options) {
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching tags"));
 
-        hash<auto> response = doGet("/accounts/listtags");
-        list<hash<auto>> records;
-        if (response.typeCode() == NT_LIST) {
-            records = response;
-        } else {
-            records = ();
-        }
+        auto response = doGet("/accounts/listtags");
+        list<hash<auto>> records = response.typeCode() == NT_LIST
+            ? cast<list<hash<auto>>>(response)
+            : ();
 
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());

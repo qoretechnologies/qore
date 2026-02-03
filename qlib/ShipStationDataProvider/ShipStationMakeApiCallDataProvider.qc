@@ -145,7 +145,7 @@ public class ShipStationMakeApiCallDataProvider inherits ShipStationDataProvider
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string method = req.method.toUpper();
+        string method = req.method.upr();
         string path = req.path;
 
         if (!path.val()) {
@@ -159,7 +159,7 @@ public class ShipStationMakeApiCallDataProvider inherits ShipStationDataProvider
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: %s %s", method, path));
 
-        hash<auto> response;
+        auto response;
 
         switch (method) {
             case "GET":

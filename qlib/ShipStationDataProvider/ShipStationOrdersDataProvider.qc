@@ -81,25 +81,25 @@ public class ShipStationOrdersDataProvider inherits ShipStationDataProviderBase 
             "orderDateStart": <DataProviderOptionInfo>{
                 "display_name": "Order Date Start",
                 "short_desc": "Start of order date range",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter orders placed on or after this date (ISO 8601)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Filter orders placed on or after this date",
             },
             "orderDateEnd": <DataProviderOptionInfo>{
                 "display_name": "Order Date End",
                 "short_desc": "End of order date range",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter orders placed on or before this date (ISO 8601)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Filter orders placed on or before this date",
             },
             "modifyDateStart": <DataProviderOptionInfo>{
                 "display_name": "Modify Date Start",
                 "short_desc": "Start of modify date range",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "type": AbstractDataProviderType::get(DateOrNothingType),
                 "desc": "Filter orders modified on or after this date",
             },
             "modifyDateEnd": <DataProviderOptionInfo>{
                 "display_name": "Modify Date End",
                 "short_desc": "End of modify date range",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "type": AbstractDataProviderType::get(DateOrNothingType),
                 "desc": "Filter orders modified on or before this date",
             },
             "sortBy": <DataProviderOptionInfo>{

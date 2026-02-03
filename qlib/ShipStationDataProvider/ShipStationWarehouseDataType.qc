@@ -55,7 +55,7 @@ public class ShipStationWarehouseDataType inherits HashDataType {
                 "desc": "The return address (defaults to origin address if not set)",
             },
             "createDate": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Create Date",
                 "short_desc": "When warehouse was created",
                 "desc": "The date this warehouse was created",

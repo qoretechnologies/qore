@@ -68,14 +68,14 @@ public class ShipStationShipmentDataType inherits HashDataType {
         "createDate": {
             "display_name": "Create Date",
             "short_desc": "Date the shipment was created",
-            "type": SoftStringOrNothingType,
-            "desc": "The date and time the shipment was created (ISO 8601 format)",
+            "type": DateOrNothingType,
+            "desc": "The date and time the shipment was created",
         },
         "shipDate": {
             "display_name": "Ship Date",
             "short_desc": "Date the shipment was shipped",
-            "type": SoftStringOrNothingType,
-            "desc": "The date and time the shipment was shipped (ISO 8601 format)",
+            "type": DateOrNothingType,
+            "desc": "The date and time the shipment was shipped",
         },
         "shipmentCost": {
             "display_name": "Shipment Cost",
@@ -146,7 +146,7 @@ public class ShipStationShipmentDataType inherits HashDataType {
         "voidDate": {
             "display_name": "Void Date",
             "short_desc": "Date the shipment was voided",
-            "type": SoftStringOrNothingType,
+            "type": DateOrNothingType,
             "desc": "The date and time the shipment was voided (if applicable)",
         },
         "marketplaceNotified": {

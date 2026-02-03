@@ -254,6 +254,179 @@ public class ShipStationBaseEventDataProvider inherits ShipStationDataProviderBa
     private hash<auto> getEventSpecificFields(hash<auto> event_data) {
         return {};
     }
+
+    #! Tries to fetch a real order from the API for example data
+    /** @param include_items if True, the order will include item details
+        @return the most recent order, or NOTHING if none found or on error
+    */
+    private *hash<auto> tryFetchRealOrder(bool include_items = False) {
+        try {
+            hash<auto> params = {
+                "pageSize": 1,
+                "sortBy": "ModifyDate",
+                "sortDir": "DESC",
+            };
+            # If filtering by store, include it in the query
+            if (store_id) {
+                params.storeId = store_id;
+            }
+
+            hash<auto> response = doGet("/orders", params);
+            if (response.orders && response.orders.typeCode() == NT_LIST && elements response.orders > 0) {
+                return response.orders[0];
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "tryFetchRealOrder: error fetching order: %s: %s", ex.err, ex.desc);
+        }
+        return NOTHING;
+    }
+
+    #! Tries to fetch a real shipment from the API for example data
+    /** @param include_items if True, the shipment will include item details
+        @return the most recent shipment, or NOTHING if none found or on error
+    */
+    private *hash<auto> tryFetchRealShipment(bool include_items = False) {
+        try {
+            hash<auto> params = {
+                "pageSize": 1,
+                "sortBy": "CreateDate",
+                "sortDir": "DESC",
+            };
+            # If filtering by store, include it in the query
+            if (store_id) {
+                params.storeId = store_id;
+            }
+            # Include shipment items if requested
+            if (include_items) {
+                params.includeShipmentItems = "true";
+            }
+
+            hash<auto> response = doGet("/shipments", params);
+            if (response.shipments && response.shipments.typeCode() == NT_LIST && elements response.shipments > 0) {
+                return response.shipments[0];
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "tryFetchRealShipment: error fetching shipment: %s: %s", ex.err, ex.desc);
+        }
+        return NOTHING;
+    }
+
+    #! Maps an order from the API to order event data format
+    /** @param order the order data from the API
+        @param event_type the event type (e.g., EVENT_ORDER_NOTIFY)
+        @param webhook_type the webhook type (e.g., WEBHOOK_ORDER_NOTIFY)
+        @return the mapped event data
+    */
+    private hash<auto> mapOrderToEventData(hash<auto> order, string event_type, string webhook_type) {
+        return {
+            "event": event_type,
+            "resource_url": sprintf("https://ssapi.shipstation.com/orders?orderNumber=%s",
+                encode_url(order.orderNumber ?? "", True)),
+            "resource_type": webhook_type,
+            "orderId": order.orderId,
+            "orderNumber": order.orderNumber,
+            "orderKey": order.orderKey,
+            "orderDate": order.orderDate,
+            "orderStatus": order.orderStatus,
+            "customerEmail": order.customerEmail,
+            "shipTo": order.shipTo,
+            "billTo": order.billTo,
+            "orderTotal": order.orderTotal,
+            "storeId": order.advancedOptions.storeId ?? order.storeId,
+        };
+    }
+
+    #! Maps a shipment from the API to ship event data format
+    /** @param shipment the shipment data from the API
+        @param event_type the event type (e.g., EVENT_SHIP_NOTIFY)
+        @param webhook_type the webhook type (e.g., WEBHOOK_SHIP_NOTIFY)
+        @return the mapped event data
+    */
+    private hash<auto> mapShipmentToEventData(hash<auto> shipment, string event_type, string webhook_type) {
+        return {
+            "event": event_type,
+            "resource_url": sprintf("https://ssapi.shipstation.com/shipments?shipmentId=%d",
+                shipment.shipmentId ?? 0),
+            "resource_type": webhook_type,
+            "shipmentId": shipment.shipmentId,
+            "orderId": shipment.orderId,
+            "orderNumber": shipment.orderNumber,
+            "trackingNumber": shipment.trackingNumber,
+            "carrierCode": shipment.carrierCode,
+            "serviceCode": shipment.serviceCode,
+            "shipDate": shipment.shipDate,
+            "createDate": shipment.createDate,
+            "shipmentCost": shipment.shipmentCost,
+            "insuranceCost": shipment.insuranceCost,
+            "voided": shipment.voided,
+            "shipTo": shipment.shipTo,
+            "weight": shipment.weight,
+            "dimensions": shipment.dimensions,
+        };
+    }
+
+    #! Returns fake example data for order events - to be overridden by subclasses
+    private hash<auto> getFakeOrderExampleData() {
+        return {
+            "event": getEventType(),
+            "resource_url": "https://ssapi.shipstation.com/orders?orderNumber=TEST-001",
+            "resource_type": getWebhookEventType(),
+            "orderId": 12345,
+            "orderNumber": "TEST-001",
+            "orderKey": "unique-key-001",
+            "orderDate": "2026-01-15T10:30:00.000Z",
+            "orderStatus": "awaiting_shipment",
+            "customerEmail": "customer@example.com",
+            "shipTo": {
+                "name": "John Doe",
+                "street1": "123 Main St",
+                "city": "Austin",
+                "state": "TX",
+                "postalCode": "78701",
+                "country": "US",
+            },
+            "orderTotal": 99.99,
+            "storeId": 12345,
+        };
+    }
+
+    #! Returns fake example data for shipment events - to be overridden by subclasses
+    private hash<auto> getFakeShipmentExampleData() {
+        return {
+            "event": getEventType(),
+            "resource_url": "https://ssapi.shipstation.com/shipments?shipmentId=12345",
+            "resource_type": getWebhookEventType(),
+            "shipmentId": 12345,
+            "orderId": 54321,
+            "orderNumber": "TEST-001",
+            "trackingNumber": "1Z999AA10123456784",
+            "carrierCode": "ups",
+            "serviceCode": "ups_ground",
+            "shipDate": "2026-01-15",
+            "createDate": "2026-01-15T10:30:00.000Z",
+            "shipmentCost": 12.50,
+            "insuranceCost": 0.00,
+            "voided": False,
+            "shipTo": {
+                "name": "John Doe",
+                "street1": "123 Main St",
+                "city": "Austin",
+                "state": "TX",
+                "postalCode": "78701",
+                "country": "US",
+            },
+            "weight": {
+                "value": 2.5,
+                "units": "pounds",
+            },
+            "dimensions": {
+                "length": 10,
+                "width": 8,
+                "height": 4,
+                "units": "inches",
+            },
+        };
+    }
 }
 
 } # namespace ShipStationDataProvider

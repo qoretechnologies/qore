@@ -98,14 +98,14 @@ public class ShipStationProductDataType inherits HashDataType {
         "createDate": {
             "display_name": "Create Date",
             "short_desc": "Date the product was created",
-            "type": SoftStringOrNothingType,
-            "desc": "The date and time the product was created (ISO 8601 format)",
+            "type": DateOrNothingType,
+            "desc": "The date and time the product was created",
         },
         "modifyDate": {
             "display_name": "Modify Date",
             "short_desc": "Date the product was last modified",
-            "type": SoftStringOrNothingType,
-            "desc": "The date and time the product was last modified (ISO 8601 format)",
+            "type": DateOrNothingType,
+            "desc": "The date and time the product was last modified",
         },
         "active": {
             "display_name": "Active",

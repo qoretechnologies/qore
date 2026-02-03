@@ -37,10 +37,10 @@ public class ShipStationRefreshStoreRequestDataType inherits HashDataType {
                 "required": True,
             },
             "refreshDate": {
-                "type": SoftStringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Refresh Date",
                 "short_desc": "Start date for order refresh",
-                "desc": "The date from which to start the refresh (ISO 8601). "
+                "desc": "The date from which to start the refresh. "
                     "If not provided, refreshes recent orders.",
             },
         };

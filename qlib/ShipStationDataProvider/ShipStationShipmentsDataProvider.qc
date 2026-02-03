@@ -91,25 +91,25 @@ public class ShipStationShipmentsDataProvider inherits ShipStationDataProviderBa
             "shipDateStart": <DataProviderOptionInfo>{
                 "display_name": "Ship Date Start",
                 "short_desc": "Start of ship date range",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter shipments shipped on or after this date (ISO 8601)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Filter shipments shipped on or after this date",
             },
             "shipDateEnd": <DataProviderOptionInfo>{
                 "display_name": "Ship Date End",
                 "short_desc": "End of ship date range",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter shipments shipped on or before this date (ISO 8601)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Filter shipments shipped on or before this date",
             },
             "createDateStart": <DataProviderOptionInfo>{
                 "display_name": "Create Date Start",
                 "short_desc": "Start of create date range",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "type": AbstractDataProviderType::get(DateOrNothingType),
                 "desc": "Filter shipments created on or after this date",
             },
             "createDateEnd": <DataProviderOptionInfo>{
                 "display_name": "Create Date End",
                 "short_desc": "End of create date range",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "type": AbstractDataProviderType::get(DateOrNothingType),
                 "desc": "Filter shipments created on or before this date",
             },
             "voidDateStart": <DataProviderOptionInfo>{

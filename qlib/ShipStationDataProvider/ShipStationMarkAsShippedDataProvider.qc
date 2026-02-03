@@ -44,10 +44,10 @@ public class ShipStationMarkAsShippedRequestDataType inherits HashDataType {
                 "required": True,
             },
             "shipDate": {
-                "type": SoftStringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Ship Date",
                 "short_desc": "The date the order was shipped",
-                "desc": "The ship date (ISO 8601 format). Defaults to current date if not specified.",
+                "desc": "The ship date. Defaults to current date if not specified.",
             },
             "trackingNumber": {
                 "type": SoftStringOrNothingType,
