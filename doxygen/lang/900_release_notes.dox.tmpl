@@ -200,6 +200,62 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       common cases
     @endparblock
 
+    @par AOT (Ahead-of-Time) Compilation
+    @parblock
+    %Qore now supports AOT compilation, which compiles %Qore scripts and modules to standalone
+    native executables or binary modules that can run without the original source code.  This
+    provides faster startup times (no parse phase), intellectual property protection, and
+    simplified deployment.
+
+    <b>Compiling Scripts to Standalone Executables:</b>
+
+    The \c --compile-script option compiles a %Qore script to a standalone ELF executable:
+    @code{.sh}
+qore --compile-script myscript.q -o myscript
+./myscript [args...]
+    @endcode
+
+    The resulting executable:
+    - Links against \c libqore.so at runtime (no static linking)
+    - Contains compiled native code for all functions
+    - Includes embedded source code by default for error messages and debugging
+    - Supports all command-line arguments the original script accepted
+
+    <b>Compiling Modules to Binary Modules:</b>
+
+    The \c --compile-module option compiles a %Qore module (\c .qm) to a binary module (\c .qmod):
+    @code{.sh}
+qore --compile-module MyModule.qm
+# Creates MyModule.qmod in the same directory
+    @endcode
+
+    Binary modules:
+    - Load faster than source modules (no parse phase)
+    - Are searched before source modules with the same base name
+    - Support all module features including classes, functions, and constants
+
+    <b>Source Stripping for IP Protection:</b>
+
+    The \c --strip-source option removes source code from compiled binaries:
+    @code{.sh}
+qore --compile-script myscript.q --strip-source -o myscript
+qore --compile-module MyModule.qm --strip-source
+    @endcode
+
+    Source-stripped binaries:
+    - Contain no readable source code (only binary metadata and native code)
+    - Use the QORD binary format (magic: \c 0x514F5244) for metadata serialization
+    - Provide full functionality including exception handling and \c on_block_exit
+    - Show \c "[AOT-compiled]" in stack traces instead of source lines
+    - Cannot be decompiled back to source code
+
+    <b>Requirements and Limitations:</b>
+    - AOT compilation requires @ref modern "%modern" code (non-modern code is rejected)
+    - Source stripping is one-way: stripped binaries cannot recover source code
+    - Compiled executables require the same major version of \c libqore.so at runtime
+    - Debug information (line numbers, variable names) is preserved for diagnostics
+    @endparblock
+
     - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>
       - new @ref modern "%modern" parse directive combines all recommended parse options into one:
         @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args",
