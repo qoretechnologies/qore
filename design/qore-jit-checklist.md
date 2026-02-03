@@ -872,6 +872,55 @@ memory leaks when the result is a node type (string, number, date, list, etc.).
 - [x] `lib/QoreIRInterpreter.cpp` — Regex `evalInvoke()` + standalone handler updates
 - [x] `examples/test/ir/JITSmoke.qtest` — 58 test cases, 4 new regex regression tests
 
+### Phase 7g: Extract Cache Staleness & JIT Local Variable Reload — COMPLETE ✓
+
+Fixed three bugs affecting IR/JIT variable coherence:
+
+#### Bug A: Extract Cache Staleness (IR Interpreter + LLVM)
+
+The `extract` operator modifies the source list/string/binary in-place via
+`LValueHelper`, but the IR interpreter's local variable cache was not
+invalidated after execution. The LLVM lowering also did not reload local
+allocas after lvalue-modifying expression ops.
+
+**Fix (IR interpreter)**: Added `ExtractAny`, `ExtractList`, `ExtractString`,
+`ExtractBinary` to the cache invalidation switch in the general expression
+ops handler.
+
+**Fix (LLVM)**: Split lvalue-modifying expression ops (Extract*, Remove*,
+RegexSubst*, Trim*, Chomp*, Transliterate*, Pop*, Push*, ListAssign*) into
+a separate handler with `reloadAllLocalsFromRuntime()` after the runtime call.
+Pure expression ops (Keys*, Exists*, Elements*, InstanceOf, Background, Cast*)
+remain in the original handler without reload.
+
+#### Bug B: JIT Local Variable Alloca Pre-Creation
+
+When `VarRefNewObjectNode` (scoped object construction like `Counter done(4)`)
+was evaluated in JIT mode via `qore_rt_invoke_expr`, it assigned the variable
+through `LValueHelper` on the runtime variable stack. The subsequent
+`reloadAllLocalsFromRuntime` call (after the Call instruction) iterated over
+`local_allocas`, but the alloca for the target variable didn't exist yet
+(created lazily on first `LoadLocal`), so the reload missed it. Later
+`LoadLocal` would create the alloca initialized to NOTHING, producing stale
+results.
+
+**Fix**: Added `preCreateLocalAllocas()` that creates LLVM allocas for ALL
+local variables (collected by `collectLocals()`) during the function prologue,
+before any instruction lowering begins. Pre-instantiated locals are initialized
+from the runtime stack; body locals are initialized to NOTHING. This ensures
+`reloadAllLocalsFromRuntime` can find and reload all variable allocas.
+
+#### Test Results
+
+| Test Suite | Result |
+|-----------|--------|
+| JITSmoke.qtest | 58/58 (103 assertions) |
+| IRExecModeSmoke.qtest | 137/137 (416 assertions) — previously 135/137 |
+| TieredSmoke.qtest | 19/20 (283/284 assertions) — 1 pre-existing concurrent/closure issue |
+| AOTSmoke.qtest | 20/20 (32 assertions) |
+| Valgrind (JITSmoke) | 0 bytes definitely/indirectly/possibly lost |
+| Valgrind (IRExecModeSmoke) | 0 bytes definitely/indirectly/possibly lost |
+
 ### Future Extensions (not in this phase)
 
 - [x] ~~**Fix Call double-evaluation**~~: Fixed in Phase 7c. Dispatch based on
@@ -889,6 +938,18 @@ memory leaks when the result is a node type (string, number, date, list, etc.).
       runtime helper with `isRegexInvokeOpcode()` classifier.
 - [x] ~~**Fix binary .any ops memory leaks**~~: Fixed in Phase 7f. `trackResultForCleanup()`
       added to .any arithmetic, bitwise, and compound assignment/higher-order/range ops.
+- [x] ~~**Fix extract cache staleness**~~: Fixed in Phase 7g. Extract* opcodes added to IR
+      interpreter cache invalidation switch; LLVM lvalue-modifying expression ops split into
+      separate handler with `reloadAllLocalsFromRuntime`.
+- [x] ~~**Fix JIT local variable reload for VarRefNewObjectNode**~~: Fixed in Phase 7g.
+      `preCreateLocalAllocas()` ensures all local variable allocas exist before any
+      instruction lowering, so `reloadAllLocalsFromRuntime` can find them after Call
+      instructions that assign variables via LValueHelper.
+- [ ] **Fix JIT background thread + closure variable coherence**: JIT-compiled code uses
+      LLVM allocas for local variables, but background threads access closure-captured
+      variables through the runtime variable stack. After threads modify captured variables,
+      the main thread's allocas are stale. Additionally, `qore_rt_uninstantiate_local`
+      crashes when closures interact with the thread-local variable stack.
 - [ ] Cross-compilation: target triple selection via `--target` flag
 - [ ] Optimization levels: `-O0` through `-O3` flag for AOT optimization
 - [ ] Static linking: link libqore statically for fully standalone binaries
