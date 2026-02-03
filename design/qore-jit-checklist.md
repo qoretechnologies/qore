@@ -824,6 +824,54 @@ causing memory leaks for node-type results.
 | IRExecModeSmoke.qtest | 135/137 (414/416 assertions) — 2 pre-existing list extract failures |
 | TieredSmoke.qtest | 19/20 (283/284 assertions) — 1 pre-existing concurrent calls issue |
 
+### Phase 7f: Regex Double-Evaluation & Binary .any Ops Memory Leak Fix — COMPLETE ✓
+
+Fixed two bugs: regex expressions (e.g., `f() =~ /pattern/`) double-evaluated the
+subject expression, and binary `.any` operation handlers in LLVM lowering leaked
+reference-counted results.
+
+#### Bug A: Regex Double-Evaluation (Functional Correctness)
+
+When regex expressions are compiled to IR, the IR lowering correctly pre-evaluates the
+subject expression as `operands[0]`. However, the LLVM lowering for all regex opcodes
+and the IR interpreter for RegexMatchAny/RegexExtract* **ignored this operand** and fell
+through to `qore_rt_invoke_expr`/`evalExpr()`, which re-evaluated the entire AST
+including the subject expression. Side effects executed twice.
+
+**Fix**: Added `isRegexInvokeOpcode()` classifier for the 5 non-subst regex opcodes.
+New runtime helper `qore_rt_regex_op_with_operand()` extracts the `QoreRegex*` from
+the operator node and dispatches match/extract using the pre-evaluated operand value.
+AOT variant `qore_rt_regex_op_with_operand_aot()` resolves expression from context slot.
+Both LLVM lowering (Invoke handler + standalone regex handler) and IR interpreter
+(`evalInvoke()` + standalone expression handler) now dispatch to these paths using the
+pre-evaluated `operands[0]`.
+
+RegexSubst (RegexSubstAny/RegexSubstString) excluded: lvalue operations using
+`LValueHelper` — cannot decompose into pre-evaluated operand + regex dispatch.
+
+#### Bug B: Binary .any Ops Missing trackResultForCleanup()
+
+Multiple binary operation handlers in LLVM lowering produced NaN-boxed results that may
+contain reference-counted nodes but never called `trackResultForCleanup()`, causing
+memory leaks when the result is a node type (string, number, date, list, etc.).
+
+**Fix**: Added `trackResultForCleanup()` calls to:
+- `.any` arithmetic (AddAny, SubAny, MulAny, DivAny, ModAny) — both fast-path PHI
+  results and direct runtime helper results
+- `.any` bitwise (AndAny, OrAny, XorAny, ShlAny, ShrAny)
+- Compound assignment + higher-order + range ops (SubAssignAny through RangeSliceFloat)
+
+#### Deliverables
+
+- [x] `include/qore/intern/QoreIR.h` — `isRegexInvokeOpcode()` classifier
+- [x] `include/qore/intern/JITRuntime.h` / `lib/JITRuntime.cpp` — `qore_rt_regex_op_with_operand`,
+      `qore_rt_regex_op_with_operand_aot` helpers
+- [x] `lib/QoreJIT.cpp` — symbol registration for new helpers
+- [x] `lib/QoreIRToLLVM.cpp` — Regex Invoke dispatch + standalone regex handler split +
+      `trackResultForCleanup` for binary .any ops
+- [x] `lib/QoreIRInterpreter.cpp` — Regex `evalInvoke()` + standalone handler updates
+- [x] `examples/test/ir/JITSmoke.qtest` — 58 test cases, 4 new regex regression tests
+
 ### Future Extensions (not in this phase)
 
 - [x] ~~**Fix Call double-evaluation**~~: Fixed in Phase 7c. Dispatch based on
@@ -837,6 +885,10 @@ causing memory leaks for node-type results.
       `QoreDotEvalOperatorNode` with `qore_rt_dot_eval_with_base` runtime helpers.
 - [x] ~~**Fix expression opcode memory leaks**~~: Fixed in Phase 7e. `trackResultForCleanup()`
       added to all expression-based opcode handlers.
+- [x] ~~**Fix Regex double-evaluation**~~: Fixed in Phase 7f. `qore_rt_regex_op_with_operand`
+      runtime helper with `isRegexInvokeOpcode()` classifier.
+- [x] ~~**Fix binary .any ops memory leaks**~~: Fixed in Phase 7f. `trackResultForCleanup()`
+      added to .any arithmetic, bitwise, and compound assignment/higher-order/range ops.
 - [ ] Cross-compilation: target triple selection via `--target` flag
 - [ ] Optimization levels: `-O0` through `-O3` flag for AOT optimization
 - [ ] Static linking: link libqore statically for fully standalone binaries

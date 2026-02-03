@@ -28,6 +28,7 @@
 #include <qore/intern/QoreRegex.h>
 #include <qore/intern/QoreRegexMatchOperatorNode.h>
 #include <qore/intern/QoreRegexNMatchOperatorNode.h>
+#include <qore/intern/QoreRegexExtractOperatorNode.h>
 #include <qore/intern/StatementBlock.h>
 #include <qore/intern/QoreException.h>
 #include <qore/intern/qore_thread_intern.h>
@@ -699,6 +700,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return QoreIRInterpreter::evalBinary(op, left, right, xsink);
         }
         // Regex match/nmatch: use operand value instead of AST expression's left operand
+        case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexNMatchBool: {
             if (!inv->operands.empty()) {
@@ -718,6 +720,22 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         match = !match;
                     }
                     return QoreValue(match);
+                }
+            }
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
+        // Regex extract: use operand value instead of re-evaluating subject expression
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList: {
+            if (!inv->operands.empty()) {
+                QoreValue str_val = getIRValue(values, inv->operands[0]);
+                if (auto* extract_node = dynamic_cast<const QoreRegexExtractOperatorNode*>(
+                        inv->expr.getInternalNode())) {
+                    QoreRegex* regex = extract_node->getRegex();
+                    if (regex) {
+                        QoreStringNodeValueHelper str(str_val);
+                        return QoreValue(regex->extractSubstrings(*str, xsink));
+                    }
                 }
             }
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
@@ -2261,6 +2279,56 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             ++ip;
             break;
         }
+        case QoreIROpcode::RegexMatchAny:
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList: {
+            auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+            QoreValue res;
+            if (!inst->operands.empty()) {
+                QoreValue str_val = getIRValue(values, expr_inst->operands[0]);
+                if (auto* match_node = dynamic_cast<const QoreRegexMatchOperatorNode*>(
+                        expr_inst->expr.getInternalNode())) {
+                    QoreRegex* regex = match_node->getRegex();
+                    if (regex) {
+                        QoreStringNodeValueHelper str(str_val);
+                        if (inst->opcode == QoreIROpcode::RegexMatchAny) {
+                            res = QoreValue(regex->exec(*str, xsink));
+                        } else {
+                            res = QoreValue(regex->extractSubstrings(*str, xsink));
+                        }
+                    } else {
+                        res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                    }
+                } else if (auto* extract_node = dynamic_cast<const QoreRegexExtractOperatorNode*>(
+                        expr_inst->expr.getInternalNode())) {
+                    QoreRegex* regex = extract_node->getRegex();
+                    if (regex) {
+                        QoreStringNodeValueHelper str(str_val);
+                        res = QoreValue(regex->extractSubstrings(*str, xsink));
+                    } else {
+                        res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                    }
+                } else {
+                    res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                }
+            } else {
+                res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+            }
+            if (xsink && *xsink) {
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                return false;
+            }
+            values[expr_inst->result.id] = res;
+            if (res.hasNode()) {
+                cleanup.push_back(expr_inst->result.id);
+            }
+            ++ip;
+            break;
+        }
         case QoreIROpcode::ExtractAny:
         case QoreIROpcode::ExtractList:
         case QoreIROpcode::ExtractString:
@@ -2274,9 +2342,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
         case QoreIROpcode::KeysHash:
-        case QoreIROpcode::RegexMatchAny:
-            case QoreIROpcode::RegexExtractAny:
-            case QoreIROpcode::RegexExtractList:
             case QoreIROpcode::RegexSubstAny:
             case QoreIROpcode::RegexSubstString:
             case QoreIROpcode::InstanceOfBool:

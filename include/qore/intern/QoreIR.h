@@ -406,6 +406,20 @@ inline bool isCallInvokeOpcode(QoreIROpcode op) {
     }
 }
 
+//! Returns true if the opcode is a non-subst regex op (used by Invoke dispatch)
+inline bool isRegexInvokeOpcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::RegexMatchAny:
+        case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList:
+            return true;
+        default:
+            return false;
+    }
+}
+
 //! Returns true if the opcode is a DotEval-type op (method call on expression result)
 inline bool isDotEvalInvokeOpcode(QoreIROpcode op) {
     switch (op) {

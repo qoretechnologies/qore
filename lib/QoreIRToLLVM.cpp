@@ -957,6 +957,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 "qore_rt_add_any", lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
         case QoreIROpcode::SubAny: {
@@ -970,6 +971,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 "qore_rt_sub_any", lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
         case QoreIROpcode::MulAny: {
@@ -983,6 +985,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 "qore_rt_mul_any", lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
         case QoreIROpcode::DivAny:
@@ -999,6 +1002,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
 
@@ -1645,6 +1649,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // DotEval method calls can modify locals through side effects
                 reloadAllLocalsFromRuntime(module, llvm_func);
 
+            } else if (!inv->operands.empty() && isRegexInvokeOpcode(inv->invoke_opcode)) {
+                // Regex invoke: use pre-evaluated operand with qore_rt_regex_op_with_operand
+                auto* operand = getVal(inv->operands[0].id, error);
+                if (!operand) { return false; }
+                llvm::Value* operand_boxed = boxValue(operand, inv->operands[0].id);
+                llvm::Value* opcode_val = llvm::ConstantInt::get(i32_type,
+                        static_cast<int>(inv->invoke_opcode));
+
+                QoreValue expr_val = inv->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i32_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg, opcode_val,
+                            llvm::ConstantInt::get(i32_type, slot), operand_boxed, xsink_arg});
+                } else {
+                    llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand",
+                            llvm::FunctionType::get(i64_type,
+                                {i32_type, i64_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {opcode_val, expr_const, operand_boxed,
+                            xsink_arg});
+                }
+                // Regex ops don't modify locals — no reload needed
+
             } else if (!inv->operands.empty() && isCallInvokeOpcode(inv->invoke_opcode)) {
                 // Call invoke: build args array from pre-evaluated operands
                 int arg_start = (inv->invoke_opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
@@ -2034,6 +2067,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     {opcode_val, lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -2429,6 +2463,64 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     {opcode_val, lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+
+        // === Regex operations (use pre-evaluated operand to avoid double-evaluation) ===
+        case QoreIROpcode::RegexMatchAny:
+        case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList: {
+            const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            QoreValue expr_val = expr_inst->expr;
+            uint64_t expr_bits;
+            std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+            llvm::Value* result;
+
+            if (!inst->operands.empty()) {
+                // Use pre-evaluated operand with qore_rt_regex_op_with_operand
+                auto* operand = getVal(inst->operands[0].id, error);
+                if (!operand) { return false; }
+                llvm::Value* operand_boxed = boxValue(operand, inst->operands[0].id);
+                llvm::Value* opcode_val = llvm::ConstantInt::get(i32_type,
+                        static_cast<int>(inst->opcode));
+
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i32_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg, opcode_val,
+                            llvm::ConstantInt::get(i32_type, slot), operand_boxed, xsink_arg});
+                } else {
+                    llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand",
+                            llvm::FunctionType::get(i64_type,
+                                {i32_type, i64_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {opcode_val, expr_const, operand_boxed,
+                            xsink_arg});
+                }
+            } else {
+                // Fallback to qore_rt_invoke_expr if no operands
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                            llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                } else {
+                    llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr",
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {expr_const, xsink_arg});
+                }
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -2449,11 +2541,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
         case QoreIROpcode::KeysHash:
-        case QoreIROpcode::RegexMatchAny:
-        case QoreIROpcode::RegexMatchBool:
-        case QoreIROpcode::RegexNMatchBool:
-        case QoreIROpcode::RegexExtractAny:
-        case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
         case QoreIROpcode::RegexSubstString:
         case QoreIROpcode::InstanceOfBool:

@@ -75,6 +75,11 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("dot-eval invoke path single eval", \testJitDotEvalInvokeSingleEval());
         addTestCase("dot-eval chained methods", \testJitDotEvalChained());
         addTestCase("dot-eval hash member access", \testJitDotEvalHashMember());
+        # Regex double-evaluation regression tests
+        addTestCase("regex match single eval", \testJitRegexMatchSingleEval());
+        addTestCase("regex match invoke single eval", \testJitRegexMatchInvokeSingleEval());
+        addTestCase("regex extract single eval", \testJitRegexExtractSingleEval());
+        addTestCase("regex extract invoke single eval", \testJitRegexExtractInvokeSingleEval());
         set_return_value(main());
     }
 
@@ -946,6 +951,64 @@ printf(\"%s:%d\\n\", r, counter);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(code, mode));
             assertEq("hello:1", result, sprintf("dot-eval hash member %s", mode));
+        }
+    }
+
+    testJitRegexMatchSingleEval() {
+        # Regex match: subject f() should be called once, not twice
+        string code = "%modern
+our int counter = 0;
+string sub f() { counter++; return \"hello123world\"; }
+bool r = f() =~ /\\d+/;
+printf(\"%s:%d\\n\", r ? \"true\" : \"false\", counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("true:1", result, sprintf("regex match single eval %s", mode));
+        }
+    }
+
+    testJitRegexMatchInvokeSingleEval() {
+        # Regex match inside try/catch (Invoke path): f() called once
+        string code = "%modern
+our int counter = 0;
+string sub f() { counter++; return \"abc456def\"; }
+bool r;
+try { r = f() =~ /\\d+/; } catch (hash<auto> ex) { r = False; }
+printf(\"%s:%d\\n\", r ? \"true\" : \"false\", counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("true:1", result, sprintf("regex match invoke single eval %s", mode));
+        }
+    }
+
+    testJitRegexExtractSingleEval() {
+        # Regex extract: subject f() should be called once
+        string code = "%modern
+our int counter = 0;
+string sub f() { counter++; return \"abc123def456\"; }
+auto r = (f() =~ x/(\\d+)/);
+printf(\"%s:%d\\n\", r[0], counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("123:1", result, sprintf("regex extract single eval %s", mode));
+        }
+    }
+
+    testJitRegexExtractInvokeSingleEval() {
+        # Regex extract inside try/catch (Invoke path): f() called once
+        string code = "%modern
+our int counter = 0;
+string sub f() { counter++; return \"xyz789\"; }
+auto r;
+try { r = (f() =~ x/(\\d+)/); } catch (hash<auto> ex) { r = list(); }
+printf(\"%s:%d\\n\", r[0], counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("789:1", result, sprintf("regex extract invoke single eval %s", mode));
         }
     }
 }

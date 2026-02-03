@@ -354,6 +354,20 @@ uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, E
 uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
     ExceptionSink* xsink);
 
+//! Regex op with pre-evaluated operand: evaluates regex match/extract using the given operand
+//! instead of re-evaluating the AST subject expression.
+//! opcode identifies the regex operation (RegexMatchAny, RegexMatchBool, RegexNMatchBool,
+//! RegexExtractAny, RegexExtractList).
+//! expr_bits is the NaN-boxed regex operator expression node.
+//! operand_bits is the NaN-boxed pre-evaluated subject value.
+//! Returns the NaN-boxed result; sets xsink on exception.
+uint64_t qore_rt_regex_op_with_operand(int32_t opcode, uint64_t expr_bits, uint64_t operand_bits,
+    ExceptionSink* xsink);
+
+//! AOT variant: resolve expression from context slot, then delegate to qore_rt_regex_op_with_operand
+uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* ctx, int32_t opcode, int32_t slot,
+    uint64_t operand_bits, ExceptionSink* xsink);
+
 } // extern "C"
 
 #endif

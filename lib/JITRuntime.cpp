@@ -791,3 +791,59 @@ extern "C" uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx, int32_t 
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     return qore_rt_dot_eval_with_base(ctx->exprs[slot], base_bits, xsink);
 }
+
+// --- Regex op with pre-evaluated operand helper ---
+
+#include "qore/intern/QoreRegexMatchOperatorNode.h"
+#include "qore/intern/QoreRegexExtractOperatorNode.h"
+#include "qore/intern/QoreRegexNMatchOperatorNode.h"
+#include "qore/intern/QoreRegex.h"
+
+extern "C" uint64_t qore_rt_regex_op_with_operand(int32_t opcode, uint64_t expr_bits, uint64_t operand_bits,
+        ExceptionSink* xsink) {
+    QoreValue expr = fromBits(expr_bits);
+    if (!expr.hasNode()) {
+        return qore_rt_invoke_expr(expr_bits, xsink);
+    }
+
+    QoreValue operand = fromBits(operand_bits);
+    QoreIROpcode op = static_cast<QoreIROpcode>(opcode);
+
+    // Get the regex from the operator node
+    QoreRegex* regex = nullptr;
+    if (auto* match_node = dynamic_cast<const QoreRegexMatchOperatorNode*>(expr.getInternalNode())) {
+        regex = match_node->getRegex();
+    }
+
+    if (!regex) {
+        // Fallback: shouldn't happen but be safe
+        return qore_rt_invoke_expr(expr_bits, xsink);
+    }
+
+    QoreStringNodeValueHelper str(operand);
+
+    switch (op) {
+        case QoreIROpcode::RegexMatchAny:
+        case QoreIROpcode::RegexMatchBool: {
+            bool match = regex->exec(*str, xsink);
+            return toBits(QoreValue(match));
+        }
+        case QoreIROpcode::RegexNMatchBool: {
+            bool match = !regex->exec(*str, xsink);
+            return toBits(QoreValue(match));
+        }
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList: {
+            QoreListNode* result = regex->extractSubstrings(*str, xsink);
+            return toBits(QoreValue(result));
+        }
+        default:
+            return qore_rt_invoke_expr(expr_bits, xsink);
+    }
+}
+
+extern "C" uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* ctx, int32_t opcode, int32_t slot,
+        uint64_t operand_bits, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    return qore_rt_regex_op_with_operand(opcode, ctx->exprs[slot], operand_bits, xsink);
+}
