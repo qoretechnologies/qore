@@ -106,4 +106,5 @@ Current usages to migrate:
 - [ ] `CMakeLists.txt` module registration updated
 - [ ] `Makefile.am` module lists updated
 - [ ] Docs module list (`doxygen/lang/120_modules.dox.tmpl`) updated when applicable
+- [ ] entry in `doxygen/lang/900_release_notes.dox.tmpl` for new modules or updates
 - [ ] Tests added/updated for the module

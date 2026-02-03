@@ -1,0 +1,464 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/2 Client I/O module unit tests - tests multiplexed client connections.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/Http2ClientIo
+%requires json
+
+%exec-class Http2ClientIoTest
+
+#! Simple handler for regular HTTP/2 GET requests
+class SimpleGetHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns a large response body
+class LargeResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 1000;
+        *list<*string> m = (hdr.path =~ x/large\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        return makeResponse(200, strmul("X", size), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Echo handler that returns the request body and method
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string resp_body = sprintf("method=%s path=%s", hdr.method, hdr.path);
+        if (body) {
+            if (body.typeCode() == NT_BINARY) {
+                resp_body += sprintf(" body_size=%d body=%s", body.size(), body.toString());
+            } else {
+                resp_body += sprintf(" body_size=%d body=%s", body.length(), body);
+            }
+        }
+        return makeResponse(200, resp_body, {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that delays before responding
+class SlowHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int delay_ms = 100;
+        *list<*string> m = (hdr.path =~ x/slow\/(\d+)/);
+        if (m) {
+            delay_ms = int(m[0]);
+        }
+        sleep(delay_ms);
+        return makeResponse(200, sprintf("delayed %d ms", delay_ms), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns an error
+class ErrorHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int code = 500;
+        *list<*string> m = (hdr.path =~ x/error\/(\d+)/);
+        if (m) {
+            code = int(m[0]);
+        }
+        return makeResponse(code, sprintf("Error %d", code), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns JSON
+class JsonHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> response = {
+            "method": hdr.method,
+            "path": hdr.path,
+            "query": hdr."query-string",
+        };
+        if (body) {
+            response.body_size = body.typeCode() == NT_BINARY ? body.size() : body.length();
+        }
+        return makeResponse(200, make_json(response), {"Content-Type": "application/json"});
+    }
+}
+
+class Http2ClientIoTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int mSslPort;
+        string mSslUrl;
+        Logger mLogger;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("Http2ClientIoTest", "1.0") {
+        # Module and definition tests
+        addTestCase("module load test", \testModuleLoad());
+        addTestCase("hashdecl and enum definitions", \testDefinitions());
+        addTestCase("connection manager creation", \testConnectionManagerCreation());
+
+        # Basic functionality tests
+        addTestCase("connection manager stats", \testConnectionManagerStats());
+
+        # Negative tests
+        addTestCase("invalid URL handling", \testInvalidUrl());
+        addTestCase("connection manager shutdown", \testConnectionManagerShutdown());
+
+        # Corner case tests
+        addTestCase("empty options hashdecl", \testEmptyOptions());
+        addTestCase("stream state transitions", \testStreamStateTransitions());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("http2-client-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        mServer = new HttpServer(opts);
+
+        # Register handlers
+        mServer.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        mServer.setHandler("large", "/large", NOTHING, new LargeResponseHandler());
+        mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        mServer.setHandler("slow", "/slow", NOTHING, new SlowHandler());
+        mServer.setHandler("error", "/error", NOTHING, new ErrorHandler());
+        mServer.setHandler("json", "/json", NOTHING, new JsonHandler());
+
+        # Add HTTPS listener for HTTP/2
+        mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        mSslUrl = "https://localhost:" + mSslPort;
+
+        mServer.waitForAsyncIo();
+
+        if (m_options.verbose > 1) {
+            printf("HTTPS test server on port %d\n", mSslPort);
+        }
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    #! Test that the module loaded successfully
+    testModuleLoad() {
+        # If we got here, the module loaded
+        assertEq(True, True, "module loaded successfully");
+    }
+
+    #! Test hashdecl and enum definitions are accessible
+    testDefinitions() {
+        # Test stream state enums have expected values
+        assertEq(0, Http2ClientIo::Http2ClientStreamState::Pending, "stream state Pending");
+        assertEq(1, Http2ClientIo::Http2ClientStreamState::Open, "stream state Open");
+        assertEq(2, Http2ClientIo::Http2ClientStreamState::HeadersReceived, "stream state HeadersReceived");
+        assertEq(3, Http2ClientIo::Http2ClientStreamState::ReceivingBody, "stream state ReceivingBody");
+        assertEq(4, Http2ClientIo::Http2ClientStreamState::Complete, "stream state Complete");
+        assertEq(5, Http2ClientIo::Http2ClientStreamState::Cancelled, "stream state Cancelled");
+        assertEq(6, Http2ClientIo::Http2ClientStreamState::Error, "stream state Error");
+
+        # Test connection state enums have expected values
+        assertEq(0, Http2ClientIo::Http2ClientConnectionState::Connecting, "conn state Connecting");
+        assertEq(1, Http2ClientIo::Http2ClientConnectionState::Ready, "conn state Ready");
+        assertEq(2, Http2ClientIo::Http2ClientConnectionState::Draining, "conn state Draining");
+        assertEq(3, Http2ClientIo::Http2ClientConnectionState::Closed, "conn state Closed");
+
+        # Test constants have expected values
+        assertEq(6, Http2ClientIo::DefaultMaxConnectionsPerHost, "default max connections per host");
+        assertEq(100, Http2ClientIo::DefaultMaxStreamsPerConnection, "default max streams per connection");
+        assertTrue(Http2ClientIo::DefaultConnectionIdleTimeout > 0, "default idle timeout > 0");
+        assertTrue(Http2ClientIo::DefaultConnectTimeout > 0, "default connect timeout > 0");
+        assertTrue(Http2ClientIo::DefaultRequestTimeout > 0, "default request timeout > 0");
+
+        # Test hashdecl can be instantiated with values
+        hash<Http2ClientIo::Http2ClientConnectionManagerOptions> opts = <Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "max_connections_per_host": 4,
+            "max_streams_per_connection": 50,
+            "idle_timeout": 30s,
+            "connect_timeout": 15s,
+            "request_timeout": 45s,
+            "accept_all_certs": True,
+        };
+        assertEq(4, opts.max_connections_per_host, "manager options max_connections_per_host");
+        assertEq(50, opts.max_streams_per_connection, "manager options max_streams_per_connection");
+        assertEq(30000, int(opts.idle_timeout), "manager options idle_timeout");
+        assertEq(15000, int(opts.connect_timeout), "manager options connect_timeout");
+        assertEq(45000, int(opts.request_timeout), "manager options request_timeout");
+        assertEq(True, opts.accept_all_certs, "manager options accept_all_certs");
+
+        # Test request options hashdecl
+        hash<Http2ClientIo::Http2ClientRequestOptions> req_opts = <Http2ClientIo::Http2ClientRequestOptions>{
+            "timeout": 5s,
+            "priority_weight": 128,
+        };
+        assertEq(5000, int(req_opts.timeout), "request options timeout");
+        assertEq(128, req_opts.priority_weight, "request options priority_weight");
+
+        # Test response info hashdecl
+        hash<Http2ClientIo::Http2ClientResponseInfo> resp_info = <Http2ClientIo::Http2ClientResponseInfo>{
+            "status_code": 200,
+            "headers": {"content-type": "text/plain"},
+            "body": "test",
+            "stream_id": 1,
+        };
+        assertEq(200, resp_info.status_code, "response info status_code");
+        assertEq("text/plain", resp_info.headers."content-type", "response info headers");
+        assertEq("test", resp_info.body, "response info body");
+        assertEq(1, resp_info.stream_id, "response info stream_id");
+
+        # Test error info hashdecl
+        hash<Http2ClientIo::Http2ClientErrorInfo> err_info = <Http2ClientIo::Http2ClientErrorInfo>{
+            "err": "HTTP2-ERROR",
+            "desc": "test error",
+            "stream_id": 3,
+            "h2_error_code": 1,
+        };
+        assertEq("HTTP2-ERROR", err_info.err, "error info err");
+        assertEq("test error", err_info.desc, "error info desc");
+        assertEq(3, err_info.stream_id, "error info stream_id");
+        assertEq(1, err_info.h2_error_code, "error info h2_error_code");
+
+        # Test connection info hashdecl - state field must be assigned separately
+        # due to enum type handling in hashdecl initializers
+        hash<Http2ClientIo::Http2ClientConnectionInfo> conn_info = <Http2ClientIo::Http2ClientConnectionInfo>{
+            "host": "example.com",
+            "port": 443,
+            "ssl": True,
+            "active_streams": 5,
+            "max_concurrent_streams": 100,
+            "connection_id": 1,
+        };
+        conn_info.state = Http2ClientIo::Http2ClientConnectionState::Ready;
+        assertEq("example.com", conn_info.host, "connection info host");
+        assertEq(443, conn_info.port, "connection info port");
+        assertEq(True, conn_info.ssl, "connection info ssl");
+        assertEq(Http2ClientIo::Http2ClientConnectionState::Ready, conn_info.state, "connection info state");
+        assertEq(5, conn_info.active_streams, "connection info active_streams");
+        assertEq(100, conn_info.max_concurrent_streams, "connection info max_concurrent_streams");
+        assertEq(1, conn_info.connection_id, "connection info connection_id");
+    }
+
+    #! Test connection manager creation with various options
+    testConnectionManagerCreation() {
+        # Create with default options
+        Http2ClientIo::Http2ClientConnectionManager manager1();
+        hash<auto> stats1 = manager1.getStats();
+        assertEq(0, stats1.total_connections, "default manager initial connections");
+        assertEq(0, stats1.total_active_streams, "default manager initial streams");
+        assertEq(0, stats1.hosts, "default manager initial hosts");
+
+        # Create with custom options
+        Http2ClientIo::Http2ClientConnectionManager manager2(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "max_connections_per_host": 4,
+            "max_streams_per_connection": 50,
+            "idle_timeout": 30s,
+            "connect_timeout": 15s,
+            "request_timeout": 45s,
+            "logger": mLogger,
+        });
+        hash<auto> stats2 = manager2.getStats();
+        assertEq(0, stats2.total_connections, "custom manager initial connections");
+        assertEq(0, stats2.total_active_streams, "custom manager initial streams");
+
+        # Create with minimal options
+        Http2ClientIo::Http2ClientConnectionManager manager3(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "max_connections_per_host": 1,
+        });
+        hash<auto> stats3 = manager3.getStats();
+        assertEq(0, stats3.total_connections, "minimal manager initial connections");
+
+        # Create with SSL options
+        Http2ClientIo::Http2ClientConnectionManager manager4(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "ssl_verify_mode": 0,
+        });
+        hash<auto> stats4 = manager4.getStats();
+        assertEq(0, stats4.total_connections, "ssl manager initial connections");
+    }
+
+    #! Test connection manager statistics
+    testConnectionManagerStats() {
+        Http2ClientIo::Http2ClientConnectionManager manager();
+
+        # Initial stats should be empty
+        hash<auto> stats = manager.getStats();
+        assertEq(0, stats.total_connections, "initial total_connections");
+        assertEq(0, stats.total_active_streams, "initial total_active_streams");
+        assertEq(0, stats.hosts, "initial hosts count");
+        assertEq({}, stats.per_host, "initial per_host empty");
+
+        # After cleanup (no connections to clean)
+        manager.cleanupIdleConnections();
+        stats = manager.getStats();
+        assertEq(0, stats.total_connections, "after cleanup total_connections");
+    }
+
+    #! Test invalid URL handling
+    testInvalidUrl() {
+        Http2ClientIo::Http2ClientConnectionManager manager();
+
+        # Test URL without host
+        assertThrows("HTTP2-URL-ERROR", \manager.acquireStream(), ("https:///path",),
+            "URL without host should throw");
+
+        # Test empty URL
+        assertThrows("HTTP2-URL-ERROR", \manager.acquireStream(), ("",),
+            "empty URL should throw");
+
+        # Test URL with only scheme
+        assertThrows("HTTP2-URL-ERROR", \manager.acquireStream(), ("https://",),
+            "URL with only scheme should throw");
+    }
+
+    #! Test connection manager shutdown
+    testConnectionManagerShutdown() {
+        Http2ClientIo::Http2ClientConnectionManager manager();
+
+        # Close all connections (should work even with no connections)
+        manager.closeAll();
+
+        # After closeAll, acquiring streams should fail
+        assertThrows("HTTP2-SHUTDOWN", \manager.acquireStream(), (mSslUrl,),
+            "acquireStream after shutdown should throw");
+
+        # Stats should show no connections
+        hash<auto> stats = manager.getStats();
+        assertEq(0, stats.total_connections, "after shutdown total_connections");
+    }
+
+    #! Test empty options hashdecl
+    testEmptyOptions() {
+        # Create manager with empty hash (should use defaults)
+        Http2ClientIo::Http2ClientConnectionManager manager(<Http2ClientIo::Http2ClientConnectionManagerOptions>{});
+        hash<auto> stats = manager.getStats();
+        assertEq(0, stats.total_connections, "empty options manager works");
+    }
+
+    #! Test stream state transitions
+    testStreamStateTransitions() {
+        # Verify state values are distinct
+        list<int> states = (
+            Http2ClientIo::Http2ClientStreamState::Pending,
+            Http2ClientIo::Http2ClientStreamState::Open,
+            Http2ClientIo::Http2ClientStreamState::HeadersReceived,
+            Http2ClientIo::Http2ClientStreamState::ReceivingBody,
+            Http2ClientIo::Http2ClientStreamState::Complete,
+            Http2ClientIo::Http2ClientStreamState::Cancelled,
+            Http2ClientIo::Http2ClientStreamState::Error,
+        );
+
+        # All states should be unique
+        hash<string, bool> seen;
+        foreach int state in (states) {
+            string key = string(state);
+            assertFalse(seen{key} ?? False, sprintf("state %d should be unique", state));
+            seen{key} = True;
+        }
+        assertEq(7, seen.size(), "should have 7 unique stream states");
+
+        # Verify connection states are distinct
+        list<int> conn_states = (
+            Http2ClientIo::Http2ClientConnectionState::Connecting,
+            Http2ClientIo::Http2ClientConnectionState::Ready,
+            Http2ClientIo::Http2ClientConnectionState::Draining,
+            Http2ClientIo::Http2ClientConnectionState::Closed,
+        );
+
+        hash<string, bool> conn_seen;
+        foreach int state in (conn_states) {
+            string key = string(state);
+            assertFalse(conn_seen{key} ?? False, sprintf("conn state %d should be unique", state));
+            conn_seen{key} = True;
+        }
+        assertEq(4, conn_seen.size(), "should have 4 unique connection states");
+    }
+}

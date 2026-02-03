@@ -1,0 +1,263 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file Http2ClientIo.qm Qore user module providing HTTP/2 multiplexed client I/O
+
+/*  Http2ClientIo.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires Logger
+
+module Http2ClientIo {
+    version = "1.0";
+    desc = "HTTP/2 multiplexed client I/O support";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Module initialization
+    };
+}
+
+/** @mainpage Http2ClientIo Module
+
+    @tableofcontents
+
+    @section http2clientio_intro Introduction
+
+    The %Http2ClientIo module provides HTTP/2 multiplexed client I/O support, enabling
+    multiple concurrent streams on a single TCP connection for RestClient, WebSocketClient,
+    and ServerSentEventClient.
+
+    This module leverages the @ref Qore::AbstractPollOperation pattern and integrates with
+    @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" for efficient
+    multiplexed I/O handling.
+
+    @section http2clientio_features Features
+
+    - **True HTTP/2 multiplexing**: Multiple concurrent streams on a single TCP connection
+    - **Connection pooling**: Shared connections across multiple clients
+    - **Sync and async APIs**: Blocking and callback-based interfaces
+    - **Streaming support**: WebSocket and SSE over HTTP/2
+    - **Automatic GOAWAY handling**: Graceful connection shutdown
+
+    @section http2clientio_components Components
+
+    - @ref Http2ClientIo::Http2ClientConnectionManager "Http2ClientConnectionManager" - Connection pool per host:port
+    - @ref Http2ClientIo::Http2ClientConnection "Http2ClientConnection" - Single TCP, multiple streams
+    - @ref Http2ClientIo::Http2ClientStreamHandle "Http2ClientStreamHandle" - Per-request handle (sync/async)
+    - @ref Http2ClientIo::Http2ClientPollOperation "Http2ClientPollOperation" - Continuous frame reading
+
+    @section http2clientio_usage Usage
+
+    @par Basic Usage (sync API)
+    @code{.py}
+%requires Http2ClientIo
+
+# Create a connection manager
+Http2ClientConnectionManager manager();
+
+# Acquire a stream for a request
+Http2ClientStreamHandle stream = manager.acquireStream("https://example.com");
+
+# Submit request and wait for response
+hash<auto> response = stream.request("GET", "/api/resource");
+    @endcode
+
+    @par Async Usage (callback API)
+    @code{.py}
+%requires Http2ClientIo
+%requires AsyncSocketIo
+
+Http2ClientConnectionManager manager();
+AsyncSocketIoController controller();
+
+# Submit async request with callback
+manager.submitRequestAsync(controller, "https://example.com", "GET", "/api/resource",
+    NOTHING, NOTHING,
+    sub (hash<auto> response, *hash<auto> error) {
+        if (error) {
+            printf("Error: %y\n", error);
+        } else {
+            printf("Response: %y\n", response);
+        }
+    });
+
+# Run event loop
+controller.run();
+    @endcode
+
+    @section http2clientio_relnotes Release Notes
+
+    @subsection http2clientio_v1_0 Version 1.0
+    - Initial release of Http2ClientIo module
+    - True HTTP/2 multiplexing for client scenarios
+    - Connection pooling with configurable limits
+    - Sync and async request APIs
+    - Streaming support for WebSocket and SSE
+*/
+
+#! Main namespace for Http2ClientIo module
+public namespace Http2ClientIo {
+    #! Default maximum connections per host
+    public const DefaultMaxConnectionsPerHost = 6;
+
+    #! Default maximum streams per connection
+    public const DefaultMaxStreamsPerConnection = 100;
+
+    #! Default connection idle timeout (60 seconds)
+    public const DefaultConnectionIdleTimeout = 60s;
+
+    #! Default connect timeout (30 seconds)
+    public const DefaultConnectTimeout = 30s;
+
+    #! Default request timeout (60 seconds)
+    public const DefaultRequestTimeout = 60s;
+
+    #! Stream state enum
+    public enum Http2ClientStreamState {
+        #! Stream is pending (not yet submitted)
+        Pending = 0,
+        #! Stream is open (request submitted, awaiting response)
+        Open = 1,
+        #! Stream has received headers
+        HeadersReceived = 2,
+        #! Stream is receiving body data
+        ReceivingBody = 3,
+        #! Stream is complete (response fully received)
+        Complete = 4,
+        #! Stream was cancelled
+        Cancelled = 5,
+        #! Stream encountered an error
+        Error = 6,
+    }
+
+    #! Connection state enum
+    public enum Http2ClientConnectionState {
+        #! Connection is connecting
+        Connecting = 0,
+        #! Connection is ready (preface exchanged)
+        Ready = 1,
+        #! Connection is draining (GOAWAY received)
+        Draining = 2,
+        #! Connection is closed
+        Closed = 3,
+    }
+
+    #! Request options for HTTP/2 client requests
+    public hashdecl Http2ClientRequestOptions {
+        #! Request timeout
+        *timeout timeout;
+
+        #! Priority weight (1-256)
+        *int priority_weight;
+
+        #! Stream dependency (stream ID)
+        *int depends_on;
+
+        #! Exclusive dependency flag
+        bool exclusive_dependency = False;
+    }
+
+    #! Response info for HTTP/2 client requests
+    public hashdecl Http2ClientResponseInfo {
+        #! HTTP status code
+        int status_code;
+
+        #! Response headers
+        hash<auto> headers;
+
+        #! Response body (binary or string depending on content-type)
+        auto body;
+
+        #! Stream ID used for this request
+        int stream_id;
+
+        #! Response timing info
+        hash<auto> timing;
+    }
+
+    #! Error info for HTTP/2 client operations
+    public hashdecl Http2ClientErrorInfo {
+        #! Error code
+        string err;
+
+        #! Error description
+        string desc;
+
+        #! Stream ID (if stream-level error)
+        *int stream_id;
+
+        #! HTTP/2 error code (if applicable)
+        *int h2_error_code;
+    }
+
+    #! Connection info for HTTP/2 client connections
+    public hashdecl Http2ClientConnectionInfo {
+        #! Host name
+        string host;
+
+        #! Port number
+        int port;
+
+        #! Whether SSL/TLS is used
+        bool ssl;
+
+        #! Connection state
+        Http2ClientConnectionState state;
+
+        #! Number of active streams
+        int active_streams;
+
+        #! Maximum concurrent streams (from server SETTINGS)
+        int max_concurrent_streams;
+
+        #! Connection ID
+        int connection_id;
+    }
+
+    #! Connection manager options
+    public hashdecl Http2ClientConnectionManagerOptions {
+        #! Maximum connections per host
+        int max_connections_per_host = DefaultMaxConnectionsPerHost;
+
+        #! Maximum streams per connection
+        int max_streams_per_connection = DefaultMaxStreamsPerConnection;
+
+        #! Connection idle timeout
+        timeout idle_timeout = DefaultConnectionIdleTimeout;
+
+        #! Connect timeout
+        timeout connect_timeout = DefaultConnectTimeout;
+
+        #! Default request timeout
+        timeout request_timeout = DefaultRequestTimeout;
+
+        #! SSL/TLS verification mode
+        *int ssl_verify_mode;
+
+        #! Accept all SSL certificates
+        bool accept_all_certs = False;
+
+        #! Logger for connection manager
+        *Logger logger;
+    }
+}

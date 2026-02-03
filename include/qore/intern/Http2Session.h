@@ -38,12 +38,13 @@
 
 #include <qore/Qore.h>
 
-#include <string>
-#include <vector>
+#include <functional>
 #include <map>
-#include <queue>
 #include <memory>
 #include <mutex>
+#include <queue>
+#include <string>
+#include <vector>
 
 // Forward declarations
 struct qore_socket_private;
@@ -331,6 +332,37 @@ public:
     //! Returns true if there are completed streams waiting
     DLLLOCAL bool hasCompletedStreams() const { return !completed_streams.empty(); }
 
+    //! Callback type for stream completion notification (HTTP/2 client multiplexing)
+    /** @param stream_id the completed stream ID
+        @param stream the stream info (may be nullptr if stream was reset before completion)
+        @param xsink exception sink for error reporting
+    */
+    using StreamCompleteCallback = std::function<void(int32_t stream_id, Http2StreamInfo* stream,
+        ExceptionSink* xsink)>;
+
+    //! Sets the stream completion callback for HTTP/2 client multiplexing
+    /** When set, this callback is invoked each time a stream completes (response received,
+        stream reset, or error). This enables multiplexed response routing in client scenarios.
+
+        @param callback the callback to invoke on stream completion
+    */
+    DLLLOCAL void setStreamCompleteCallback(StreamCompleteCallback callback) {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        stream_complete_callback = std::move(callback);
+    }
+
+    //! Clears the stream completion callback
+    DLLLOCAL void clearStreamCompleteCallback() {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        stream_complete_callback = nullptr;
+    }
+
+    //! Returns true if a stream completion callback is set
+    DLLLOCAL bool hasStreamCompleteCallback() const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        return static_cast<bool>(stream_complete_callback);
+    }
+
     //! Returns the number of active streams
     DLLLOCAL size_t getActiveStreamCount() const { return streams.size(); }
 
@@ -419,6 +451,9 @@ private:
     // Stream management
     std::map<int32_t, std::unique_ptr<Http2StreamInfo>> streams;
     std::queue<std::unique_ptr<Http2StreamInfo>> completed_streams;
+
+    // Stream completion callback for client multiplexing
+    StreamCompleteCallback stream_complete_callback;
 
     // Send buffer
     std::vector<char> send_buffer;
