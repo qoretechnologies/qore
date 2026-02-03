@@ -123,7 +123,13 @@ struct Http2Settings {
     uint32_t initial_window_size = 65535;
     uint32_t max_frame_size = 16384;
     uint32_t max_header_list_size = UINT32_MAX;
-    uint32_t enable_connect_protocol = 1;  //!< RFC 8441: Enable extended CONNECT for WebSocket
+    //! RFC 8441: Extended CONNECT for WebSocket over HTTP/2.
+    /** Default is 0 per the HTTP/2 spec.  Servers that want to advertise support must
+        call Http2Session::setEnableConnectProtocol(true) before the connection preface
+        is sent; this is handled automatically by SocketHttp2ServerPollOperation::initSession()
+        based on qore_socket_private::h2_enable_connect_protocol.
+    */
+    uint32_t enable_connect_protocol = 0;
 };
 
 //! HTTP/2 Session wrapper using nghttp2
@@ -259,9 +265,21 @@ public:
     DLLLOCAL int submitConnectResponse(int32_t stream_id, int status_code,
         const std::map<std::string, std::string>& headers, ExceptionSink* xsink);
 
-    //! Returns true if RFC 8441 extended CONNECT protocol is enabled
+    //! Returns true if RFC 8441 extended CONNECT protocol is enabled locally
     DLLLOCAL bool isConnectProtocolEnabled() const {
         return local_settings.enable_connect_protocol != 0;
+    }
+
+    //! Returns true if the remote peer has advertised ENABLE_CONNECT_PROTOCOL
+    DLLLOCAL bool isRemoteConnectProtocolEnabled() const {
+        return remote_settings_received && remote_settings.enable_connect_protocol != 0;
+    }
+
+    //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in SETTINGS
+    /** Must be called before sendConnectionPreface() to take effect.
+    */
+    DLLLOCAL void setEnableConnectProtocol(bool enable) {
+        local_settings.enable_connect_protocol = enable ? 1 : 0;
     }
 
     //! Send all pending data (async, non-blocking)
@@ -325,6 +343,20 @@ public:
     */
     DLLLOCAL bool hasPendingData() const { return !send_buffer.empty(); }
 
+    //! Returns the remote flow control window size for a given stream
+    /** Returns the number of bytes the server can send on this stream before
+        a WINDOW_UPDATE is needed from the client.
+        @param stream_id the stream ID to check (0 for connection-level window)
+        @return the remote window size in bytes, or -1 on error
+    */
+    DLLLOCAL int32_t getStreamRemoteWindowSize(int32_t stream_id) const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        if (stream_id == 0) {
+            return nghttp2_session_get_remote_window_size(session);
+        }
+        return nghttp2_session_get_stream_remote_window_size(session, stream_id);
+    }
+
     //! Get current settings
     DLLLOCAL Http2Settings getSettings() const { return local_settings; }
 
@@ -386,6 +418,7 @@ private:
     // Settings
     Http2Settings local_settings;
     Http2Settings remote_settings;
+    bool remote_settings_received = false;  //!< True after first SETTINGS frame from peer
 
     // GOAWAY state
     bool goaway_received = false;

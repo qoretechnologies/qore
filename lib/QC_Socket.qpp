@@ -4343,6 +4343,56 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
     return s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
 }
 
+//! Submits an HTTP/2 response without creating a poll operation
+/** Queues the response in the nghttp2 session. The actual socket write is handled by
+    the active read poll operation's sendPendingData() calls. This is designed for
+    HTTP/2 multiplexing where the read operation stays on the I/O thread and responses
+    are submitted from handler threads.
+
+    @param stream_id the HTTP/2 stream ID from the request
+    @param status_code the HTTP status code to send
+    @param headers hash of response headers
+    @param body the response body (optional)
+
+    @throw HTTP2-ERROR no HTTP/2 session active or submission failed
+
+    @since %Qore 2.2
+*/
+nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> headers, *data body) {
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    SimpleRefHolder<BinaryNode> body_holder;
+
+    if (body) {
+        qore_type_t body_type = body->getType();
+        if (body_type == NT_BINARY) {
+            const BinaryNode* bin = reinterpret_cast<const BinaryNode*>(body);
+            body_ptr = bin->getPtr();
+            body_len = bin->size();
+        } else if (body_type == NT_STRING) {
+            const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+            body_ptr = str->c_str();
+            body_len = str->size();
+        }
+    }
+
+    s->submitHttp2Response(stream_id, status_code, headers, body_ptr, body_len, xsink);
+}
+
+//! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
+/** Must be called before the HTTP/2 session is created (before the socket starts
+    processing HTTP/2 traffic). When \c enable is @ref False, the server will not
+    advertise RFC 8441 extended CONNECT protocol support, so clients will not attempt
+    WebSocket over HTTP/2 CONNECT.
+
+    @param enable @ref True to advertise ENABLE_CONNECT_PROTOCOL (default), @ref False to disable
+
+    @since %Qore 2.3
+*/
+nothing Socket::setHttp2ConnectProtocolEnabled(bool enable = True) {
+    s->setHttp2ConnectProtocolEnabled(enable);
+}
+
 //! Returns a poll operation for sending an HTTP/2 CONNECT response (RFC 8441)
 /** This poll operation sends an HTTP/2 response for an extended CONNECT request
     (RFC 8441), used for WebSocket over HTTP/2. Unlike a regular HTTP/2 response,

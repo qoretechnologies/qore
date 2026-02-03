@@ -612,6 +612,13 @@ struct qore_socket_private {
     */
     bool h2_stream_read_external = false;
 
+    //! Whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
+    /** When false, the server does not advertise extended CONNECT protocol support
+        (RFC 8441), so clients will not attempt WebSocket over HTTP/2 CONNECT.
+        Defaults to true.
+    */
+    bool h2_enable_connect_protocol = true;
+
     DLLLOCAL qore_socket_private(int n_sock = QORE_INVALID_SOCKET, int n_sfamily = AF_UNSPEC,
             int n_stype = SOCK_STREAM, int n_prot = 0, const QoreEncoding* n_enc = QCS_DEFAULT) :
             sock(n_sock), sfamily(n_sfamily), port(-1), stype(n_stype), sprot(n_prot), enc(n_enc) {
@@ -3442,7 +3449,7 @@ struct qore_socket_private {
             int64 r;
             {
                 AutoUnlocker al(l);
-                r = is->read((void*)buf->getPtr(), sizeof(max_chunk_size), xsink);
+                r = is->read((void*)buf->getPtr(), max_chunk_size, xsink);
                 if (*xsink)
                     return;
             }

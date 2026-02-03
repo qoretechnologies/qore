@@ -4089,6 +4089,17 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             }
         }
 
+        // Check if the stream was reset (e.g., RST_STREAM from server)
+        {
+            Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
+            if (stream && stream->reset) {
+                xsink->raiseException("HTTP2-CONNECT-ERROR",
+                    "HTTP/2 CONNECT request was rejected by the server "
+                    "(stream reset with error code %d)", (int)stream->error_code);
+                return nullptr;
+            }
+        }
+
         // Check if we have a response
         Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
         if (stream && stream->headers_complete) {

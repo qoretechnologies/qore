@@ -1890,6 +1890,37 @@ public:
     */
     DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
             const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Submits an HTTP/2 response to the nghttp2 session without creating a poll operation
+    /** The response headers and body are queued in the nghttp2 session.  The actual
+        socket write is handled by the active read poll operation's sendPendingData() calls.
+        This is thread-safe and can be called from any thread.
+
+        @param stream_id the HTTP/2 stream ID from the request
+        @param status_code the HTTP status code
+        @param headers response headers
+        @param body response body data (optional)
+        @param body_len response body length
+        @return 0 on success, -1 on error (exception raised)
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2Response(int32_t stream_id, int status_code,
+            const QoreHashNode* headers, const void* body, size_t body_len,
+            ExceptionSink* xsink);
+
+    //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
+    /** Must be called before the HTTP/2 session is created (i.e., before the connection
+        preface is exchanged). When \c enable is \c false, the server will not advertise
+        RFC 8441 extended CONNECT protocol support, so clients will not attempt WebSocket
+        over HTTP/2 CONNECT.
+
+        @param enable \c true to advertise ENABLE_CONNECT_PROTOCOL (default), \c false to disable
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setHttp2ConnectProtocolEnabled(bool enable);
+
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
             bool end_stream, int timeout_ms, ExceptionSink* xsink);
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);

@@ -513,7 +513,7 @@ public:
     }
 
     DLLLOCAL virtual bool goalReached() const {
-        return h2_state == H2S_REQUEST_READY;
+        return h2_state == H2S_REQUEST_READY && !peer_closed;
     }
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
@@ -660,6 +660,7 @@ public:
             case SS_READ_CHUNK: return "reading-chunk";
             case SS_SEND_CHUNK: return "sending-chunk";
             case SS_FLUSH: return "flushing";
+            case SS_RECV_WINDOW: return "receiving-window-update";
             case SS_DONE: return "done";
             default: return "unknown";
         }
@@ -676,7 +677,7 @@ public:
     }
 
 private:
-    enum StreamingState { SS_READ_CHUNK, SS_SEND_CHUNK, SS_FLUSH, SS_DONE };
+    enum StreamingState { SS_READ_CHUNK, SS_SEND_CHUNK, SS_FLUSH, SS_RECV_WINDOW, SS_DONE };
     StreamingState ss_state = SS_READ_CHUNK;
     int32_t stream_id = 0;
     SimpleRefHolder<InputStream> input_stream;

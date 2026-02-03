@@ -346,6 +346,18 @@ public:
     DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
         const QoreHashNode* headers, ExceptionSink* xsink);
 
+    //! Submits an HTTP/2 response without creating a poll operation
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2Response(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        ExceptionSink* xsink);
+
+    //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT void setHttp2ConnectProtocolEnabled(bool enable);
+
     //! Sets the active HTTP/2 stream ID for transparent send/recv operations
     /** @since %Qore 2.3
     */

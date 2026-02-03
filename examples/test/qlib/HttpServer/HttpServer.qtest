@@ -302,6 +302,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
         addTestCase("async mode WebSocket over SSL", \asyncModeWebSocketSslTest());
         addTestCase("async mode WebSocket HTTP/2 status 200", \asyncModeWebSocketHttp2StatusTest());
+        addTestCase("async mode WebSocket HTTP/2 reject", \asyncModeWebSocketHttp2RejectTest());
         addTestCase("async mode WebSocket over SSL HTTP/1.1", \asyncModeWebSocketSslHttp1Test());
         addTestCase("async mode client cert capture", \asyncModeClientCertTest());
         addTestCase("async mode WebSocket 401 then success", \asyncModeWebSocket401ThenSuccessTest());
@@ -993,6 +994,75 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         assertTrue(wsc.isHttp2(), "WebSocket should negotiate HTTP/2");
         assertTrue(wsc.isOpen(), "WebSocket should be open");
+    }
+
+    asyncModeWebSocketHttp2RejectTest() {
+        # Test reject_http2_websocket option: server rejects HTTP/2 WebSocket CONNECT with 501,
+        # client with http_version "auto" falls back to HTTP/1.1
+
+        Logger rejectLogger("ws-reject-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            rejectLogger.addAppender(new StdoutAppender());
+        }
+        HttpServer rejectServer(<HttpServerOptionInfo>{
+            "logger": rejectLogger,
+            "debug": True,
+            "reject_http2_websocket": True,
+        });
+        on_exit rejectServer.stop();
+
+        TestWsHandler rejectWsHandler({"logger": rejectLogger});
+        rejectServer.setHandler("ws", "/ws", NOTHING, rejectWsHandler);
+
+        int rejectSslPort = rejectServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+
+        rejectServer.waitForAsyncIo();
+
+        string wssUrl = "wss://localhost:" + rejectSslPort + "/ws";
+
+        # Part 1: Explicit HTTP/2 should get rejection (server's nghttp2 sends RST_STREAM
+        # because ENABLE_CONNECT_PROTOCOL is not advertised)
+        {
+            code callback = sub (*data msg) { };
+            WebSocketClient wsc(callback, {
+                "url": wssUrl,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+                "http_version": "2.0",
+            });
+            assertThrows("HTTP2-CONNECT-ERROR", "stream reset", \wsc.connect());
+        }
+
+        # Part 2: Auto mode should fall back to HTTP/1.1 successfully
+        {
+            Counter msgReceived(1);
+            string receivedMsg;
+            code callback = sub (*data msg) {
+                if (msg.typeCode() == NT_STRING) {
+                    receivedMsg = msg;
+                    msgReceived.dec();
+                }
+            };
+            WebSocketClient wsc(callback, {
+                "url": wssUrl,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+                "http_version": "auto",
+            });
+            wsc.connect();
+            on_exit wsc.disconnect();
+
+            assertFalse(wsc.isHttp2(), "WebSocket should fall back to HTTP/1.1");
+            assertTrue(wsc.isOpen(), "WebSocket should be open");
+
+            wsc.send("hello-reject-test");
+            assertEq(0, msgReceived.waitForZero(5s));
+            assertEq("ECHO:hello-reject-test", receivedMsg);
+        }
     }
 
     asyncModeWebSocketSslHttp1Test() {

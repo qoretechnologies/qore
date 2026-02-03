@@ -724,6 +724,18 @@ int32_t QoreSocketObject::submitHttp2PushPromise(int32_t stream_id, const char* 
     return priv->socket->submitHttp2PushPromise(stream_id, path, headers, xsink);
 }
 
+int QoreSocketObject::submitHttp2Response(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->submitHttp2Response(stream_id, status_code, headers, body, body_len, xsink);
+}
+
+void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
+    AutoLocker al(priv->m);
+    priv->socket->setHttp2ConnectProtocolEnabled(enable);
+}
+
 void QoreSocketObject::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     priv->socket->setHttp2ActiveStream(stream_id, xsink);
