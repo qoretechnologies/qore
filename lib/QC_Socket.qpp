@@ -812,11 +812,11 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
     }
 
     // Compute idle deadline in milliseconds from epoch
+    // Note: the 'timeout' parameter type provides values in milliseconds
     int us;
     int64 now_s = q_epoch_us(us);
     int64 now_ms = now_s * 1000 + us / 1000;
-    int64 idle_timeout_ms = idle_timeout / 1000;  // timeout is in microseconds
-    int64 deadline_ms = now_ms + idle_timeout_ms;
+    int64 deadline_ms = now_ms + idle_timeout;
 
     // Create the fused poll operation
     s->ref();

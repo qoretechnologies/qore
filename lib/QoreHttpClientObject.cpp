@@ -4035,6 +4035,17 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
         }
     }
 
+    // RFC 8441: Check if server supports extended CONNECT before sending.
+    // Some nghttp2 versions silently drop :protocol when ENABLE_CONNECT_PROTOCOL
+    // is not advertised, causing the CONNECT to be processed as a bare tunnel
+    // request with no response sent to the client.
+    if (http_priv->getH2Session()->isExtendedConnectRejected()) {
+        xsink->raiseException("HTTP2-CONNECT-ERROR",
+            "server does not support extended CONNECT "
+            "(ENABLE_CONNECT_PROTOCOL not advertised in SETTINGS)");
+        return nullptr;
+    }
+
     // Build headers map with :protocol for extended CONNECT (RFC 8441)
     std::map<std::string, std::string> h2_headers;
     h2_headers[":protocol"] = protocol;
@@ -4069,10 +4080,38 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
         return nullptr;
     }
 
-    // Read the response
+    // Read the response with overall timeout
+    int64 deadline_ms = http_priv->timeout < 0 ? -1 : q_clock_getmillis() + http_priv->timeout;
     while (true) {
-        int rv = http_priv->getH2Session()->receiveData(http_priv->timeout, xsink);
+        int recv_timeout = http_priv->timeout;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            if (now_ms >= deadline_ms) {
+                xsink->raiseException("HTTP2-CONNECT-ERROR",
+                    "timeout waiting for HTTP/2 CONNECT response (timeout: %d ms)",
+                    (int)http_priv->timeout);
+                return nullptr;
+            }
+            recv_timeout = static_cast<int>(deadline_ms - now_ms);
+        }
+        int rv = http_priv->getH2Session()->receiveData(recv_timeout, xsink);
         if (rv < 0) {
+            return nullptr;
+        }
+        // Flush pending output (SETTINGS_ACK, etc.) after processing received frames.
+        // Following nginx pattern: always send pending data after recv processing.
+        // Recompute timeout from deadline since receiveData() may have consumed time.
+        // NOTE: unlike the loop entry deadline check above, we use zero-timeout (non-blocking)
+        // rather than raising an error when the deadline has passed, because this flush is a
+        // necessary consequence of processing inbound frames — the pending data (typically small
+        // control frames like SETTINGS_ACK) must be sent for the protocol to proceed, and a
+        // non-blocking send will almost always succeed for small frames in the kernel buffer.
+        int flush_timeout = recv_timeout;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            flush_timeout = now_ms >= deadline_ms ? 0 : static_cast<int>(deadline_ms - now_ms);
+        }
+        if (http_priv->getH2Session()->sendPendingDataBlocking(flush_timeout, xsink) < 0) {
             return nullptr;
         }
         if (rv == 1) {
@@ -4087,6 +4126,26 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
                     "HTTP/2 connection closed by peer before CONNECT response was received");
                 return nullptr;
             }
+        }
+
+        // Check if SETTINGS revealed that server doesn't support extended CONNECT.
+        // This catches the case where SETTINGS are received after the CONNECT was sent;
+        // some nghttp2 versions silently drop :protocol, so no RST_STREAM will arrive.
+        if (http_priv->getH2Session()->isExtendedConnectRejected()) {
+            // Cancel the submitted stream to prevent leaking it in the session map
+            // and notify the server to stop processing the bare CONNECT.
+            // sendPendingDataBlocking() triggers onStreamCloseCallback which removes
+            // the stream from the session map.
+            http_priv->getH2Session()->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+            if (!*xsink) {
+                http_priv->getH2Session()->sendPendingDataBlocking(0, xsink);
+            }
+            // Clear cleanup errors — the real error is missing ENABLE_CONNECT_PROTOCOL
+            xsink->clear();
+            xsink->raiseException("HTTP2-CONNECT-ERROR",
+                "server does not support extended CONNECT "
+                "(ENABLE_CONNECT_PROTOCOL not advertised in SETTINGS)");
+            return nullptr;
         }
 
         // Check if the stream was reset (e.g., RST_STREAM from server)

@@ -1168,18 +1168,41 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                         }
                         h2->markStreamComplete(frame->hd.stream_id);
                     } else if (h2->is_server && stream->is_connect) {
-                        // RFC 8441: Extended CONNECT requests have no body, so they're complete
-                        // once headers are received. The client doesn't send END_STREAM because
-                        // it needs to send data on the stream after the handshake completes.
-                        printd(5, "onFrameRecvCallback: CONNECT request complete (no END_STREAM expected)\n");
-                        if (http2DebugEnabled()) {
-                            fprintf(stderr,
-                                "HTTP2 DEBUG: headers complete stream=%d END_STREAM=0 is_connect=1\n",
+                        // RFC 8441: Extended CONNECT with :protocol when ENABLE_CONNECT_PROTOCOL
+                        // is not advertised must be rejected. Some nghttp2 versions don't enforce
+                        // this automatically, so reject explicitly to ensure consistent behavior.
+                        if (!stream->connect_protocol.empty()
+                                && !h2->local_settings.enable_connect_protocol) {
+                            printd(5, "onFrameRecvCallback: rejecting extended CONNECT "
+                                "(ENABLE_CONNECT_PROTOCOL not set) stream=%d\n",
                                 frame->hd.stream_id);
-                            fflush(stderr);
+                            if (http2DebugEnabled()) {
+                                fprintf(stderr,
+                                    "HTTP2 DEBUG: rejecting extended CONNECT stream=%d "
+                                    "(ENABLE_CONNECT_PROTOCOL not set)\n",
+                                    frame->hd.stream_id);
+                                fflush(stderr);
+                            }
+                            // Submit RST_STREAM; onStreamCloseCallback is called synchronously,
+                            // which sets reset=true and calls markStreamComplete()
+                            nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
+                                frame->hd.stream_id, NGHTTP2_PROTOCOL_ERROR);
+                        } else {
+                            // Normal CONNECT: request is complete once headers are received.
+                            // The client doesn't send END_STREAM because it needs to send data
+                            // on the stream after the handshake completes.
+                            printd(5, "onFrameRecvCallback: CONNECT request complete "
+                                "(no END_STREAM expected)\n");
+                            if (http2DebugEnabled()) {
+                                fprintf(stderr,
+                                    "HTTP2 DEBUG: headers complete stream=%d END_STREAM=0 "
+                                    "is_connect=1\n",
+                                    frame->hd.stream_id);
+                                fflush(stderr);
+                            }
+                            stream->body_complete = true;
+                            h2->markStreamComplete(frame->hd.stream_id);
                         }
-                        stream->body_complete = true;
-                        h2->markStreamComplete(frame->hd.stream_id);
                     }
                 }
             }
@@ -1468,7 +1491,6 @@ int Http2Session::onInvalidFrameRecvCallback(nghttp2_session* session,
 int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
         const nghttp2_frame* frame, const uint8_t* name, size_t namelen,
         const uint8_t* value, size_t valuelen, uint8_t flags, void* user_data) {
-    // Log invalid headers for debugging but don't fail
     std::string hdr_name(reinterpret_cast<const char*>(name), namelen);
     std::string hdr_val(reinterpret_cast<const char*>(value), valuelen);
     if (http2DebugEnabled()) {
@@ -1478,6 +1500,22 @@ int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
     }
     printd(3, "Http2Session::onInvalidHeaderCallback() stream_id: %d header: %s=%s\n",
         frame->hd.stream_id, hdr_name.c_str(), hdr_val.c_str());
+
+    // RFC 8441: When :protocol is rejected as invalid (e.g., ENABLE_CONNECT_PROTOCOL not set),
+    // store the value so onFrameRecvCallback can reject the stream with RST_STREAM via the
+    // Layer 2 extended CONNECT rejection check.  We cannot rely on
+    // NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE here because some nghttp2 versions do not honor
+    // this return value from on_invalid_header_callback (they treat it as 0, silently dropping
+    // the header and causing the CONNECT to be processed without :protocol).
+    if (hdr_name == ":protocol") {
+        Http2Session* h2 = static_cast<Http2Session*>(user_data);
+        Http2StreamInfo* stream = h2->getStream(frame->hd.stream_id);
+        if (stream) {
+            stream->connect_protocol = hdr_val;
+        }
+        return 0;
+    }
+
     return 0;
 }
 

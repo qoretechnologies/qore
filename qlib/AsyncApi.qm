@@ -1813,16 +1813,16 @@ public class AsyncApiSchemaTokenizer {
             throw "PARSE-ERROR", "Cannot find event name in @EVENT block";
         }
 
-        # Extract @summary
-        match = (block =~ x/@summary\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
+        # Extract @summary (don't stop at inline doxygen tags like @ref)
+        match = (block =~ x/@summary\s+(.+?)(?=@(?!ref\b)[a-zA-Z]|\n\s*\n|$)/s);
         if (match.typeCode() == NT_LIST && match[0]) {
-            event.summary = trim(match[0]);
+            event.summary = trim(processDoxygenRefs(match[0]));
         }
 
-        # Extract @desc (stop at @ENDEVENTSCHEMA or other tags)
-        match = (block =~ x/@desc\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
+        # Extract @desc (stop at @ENDEVENTSCHEMA or other schema tags, not @ref)
+        match = (block =~ x/@desc\s+(.+?)(?=@(?!ref\b)[a-zA-Z]|\n\s*\n|$)/s);
         if (match.typeCode() == NT_LIST && match[0]) {
-            event.desc = trim(match[0]);
+            event.desc = trim(processDoxygenRefs(match[0]));
         }
 
         # Extract @class
@@ -1841,6 +1841,24 @@ public class AsyncApiSchemaTokenizer {
         event.info_schema = parseInfoSchema(block);
 
         return event;
+    }
+
+    #! Resolve doxygen \@ref tags in description text
+    /** Converts \c @ref tags to their display text for use in AsyncAPI schema descriptions.
+
+        Handles two forms:
+        - \c "@ref Namespace::Name \"Display Text\"" becomes \c "Display Text"
+        - \c "@ref Namespace::Name" (no display text) becomes \c "Name"
+
+        @param text the description text to process
+        @return the text with \@ref tags resolved to display text
+    */
+    private static string processDoxygenRefs(string text) {
+        # Handle @ref with display text: @ref Namespace::Name "Display Text" -> Display Text
+        text = regex_subst(text, "@ref\\s+\\S+\\s+\"([^\"]+)\"", "$1", RE_Global);
+        # Handle @ref without display text: @ref Namespace::Name -> Name
+        text = regex_subst(text, "@ref\\s+(?:\\w+::)*(\\w+)", "$1", RE_Global);
+        return text;
     }
 
     #! Parse the @info section of an event block
@@ -1914,7 +1932,7 @@ public class AsyncApiSchemaTokenizer {
 
             hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
             if (field_desc) {
-                field_schema.description = trim(field_desc);
+                field_schema.description = trim(processDoxygenRefs(field_desc));
             }
 
             # Pop stack until we find a parent with smaller indentation
@@ -2002,16 +2020,16 @@ public class AsyncApiSchemaTokenizer {
             throw "PARSE-ERROR", "Cannot find path in @WEBSOCKET block";
         }
 
-        # Extract @summary
-        match = (block =~ x/@summary\s+(.+?)(?=@|\n\s*\n|$)/s);
+        # Extract @summary (don't stop at inline doxygen tags like @ref)
+        match = (block =~ x/@summary\s+(.+?)(?=@(?!ref\b)|\n\s*\n|$)/s);
         if (match.typeCode() == NT_LIST && match[0]) {
-            channel.summary = trim(match[0]);
+            channel.summary = trim(processDoxygenRefs(match[0]));
         }
 
-        # Extract @desc (stop at @ENDASYNCAPI or other tags)
-        match = (block =~ x/@desc\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
+        # Extract @desc (stop at @ENDASYNCAPI or other schema tags, not @ref)
+        match = (block =~ x/@desc\s+(.+?)(?=@(?!ref\b)[a-zA-Z]|\n\s*\n|$)/s);
         if (match.typeCode() == NT_LIST && match[0]) {
-            channel.desc = trim(match[0]);
+            channel.desc = trim(processDoxygenRefs(match[0]));
         }
 
         # Extract all @subscribe schemas
@@ -2144,7 +2162,7 @@ public class AsyncApiSchemaTokenizer {
 
             hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
             if (field_desc) {
-                field_schema.description = trim(field_desc);
+                field_schema.description = trim(processDoxygenRefs(field_desc));
             }
 
             # Pop stack until we find a parent with smaller indentation

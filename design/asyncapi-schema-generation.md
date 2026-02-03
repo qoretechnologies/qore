@@ -198,6 +198,23 @@ The generator supports all Qore types, mapped to JSON Schema:
 | `list<T>` | array of T | - |
 | `*type` | type (nullable: true) | - |
 
+## Doxygen `@ref` Tags
+
+Doxygen `@ref` tags are automatically resolved to plain text in all description fields (`@summary`, `@desc`,
+and field descriptions in `@info`, `@subscribe`, and `@publish` blocks).
+
+| Source | Generated Output |
+|--------|------------------|
+| `@ref OMQ::ES_Fatal "FATAL"` | `FATAL` |
+| `@ref OMQ::StatError "ERROR"` | `ERROR` |
+| `@ref OMQ::BatchMode` (no display text) | `BatchMode` |
+
+Example:
+```
+- severity (string): error severity (@ref OMQ::ES_Fatal "FATAL", @ref OMQ::ES_Major "MAJOR")
+```
+Produces a field with description: `error severity (FATAL, MAJOR)`
+
 ## Command-Line Tool
 
 ### Basic Usage

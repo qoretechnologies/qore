@@ -1024,8 +1024,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         string wssUrl = "wss://localhost:" + rejectSslPort + "/ws";
 
-        # Part 1: Explicit HTTP/2 should get rejection (server's nghttp2 sends RST_STREAM
-        # because ENABLE_CONNECT_PROTOCOL is not advertised)
+        # Part 1: Explicit HTTP/2 should get rejection (client detects that
+        # ENABLE_CONNECT_PROTOCOL is not advertised in server's SETTINGS)
         {
             code callback = sub (*data msg) { };
             WebSocketClient wsc(callback, {
@@ -1034,7 +1034,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 "ssl_verify_cert": False,
                 "http_version": "2.0",
             });
-            assertThrows("HTTP2-CONNECT-ERROR", "stream reset", \wsc.connect());
+            assertThrows("HTTP2-CONNECT-ERROR", "ENABLE_CONNECT_PROTOCOL", \wsc.connect());
         }
 
         # Part 2: Auto mode should fall back to HTTP/1.1 successfully
@@ -1212,22 +1212,21 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # First attempt: Connect WITHOUT valid token - should get 401
         string wssUrlNoToken = "wss://localhost:" + authSslPort + "/ws";
-        bool gotRejection = False;
+        bool connectSucceeded = False;
         try {
-        WebSocketClient wscBad(sub (*data msg) {}, {
-            "url": wssUrlNoToken,
-            "timeout": 10s,
-            "ssl_verify_cert": False,
-            "http_version": "2.0",
-        });
+            WebSocketClient wscBad(sub (*data msg) {}, {
+                "url": wssUrlNoToken,
+                "timeout": 10s,
+                "ssl_verify_cert": False,
+                "http_version": "2.0",
+            });
             wscBad.connect();
             # If we get here, connection succeeded when it shouldn't have
+            connectSucceeded = True;
             wscBad.disconnect();
-            assertFalse(True, "Connection without token should have been rejected with 401");
         } catch (hash<ExceptionInfo> ex) {
             # Expected - should get an error due to 401 rejection
             # HTTP/2 WebSocket uses CONNECT method which gives HTTP2-CONNECT-ERROR on rejection
-            gotRejection = True;
             if (m_options.verbose > 2) {
                 printf("Got expected error on 401 rejection: %s: %s\n", ex.err, ex.desc);
             }
@@ -1237,7 +1236,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 ex.err == "HTTP2-CONNECT-ERROR",
                 sprintf("Error should be related to 401 rejection, got: %s: %s", ex.err, ex.desc));
         }
-        assertTrue(gotRejection, "First connection without token should be rejected");
+        assertFalse(connectSucceeded, "Connection without token should have been rejected with 401");
 
         # Second attempt: Connect WITH valid token - should succeed
         Counter msgReceived(1);
