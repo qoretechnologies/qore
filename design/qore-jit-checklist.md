@@ -833,9 +833,10 @@ reloading the updated value.
 
 | Test | Result |
 |------|--------|
-| AOTSmoke.qtest | 20/20 test cases, 32 assertions |
-| TieredSmoke.qtest | 20/20 (284 assertions) — no regression |
-| JITSmoke.qtest | 50/50 (79 assertions) — 4 new bug-fix regression tests |
+| Phase4bSmoke.qtest | 16/16 test cases, 22 assertions |
+| AOTSmoke.qtest | 28/28 test cases, 66 assertions |
+| TieredSmoke.qtest | 23/23 (367 assertions) — no regression |
+| JITSmoke.qtest | 58/58 (103 assertions) — no regression |
 | IRExecMode.qtest | 2/2 (4 assertions) — no regression |
 | IRExecModeSmoke.qtest | 137/137 (416 assertions) — no regression |
 | operators.qtest | 25/25 (696 assertions) — no regression |
