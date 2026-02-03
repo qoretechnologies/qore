@@ -275,6 +275,15 @@ public:
         return remote_settings_received && remote_settings.enable_connect_protocol != 0;
     }
 
+    //! Returns true if remote SETTINGS have been received and ENABLE_CONNECT_PROTOCOL was not set
+    /** Used by the client to detect servers that don't support extended CONNECT (RFC 8441)
+        before sending a CONNECT request with :protocol.  On some nghttp2 versions, the
+        server silently drops :protocol when ENABLE_CONNECT_PROTOCOL is not advertised.
+    */
+    DLLLOCAL bool isExtendedConnectRejected() const {
+        return remote_settings_received && !remote_settings.enable_connect_protocol;
+    }
+
     //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in SETTINGS
     /** Must be called before sendConnectionPreface() to take effect.
     */
