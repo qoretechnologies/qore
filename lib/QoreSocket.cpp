@@ -5740,6 +5740,11 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     if (!stream_info) {
         return QoreValue();
     }
+    // Skip streams reset at protocol level (e.g., CONNECT without ENABLE_CONNECT_PROTOCOL)
+    // The RST_STREAM was already sent by nghttp2 via sendPendingData()
+    if (stream_info->reset) {
+        return QoreValue();
+    }
 
     const_cast<SocketHttp2ServerPollOperation*>(this)->stream_id = stream_info->stream_id;
 

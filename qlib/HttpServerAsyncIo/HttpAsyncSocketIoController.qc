@@ -1467,15 +1467,17 @@ public class HttpAsyncSocketIoController {
             Http2PollOperation h2op) {
         *hash<auto> request = h2op.getOutput();
         if (!request) {
-            # Should not happen: Http2PollOperation internally handles empty reads via
-            # STATE_WAIT_READ. If we get here, something unexpected occurred.
-            log(LoggerLevel::WARN, "HTTP/2 connection %y: goalReached but no request "
-                "(state %y), closing", uh, h2op.getState());
+            # Could be a protocol-level rejection (RST_STREAM for invalid CONNECT, etc.)
+            # or an empty read — continue reading instead of closing
+            h2op.continueReading();
+            hash<HttpActiveConnectionInfo> new_cinfo;
             {
                 AutoLock al(m);
-                remove connections{uh};
+                connections{uh}.stream_op = h2op;
+                connections{uh}.state = HttpConnectionState::Http2;
+                new_cinfo = connections{uh};
             }
-            try { cinfo.sock.close(); } catch () {}
+            submitConnectionOp(uh, new_cinfo);
             return;
         }
 
