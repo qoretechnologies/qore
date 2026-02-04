@@ -72,6 +72,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/NetSuiteRestClient.qm \
 	qlib/OpenAiRestClient.qm \
 	qlib/ServiceNowRestClient.qm \
+	qlib/ShipStationRestClient.qm \
 	qlib/FilePoller.qm \
 	qlib/FreetdsSqlUtil.qm \
 	qlib/FtpPoller.qm \
@@ -133,6 +134,7 @@ DOX_SPLIT_MODULES = \
     qlib/ServerSentEventClient \
     qlib/ServerSentEventHandler \
     qlib/ServiceNowRestDataProvider \
+    qlib/ShipStationDataProvider \
     qlib/SwaggerDataProvider \
     qlib/ZohoBooksDataProvider \
     qlib/ZohoInvoiceDataProvider \
@@ -183,6 +185,7 @@ SalesforceRestDataProvider_modverdir = $(modverdir)/SalesforceRestDataProvider
 ServerSentEventClient_modverdir = $(modverdir)/ServerSentEventClient
 ServerSentEventHandler_modverdir = $(modverdir)/ServerSentEventHandler
 ServiceNowRestDataProvider_modverdir = $(modverdir)/ServiceNowRestDataProvider
+ShipStationDataProvider_modverdir = $(modverdir)/ShipStationDataProvider
 SqlUtil_modverdir = $(modverdir)/SqlUtil
 SwaggerDataProvider_modverdir = $(modverdir)/SwaggerDataProvider
 ZohoBooksDataProvider_modverdir = $(modverdir)/ZohoBooksDataProvider
@@ -228,6 +231,7 @@ dist_SalesforceRestDataProvider_modver_DATA = $(wildcard qlib/SalesforceRestData
 dist_ServerSentEventClient_modver_DATA = $(wildcard qlib/ServerSentEventClient/*.q[cm])
 dist_ServerSentEventHandler_modver_DATA = $(wildcard qlib/ServerSentEventHandler/*.q[cm])
 dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestDataProvider/*.q[cm])
+dist_ShipStationDataProvider_modver_DATA = $(wildcard qlib/ShipStationDataProvider/*.q[cm]) $(wildcard qlib/ShipStationDataProvider/*.svg)
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
 dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[cm])
 dist_ZohoBooksDataProvider_modver_DATA = $(wildcard qlib/ZohoBooksDataProvider/*.q[cm]) $(wildcard qlib/ZohoBooksDataProvider/*.svg)
