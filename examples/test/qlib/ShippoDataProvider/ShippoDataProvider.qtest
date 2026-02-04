@@ -716,7 +716,7 @@ public class ShippoDataProviderTest inherits QUnit::Test {
             },
             "order_number": "TEST-ORDER-" + now_us().toString(),
             "order_status": "PAID",
-            "placed_at": format_date("YYYY-MM-DD", now()),
+            "placed_at": now(),
             "line_items": ({
                 "title": "Test Product",
                 "quantity": 2,

@@ -88,7 +88,7 @@ public class ShippoCreateShipmentDataProvider inherits ShippoDataProviderBase {
             body.address_return = req.address_return;
         }
         if (exists req.shipment_date) {
-            body.shipment_date = req.shipment_date;
+            body.shipment_date = format_date("YYYY-MM-DDTHH:mm:ssZ", req.shipment_date);
         }
         if (exists req.extra) {
             body.extra = req.extra;
@@ -158,10 +158,10 @@ public class ShippoCreateShipmentRequestDataType inherits HashDataType {
                 "desc": "The return address (defaults to address_from if not specified)",
             },
             "shipment_date": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Shipment Date",
                 "short_desc": "Expected shipment date",
-                "desc": "The date the shipment will be sent (ISO 8601 format). Defaults to current date.",
+                "desc": "The date the shipment will be sent. Defaults to current date.",
             },
             "extra": {
                 "type": AutoHashOrNothingType,

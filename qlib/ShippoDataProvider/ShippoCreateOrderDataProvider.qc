@@ -80,6 +80,9 @@ public class ShippoCreateOrderDataProvider inherits ShippoDataProviderBase {
 
         # Required fields
         body.to_address = req.to_address;
+        body.placed_at = format_date("YYYY-MM-DDTHH:mm:SSZ", req.placed_at);
+        body.weight = req.weight;
+        body.weight_unit = req.weight_unit;
 
         # Optional fields
         if (exists req.from_address) {
@@ -90,9 +93,6 @@ public class ShippoCreateOrderDataProvider inherits ShippoDataProviderBase {
         }
         if (exists req.order_status) {
             body.order_status = req.order_status;
-        }
-        if (exists req.placed_at) {
-            body.placed_at = req.placed_at;
         }
         if (exists req.line_items) {
             body.line_items = req.line_items;
@@ -117,12 +117,6 @@ public class ShippoCreateOrderDataProvider inherits ShippoDataProviderBase {
         }
         if (exists req.currency) {
             body.currency = req.currency;
-        }
-        if (exists req.weight) {
-            body.weight = req.weight;
-        }
-        if (exists req.weight_unit) {
-            body.weight_unit = req.weight_unit;
         }
         if (exists req.notes) {
             body.notes = req.notes;
@@ -189,10 +183,11 @@ public class ShippoCreateOrderRequestDataType inherits HashDataType {
                 ),
             },
             "placed_at": {
-                "type": SoftStringOrNothingType,
+                "type": DateType,
                 "display_name": "Placed At",
                 "short_desc": "Order placement date",
-                "desc": "ISO 8601 timestamp when the order was placed",
+                "desc": "The date/time when the order was placed",
+                "required": True,
             },
             "line_items": {
                 "type": SoftAutoListOrNothingType,
@@ -243,16 +238,24 @@ public class ShippoCreateOrderRequestDataType inherits HashDataType {
                 "desc": "Three-letter ISO currency code for prices",
             },
             "weight": {
-                "type": SoftStringOrNothingType,
+                "type": SoftStringType,
                 "display_name": "Weight",
                 "short_desc": "Total weight",
                 "desc": "The total weight of the order",
+                "required": True,
             },
             "weight_unit": {
-                "type": SoftStringOrNothingType,
+                "type": SoftStringType,
                 "display_name": "Weight Unit",
                 "short_desc": "Weight unit",
                 "desc": "The unit of measurement for weight (g, oz, lb, kg)",
+                "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "g", "desc": "Grams"},
+                    <AllowedValueInfo>{"value": "oz", "desc": "Ounces"},
+                    <AllowedValueInfo>{"value": "lb", "desc": "Pounds"},
+                    <AllowedValueInfo>{"value": "kg", "desc": "Kilograms"},
+                ),
             },
             "notes": {
                 "type": SoftStringOrNothingType,
