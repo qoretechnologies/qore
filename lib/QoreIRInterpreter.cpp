@@ -712,6 +712,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::SelectPositiveFloat:
         case QoreIROpcode::SelectNonZeroInt:
         case QoreIROpcode::SelectNonZeroFloat:
+        case QoreIROpcode::FusedMapSelectScalePositiveInt:
+        case QoreIROpcode::FusedMapSelectScalePositiveFloat:
+        case QoreIROpcode::FusedMapSelectOffsetPositiveInt:
+        case QoreIROpcode::FusedMapSelectOffsetPositiveFloat:
+        case QoreIROpcode::FusedMapSelectSquarePositiveInt:
+        case QoreIROpcode::FusedMapSelectSquarePositiveFloat:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
@@ -1861,6 +1867,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::SelectPositiveFloat:
             case QoreIROpcode::SelectNonZeroInt:
             case QoreIROpcode::SelectNonZeroFloat:
+            case QoreIROpcode::FusedMapSelectScalePositiveInt:
+            case QoreIROpcode::FusedMapSelectScalePositiveFloat:
+            case QoreIROpcode::FusedMapSelectOffsetPositiveInt:
+            case QoreIROpcode::FusedMapSelectOffsetPositiveFloat:
+            case QoreIROpcode::FusedMapSelectSquarePositiveInt:
+            case QoreIROpcode::FusedMapSelectSquarePositiveFloat:
             case QoreIROpcode::RangeAny:
             case QoreIROpcode::RangeInt:
             case QoreIROpcode::RangeFloat:
@@ -3275,6 +3287,107 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 double val = l->retrieveEntry(i).getAsFloat();
                 if (val != 0.0) {
                     result->push(val, xsink);
+                }
+            }
+            return result.release();
+        }
+        // Fused map+select operations (single pass, no intermediate list)
+        case QoreIROpcode::FusedMapSelectScalePositiveInt: {
+            // left = list, right = scale factor
+            // Filter $1 > 0, then multiply by scale
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            int64_t scale = right.getAsBigInt();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                if (val > 0) {
+                    result->push(val * scale, xsink);
+                }
+            }
+            return result.release();
+        }
+        case QoreIROpcode::FusedMapSelectScalePositiveFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            double scale = right.getAsFloat();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                double val = l->retrieveEntry(i).getAsFloat();
+                if (val > 0.0) {
+                    result->push(val * scale, xsink);
+                }
+            }
+            return result.release();
+        }
+        case QoreIROpcode::FusedMapSelectOffsetPositiveInt: {
+            // left = list, right = offset
+            // Filter $1 > 0, then add offset
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            int64_t offset = right.getAsBigInt();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                if (val > 0) {
+                    result->push(val + offset, xsink);
+                }
+            }
+            return result.release();
+        }
+        case QoreIROpcode::FusedMapSelectOffsetPositiveFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            double offset = right.getAsFloat();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                double val = l->retrieveEntry(i).getAsFloat();
+                if (val > 0.0) {
+                    result->push(val + offset, xsink);
+                }
+            }
+            return result.release();
+        }
+        case QoreIROpcode::FusedMapSelectSquarePositiveInt: {
+            // left = list, right = unused
+            // Filter $1 > 0, then square
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                if (val > 0) {
+                    result->push(val * val, xsink);
+                }
+            }
+            return result.release();
+        }
+        case QoreIROpcode::FusedMapSelectSquarePositiveFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                double val = l->retrieveEntry(i).getAsFloat();
+                if (val > 0.0) {
+                    result->push(val * val, xsink);
                 }
             }
             return result.release();

@@ -4838,8 +4838,84 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
     QoreValue constant_val;
     QoreIROpcode opt_opcode = analyzeMapPattern(map->getLeft(), result_type, constant_val);
 
-    // For optimized patterns, emit optimized opcode with (list, constant) operands
+    // For optimized patterns, check if we can fuse with a select operand
     if (opt_opcode != QoreIROpcode::MapAny) {
+        // Check if the right operand (list) is a select expression with positive filter
+        const AbstractQoreNode* right_node = map->getRight().getInternalNode();
+        auto* inner_select = dynamic_cast<const QoreSelectOperatorNode*>(right_node);
+
+        if (inner_select) {
+            // Analyze the select pattern
+            const QoreTypeInfo* select_result_type = nullptr;
+            QoreIROpcode select_opcode = analyzeSelectPattern(inner_select->getRight(), select_result_type);
+
+            // Only fuse if select pattern is SelectPositiveInt (i.e., $1 > 0)
+            if (select_opcode == QoreIROpcode::SelectPositiveInt) {
+                // Determine element type from the underlying list
+                QoreParseAnalysis list_analysis;
+                const QoreTypeInfo* list_type = nullptr;
+                if (getAnalysis(inner_select->getLeft(), list_analysis) &&
+                        list_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+                    list_type = list_analysis.known_type;
+                }
+                const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+                bool is_float = QoreTypeInfo::isType(elem_type, NT_FLOAT);
+
+                // Select the fused opcode based on map pattern and element type
+                QoreIROpcode fused_opcode = QoreIROpcode::MapAny;
+                if (opt_opcode == QoreIROpcode::MapScaleInt || opt_opcode == QoreIROpcode::MapScaleFloat) {
+                    fused_opcode = is_float ? QoreIROpcode::FusedMapSelectScalePositiveFloat
+                                           : QoreIROpcode::FusedMapSelectScalePositiveInt;
+                } else if (opt_opcode == QoreIROpcode::MapOffsetInt || opt_opcode == QoreIROpcode::MapOffsetFloat) {
+                    fused_opcode = is_float ? QoreIROpcode::FusedMapSelectOffsetPositiveFloat
+                                           : QoreIROpcode::FusedMapSelectOffsetPositiveInt;
+                } else if (opt_opcode == QoreIROpcode::MapSquareInt || opt_opcode == QoreIROpcode::MapSquareFloat) {
+                    fused_opcode = is_float ? QoreIROpcode::FusedMapSelectSquarePositiveFloat
+                                           : QoreIROpcode::FusedMapSelectSquarePositiveInt;
+                }
+
+                if (fused_opcode != QoreIROpcode::MapAny) {
+                    // Lower the underlying list (left operand of select)
+                    QoreIRValue list_val = lowerExpression(inner_select->getLeft(), error);
+                    if (!list_val.isValid()) {
+                        return QoreIRValue();
+                    }
+
+                    QoreIRValue const_ir;
+                    if (fused_opcode == QoreIROpcode::FusedMapSelectSquarePositiveInt ||
+                            fused_opcode == QoreIROpcode::FusedMapSelectSquarePositiveFloat) {
+                        // Square doesn't need a constant, use NOTHING as placeholder
+                        const_ir = builder.createConstNothing(map->loc)->result;
+                    } else {
+                        // Lower the constant value
+                        const_ir = lowerConstant(constant_val, error);
+                        if (!const_ir.isValid()) {
+                            return QoreIRValue();
+                        }
+                    }
+
+                    QoreIRValue result;
+                    if (!exception_stack.empty()) {
+                        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                        if (!normal_block) {
+                            error = "IR builder failed to create invoke continuation block";
+                            return QoreIRValue();
+                        }
+                        QoreIRBasicBlock* handler = exception_stack.back();
+                        auto* inst = builder.createInvoke(expr, {list_val, const_ir}, normal_block, handler, map->loc);
+                        inst->invoke_opcode = fused_opcode;
+                        builder.setBlock(normal_block);
+                        result = inst->result;
+                    } else {
+                        result = builder.createBinaryOp(fused_opcode, list_val, const_ir, map->loc)->result;
+                    }
+                    maybeInsertNotNothingGuard(result, &expr, map->loc, nullptr);
+                    return result;
+                }
+            }
+        }
+
+        // No fusion possible, emit regular optimized map opcode
         // Lower the list (right operand of map)
         QoreIRValue list_val = lowerExpression(map->getRight(), error);
         if (!list_val.isValid()) {

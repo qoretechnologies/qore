@@ -253,6 +253,13 @@ enum class QoreIROpcode : uint16_t {
     SelectPositiveFloat,
     SelectNonZeroInt,   // select $1 != 0, list
     SelectNonZeroFloat,
+    // Fused map+select operations (single-pass, no intermediate list)
+    FusedMapSelectScalePositiveInt,     // (map $1 * c, (select list, $1 > 0))
+    FusedMapSelectScalePositiveFloat,
+    FusedMapSelectOffsetPositiveInt,    // (map $1 + c, (select list, $1 > 0))
+    FusedMapSelectOffsetPositiveFloat,
+    FusedMapSelectSquarePositiveInt,    // (map $1 * $1, (select list, $1 > 0))
+    FusedMapSelectSquarePositiveFloat,
     MapSelectAny,
     HashMapAny,
     HashMapSelectAny,

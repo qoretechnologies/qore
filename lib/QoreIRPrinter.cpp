@@ -231,6 +231,12 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::SelectPositiveFloat: return "select.positive.float";
         case QoreIROpcode::SelectNonZeroInt: return "select.nonzero.int";
         case QoreIROpcode::SelectNonZeroFloat: return "select.nonzero.float";
+        case QoreIROpcode::FusedMapSelectScalePositiveInt: return "fused.map.select.scale.positive.int";
+        case QoreIROpcode::FusedMapSelectScalePositiveFloat: return "fused.map.select.scale.positive.float";
+        case QoreIROpcode::FusedMapSelectOffsetPositiveInt: return "fused.map.select.offset.positive.int";
+        case QoreIROpcode::FusedMapSelectOffsetPositiveFloat: return "fused.map.select.offset.positive.float";
+        case QoreIROpcode::FusedMapSelectSquarePositiveInt: return "fused.map.select.square.positive.int";
+        case QoreIROpcode::FusedMapSelectSquarePositiveFloat: return "fused.map.select.square.positive.float";
         case QoreIROpcode::MapSelectAny: return "map.select.any";
         case QoreIROpcode::HashMapAny: return "hash.map.any";
         case QoreIROpcode::HashMapSelectAny: return "hash.map.select.any";

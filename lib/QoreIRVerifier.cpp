@@ -172,6 +172,12 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::SelectPositiveFloat:
         case QoreIROpcode::SelectNonZeroInt:
         case QoreIROpcode::SelectNonZeroFloat:
+        case QoreIROpcode::FusedMapSelectScalePositiveInt:
+        case QoreIROpcode::FusedMapSelectScalePositiveFloat:
+        case QoreIROpcode::FusedMapSelectOffsetPositiveInt:
+        case QoreIROpcode::FusedMapSelectOffsetPositiveFloat:
+        case QoreIROpcode::FusedMapSelectSquarePositiveInt:
+        case QoreIROpcode::FusedMapSelectSquarePositiveFloat:
         case QoreIROpcode::MapSelectAny:
         case QoreIROpcode::HashMapAny:
         case QoreIROpcode::HashMapSelectAny:
@@ -394,6 +400,12 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::SelectPositiveFloat:
         case QoreIROpcode::SelectNonZeroInt:
         case QoreIROpcode::SelectNonZeroFloat:
+        case QoreIROpcode::FusedMapSelectScalePositiveInt:
+        case QoreIROpcode::FusedMapSelectScalePositiveFloat:
+        case QoreIROpcode::FusedMapSelectOffsetPositiveInt:
+        case QoreIROpcode::FusedMapSelectOffsetPositiveFloat:
+        case QoreIROpcode::FusedMapSelectSquarePositiveInt:
+        case QoreIROpcode::FusedMapSelectSquarePositiveFloat:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:

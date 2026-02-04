@@ -3825,6 +3825,91 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
+        // === Fused map+select operations (runtime helpers) ===
+        case QoreIROpcode::FusedMapSelectScalePositiveInt: {
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* scale = getVal(inst->operands[1].id, error);
+            if (!list || !scale) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* scale_int = nanboxed_values.count(inst->operands[1].id)
+                ? unboxInt(scale) : scale;
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_select_scale_positive_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_int});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::FusedMapSelectScalePositiveFloat: {
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* scale = getVal(inst->operands[1].id, error);
+            if (!list || !scale) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* scale_float = nanboxed_values.count(inst->operands[1].id)
+                ? unboxFloat(scale) : scale;
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_select_scale_positive_float",
+                    llvm::FunctionType::get(i64_type, {i64_type, double_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_float});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::FusedMapSelectOffsetPositiveInt: {
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* offset = getVal(inst->operands[1].id, error);
+            if (!list || !offset) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* offset_int = nanboxed_values.count(inst->operands[1].id)
+                ? unboxInt(offset) : offset;
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_select_offset_positive_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, offset_int});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::FusedMapSelectOffsetPositiveFloat: {
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* offset = getVal(inst->operands[1].id, error);
+            if (!list || !offset) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* offset_float = nanboxed_values.count(inst->operands[1].id)
+                ? unboxFloat(offset) : offset;
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_select_offset_positive_float",
+                    llvm::FunctionType::get(i64_type, {i64_type, double_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, offset_float});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::FusedMapSelectSquarePositiveInt: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_select_square_positive_int",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::FusedMapSelectSquarePositiveFloat: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_select_square_positive_float",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
 
         // === Division/Modulo Any compound assignments (keep using runtime) ===
         case QoreIROpcode::DivAssignAny:

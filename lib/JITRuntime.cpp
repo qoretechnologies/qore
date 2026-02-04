@@ -725,6 +725,109 @@ extern "C" uint64_t qore_rt_select_nonzero_float(uint64_t list_val) {
     return toBits(result.release());
 }
 
+// Fused map+select operations - filter positive then transform in single pass
+extern "C" uint64_t qore_rt_fused_map_select_scale_positive_int(uint64_t list_val, int64_t scale) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        int64_t val = l->retrieveEntry(i).getAsBigInt();
+        if (val > 0) {
+            result->push(val * scale, nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" uint64_t qore_rt_fused_map_select_scale_positive_float(uint64_t list_val, double scale) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        double val = l->retrieveEntry(i).getAsFloat();
+        if (val > 0.0) {
+            result->push(val * scale, nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" uint64_t qore_rt_fused_map_select_offset_positive_int(uint64_t list_val, int64_t offset) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        int64_t val = l->retrieveEntry(i).getAsBigInt();
+        if (val > 0) {
+            result->push(val + offset, nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" uint64_t qore_rt_fused_map_select_offset_positive_float(uint64_t list_val, double offset) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        double val = l->retrieveEntry(i).getAsFloat();
+        if (val > 0.0) {
+            result->push(val + offset, nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" uint64_t qore_rt_fused_map_select_square_positive_int(uint64_t list_val) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        int64_t val = l->retrieveEntry(i).getAsBigInt();
+        if (val > 0) {
+            result->push(val * val, nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" uint64_t qore_rt_fused_map_select_square_positive_float(uint64_t list_val) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        double val = l->retrieveEntry(i).getAsFloat();
+        if (val > 0.0) {
+            result->push(val * val, nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
 extern "C" uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
