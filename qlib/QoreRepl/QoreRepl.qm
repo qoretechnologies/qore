@@ -31,14 +31,22 @@
 %define NoWebSocketHandler
 %endtry
 
+# Optional linenoise support for line editing and history
+%try-module linenoise
+%define NoLinenoise
+%endtry
+
 # JSON support for WebSocket message protocol
 %requires json
 
 # Reflection support for introspection commands
 %requires reflection
 
+# Util module for TerminalColor
+%requires Util
+
 module QoreRepl {
-    version = "1.0";
+    version = "1.1";
     desc = "Qore REPL (Read-Eval-Print Loop) module";
     author = "Qore Technologies, s.r.o.";
     url = "https://qoretechnologies.com";
@@ -203,6 +211,13 @@ server.start();
     @endcode
 
     @section qorerepl_relnotes Release Notes
+
+    @subsection qorerepl_v1_1 v1.1
+    - Added optional linenoise support for enhanced line editing and persistent history
+    - Added @ref QoreRepl::QoreRepl::run() "run()" method for simplified interactive loop
+    - Added tab completion for REPL commands
+    - Added persistent history file support (~/.qore-repl-history)
+    - Added keyboard shortcuts when linenoise is available (Up/Down, Ctrl+R, Tab)
 
     @subsection qorerepl_v1_0 v1.0
     - Initial release

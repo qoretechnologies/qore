@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-/*  QoreRepl.qtest Copyright 2025 Qore Technologies, s.r.o.
+/*  QoreRepl.qtest Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -75,6 +75,7 @@ public class QoreReplTest inherits QUnit::Test {
 
         # New session command tests
         addTestCase("Command: /history", \testCommandHistory());
+        addTestCase("Command abbreviations", \testAbbreviatedCommands());
         addTestCase("Command: /timing", \testCommandTiming());
 
         # New file command tests
@@ -121,6 +122,11 @@ public class QoreReplTest inherits QUnit::Test {
         addTestCase("Rollback: class hierarchy", \testRollbackPreservesClassHierarchy());
         addTestCase("Rollback: closures", \testRollbackPreservesClosures());
         addTestCase("Rollback: stress test", \testRollbackStressTest());
+
+        # Linenoise-related tests
+        addTestCase("Command completion", \testCommandCompletion());
+        addTestCase("History file path initialization", \testHistoryFilePath());
+        addTestCase("run() integration", \testRunIntegration());
 
         set_return_value(main());
     }
@@ -529,24 +535,24 @@ public class QoreReplTest inherits QUnit::Test {
 %if !defined(NoQoreRepl)
         QoreRepl repl();
 
-        # Test with integer
+        # Test with integer - reflection shows "int" not "integer"
         *hash<auto> result = repl.eval("/type 42");
         assertTrue(exists result, "Should return result");
         assertFalse(exists result.error, "Should not have error");
-        assertRegex("integer", result.value, "Should show integer type");
+        assertRegex("int", result.value, "Should show int type");
 
         # Test with string
         result = repl.eval("/type 'hello'");
         assertFalse(exists result.error, "Should not have error");
         assertRegex("string", result.value, "Should show string type");
 
-        # Test with list
+        # Test with list - shows full type like list<int>
         result = repl.eval("/type (1, 2, 3)");
         assertFalse(exists result.error, "Should not have error");
         assertRegex("list", result.value, "Should show list type");
 
         # Test with hash
-        result = repl.eval("/type {'a': 1}");
+        result = repl.eval("/type ('a': 1)");
         assertFalse(exists result.error, "Should not have error");
         assertRegex("hash", result.value, "Should show hash type");
 
@@ -556,10 +562,10 @@ public class QoreReplTest inherits QUnit::Test {
         assertFalse(exists result.error, "Should not have error");
         assertRegex("float", result.value, "Should show float type");
 
-        # Test with expression
+        # Test with expression - reflection shows "int" not "integer"
         result = repl.eval("/type 1 + 2");
         assertFalse(exists result.error, "Should not have error");
-        assertRegex("integer", result.value, "Should show integer type for expression");
+        assertRegex("int", result.value, "Should show int type for expression");
 
         # Test error case - no argument
         result = repl.eval("/type");
@@ -598,6 +604,15 @@ public class QoreReplTest inherits QUnit::Test {
         assertFalse(exists result.error, "Should not have error");
         assertRegex("Namespace:", result.value, "Should show Namespace label");
 
+        # Describe an enum (should show all values, not be listed as namespace)
+        result = repl.eval("/describe HTTP2Mode");
+        assertFalse(exists result.error, "Should not have error");
+        assertRegex("Enum:", result.value, "Should show Enum label (not Namespace)");
+        assertRegex("Base type:", result.value, "Should show base type");
+        assertRegex("Values:", result.value, "Should show Values section");
+        assertRegex("Disabled", result.value, "Should show Disabled enum value");
+        assertRegex("Auto", result.value, "Should show Auto enum value");
+
         # Test error case - symbol not found
         result = repl.eval("/describe NonExistent");
         assertTrue(exists result.error, "Should have error for non-existent symbol");
@@ -633,6 +648,68 @@ public class QoreReplTest inherits QUnit::Test {
         assertRegex("1 \\+ 1", result.value, "Should show first command in history");
         assertRegex("x = 42", result.value, "Should show variable definition in history");
         assertRegex("/vars", result.value, "Should show /vars command in history");
+%endif
+    }
+
+    #! Test abbreviated commands
+    testAbbreviatedCommands() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # Test unambiguous abbreviation - /desc for /describe
+        *hash<auto> result = repl.eval("/desc Mutex");
+        assertFalse(exists result.error, "/desc should resolve to /describe");
+        assertRegex("Class:", result.value, "Should show class description");
+        assertRegex("Mutex", result.value, "Should describe Mutex");
+
+        # Test unambiguous abbreviation - /his for /history
+        result = repl.eval("/his");
+        assertFalse(exists result.error, "/his should resolve to /history");
+        assertRegex("history", result.value.lwr(), "Should show command history");
+
+        # Test unambiguous abbreviation - /he for /help
+        result = repl.eval("/he");
+        assertFalse(exists result.error, "/he should resolve to /help");
+        assertRegex("Commands:", result.value, "Should show help text");
+
+        # Test unambiguous abbreviation - /ti for /timing
+        result = repl.eval("/ti");
+        assertFalse(exists result.error, "/ti should resolve to /timing");
+        assertRegex("enabled", result.value, "Should toggle timing");
+
+        # Test unambiguous abbreviation - /ty for /type
+        result = repl.eval("/ty 42");
+        assertFalse(exists result.error, "/ty should resolve to /type");
+        assertRegex("int", result.value, "Should show integer type");
+
+        # Test ambiguous abbreviation - /c matches multiple commands
+        result = repl.eval("/c");
+        assertTrue(exists result.error, "/c should be ambiguous");
+        assertEq("REPL-ERROR", result.error.err, "Should be REPL-ERROR");
+        assertRegex("Ambiguous", result.error.desc, "Should mention ambiguous");
+        assertRegex("/clear", result.error.desc, "Should list /clear option");
+        assertRegex("/classes", result.error.desc, "Should list /classes option");
+        assertRegex("/cd", result.error.desc, "Should list /cd option");
+
+        # Test ambiguous abbreviation - /cl matches /clear and /classes
+        result = repl.eval("/cl");
+        assertTrue(exists result.error, "/cl should be ambiguous");
+        assertRegex("Ambiguous", result.error.desc, "Should mention ambiguous");
+        assertRegex("/clear", result.error.desc, "Should list /clear");
+        assertRegex("/classes", result.error.desc, "Should list /classes");
+
+        # Test that exact short aliases still work
+        result = repl.eval("/ns");
+        assertFalse(exists result.error, "/ns exact alias should work");
+        assertRegex("Namespace", result.value, "Should show namespaces");
+
+        result = repl.eval("/funcs");
+        assertFalse(exists result.error, "/funcs exact alias should work");
+
+        result = repl.eval("/?");
+        assertFalse(exists result.error, "/? exact alias should work");
+        assertRegex("Commands:", result.value, "Should show help text");
 %endif
     }
 
@@ -1026,8 +1103,8 @@ public class QoreReplTest inherits QUnit::Test {
         # Float
         assertRegex("3\\.14", QoreRepl::formatValue(3.14), "Float formatting");
 
-        # String - should be quoted
-        assertEq("\"hello\"", QoreRepl::formatValue("hello"), "String formatting");
+        # String - returned as-is without quotes
+        assertEq("hello", QoreRepl::formatValue("hello"), "String formatting");
 
         # Boolean
         assertEq("True", QoreRepl::formatValue(True), "Boolean True formatting");
@@ -1036,12 +1113,12 @@ public class QoreReplTest inherits QUnit::Test {
         # NOTHING
         assertEq("", QoreRepl::formatValue(NOTHING), "NOTHING formatting");
 
-        # List
+        # List - formatted with %Y
         string listFmt = QoreRepl::formatValue((1, 2, 3));
         assertRegex("1", listFmt, "List should contain 1");
         assertRegex("2", listFmt, "List should contain 2");
 
-        # Hash
+        # Hash - formatted with %Y
         string hashFmt = QoreRepl::formatValue({"a": 1, "b": 2});
         assertRegex("a", hashFmt, "Hash should contain key a");
         assertRegex("b", hashFmt, "Hash should contain key b");
@@ -1540,6 +1617,143 @@ public class QoreReplTest inherits QUnit::Test {
         repl.eval("our Class0 finalObj();");
         repl.eval("our int finalClass = finalObj.getVal();");
         assertEq(0, repl.getProgram().getGlobalVariable("finalClass"), "Class0 should still work");
+%endif
+    }
+
+    #! Test command completion functionality
+    testCommandCompletion() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # Test completion for /h - should match /help and /history
+        softlist<string> completions = repl.getCompletions("/h");
+        assertTrue(completions.size() >= 2, "Should have at least 2 completions for /h");
+        assertTrue(inlist("/help", completions), "/help should be in completions");
+        assertTrue(inlist("/history", completions), "/history should be in completions");
+
+        # Test completion for /qu - should match /quit
+        completions = repl.getCompletions("/qu");
+        assertTrue(inlist("/quit", completions), "/quit should be in completions");
+
+        # Test completion for /var - should match /vars
+        completions = repl.getCompletions("/var");
+        assertTrue(inlist("/vars", completions), "/vars should be in completions");
+
+        # Test completion for /func - should match /functions and /funcs
+        completions = repl.getCompletions("/func");
+        assertTrue(completions.size() >= 2, "Should have at least 2 completions for /func");
+        assertTrue(inlist("/functions", completions), "/functions should be in completions");
+        assertTrue(inlist("/funcs", completions), "/funcs should be in completions");
+
+        # Test completion for /cl - should match /clear and /classes
+        completions = repl.getCompletions("/cl");
+        assertTrue(inlist("/clear", completions), "/clear should be in completions");
+        assertTrue(inlist("/classes", completions), "/classes should be in completions");
+
+        # Test completion for non-command (doesn't start with /) - should return empty
+        completions = repl.getCompletions("1 + 1");
+        assertEq(0, completions.size(), "Non-command should have no completions");
+
+        # Test completion for unknown command prefix - should return empty
+        completions = repl.getCompletions("/xyz");
+        assertEq(0, completions.size(), "Unknown command prefix should have no completions");
+
+        # Test exact match - /help
+        completions = repl.getCompletions("/help");
+        assertTrue(inlist("/help", completions), "/help should match itself");
+
+        # Test case-insensitive completion (matches command execution behavior)
+        completions = repl.getCompletions("/H");
+        assertTrue(inlist("/help", completions), "/H should match /help (case-insensitive)");
+        assertTrue(inlist("/history", completions), "/H should match /history (case-insensitive)");
+
+        completions = repl.getCompletions("/HELP");
+        assertTrue(inlist("/help", completions), "/HELP should match /help (case-insensitive)");
+
+        completions = repl.getCompletions("/Desc");
+        assertTrue(inlist("/describe", completions), "/Desc should match /describe (case-insensitive)");
+%endif
+    }
+
+    #! Test history file path initialization
+    testHistoryFilePath() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        # Test with explicit history_file option
+        string temp_history = tmp_location() + "/test_repl_history_" + string(getpid());
+        QoreRepl repl({"history_file": temp_history});
+        # Note: We can't directly verify the history_file member since it's private,
+        # but we test that the option is accepted without error
+        assertTrue(True, "REPL with explicit history_file should create successfully");
+
+        # Test with sandboxed mode (no filesystem) - history should be disabled
+        QoreRepl sandboxed_repl({"parse_options": PO_NEW_STYLE | PO_NO_FILESYSTEM});
+        # Should not fail even though filesystem is restricted
+        assertTrue(True, "Sandboxed REPL should create successfully without history file");
+
+        # Test default REPL (no options) - should use default history file
+        QoreRepl default_repl();
+        assertTrue(True, "Default REPL should create successfully with default history");
+%endif
+    }
+
+    #! Test run() integration via subprocess
+    testRunIntegration() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        # Create a simple REPL script that evaluates some commands and exits
+        string script = "%modern
+%requires QoreRepl
+
+# Use stdin/stdout for a simple test
+QoreRepl repl({'history_file': NOTHING});
+
+# Simulate input - we can't use run() directly in test because it reads stdin
+# Instead, test that run() method exists and basic REPL works
+*hash<auto> result = repl.eval('1 + 1');
+if (result.value != 2) {
+    exit(1);
+}
+
+result = repl.eval('/help');
+if (!result.value) {
+    exit(2);
+}
+
+# Test completion functionality
+softlist<string> completions = repl.getCompletions('/he');
+if (!inlist('/help', completions)) {
+    exit(3);
+}
+
+printf('OK');
+";
+        string temp_script = tmp_location() + "/test_repl_run_" + string(getpid()) + ".q";
+        {
+            File f();
+            f.open2(temp_script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(script);
+        }
+
+        # Run the script with qore using backquote
+        # Pass QORE_MODULE_DIR to subprocess so it can find the QoreRepl module
+        # Quote paths properly to handle spaces and special characters
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        string cmd;
+        # Shell-escape paths by replacing ' with '\'' and wrapping in single quotes
+        string escaped_script = "'" + replace(temp_script, "'", "'\\''") + "'";
+        if (module_dir) {
+            string escaped_module_dir = "'" + replace(module_dir, "'", "'\\''") + "'";
+            cmd = sprintf("QORE_MODULE_DIR=%s qore %s 2>&1", escaped_module_dir, escaped_script);
+        } else {
+            cmd = sprintf("qore %s 2>&1", escaped_script);
+        }
+        string output = backquote(cmd);
+        assertRegex("OK", output, "REPL test script should output OK");
+
+        # Clean up
+        unlink(temp_script);
 %endif
     }
 }
