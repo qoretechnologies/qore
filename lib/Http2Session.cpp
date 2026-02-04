@@ -1034,9 +1034,10 @@ void Http2Session::markStreamComplete(int32_t stream_id) {
 
         if (callback_copy) {
             // When using callback mechanism, don't push to completed_streams.
-            // For server-side non-CONNECT streams, we'll erase after callback.
-            // For CONNECT or client streams, keep in map for caller access.
-            should_erase_after_callback = is_server && !is_connect;
+            // Erase stream after callback completion:
+            // - Server mode: erase non-CONNECT streams (CONNECT needed to detect closes)
+            // - Client mode: always erase after callback (managed by Qore layer)
+            should_erase_after_callback = is_server ? !is_connect : true;
             if (http2DebugEnabled()) {
                 fprintf(stderr, "HTTP2 DEBUG: markStreamComplete stream=%d using callback "
                     "(erase_after=%d)\n", stream_id, should_erase_after_callback ? 1 : 0);

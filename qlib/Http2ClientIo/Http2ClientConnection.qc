@@ -87,6 +87,9 @@ public class Http2ClientConnection {
         #! Static counter for connection IDs
         static int next_connection_id = 0;
 
+        #! Static lock for connection ID counter (protects across instances)
+        static Mutex connection_id_lock();
+
         #! Connect timeout
         timeout connect_timeout;
 
@@ -110,7 +113,7 @@ public class Http2ClientConnection {
         self.last_activity = now_us();
 
         {
-            AutoLock al(lock);
+            AutoLock al(connection_id_lock);
             connection_id = ++next_connection_id;
         }
 

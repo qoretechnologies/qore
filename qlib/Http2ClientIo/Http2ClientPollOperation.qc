@@ -90,6 +90,9 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         #! Number of active streams
         int active_stream_count = 0;
 
+        #! Lock for stream callback access (protects stream_callbacks, stream_ctxs, active_stream_count)
+        Mutex stream_lock();
+
         #! Error info if an error occurred
         *hash<auto> error_info;
 
@@ -174,6 +177,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
 
     #! Returns the number of active streams
     int getActiveStreamCount() {
+        AutoLock al(stream_lock);
         return active_stream_count;
     }
 
@@ -216,12 +220,15 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         int stream_id = sock.submitHttp2Request(req_headers, body);
         string sid = string(stream_id);
 
-        # Register callback for this stream
-        stream_callbacks{sid} = callback;
-        if (ctx) {
-            stream_ctxs{sid} = ctx;
+        # Register callback for this stream (under lock)
+        {
+            AutoLock al(stream_lock);
+            stream_callbacks{sid} = callback;
+            if (ctx) {
+                stream_ctxs{sid} = ctx;
+            }
+            ++active_stream_count;
         }
-        ++active_stream_count;
 
         log(LoggerLevel::DEBUG, "submitted request: method=%y path=%y stream_id=%d", method, path, stream_id);
 
@@ -263,17 +270,20 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     */
     cancelRequest(int stream_id) {
         string sid = string(stream_id);
-        if (!stream_callbacks.hasKey(sid)) {
-            throw "HTTP2-STREAM-ERROR", sprintf("stream %d not found", stream_id);
+        {
+            AutoLock al(stream_lock);
+            if (!stream_callbacks.hasKey(sid)) {
+                throw "HTTP2-STREAM-ERROR", sprintf("stream %d not found", stream_id);
+            }
+
+            # Send RST_STREAM via the socket's HTTP/2 session
+            sock.cancelHttp2Stream(stream_id);
+
+            # Remove callback
+            remove stream_callbacks{sid};
+            remove stream_ctxs{sid};
+            --active_stream_count;
         }
-
-        # Send RST_STREAM via the socket's HTTP/2 session
-        sock.cancelHttp2Stream(stream_id);
-
-        # Remove callback
-        remove stream_callbacks{sid};
-        remove stream_ctxs{sid};
-        --active_stream_count;
 
         log(LoggerLevel::DEBUG, "cancelled request: stream_id=%d", stream_id);
     }
@@ -470,15 +480,19 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                     log(LoggerLevel::DEBUG, "response ready: stream_id=%d status=%d",
                         stream_id, output.status_code);
 
-                    # Dispatch to callback if registered
-                    *code cb = stream_callbacks{sid};
+                    # Dispatch to callback if registered (get callback under lock)
+                    *code cb;
+                    *hash<auto> stream_ctx;
+                    {
+                        AutoLock al(stream_lock);
+                        cb = remove stream_callbacks{sid};
+                        stream_ctx = remove stream_ctxs{sid};
+                        if (cb) {
+                            --active_stream_count;
+                        }
+                    }
                     if (cb) {
-                        *hash<auto> stream_ctx = stream_ctxs{sid};
-                        remove stream_callbacks{sid};
-                        remove stream_ctxs{sid};
-                        --active_stream_count;
-
-                        # Call callback with response
+                        # Call callback outside lock to avoid deadlocks
                         try {
                             cb(output + {"ctx": stream_ctx}, NOTHING);
                         } catch (hash<ExceptionInfo> ex) {
@@ -530,9 +544,20 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
 
     #! Internal: notifies all pending streams of an error
     private notifyPendingStreams(hash<auto> err) {
-        foreach string sid in (keys stream_callbacks) {
-            code cb = stream_callbacks{sid};
-            *hash<auto> stream_ctx = stream_ctxs{sid};
+        # Get a copy of callbacks under lock, then notify outside lock
+        hash<string, code> callbacks_copy;
+        hash<string, hash<auto>> ctxs_copy;
+        {
+            AutoLock al(stream_lock);
+            callbacks_copy = stream_callbacks;
+            ctxs_copy = stream_ctxs;
+            remove stream_callbacks;
+            remove stream_ctxs;
+            active_stream_count = 0;
+        }
+        foreach string sid in (keys callbacks_copy) {
+            code cb = callbacks_copy{sid};
+            *hash<auto> stream_ctx = ctxs_copy{sid};
             try {
                 cb(NOTHING, err + {"stream_id": sid.toInt(), "ctx": stream_ctx});
             } catch (hash<ExceptionInfo> ex) {
@@ -540,9 +565,6 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                     ex.err, ex.desc);
             }
         }
-        remove stream_callbacks;
-        remove stream_ctxs;
-        active_stream_count = 0;
     }
 
     #! Internal: logging helper

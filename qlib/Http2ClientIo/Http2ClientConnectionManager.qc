@@ -150,11 +150,12 @@ public class Http2ClientConnectionManager {
         if (!url_info.host) {
             throw "HTTP2-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
         }
-        if (!url_info.port) {
-            url_info.port = url_info.protocol == "https" ? 443 : 80;
-        }
+        # Set protocol default first, so port default can be derived from it
         if (!url_info.protocol) {
             url_info.protocol = "https";
+        }
+        if (!url_info.port) {
+            url_info.port = url_info.protocol == "https" ? 443 : 80;
         }
 
         # Get or create a connection

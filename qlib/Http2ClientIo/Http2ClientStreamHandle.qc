@@ -228,11 +228,20 @@ public class Http2ClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "submitting async request: %s %s", method, path);
 
-        stream_id = conn.submitRequest(method, path, headers, body,
-            sub (hash<auto> resp, *hash<auto> err) {
-                handleResponse(resp, err);
-                callback(resp, err);
-            });
+        try {
+            stream_id = conn.submitRequest(method, path, headers, body,
+                sub (hash<auto> resp, *hash<auto> err) {
+                    handleResponse(resp, err);
+                    callback(resp, err);
+                });
+        } catch (hash<ExceptionInfo> ex) {
+            # Rollback state on error
+            {
+                AutoLock al(lock);
+                state = Http2ClientStreamState::Pending;
+            }
+            rethrow;
+        }
 
         return stream_id;
     }
@@ -260,8 +269,19 @@ public class Http2ClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "starting streaming request: %s %s", method, path);
 
-        stream_id = conn.submitRequest(method, path, headers, NOTHING,
-            \handleStreamingResponse());
+        try {
+            stream_id = conn.submitRequest(method, path, headers, NOTHING,
+                \handleStreamingResponse());
+        } catch (hash<ExceptionInfo> ex) {
+            # Rollback state on error
+            {
+                AutoLock al(lock);
+                state = Http2ClientStreamState::Pending;
+                streaming = False;
+                delete data_queue;
+            }
+            rethrow;
+        }
 
         return stream_id;
     }
