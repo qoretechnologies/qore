@@ -816,17 +816,31 @@ public class HttpAsyncSocketIoController {
                 Http2PollOperation h2op(sock);
                 {
                     AutoLock al(m);
-                    connections{uh}.state = HttpConnectionState::Http2;
-                    connections{uh}.stream_op = h2op;
-                    connections{uh}.is_http2 = True;
-                    cinfo = connections{uh};
+                    # Check if connection still exists (may have been removed during shutdown)
+                    if (!connections.hasKey(uh)) {
+                        try { sock.close(); } catch () {}
+                        return;
+                    }
+                    # Cast to typed hash to update fields and assign back
+                    hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                    conn_info.state = HttpConnectionState::Http2;
+                    conn_info.stream_op = h2op;
+                    conn_info.is_http2 = True;
+                    cinfo = connections{uh} = conn_info;
                 }
             } else {
                 {
                     AutoLock al(m);
-                    connections{uh}.state = HttpConnectionState::ReadHeader;
-                    connections{uh}.is_http2 = False;
-                    cinfo = connections{uh};
+                    # Check if connection still exists (may have been removed during shutdown)
+                    if (!connections.hasKey(uh)) {
+                        try { sock.close(); } catch () {}
+                        return;
+                    }
+                    # Cast to typed hash to update fields and assign back
+                    hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                    conn_info.state = HttpConnectionState::ReadHeader;
+                    conn_info.is_http2 = False;
+                    cinfo = connections{uh} = conn_info;
                 }
             }
 
@@ -1370,13 +1384,15 @@ public class HttpAsyncSocketIoController {
         # Opt 4: merge state update + stopping check into a single lock scope
         {
             AutoLock al(m);
-            if (stopping) {
+            if (stopping || !connections.hasKey(uh)) {
                 remove connections{uh};
                 try { cinfo.sock.close(); } catch () {}
                 return;
             }
-            connections{uh}.state = HttpConnectionState::ReadHeader;
-            cinfo = connections{uh};
+            # Cast to typed hash to update fields and assign back
+            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+            conn_info.state = HttpConnectionState::ReadHeader;
+            cinfo = connections{uh} = conn_info;
         }
 
         submitConnectionOpUnlocked(uh, cinfo);
@@ -1451,9 +1467,16 @@ public class HttpAsyncSocketIoController {
             hash<HttpActiveConnectionInfo> new_cinfo;
             {
                 AutoLock al(m);
-                connections{uh}.stream_op = h2op;
-                connections{uh}.state = HttpConnectionState::Http2;
-                new_cinfo = connections{uh};
+                # Check if connection still exists
+                if (!connections.hasKey(uh)) {
+                    try { cinfo.sock.close(); } catch () {}
+                    return;
+                }
+                # Cast to typed hash to update fields and assign back
+                hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                conn_info.stream_op = h2op;
+                conn_info.state = HttpConnectionState::Http2;
+                new_cinfo = connections{uh} = conn_info;
             }
             submitConnectionOp(uh, new_cinfo);
             return;
@@ -1482,9 +1505,16 @@ public class HttpAsyncSocketIoController {
         hash<HttpActiveConnectionInfo> new_cinfo;
         {
             AutoLock al(m);
-            connections{uh}.stream_op = h2op;
-            connections{uh}.state = HttpConnectionState::Http2;
-            new_cinfo = connections{uh};
+            # Check if connection still exists
+            if (!connections.hasKey(uh)) {
+                try { cinfo.sock.close(); } catch () {}
+                return;
+            }
+            # Cast to typed hash to update fields and assign back
+            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+            conn_info.stream_op = h2op;
+            conn_info.state = HttpConnectionState::Http2;
+            new_cinfo = connections{uh} = conn_info;
         }
         submitConnectionOp(uh, new_cinfo);
 
@@ -1566,9 +1596,16 @@ public class HttpAsyncSocketIoController {
         hash<HttpActiveConnectionInfo> new_cinfo;
         {
             AutoLock al(m);
-            connections{uh}.stream_op = h2op;
-            connections{uh}.state = HttpConnectionState::Http2;
-            new_cinfo = connections{uh};
+            # Check if connection still exists
+            if (!connections.hasKey(uh)) {
+                try { cinfo.sock.close(); } catch () {}
+                return;
+            }
+            # Cast to typed hash to update fields and assign back
+            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+            conn_info.stream_op = h2op;
+            conn_info.state = HttpConnectionState::Http2;
+            new_cinfo = connections{uh} = conn_info;
         }
         submitConnectionOp(uh, new_cinfo);
 
@@ -1776,9 +1813,16 @@ public class HttpAsyncSocketIoController {
             hash<HttpActiveConnectionInfo> new_cinfo;
             {
                 AutoLock al(m);
-                connections{uh}.stream_op = h2op;
-                connections{uh}.state = HttpConnectionState::Http2;
-                new_cinfo = connections{uh};
+                # Check if connection still exists
+                if (!connections.hasKey(uh)) {
+                    try { cinfo.sock.close(); } catch () {}
+                    return;
+                }
+                # Cast to typed hash to update fields and assign back
+                hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                conn_info.stream_op = h2op;
+                conn_info.state = HttpConnectionState::Http2;
+                new_cinfo = connections{uh} = conn_info;
             }
             submitConnectionOp(uh, new_cinfo);
         } else {

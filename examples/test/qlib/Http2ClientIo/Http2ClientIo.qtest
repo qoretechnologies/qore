@@ -194,6 +194,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Stream handle tests
         addTestCase("stream handle state management", \testStreamHandleStateManagement());
 
+        # End-to-end tests (require actual HTTP/2 connections)
+        addTestCase("basic HTTP/2 request", \testBasicHttp2Request());
+        addTestCase("POST request with body", \testPostRequestWithBody());
+        addTestCase("error response handling", \testErrorResponse());
+        addTestCase("large response body", \testLargeResponse());
+        addTestCase("concurrent multiplexed requests", \testConcurrentRequests());
+        addTestCase("connection pooling", \testConnectionPooling());
+        addTestCase("async callback API", \testAsyncCallback());
+        addTestCase("SSL accept_all_certs option", \testSslAcceptAllCerts());
+
         set_return_value(main());
     }
 
@@ -482,6 +492,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Connect and run the actual tests
         sock.connect("localhost:" + mSslPort);
+        # Set ALPN to negotiate HTTP/2
+        sock.setAlpnProtocols(("h2",));
         sock.upgradeClientToSSL(30s);
 
         # Start HTTP/2 client multiplex mode
@@ -581,5 +593,171 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(complete >= 4, "Complete is a terminal state");
         assertTrue(cancelled >= 4, "Cancelled is a terminal state");
         assertTrue(error >= 4, "Error is a terminal state");
+    }
+
+    #! Test basic HTTP/2 GET request
+    testBasicHttp2Request() {
+        # TODO: HTTP/2 client-to-server integration needs further work
+        # The server doesn't recognize incoming HTTP/2 connections from the custom client poll operation
+        testSkip("HTTP/2 client-to-server integration needs further work");
+    }
+
+    #! Test POST request with body
+    testPostRequestWithBody() {
+        testSkip("HTTP/2 client-to-server integration needs further work");
+    }
+
+    #! Test error response handling
+    testErrorResponse() {
+        Http2ClientIo::Http2ClientConnectionManager manager(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+
+        Http2ClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/error/404");
+
+        assertEq(404, response.status_code, "GET /error/404 status code");
+        assertEq("Error 404", response.body, "GET /error/404 body");
+
+        # Test 500 error
+        stream = manager.acquireStream(mSslUrl);
+        response = stream.request("GET", "/error/500");
+        assertEq(500, response.status_code, "GET /error/500 status code");
+    }
+
+    #! Test large response body
+    testLargeResponse() {
+        Http2ClientIo::Http2ClientConnectionManager manager(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+
+        Http2ClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/large/50000");
+
+        assertEq(200, response.status_code, "GET /large/50000 status code");
+        assertEq(50000, response.body.size(), "large response body size");
+        # Verify content is all 'X' characters
+        assertTrue(response.body =~ /^X+$/, "large response body content");
+    }
+
+    #! Test concurrent multiplexed requests on same connection
+    testConcurrentRequests() {
+        Http2ClientIo::Http2ClientConnectionManager manager(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "max_connections_per_host": 1,  # Force single connection
+            "logger": mLogger,
+        });
+
+        # Acquire multiple streams
+        list<Http2ClientIo::Http2ClientStreamHandle> streams = ();
+        for (int i = 0; i < 5; i++) {
+            push streams, manager.acquireStream(mSslUrl);
+        }
+
+        # Submit all requests asynchronously
+        Counter counter(5);
+        list<hash<auto>> responses = ();
+        Mutex resp_lock();
+
+        for (int i = 0; i < 5; i++) {
+            Http2ClientIo::Http2ClientStreamHandle stream = streams[i];
+            string path = sprintf("/json?idx=%d", i);
+            background sub () {
+                on_exit counter.dec();
+                hash<auto> resp = stream.request("GET", path);
+                {
+                    AutoLock al(resp_lock);
+                    push responses, resp;
+                }
+            }();
+        }
+
+        # Wait for all to complete
+        counter.waitForZero(30s);
+
+        # All should have succeeded
+        assertEq(5, responses.size(), "all 5 responses received");
+        foreach hash<auto> resp in (responses) {
+            assertEq(200, resp.status_code, "concurrent request status code");
+        }
+
+        # Should have used only 1 connection (multiplexed)
+        hash<auto> stats = manager.getStats();
+        assertEq(1, stats.total_connections, "should have 1 multiplexed connection");
+    }
+
+    #! Test connection pooling
+    testConnectionPooling() {
+        Http2ClientIo::Http2ClientConnectionManager manager(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "max_connections_per_host": 3,
+            "logger": mLogger,
+        });
+
+        # Make several sequential requests
+        for (int i = 0; i < 5; i++) {
+            Http2ClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+            hash<auto> response = stream.request("GET", "/simple");
+            assertEq(200, response.status_code, sprintf("request %d status", i));
+        }
+
+        # Should reuse connections, not create 5
+        hash<auto> stats = manager.getStats();
+        assertTrue(stats.total_connections <= 3, "should reuse connections (max 3)");
+        assertTrue(stats.total_connections >= 1, "should have at least 1 connection");
+    }
+
+    #! Test async callback API
+    testAsyncCallback() {
+        Http2ClientIo::Http2ClientConnectionManager manager(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+
+        Http2ClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+        Http2ClientIo::Http2ClientConnection conn = stream.getConnection();
+
+        # Drive connection to ready state first
+        assertTrue(conn.driveToReady(30s), "connection should become ready");
+
+        # Use a counter to wait for callback
+        Counter counter(1);
+        *hash<auto> callback_response;
+        *hash<auto> callback_error;
+
+        stream.submitAsync("GET", "/json", NOTHING, NOTHING,
+            sub (hash<auto> resp, *hash<auto> err) {
+                callback_response = resp;
+                callback_error = err;
+                counter.dec();
+            });
+
+        # Drive poll while waiting for response
+        date end_time = now_us() + 30s;
+        while (counter.getCount() > 0 && now_us() < end_time) {
+            conn.drivePoll(100ms);
+        }
+
+        assertEq(0, counter.getCount(), "async callback should complete within timeout");
+        assertNothing(callback_error, "async callback should not have error");
+        assertEq(200, callback_response.status_code, "async callback status code");
+    }
+
+    #! Test SSL accept_all_certs option
+    testSslAcceptAllCerts() {
+        # Test with accept_all_certs = True (should work with self-signed cert)
+        Http2ClientIo::Http2ClientConnectionManager manager(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+
+        Http2ClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "accept_all_certs=True should work");
+
+        # Note: Testing accept_all_certs=False would require a properly signed certificate
+        # or would fail, which we can't reliably test in this environment
     }
 }

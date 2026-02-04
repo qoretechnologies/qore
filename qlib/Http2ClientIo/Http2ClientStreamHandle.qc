@@ -156,6 +156,11 @@ public class Http2ClientStreamHandle {
         return error_info;
     }
 
+    #! Returns the underlying connection
+    Http2ClientConnection getConnection() {
+        return conn;
+    }
+
     #! Performs a synchronous request and returns the response
     /** @param method HTTP method (GET, POST, etc.)
         @param path request path
@@ -170,13 +175,21 @@ public class Http2ClientStreamHandle {
     */
     hash<auto> request(string method, string path, *hash<auto> headers, *data body,
             *timeout timeout_ms) {
-        # Submit async and wait
-        submitAsync(method, path, headers, body, \handleAsyncResponse());
-
-        # Wait for response
         timeout wait_timeout = timeout_ms ?? request_timeout;
         date end_time = now_us() + wait_timeout;
 
+        # Drive connection to ready state first (for synchronous use)
+        if (!conn.isReady()) {
+            date remaining = end_time - now_us();
+            if (remaining <= 0us || !conn.driveToReady(remaining)) {
+                throw "HTTP2-TIMEOUT", "connection establishment timed out";
+            }
+        }
+
+        # Submit async and wait
+        submitAsync(method, path, headers, body, \handleAsyncResponse());
+
+        # Drive poll operation and wait for response
         {
             AutoLock al(lock);
             while (state != Http2ClientStreamState::Complete
@@ -185,13 +198,16 @@ public class Http2ClientStreamHandle {
                 date remaining = end_time - now_us();
                 if (remaining <= 0us) {
                     # Release lock before calling cancel() to avoid deadlock
-                    # (cancel() also acquires the lock)
                     delete al;
                     cancel();
                     throw "HTTP2-TIMEOUT",
                         sprintf("request timed out after %d ms", int(wait_timeout));
                 }
-                response_cond.wait(lock, remaining);
+
+                # Release lock while driving poll (callbacks may need it)
+                delete al;
+                conn.drivePoll(min(remaining, 100ms));
+                al = new AutoLock(lock);
             }
 
             if (error_info) {
@@ -427,7 +443,7 @@ public class Http2ClientStreamHandle {
             string prefix = stream_id
                 ? sprintf("Http2ClientStreamHandle[%d]: ", stream_id)
                 : "Http2ClientStreamHandle: ";
-            logger.log(level, prefix + fmt, argv);
+            call_function_args(\logger.log(), (level, prefix + fmt) + argv);
         }
     }
 }

@@ -247,18 +247,33 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     // Add pseudo-headers first
     std::string method_str(method);
     std::string path_str(path);
-    std::string scheme_str(scheme);  // Use stored scheme for h2c support
+    std::string scheme_str;
     std::string authority;
     std::string protocol;  // RFC 8441: :protocol pseudo-header for extended CONNECT
 
+    // Get scheme from headers if present, otherwise use stored scheme
+    auto scheme_it = headers.find(":scheme");
+    if (scheme_it != headers.end()) {
+        scheme_str = scheme_it->second;
+    } else {
+        scheme_str = scheme;  // Use stored scheme for h2c support
+    }
+
     // Get authority from headers if present
-    auto it = headers.find("host");
+    // Check for :authority pseudo-header first (set by Qore layer)
+    auto it = headers.find(":authority");
     if (it != headers.end()) {
         authority = it->second;
     } else {
-        it = headers.find("Host");
+        // Fall back to host header for backwards compatibility
+        it = headers.find("host");
         if (it != headers.end()) {
             authority = it->second;
+        } else {
+            it = headers.find("Host");
+            if (it != headers.end()) {
+                authority = it->second;
+            }
         }
     }
 

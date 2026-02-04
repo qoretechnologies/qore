@@ -104,12 +104,17 @@ public class Http2ClientConnection {
     /** @param url_info parsed URL info with host, port, scheme
         @param connect_timeout timeout for connection establishment
         @param logger optional logger for debug output
+        @param max_streams maximum concurrent streams per connection
+        @param ssl_verify_mode SSL verification mode (optional)
+        @param accept_all_certs if True, accept all SSL certificates including self-signed
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
-            *Logger logger) {
+            *Logger logger, int max_streams = DefaultMaxStreamsPerConnection,
+            *int ssl_verify_mode, bool accept_all_certs = False) {
         self.url_info = url_info;
         self.connect_timeout = connect_timeout;
         self.logger = logger;
+        self.max_concurrent_streams = max_streams;
         self.last_activity = now_us();
 
         {
@@ -117,11 +122,12 @@ public class Http2ClientConnection {
             connection_id = ++next_connection_id;
         }
 
-        log(LoggerLevel::DEBUG, "creating connection to %s:%d (ssl=%y)",
-            url_info.host, url_info.port, url_info.protocol == "https");
+        log(LoggerLevel::DEBUG, "creating connection to %s:%d (ssl=%y max_streams=%d)",
+            url_info.host, url_info.port, url_info.protocol == "https", max_streams);
 
         # Create poll operation for this connection
-        poll_op = new Http2ClientPollOperation(url_info, connect_timeout, logger);
+        poll_op = new Http2ClientPollOperation(url_info, connect_timeout, logger,
+            ssl_verify_mode, accept_all_certs);
     }
 
     #! Returns the poll operation for this connection
@@ -293,6 +299,69 @@ public class Http2ClientConnection {
         return state == Http2ClientConnectionState::Ready;
     }
 
+    #! Drives the connection synchronously until ready or timeout
+    /** This method polls the connection in a loop until the HTTP/2 handshake
+        completes and the connection is ready for requests.
+
+        @param timeout_ms maximum time to wait
+
+        @return True if the connection is ready, False on timeout
+
+        @throw HTTP2-CONNECT-ERROR if the connection fails
+    */
+    bool driveToReady(timeout timeout_ms = 30s) {
+        date end_time = now_us() + timeout_ms;
+
+        while (!isReady() && !isClosed()) {
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+
+            *hash<SocketPollInfo> poll_info = poll_op.continuePoll();
+            if (!poll_info) {
+                # Poll operation complete or no more work
+                handlePollResult();
+                if (poll_op.hasError()) {
+                    *hash<auto> err = poll_op.getError();
+                    throw "HTTP2-CONNECT-ERROR",
+                        sprintf("%s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
+                }
+                continue;
+            }
+
+            # Wait for socket to be ready
+            int poll_timeout = min(int(remaining), 1000);
+            Socket::poll((poll_info,), poll_timeout);
+            handlePollResult();
+        }
+
+        if (isClosed()) {
+            *hash<auto> err = poll_op.getError();
+            throw "HTTP2-CONNECT-ERROR",
+                sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
+        }
+
+        return isReady();
+    }
+
+    #! Drives the connection poll operation once
+    /** @param poll_timeout_ms timeout for this poll iteration
+
+        @return True if there is more work to do, False if poll is complete
+    */
+    bool drivePoll(timeout poll_timeout_ms = 1s) {
+        *hash<SocketPollInfo> poll_info = poll_op.continuePoll();
+        if (!poll_info) {
+            handlePollResult();
+            return !isClosed() && !poll_op.hasError();
+        }
+
+        Socket::poll((poll_info,), int(poll_timeout_ms));
+        handlePollResult();
+        return True;
+    }
+
     #! Closes the connection
     close() {
         log(LoggerLevel::DEBUG, "closing connection");
@@ -317,7 +386,7 @@ public class Http2ClientConnection {
     #! Internal: logging helper
     private log(int level, string fmt) {
         if (logger) {
-            logger.log(level, sprintf("Http2ClientConnection[%d]: ", connection_id) + fmt, argv);
+            call_function_args(\logger.log(), (level, sprintf("Http2ClientConnection[%d]: ", connection_id) + fmt) + argv);
         }
     }
 }

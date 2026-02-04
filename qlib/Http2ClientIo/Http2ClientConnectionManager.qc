@@ -345,7 +345,8 @@ public class Http2ClientConnectionManager {
 
             # Create new connection
             log(LoggerLevel::DEBUG, "creating new connection to %s", key);
-            Http2ClientConnection conn(url_info, opts.connect_timeout, logger);
+            Http2ClientConnection conn(url_info, opts.connect_timeout, logger,
+                opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs);
 
             # Add to pool
             if (!pool.hasKey(key)) {
@@ -366,7 +367,7 @@ public class Http2ClientConnectionManager {
     #! Internal: logging helper
     private log(int level, string fmt) {
         if (logger) {
-            logger.log(level, "Http2ClientConnectionManager: " + fmt, argv);
+            call_function_args(\logger.log(), (level, "Http2ClientConnectionManager: " + fmt) + argv);
         }
     }
 }

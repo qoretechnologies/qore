@@ -116,8 +116,11 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     /** @param url_info parsed URL info with host, port, scheme
         @param connect_timeout timeout for connection establishment
         @param logger optional logger for debug output
+        @param ssl_verify_mode SSL verification mode (optional)
+        @param accept_all_certs if True, accept all SSL certificates including self-signed
     */
-    constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *Logger logger) {
+    constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *Logger logger,
+            *int ssl_verify_mode, bool accept_all_certs = False) {
         self.url_info = url_info;
         self.connect_timeout = connect_timeout;
         self.logger = logger;
@@ -127,6 +130,13 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
 
         # Configure socket for HTTP/2
         if (ssl_required) {
+            # Apply SSL verification options
+            if (exists ssl_verify_mode) {
+                sock.setSslVerifyMode(ssl_verify_mode);
+            }
+            if (accept_all_certs) {
+                sock.acceptAllCertificates(True);
+            }
             # Set ALPN protocols to negotiate HTTP/2
             sock.setAlpnProtocols(("h2",));
         }
@@ -370,7 +380,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     private startConnect() {
         string target = sprintf("%s:%d", url_info.host, url_info.port);
         log(LoggerLevel::DEBUG, "connecting to %s (ssl=%y)", target, ssl_required);
-        current_op = sock.startConnect(target);
+        current_op = sock.startPollConnect(target);
         state = STATE_CONNECTING;
     }
 
@@ -408,7 +418,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     #! Internal: starts SSL upgrade
     private startSslUpgrade() {
         log(LoggerLevel::DEBUG, "starting SSL upgrade");
-        current_op = sock.startSslConnect();
+        current_op = sock.startPollUpgradeClientToSSL();
         state = STATE_SSL_UPGRADE;
     }
 
@@ -545,8 +555,8 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     #! Internal: notifies all pending streams of an error
     private notifyPendingStreams(hash<auto> err) {
         # Get a copy of callbacks under lock, then notify outside lock
-        hash<string, code> callbacks_copy;
-        hash<string, hash<auto>> ctxs_copy;
+        *hash<string, code> callbacks_copy;
+        *hash<string, hash<auto>> ctxs_copy;
         {
             AutoLock al(stream_lock);
             callbacks_copy = stream_callbacks;
@@ -570,7 +580,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     #! Internal: logging helper
     private log(int level, string fmt) {
         if (logger) {
-            logger.log(level, "Http2ClientPollOperation: " + fmt, argv);
+            call_function_args(\logger.log(), (level, "Http2ClientPollOperation: " + fmt) + argv);
         }
     }
 }
