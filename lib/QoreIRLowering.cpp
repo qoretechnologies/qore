@@ -3231,15 +3231,16 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
     QoreValue right_expr = plus->getRight();
 
     // Lambda to check if a leaf expression has string type using AST type info
+    // Note: We check VarRefNode specifically because ParseNode::getTypeInfo() is protected
     auto isStringTypedExpr = [](QoreValue e) -> bool {
         // Check for string literal
         if (e.getType() == NT_STRING) {
             return true;
         }
-        // Check parse node's type info
-        auto* parse_node = dynamic_cast<const ParseNode*>(e.getInternalNode());
-        if (parse_node) {
-            const QoreTypeInfo* type_info = parse_node->getTypeInfo();
+        // Check VarRefNode's type info (public method)
+        auto* var_node = dynamic_cast<const VarRefNode*>(e.getInternalNode());
+        if (var_node) {
+            const QoreTypeInfo* type_info = var_node->getTypeInfo();
             if (type_info && QoreTypeInfo::isType(type_info, NT_STRING)) {
                 return true;
             }
@@ -3251,7 +3252,7 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
     std::function<bool(QoreValue)> isStringPlusChain = [&](QoreValue e) -> bool {
         auto* p = dynamic_cast<const QorePlusOperatorNode*>(e.getInternalNode());
         if (p) {
-            // It's a plus - check if its return type is string
+            // It's a plus - check if its return type is string (public method on QorePlusOperatorNode)
             const QoreTypeInfo* type_info = p->getTypeInfo();
             if (!type_info || !QoreTypeInfo::isType(type_info, NT_STRING)) {
                 return false;
