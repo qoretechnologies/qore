@@ -1,0 +1,450 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ShippoRestClient.qm Qore user module for calling Shippo REST API services
+
+/*  ShippoRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+%require-types
+
+# enable all warnings
+%enable-all-warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%new-style
+
+# do not ignore argument errors
+%strict-args
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module ShippoRestClient {
+    version = "1.0";
+    desc = "User module for calling Shippo REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("shippo", ShippoRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage ShippoRestClient Module
+
+    @tableofcontents
+
+    @section shipporestclientintro ShippoRestClient Introduction
+
+    The %ShippoRestClient module provides an API for calling Shippo's REST API services.
+
+    To use this module, use \c "%requires ShippoRestClient" in your code.
+
+    All the public symbols in the module are defined in the ShippoRestClient namespace.
+
+    The main classes are:
+    - @ref ShippoRestClient::ShippoRestClient "ShippoRestClient":
+      this class provides the REST client API for communication with the Shippo API;
+      it handles authentication via API key (ShippoToken) or OAuth2 (Bearer token)
+    - @ref ShippoRestClient::ShippoRestConnection "ShippoRestConnection":
+      provides a connection object to Shippo services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ShippoRestClient
+
+ShippoRestClient shippo({"apikey": ENV.SHIPPO_API_TOKEN});
+hash<auto> result = shippo.get("/addresses");
+printf("Addresses: %N\n", result.body);
+    @endcode
+
+    @section shipporestclientrelnotes Release Notes
+
+    @subsection shipporestclientv1_0 ShippoRestClient v1.0
+    - the initial version of the %ShippoRestClient module
+*/
+
+#! the ShippoRestClient namespace contains all the objects in the ShippoRestClient module
+public namespace ShippoRestClient {
+
+#! This class provides the REST client API for communication with Shippo servers
+/** Shippo uses a REST API with two authentication methods:
+    - API Token: Authorization header with \c "ShippoToken <api_token>"
+    - OAuth2: Authorization header with \c "Bearer <access_token>"
+
+    @par API Information:
+    - Base URL: https://api.goshippo.com
+    - API Version: 2018-02-08 (passed via Shippo-API-Version header)
+    - Access tokens never expire (no refresh mechanism needed)
+
+    @par Authentication:
+    You can authenticate using either:
+    - \c apikey option: Your Shippo API token (recommended for server-to-server)
+    - OAuth2 options: For user-authorized access via OAuth2 flow
+*/
+public class ShippoRestClient inherits RestClient::RestClient {
+    public {
+        #! Shippo API base URL
+        const DefaultApiUrl = "https://api.goshippo.com";
+
+        #! Default authorization request URL
+        const DefaultAuthUrl = "https://goshippo.com/oauth/authorize";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default token request URL
+        const DefaultTokenUrl = "https://api.goshippo.com/oauth/token";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default Shippo ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default Shippo ping path (addresses endpoint - lightweight)
+        const DefaultPingPath = "addresses";
+
+        #! Default Shippo ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Shippo API version header
+        const DefaultApiVersionHeader = "2018-02-08";
+
+        #! Default constructor options (without OAuth2 - added conditionally)
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "url": DefaultApiUrl,
+        };
+
+        #! OAuth2 options (added when OAuth2 credentials are provided)
+        const OAuth2Options = {
+            "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_token_url": DefaultTokenUrl,
+        };
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+ShippoRestClient shippo({"apikey": "shippo_live_xxxxx"});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c apikey: the Shippo API token (use this OR OAuth2 credentials)
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(ShippoRestClient::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+        # Add API version header to all requests
+        addDefaultHeaders({"Shippo-API-Version": DefaultApiVersionHeader});
+    }
+
+    #! returns options for @ref ShippoRestClient::ShippoRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Dual auth: API token takes precedence if provided, otherwise use OAuth2
+        if (opts.apikey) {
+            # API token mode: Authorization: ShippoToken <api_token>
+            rv.headers.Authorization = "ShippoToken " + opts.apikey;
+            # Remove apikey and OAuth2 options so RestClient doesn't try to use them
+            remove rv.apikey;
+            remove rv.oauth2_grant_type;
+            remove rv.oauth2_auth_url;
+            remove rv.oauth2_token_url;
+        } else {
+            # OAuth2 mode: Authorization: Bearer <token>
+            rv += OAuth2Options;
+            # RestClient handles Bearer prefix for token option
+        }
+
+        return rv;
+    }
+}
+
+#! Class for Shippo REST connections; returns @ref ShippoRestClient objects
+/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c apikey: the Shippo API token (creates Authorization header with "ShippoToken" prefix)
+
+    For OAuth2, the following default values are provided:
+    - \c oauth2_auth_url: \c https://goshippo.com/oauth/authorize
+    - \c oauth2_grant_type: \c authorization_code
+    - \c oauth2_token_url: \c https://api.goshippo.com/oauth/token
+
+    @see @ref ShippoRestClient::ShippoRestClient::constructor() for more information on the above options
+*/
+public class ShippoRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Shippo API URL
+        const DefaultConnectionUrl = "shippo://api.goshippo.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Shippo REST Connection",
+            "short_desc": "A connection to the Shippo shipping API",
+            "desc": "A connection to the Shippo REST API for shipping, label creation, and order management.\n\n"
+                "Shippo is a multi-carrier shipping API that enables you to connect with multiple shipping "
+                "carriers (USPS, UPS, FedEx, DHL, and 85+ more) through a single integration.\n\n"
+                "**Features:**\n"
+                "- Compare shipping rates across carriers\n"
+                "- Create shipping labels\n"
+                "- Track shipments\n"
+                "- Validate addresses\n"
+                "- Manage orders\n\n"
+                "**Authentication:**\n"
+                "You can authenticate using either:\n"
+                "- **API Token**: Recommended for server-to-server integrations\n"
+                "- **OAuth2**: For user-authorized access",
+            "cls": Class::forName("ShippoRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "shippo": True,
+            },
+            "base_scheme_map": {
+                "https": "shippo",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": ShippoRestClient::DefaultData,
+                },
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Token",
+                    "short_desc": "Shippo API token for authentication",
+                    "type": "string",
+                    "desc": "Your Shippo API token used for authentication.\n\n"
+                        "**To obtain your API token:**\n"
+                        "1. Log in to https://apps.goshippo.com/\n"
+                        "2. Navigate to **Settings > API**\n"
+                        "3. Copy your **Live Token** for production use\n"
+                        "4. Use **Test Token** for development/testing\n\n"
+                        "**Token format:** `shippo_live_xxxxx` or `shippo_test_xxxxx`\n\n"
+                        "**Note:** Use either API Token OR OAuth2 authentication - not both.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": ShippoRestClient::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": ShippoRestClient::DefaultGrantType,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": ShippoRestClient::DefaultTokenUrl,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": ShippoRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": ShippoRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": ShippoRestClient::DefaultPingPath,
+                },
+            },
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "Authentication Options",
+                    "intent": "info",
+                    "content": "Shippo supports two authentication methods:\n\n"
+                        "**Option 1: OAuth2 (Recommended)**\n"
+                        "Simply click the authorize button to connect your Shippo account.\n"
+                        "No additional configuration needed.\n\n"
+                        "**Option 2: API Token**\n"
+                        "Enter your Shippo API token in the 'API Token' field.\n"
+                        "Use this if you prefer to authenticate with a token directly.",
+                },
+                <UiMessageInfo>{
+                    "title": "How to Get Your API Token",
+                    "intent": "info",
+                    "content": "If using API Token authentication:\n\n"
+                        "1. Log in to https://apps.goshippo.com/\n"
+                        "2. Navigate to **Settings > API**\n"
+                        "3. Copy your **Live Token** for production\n"
+                        "4. Use **Test Token** for development/testing\n\n"
+                        "**Token formats:**\n"
+                        "- Live: `shippo_live_xxxxx`\n"
+                        "- Test: `shippo_test_xxxxx`\n\n"
+                        "Keep your tokens secure and never share them publicly.",
+                },
+                <UiMessageInfo>{
+                    "title": "API Capabilities",
+                    "intent": "info",
+                    "content": "The Shippo API enables you to:\n\n"
+                        "**Shipping:**\n"
+                        "- Compare rates across 85+ carriers\n"
+                        "- Create shipping labels\n"
+                        "- Track shipments in real-time\n\n"
+                        "**Address Management:**\n"
+                        "- Validate addresses\n"
+                        "- Store address book entries\n\n"
+                        "**Orders:**\n"
+                        "- Create and manage orders\n"
+                        "- Link shipments to orders\n\n"
+                        "**International:**\n"
+                        "- Create customs declarations\n"
+                        "- Generate commercial invoices",
+                },
+            ),
+        };
+    }
+
+    #! creates the ShippoRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the ShippoRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! returns \c "shippo"
+    string getType() {
+        return "shippo";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "Shippo";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the ShippoDataProvider and creates the data provider
+        # object dynamically
+        load_module("ShippoDataProvider");
+        return create_object("ShippoDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! Sets the update options code for the connection
+    /** The closure or call reference must have the following signature:
+        <tt>update_options(hash<auto> options)</tt>
+    */
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        # update the URL immediately if necessary
+        if (update_options && url != DefaultConnectionUrl) {
+            # NOTE: do not update the URL or real URL values here, or the external update will fail, because it will
+            # believe that no changes are necessary
+            doUpdateOptions(self, {
+                "url": DefaultConnectionUrl,
+            });
+        }
+    }
+
+    #! returns a @ref ShippoRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref ShippoRestClient object
+    */
+    private ShippoRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ShippoRestClient(getConnectionOptions(), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

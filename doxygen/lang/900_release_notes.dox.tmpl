@@ -522,6 +522,18 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - polling-based event triggers for new invoices, contacts, estimates, expenses, items, and projects
       - action catalog integration with reference data support for organizations, customers, and contacts
       - connection support with \c zohoinvoice:// URL scheme
+    - @ref shipporestclientintro "ShippoRestClient" module
+      - new module providing a REST client for Shippo's shipping API
+      - supports dual authentication: OAuth2 and API token (\c ShippoToken header)
+      - provides ShippoRestConnection for connection management with \c shippo:// URL scheme
+    - @ref shippodataproviderintro "ShippoDataProvider" module
+      - new module providing a data provider API for Shippo shipping services
+      - shipment and rate management (create shipments, get shipping rates)
+      - shipping label creation and management (create labels from rates, get transaction details)
+      - order management (create and retrieve orders)
+      - polling-based event triggers for new parcels, shipments, and labels
+      - action catalog integration with 10 actions and 3 triggers
+      - connection support with \c shippo:// URL scheme
     - @ref shipstationrestclientintro "ShipStationRestClient" module
       - new module providing a REST client for ShipStation's shipping and logistics API
       - supports HTTP Basic Authentication with API Key and API Secret
