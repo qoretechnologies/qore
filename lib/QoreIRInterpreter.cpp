@@ -22,6 +22,7 @@
 #include <qore/intern/ContextStatement.h>
 #include <qore/intern/SummarizeStatement.h>
 #include <qore/intern/ForEachStatement.h>
+#include <qore/intern/FunctionalOperatorInterface.h>
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/OnBlockExitStatement.h>
@@ -1680,6 +1681,71 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 cleanupStoredValues(threadlocals, nullptr);
                 cleanupStoredValues(closures, nullptr);
                 ++ip;
+                break;
+            }
+            case QoreIROpcode::IteratorCreate: {
+                auto* iter_inst = static_cast<QoreIRIteratorCreateInstruction*>(inst);
+                QoreValue iterable = getIRValue(values, iter_inst->iterable);
+                FunctionalOperator::FunctionalValueType value_type;
+                FunctionalOperatorInterface* iter = nullptr;
+                if (iter_inst->iterator_func) {
+                    iter = iter_inst->iterator_func->getFunctionalIterator(value_type, xsink);
+                } else {
+                    iter = FunctionalOperatorInterface::getFunctionalIterator(value_type, iterable, true,
+                        "foreach statement", xsink);
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                // Store iterator pointer as int64_t in result
+                // A nullptr means the iterable was empty (nothing)
+                values[iter_inst->result.id] = QoreValue(reinterpret_cast<int64_t>(iter));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::IteratorNext: {
+                auto* iter_inst = static_cast<QoreIRIteratorNextInstruction*>(inst);
+                QoreValue iter_val = getIRValue(values, iter_inst->iterator);
+                FunctionalOperatorInterface* iter = reinterpret_cast<FunctionalOperatorInterface*>(
+                    iter_val.getAsBigInt());
+                if (!iter) {
+                    // Empty iterator - branch to done
+                    prev_block = block;
+                    block = iter_inst->done_target;
+                    ip = 0;
+                    break;
+                }
+                ValueOptionalRefHolder val(xsink);
+                bool done = iter->getNext(val, xsink);
+                if (xsink && *xsink) {
+                    delete iter;
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                if (done) {
+                    // Iterator exhausted - clean up and branch to done
+                    delete iter;
+                    // Clear the iterator value so we don't double-delete
+                    values[iter_inst->iterator.id] = QoreValue(static_cast<int64_t>(0));
+                    prev_block = block;
+                    block = iter_inst->done_target;
+                    ip = 0;
+                } else {
+                    // Store current value in result and branch to continue
+                    values[iter_inst->result.id] = val.takeReferencedValue();
+                    prev_block = block;
+                    block = iter_inst->continue_target;
+                    ip = 0;
+                }
                 break;
             }
             case QoreIROpcode::OnBlockExit: {

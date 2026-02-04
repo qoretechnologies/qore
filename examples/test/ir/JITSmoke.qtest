@@ -94,6 +94,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("optimized map patterns", \testJitMapOptimized());
         addTestCase("optimized select patterns", \testJitSelectOptimized());
         addTestCase("fused map+select patterns", \testJitFusedMapSelect());
+        addTestCase("IR foreach lowering", \testIRForeachLowering());
         set_return_value(main());
     }
 
@@ -1542,6 +1543,89 @@ printf(\"%s\\n\", (map $1.toString(), result).join(\",\"));
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(single_code, mode));
             assertEq("15", result, sprintf("fused map select single element %s", mode));
+        }
+    }
+
+    testIRForeachLowering() {
+        # Test basic foreach loop lowering to IR
+        string basic_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int sum = 0;
+foreach int n in (nums) {
+    sum += n;
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir") {
+            string result = trim(runScript(basic_code, mode));
+            assertEq("15", result, sprintf("foreach basic sum %s", mode));
+        }
+
+        # Test foreach with break
+        string break_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int sum = 0;
+foreach int n in (nums) {
+    if (n == 3) {
+        break;
+    }
+    sum += n;
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir") {
+            string result = trim(runScript(break_code, mode));
+            # 1 + 2 = 3 (break before processing 3)
+            assertEq("3", result, sprintf("foreach break %s", mode));
+        }
+
+        # Test foreach with continue
+        string continue_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int sum = 0;
+foreach int n in (nums) {
+    if (n == 3) {
+        continue;
+    }
+    sum += n;
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir") {
+            string result = trim(runScript(continue_code, mode));
+            # 1 + 2 + 4 + 5 = 12 (skip 3)
+            assertEq("12", result, sprintf("foreach continue %s", mode));
+        }
+
+        # Test foreach with empty list
+        string empty_code = "%modern
+list<int> empty = ();
+int sum = 0;
+foreach int n in (empty) {
+    sum += n;
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir") {
+            string result = trim(runScript(empty_code, mode));
+            assertEq("0", result, sprintf("foreach empty %s", mode));
+        }
+
+        # Test nested foreach
+        string nested_code = "%modern
+list<list<int>> nested = ((1, 2), (3, 4), (5, 6));
+int total = 0;
+foreach list<int> inner in (nested) {
+    foreach int n in (inner) {
+        total += n;
+    }
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir") {
+            string result = trim(runScript(nested_code, mode));
+            # 1+2+3+4+5+6 = 21
+            assertEq("21", result, sprintf("foreach nested %s", mode));
         }
     }
 }

@@ -437,6 +437,20 @@ QoreIRForeachInstruction* QoreIRBuilder::createForeach(const ForEachStatement* s
     return inst;
 }
 
+QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreate(QoreIRValue iterable,
+        FunctionalOperator* iterator_func, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRIteratorCreateInstruction>(iterable, iterator_func);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRIteratorNextInstruction* QoreIRBuilder::createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
+        QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRIteratorNextInstruction>(iterator, done_target, continue_target);
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIROnBlockExitInstruction* QoreIRBuilder::createOnBlockExit(const OnBlockExitStatement* stmt,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIROnBlockExitInstruction>(stmt);

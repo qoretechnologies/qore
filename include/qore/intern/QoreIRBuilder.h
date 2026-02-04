@@ -113,6 +113,10 @@ public:
     QoreIRGuardInstruction* createGuardNotNothing(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
     QoreIRForeachInstruction* createForeach(const ForEachStatement* stmt, const QoreProgramLocation* loc = nullptr);
+    QoreIRIteratorCreateInstruction* createIteratorCreate(QoreIRValue iterable,
+        FunctionalOperator* iterator_func = nullptr, const QoreProgramLocation* loc = nullptr);
+    QoreIRIteratorNextInstruction* createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
+        QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
     QoreIROnBlockExitInstruction* createOnBlockExit(const OnBlockExitStatement* stmt,
         const QoreProgramLocation* loc = nullptr);
     QoreIRScopeEnterInstruction* createScopeEnter(uint32_t scope_id, const QoreProgramLocation* loc = nullptr);

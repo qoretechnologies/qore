@@ -51,6 +51,27 @@ public:
     }
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
+    // Accessors for IR lowering
+    DLLLOCAL QoreValue getVar() const {
+        return var;
+    }
+
+    DLLLOCAL QoreValue getList() const {
+        return list;
+    }
+
+    DLLLOCAL StatementBlock* getCode() const {
+        return code;
+    }
+
+    DLLLOCAL bool isRef() const {
+        return is_ref;
+    }
+
+    DLLLOCAL FunctionalOperator* getIteratorFunc() const {
+        return iterator_func;
+    }
+
 private:
     QoreValue var,
         list;

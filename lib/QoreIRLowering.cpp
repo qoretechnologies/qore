@@ -140,6 +140,7 @@ static bool isTerminatorOpcode(QoreIROpcode op) {
         case QoreIROpcode::Br:
         case QoreIROpcode::BrIf:
         case QoreIROpcode::Invoke:
+        case QoreIROpcode::IteratorNext:
         case QoreIROpcode::Return:
         case QoreIROpcode::ReturnNothing:
         case QoreIROpcode::Throw:
@@ -597,10 +598,83 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
-        auto* inst = builder.createForeach(foreach_stmt, stmt->loc);
-        if (!exception_stack.empty()) {
-            inst->exception_target = exception_stack.back();
+        // For reference iteration (foreach x in \list), fall back to AST execution
+        // due to complex semantics of modifying the list during iteration
+        if (foreach_stmt->isRef()) {
+            auto* inst = builder.createForeach(foreach_stmt, stmt->loc);
+            if (!exception_stack.empty()) {
+                inst->exception_target = exception_stack.back();
+            }
+            return true;
         }
+
+        // Create basic blocks for the loop structure
+        QoreIRBasicBlock* header_block = createBlock("foreach.header");
+        QoreIRBasicBlock* body_block = createBlock("foreach.body");
+        QoreIRBasicBlock* exit_block = createBlock("foreach.exit");
+        if (!header_block || !body_block || !exit_block) {
+            error = "IR builder failed to create blocks for foreach";
+            return false;
+        }
+        // Mark header block as loop header for OSR detection
+        header_block->is_loop_header = true;
+
+        // Evaluate the list expression
+        QoreValue list_expr = foreach_stmt->getList();
+        QoreIRValue list_val;
+        if (list_expr && !list_expr.isNothing()) {
+            list_val = lowerExpression(list_expr, error);
+            if (!list_val.isValid()) {
+                return false;
+            }
+        } else {
+            // Empty list - just create a nothing constant
+            list_val = builder.createConstNothing(stmt->loc)->result;
+        }
+
+        // Create the iterator
+        auto* iter_inst = builder.createIteratorCreate(list_val, foreach_stmt->getIteratorFunc(), stmt->loc);
+        QoreIRValue iter_val = iter_inst->result;
+
+        // Branch to header
+        builder.createBranch(header_block, stmt->loc);
+
+        // Header block: check for next value and branch
+        builder.setBlock(header_block);
+        auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, stmt->loc);
+        QoreIRValue value_val = next_inst->result;
+
+        // Body block: assign value to loop variable and execute body
+        builder.setBlock(body_block);
+
+        // Assign the value to the loop variable
+        QoreValue var_expr = foreach_stmt->getVar();
+        if (var_expr && !var_expr.isNothing()) {
+            // Use StoreLValue for the assignment
+            auto* store_inst = builder.createStoreLValue(var_expr, value_val, stmt->loc);
+            if (!exception_stack.empty()) {
+                store_inst->exception_target = exception_stack.back();
+            }
+        }
+
+        // Lower the loop body with proper break/continue targets
+        flow_stack.push_back({exit_block, header_block, false, scope_stack.size()});
+        StatementBlock* body = foreach_stmt->getCode();
+        if (body) {
+            if (!lowerStatementBlock(body, error)) {
+                flow_stack.pop_back();
+                return false;
+            }
+        }
+        flow_stack.pop_back();
+
+        // Branch back to header
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(header_block, stmt->loc);
+        }
+
+        // Exit block
+        builder.setBlock(exit_block);
         return true;
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
@@ -4464,7 +4538,9 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
 
 // Pattern analysis for optimized foldl operations
 // Returns optimized opcode if pattern is detected, or FoldlAny for fallback
-static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTypeInfo*& result_type) {
+// list_type is the type info of the list being folded, used as fallback for type detection
+static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTypeInfo*& result_type,
+        const QoreTypeInfo* list_type = nullptr) {
     const AbstractQoreNode* node = fold_expr.getInternalNode();
     if (!node) {
         return QoreIROpcode::FoldlAny;
@@ -4550,14 +4626,28 @@ static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTyp
 
                 // Check if args are $1 and $2 (offsets 0 and 1)
                 if (impl_arg0 && impl_arg1 && impl_arg0->getOffset() == 0 && impl_arg1->getOffset() == 1) {
-                    result_type = call->getTypeInfo();
+                    // min/max return the same type as their arguments
+                    // Try the argument type first, then fall back to list element type
+                    result_type = arg0.getTypeInfo();
                     if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
                         return is_min ? QoreIROpcode::FoldlMinInt : QoreIROpcode::FoldlMaxInt;
                     } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
                         return is_min ? QoreIROpcode::FoldlMinFloat : QoreIROpcode::FoldlMaxFloat;
                     }
-                    // Default to int for untyped
-                    return is_min ? QoreIROpcode::FoldlMinInt : QoreIROpcode::FoldlMaxInt;
+                    // Fall back to list element type if available
+                    if (list_type) {
+                        const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+                        if (elem_type) {
+                            if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
+                                return is_min ? QoreIROpcode::FoldlMinInt : QoreIROpcode::FoldlMaxInt;
+                            } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+                                return is_min ? QoreIROpcode::FoldlMinFloat : QoreIROpcode::FoldlMaxFloat;
+                            }
+                        }
+                    }
+                    // Fall back to generic foldl if type cannot be determined
+                    // This ensures correctness over optimization
+                    return QoreIROpcode::FoldlAny;
                 }
             }
         }
@@ -4721,7 +4811,9 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
 
     // Try to detect optimizable pattern first
     const QoreTypeInfo* result_type = nullptr;
-    QoreIROpcode opt_opcode = analyzeFoldPattern(foldl->getLeft(), result_type);
+    // Get list type info for fallback type detection
+    const QoreTypeInfo* list_type = foldl->getRight().getTypeInfo();
+    QoreIROpcode opt_opcode = analyzeFoldPattern(foldl->getLeft(), result_type, list_type);
 
     if (opt_opcode != QoreIROpcode::FoldlAny) {
         // Optimized path: emit specialized opcode with just the list operand

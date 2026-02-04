@@ -40,6 +40,7 @@ static bool isTerminator(QoreIROpcode op) {
         case QoreIROpcode::Invoke:
         case QoreIROpcode::Br:
         case QoreIROpcode::BrIf:
+        case QoreIROpcode::IteratorNext:
         case QoreIROpcode::Return:
         case QoreIROpcode::ReturnNothing:
         case QoreIROpcode::Throw:
@@ -270,6 +271,8 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::CallStatic:
         case QoreIROpcode::Invoke:
         case QoreIROpcode::CatchException:
+        case QoreIROpcode::IteratorCreate:
+        case QoreIROpcode::IteratorNext:
             return true;
         default:
             return false;
@@ -279,6 +282,8 @@ static bool requiresResult(QoreIROpcode op) {
 static int expectedOperands(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::Foreach:
+        case QoreIROpcode::IteratorCreate:
+        case QoreIROpcode::IteratorNext:
         case QoreIROpcode::OnBlockExit:
         case QoreIROpcode::ThreadExit:
         case QoreIROpcode::Debug:
@@ -605,6 +610,22 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 }
                 if (!br->true_target || !br->false_target) {
                     error = "branch-if missing target";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::IteratorCreate) {
+                auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
+                if (!iter || !iter->iterable.isValid()) {
+                    error = "iterator.create missing iterable";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::IteratorNext) {
+                auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
+                if (!iter || !iter->iterator.isValid()) {
+                    error = "iterator.next missing iterator";
+                    return false;
+                }
+                if (!iter->done_target || !iter->continue_target) {
+                    error = "iterator.next missing targets";
                     return false;
                 }
             } else if (inst->opcode == QoreIROpcode::Return

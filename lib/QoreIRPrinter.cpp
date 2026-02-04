@@ -162,6 +162,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::HashMap: return "hash.map";
         case QoreIROpcode::HashMapSelect: return "hash.map.select";
         case QoreIROpcode::Foreach: return "foreach";
+        case QoreIROpcode::IteratorCreate: return "iterator.create";
+        case QoreIROpcode::IteratorNext: return "iterator.next";
         case QoreIROpcode::OnBlockExit: return "on.block.exit";
         case QoreIROpcode::ThreadExit: return "thread.exit";
         case QoreIROpcode::Debug: return "debug";
@@ -464,6 +466,25 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* ret = dynamic_cast<const QoreIRReturnInstruction*>(inst.get());
                 if (ret && ret->has_value) {
                     out << " %" << ret->value.id;
+                }
+            } else if (inst->opcode == QoreIROpcode::IteratorCreate) {
+                auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
+                if (iter) {
+                    out << " %" << iter->iterable.id;
+                    if (iter->iterator_func) {
+                        out << " <functional>";
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::IteratorNext) {
+                auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
+                if (iter) {
+                    out << " %" << iter->iterator.id;
+                    if (iter->continue_target) {
+                        out << " body " << iter->continue_target->name;
+                    }
+                    if (iter->done_target) {
+                        out << " done " << iter->done_target->name;
+                    }
                 }
             }
             out << "\n";

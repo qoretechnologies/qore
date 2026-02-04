@@ -3324,6 +3324,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::FoldlDiffInt: {
             // Native LLVM loop for difference reduction on integer list
+            // foldl $1 - $2 means: list[0] - list[1] - list[2] - ...
             auto* list = getVal(inst->operands[0].id, error);
             if (!list) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
@@ -3338,40 +3339,44 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_diff_loop", llvm_func);
             llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_diff_exit", llvm_func);
 
-            // Check if list is empty
             llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
-            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero);
-            builder->CreateCondBr(is_empty, exit_bb, loop_bb);
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
 
-            // Loop body
+            // Get first element as initial accumulator
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* first_elem = builder->CreateCall(get_helper, {list_boxed, zero});
+
+            // Check if list has only one element (no loop needed)
+            llvm::Value* has_more = builder->CreateICmpUGT(size, one);
+            builder->CreateCondBr(has_more, loop_bb, exit_bb);
+
+            // Loop body - start from index 1
             builder->SetInsertPoint(loop_bb);
             llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
             llvm::PHINode* acc_phi = builder->CreatePHI(i64_type, 2, "acc");
 
             // Get element at index
-            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_int",
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
 
             // Subtract from accumulator
             llvm::Value* new_acc = builder->CreateSub(acc_phi, elem);
 
             // Increment index and check loop condition
-            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
             llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
             llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
             builder->CreateCondBr(done, exit_bb, loop_bb);
 
-            // Update PHI nodes
-            idx_phi->addIncoming(zero, preheader);
+            // Update PHI nodes - start from index 1 with first element as accumulator
+            idx_phi->addIncoming(one, preheader);
             idx_phi->addIncoming(next_idx, loop_bb);
-            acc_phi->addIncoming(zero, preheader);
+            acc_phi->addIncoming(first_elem, preheader);
             acc_phi->addIncoming(new_acc, loop_bb);
 
             // Exit block - merge results
             builder->SetInsertPoint(exit_bb);
             llvm::PHINode* result_phi = builder->CreatePHI(i64_type, 2, "diff_result");
-            result_phi->addIncoming(zero, preheader);
+            result_phi->addIncoming(first_elem, preheader);  // Single element case
             result_phi->addIncoming(new_acc, loop_bb);
 
             values[inst->result.id] = result_phi;
@@ -3379,6 +3384,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::FoldlDiffFloat: {
             // Native LLVM loop for difference reduction on float list
+            // foldl $1 - $2 means: list[0] - list[1] - list[2] - ...
             auto* list = getVal(inst->operands[0].id, error);
             if (!list) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
@@ -3393,41 +3399,44 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_difff_loop", llvm_func);
             llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_difff_exit", llvm_func);
 
-            // Check if list is empty
             llvm::Value* zero_i = llvm::ConstantInt::get(i64_type, 0);
-            llvm::Value* zero_f = llvm::ConstantFP::get(double_type, 0.0);
-            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero_i);
-            builder->CreateCondBr(is_empty, exit_bb, loop_bb);
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
 
-            // Loop body
+            // Get first element as initial accumulator
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_float",
+                    llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+            llvm::Value* first_elem = builder->CreateCall(get_helper, {list_boxed, zero_i});
+
+            // Check if list has only one element (no loop needed)
+            llvm::Value* has_more = builder->CreateICmpUGT(size, one);
+            builder->CreateCondBr(has_more, loop_bb, exit_bb);
+
+            // Loop body - start from index 1
             builder->SetInsertPoint(loop_bb);
             llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
             llvm::PHINode* acc_phi = builder->CreatePHI(double_type, 2, "acc");
 
             // Get element at index
-            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_float",
-                    llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
             llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
 
             // Subtract from accumulator
             llvm::Value* new_acc = builder->CreateFSub(acc_phi, elem);
 
             // Increment index and check loop condition
-            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
             llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
             llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
             builder->CreateCondBr(done, exit_bb, loop_bb);
 
-            // Update PHI nodes
-            idx_phi->addIncoming(zero_i, preheader);
+            // Update PHI nodes - start from index 1 with first element as accumulator
+            idx_phi->addIncoming(one, preheader);
             idx_phi->addIncoming(next_idx, loop_bb);
-            acc_phi->addIncoming(zero_f, preheader);
+            acc_phi->addIncoming(first_elem, preheader);
             acc_phi->addIncoming(new_acc, loop_bb);
 
             // Exit block - merge results
             builder->SetInsertPoint(exit_bb);
             llvm::PHINode* result_phi = builder->CreatePHI(double_type, 2, "difff_result");
-            result_phi->addIncoming(zero_f, preheader);
+            result_phi->addIncoming(first_elem, preheader);  // Single element case
             result_phi->addIncoming(new_acc, loop_bb);
 
             values[inst->result.id] = result_phi;

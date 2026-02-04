@@ -177,6 +177,8 @@ enum class QoreIROpcode : uint16_t {
     HashMap,
     HashMapSelect,
     Foreach,
+    IteratorCreate,     // Create iterator from list/iterable
+    IteratorNext,       // Advance iterator, branch if done, store value
     OnBlockExit,
     ScopeEnter,
     ScopeExit,
@@ -711,6 +713,38 @@ public:
     }
 
     const ForEachStatement* stmt = nullptr;
+};
+
+//! Creates a FunctionalOperatorInterface from a list or iterable expression
+//! result contains a pointer to the iterator (as int64_t)
+class QoreIRIteratorCreateInstruction : public QoreIRInstruction {
+public:
+    QoreIRIteratorCreateInstruction(QoreIRValue n_iterable, FunctionalOperator* n_iterator_func = nullptr)
+            : QoreIRInstruction(QoreIROpcode::IteratorCreate),
+              iterable(n_iterable),
+              iterator_func(n_iterator_func) {
+    }
+
+    QoreIRValue iterable;               //!< List value or iterable expression result
+    FunctionalOperator* iterator_func;  //!< Optional functional operator for lazy evaluation
+};
+
+//! Advances iterator and branches based on done status
+//! If not done, stores current value in result and branches to continue_target
+//! If done, branches to done_target
+class QoreIRIteratorNextInstruction : public QoreIRInstruction {
+public:
+    QoreIRIteratorNextInstruction(QoreIRValue n_iterator, QoreIRBasicBlock* n_done_target,
+            QoreIRBasicBlock* n_continue_target)
+            : QoreIRInstruction(QoreIROpcode::IteratorNext),
+              iterator(n_iterator),
+              done_target(n_done_target),
+              continue_target(n_continue_target) {
+    }
+
+    QoreIRValue iterator;                       //!< Iterator handle from IteratorCreate
+    QoreIRBasicBlock* done_target = nullptr;    //!< Target block when iterator is exhausted
+    QoreIRBasicBlock* continue_target = nullptr; //!< Target block with next value
 };
 
 class QoreIROnBlockExitInstruction : public QoreIRInstruction {
