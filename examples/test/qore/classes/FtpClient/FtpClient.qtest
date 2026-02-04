@@ -272,38 +272,49 @@ class FtpTest inherits QUnit::Test {
             return;
         }
 
-        assertNothing(fc.connect());
+        # Wrap operations in try-catch to skip gracefully on network errors
+        # since this test depends on an external FTP server that may be unreachable
+        try {
+            assertNothing(fc.connect());
 
-        string local_read_path = tmp_location() + '/ftptest-read';
-        unlink(local_read_path);
+            string local_read_path = tmp_location() + '/ftptest-read';
+            unlink(local_read_path);
 
 %ifdef Windows
-        path =~ s/\\/\//g;
+            path =~ s/\\/\//g;
 %endif
 
-        fc.cwd(path);
+            fc.cwd(path);
 
-        assertNothing(fc.get(file, local_read_path));
+            assertNothing(fc.get(file, local_read_path));
 
-        *list l = stat(local_read_path);
-        testAssertion("FtpClient::get() return value", int sub () {return l.typeCode();}, NOTHING, new TestResultValue(NT_LIST));
+            *list l = stat(local_read_path);
+            testAssertion("FtpClient::get() return value", int sub () {return l.typeCode();}, NOTHING, new TestResultValue(NT_LIST));
 
-        testAssertion("FtpClient mode-1", \notEquals(), (fc.getMode(), "auto"));
+            testAssertion("FtpClient mode-1", \notEquals(), (fc.getMode(), "auto"));
 
-        fc.disconnect();
-        unlink(local_read_path);
+            fc.disconnect();
+            unlink(local_read_path);
 
-        testAssertion("FtpClient mode-2", \fc.getMode(), NOTHING, new TestResultValue("auto"));
-        fc.setModePASV();
+            testAssertion("FtpClient mode-2", \fc.getMode(), NOTHING, new TestResultValue("auto"));
+            fc.setModePASV();
 
-        assertNothing(fc.connect());
+            assertNothing(fc.connect());
 
-        testAssertion("FtpClient mode-3", \fc.getMode(), NOTHING, new TestResultValue("pasv"));
-        fc.disconnect();
-        testAssertion("FtpClient mode-4", \fc.getMode(), NOTHING, new TestResultValue("pasv"));
+            testAssertion("FtpClient mode-3", \fc.getMode(), NOTHING, new TestResultValue("pasv"));
+            fc.disconnect();
+            testAssertion("FtpClient mode-4", \fc.getMode(), NOTHING, new TestResultValue("pasv"));
 
-        # test for issue #1295
-        assertEq(False, fc.pwd() =~ /"/);
+            # test for issue #1295
+            assertEq(False, fc.pwd() =~ /"/);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-TIMEOUT"
+                    || ex.err == "SOCKET-CLOSED" || ex.err == "FTP-CONNECT-ERROR") {
+                testSkip(sprintf("External FTP server unreachable: %s: %s", ex.err, ex.desc));
+                return;
+            }
+            rethrow;
+        }
     }
 
     testFtpClientSim() {
