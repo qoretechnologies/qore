@@ -3211,20 +3211,49 @@ int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* 
         return -1;
     }
 
-    // Convert Qore headers hash to std::map
-    std::map<std::string, std::string> h2_headers;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            const char* key = hi.getKey();
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
-            }
-        }
+    if (!headers) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
+        return -1;
     }
 
-    return priv->h2_session->submitRequest(nullptr, nullptr, h2_headers, body, body_len, xsink);
+    // Convert Qore headers hash to std::map and extract :method, :path
+    std::map<std::string, std::string> h2_headers;
+    std::string method;
+    std::string path;
+
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        QoreValue val = hi.get();
+        if (val.getType() != NT_STRING) {
+            continue;
+        }
+        const char* sval = val.get<const QoreStringNode>()->c_str();
+        std::string skey(key);
+
+        if (skey == ":method") {
+            if (sval && *sval) {
+                method = sval;
+            }
+        } else if (skey == ":path") {
+            if (sval && *sval) {
+                path = sval;
+            }
+        }
+        h2_headers[skey] = sval ? sval : "";
+    }
+
+    if (method.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
+        return -1;
+    }
+
+    if (path.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
+        return -1;
+    }
+
+    return priv->h2_session->submitRequest(method.c_str(), path.c_str(), h2_headers, body, body_len, xsink);
 }
 
 void QoreSocket::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {

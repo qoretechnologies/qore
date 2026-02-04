@@ -62,11 +62,17 @@ Http2ClientStreamHandle stream = manager.acquireStream("https://example.com");
 stream.startStreaming("GET", "/events", {"accept": "text/event-stream"});
 
 # Read streaming data
-while (!stream.isClosed()) {
+while (True) {
     auto data = stream.readData(30s);
-    if (data) {
-        printf("Event: %y\n", data);
+    if (!exists data) {
+        # Timeout - no data received within timeout period
+        continue;
     }
+    if (data.end_stream) {
+        # End of stream sentinel received
+        break;
+    }
+    printf("Event: %y\n", data);
 }
     @endcode
 
@@ -178,6 +184,9 @@ public class Http2ClientStreamHandle {
                     && state != Http2ClientStreamState::Cancelled) {
                 date remaining = end_time - now_us();
                 if (remaining <= 0us) {
+                    # Release lock before calling cancel() to avoid deadlock
+                    # (cancel() also acquires the lock)
+                    delete al;
                     cancel();
                     throw "HTTP2-TIMEOUT",
                         sprintf("request timed out after %d ms", int(wait_timeout));
@@ -260,10 +269,11 @@ public class Http2ClientStreamHandle {
     #! Reads data from a streaming connection
     /** @param timeout_ms timeout for waiting for data
 
-        @return the data received, or NOTHING on timeout
+        @return the data received, NOTHING on timeout, or a hash with key "end_stream"
+        set to True when the stream is complete (to distinguish from timeout)
 
         @throw HTTP2-STATE-ERROR if not in streaming mode
-        @throw HTTP2-STREAM-CLOSED if the stream is closed
+        @throw HTTP2-STREAM-CLOSED if the stream is closed and no data is queued
     */
     auto readData(*timeout timeout_ms) {
         {
@@ -386,7 +396,8 @@ public class Http2ClientStreamHandle {
         }
 
         if (resp.end_stream) {
-            data_queue.push(NOTHING); # Signal end of stream
+            # Use explicit sentinel to distinguish from timeout (which returns NOTHING)
+            data_queue.push({"end_stream": True});
         }
     }
 

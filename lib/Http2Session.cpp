@@ -1010,6 +1010,7 @@ Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
 void Http2Session::markStreamComplete(int32_t stream_id) {
     Http2StreamInfo* stream_ptr = nullptr;
     StreamCompleteCallback callback_copy;
+    bool should_erase_after_callback = false;
 
     {
         std::lock_guard<std::recursive_mutex> lg(m);
@@ -1027,34 +1028,57 @@ void Http2Session::markStreamComplete(int32_t stream_id) {
         stream_ptr = it->second.get();
 
         bool is_connect = it->second->is_connect;
-        // For CONNECT streams on the server, we need to keep the stream in the map so we can respond
-        // For client-side sessions, we also keep the stream in the map so the caller can access it
-        // Create a copy for completed_streams instead of moving
-        if (is_connect || !is_server) {
-            auto copy = std::make_unique<Http2StreamInfo>(*it->second);
-            completed_streams.push(std::move(copy));
-            // Keep the original in streams for the caller to find
-        } else {
-            completed_streams.push(std::move(it->second));
-            streams.erase(it);
-        }
-        if (http2DebugEnabled()) {
-            fprintf(stderr, "HTTP2 DEBUG: markStreamComplete stream=%d is_connect=%d completed=%zu\n",
-                stream_id, is_connect ? 1 : 0, completed_streams.size());
-            fflush(stderr);
-        }
 
         // Copy callback to invoke outside the lock
         callback_copy = stream_complete_callback;
+
+        if (callback_copy) {
+            // When using callback mechanism, don't push to completed_streams.
+            // For server-side non-CONNECT streams, we'll erase after callback.
+            // For CONNECT or client streams, keep in map for caller access.
+            should_erase_after_callback = is_server && !is_connect;
+            if (http2DebugEnabled()) {
+                fprintf(stderr, "HTTP2 DEBUG: markStreamComplete stream=%d using callback "
+                    "(erase_after=%d)\n", stream_id, should_erase_after_callback ? 1 : 0);
+                fflush(stderr);
+            }
+        } else {
+            // No callback - use completed_streams queue
+            // For CONNECT streams on the server, we need to keep the stream in the map so we can respond
+            // For client-side sessions, we also keep the stream in the map so the caller can access it
+            // Create a copy for completed_streams instead of moving
+            if (is_connect || !is_server) {
+                auto copy = std::make_unique<Http2StreamInfo>(*it->second);
+                completed_streams.push(std::move(copy));
+                // Keep the original in streams for the caller to find
+            } else {
+                completed_streams.push(std::move(it->second));
+                streams.erase(it);
+            }
+            if (http2DebugEnabled()) {
+                fprintf(stderr, "HTTP2 DEBUG: markStreamComplete stream=%d is_connect=%d completed=%zu\n",
+                    stream_id, is_connect ? 1 : 0, completed_streams.size());
+                fflush(stderr);
+            }
+        }
     }
 
     // Invoke stream completion callback outside the lock to avoid deadlocks
-    // Note: stream_ptr may be invalidated if client code calls takeCompletedStream()
-    // from the callback, but the callback receives a copy of the stream data
     if (callback_copy) {
         ExceptionSink xsink;
         callback_copy(stream_id, stream_ptr, &xsink);
         // Ignore any exceptions from the callback
+
+        // Now erase server-side non-CONNECT streams to prevent memory leak
+        if (should_erase_after_callback) {
+            std::lock_guard<std::recursive_mutex> lg(m);
+            streams.erase(stream_id);
+            if (http2DebugEnabled()) {
+                fprintf(stderr, "HTTP2 DEBUG: markStreamComplete stream=%d erased after callback\n",
+                    stream_id);
+                fflush(stderr);
+            }
+        }
     }
 }
 

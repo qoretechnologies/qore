@@ -252,9 +252,11 @@ public namespace Http2ClientIo {
         timeout request_timeout = DefaultRequestTimeout;
 
         #! SSL/TLS verification mode
+        #! @note Not yet implemented - reserved for future use
         *int ssl_verify_mode;
 
         #! Accept all SSL certificates
+        #! @note Not yet implemented - reserved for future use
         bool accept_all_certs = False;
 
         #! Logger for connection manager

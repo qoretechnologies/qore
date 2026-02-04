@@ -55,7 +55,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         #! State constants
         const STATE_CONNECTING = "connecting";
         const STATE_SSL_UPGRADE = "ssl_upgrade";
-        const STATE_PREFACE = "preface";
+        # Note: STATE_PREFACE was removed - the C++ layer handles preface internally
         const STATE_READING = "reading";
         const STATE_WAIT_READ = "wait_read";
         const STATE_RESPONSE_READY = "response_ready";
@@ -292,10 +292,6 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                     return handleSslUpgrade();
                 }
 
-                case STATE_PREFACE: {
-                    return handlePreface();
-                }
-
                 case STATE_READING: {
                     return handleReading();
                 }
@@ -386,7 +382,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                 if (ssl_required) {
                     startSslUpgrade();
                 } else {
-                    startPreface();
+                    startMultiplex();
                 }
                 return continuePoll();
             } else {
@@ -428,7 +424,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                     return NOTHING;
                 }
                 log(LoggerLevel::DEBUG, "SSL connection established, ALPN=%y", alpn);
-                startPreface();
+                startMultiplex();
                 return continuePoll();
             } else {
                 setError("HTTP2-SSL-ERROR", "SSL upgrade failed");
@@ -440,38 +436,14 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         }
     }
 
-    #! Internal: starts the HTTP/2 preface exchange
-    private startPreface() {
-        log(LoggerLevel::DEBUG, "starting HTTP/2 client preface");
+    #! Internal: starts the HTTP/2 multiplex operation
+    #! The C++ layer handles the HTTP/2 preface exchange internally
+    private startMultiplex() {
+        log(LoggerLevel::DEBUG, "starting HTTP/2 client multiplex operation");
         current_op = sock.startPollHttp2ClientMultiplex();
-        state = STATE_PREFACE;
-    }
-
-    #! Internal: handles preface state
-    private *hash<SocketPollInfo> handlePreface() {
-        if (!current_op) {
-            setError("HTTP2-PREFACE-ERROR", "preface operation not initialized");
-            return NOTHING;
-        }
-
-        try {
-            auto poll_info = current_op.continuePoll();
-            if (poll_info) {
-                return poll_info;
-            }
-
-            if (current_op.goalReached()) {
-                log(LoggerLevel::DEBUG, "HTTP/2 preface complete, connection ready");
-                state = STATE_READING;
-                return continuePoll();
-            } else {
-                setError("HTTP2-PREFACE-ERROR", "preface exchange failed");
-                return NOTHING;
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            setError(ex.err, ex.desc);
-            return NOTHING;
-        }
+        # Go directly to READING state - the C++ operation handles preface internally
+        # and allows requests to be submitted even before preface completes
+        state = STATE_READING;
     }
 
     #! Internal: handles reading state

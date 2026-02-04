@@ -57,23 +57,25 @@ Http2ClientConnectionManager manager(<Http2ClientConnectionManagerOptions>{
     "idle_timeout": 30s,
 });
 
-# Use with AsyncSocketIoController
-AsyncSocketIoController controller();
-manager.setController(controller);
+# Acquire a stream and make a synchronous request
+Http2ClientStreamHandle stream = manager.acquireStream("https://example.com");
+hash<auto> response = stream.request("GET", "/api/item/1");
+printf("Response: %y\n", response.body);
 
-# Submit multiple requests in parallel
-list<Http2ClientStreamHandle> streams = ();
-for (int i = 0; i < 10; ++i) {
-    Http2ClientStreamHandle stream = manager.acquireStream("https://example.com");
-    stream.submitAsync("GET", "/api/item/" + string(i), NOTHING, NOTHING,
-        sub (hash<auto> response, *hash<auto> error) {
-            printf("Item %d: %y\n", i, response.body);
-        });
-    push streams, stream;
-}
-
-controller.run();
+# Or use async with callbacks
+stream = manager.acquireStream("https://example.com");
+stream.submitAsync("GET", "/api/item/2", NOTHING, NOTHING,
+    sub (hash<auto> response, *hash<auto> error) {
+        if (error) {
+            printf("Error: %y\n", error);
+        } else {
+            printf("Response: %y\n", response.body);
+        }
+    });
     @endcode
+
+    @note AsyncSocketIoController integration for event-driven I/O is planned
+    for a future release. Currently, connections operate in synchronous mode.
 
     @par Connection Sharing
     When multiple clients use the same manager, they automatically share
@@ -350,18 +352,11 @@ public class Http2ClientConnectionManager {
             }
             push pool{key}, conn;
 
-            # Register with controller if available
-            if (controller) {
-                # Register the poll operation with the controller
-                # The controller will drive the connection's I/O
-                try {
-                    controller.registerPollOperation(conn.getPollOperation(),
-                        sub () { conn.handlePollResult(); });
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::WARN, "failed to register with controller: %s: %s",
-                        ex.err, ex.desc);
-                }
-            }
+            # TODO: Controller integration for HTTP/2 client multiplexing requires
+            # a different approach than one-shot operations. The multiplex poll operation
+            # is long-running and needs continuous driving. For now, connections work
+            # in synchronous mode. Future work: implement a dedicated HTTP/2 client
+            # event loop or extend AsyncSocketIoController for persistent connections.
 
             return conn;
         }

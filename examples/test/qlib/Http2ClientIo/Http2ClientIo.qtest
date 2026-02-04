@@ -117,6 +117,8 @@ class Http2ClientIoTest inherits QUnit::Test {
         HttpServer mServer;
         int mSslPort;
         string mSslUrl;
+        int mPlainPort;
+        string mPlainUrl;
         Logger mLogger;
 
         const CertPem = "-----BEGIN CERTIFICATE-----
@@ -185,6 +187,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Corner case tests
         addTestCase("empty options hashdecl", \testEmptyOptions());
         addTestCase("stream state transitions", \testStreamStateTransitions());
+
+        # C++ layer tests for fixes
+        addTestCase("submitHttp2Request missing headers", \testSubmitHttp2RequestMissingHeaders());
+
+        # Stream handle tests
+        addTestCase("stream handle state management", \testStreamHandleStateManagement());
 
         set_return_value(main());
     }
@@ -460,5 +468,118 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             conn_seen{key} = True;
         }
         assertEq(4, conn_seen.size(), "should have 4 unique connection states");
+    }
+
+    #! Test Socket::submitHttp2Request with missing required headers
+    #! Requires qore to be rebuilt with the latest C++ changes
+    testSubmitHttp2RequestMissingHeaders() {
+        # Check if the new Socket methods are available
+        Socket sock();
+        if (!sock.hasCallableMethod("startPollHttp2ClientMultiplex")) {
+            testSkip("Socket::startPollHttp2ClientMultiplex() not available - rebuild qore required");
+            return;
+        }
+
+        # Connect and run the actual tests
+        sock.connect("localhost:" + mSslPort);
+        sock.upgradeClientToSSL(30s);
+
+        # Start HTTP/2 client multiplex mode
+        AbstractPollOperation poll_op = sock.startPollHttp2ClientMultiplex();
+
+        # Drive the poll operation until ready (or error)
+        date start = now_us();
+        date timeout = 10s;
+        while (!poll_op.goalReached()) {
+            if (now_us() - start > timeout) {
+                testSkip("HTTP/2 connection establishment timed out");
+                return;
+            }
+            *hash<SocketPollInfo> info = poll_op.continuePoll();
+            if (info) {
+                Socket::poll((info,), 1s);
+            }
+        }
+
+        # Test 1: Missing headers entirely (should throw HTTP2-ERROR)
+        # Note: With %modern, we cannot pass NOTHING as hash<auto>, so we test
+        # with an empty hash instead (which should also fail for missing :method/:path)
+        assertThrows("HTTP2-ERROR", ":method.*missing",
+            sub () { sock.submitHttp2Request({}); },
+            NOTHING, "submitHttp2Request with empty headers should throw");
+
+        # Test 2: Headers without :method (should throw HTTP2-ERROR)
+        hash<auto> headers_no_method = {
+            ":path": "/test",
+            ":scheme": "https",
+            ":authority": "localhost",
+        };
+        assertThrows("HTTP2-ERROR", ":method.*missing",
+            sub () { sock.submitHttp2Request(headers_no_method); },
+            NOTHING, "submitHttp2Request without :method should throw");
+
+        # Test 3: Headers without :path (should throw HTTP2-ERROR)
+        hash<auto> headers_no_path = {
+            ":method": "GET",
+            ":scheme": "https",
+            ":authority": "localhost",
+        };
+        assertThrows("HTTP2-ERROR", ":path.*missing",
+            sub () { sock.submitHttp2Request(headers_no_path); },
+            NOTHING, "submitHttp2Request without :path should throw");
+
+        # Test 4: Headers with empty :method (should throw HTTP2-ERROR)
+        hash<auto> headers_empty_method = {
+            ":method": "",
+            ":path": "/test",
+            ":scheme": "https",
+            ":authority": "localhost",
+        };
+        assertThrows("HTTP2-ERROR", ":method.*missing",
+            sub () { sock.submitHttp2Request(headers_empty_method); },
+            NOTHING, "submitHttp2Request with empty :method should throw");
+
+        # Test 5: Headers with empty :path (should throw HTTP2-ERROR)
+        hash<auto> headers_empty_path = {
+            ":method": "GET",
+            ":path": "",
+            ":scheme": "https",
+            ":authority": "localhost",
+        };
+        assertThrows("HTTP2-ERROR", ":path.*missing",
+            sub () { sock.submitHttp2Request(headers_empty_path); },
+            NOTHING, "submitHttp2Request with empty :path should throw");
+
+        # Test 6: Valid headers should not throw (returns stream ID)
+        hash<auto> valid_headers = {
+            ":method": "GET",
+            ":path": "/simple",
+            ":scheme": "https",
+            ":authority": "localhost:" + mSslPort,
+        };
+        int stream_id = sock.submitHttp2Request(valid_headers);
+        assertTrue(stream_id > 0, "valid submitHttp2Request should return positive stream ID");
+    }
+
+    #! Test Http2ClientStreamHandle state management
+    testStreamHandleStateManagement() {
+        # Test that stream states are properly defined and have expected relationships
+
+        # Pending is the initial state
+        assertEq(0, Http2ClientIo::Http2ClientStreamState::Pending, "Pending is initial state (0)");
+
+        # Terminal states should be distinct
+        int complete = Http2ClientIo::Http2ClientStreamState::Complete;
+        int cancelled = Http2ClientIo::Http2ClientStreamState::Cancelled;
+        int error = Http2ClientIo::Http2ClientStreamState::Error;
+
+        assertTrue(complete != cancelled, "Complete != Cancelled");
+        assertTrue(complete != error, "Complete != Error");
+        assertTrue(cancelled != error, "Cancelled != Error");
+
+        # All terminal states should be >= 4 (after ReceivingBody)
+        assertTrue(complete >= 4, "Complete is a terminal state");
+        assertTrue(cancelled >= 4, "Cancelled is a terminal state");
+        assertTrue(error >= 4, "Error is a terminal state");
     }
 }
