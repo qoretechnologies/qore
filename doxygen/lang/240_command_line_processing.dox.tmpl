@@ -81,6 +81,37 @@
     qore>
     @endcode
 
+    @subsection repl_linenoise Line Editing and History (linenoise)
+
+    When the \c linenoise module is installed, the REPL provides enhanced line editing capabilities
+    similar to those in other shells like bash. This includes:
+
+    - Arrow key navigation within the current line
+    - Command history navigation with Up/Down arrows
+    - Reverse history search with Ctrl+R
+    - Tab completion for REPL commands
+
+    <b>Keyboard Shortcuts</b> (available when linenoise is installed)
+    |!Shortcut|!Description
+    |Up/Down|Navigate through command history
+    |Left/Right|Move cursor within the current line
+    |Ctrl+A|Move cursor to beginning of line
+    |Ctrl+E|Move cursor to end of line
+    |Ctrl+R|Reverse search through history
+    |Tab|Complete REPL commands (commands starting with \c /)
+    |Ctrl+C|Cancel current input; if at prompt, exit the REPL
+
+    <b>Persistent History</b>
+
+    When linenoise is available, the REPL automatically saves command history to
+    \c ~/.qore-repl-history (or \c %USERPROFILE%\\.qore-repl-history on Windows).
+    History is loaded when the REPL starts and saved when it exits, so your
+    command history persists across sessions.
+
+    @note The linenoise module is optional. If it is not installed, the REPL
+    will still work but without line editing, history navigation, or tab completion.
+    Install the linenoise module for the best interactive experience.
+
     @subsection repl_commands REPL Commands
 
     The REPL supports special commands that start with a forward slash (\c /). Type \c /help to see all
@@ -197,6 +228,7 @@
     - The REPL maintains state between commands, so you can build up complex programs incrementally
     - Use \c /reset to start fresh if you want to clear all definitions
     - Use \c /save to save your work before exiting
+    - Install the \c linenoise module for enhanced line editing and command history
 
     @see \c QoreRepl::QoreRepl for programmatic REPL access
 */
