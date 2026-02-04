@@ -52,6 +52,7 @@
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/FunctionalOperatorInterface.h>
+#include <qore/intern/QoreClassIntern.h>
 
 // Helper: bit-cast between uint64_t and QoreValue.
 // QoreValue is NaN-boxed and has the same size as uint64_t.
@@ -1109,6 +1110,41 @@ extern "C" uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, i
         // Fall back to full AST re-evaluation for unrecognized call types
         return qore_rt_invoke_expr(expr_bits, xsink);
     }
+
+    return toBits(result);
+}
+
+// --- Direct method call for devirtualized calls (final classes) ---
+
+extern "C" uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    if (!method) {
+        xsink->raiseException("JIT-ERROR", "null method pointer in direct call");
+        return toBits(QoreValue());
+    }
+
+    // Get the current self object from the runtime stack
+    QoreObject* self = runtime_get_stack_object();
+    if (!self) {
+        xsink->raiseException("JIT-ERROR", "no self object in direct method call");
+        return toBits(QoreValue());
+    }
+
+    // Build QoreListNode from the NaN-boxed args array
+    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+    for (int i = 0; i < nargs; ++i) {
+        QoreValue val = fromBits(args[i]);
+        if (val.hasNode()) {
+            val.refSelf();
+        }
+        arg_list->push(val, xsink);
+    }
+
+    // Get runtime config
+    RuntimeConfig& rc = rc_get_current_ref();
+
+    // Call the method directly through qore_method_private
+    QoreValue result = qore_method_private::eval(*method, xsink, rc, self, *arg_list);
 
     return toBits(result);
 }

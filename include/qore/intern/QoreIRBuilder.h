@@ -86,6 +86,8 @@ public:
         QoreIRValue second, QoreIRValue third, const QoreProgramLocation* loc = nullptr);
     QoreIRExprInstruction* createExprOp(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
+    QoreIRCallMethodDirectInstruction* createCallMethodDirect(const QoreMethod* method, const QoreClass* qc,
+        const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc = nullptr);
     QoreIRInvokeInstruction* createInvoke(const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);

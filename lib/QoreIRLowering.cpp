@@ -134,6 +134,7 @@
 #include <qore/intern/SummarizeStatement.h>
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/QoreTypeInfo.h>
+#include <qore/intern/QoreClassIntern.h>
 
 static bool isTerminatorOpcode(QoreIROpcode op) {
     switch (op) {
@@ -4724,6 +4725,37 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
+
+    // Check for devirtualization opportunities
+    // We can bypass virtual dispatch if:
+    // 1. The method is resolved at parse time, AND
+    // 2. The class is final (cannot have subclasses, so no override possible)
+    const QoreMethod* method = call->getMethod();
+    const QoreClass* qc = call->getClass();
+    if (method && qc && qc->isFinal()) {
+        // Safe devirtualization - the class is final, so no subclass can override
+        QoreIRValue result;
+        bool should_invoke = !exception_stack.empty();  // method calls can always throw
+        if (should_invoke) {
+            // For invoke path, we still need to use the expr-based path for now
+            // because the exception handling needs the AST node for context
+            // TODO: Add InvokeMethodDirect for proper exception handling
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, operands, normal_block, handler, call->loc);
+            inst->invoke_opcode = QoreIROpcode::CallMethodDirect;
+            builder.setBlock(normal_block);
+            result = inst->result;
+        } else {
+            result = builder.createCallMethodDirect(method, qc, operands, call->loc)->result;
+        }
+        return result;
+    }
+
     return lowerExprOpOrInvoke(QoreIROpcode::CallMethod, expr, operands, call->loc, error);
 }
 

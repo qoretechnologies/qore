@@ -279,6 +279,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::CallStatic:
         case QoreIROpcode::Invoke:
         case QoreIROpcode::CatchException:
@@ -535,6 +536,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::CallStatic:
         case QoreIROpcode::Invoke:
             return -1;

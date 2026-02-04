@@ -36,6 +36,7 @@
 #include <qore/intern/QoreIR.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/Variable.h>
+#include <qore/QoreClass.h>
 
 static const char* opcodeName(QoreIROpcode op) {
     switch (op) {
@@ -281,6 +282,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::Call: return "call";
         case QoreIROpcode::CallIndirect: return "call.indirect";
         case QoreIROpcode::CallMethod: return "call.method";
+        case QoreIROpcode::CallMethodDirect: return "call.method.direct";
         case QoreIROpcode::CallStatic: return "call.static";
         case QoreIROpcode::Invoke: return "invoke";
         case QoreIROpcode::GuardInt: return "guard.int";
@@ -365,6 +367,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* lv_inst = dynamic_cast<const QoreIRLValueInstruction*>(inst.get());
                 if (lv_inst && lv_inst->lvalue.hasNode()) {
                     out << " <lvalue>";
+                }
+            } else if (inst->opcode == QoreIROpcode::CallMethodDirect) {
+                // Print the devirtualized method name
+                auto* direct_inst = dynamic_cast<const QoreIRCallMethodDirectInstruction*>(inst.get());
+                if (direct_inst && direct_inst->method && direct_inst->qc) {
+                    out << " @" << direct_inst->qc->getName() << "::" << direct_inst->method->getName();
                 }
             } else if (inst->opcode == QoreIROpcode::Call
                     || inst->opcode == QoreIROpcode::CallIndirect

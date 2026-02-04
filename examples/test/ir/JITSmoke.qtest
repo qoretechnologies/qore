@@ -99,6 +99,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("typed string concatenation", \testTypedStringConcat());
         addTestCase("typed string equality", \testTypedStringEquality());
         addTestCase("string switch optimization", \testStringSwitchOptimization());
+        addTestCase("final class devirtualization", \testFinalClassDevirtualization());
         set_return_value(main());
     }
 
@@ -2003,6 +2004,145 @@ printf(\"%s,%s,%s,%s,%s\\n\",
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(similar_code, mode));
             assertEq("1,2,3,4,0", result, sprintf("string switch similar strings %s", mode));
+        }
+    }
+
+    testFinalClassDevirtualization() {
+        # Test final class devirtualization - self.method() calls in final classes
+        # should use CallMethodDirect opcode instead of CallMethod
+
+        # Test 1: Final class with recursive self call
+        # The self.compute() call inside compute() should be devirtualized
+        string recursive_code = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class Calculator {
+    public {
+        int calls = 0;
+    }
+
+    int compute(int n) {
+        ++calls;
+        if (n <= 1) {
+            return 1;
+        }
+        return n * self.compute(n - 1);
+    }
+}
+
+Calculator c();
+int result = c.compute(5);
+printf(\"%d,%d\\n\", result, c.calls);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(recursive_code, mode));
+            # factorial(5) = 120, calls = 5 (5, 4, 3, 2, 1)
+            assertEq("120,5", result, sprintf("final class recursive self call %s", mode));
+        }
+
+        # Test 2: Final class with multiple self calls in one method
+        string multi_self_code = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class MyCounter {
+    public {
+        int count = 0;
+    }
+
+    int inc() {
+        return ++count;
+    }
+
+    int getValue() {
+        return count;
+    }
+
+    # Multiple self calls - all should be devirtualized
+    int compute(int a, int b) {
+        return self.inc() + a + self.inc() + b + self.getValue();
+    }
+}
+
+MyCounter c();
+int result = c.compute(10, 20);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(multi_self_code, mode));
+            # inc() returns 1, a=10, inc() returns 2, b=20, get() returns 2
+            # Total: 1 + 10 + 2 + 20 + 2 = 35
+            assertEq("35", result, sprintf("final class multiple self calls %s", mode));
+        }
+
+        # Test 3: Final class with exception in self call
+        string exception_code = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class SafeDiv {
+    int divide(int a, int b) {
+        if (b == 0) {
+            throw \"DIVISION-ERROR\", \"cannot divide by zero\";
+        }
+        return a / b;
+    }
+
+    int safeDivide(int a, int b) {
+        try {
+            return self.divide(a, b);
+        } catch (hash<auto> ex) {
+            return -1;
+        }
+    }
+}
+
+SafeDiv s();
+printf(\"%d,%d\\n\", s.safeDivide(10, 2), s.safeDivide(10, 0));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(exception_code, mode));
+            assertEq("5,-1", result, sprintf("final class self call with exception %s", mode));
+        }
+
+        # Test 4: Verify polymorphic calls still work correctly (NOT devirtualized)
+        string polymorphic_code = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+class Animal {
+    string speak() {
+        return \"...\";
+    }
+}
+
+class Dog inherits Animal {
+    string speak() {
+        return \"woof\";
+    }
+}
+
+class Cat inherits Animal {
+    string speak() {
+        return \"meow\";
+    }
+}
+
+list<Animal> animals = (new Dog(), new Cat(), new Animal());
+list<string> sounds = ();
+foreach Animal a in (animals) {
+    sounds += a.speak();
+}
+printf(\"%s\\n\", sounds.join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(polymorphic_code, mode));
+            assertEq("woof,meow,...", result, sprintf("polymorphic calls (no devirt) %s", mode));
         }
     }
 }

@@ -51,6 +51,8 @@ class AssertStatement;
 class ContextStatement;
 class SummarizeStatement;
 class QoreTypeInfo;
+class QoreMethod;
+class QoreClass;
 
 enum class QoreIROpcode : uint16_t {
     ConstInt,
@@ -308,6 +310,7 @@ enum class QoreIROpcode : uint16_t {
     Call,
     CallIndirect,
     CallMethod,
+    CallMethodDirect,  // Direct method call - no dispatch needed (final class/method)
     CallStatic,
     Invoke,
 
@@ -461,6 +464,7 @@ inline bool isCallInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::CallStatic:
             return true;
         default:
@@ -756,6 +760,21 @@ public:
     }
 
     QoreValue expr;
+};
+
+//! Direct method call instruction - bypasses virtual dispatch for final classes/methods
+//! The method pointer is resolved at compile time and stored directly in the instruction
+class QoreIRCallMethodDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRCallMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc)
+            : QoreIRInstruction(QoreIROpcode::CallMethodDirect),
+              method(n_method),
+              qc(n_qc) {
+    }
+
+    const QoreMethod* method = nullptr;     //!< The resolved method pointer
+    const QoreClass* qc = nullptr;          //!< The class containing the method
+    //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
 };
 
 class QoreIRForeachInstruction : public QoreIRInstruction {

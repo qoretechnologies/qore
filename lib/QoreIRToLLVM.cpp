@@ -2258,6 +2258,51 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
+        // === CallMethodDirect (devirtualized method call) ===
+        case QoreIROpcode::CallMethodDirect: {
+            const auto* direct_inst = static_cast<const QoreIRCallMethodDirectInstruction*>(inst);
+
+            // Build args array from operands
+            int nargs = static_cast<int>(inst->operands.size());
+
+            llvm::Value* args_array;
+            if (nargs > 0) {
+                args_array = builder->CreateAlloca(i64_type,
+                        llvm::ConstantInt::get(i32_type, nargs));
+                for (int i = 0; i < nargs; ++i) {
+                    auto* arg_val = getVal(inst->operands[i].id, error);
+                    if (!arg_val) { return false; }
+                    llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[i].id);
+                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
+                            llvm::ConstantInt::get(i32_type, i));
+                    builder->CreateStore(arg_boxed, gep);
+                }
+            } else {
+                // For zero args, pass a null pointer using i64 constant cast to pointer
+                args_array = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type, 0), ptr_type);
+            }
+
+            // Pass method pointer directly to runtime helper as a pointer constant
+            llvm::Value* method_ptr = builder->CreateIntToPtr(
+                    llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(direct_inst->method)),
+                    ptr_type);
+
+            auto helper = module.getOrInsertFunction("qore_rt_call_method_direct",
+                    llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type, i32_type, ptr_type}, false));
+            llvm::Value* call_result = builder->CreateCall(helper, {method_ptr, args_array,
+                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+
+            // Calls can modify local variables through side effects
+            reloadAllLocalsFromRuntime(module, llvm_func);
+
+            values[inst->result.id] = call_result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            return true;
+        }
+
         // === IsNullOrNothing ===
         case QoreIROpcode::IsNullOrNothing: {
             auto* val = getVal(inst->operands[0].id, error);

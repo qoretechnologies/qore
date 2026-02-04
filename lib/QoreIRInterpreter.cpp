@@ -58,6 +58,7 @@
 #include <qore/intern/QoreJIT.h>
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
+#include <qore/intern/QoreClassIntern.h>
 #include <qore/intern/QoreDotEvalOperatorNode.h>
 
 static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const QoreTypeInfo* type_info) {
@@ -2447,6 +2448,57 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 values[expr_inst->result.id] = res;
                 if (res.hasNode()) {
                     cleanup.push_back(expr_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CallMethodDirect: {
+                // Direct method call for devirtualized final class methods
+                auto* direct_inst = static_cast<QoreIRCallMethodDirectInstruction*>(inst);
+                const QoreMethod* method = direct_inst->method;
+
+                // Get self object from runtime stack
+                QoreObject* self = runtime_get_stack_object();
+                if (!self) {
+                    if (xsink) {
+                        xsink->raiseException("IR-INTERPRETER-ERROR",
+                            "no self object in direct method call");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+
+                // Build argument list from operands
+                ReferenceHolder<QoreListNode> arg_list(
+                    direct_inst->operands.empty() ? nullptr
+                        : new QoreListNode(autoTypeInfo), xsink);
+                for (const auto& operand : direct_inst->operands) {
+                    QoreValue arg_val = getIRValue(values, operand);
+                    if (arg_val.hasNode()) {
+                        arg_val.refSelf();
+                    }
+                    arg_list->push(arg_val, xsink);
+                }
+
+                // Get runtime config and call the method directly
+                RuntimeConfig& rc = rc_get_current_ref();
+                QoreValue res = qore_method_private::eval(*method, xsink, rc, self, *arg_list);
+
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                values[direct_inst->result.id] = res;
+                if (res.hasNode()) {
+                    cleanup.push_back(direct_inst->result.id);
                 }
                 ++ip;
                 break;
