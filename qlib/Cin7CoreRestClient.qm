@@ -1,0 +1,437 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file Cin7CoreRestClient.qm Qore user module for calling Cin7Core REST API services
+
+/*  Cin7CoreRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+%require-types
+
+# enable all warnings
+%enable-all-warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%new-style
+
+# do not ignore argument errors
+%strict-args
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module Cin7CoreRestClient {
+    version = "1.0";
+    desc = "User module for calling Cin7Core (DEAR Inventory) REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("cin7core", Cin7CoreRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage Cin7CoreRestClient Module
+
+    @tableofcontents
+
+    @section cin7corerestclientintro Cin7CoreRestClient Introduction
+
+    The %Cin7CoreRestClient module provides an API for calling Cin7Core's (formerly DEAR Inventory)
+    REST API services.
+
+    To use this module, use \c "%requires Cin7CoreRestClient" in your code.
+
+    All the public symbols in the module are defined in the Cin7CoreRestClient namespace.
+
+    The main classes are:
+    - @ref Cin7CoreRestClient::Cin7CoreRestClient "Cin7CoreRestClient":
+      this class provides the REST client API for communication with the Cin7Core API;
+      it handles authentication via Account ID and API Key headers
+    - @ref Cin7CoreRestClient::Cin7CoreRestConnection "Cin7CoreRestConnection":
+      provides a connection object to Cin7Core services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires Cin7CoreRestClient
+
+Cin7CoreRestClient cin7core({
+    "account_id": ENV.CIN7CORE_ACCOUNT_ID,
+    "apikey": ENV.CIN7CORE_API_KEY,
+});
+hash<auto> result = cin7core.get("/Customer?Page=1&Limit=10");
+printf("Customers: %N\n", result.body);
+    @endcode
+
+    @section cin7corerestclientrelnotes Release Notes
+
+    @subsection cin7corerestclientv1_0 Cin7CoreRestClient v1.0
+    - the initial version of the %Cin7CoreRestClient module
+*/
+
+#! the Cin7CoreRestClient namespace contains all the objects in the Cin7CoreRestClient module
+public namespace Cin7CoreRestClient {
+
+#! This class provides the REST client API for communication with Cin7Core servers
+/** Cin7Core uses a REST API with header-based authentication:
+    - Account ID: api-auth-accountid header
+    - API Key: api-auth-applicationkey header
+
+    @par API Information:
+    - Base URL: https://inventory.dearsystems.com/externalapi
+    - JSON format only
+    - Pagination: page and limit query parameters
+
+    @par Authentication:
+    Both Account ID and API Key are required for all API requests.
+    These can be obtained from the Cin7Core application:
+    1. Log in to https://inventory.dearsystems.com
+    2. Navigate to Integrations > API > Cin7 Core API
+    3. Create an application and note down the Account ID and Application Key
+*/
+public class Cin7CoreRestClient inherits RestClient::RestClient {
+    public {
+        #! Cin7Core API base URL
+        const DefaultApiUrl = "https://inventory.dearsystems.com/externalapi";
+
+        #! Account ID header name
+        const AccountIdHeader = "api-auth-accountid";
+
+        #! API Key header name
+        const ApplicationKeyHeader = "api-auth-applicationkey";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default Cin7Core ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default Cin7Core ping path (Customer endpoint with limit=1 - lightweight)
+        const DefaultPingPath = "Customer";
+
+        #! Default Cin7Core ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default ping body
+        const DefaultPingBody = {
+            "Page": 1,
+            "Limit": 1,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "url": DefaultApiUrl,
+        };
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+Cin7CoreRestClient cin7core({
+    "account_id": "your_account_id",
+    "apikey": "your_api_key",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c account_id: (required) the Cin7Core Account ID
+        - \c apikey: (required) the Cin7Core Application/API Key
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw CIN7CORE-AUTH-ERROR missing required authentication credentials
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(Cin7CoreRestClient::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! returns options for @ref Cin7CoreRestClient::Cin7CoreRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Validate required credentials
+        if (!opts.account_id) {
+            throw "CIN7CORE-AUTH-ERROR", "missing required 'account_id' option";
+        }
+        if (!opts.apikey) {
+            throw "CIN7CORE-AUTH-ERROR", "missing required 'apikey' option";
+        }
+
+        # Add authentication headers
+        rv.headers{AccountIdHeader} = opts.account_id;
+        rv.headers{ApplicationKeyHeader} = opts.apikey;
+
+        # Remove credentials from options (they're in headers now)
+        remove rv.account_id;
+        remove rv.apikey;
+
+        return rv;
+    }
+}
+
+#! Class for Cin7Core REST connections; returns @ref Cin7CoreRestClient objects
+/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c account_id: (required) the Cin7Core Account ID
+    - \c apikey: (required) the Cin7Core Application/API Key
+
+    @see @ref Cin7CoreRestClient::Cin7CoreRestClient::constructor() for more information on the above options
+*/
+public class Cin7CoreRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Cin7Core API URL
+        const DefaultConnectionUrl = "cin7core://inventory.dearsystems.com/externalapi";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Cin7Core REST Connection",
+            "short_desc": "A connection to the Cin7Core (DEAR Inventory) API",
+            "desc": "A connection to the Cin7Core REST API for inventory management, sales, and order processing.\n\n"
+                "Cin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform "
+                "that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n"
+                "**Features:**\n"
+                "- Manage customers and suppliers\n"
+                "- Create and track sales orders\n"
+                "- Process payments and invoices\n"
+                "- Monitor inventory and stock levels\n"
+                "- Handle stock adjustments\n"
+                "- Track shipments and fulfillment\n\n"
+                "**Authentication:**\n"
+                "Cin7Core uses Account ID and API Key authentication. Both credentials are required.",
+            "cls": Class::forName("Cin7CoreRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "cin7core": True,
+            },
+            "base_scheme_map": {
+                "https": "cin7core",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": Cin7CoreRestClient::DefaultData,
+                },
+                "account_id": <ConnectionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "Cin7Core Account ID for authentication",
+                    "type": "string",
+                    "desc": "Your Cin7Core Account ID used for API authentication.\n\n"
+                        "**To obtain your Account ID:**\n"
+                        "1. Log in to https://inventory.dearsystems.com\n"
+                        "2. Navigate to **Integrations > API > Cin7 Core API**\n"
+                        "3. Create an application if you haven't already\n"
+                        "4. Copy your **Account ID**\n\n"
+                        "**Note:** Both Account ID and API Key are required for authentication.",
+                    "sensitive": True,
+                    "required": True,
+                    "preselected": True,
+                },
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Cin7Core Application/API Key",
+                    "type": "string",
+                    "desc": "Your Cin7Core Application/API Key for authentication.\n\n"
+                        "**To obtain your API Key:**\n"
+                        "1. Log in to https://inventory.dearsystems.com\n"
+                        "2. Navigate to **Integrations > API > Cin7 Core API**\n"
+                        "3. Create an application if you haven't already\n"
+                        "4. Copy your **Application Key**\n\n"
+                        "**Note:** Both Account ID and API Key are required for authentication.",
+                    "sensitive": True,
+                    "required": True,
+                    "preselected": True,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": Cin7CoreRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": Cin7CoreRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": Cin7CoreRestClient::DefaultPingPath,
+                },
+            },
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "How to Get Your API Credentials",
+                    "intent": "info",
+                    "content": "To connect to Cin7Core, you need both an Account ID and API Key:\n\n"
+                        "1. Log in to https://inventory.dearsystems.com\n"
+                        "2. Navigate to **Integrations > API > Cin7 Core API**\n"
+                        "3. Click **Create Application** if you haven't already\n"
+                        "4. Note down both credentials:\n"
+                        "   - **Account ID** - Your unique account identifier\n"
+                        "   - **Application Key** - Your API authentication key\n\n"
+                        "Keep your credentials secure and never share them publicly.",
+                },
+                <UiMessageInfo>{
+                    "title": "API Capabilities",
+                    "intent": "info",
+                    "content": "The Cin7Core API enables you to:\n\n"
+                        "**Inventory:**\n"
+                        "- Track stock levels across locations\n"
+                        "- Manage stock adjustments and transfers\n"
+                        "- View product availability\n\n"
+                        "**Sales:**\n"
+                        "- Create and manage sales orders\n"
+                        "- Process payments and invoices\n"
+                        "- Track shipments and fulfillment\n"
+                        "- Handle credit notes and refunds\n\n"
+                        "**Contacts:**\n"
+                        "- Manage customers and suppliers\n"
+                        "- Access contact details and history\n\n"
+                        "**Products:**\n"
+                        "- Query product catalog\n"
+                        "- Access pricing and inventory data\n"
+                        "- Manage product families and categories",
+                },
+                <UiMessageInfo>{
+                    "title": "API Rate Limits",
+                    "intent": "warning",
+                    "content": "Cin7Core API has the following rate limits:\n\n"
+                        "- Maximum page size: 1000 records\n"
+                        "- Default page size: 100 records\n\n"
+                        "**Best Practices:**\n"
+                        "- Use pagination for large data sets\n"
+                        "- Filter by date ranges when possible\n"
+                        "- Cache frequently accessed data",
+                },
+            ),
+        };
+    }
+
+    #! creates the Cin7CoreRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the Cin7CoreRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! returns \c "cin7core"
+    string getType() {
+        return "cin7core";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "Cin7Core";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the Cin7CoreDataProvider and creates the data provider
+        # object dynamically
+        load_module("Cin7CoreDataProvider");
+        return create_object("Cin7CoreDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! returns a @ref Cin7CoreRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref Cin7CoreRestClient object
+    */
+    private Cin7CoreRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new Cin7CoreRestClient(getConnectionOptions(), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

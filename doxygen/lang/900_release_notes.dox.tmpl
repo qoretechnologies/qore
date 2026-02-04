@@ -545,6 +545,21 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref cin7corerestclientintro "Cin7CoreRestClient" module
+      - new module providing a REST client for Cin7Core (DEAR Inventory) API
+      - supports Account ID and API Key authentication via headers
+      - provides Cin7CoreRestConnection for connection management with \c cin7core:// URL scheme
+    - @ref cin7coredataproviderintro "Cin7CoreDataProvider" module
+      - new module providing a data provider API for Cin7Core inventory management and ERP
+      - customer and supplier management (create, read, update, search)
+      - product catalog and availability tracking
+      - sales order management (create, read, update, delete)
+      - payment processing (add, update, delete payments)
+      - stock adjustment management
+      - assembly/finished goods tracking
+      - polling-based event triggers for payments, invoices, credit notes, tracking, stock levels, and contact updates
+      - action catalog integration with 35 actions and 8 triggers
+      - connection support with \c cin7core:// URL scheme
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
