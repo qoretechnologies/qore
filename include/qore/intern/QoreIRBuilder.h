@@ -95,6 +95,10 @@ public:
     QoreIRBranchInstruction* createBranch(QoreIRBasicBlock* target, const QoreProgramLocation* loc = nullptr);
     QoreIRBranchIfInstruction* createBranchIf(QoreIRValue cond, QoreIRBasicBlock* true_target,
         QoreIRBasicBlock* false_target, const QoreProgramLocation* loc = nullptr);
+    QoreIRSwitchIntInstruction* createSwitchInt(QoreIRValue switch_val, QoreIRBasicBlock* default_target,
+        const std::vector<QoreIRSwitchCase>& cases, const QoreProgramLocation* loc = nullptr);
+    QoreIRSwitchStringInstruction* createSwitchString(QoreIRValue switch_val, QoreIRBasicBlock* default_target,
+        const std::vector<QoreIRSwitchStringCase>& cases, const QoreProgramLocation* loc = nullptr);
 
     QoreIRReturnInstruction* createReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     QoreIRReturnInstruction* createReturnNothing(const QoreProgramLocation* loc = nullptr);

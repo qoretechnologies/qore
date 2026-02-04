@@ -1099,6 +1099,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
+        case QoreIROpcode::AddString: {
+            // Typed string concatenation - skip type checks, call typed helper directly
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_string_add_typed",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
         case QoreIROpcode::SubAny: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
@@ -1752,6 +1767,104 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             builder->CreateCondBr(cond, t_it->second, f_it->second);
             return true;
         }
+        case QoreIROpcode::SwitchInt: {
+            const auto* sw = static_cast<const QoreIRSwitchIntInstruction*>(inst);
+            auto* switch_val = getVal(sw->switch_val.id, error);
+            if (!switch_val) { return false; }
+
+            // Get default block
+            auto def_it = block_map.find(sw->default_target);
+            if (def_it == block_map.end()) {
+                error = "switch default target block not found";
+                return false;
+            }
+
+            // Unbox if needed to get raw i64
+            llvm::Value* val_i64;
+            if (switch_val->getType() == i64_type && nanboxed_values.count(sw->switch_val.id)) {
+                val_i64 = unboxInt(switch_val);
+            } else if (switch_val->getType() == i64_type) {
+                val_i64 = switch_val;
+            } else {
+                error = "SwitchInt requires i64 value";
+                return false;
+            }
+
+            // Create LLVM switch instruction
+            llvm::SwitchInst* llvm_switch = builder->CreateSwitch(val_i64, def_it->second,
+                    static_cast<unsigned>(sw->cases.size()));
+
+            // Add cases
+            for (const auto& c : sw->cases) {
+                auto case_it = block_map.find(c.target);
+                if (case_it == block_map.end()) {
+                    error = "switch case target block not found";
+                    return false;
+                }
+                llvm_switch->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type), c.value),
+                        case_it->second);
+            }
+            return true;
+        }
+        case QoreIROpcode::SwitchString: {
+            const auto* sw = static_cast<const QoreIRSwitchStringInstruction*>(inst);
+            auto* switch_val = getVal(sw->switch_val.id, error);
+            if (!switch_val) { return false; }
+
+            // Get default block
+            auto def_it = block_map.find(sw->default_target);
+            if (def_it == block_map.end()) {
+                error = "switch default target block not found";
+                return false;
+            }
+
+            // Box the value if needed
+            llvm::Value* val_boxed = boxValue(switch_val, sw->switch_val.id);
+
+            // Create global array of case strings
+            std::vector<llvm::Constant*> case_str_ptrs;
+            for (const auto& c : sw->cases) {
+                // Create global string constant
+                llvm::Constant* str_const = builder->CreateGlobalString(c.value);
+                case_str_ptrs.push_back(str_const);
+            }
+
+            // Create array type and global array
+            llvm::ArrayType* arr_type = llvm::ArrayType::get(ptr_type,
+                    static_cast<uint64_t>(sw->cases.size()));
+            llvm::Constant* arr_init = llvm::ConstantArray::get(arr_type, case_str_ptrs);
+            llvm::GlobalVariable* case_arr = new llvm::GlobalVariable(module, arr_type, true,
+                    llvm::GlobalValue::PrivateLinkage, arr_init, "switch_string_cases");
+
+            // Get pointer to first element
+            llvm::Value* arr_ptr = builder->CreateBitCast(case_arr,
+                    llvm::PointerType::get(ptr_type, 0));
+
+            // Call runtime helper: int32_t qore_rt_switch_string_lookup(uint64_t, const char**, int32_t)
+            auto helper = module.getOrInsertFunction("qore_rt_switch_string_lookup",
+                    llvm::FunctionType::get(i32_type,
+                            {i64_type, llvm::PointerType::get(ptr_type, 0), i32_type}, false));
+            llvm::Value* case_idx = builder->CreateCall(helper,
+                    {val_boxed, arr_ptr,
+                     llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type),
+                             static_cast<int32_t>(sw->cases.size()))});
+
+            // Create LLVM switch on the case index
+            llvm::SwitchInst* llvm_switch = builder->CreateSwitch(case_idx, def_it->second,
+                    static_cast<unsigned>(sw->cases.size()));
+
+            // Add cases (index 0, 1, 2, ...)
+            for (size_t i = 0; i < sw->cases.size(); ++i) {
+                auto case_it = block_map.find(sw->cases[i].target);
+                if (case_it == block_map.end()) {
+                    error = "switch case target block not found";
+                    return false;
+                }
+                llvm_switch->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type),
+                        static_cast<int32_t>(i)), case_it->second);
+            }
+            return true;
+        }
         case QoreIROpcode::Return: {
             const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
             // Box the return value BEFORE cleanup so we can incref it.  Cleanup
@@ -2194,6 +2307,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
+        case QoreIROpcode::EqString: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_string_eq_typed",
+                llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            return true;
+        }
         case QoreIROpcode::NeAny: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
@@ -2206,6 +2332,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::NeString: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_string_ne_typed",
+                llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::LtAny: {
@@ -3927,6 +4066,88 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
+        // Fused map+foldl operations (single pass, no intermediate list)
+        case QoreIROpcode::FusedMapFoldlSumScaleInt: {
+            // foldl $1 + $2, (map $1 * c, list) -> sum(list[i] * c)
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* scale = getVal(inst->operands[1].id, error);
+            if (!list || !scale) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* scale_int = nanboxed_values.count(inst->operands[1].id)
+                ? unboxInt(scale) : scale;
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_sum_scale_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_int});
+            values[inst->result.id] = result;
+            // Result is unboxed int, mark not nanboxed
+            return true;
+        }
+        case QoreIROpcode::FusedMapFoldlSumScaleFloat: {
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* scale = getVal(inst->operands[1].id, error);
+            if (!list || !scale) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* scale_float = nanboxed_values.count(inst->operands[1].id)
+                ? unboxFloat(scale) : scale;
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_sum_scale_float",
+                    llvm::FunctionType::get(double_type, {i64_type, double_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_float});
+            values[inst->result.id] = result;
+            // Result is unboxed float, mark not nanboxed
+            return true;
+        }
+        case QoreIROpcode::FusedMapFoldlSumSquareInt: {
+            // foldl $1 + $2, (map $1 * $1, list) -> sum(list[i]^2)
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_sum_square_int",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed});
+            values[inst->result.id] = result;
+            // Result is unboxed int
+            return true;
+        }
+        case QoreIROpcode::FusedMapFoldlSumSquareFloat: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_sum_square_float",
+                    llvm::FunctionType::get(double_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed});
+            values[inst->result.id] = result;
+            // Result is unboxed float
+            return true;
+        }
+        case QoreIROpcode::FusedMapFoldlProdScaleInt: {
+            // foldl $1 * $2, (map $1 * c, list) -> prod(list[i] * c)
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* scale = getVal(inst->operands[1].id, error);
+            if (!list || !scale) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* scale_int = nanboxed_values.count(inst->operands[1].id)
+                ? unboxInt(scale) : scale;
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_prod_scale_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_int});
+            values[inst->result.id] = result;
+            // Result is unboxed int
+            return true;
+        }
+        case QoreIROpcode::FusedMapFoldlProdScaleFloat: {
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* scale = getVal(inst->operands[1].id, error);
+            if (!list || !scale) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* scale_float = nanboxed_values.count(inst->operands[1].id)
+                ? unboxFloat(scale) : scale;
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_prod_scale_float",
+                    llvm::FunctionType::get(double_type, {i64_type, double_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_float});
+            values[inst->result.id] = result;
+            // Result is unboxed float
+            return true;
+        }
 
         // === Division/Modulo Any compound assignments (keep using runtime) ===
         case QoreIROpcode::DivAssignAny:
@@ -4447,21 +4668,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "unsupported iterable type for IteratorCreate";
                 return false;
             }
-            // Get iterator_func pointer (can be null)
-            llvm::Value* iter_func_ptr;
-            if (iter_inst->iterator_func) {
-                iter_func_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(iter_inst->iterator_func));
-                iter_func_ptr = builder->CreateIntToPtr(iter_func_ptr, ptr_type);
+
+            llvm::Value* result;
+            if (aot_mode) {
+                // AOT mode: use slot-based lookup for iterator_func pointer
+                // Use -1 as sentinel when iterator_func is null
+                int32_t slot = -1;
+                if (iter_inst->iterator_func) {
+                    uint64_t func_bits = reinterpret_cast<uint64_t>(iter_inst->iterator_func);
+                    slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(func_bits);
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_iterator_create_aot",
+                        llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), iterable_boxed, xsink_arg});
             } else {
-                // Create null pointer: i64 0 -> inttoptr -> ptr
-                iter_func_ptr = builder->CreateIntToPtr(
-                        llvm::ConstantInt::get(i64_type, 0), ptr_type);
+                // JIT mode: embed iterator_func pointer directly
+                llvm::Value* iter_func_ptr;
+                if (iter_inst->iterator_func) {
+                    iter_func_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(iter_inst->iterator_func));
+                    iter_func_ptr = builder->CreateIntToPtr(iter_func_ptr, ptr_type);
+                } else {
+                    // Create null pointer: i64 0 -> inttoptr -> ptr
+                    iter_func_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type, 0), ptr_type);
+                }
+                // Call qore_rt_iterator_create(iterable, iterator_func, xsink) -> ptr
+                auto helper = module.getOrInsertFunction("qore_rt_iterator_create",
+                        llvm::FunctionType::get(ptr_type, {i64_type, ptr_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {iterable_boxed, iter_func_ptr, xsink_arg});
             }
-            // Call qore_rt_iterator_create(iterable, iterator_func, xsink) -> ptr
-            auto helper = module.getOrInsertFunction("qore_rt_iterator_create",
-                    llvm::FunctionType::get(ptr_type, {i64_type, ptr_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {iterable_boxed, iter_func_ptr, xsink_arg});
             // Store the iterator pointer as the result
             values[inst->result.id] = result;
             // Don't mark as nanboxed - it's a raw pointer

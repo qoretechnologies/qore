@@ -40,6 +40,8 @@ static bool isTerminator(QoreIROpcode op) {
         case QoreIROpcode::Invoke:
         case QoreIROpcode::Br:
         case QoreIROpcode::BrIf:
+        case QoreIROpcode::SwitchInt:
+        case QoreIROpcode::SwitchString:
         case QoreIROpcode::IteratorNext:
         case QoreIROpcode::Return:
         case QoreIROpcode::ReturnNothing:
@@ -65,6 +67,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::AddInt:
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::AddAny:
+        case QoreIROpcode::AddString:
         case QoreIROpcode::SubInt:
         case QoreIROpcode::SubFloat:
         case QoreIROpcode::SubAny:
@@ -112,9 +115,11 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::XorAssignAny:
         case QoreIROpcode::EqInt:
         case QoreIROpcode::EqFloat:
+        case QoreIROpcode::EqString:
         case QoreIROpcode::EqAny:
         case QoreIROpcode::NeInt:
         case QoreIROpcode::NeFloat:
+        case QoreIROpcode::NeString:
         case QoreIROpcode::NeAny:
         case QoreIROpcode::EqHard:
         case QoreIROpcode::NeHard:
@@ -179,6 +184,12 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::FusedMapSelectOffsetPositiveFloat:
         case QoreIROpcode::FusedMapSelectSquarePositiveInt:
         case QoreIROpcode::FusedMapSelectSquarePositiveFloat:
+        case QoreIROpcode::FusedMapFoldlSumScaleInt:
+        case QoreIROpcode::FusedMapFoldlSumScaleFloat:
+        case QoreIROpcode::FusedMapFoldlSumSquareInt:
+        case QoreIROpcode::FusedMapFoldlSumSquareFloat:
+        case QoreIROpcode::FusedMapFoldlProdScaleInt:
+        case QoreIROpcode::FusedMapFoldlProdScaleFloat:
         case QoreIROpcode::MapSelectAny:
         case QoreIROpcode::HashMapAny:
         case QoreIROpcode::HashMapSelectAny:
@@ -305,6 +316,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::AddInt:
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::AddAny:
+        case QoreIROpcode::AddString:
         case QoreIROpcode::SubInt:
         case QoreIROpcode::SubFloat:
         case QoreIROpcode::SubAny:
@@ -352,9 +364,11 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::XorAssignAny:
         case QoreIROpcode::EqInt:
         case QoreIROpcode::EqFloat:
+        case QoreIROpcode::EqString:
         case QoreIROpcode::EqAny:
         case QoreIROpcode::NeInt:
         case QoreIROpcode::NeFloat:
+        case QoreIROpcode::NeString:
         case QoreIROpcode::NeAny:
         case QoreIROpcode::EqHard:
         case QoreIROpcode::NeHard:
@@ -411,6 +425,12 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::FusedMapSelectOffsetPositiveFloat:
         case QoreIROpcode::FusedMapSelectSquarePositiveInt:
         case QoreIROpcode::FusedMapSelectSquarePositiveFloat:
+        case QoreIROpcode::FusedMapFoldlSumScaleInt:
+        case QoreIROpcode::FusedMapFoldlSumScaleFloat:
+        case QoreIROpcode::FusedMapFoldlSumSquareInt:
+        case QoreIROpcode::FusedMapFoldlSumSquareFloat:
+        case QoreIROpcode::FusedMapFoldlProdScaleInt:
+        case QoreIROpcode::FusedMapFoldlProdScaleFloat:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
@@ -611,6 +631,22 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 if (!br->true_target || !br->false_target) {
                     error = "branch-if missing target";
                     return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::SwitchInt) {
+                auto* sw = dynamic_cast<const QoreIRSwitchIntInstruction*>(inst.get());
+                if (!sw || !sw->switch_val.isValid()) {
+                    error = "switch.int missing switch value";
+                    return false;
+                }
+                if (!sw->default_target) {
+                    error = "switch.int missing default target";
+                    return false;
+                }
+                for (const auto& c : sw->cases) {
+                    if (!c.target) {
+                        error = "switch.int case missing target";
+                        return false;
+                    }
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorCreate) {
                 auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());

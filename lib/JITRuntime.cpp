@@ -829,6 +829,114 @@ extern "C" uint64_t qore_rt_fused_map_select_square_positive_float(uint64_t list
     return toBits(result.release());
 }
 
+// Fused map+foldl operations - map and reduce in single pass, no intermediate list
+// Pattern: foldl $1 + $2, (map $1 * c, list) -> sum(list[i] * c)
+extern "C" int64_t qore_rt_fused_map_foldl_sum_scale_int(uint64_t list_val, int64_t scale) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return 0;
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    if (sz == 0) {
+        return 0;
+    }
+    int64_t result = 0;
+    for (size_t i = 0; i < sz; ++i) {
+        result += l->retrieveEntry(i).getAsBigInt() * scale;
+    }
+    return result;
+}
+
+extern "C" double qore_rt_fused_map_foldl_sum_scale_float(uint64_t list_val, double scale) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return 0.0;
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    if (sz == 0) {
+        return 0.0;
+    }
+    double result = 0.0;
+    for (size_t i = 0; i < sz; ++i) {
+        result += l->retrieveEntry(i).getAsFloat() * scale;
+    }
+    return result;
+}
+
+// Pattern: foldl $1 + $2, (map $1 * $1, list) -> sum(list[i]^2)
+extern "C" int64_t qore_rt_fused_map_foldl_sum_square_int(uint64_t list_val) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return 0;
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    if (sz == 0) {
+        return 0;
+    }
+    int64_t result = 0;
+    for (size_t i = 0; i < sz; ++i) {
+        int64_t val = l->retrieveEntry(i).getAsBigInt();
+        result += val * val;
+    }
+    return result;
+}
+
+extern "C" double qore_rt_fused_map_foldl_sum_square_float(uint64_t list_val) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return 0.0;
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    if (sz == 0) {
+        return 0.0;
+    }
+    double result = 0.0;
+    for (size_t i = 0; i < sz; ++i) {
+        double val = l->retrieveEntry(i).getAsFloat();
+        result += val * val;
+    }
+    return result;
+}
+
+// Pattern: foldl $1 * $2, (map $1 * c, list) -> prod(list[i] * c)
+extern "C" int64_t qore_rt_fused_map_foldl_prod_scale_int(uint64_t list_val, int64_t scale) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return 1;  // Identity for product
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    if (sz == 0) {
+        return 1;  // Identity for product
+    }
+    int64_t result = 1;
+    for (size_t i = 0; i < sz; ++i) {
+        result *= l->retrieveEntry(i).getAsBigInt() * scale;
+    }
+    return result;
+}
+
+extern "C" double qore_rt_fused_map_foldl_prod_scale_float(uint64_t list_val, double scale) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return 1.0;  // Identity for product
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    if (sz == 0) {
+        return 1.0;  // Identity for product
+    }
+    double result = 1.0;
+    for (size_t i = 0; i < sz; ++i) {
+        result *= l->retrieveEntry(i).getAsFloat() * scale;
+    }
+    return result;
+}
+
 extern "C" uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
@@ -845,6 +953,71 @@ extern "C" uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, Excepti
     }
     // Not both strings: fall back to generic add
     return qore_rt_add_any(left, right, xsink);
+}
+
+// Typed string concatenation - both operands are known to be strings at compile time
+extern "C" uint64_t qore_rt_string_add_typed(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    // Caller guarantees both are strings, but handle NOTHING gracefully
+    const QoreStringNode* ls = lv.getType() == NT_STRING
+        ? lv.get<const QoreStringNode>() : nullptr;
+    const QoreStringNode* rs = rv.getType() == NT_STRING
+        ? rv.get<const QoreStringNode>() : nullptr;
+    if (!ls && !rs) {
+        return toBits(QoreValue());  // Both NOTHING
+    }
+    if (!ls) {
+        return toBits(QoreValue(rs->stringRefSelf()));  // Copy right
+    }
+    if (!rs) {
+        return toBits(QoreValue(ls->stringRefSelf()));  // Copy left
+    }
+    // Both are strings - concatenate
+    QoreStringNode* result = new QoreStringNode(*ls);
+    result->concat(rs, xsink);
+    if (xsink && *xsink) {
+        result->deref();
+        return toBits(QoreValue());
+    }
+    return toBits(QoreValue(result));
+}
+
+// Typed string equality - both operands are known to be strings at compile time
+extern "C" uint64_t qore_rt_string_eq_typed(uint64_t left, uint64_t right) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreStringNode* ls = lv.get<const QoreStringNode>();
+    const QoreStringNode* rs = rv.get<const QoreStringNode>();
+    bool result = ls && rs && ls->equal(rs);
+    return toBits(QoreValue(result));
+}
+
+// Typed string inequality - both operands are known to be strings at compile time
+extern "C" uint64_t qore_rt_string_ne_typed(uint64_t left, uint64_t right) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreStringNode* ls = lv.get<const QoreStringNode>();
+    const QoreStringNode* rs = rv.get<const QoreStringNode>();
+    bool result = !ls || !rs || !ls->equal(rs);
+    return toBits(QoreValue(result));
+}
+
+// String switch lookup - returns the case index or -1 for default
+// case_strings is an array of C strings (null-terminated), num_cases is the count
+extern "C" int32_t qore_rt_switch_string_lookup(uint64_t switch_val_bits, const char** case_strings,
+        int32_t num_cases) {
+    QoreValue switch_val = fromBits(switch_val_bits);
+    const QoreStringNode* str = switch_val.get<const QoreStringNode>();
+    if (!str) {
+        return -1;  // Not a string, go to default
+    }
+    for (int32_t i = 0; i < num_cases; ++i) {
+        if (str->equal(case_strings[i])) {
+            return i;
+        }
+    }
+    return -1;  // No match, go to default
 }
 
 // --- DotEval with pre-evaluated base helper ---
@@ -1185,6 +1358,19 @@ extern "C" void* qore_rt_iterator_create(uint64_t iterable_bits, void* iterator_
     }
 
     return iter;
+}
+
+/// AOT version: looks up iterator_func pointer from AOT context by slot index
+extern "C" void* qore_rt_iterator_create_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t iterable_bits, ExceptionSink* xsink) {
+    assert(ctx);
+    // Negative slot (-1) means null iterator_func (no custom iteration function)
+    // Otherwise, look up the FunctionalOperator* pointer from the exprs array
+    void* iterator_func = nullptr;
+    if (slot >= 0 && slot < ctx->num_exprs) {
+        iterator_func = reinterpret_cast<void*>(ctx->exprs[slot]);
+    }
+    return qore_rt_iterator_create(iterable_bits, iterator_func, xsink);
 }
 
 // Advances the iterator and returns the next value.

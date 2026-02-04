@@ -154,6 +154,7 @@ private:
     bool analysisIndicatesDate(const QoreParseAnalysis& analysis) const;
     bool guaranteedIntType(const QoreValue* expr) const;
     bool guaranteedFloatType(const QoreValue* expr) const;
+    bool guaranteedStringType(const QoreValue* expr) const;
     bool guaranteedDateType(const QoreValue* expr) const;
     const QoreTypeInfo* selectAnalysisType(const QoreParseAnalysis& analysis) const;
     QoreIROpcode selectNumericOpcode(const QoreValue& left, const QoreValue& right,

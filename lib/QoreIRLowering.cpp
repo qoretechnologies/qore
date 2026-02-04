@@ -786,6 +786,162 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
         }
 
+        // Check if we can use optimized SwitchInt (all cases are integer constants with equality)
+        // Requirements:
+        // 1. Switch expression must be guaranteed int type (not float, string, NOTHING, etc.)
+        // 2. All non-default cases must be integer constants with soft equality
+        bool use_switch_int = guaranteedIntType(&switch_expr);
+        std::vector<std::pair<int64_t, QoreIRBasicBlock*>> int_cases;
+        QoreIRBasicBlock* default_block_for_switch = nullptr;
+
+        // First pass: check if all non-default cases are integer equality checks
+        for (size_t i = 0; i < cases.size() && use_switch_int; ++i) {
+            const CaseNode* node = cases[i].node;
+            if (node->isDefault()) {
+                default_block_for_switch = cases[i].block;
+                continue;
+            }
+            // Check for regex cases - not supported
+            if (dynamic_cast<const CaseNodeRegex*>(node)) {
+                use_switch_int = false;
+                break;
+            }
+            // Check for range operators - not supported for SwitchInt
+            if (auto* op_case = dynamic_cast<const CaseNodeWithOperator*>(node)) {
+                op_log_func_t op_func = op_case->getOpFunc();
+                // Only soft equality is compatible with SwitchInt
+                if (op_func != QoreLogicalEqualsOperatorNode::softEqual) {
+                    use_switch_int = false;
+                    break;
+                }
+            }
+            // Check if case value is an integer constant
+            if (node->val.getType() != NT_INT) {
+                use_switch_int = false;
+                break;
+            }
+            int_cases.push_back({node->val.getAsBigInt(), cases[i].block});
+        }
+
+        // Use SwitchInt if all conditions are met
+        if (use_switch_int && !int_cases.empty()) {
+            builder.setBlock(match_block);
+
+            // If no default case, use end_block
+            if (!default_block_for_switch) {
+                default_block_for_switch = end_block;
+            }
+
+            // Convert to QoreIRSwitchCase format
+            std::vector<QoreIRSwitchCase> switch_cases;
+            for (const auto& ic : int_cases) {
+                switch_cases.push_back({ic.first, ic.second});
+            }
+
+            builder.createSwitchInt(switch_val, default_block_for_switch, switch_cases);
+
+            // Lower case bodies (same as before)
+            flow_stack.push_back({end_block, nullptr, true, scope_stack.size()});
+            for (size_t i = 0; i < cases.size(); ++i) {
+                builder.setBlock(cases[i].block);
+                if (cases[i].node->code) {
+                    if (!lowerStatementBlock(cases[i].node->code, error)) {
+                        flow_stack.pop_back();
+                        return false;
+                    }
+                }
+                if (!blockHasTerminator(builder.getBlock())) {
+                    if (i + 1 < cases.size()) {
+                        builder.createBranch(cases[i + 1].block);
+                    } else {
+                        builder.createBranch(end_block);
+                    }
+                }
+            }
+            flow_stack.pop_back();
+            builder.setBlock(end_block);
+            return true;
+        }
+
+        // Check if we can use optimized SwitchString (all cases are string constants with equality)
+        // Requirements:
+        // 1. Switch expression must be guaranteed string type
+        // 2. All non-default cases must be string constants with soft equality
+        bool use_switch_string = guaranteedStringType(&switch_expr);
+        std::vector<std::pair<std::string, QoreIRBasicBlock*>> string_cases;
+        QoreIRBasicBlock* default_block_for_str_switch = nullptr;
+
+        // First pass: check if all non-default cases are string equality checks
+        for (size_t i = 0; i < cases.size() && use_switch_string; ++i) {
+            const CaseNode* node = cases[i].node;
+            if (node->isDefault()) {
+                default_block_for_str_switch = cases[i].block;
+                continue;
+            }
+            // Check for regex cases - not supported
+            if (dynamic_cast<const CaseNodeRegex*>(node)) {
+                use_switch_string = false;
+                break;
+            }
+            // Check for range operators - not supported for SwitchString
+            if (auto* op_case = dynamic_cast<const CaseNodeWithOperator*>(node)) {
+                op_log_func_t op_func = op_case->getOpFunc();
+                // Only soft equality is compatible with SwitchString
+                if (op_func != QoreLogicalEqualsOperatorNode::softEqual) {
+                    use_switch_string = false;
+                    break;
+                }
+            }
+            // Check if case value is a string constant
+            if (node->val.getType() != NT_STRING) {
+                use_switch_string = false;
+                break;
+            }
+            const QoreStringNode* str = node->val.get<const QoreStringNode>();
+            string_cases.push_back({str->c_str(), cases[i].block});
+        }
+
+        // Use SwitchString if all conditions are met
+        if (use_switch_string && !string_cases.empty()) {
+            builder.setBlock(match_block);
+
+            // If no default case, use end_block
+            if (!default_block_for_str_switch) {
+                default_block_for_str_switch = end_block;
+            }
+
+            // Convert to QoreIRSwitchStringCase format
+            std::vector<QoreIRSwitchStringCase> switch_cases;
+            for (const auto& sc : string_cases) {
+                switch_cases.push_back({sc.first, sc.second});
+            }
+
+            builder.createSwitchString(switch_val, default_block_for_str_switch, switch_cases);
+
+            // Lower case bodies (same as before)
+            flow_stack.push_back({end_block, nullptr, true, scope_stack.size()});
+            for (size_t i = 0; i < cases.size(); ++i) {
+                builder.setBlock(cases[i].block);
+                if (cases[i].node->code) {
+                    if (!lowerStatementBlock(cases[i].node->code, error)) {
+                        flow_stack.pop_back();
+                        return false;
+                    }
+                }
+                if (!blockHasTerminator(builder.getBlock())) {
+                    if (i + 1 < cases.size()) {
+                        builder.createBranch(cases[i + 1].block);
+                    } else {
+                        builder.createBranch(end_block);
+                    }
+                }
+            }
+            flow_stack.pop_back();
+            builder.setBlock(end_block);
+            return true;
+        }
+
+        // Fall through to comparison chain approach
         builder.setBlock(match_block);
         QoreIRBasicBlock* check_block = match_block;
         QoreIRBasicBlock* default_block = nullptr;
@@ -1109,6 +1265,30 @@ bool QoreIRLowering::guaranteedFloatType(const QoreValue* expr) const {
     }
     const QoreTypeInfo* type = getGuaranteedTypeForValue(expr, nullptr);
     if (!type || !QoreTypeInfo::isType(type, NT_FLOAT)) {
+        return false;
+    }
+    if (QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_IDENT) {
+        return false;
+    }
+    if (expr->hasNode()) {
+        QoreParseAnalysis analysis;
+        if (getAnalysis(*expr, analysis) && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            return true;
+        }
+    }
+    return true;
+}
+
+bool QoreIRLowering::guaranteedStringType(const QoreValue* expr) const {
+    if (!expr) {
+        return false;
+    }
+    // Check for string literal
+    if (expr->getType() == NT_STRING) {
+        return true;
+    }
+    const QoreTypeInfo* type = getGuaranteedTypeForValue(expr, nullptr);
+    if (!type || !QoreTypeInfo::isType(type, NT_STRING)) {
         return false;
     }
     if (QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_IDENT) {
@@ -3054,7 +3234,15 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectNumericOpcode(plus->getLeft(), plus->getRight(),
+
+    // Check for typed string concatenation first
+    QoreValue left_expr = plus->getLeft();
+    QoreValue right_expr = plus->getRight();
+    if (guaranteedStringType(&left_expr) && guaranteedStringType(&right_expr)) {
+        return lowerBinaryOpOrInvoke(QoreIROpcode::AddString, expr, left, right, plus->loc, error);
+    }
+
+    QoreIROpcode op = selectNumericOpcode(left_expr, right_expr,
         QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny);
     return lowerBinaryOpOrInvoke(op, expr, left, right, plus->loc, error);
 }
@@ -3094,8 +3282,16 @@ QoreIRValue QoreIRLowering::lowerLogicalEquals(const QoreValue& expr, std::strin
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectComparisonOpcode(eq->getLeft(), eq->getRight(),
-        QoreIROpcode::EqInt, QoreIROpcode::EqFloat, QoreIROpcode::EqAny);
+    // Check for typed string equality first
+    QoreValue left_expr = eq->getLeft();
+    QoreValue right_expr = eq->getRight();
+    QoreIROpcode op;
+    if (guaranteedStringType(&left_expr) && guaranteedStringType(&right_expr)) {
+        op = QoreIROpcode::EqString;
+    } else {
+        op = selectComparisonOpcode(eq->getLeft(), eq->getRight(),
+            QoreIROpcode::EqInt, QoreIROpcode::EqFloat, QoreIROpcode::EqAny);
+    }
     return lowerBinaryOpOrInvoke(op, expr, left, right, eq->loc, error);
 }
 
@@ -3114,8 +3310,16 @@ QoreIRValue QoreIRLowering::lowerLogicalNotEquals(const QoreValue& expr, std::st
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectComparisonOpcode(ne->getLeft(), ne->getRight(),
-        QoreIROpcode::NeInt, QoreIROpcode::NeFloat, QoreIROpcode::NeAny);
+    // Check for typed string inequality first
+    QoreValue left_expr = ne->getLeft();
+    QoreValue right_expr = ne->getRight();
+    QoreIROpcode op;
+    if (guaranteedStringType(&left_expr) && guaranteedStringType(&right_expr)) {
+        op = QoreIROpcode::NeString;
+    } else {
+        op = selectComparisonOpcode(ne->getLeft(), ne->getRight(),
+            QoreIROpcode::NeInt, QoreIROpcode::NeFloat, QoreIROpcode::NeAny);
+    }
     return lowerBinaryOpOrInvoke(op, expr, left, right, ne->loc, error);
 }
 
@@ -4816,6 +5020,103 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
     QoreIROpcode opt_opcode = analyzeFoldPattern(foldl->getLeft(), result_type, list_type);
 
     if (opt_opcode != QoreIROpcode::FoldlAny) {
+        // Check if we can fuse foldl with a map operand
+        // Pattern: foldl $1 + $2, (map $1 * c, list) or foldl $1 * $2, (map $1 * c, list)
+        const AbstractQoreNode* right_node = foldl->getRight().getInternalNode();
+        auto* inner_map = dynamic_cast<const QoreMapOperatorNode*>(right_node);
+
+        if (inner_map && (opt_opcode == QoreIROpcode::FoldlSumInt || opt_opcode == QoreIROpcode::FoldlSumFloat ||
+                         opt_opcode == QoreIROpcode::FoldlProdInt || opt_opcode == QoreIROpcode::FoldlProdFloat)) {
+            // Analyze the map pattern
+            const QoreTypeInfo* map_result_type = nullptr;
+            QoreValue map_constant_val;
+            QoreIROpcode map_opcode = analyzeMapPattern(inner_map->getLeft(), map_result_type, map_constant_val);
+
+            // Only fuse for scale ($1 * c) or square ($1 * $1) patterns with sum
+            QoreIROpcode fused_opcode = QoreIROpcode::FoldlAny;
+            bool needs_constant = true;
+
+            // Determine if we need float fused opcodes based on:
+            // 1. The fold opcode type (FoldlSumFloat, FoldlProdFloat)
+            // 2. The map opcode type (MapScaleFloat, MapSquareFloat)
+            // 3. The element type of the underlying list (as fallback)
+            bool is_float = (opt_opcode == QoreIROpcode::FoldlSumFloat ||
+                            opt_opcode == QoreIROpcode::FoldlProdFloat ||
+                            map_opcode == QoreIROpcode::MapScaleFloat ||
+                            map_opcode == QoreIROpcode::MapSquareFloat);
+
+            // If opcodes don't indicate float, check element type as additional validation
+            if (!is_float) {
+                QoreParseAnalysis inner_list_analysis;
+                const QoreTypeInfo* inner_list_type = nullptr;
+                if (getAnalysis(inner_map->getRight(), inner_list_analysis) &&
+                        inner_list_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+                    inner_list_type = inner_list_analysis.known_type;
+                }
+                const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(inner_list_type);
+                if (QoreTypeInfo::isType(elem_type, NT_FLOAT)) {
+                    is_float = true;
+                }
+            }
+
+            if (opt_opcode == QoreIROpcode::FoldlSumInt || opt_opcode == QoreIROpcode::FoldlSumFloat) {
+                // foldl $1 + $2, (map ..., list)
+                if (map_opcode == QoreIROpcode::MapScaleInt || map_opcode == QoreIROpcode::MapScaleFloat) {
+                    fused_opcode = is_float ? QoreIROpcode::FusedMapFoldlSumScaleFloat
+                                           : QoreIROpcode::FusedMapFoldlSumScaleInt;
+                } else if (map_opcode == QoreIROpcode::MapSquareInt || map_opcode == QoreIROpcode::MapSquareFloat) {
+                    fused_opcode = is_float ? QoreIROpcode::FusedMapFoldlSumSquareFloat
+                                           : QoreIROpcode::FusedMapFoldlSumSquareInt;
+                    needs_constant = false;
+                }
+            } else if (opt_opcode == QoreIROpcode::FoldlProdInt || opt_opcode == QoreIROpcode::FoldlProdFloat) {
+                // foldl $1 * $2, (map ..., list)
+                if (map_opcode == QoreIROpcode::MapScaleInt || map_opcode == QoreIROpcode::MapScaleFloat) {
+                    fused_opcode = is_float ? QoreIROpcode::FusedMapFoldlProdScaleFloat
+                                           : QoreIROpcode::FusedMapFoldlProdScaleInt;
+                }
+                // Note: We don't have fused square+prod patterns currently
+            }
+
+            if (fused_opcode != QoreIROpcode::FoldlAny) {
+                // Lower the underlying list (right operand of map)
+                QoreIRValue list_val = lowerExpression(inner_map->getRight(), error);
+                if (!list_val.isValid()) {
+                    return QoreIRValue();
+                }
+
+                QoreIRValue const_ir;
+                if (needs_constant) {
+                    const_ir = lowerConstant(map_constant_val, error);
+                    if (!const_ir.isValid()) {
+                        return QoreIRValue();
+                    }
+                } else {
+                    // Square doesn't need a constant, use NOTHING as placeholder
+                    const_ir = builder.createConstNothing(foldl->loc)->result;
+                }
+
+                QoreIRValue result;
+                if (!exception_stack.empty()) {
+                    QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                    if (!normal_block) {
+                        error = "IR builder failed to create invoke continuation block";
+                        return QoreIRValue();
+                    }
+                    QoreIRBasicBlock* handler = exception_stack.back();
+                    auto* inst = builder.createInvoke(expr, {list_val, const_ir}, normal_block, handler, foldl->loc);
+                    inst->invoke_opcode = fused_opcode;
+                    builder.setBlock(normal_block);
+                    result = inst->result;
+                } else {
+                    result = builder.createBinaryOp(fused_opcode, list_val, const_ir, foldl->loc)->result;
+                }
+                maybeInsertNotNothingGuard(result, &expr, foldl->loc, nullptr);
+                return result;
+            }
+        }
+
+        // No fusion possible, emit regular optimized foldl opcode
         // Optimized path: emit specialized opcode with just the list operand
         QoreIRValue list = lowerExpression(foldl->getRight(), error);
         if (!list.isValid()) {

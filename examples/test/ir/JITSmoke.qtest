@@ -94,7 +94,11 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("optimized map patterns", \testJitMapOptimized());
         addTestCase("optimized select patterns", \testJitSelectOptimized());
         addTestCase("fused map+select patterns", \testJitFusedMapSelect());
+        addTestCase("fused map+foldl patterns", \testJitFusedMapFoldl());
         addTestCase("IR foreach lowering", \testIRForeachLowering());
+        addTestCase("typed string concatenation", \testTypedStringConcat());
+        addTestCase("typed string equality", \testTypedStringEquality());
+        addTestCase("string switch optimization", \testStringSwitchOptimization());
         set_return_value(main());
     }
 
@@ -367,6 +371,91 @@ printf(\"%d,%d,%d,%d\\n\", classify(1), classify(2), classify(3), classify(99));
 ";
         string result = trim(runScript(code));
         assertEq("10,20,30,-1", result, "switch statement");
+
+        # Test integer switch optimization across all modes
+        string switch_code = "%modern
+int sub test_switch(int val) {
+    switch (val) {
+        case -5: return 100;
+        case 0: return 200;
+        case 7: return 300;
+        case 42: return 400;
+        case 1000: return 500;
+        default: return -999;
+    }
+}
+printf(\"%d,%d,%d,%d,%d,%d\\n\",
+    test_switch(-5), test_switch(0), test_switch(7),
+    test_switch(42), test_switch(1000), test_switch(99));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            result = trim(runScript(switch_code, mode));
+            assertEq("100,200,300,400,500,-999", result, sprintf("integer switch optimization %s", mode));
+        }
+
+        # Test switch with fall-through cases (no return)
+        string fallthrough_code = "%modern
+int sub test_fallthrough(int val) {
+    int result = 0;
+    switch (val) {
+        case 1:
+        case 2:
+        case 3:
+            result = 10;
+            break;
+        case 4:
+        case 5:
+            result = 20;
+            break;
+        default:
+            result = -1;
+    }
+    return result;
+}
+printf(\"%d,%d,%d,%d,%d,%d\\n\",
+    test_fallthrough(1), test_fallthrough(2), test_fallthrough(3),
+    test_fallthrough(4), test_fallthrough(5), test_fallthrough(99));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            result = trim(runScript(fallthrough_code, mode));
+            assertEq("10,10,10,20,20,-1", result, sprintf("switch fallthrough %s", mode));
+        }
+
+        # Test switch with string expression - should NOT use SwitchInt, must use soft-equal semantics
+        string string_switch_code = "%modern
+string sub test_string_switch(string val) {
+    switch (val) {
+        case \"1\": return \"one\";
+        case \"2\": return \"two\";
+        case \"hello\": return \"greeting\";
+        default: return \"unknown\";
+    }
+}
+printf(\"%s,%s,%s,%s\\n\",
+    test_string_switch(\"1\"), test_string_switch(\"2\"),
+    test_string_switch(\"hello\"), test_string_switch(\"other\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            result = trim(runScript(string_switch_code, mode));
+            assertEq("one,two,greeting,unknown", result, sprintf("switch string expression %s", mode));
+        }
+
+        # Test switch with float expression - should NOT use SwitchInt
+        string float_switch_code = "%modern
+string sub test_float_switch(float val) {
+    switch (val) {
+        case 1.0: return \"one\";
+        case 2.5: return \"two-half\";
+        default: return \"other\";
+    }
+}
+printf(\"%s,%s,%s\\n\",
+    test_float_switch(1.0), test_float_switch(2.5), test_float_switch(3.0));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            result = trim(runScript(float_switch_code, mode));
+            assertEq("one,two-half,other", result, sprintf("switch float expression %s", mode));
+        }
     }
 
     testJitWhileLoop() {
@@ -1546,6 +1635,118 @@ printf(\"%s\\n\", (map $1.toString(), result).join(\",\"));
         }
     }
 
+    testJitFusedMapFoldl() {
+        # Test fused map+foldl patterns: foldl $1 + $2, (map $1 * c, list)
+        # This optimizes to a single-pass operation without intermediate list
+
+        # Pattern: foldl $1 + $2, (map $1 * 2, list) -> sum(list[i] * 2)
+        string sum_scale_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int result = (foldl $1 + $2, (map $1 * 2, nums));
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(sum_scale_code, mode));
+            # (1*2 + 2*2 + 3*2 + 4*2 + 5*2) = 2+4+6+8+10 = 30
+            assertEq("30", result, sprintf("fused map foldl sum scale int %s", mode));
+        }
+
+        # Pattern: foldl $1 + $2, (map $1 * $1, list) -> sum(list[i]^2)
+        string sum_square_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int result = (foldl $1 + $2, (map $1 * $1, nums));
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(sum_square_code, mode));
+            # 1 + 4 + 9 + 16 + 25 = 55
+            assertEq("55", result, sprintf("fused map foldl sum square int %s", mode));
+        }
+
+        # Pattern: foldl $1 * $2, (map $1 * 2, list) -> prod(list[i] * 2)
+        string prod_scale_code = "%modern
+list<int> nums = (1, 2, 3);
+int result = (foldl $1 * $2, (map $1 * 2, nums));
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(prod_scale_code, mode));
+            # (1*2) * (2*2) * (3*2) = 2 * 4 * 6 = 48
+            assertEq("48", result, sprintf("fused map foldl prod scale int %s", mode));
+        }
+
+        # Float versions
+        string float_sum_scale_code = "%modern
+list<float> nums = (1.0, 2.0, 3.0);
+float result = (foldl $1 + $2, (map $1 * 2.0, nums));
+printf(\"%.1f\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_sum_scale_code, mode));
+            # (1*2 + 2*2 + 3*2) = 2+4+6 = 12.0
+            assertEq("12.0", result, sprintf("fused map foldl sum scale float %s", mode));
+        }
+
+        string float_sum_square_code = "%modern
+list<float> nums = (1.0, 2.0, 3.0);
+float result = (foldl $1 + $2, (map $1 * $1, nums));
+printf(\"%.1f\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_sum_square_code, mode));
+            # 1 + 4 + 9 = 14.0
+            assertEq("14.0", result, sprintf("fused map foldl sum square float %s", mode));
+        }
+
+        # Edge case: single element
+        string single_code = "%modern
+list<int> single = (5,);
+int result = (foldl $1 + $2, (map $1 * 2, single));
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(single_code, mode));
+            # 5 * 2 = 10
+            assertEq("10", result, sprintf("fused map foldl single element %s", mode));
+        }
+
+        # Edge case: empty list
+        # AST mode returns NOTHING, IR/JIT return identity value (0 for sum, 1 for product)
+        # This is existing behavior difference between AST and IR/JIT optimized paths
+        string empty_code = "%modern
+list<int> empty = ();
+auto result = (foldl $1 + $2, (map $1 * 2, empty));
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        assertEq("NOTHING", trim(runScript(empty_code, "ast")), "fused map foldl empty list ast");
+        assertEq("0", trim(runScript(empty_code, "ir")), "fused map foldl empty list ir");
+        assertEq("0", trim(runScript(empty_code, "jit")), "fused map foldl empty list jit");
+
+        # Test float precision - ensure no truncation to int
+        string precision_code = "%modern
+list<float> nums = (0.5, 1.5, 2.5);
+float result = (foldl $1 + $2, (map $1 * 2.0, nums));
+printf(\"%.1f\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(precision_code, mode));
+            # (0.5*2 + 1.5*2 + 2.5*2) = 1.0+3.0+5.0 = 9.0
+            assertEq("9.0", result, sprintf("fused map foldl float precision %s", mode));
+        }
+
+        # Test product with floats
+        string float_prod_code = "%modern
+list<float> nums = (1.0, 2.0, 3.0);
+float result = (foldl $1 * $2, (map $1 * 0.5, nums));
+printf(\"%.4f\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_prod_code, mode));
+            # (1*0.5) * (2*0.5) * (3*0.5) = 0.5 * 1.0 * 1.5 = 0.75
+            assertEq("0.7500", result, sprintf("fused map foldl float product %s", mode));
+        }
+    }
+
     testIRForeachLowering() {
         # Test basic foreach loop lowering to IR
         string basic_code = "%modern
@@ -1626,6 +1827,182 @@ printf(\"%d\\n\", total);
             string result = trim(runScript(nested_code, mode));
             # 1+2+3+4+5+6 = 21
             assertEq("21", result, sprintf("foreach nested %s", mode));
+        }
+    }
+
+    testTypedStringConcat() {
+        # Test basic typed string concatenation (AddString opcode)
+        string basic_code = "%modern
+string a = \"hello\";
+string b = \" world\";
+string result = a + b;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(basic_code, mode));
+            assertEq("hello world", result, sprintf("typed string concat basic %s", mode));
+        }
+
+        # Test chained string concatenation
+        string chain_code = "%modern
+string a = \"one\";
+string b = \"two\";
+string c = \"three\";
+string result = a + b + c;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(chain_code, mode));
+            assertEq("onetwothree", result, sprintf("typed string concat chain %s", mode));
+        }
+
+        # Test string concatenation with function return
+        string func_code = "%modern
+string sub getPrefix() { return \"prefix_\"; }
+string sub getSuffix() { return \"_suffix\"; }
+string middle = \"value\";
+string result = getPrefix() + middle + getSuffix();
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(func_code, mode));
+            assertEq("prefix_value_suffix", result, sprintf("typed string concat func %s", mode));
+        }
+
+        # Test string concatenation in loop
+        string loop_code = "%modern
+string result = \"\";
+for (int i = 0; i < 3; i++) {
+    result = result + \"x\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(loop_code, mode));
+            assertEq("xxx", result, sprintf("typed string concat loop %s", mode));
+        }
+    }
+
+    testTypedStringEquality() {
+        # Test typed string equality (EqString opcode)
+        string eq_code = "%modern
+string sub test_eq(string a, string b) {
+    if (a == b) {
+        return \"equal\";
+    }
+    return \"not equal\";
+}
+printf(\"%s,%s,%s\\n\",
+    test_eq(\"hello\", \"hello\"),
+    test_eq(\"hello\", \"world\"),
+    test_eq(\"\", \"\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(eq_code, mode));
+            assertEq("equal,not equal,equal", result, sprintf("typed string equality %s", mode));
+        }
+
+        # Test typed string inequality (NeString opcode)
+        string ne_code = "%modern
+string sub test_ne(string a, string b) {
+    if (a != b) {
+        return \"different\";
+    }
+    return \"same\";
+}
+printf(\"%s,%s,%s\\n\",
+    test_ne(\"hello\", \"world\"),
+    test_ne(\"hello\", \"hello\"),
+    test_ne(\"abc\", \"ABC\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(ne_code, mode));
+            assertEq("different,same,different", result, sprintf("typed string inequality %s", mode));
+        }
+
+        # Test string comparison in loop
+        string loop_code = "%modern
+int sub count_matches(list<string> items, string target) {
+    int count = 0;
+    foreach string s in (items) {
+        if (s == target) {
+            count++;
+        }
+    }
+    return count;
+}
+list<string> data = (\"a\", \"b\", \"a\", \"c\", \"a\");
+printf(\"%d,%d,%d\\n\",
+    count_matches(data, \"a\"),
+    count_matches(data, \"b\"),
+    count_matches(data, \"x\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(loop_code, mode));
+            assertEq("3,1,0", result, sprintf("typed string equality loop %s", mode));
+        }
+    }
+
+    testStringSwitchOptimization() {
+        # Test string switch with multiple cases (uses SwitchString opcode)
+        string switch_code = "%modern
+string sub classify(string val) {
+    switch (val) {
+        case \"red\": return \"color\";
+        case \"blue\": return \"color\";
+        case \"green\": return \"color\";
+        case \"apple\": return \"fruit\";
+        case \"banana\": return \"fruit\";
+        case \"orange\": return \"fruit\";
+        case \"dog\": return \"animal\";
+        case \"cat\": return \"animal\";
+        default: return \"unknown\";
+    }
+}
+printf(\"%s,%s,%s,%s,%s\\n\",
+    classify(\"red\"), classify(\"apple\"), classify(\"dog\"),
+    classify(\"blue\"), classify(\"xyz\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(switch_code, mode));
+            assertEq("color,fruit,animal,color,unknown", result, sprintf("string switch optimization %s", mode));
+        }
+
+        # Test string switch with empty string case
+        string empty_case_code = "%modern
+string sub check_empty(string val) {
+    switch (val) {
+        case \"\": return \"empty\";
+        case \"null\": return \"null string\";
+        default: return \"has value\";
+    }
+}
+printf(\"%s,%s,%s\\n\",
+    check_empty(\"\"), check_empty(\"null\"), check_empty(\"test\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(empty_case_code, mode));
+            assertEq("empty,null string,has value", result, sprintf("string switch empty case %s", mode));
+        }
+
+        # Test string switch with similar strings
+        string similar_code = "%modern
+string sub similar_test(string val) {
+    switch (val) {
+        case \"test\": return \"1\";
+        case \"test1\": return \"2\";
+        case \"test12\": return \"3\";
+        case \"test123\": return \"4\";
+        default: return \"0\";
+    }
+}
+printf(\"%s,%s,%s,%s,%s\\n\",
+    similar_test(\"test\"), similar_test(\"test1\"), similar_test(\"test12\"),
+    similar_test(\"test123\"), similar_test(\"test1234\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(similar_code, mode));
+            assertEq("1,2,3,4,0", result, sprintf("string switch similar strings %s", mode));
         }
     }
 }

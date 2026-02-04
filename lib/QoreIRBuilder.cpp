@@ -340,6 +340,27 @@ QoreIRBranchIfInstruction* QoreIRBuilder::createBranchIf(QoreIRValue cond, QoreI
     return inst;
 }
 
+QoreIRSwitchIntInstruction* QoreIRBuilder::createSwitchInt(QoreIRValue switch_val, QoreIRBasicBlock* default_target,
+        const std::vector<QoreIRSwitchCase>& cases, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRSwitchIntInstruction>();
+    inst->loc = loc;
+    inst->switch_val = switch_val;
+    inst->default_target = default_target;
+    inst->cases = cases;
+    return inst;
+}
+
+QoreIRSwitchStringInstruction* QoreIRBuilder::createSwitchString(QoreIRValue switch_val,
+        QoreIRBasicBlock* default_target, const std::vector<QoreIRSwitchStringCase>& cases,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRSwitchStringInstruction>();
+    inst->loc = loc;
+    inst->switch_val = switch_val;
+    inst->default_target = default_target;
+    inst->cases = cases;
+    return inst;
+}
+
 QoreIRReturnInstruction* QoreIRBuilder::createReturn(QoreIRValue value, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRReturnInstruction>();
     inst->opcode = QoreIROpcode::Return;

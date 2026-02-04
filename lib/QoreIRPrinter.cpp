@@ -51,6 +51,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";
         case QoreIROpcode::AddAny: return "add.any";
+        case QoreIROpcode::AddString: return "add.string";
         case QoreIROpcode::SubInt: return "sub.int";
         case QoreIROpcode::SubFloat: return "sub.float";
         case QoreIROpcode::SubAny: return "sub.any";
@@ -172,9 +173,11 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::Summarize: return "summarize";
         case QoreIROpcode::EqInt: return "eq.int";
         case QoreIROpcode::EqFloat: return "eq.float";
+        case QoreIROpcode::EqString: return "eq.string";
         case QoreIROpcode::EqAny: return "eq.any";
         case QoreIROpcode::NeInt: return "ne.int";
         case QoreIROpcode::NeFloat: return "ne.float";
+        case QoreIROpcode::NeString: return "ne.string";
         case QoreIROpcode::NeAny: return "ne.any";
         case QoreIROpcode::EqHard: return "eq.hard";
         case QoreIROpcode::NeHard: return "ne.hard";
@@ -239,6 +242,12 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::FusedMapSelectOffsetPositiveFloat: return "fused.map.select.offset.positive.float";
         case QoreIROpcode::FusedMapSelectSquarePositiveInt: return "fused.map.select.square.positive.int";
         case QoreIROpcode::FusedMapSelectSquarePositiveFloat: return "fused.map.select.square.positive.float";
+        case QoreIROpcode::FusedMapFoldlSumScaleInt: return "fused.map.foldl.sum.scale.int";
+        case QoreIROpcode::FusedMapFoldlSumScaleFloat: return "fused.map.foldl.sum.scale.float";
+        case QoreIROpcode::FusedMapFoldlSumSquareInt: return "fused.map.foldl.sum.square.int";
+        case QoreIROpcode::FusedMapFoldlSumSquareFloat: return "fused.map.foldl.sum.square.float";
+        case QoreIROpcode::FusedMapFoldlProdScaleInt: return "fused.map.foldl.prod.scale.int";
+        case QoreIROpcode::FusedMapFoldlProdScaleFloat: return "fused.map.foldl.prod.scale.float";
         case QoreIROpcode::MapSelectAny: return "map.select.any";
         case QoreIROpcode::HashMapAny: return "hash.map.any";
         case QoreIROpcode::HashMapSelectAny: return "hash.map.select.any";
@@ -256,6 +265,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::CastEnum: return "cast.enum";
         case QoreIROpcode::Br: return "br";
         case QoreIROpcode::BrIf: return "br.if";
+        case QoreIROpcode::SwitchInt: return "switch.int";
+        case QoreIROpcode::SwitchString: return "switch.string";
         case QoreIROpcode::Return: return "return";
         case QoreIROpcode::ReturnNothing: return "return.nothing";
         case QoreIROpcode::LoadLocal: return "load.local";
@@ -485,6 +496,38 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     if (iter->done_target) {
                         out << " done " << iter->done_target->name;
                     }
+                }
+            } else if (inst->opcode == QoreIROpcode::SwitchInt) {
+                auto* sw = dynamic_cast<const QoreIRSwitchIntInstruction*>(inst.get());
+                if (sw) {
+                    out << " %" << sw->switch_val.id;
+                    if (sw->default_target) {
+                        out << " default " << sw->default_target->name;
+                    }
+                    out << " [";
+                    for (size_t i = 0; i < sw->cases.size(); ++i) {
+                        if (i) {
+                            out << ", ";
+                        }
+                        out << sw->cases[i].value << " -> " << sw->cases[i].target->name;
+                    }
+                    out << "]";
+                }
+            } else if (inst->opcode == QoreIROpcode::SwitchString) {
+                auto* sw = dynamic_cast<const QoreIRSwitchStringInstruction*>(inst.get());
+                if (sw) {
+                    out << " %" << sw->switch_val.id;
+                    if (sw->default_target) {
+                        out << " default " << sw->default_target->name;
+                    }
+                    out << " [";
+                    for (size_t i = 0; i < sw->cases.size(); ++i) {
+                        if (i) {
+                            out << ", ";
+                        }
+                        out << "\"" << sw->cases[i].value << "\" -> " << sw->cases[i].target->name;
+                    }
+                    out << "]";
                 }
             }
             out << "\n";

@@ -157,12 +157,22 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
             return QoreValue(left.getAsBigInt() == right.getAsBigInt());
         case QoreIROpcode::EqFloat:
             return QoreValue(left.getAsFloat() == right.getAsFloat());
+        case QoreIROpcode::EqString: {
+            const QoreStringNode* lstr = left.get<const QoreStringNode>();
+            const QoreStringNode* rstr = right.get<const QoreStringNode>();
+            return QoreValue(lstr && rstr && lstr->equal(rstr));
+        }
         case QoreIROpcode::EqAny:
             return QoreValue(QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
         case QoreIROpcode::NeInt:
             return QoreValue(left.getAsBigInt() != right.getAsBigInt());
         case QoreIROpcode::NeFloat:
             return QoreValue(left.getAsFloat() != right.getAsFloat());
+        case QoreIROpcode::NeString: {
+            const QoreStringNode* lstr = left.get<const QoreStringNode>();
+            const QoreStringNode* rstr = right.get<const QoreStringNode>();
+            return QoreValue(!lstr || !rstr || !lstr->equal(rstr));
+        }
         case QoreIROpcode::NeAny:
             return QoreValue(!QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
         case QoreIROpcode::EqHard:
@@ -380,12 +390,23 @@ static void removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
 
 static void cleanupValues(const std::unordered_map<uint32_t, QoreValue>& values, std::vector<uint32_t>& cleanup,
         ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log) {
+    // Track already-cleaned nodes to avoid double-free when multiple value IDs
+    // point to the same underlying node (e.g., via LoadLocal + refSelf in loops)
+    std::unordered_set<const AbstractQoreNode*> cleaned_nodes;
     for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
         auto val_it = values.find(*it);
         if (val_it == values.end()) {
             continue;
         }
         QoreValue temp = val_it->second;
+        // Skip if we already cleaned this exact node pointer
+        if (temp.hasNode()) {
+            const AbstractQoreNode* node = temp.getInternalNode();
+            if (cleaned_nodes.count(node)) {
+                continue;  // Already cleaned via a different value ID
+            }
+            cleaned_nodes.insert(node);
+        }
         if (cleanup_log && temp.hasNode()) {
             if (temp.getType() == NT_STRING) {
                 auto* str = temp.get<QoreStringNode>();
@@ -613,6 +634,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::AddInt:
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::AddAny:
+        case QoreIROpcode::AddString:
         case QoreIROpcode::SubInt:
         case QoreIROpcode::SubFloat:
         case QoreIROpcode::SubAny:
@@ -660,9 +682,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::XorAssignAny:
         case QoreIROpcode::EqInt:
         case QoreIROpcode::EqFloat:
+        case QoreIROpcode::EqString:
         case QoreIROpcode::EqAny:
         case QoreIROpcode::NeInt:
         case QoreIROpcode::NeFloat:
+        case QoreIROpcode::NeString:
         case QoreIROpcode::NeAny:
         case QoreIROpcode::EqHard:
         case QoreIROpcode::NeHard:
@@ -719,6 +743,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::FusedMapSelectOffsetPositiveFloat:
         case QoreIROpcode::FusedMapSelectSquarePositiveInt:
         case QoreIROpcode::FusedMapSelectSquarePositiveFloat:
+        case QoreIROpcode::FusedMapFoldlSumScaleInt:
+        case QoreIROpcode::FusedMapFoldlSumScaleFloat:
+        case QoreIROpcode::FusedMapFoldlSumSquareInt:
+        case QoreIROpcode::FusedMapFoldlSumSquareFloat:
+        case QoreIROpcode::FusedMapFoldlProdScaleInt:
+        case QoreIROpcode::FusedMapFoldlProdScaleFloat:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
@@ -1281,6 +1311,42 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
                     }
                 }
+                break;
+            }
+            case QoreIROpcode::SwitchInt: {
+                auto* sw = static_cast<QoreIRSwitchIntInstruction*>(inst);
+                QoreValue switch_val = getIRValue(values, sw->switch_val);
+                int64_t val = switch_val.getAsBigInt();
+                prev_block = block;
+                // Search for matching case
+                QoreIRBasicBlock* target = sw->default_target;
+                for (const auto& c : sw->cases) {
+                    if (c.value == val) {
+                        target = c.target;
+                        break;
+                    }
+                }
+                block = target;
+                ip = 0;
+                break;
+            }
+            case QoreIROpcode::SwitchString: {
+                auto* sw = static_cast<QoreIRSwitchStringInstruction*>(inst);
+                QoreValue switch_val = getIRValue(values, sw->switch_val);
+                prev_block = block;
+                // Search for matching case
+                QoreIRBasicBlock* target = sw->default_target;
+                const QoreStringNode* str = switch_val.get<const QoreStringNode>();
+                if (str) {
+                    for (const auto& c : sw->cases) {
+                        if (str->equal(c.value.c_str())) {
+                            target = c.target;
+                            break;
+                        }
+                    }
+                }
+                block = target;
+                ip = 0;
                 break;
             }
             case QoreIROpcode::LoadLocal: {
@@ -1856,6 +1922,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::AddInt:
             case QoreIROpcode::AddFloat:
             case QoreIROpcode::AddAny:
+            case QoreIROpcode::AddString:
             case QoreIROpcode::SubInt:
             case QoreIROpcode::SubFloat:
             case QoreIROpcode::SubAny:
@@ -1939,6 +2006,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::FusedMapSelectOffsetPositiveFloat:
             case QoreIROpcode::FusedMapSelectSquarePositiveInt:
             case QoreIROpcode::FusedMapSelectSquarePositiveFloat:
+            case QoreIROpcode::FusedMapFoldlSumScaleInt:
+            case QoreIROpcode::FusedMapFoldlSumScaleFloat:
+            case QoreIROpcode::FusedMapFoldlSumSquareInt:
+            case QoreIROpcode::FusedMapFoldlSumSquareFloat:
+            case QoreIROpcode::FusedMapFoldlProdScaleInt:
+            case QoreIROpcode::FusedMapFoldlProdScaleFloat:
             case QoreIROpcode::RangeAny:
             case QoreIROpcode::RangeInt:
             case QoreIROpcode::RangeFloat:
@@ -2755,6 +2828,29 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return evalAndRef(&node, xsink);
         }
+        case QoreIROpcode::AddString: {
+            // Typed string concatenation - both operands are known to be strings
+            const QoreStringNode* ls = left.getType() == NT_STRING
+                ? left.get<const QoreStringNode>() : nullptr;
+            const QoreStringNode* rs = right.getType() == NT_STRING
+                ? right.get<const QoreStringNode>() : nullptr;
+            if (!ls && !rs) {
+                return QoreValue();  // Both NOTHING
+            }
+            if (!ls) {
+                return QoreValue(rs->stringRefSelf());  // Copy right
+            }
+            if (!rs) {
+                return QoreValue(ls->stringRefSelf());  // Copy left
+            }
+            QoreStringNode* result = new QoreStringNode(*ls);
+            result->concat(rs, xsink);
+            if (*xsink) {
+                result->deref();
+                return QoreValue();
+            }
+            return QoreValue(result);
+        }
         case QoreIROpcode::SubInt:
             return QoreValue(left.getAsBigInt() - right.getAsBigInt());
         case QoreIROpcode::SubFloat:
@@ -3458,6 +3554,109 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             return result.release();
         }
+        // Fused map+foldl operations (single pass, no intermediate list)
+        case QoreIROpcode::FusedMapFoldlSumScaleInt: {
+            // left = list, right = scale factor
+            // Sum of (list[i] * scale)
+            if (left.getType() != NT_LIST) {
+                return QoreValue((int64_t)0);
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            if (sz == 0) {
+                return QoreValue((int64_t)0);
+            }
+            int64_t scale = right.getAsBigInt();
+            int64_t result = 0;
+            for (size_t i = 0; i < sz; ++i) {
+                result += l->retrieveEntry(i).getAsBigInt() * scale;
+            }
+            return QoreValue(result);
+        }
+        case QoreIROpcode::FusedMapFoldlSumScaleFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(0.0);
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            if (sz == 0) {
+                return QoreValue(0.0);
+            }
+            double scale = right.getAsFloat();
+            double result = 0.0;
+            for (size_t i = 0; i < sz; ++i) {
+                result += l->retrieveEntry(i).getAsFloat() * scale;
+            }
+            return QoreValue(result);
+        }
+        case QoreIROpcode::FusedMapFoldlSumSquareInt: {
+            // left = list, right = unused
+            // Sum of (list[i]^2)
+            if (left.getType() != NT_LIST) {
+                return QoreValue((int64_t)0);
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            if (sz == 0) {
+                return QoreValue((int64_t)0);
+            }
+            int64_t result = 0;
+            for (size_t i = 0; i < sz; ++i) {
+                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                result += val * val;
+            }
+            return QoreValue(result);
+        }
+        case QoreIROpcode::FusedMapFoldlSumSquareFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(0.0);
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            if (sz == 0) {
+                return QoreValue(0.0);
+            }
+            double result = 0.0;
+            for (size_t i = 0; i < sz; ++i) {
+                double val = l->retrieveEntry(i).getAsFloat();
+                result += val * val;
+            }
+            return QoreValue(result);
+        }
+        case QoreIROpcode::FusedMapFoldlProdScaleInt: {
+            // left = list, right = scale factor
+            // Product of (list[i] * scale)
+            if (left.getType() != NT_LIST) {
+                return QoreValue((int64_t)1);  // Identity for product
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            if (sz == 0) {
+                return QoreValue((int64_t)1);  // Identity for product
+            }
+            int64_t scale = right.getAsBigInt();
+            int64_t result = 1;
+            for (size_t i = 0; i < sz; ++i) {
+                result *= l->retrieveEntry(i).getAsBigInt() * scale;
+            }
+            return QoreValue(result);
+        }
+        case QoreIROpcode::FusedMapFoldlProdScaleFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(1.0);  // Identity for product
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            if (sz == 0) {
+                return QoreValue(1.0);  // Identity for product
+            }
+            double scale = right.getAsFloat();
+            double result = 1.0;
+            for (size_t i = 0; i < sz; ++i) {
+                result *= l->retrieveEntry(i).getAsFloat() * scale;
+            }
+            return QoreValue(result);
+        }
         case QoreIROpcode::RangeAny: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreRangeOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
@@ -3472,9 +3671,11 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::EqInt:
         case QoreIROpcode::EqFloat:
+        case QoreIROpcode::EqString:
         case QoreIROpcode::EqAny:
         case QoreIROpcode::NeInt:
         case QoreIROpcode::NeFloat:
+        case QoreIROpcode::NeString:
         case QoreIROpcode::NeAny:
         case QoreIROpcode::EqHard:
         case QoreIROpcode::NeHard:

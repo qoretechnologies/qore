@@ -66,6 +66,7 @@ enum class QoreIROpcode : uint16_t {
     AddInt,
     AddFloat,
     AddAny,
+    AddString,                          // Typed string concatenation (no runtime type checks)
     SubInt,
     SubFloat,
     SubAny,
@@ -190,9 +191,11 @@ enum class QoreIROpcode : uint16_t {
 
     EqInt,
     EqFloat,
+    EqString,
     EqAny,
     NeInt,
     NeFloat,
+    NeString,
     NeAny,
     EqHard,
     NeHard,
@@ -262,6 +265,13 @@ enum class QoreIROpcode : uint16_t {
     FusedMapSelectOffsetPositiveFloat,
     FusedMapSelectSquarePositiveInt,    // (map $1 * $1, (select list, $1 > 0))
     FusedMapSelectSquarePositiveFloat,
+    // Fused map+foldl operations (single-pass, no intermediate list)
+    FusedMapFoldlSumScaleInt,           // foldl $1 + $2, (map $1 * c, list) -> sum(list[i] * c)
+    FusedMapFoldlSumScaleFloat,
+    FusedMapFoldlSumSquareInt,          // foldl $1 + $2, (map $1 * $1, list) -> sum(list[i]^2)
+    FusedMapFoldlSumSquareFloat,
+    FusedMapFoldlProdScaleInt,          // foldl $1 * $2, (map $1 * c, list) -> prod(list[i] * c)
+    FusedMapFoldlProdScaleFloat,
     MapSelectAny,
     HashMapAny,
     HashMapSelectAny,
@@ -280,6 +290,8 @@ enum class QoreIROpcode : uint16_t {
 
     Br,
     BrIf,
+    SwitchInt,     // Integer switch with LLVM switch instruction
+    SwitchString,  // String switch with hash-table lookup
     Return,
     ReturnNothing,
 
@@ -431,6 +443,12 @@ inline bool isBinaryInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
         case QoreIROpcode::RangeDate:
+        case QoreIROpcode::FusedMapFoldlSumScaleInt:
+        case QoreIROpcode::FusedMapFoldlSumScaleFloat:
+        case QoreIROpcode::FusedMapFoldlSumSquareInt:
+        case QoreIROpcode::FusedMapFoldlSumSquareFloat:
+        case QoreIROpcode::FusedMapFoldlProdScaleInt:
+        case QoreIROpcode::FusedMapFoldlProdScaleFloat:
             return true;
         default:
             return false;
@@ -553,6 +571,40 @@ public:
     QoreIRValue condition{};
     QoreIRBasicBlock* true_target = nullptr;
     QoreIRBasicBlock* false_target = nullptr;
+};
+
+//! Integer switch case: value -> target block
+struct QoreIRSwitchCase {
+    int64_t value;
+    QoreIRBasicBlock* target;
+};
+
+//! Integer switch instruction - maps to LLVM switch for efficient dispatch
+class QoreIRSwitchIntInstruction : public QoreIRInstruction {
+public:
+    QoreIRSwitchIntInstruction() : QoreIRInstruction(QoreIROpcode::SwitchInt) {
+    }
+
+    QoreIRValue switch_val{};                       //!< Value being switched on
+    QoreIRBasicBlock* default_target = nullptr;     //!< Default case target
+    std::vector<QoreIRSwitchCase> cases;            //!< case value -> target block
+};
+
+//! String switch case: string value -> target block
+struct QoreIRSwitchStringCase {
+    std::string value;        //!< Case string value
+    QoreIRBasicBlock* target; //!< Target block for this case
+};
+
+//! String switch instruction - uses hash-table lookup for efficient dispatch
+class QoreIRSwitchStringInstruction : public QoreIRInstruction {
+public:
+    QoreIRSwitchStringInstruction() : QoreIRInstruction(QoreIROpcode::SwitchString) {
+    }
+
+    QoreIRValue switch_val{};                           //!< Value being switched on (string)
+    QoreIRBasicBlock* default_target = nullptr;         //!< Default case target
+    std::vector<QoreIRSwitchStringCase> cases;          //!< case string -> target block
 };
 
 struct QoreIRPhiIncoming {
