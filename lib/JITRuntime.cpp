@@ -51,6 +51,7 @@
 #include <qore/intern/StatementBlock.h>
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
+#include <qore/intern/FunctionalOperatorInterface.h>
 
 // Helper: bit-cast between uint64_t and QoreValue.
 // QoreValue is NaN-boxed and has the same size as uint64_t.
@@ -1157,4 +1158,62 @@ extern "C" uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* ctx, int32
         uint64_t operand_bits, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     return qore_rt_regex_op_with_operand(opcode, ctx->exprs[slot], operand_bits, xsink);
+}
+
+// --- Iterator helpers ---
+
+// Creates an iterator from an iterable value.
+// Returns a pointer to FunctionalOperatorInterface (as i64), or 0 if iterable is NOTHING.
+// The iterator_func parameter is optional (can be nullptr) for use with FunctionalOperator expressions.
+extern "C" void* qore_rt_iterator_create(uint64_t iterable_bits, void* iterator_func, ExceptionSink* xsink) {
+    QoreValue iterable = fromBits(iterable_bits);
+    FunctionalOperator::FunctionalValueType value_type;
+    FunctionalOperatorInterface* iter = nullptr;
+
+    if (iterator_func) {
+        FunctionalOperator* func_op = reinterpret_cast<FunctionalOperator*>(iterator_func);
+        iter = func_op->getFunctionalIterator(value_type, xsink);
+    } else {
+        iter = FunctionalOperatorInterface::getFunctionalIterator(value_type, iterable, true,
+            "foreach statement", xsink);
+    }
+
+    // Return nullptr on exception or NOTHING value type
+    if ((xsink && *xsink) || value_type == FunctionalOperator::nothing) {
+        delete iter;
+        return nullptr;
+    }
+
+    return iter;
+}
+
+// Advances the iterator and returns the next value.
+// Returns: 1 if done (iterator exhausted), 0 if has more values.
+// On success (not done), stores the current value in *out_value.
+// On done or exception, the iterator is deleted.
+extern "C" int64_t qore_rt_iterator_next(void* iter_ptr, uint64_t* out_value, ExceptionSink* xsink) {
+    if (!iter_ptr) {
+        // Empty iterator (was NOTHING) - already done
+        return 1;
+    }
+
+    FunctionalOperatorInterface* iter = reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr);
+    ValueOptionalRefHolder val(xsink);
+    bool done = iter->getNext(val, xsink);
+
+    if (xsink && *xsink) {
+        // Exception occurred - clean up iterator
+        delete iter;
+        return 1;
+    }
+
+    if (done) {
+        // Iterator exhausted - clean up
+        delete iter;
+        return 1;
+    }
+
+    // Store current value and continue
+    *out_value = toBits(val.takeReferencedValue());
+    return 0;
 }

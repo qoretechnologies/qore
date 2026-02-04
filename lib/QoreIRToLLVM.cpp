@@ -291,6 +291,14 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // AOT variant: (ptr, i32, ptr, i32, ptr) -> i64
     module.getOrInsertFunction("qore_rt_call_with_args_aot",
             llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+
+    // Iterator helpers for foreach loops
+    // iterator_create: (i64, ptr, ptr) -> ptr
+    module.getOrInsertFunction("qore_rt_iterator_create",
+            llvm::FunctionType::get(ptr_type, {i64_type, ptr_type, ptr_type}, false));
+    // iterator_next: (ptr, ptr, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_iterator_next",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
 }
 
 llvm::FunctionCallee QoreIRToLLVM::getHelper(llvm::Module& module, const char* name, llvm::FunctionType* ft) {
@@ -4416,6 +4424,87 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
                 nanboxed_values.insert(inst->result.id);
             }
+            return true;
+        }
+
+        // === Iterator operations ===
+        case QoreIROpcode::IteratorCreate: {
+            const auto* iter_inst = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
+            // Get the iterable value (NaN-boxed)
+            auto* iterable_val = getVal(iter_inst->iterable.id, error);
+            if (!iterable_val) {
+                return false;
+            }
+            // Box the iterable value if needed
+            llvm::Value* iterable_boxed;
+            if (nanboxed_values.count(iter_inst->iterable.id)) {
+                iterable_boxed = iterable_val;
+            } else if (iterable_val->getType() == i64_type) {
+                iterable_boxed = boxInt(iterable_val);
+            } else if (iterable_val->getType() == double_type) {
+                iterable_boxed = boxFloat(iterable_val);
+            } else {
+                error = "unsupported iterable type for IteratorCreate";
+                return false;
+            }
+            // Get iterator_func pointer (can be null)
+            llvm::Value* iter_func_ptr;
+            if (iter_inst->iterator_func) {
+                iter_func_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(iter_inst->iterator_func));
+                iter_func_ptr = builder->CreateIntToPtr(iter_func_ptr, ptr_type);
+            } else {
+                // Create null pointer: i64 0 -> inttoptr -> ptr
+                iter_func_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type, 0), ptr_type);
+            }
+            // Call qore_rt_iterator_create(iterable, iterator_func, xsink) -> ptr
+            auto helper = module.getOrInsertFunction("qore_rt_iterator_create",
+                    llvm::FunctionType::get(ptr_type, {i64_type, ptr_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {iterable_boxed, iter_func_ptr, xsink_arg});
+            // Store the iterator pointer as the result
+            values[inst->result.id] = result;
+            // Don't mark as nanboxed - it's a raw pointer
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::IteratorNext: {
+            const auto* iter_inst = static_cast<const QoreIRIteratorNextInstruction*>(inst);
+            // Get the iterator pointer
+            auto* iter_ptr = getVal(iter_inst->iterator.id, error);
+            if (!iter_ptr) {
+                return false;
+            }
+            // Ensure iter_ptr is a pointer type
+            if (iter_ptr->getType() != ptr_type) {
+                if (iter_ptr->getType() == i64_type) {
+                    iter_ptr = builder->CreateIntToPtr(iter_ptr, ptr_type);
+                } else {
+                    error = "IteratorNext: iterator value must be pointer or i64";
+                    return false;
+                }
+            }
+            // Allocate stack space for the output value
+            llvm::Value* out_val_ptr = builder->CreateAlloca(i64_type, nullptr, "iter_out_val");
+            // Call qore_rt_iterator_next(iter_ptr, out_val_ptr, xsink) -> i64 (1=done, 0=continue)
+            auto helper = module.getOrInsertFunction("qore_rt_iterator_next",
+                    llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
+            llvm::Value* done_flag = builder->CreateCall(helper, {iter_ptr, out_val_ptr, xsink_arg});
+            // Check for exception
+            emitExceptionCheck(module, llvm_func, inst);
+            // Load the output value (will be used if not done)
+            llvm::Value* out_val = builder->CreateLoad(i64_type, out_val_ptr, "iter_val");
+            values[inst->result.id] = out_val;
+            nanboxed_values.insert(inst->result.id);
+            // Branch based on done_flag
+            auto done_it = block_map.find(iter_inst->done_target);
+            auto cont_it = block_map.find(iter_inst->continue_target);
+            if (done_it == block_map.end() || cont_it == block_map.end()) {
+                error = "IteratorNext: target block not found";
+                return false;
+            }
+            llvm::Value* is_done = builder->CreateICmpNE(done_flag, llvm::ConstantInt::get(i64_type, 0));
+            builder->CreateCondBr(is_done, done_it->second, cont_it->second);
             return true;
         }
 

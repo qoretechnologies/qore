@@ -1556,7 +1556,7 @@ foreach int n in (nums) {
 }
 printf(\"%d\\n\", sum);
 ";
-        foreach string mode in ("ast", "ir") {
+        foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(basic_code, mode));
             assertEq("15", result, sprintf("foreach basic sum %s", mode));
         }
@@ -1573,7 +1573,7 @@ foreach int n in (nums) {
 }
 printf(\"%d\\n\", sum);
 ";
-        foreach string mode in ("ast", "ir") {
+        foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(break_code, mode));
             # 1 + 2 = 3 (break before processing 3)
             assertEq("3", result, sprintf("foreach break %s", mode));
@@ -1591,7 +1591,7 @@ foreach int n in (nums) {
 }
 printf(\"%d\\n\", sum);
 ";
-        foreach string mode in ("ast", "ir") {
+        foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(continue_code, mode));
             # 1 + 2 + 4 + 5 = 12 (skip 3)
             assertEq("12", result, sprintf("foreach continue %s", mode));
@@ -1606,7 +1606,7 @@ foreach int n in (empty) {
 }
 printf(\"%d\\n\", sum);
 ";
-        foreach string mode in ("ast", "ir") {
+        foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(empty_code, mode));
             assertEq("0", result, sprintf("foreach empty %s", mode));
         }
@@ -1622,7 +1622,7 @@ foreach list<int> inner in (nested) {
 }
 printf(\"%d\\n\", total);
 ";
-        foreach string mode in ("ast", "ir") {
+        foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(nested_code, mode));
             # 1+2+3+4+5+6 = 21
             assertEq("21", result, sprintf("foreach nested %s", mode));
