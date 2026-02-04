@@ -122,6 +122,7 @@ public class DataProvider {
             "salesforcerest": "SalesforceRestDataProvider",
             "sax": "SaxDataProvider",
             "servicenowrest": "ServiceNowRestDataProvider",
+            "shipstation": "ShipStationDataProvider",
 
             # provided by the ssh2 module
             "sftpclient": "SftpClientDataProvider",

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore QoreRepl class definition
 
-/** QoreRepl.qc Copyright 2025 Qore Technologies, s.r.o.
+/** QoreRepl.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -26,6 +26,9 @@
 %disable-warning deprecated
 
 public namespace QoreRepl {
+
+#! QoreRepl module version
+public const Version = "1.0";
 
 #! REPL result indicating the command requests exit
 public const ReplExit = {"exit": True};
@@ -81,6 +84,64 @@ public class QoreRepl {
 
         #! Whether to show execution timing
         bool show_timing = False;
+
+        #! Path to history file
+        *string history_file;
+
+        #! Default history file name
+        const HistoryFile = ".qore-repl-history";
+
+        #! Maximum history length
+        const MaxHistoryLen = 500;
+
+        #! Color output helper
+        Util::TerminalColor color();
+
+        #! List of all REPL commands for completion
+        const ReplCommands = (
+            "/help", "/?",
+            "/quit", "/exit", "/q",
+            "/version",
+            "/reset", "/clear",
+            "/vars",
+            "/functions", "/funcs",
+            "/classes",
+            "/constants", "/consts",
+            "/namespaces", "/ns",
+            "/modules",
+            "/type",
+            "/describe",
+            "/history",
+            "/timing",
+            "/load",
+            "/save",
+            "/pwd",
+            "/cd",
+        );
+
+        #! Canonical commands for abbreviation resolution (excludes short aliases like /q, /?, /ns)
+        const CanonicalCommands = (
+            "/help",
+            "/quit",
+            "/exit",
+            "/version",
+            "/reset",
+            "/clear",
+            "/vars",
+            "/functions",
+            "/classes",
+            "/constants",
+            "/namespaces",
+            "/modules",
+            "/type",
+            "/describe",
+            "/history",
+            "/timing",
+            "/load",
+            "/save",
+            "/pwd",
+            "/cd",
+        );
     }
 
     #! Creates a new REPL instance
@@ -104,6 +165,20 @@ public class QoreRepl {
             int parse_opts = (opts.parse_options ?? PO_NEW_STYLE) | PO_ALLOW_REPARSE | PO_ALLOW_STATEMENT_NO_EFFECT;
             # Create as independent Program (True = no parent) to avoid inheriting restrictions
             pgm = new Program(parse_opts, True);
+        }
+
+        # Initialize history file path (only if filesystem access is allowed)
+        if (!isFilesystemRestricted()) {
+            if (exists opts.history_file) {
+                # Use explicit value (can be NOTHING to disable history)
+                history_file = opts.history_file;
+            } else {
+                # Default to $HOME/.qore-repl-history (or $USERPROFILE on Windows)
+                *string home = ENV.HOME ?? ENV.USERPROFILE;
+                if (home) {
+                    history_file = home + DirSep + HistoryFile;
+                }
+            }
         }
     }
 
@@ -352,9 +427,9 @@ if (!exists result) {
 
             if (show_timing) {
                 date elapsed = now_us() - start;
-                return {"value": result, "timing": elapsed};
+                return {"value": result, "timing": elapsed, "is_eval": True};
             }
-            return {"value": result};
+            return {"value": result, "is_eval": True};
         } catch (hash<ExceptionInfo> ex) {
             return {"error": ex};
         }
@@ -417,10 +492,10 @@ if (!exists result) {
             case NT_NOTHING:
                 return "";
             case NT_STRING:
-                return sprintf("%y", val);
+                return val;
             case NT_HASH:
             case NT_LIST:
-                return sprintf("%N", val);
+                return sprintf("%Y", val);
             default:
                 return sprintf("%y", val);
         }
@@ -438,37 +513,96 @@ if (!exists result) {
         return msg;
     }
 
+    #! Pads a colored string to a visible width
+    private string padColored(string text, string visible_text, int width) {
+        int padding = width - visible_text.length();
+        if (padding > 0) {
+            return text + strmul(" ", padding);
+        }
+        return text;
+    }
+
+    #! Formats a help line with proper alignment
+    private string helpLine(string cmd, string desc, int width = 18) {
+        return sprintf("  %s %s\n", padColored(color.value(cmd), cmd, width), desc);
+    }
+
     #! Returns help text for special commands
-    static string getHelpText() {
-        return "Commands:
-  /help              Show this help
-  /quit              Exit the REPL (also /exit, /q)
+    string getHelpText() {
+        string help = sprintf("%s\n", color.key("Commands:"));
+        help += helpLine("/help", "Show this help");
+        help += helpLine("/quit", "Exit the REPL (also /exit, /q)");
+        help += helpLine("/version", "Show QoreRepl and Qore version");
+        help += sprintf("\n%s\n", color.key("Session:"));
+        help += helpLine("/reset", "Reset the Program state");
+        help += helpLine("/clear", "Clear pending multi-line input");
+        help += helpLine("/history", "Show command history");
+        help += helpLine("/timing", "Toggle execution timing display");
+        help += sprintf("\n%s\n", color.key("Introspection:"));
+        help += helpLine("/vars", "List global variables");
+        help += helpLine("/functions", "List user-defined functions (also /funcs)");
+        help += helpLine("/classes", "List user-defined classes");
+        help += helpLine("/constants", "List user-defined constants (also /consts)");
+        help += helpLine("/namespaces", "List namespaces (also /ns)");
+        help += helpLine("/modules", "List loaded modules");
+        help += helpLine("/type <expr>", "Show the type of an expression");
+        help += helpLine("/describe <name>", "Describe a symbol (class, function, namespace, enum, constant, hashdecl)");
+        help += sprintf("\n%s\n", color.key("Files:"));
+        help += helpLine("/load <file>", "Load and execute a file");
+        help += helpLine("/save <file>", "Save session history to a file");
+        help += helpLine("/pwd", "Show current working directory");
+        help += helpLine("/cd <dir>", "Change working directory");
+        help += "\nQore expressions and statements are evaluated directly.\n";
+        help += sprintf("Multi-line input is supported - the prompt changes to '%s' when more input is needed.\n",
+            color.value("...>"));
+%ifndef NoLinenoise
+        help += sprintf("\n%s\n", color.key("Keyboard shortcuts (linenoise):"));
+        help += helpLine("Up/Down", "Navigate history");
+        help += helpLine("Ctrl+R", "Reverse search history");
+        help += helpLine("Tab", "Complete REPL commands");
+        help += helpLine("Ctrl+C", "Cancel current input / exit");
+%endif
+        return help;
+    }
 
-Session:
-  /reset             Reset the Program state
-  /clear             Clear pending multi-line input
-  /history           Show command history
-  /timing            Toggle execution timing display
+    #! Resolves abbreviated commands to their full form
+    /** @param command The command to resolve (e.g., "/desc", "/cl")
+        @return A hash with either:
+            - "command": the resolved full command if unambiguous
+            - "error": an error hash if ambiguous or nothing if no resolution needed
+    */
+    private *hash<auto> resolveCommandAbbreviation(string command) {
+        # Check if it's already a known command (exact match in ReplCommands)
+        if (inlist(command, ReplCommands)) {
+            return NOTHING;
+        }
 
-Introspection:
-  /vars              List global variables
-  /functions         List user-defined functions (also /funcs)
-  /classes           List user-defined classes
-  /constants         List user-defined constants (also /consts)
-  /namespaces        List namespaces (also /ns)
-  /modules           List loaded modules
-  /type <expr>       Show the type of an expression
-  /describe <name>   Describe a class, function, or namespace
+        # Must start with / to be a command abbreviation
+        if (!command.startsWith("/")) {
+            return NOTHING;
+        }
 
-Files:
-  /load <file>       Load and execute a file
-  /save <file>       Save session history to a file
-  /pwd               Show current working directory
-  /cd <dir>          Change working directory
+        # Find all canonical commands that start with this prefix
+        list<string> matches = ();
+        foreach string canonical in (CanonicalCommands) {
+            if (canonical.equalPartial(command)) {
+                matches += canonical;
+            }
+        }
 
-Qore expressions and statements are evaluated directly.
-Multi-line input is supported - the prompt changes to '...>' when more input is needed.
-";
+        if (matches.size() == 0) {
+            # No matches - let the switch handle the "unknown command" error
+            return NOTHING;
+        }
+
+        if (matches.size() == 1) {
+            # Unambiguous match
+            return {"command": matches[0]};
+        }
+
+        # Ambiguous - multiple matches
+        string msg = sprintf("Ambiguous command '%s'. Did you mean: %s?", command, matches.join(", "));
+        return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": msg}};
     }
 
     #! Processes special commands starting with /
@@ -477,6 +611,15 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         list<string> parts = cmd.split(" ");
         string command = parts[0].lwr();
         list<string> args = parts.size() > 1 ? parts[1..] : ();
+
+        # Try to resolve abbreviated commands
+        *hash<auto> resolved = resolveCommandAbbreviation(command);
+        if (resolved.error) {
+            return resolved;
+        }
+        if (resolved.command) {
+            command = resolved.command;
+        }
 
         switch (command) {
             case "/help":
@@ -487,6 +630,9 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
             case "/exit":
             case "/q":
                 return ReplExit;
+
+            case "/version":
+                return {"value": sprintf("QoreRepl %s (Qore %s)", QoreRepl::Version, Qore::VersionString)};
 
             case "/reset":
                 # Create a new Program with the same options
@@ -598,9 +744,9 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         if (!user_vars) {
             return "No user-defined global variables";
         }
-        string result = "Global variables:\n";
+        string result = sprintf("%s\n", color.key("Global variables:"));
         foreach string name in (keys user_vars) {
-            result += sprintf("  %s = %s\n", name, formatValue(user_vars{name}));
+            result += sprintf("  %s = %s\n", color.value(name), formatValue(user_vars{name}));
         }
         return result;
     }
@@ -745,9 +891,9 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         if (!funcs) {
             return "No user-defined functions";
         }
-        string result = "User-defined functions:\n";
+        string result = sprintf("%s\n", color.key("User-defined functions:"));
         foreach string name in (funcs) {
-            result += sprintf("  %s()\n", name);
+            result += sprintf("  %s()\n", color.value(name));
         }
         return result;
     }
@@ -766,9 +912,9 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         if (!user_classes) {
             return "No user-defined classes";
         }
-        string result = "User-defined classes:\n";
+        string result = sprintf("%s\n", color.key("User-defined classes:"));
         foreach string name in (user_classes) {
-            result += sprintf("  %s\n", name);
+            result += sprintf("  %s\n", color.type(name));
         }
         return result;
     }
@@ -787,9 +933,9 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         if (!user_consts) {
             return "No user-defined constants";
         }
-        string result = "User-defined constants:\n";
+        string result = sprintf("%s\n", color.key("User-defined constants:"));
         foreach string name in (user_consts) {
-            result += sprintf("  %s\n", name);
+            result += sprintf("  %s\n", color.value(name));
         }
         return result;
     }
@@ -801,9 +947,9 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         if (!namespaces) {
             return "No namespaces defined (only root ::)";
         }
-        string result = "Namespaces:\n";
+        string result = sprintf("%s\n", color.key("Namespaces:"));
         foreach Reflection::Namespace ns in (namespaces) {
-            result += sprintf("  %s\n", ns.getPathName());
+            result += sprintf("  %s\n", color.type(ns.getPathName()));
         }
         return result;
     }
@@ -814,7 +960,7 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         if (!features) {
             return "No modules loaded";
         }
-        string result = "Loaded modules:\n";
+        string result = sprintf("%s\n", color.key("Loaded modules:"));
         foreach string name in (features) {
             result += sprintf("  %s\n", name);
         }
@@ -832,11 +978,10 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
             pgm.parse(code, label);
             pgm.run();
             auto result = pgm.getGlobalVariable(var_name);
-            string type_name = result.type();
-            if (result.typeCode() == NT_OBJECT) {
-                type_name = result.className();
-            }
-            return {"value": sprintf("Type: %s", type_name)};
+            # Use Reflection to get the full type name (e.g., hash<StatInfo> instead of just hash)
+            Reflection::Type t = Reflection::Type::getType(result);
+            string type_name = t.getName();
+            return {"value": sprintf("%s %s", color.key("Type:"), color.type(type_name))};
         } catch (hash<ExceptionInfo> ex) {
             return {"error": ex};
         }
@@ -844,45 +989,178 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
 
     #! Describes a symbol (class, function, or namespace)
     private *hash<auto> describeSymbol(string name) {
-        # Try as a class first
+        # Check for hash<TypeName> or *hash<TypeName> syntax
+        *list<*string> match = (name =~ x/^\*?hash<([^>]+)>$/);
+        if (match) {
+            name = match[0];
+        }
+
+        # Try as a hashdecl first (try standard library, then REPL program)
         try {
-            Reflection::Class cls = Reflection::Class::forName(pgm, name);
+            Reflection::TypedHash th = Reflection::TypedHash::forName(name);
+            return {"value": formatHashdeclDescription(th)};
+        } catch () {
+            try {
+                Reflection::TypedHash th = Reflection::TypedHash::forName(pgm, name);
+                return {"value": formatHashdeclDescription(th)};
+            } catch () {
+                # Not a hashdecl, continue
+            }
+        }
+
+        # Try as a class (try standard library, then REPL program)
+        try {
+            Reflection::Class cls = Reflection::Class::forName(name);
             return {"value": formatClassDescription(cls)};
         } catch () {
-            # Not a class, continue
+            try {
+                Reflection::Class cls = Reflection::Class::forName(pgm, name);
+                return {"value": formatClassDescription(cls)};
+            } catch () {
+                # Not a class, continue
+            }
         }
 
-        # Try as a function
+        # Try as a function (try standard library, then REPL program)
         try {
-            Reflection::Function func = Reflection::Function::forName(pgm, name);
+            Reflection::Function func = Reflection::Function::forName(name);
             return {"value": formatFunctionDescription(func)};
         } catch () {
-            # Not a function, continue
+            try {
+                Reflection::Function func = Reflection::Function::forName(pgm, name);
+                return {"value": formatFunctionDescription(func)};
+            } catch () {
+                # Not a function, continue
+            }
         }
 
-        # Try as a namespace
+        # Try as a constant (try standard library, then REPL program)
         try {
-            Reflection::Namespace ns = Reflection::Namespace::forName(pgm, name);
+            Reflection::Constant c = Reflection::Constant::forName(name);
+            return {"value": formatConstantDescription(c)};
+        } catch () {
+            try {
+                Reflection::Constant c = Reflection::Constant::forName(pgm, name);
+                return {"value": formatConstantDescription(c)};
+            } catch () {
+                # Not a constant, continue
+            }
+        }
+
+        # Try as an enum (try standard library, then REPL program)
+        # Note: Check enums BEFORE namespaces since enums are more specific
+        try {
+            Reflection::Enum en = Reflection::Enum::forName(name);
+            return {"value": formatEnumDescription(en)};
+        } catch () {
+            try {
+                Reflection::Enum en = Reflection::Enum::forName(pgm, name);
+                return {"value": formatEnumDescription(en)};
+            } catch () {
+                # Not an enum, continue
+            }
+        }
+
+        # Try as a namespace (try standard library, then REPL program)
+        try {
+            Reflection::Namespace ns = Reflection::Namespace::forName(name);
             return {"value": formatNamespaceDescription(ns)};
         } catch () {
-            # Not a namespace either
+            try {
+                Reflection::Namespace ns = Reflection::Namespace::forName(pgm, name);
+                return {"value": formatNamespaceDescription(ns)};
+            } catch () {
+                # Not a namespace either
+            }
         }
 
         return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": sprintf("Symbol not found: %s", name)}};
     }
 
+    #! Formats a hashdecl description
+    private string formatHashdeclDescription(Reflection::TypedHash th) {
+        string result = sprintf("%s %s\n", color.key("Hashdecl:"), color.type(th.getName()));
+
+        *string mod = th.getModuleName();
+        if (mod) {
+            result += sprintf("  %s %s\n", color.key("Module:"), mod);
+        }
+
+        # Show members
+        list<Reflection::TypedHashMember> members = th.getMembers();
+        if (members) {
+            result += sprintf("  %s\n", color.key("Members:"));
+            foreach Reflection::TypedHashMember m in (members) {
+                Reflection::Type t = m.getType();
+                string line = sprintf("%s %s", color.type(t.getName()), m.getName());
+                # Add default value if present
+                auto def = m.getDefaultValue();
+                if (exists def) {
+                    line += sprintf(" = %s", color.value(formatValue(def)));
+                }
+                result += sprintf("    %s\n", line);
+            }
+        }
+
+        return result;
+    }
+
+    #! Formats an enum description
+    private string formatEnumDescription(Reflection::Enum en) {
+        string result = sprintf("%s %s\n", color.key("Enum:"), color.type(en.getName()));
+
+        *string mod = en.getModuleName();
+        if (mod) {
+            result += sprintf("  %s %s\n", color.key("Module:"), mod);
+        }
+
+        # Show base type
+        Reflection::Type baseType = en.getBaseType();
+        result += sprintf("  %s %s\n", color.key("Base type:"), color.type(baseType.getName()));
+
+        # Show all values
+        list<Reflection::EnumMember> members = en.getMembers();
+        if (members) {
+            result += sprintf("  %s\n", color.key("Values:"));
+            foreach Reflection::EnumMember m in (members) {
+                auto val = m.getValue();
+                result += sprintf("    %s = %s\n", m.getName(), color.value(formatValue(val)));
+            }
+        }
+
+        return result;
+    }
+
+    #! Formats a constant description
+    private string formatConstantDescription(Reflection::Constant c) {
+        string result = sprintf("%s %s\n", color.key("Constant:"), color.value(c.getName()));
+
+        *string mod = c.getModuleName();
+        if (mod) {
+            result += sprintf("  %s %s\n", color.key("Module:"), mod);
+        }
+
+        Reflection::Type t = c.getType();
+        result += sprintf("  %s %s\n", color.key("Type:"), color.type(t.getName()));
+
+        auto val = c.getValue();
+        result += sprintf("  %s %s\n", color.key("Value:"), formatValue(val));
+
+        return result;
+    }
+
     #! Formats a class description
     private string formatClassDescription(Reflection::Class cls) {
-        string result = sprintf("Class: %s\n", cls.getPathName());
+        string result = sprintf("%s %s\n", color.key("Class:"), color.type(cls.getPathName()));
 
         *string mod = cls.getModuleName();
         if (mod) {
-            result += sprintf("  Module: %s\n", mod);
+            result += sprintf("  %s %s\n", color.key("Module:"), mod);
         }
 
         list<string> mods = cls.getModifierList();
         if (mods) {
-            result += sprintf("  Modifiers: %s\n", mods.join(" "));
+            result += sprintf("  %s %s\n", color.key("Modifiers:"), mods.join(" "));
         }
 
         # Show parent classes if any
@@ -890,26 +1168,35 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         if (parents) {
             list<string> parent_names = ();
             foreach hash<auto> p in (parents) {
-                parent_names += p.cls.getPathName();
+                parent_names += color.type(p.cls.getPathName());
             }
-            result += sprintf("  Inherits: %s\n", parent_names.join(", "));
+            result += sprintf("  %s %s\n", color.key("Inherits:"), parent_names.join(", "));
         }
 
-        # List methods
+        # List methods with full signatures
         list<Reflection::AbstractMethod> methods = cls.getMethods();
         if (methods) {
-            result += "  Methods:\n";
+            result += sprintf("  %s\n", color.key("Methods:"));
             foreach Reflection::AbstractMethod m in (methods) {
-                result += sprintf("    %s()\n", m.getName());
+                # Get all variants for this method to show full signatures
+                list<Reflection::AbstractMethodVariant> variants = m.getVariants();
+                foreach Reflection::AbstractMethodVariant v in (variants) {
+                    result += sprintf("    %s\n", formatMethodSignature(v));
+                }
             }
         }
 
-        # List members
+        # List members with types
         list<Reflection::AbstractMember> members = cls.getMembers();
         if (members) {
-            result += "  Members:\n";
+            result += sprintf("  %s\n", color.key("Members:"));
             foreach Reflection::AbstractMember m in (members) {
-                result += sprintf("    %s\n", m.getName());
+                Reflection::Type t = m.getType();
+                list<string> modifiers = m.getModifierList();
+                # Remove "public" from modifiers (default visibility)
+                modifiers = (map $1, modifiers, $1 != "public");
+                string mod_str = modifiers ? modifiers.join(" ") + " " : "";
+                result += sprintf("    %s%s %s\n", mod_str, color.type(t.getName()), m.getName());
             }
         }
 
@@ -918,19 +1205,19 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
 
     #! Formats a function description
     private string formatFunctionDescription(Reflection::Function func) {
-        string result = sprintf("Function: %s\n", func.getName());
+        string result = sprintf("%s %s\n", color.key("Function:"), color.value(func.getName()));
 
         *string mod = func.getModuleName();
         if (mod) {
-            result += sprintf("  Module: %s\n", mod);
+            result += sprintf("  %s %s\n", color.key("Module:"), mod);
         }
 
         # Get variants
         list<Reflection::FunctionVariant> variants = func.getVariants();
         if (variants) {
-            result += "  Variants:\n";
+            result += sprintf("  %s\n", color.key("Variants:"));
             foreach Reflection::FunctionVariant v in (variants) {
-                result += sprintf("    %s\n", v.toString());
+                result += sprintf("    %s\n", formatFunctionSignature(v));
             }
         }
 
@@ -939,31 +1226,193 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
 
     #! Formats a namespace description
     private string formatNamespaceDescription(Reflection::Namespace ns) {
-        string result = sprintf("Namespace: %s\n", ns.getPathName());
+        string result = sprintf("%s %s\n", color.key("Namespace:"), color.type(ns.getPathName()));
 
         *string mod = ns.getModuleName();
         if (mod) {
-            result += sprintf("  Module: %s\n", mod);
+            result += sprintf("  %s %s\n", color.key("Module:"), mod);
         }
 
         list<Reflection::Class> classes = ns.getClasses();
         if (classes) {
-            result += sprintf("  Classes: %d\n", classes.size());
+            result += sprintf("  %s %s\n", color.key("Classes:"), color.number(string(classes.size())));
         }
 
         list<Reflection::Function> funcs = ns.getFunctions();
         if (funcs) {
-            result += sprintf("  Functions: %d\n", funcs.size());
+            result += sprintf("  %s %s\n", color.key("Functions:"), color.number(string(funcs.size())));
         }
 
         list<Reflection::Constant> consts = ns.getConstants();
         if (consts) {
-            result += sprintf("  Constants: %d\n", consts.size());
+            result += sprintf("  %s %s\n", color.key("Constants:"), color.number(string(consts.size())));
         }
 
         list<Reflection::Namespace> subns = ns.getNamespaces();
         if (subns) {
-            result += sprintf("  Sub-namespaces: %d\n", subns.size());
+            result += sprintf("  %s %s\n", color.key("Sub-namespaces:"), color.number(string(subns.size())));
+        }
+
+        return result;
+    }
+
+    #! Formats a method signature with colors
+    private string formatMethodSignature(Reflection::AbstractMethodVariant v) {
+        string sig = v.toString();
+        # Remove "public " prefix (default visibility)
+        sig =~ s/^public //;
+        # Remove "nothing " return type (void)
+        sig =~ s/^nothing //;
+        return colorizeSignature(sig);
+    }
+
+    #! Formats a function variant signature with colors
+    private string formatFunctionSignature(Reflection::FunctionVariant v) {
+        string sig = v.toString();
+        return colorizeSignature(sig);
+    }
+
+    #! Colorizes a method/function signature string
+    /** Takes a signature like "int ClassName::methodName(string arg)" and colorizes it
+    */
+    private string colorizeSignature(string sig) {
+        # Pattern: [modifiers] [return_type] name(params)
+        # Split into parts before and after the opening paren
+        int paren_pos = sig.find("(");
+        if (paren_pos < 0) {
+            return sig;
+        }
+
+        string before_paren = sig.substr(0, paren_pos);
+        string params_part = sig.substr(paren_pos);
+
+        # Split before_paren into words
+        list<string> words = before_paren.split(" ");
+        words = (map trim($1), words, trim($1).length() > 0);
+
+        if (!words) {
+            return sig;
+        }
+
+        # Last word is the method/function name (possibly with Class::)
+        string name = words[words.size() - 1];
+        list<string> colored_parts = ();
+
+        # Process words before the name (modifiers and return type)
+        # Known modifiers that should NOT be colorized as types
+        hash<string, bool> modifiers = {
+            "private": True, "public": True, "abstract": True, "static": True,
+            "final": True, "synchronized": True, "deprecated": True,
+        };
+        for (int i = 0; i < words.size() - 1; i++) {
+            string word = words[i];
+            # Check if it's a known modifier first
+            if (modifiers{word}) {
+                colored_parts += word;
+            } else {
+                # Assume it's a type (return type, generic type, namespaced type, etc.)
+                colored_parts += color.type(word);
+            }
+        }
+
+        # Colorize the method/function name
+        colored_parts += color.value(name);
+
+        # Colorize parameters
+        string colored_params = colorizeParams(params_part);
+
+        return colored_parts.join(" ") + colored_params;
+    }
+
+    #! Colorizes the parameters part of a signature
+    private string colorizeParams(string params_str) {
+        # params_str is like "(type1 name1, type2 name2 = default)"
+        if (!params_str.startsWith("(") || !params_str.endsWith(")")) {
+            return params_str;
+        }
+
+        string inner = params_str.substr(1, params_str.length() - 2);
+        if (inner.length() == 0) {
+            return "()";
+        }
+
+        # Split by comma, but be careful of nested types like hash<string, int>
+        list<string> params = splitParams(inner);
+        list<string> colored_params = ();
+
+        foreach string param in (params) {
+            param = trim(param);
+            if (param.length() == 0) {
+                continue;
+            }
+
+            # Find the parameter name (last identifier before any = sign)
+            int eq_pos = param.find("=");
+            string type_and_name;
+            string default_part = "";
+            if (eq_pos >= 0) {
+                type_and_name = trim(param.substr(0, eq_pos));
+                default_part = " =" + param.substr(eq_pos + 1);
+            } else {
+                type_and_name = param;
+            }
+
+            # Split type and name - name is the last word
+            int last_space = type_and_name.rfind(" ");
+            if (last_space >= 0) {
+                string type_part = type_and_name.substr(0, last_space);
+                string name_part = type_and_name.substr(last_space + 1);
+                colored_params += color.type(type_part) + " " + name_part + default_part;
+            } else {
+                # No space, might just be a type or name
+                colored_params += param;
+            }
+        }
+
+        return "(" + colored_params.join(", ") + ")";
+    }
+
+    #! Splits parameter string by comma, respecting nested brackets and string literals
+    private list<string> splitParams(string params) {
+        list<string> result = ();
+        int depth = 0;  # Tracks nesting depth for < > ( ) { } [ ]
+        int start = 0;
+        *string in_string;  # Tracks if we're inside a string literal (' or ")
+
+        for (int i = 0; i < params.length(); i++) {
+            string c = params[i];
+
+            # Handle string literals
+            if (in_string) {
+                if (c == in_string) {
+                    # Check for escape (preceding backslash)
+                    if (i > 0 && params[i - 1] != "\\") {
+                        in_string = NOTHING;
+                    }
+                }
+                continue;
+            }
+
+            # Check for string start
+            if (c == "\"" || c == "'") {
+                in_string = c;
+                continue;
+            }
+
+            # Track nesting for all bracket types
+            if (c == "<" || c == "(" || c == "{" || c == "[") {
+                depth++;
+            } else if (c == ">" || c == ")" || c == "}" || c == "]") {
+                depth--;
+            } else if (c == "," && depth == 0) {
+                result += params.substr(start, i - start);
+                start = i + 1;
+            }
+        }
+
+        # Add the last parameter
+        if (start < params.length()) {
+            result += params.substr(start);
         }
 
         return result;
@@ -974,7 +1423,7 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         if (!history) {
             return "No command history";
         }
-        string result = "Command history:\n";
+        string result = sprintf("%s\n", color.key("Command history:"));
         int i = 1;
         foreach string cmd in (history) {
             # Truncate long commands and show first line only
@@ -986,7 +1435,7 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
             if (display.length() > 60) {
                 display = display.substr(0, 57) + "...";
             }
-            result += sprintf("  %3d  %s\n", i++, display);
+            result += sprintf("  %s  %s\n", color.number(sprintf("%3d", i++)), display);
         }
         return result;
     }
@@ -1016,6 +1465,200 @@ Multi-line input is supported - the prompt changes to '...>' when more input is 
         } catch (hash<ExceptionInfo> ex) {
             return {"error": ex};
         }
+    }
+
+    #! Runs the interactive REPL loop
+    /** This method provides a complete interactive loop with optional linenoise support
+        for line editing and persistent history.
+
+        @param options Optional configuration:
+        - \c no_banner: If True, don't print the welcome banner
+
+        @note When linenoise is available, provides:
+        - Line editing with arrow keys
+        - Persistent history (Up/Down)
+        - Reverse history search (Ctrl+R)
+        - Tab completion for REPL commands
+    */
+    run(*hash<auto> options) {
+        # Print banner unless disabled
+        if (!options.no_banner) {
+            printOutput(sprintf("%s %s %s\n%s %s %s %s %s\n",
+                color.info("Qore"), color.value(Qore::VersionString), color.info("Interactive Shell"),
+                "Type", color.value("/help"), "for commands,", color.value("/quit"), "to exit"));
+        }
+
+%ifndef NoLinenoise
+        # Initialize linenoise
+        Linenoise::history_set_max_len(MaxHistoryLen);
+        Linenoise::set_callback(\completion());
+        loadHistoryFile();
+%endif
+
+        # Main REPL loop
+        while (True) {
+            *string line = readLine(getPrompt());
+
+            # Handle EOF or Ctrl+C
+            if (!exists line) {
+                if (needsMoreInput()) {
+                    # In multi-line mode, cancel and reset
+                    printOutput("\n");
+                    reset();
+                    continue;
+                }
+                # Exit the REPL
+                break;
+            }
+
+            # Add non-empty lines to linenoise history
+%ifndef NoLinenoise
+            if (line.length() > 0) {
+                Linenoise::history_add(line);
+            }
+%endif
+
+            # Evaluate the input
+            *hash<auto> result = eval(line);
+
+            # Handle exit request
+            if (result.exit) {
+                break;
+            }
+
+            # Display error or result
+            if (result.error) {
+                printError(color.error("Error: ") + formatError(result.error) + "\n");
+            } else if (exists result.value) {
+                string output = formatValue(result.value);
+                # Add "=> " prefix for evaluated expressions (not command output)
+                if (result.is_eval) {
+                    output = "=> " + output;
+                }
+                # Only add newline if output doesn't already end with one
+                if (!output.endsWith("\n")) {
+                    output += "\n";
+                }
+                printOutput(output);
+            }
+
+            # Display timing if enabled
+            if (result.timing) {
+                printOutput(sprintf("   (%s)\n", result.timing.format("HH:mm:SS.xx")));
+            }
+        }
+
+%ifndef NoLinenoise
+        saveHistoryFile();
+%endif
+    }
+
+    #! Reads a line of input from the user
+    /** @param prompt The prompt to display
+        @return The line read, or NOTHING on EOF/Ctrl+C
+    */
+    private *string readLine(string prompt) {
+%ifndef NoLinenoise
+        return Linenoise::line(prompt);
+%else
+        stdout.printf(prompt);
+        stdout.sync();
+        return stdin.readLine(False);
+%endif
+    }
+
+    #! Prints output to stdout with CRLF handling for linenoise
+    /** @param text The text to print
+    */
+    private printOutput(string text) {
+%ifndef NoLinenoise
+        # Linenoise requires CRLF for proper line handling in raw mode
+        # First normalize any existing \r\n to \n to avoid \r\r\n
+        text = replace(text, "\r\n", "\n");
+        stdout.print(replace(text, "\n", "\r\n"));
+%else
+        stdout.print(text);
+%endif
+    }
+
+    #! Prints error output to stderr with CRLF handling for linenoise
+    /** @param text The text to print
+    */
+    private printError(string text) {
+%ifndef NoLinenoise
+        # Linenoise requires CRLF for proper line handling in raw mode
+        # First normalize any existing \r\n to \n to avoid \r\r\n
+        text = replace(text, "\r\n", "\n");
+        stderr.print(replace(text, "\n", "\r\n"));
+%else
+        stderr.print(text);
+%endif
+    }
+
+    #! Provides tab completion for REPL commands
+    /** @param input The current input string
+        @return A list of matching command completions
+    */
+    private softlist<string> completion(string input) {
+        # Only complete commands starting with /
+        if (!input.startsWith("/")) {
+            return ();
+        }
+
+        # Lowercase input for case-insensitive matching (consistent with command execution)
+        string input_lower = input.lwr();
+
+        # Find commands that match the input prefix
+        list<string> matches = ();
+        foreach string cmd in (ReplCommands) {
+            if (cmd.equalPartial(input_lower)) {
+                matches += cmd;
+            }
+        }
+        return matches;
+    }
+
+    #! Loads history from the history file
+    private loadHistoryFile() {
+%ifndef NoLinenoise
+        if (!history_file) {
+            return;
+        }
+        try {
+            # Create the history file if it doesn't exist
+            if (!is_file(history_file)) {
+                File f();
+                f.open2(history_file, O_CREAT | O_WRONLY, 0600);
+            }
+            Linenoise::history_load(history_file);
+        } catch (hash<ExceptionInfo> ex) {
+            # Warn but don't fail - history is optional
+            printError(sprintf("Warning: Could not load history file: %s\n", ex.desc));
+        }
+%endif
+    }
+
+    #! Saves history to the history file
+    private saveHistoryFile() {
+%ifndef NoLinenoise
+        if (!history_file) {
+            return;
+        }
+        try {
+            Linenoise::history_save(history_file);
+        } catch (hash<ExceptionInfo> ex) {
+            # Warn but don't fail - history is optional
+            printError(sprintf("Warning: Could not save history file: %s\n", ex.desc));
+        }
+%endif
+    }
+
+    #! Returns completions for a given input (for testing)
+    /** @param input The input string to complete
+        @return A list of matching completions
+    */
+    softlist<string> getCompletions(string input) {
+        return completion(input);
     }
 }
 

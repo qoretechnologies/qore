@@ -142,29 +142,7 @@ static const char repl_pgm[] =
    "%requires QoreRepl\n"
    "\n"
    "QoreRepl::QoreRepl repl();\n"
-   "\n"
-   "stdout.printf(\"Qore %s Interactive Shell\\nType /help for commands, /quit to exit\\n\", Qore::VersionString);\n"
-   "\n"
-   "while (True) {\n"
-   "    stdout.printf(repl.getPrompt());\n"
-   "    stdout.sync();\n"
-   "    *string line = stdin.readLine(False);\n"
-   "    if (!exists line) {\n"
-   "        break;\n"
-   "    }\n"
-   "    *hash<auto> result = repl.eval(line);\n"
-   "    if (result.exit) {\n"
-   "        break;\n"
-   "    }\n"
-   "    if (result.error) {\n"
-   "        stderr.printf(\"Error: %s\\n\", QoreRepl::QoreRepl::formatError(result.error));\n"
-   "    } else if (exists result.value) {\n"
-   "        stdout.printf(\"=> %s\\n\", QoreRepl::QoreRepl::formatValue(result.value));\n"
-   "    }\n"
-   "    if (result.timing) {\n"
-   "        stdout.printf(\"   (%s)\\n\", result.timing.format(\"HH:mm:SS.xx\"));\n"
-   "    }\n"
-   "}\n";
+   "repl.run();\n";
 
 // argument to evaluate given on the command-line
 static const char* eval_arg = 0;

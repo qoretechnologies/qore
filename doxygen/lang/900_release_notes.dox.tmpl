@@ -631,6 +631,17 @@ qore --compile-module MyModule.qm --strip-source
       - polling-based event triggers for new invoices, contacts, estimates, expenses, items, and projects
       - action catalog integration with reference data support for organizations, customers, and contacts
       - connection support with \c zohoinvoice:// URL scheme
+    - @ref shipstationrestclientintro "ShipStationRestClient" module
+      - new module providing a REST client for ShipStation's shipping and logistics API
+      - supports HTTP Basic Authentication with API Key and API Secret
+      - provides ShipStationRestConnection for connection management with \c shipstation:// URL scheme
+    - @ref shipstationdataproviderintro "ShipStationDataProvider" module
+      - new module providing a data provider API for ShipStation shipping and logistics services
+      - order management (create, update, delete, tag, assign users, mark as shipped)
+      - carrier, shipment, warehouse, store, product, and customer management
+      - webhook-based event triggers for order and shipment notifications
+      - action catalog integration with 36 actions and 4 triggers
+      - connection support with \c shipstation:// URL scheme
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support

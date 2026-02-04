@@ -97,6 +97,8 @@ public namespace DataProvider {
         VideoConferencing = "Video Conferencing & Meetings",
         #! Weather services
         Weather = "Weather",
+        #! Shipping & Logistics
+        Shipping = "Shipping & Logistics",
         #! Web Scraping & Automation
         WebAutomation = "Web Scraping & Automation",
     }
