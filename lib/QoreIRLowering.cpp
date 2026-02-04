@@ -4514,6 +4514,55 @@ static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTyp
         }
     }
 
+    // Check for Minus operator: $1 - $2
+    if (auto* minus_op = dynamic_cast<const QoreMinusOperatorNode*>(node)) {
+        QoreValue left = minus_op->getLeft();
+        QoreValue right = minus_op->getRight();
+
+        const auto* arg1 = dynamic_cast<const QoreImplicitArgumentNode*>(left.getInternalNode());
+        const auto* arg2 = dynamic_cast<const QoreImplicitArgumentNode*>(right.getInternalNode());
+
+        // Check if operands are $1 and $2 (offsets 0 and 1)
+        if (arg1 && arg2 && arg1->getOffset() == 0 && arg2->getOffset() == 1) {
+            // Determine result type based on expression type
+            result_type = minus_op->getTypeInfo();
+            if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
+                return QoreIROpcode::FoldlDiffInt;
+            } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
+                return QoreIROpcode::FoldlDiffFloat;
+            }
+            // Default to int for untyped
+            return QoreIROpcode::FoldlDiffInt;
+        }
+    }
+
+    // Check for min/max function calls: min($1, $2) or max($1, $2)
+    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+        const char* func_name = call->getName();
+        if (func_name && (strcmp(func_name, "min") == 0 || strcmp(func_name, "max") == 0)) {
+            bool is_min = strcmp(func_name, "min") == 0;
+            const QoreListNode* args = call->getArgs();
+            if (args && args->size() == 2) {
+                QoreValue arg0 = args->retrieveEntry(0);
+                QoreValue arg1 = args->retrieveEntry(1);
+                const auto* impl_arg0 = dynamic_cast<const QoreImplicitArgumentNode*>(arg0.getInternalNode());
+                const auto* impl_arg1 = dynamic_cast<const QoreImplicitArgumentNode*>(arg1.getInternalNode());
+
+                // Check if args are $1 and $2 (offsets 0 and 1)
+                if (impl_arg0 && impl_arg1 && impl_arg0->getOffset() == 0 && impl_arg1->getOffset() == 1) {
+                    result_type = call->getTypeInfo();
+                    if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
+                        return is_min ? QoreIROpcode::FoldlMinInt : QoreIROpcode::FoldlMaxInt;
+                    } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
+                        return is_min ? QoreIROpcode::FoldlMinFloat : QoreIROpcode::FoldlMaxFloat;
+                    }
+                    // Default to int for untyped
+                    return is_min ? QoreIROpcode::FoldlMinInt : QoreIROpcode::FoldlMaxInt;
+                }
+            }
+        }
+    }
+
     return QoreIROpcode::FoldlAny;
 }
 

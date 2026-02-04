@@ -3322,6 +3322,375 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result_phi;
             return true;
         }
+        case QoreIROpcode::FoldlDiffInt: {
+            // Native LLVM loop for difference reduction on integer list
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+
+            // Get list size
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+
+            // Create loop blocks
+            llvm::BasicBlock* preheader = builder->GetInsertBlock();
+            llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_diff_loop", llvm_func);
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_diff_exit", llvm_func);
+
+            // Check if list is empty
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero);
+            builder->CreateCondBr(is_empty, exit_bb, loop_bb);
+
+            // Loop body
+            builder->SetInsertPoint(loop_bb);
+            llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
+            llvm::PHINode* acc_phi = builder->CreatePHI(i64_type, 2, "acc");
+
+            // Get element at index
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
+
+            // Subtract from accumulator
+            llvm::Value* new_acc = builder->CreateSub(acc_phi, elem);
+
+            // Increment index and check loop condition
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
+            llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
+            builder->CreateCondBr(done, exit_bb, loop_bb);
+
+            // Update PHI nodes
+            idx_phi->addIncoming(zero, preheader);
+            idx_phi->addIncoming(next_idx, loop_bb);
+            acc_phi->addIncoming(zero, preheader);
+            acc_phi->addIncoming(new_acc, loop_bb);
+
+            // Exit block - merge results
+            builder->SetInsertPoint(exit_bb);
+            llvm::PHINode* result_phi = builder->CreatePHI(i64_type, 2, "diff_result");
+            result_phi->addIncoming(zero, preheader);
+            result_phi->addIncoming(new_acc, loop_bb);
+
+            values[inst->result.id] = result_phi;
+            return true;
+        }
+        case QoreIROpcode::FoldlDiffFloat: {
+            // Native LLVM loop for difference reduction on float list
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+
+            // Get list size
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+
+            // Create loop blocks
+            llvm::BasicBlock* preheader = builder->GetInsertBlock();
+            llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_difff_loop", llvm_func);
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_difff_exit", llvm_func);
+
+            // Check if list is empty
+            llvm::Value* zero_i = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* zero_f = llvm::ConstantFP::get(double_type, 0.0);
+            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero_i);
+            builder->CreateCondBr(is_empty, exit_bb, loop_bb);
+
+            // Loop body
+            builder->SetInsertPoint(loop_bb);
+            llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
+            llvm::PHINode* acc_phi = builder->CreatePHI(double_type, 2, "acc");
+
+            // Get element at index
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_float",
+                    llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+            llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
+
+            // Subtract from accumulator
+            llvm::Value* new_acc = builder->CreateFSub(acc_phi, elem);
+
+            // Increment index and check loop condition
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
+            llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
+            builder->CreateCondBr(done, exit_bb, loop_bb);
+
+            // Update PHI nodes
+            idx_phi->addIncoming(zero_i, preheader);
+            idx_phi->addIncoming(next_idx, loop_bb);
+            acc_phi->addIncoming(zero_f, preheader);
+            acc_phi->addIncoming(new_acc, loop_bb);
+
+            // Exit block - merge results
+            builder->SetInsertPoint(exit_bb);
+            llvm::PHINode* result_phi = builder->CreatePHI(double_type, 2, "difff_result");
+            result_phi->addIncoming(zero_f, preheader);
+            result_phi->addIncoming(new_acc, loop_bb);
+
+            values[inst->result.id] = result_phi;
+            return true;
+        }
+        case QoreIROpcode::FoldlMinInt: {
+            // Native LLVM loop for min reduction on integer list
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+
+            // Get list size
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+
+            // Create loop blocks
+            llvm::BasicBlock* preheader = builder->GetInsertBlock();
+            llvm::BasicBlock* init_bb = llvm::BasicBlock::Create(ctx, "foldl_min_init", llvm_func);
+            llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_min_loop", llvm_func);
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_min_exit", llvm_func);
+
+            // Check if list is empty (return first element as initial value)
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero);
+            builder->CreateCondBr(is_empty, exit_bb, init_bb);
+
+            // Init block: get first element as initial accumulator
+            builder->SetInsertPoint(init_bb);
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* first_elem = builder->CreateCall(get_helper, {list_boxed, zero});
+            llvm::Value* has_more = builder->CreateICmpUGT(size, one);
+            builder->CreateCondBr(has_more, loop_bb, exit_bb);
+
+            // Loop body (starts from index 1)
+            builder->SetInsertPoint(loop_bb);
+            llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
+            llvm::PHINode* acc_phi = builder->CreatePHI(i64_type, 2, "acc");
+
+            // Get element at index
+            llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
+
+            // Compare and select minimum
+            llvm::Value* cmp = builder->CreateICmpSLT(elem, acc_phi);
+            llvm::Value* new_acc = builder->CreateSelect(cmp, elem, acc_phi);
+
+            // Increment index and check loop condition
+            llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
+            llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
+            builder->CreateCondBr(done, exit_bb, loop_bb);
+
+            // Update PHI nodes
+            idx_phi->addIncoming(one, init_bb);
+            idx_phi->addIncoming(next_idx, loop_bb);
+            acc_phi->addIncoming(first_elem, init_bb);
+            acc_phi->addIncoming(new_acc, loop_bb);
+
+            // Exit block - merge results
+            builder->SetInsertPoint(exit_bb);
+            llvm::PHINode* result_phi = builder->CreatePHI(i64_type, 3, "min_result");
+            result_phi->addIncoming(zero, preheader);  // Empty list returns 0
+            result_phi->addIncoming(first_elem, init_bb);  // Single element
+            result_phi->addIncoming(new_acc, loop_bb);
+
+            values[inst->result.id] = result_phi;
+            return true;
+        }
+        case QoreIROpcode::FoldlMinFloat: {
+            // Native LLVM loop for min reduction on float list
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+
+            // Get list size
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+
+            // Create loop blocks
+            llvm::BasicBlock* preheader = builder->GetInsertBlock();
+            llvm::BasicBlock* init_bb = llvm::BasicBlock::Create(ctx, "foldl_minf_init", llvm_func);
+            llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_minf_loop", llvm_func);
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_minf_exit", llvm_func);
+
+            // Check if list is empty
+            llvm::Value* zero_i = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* zero_f = llvm::ConstantFP::get(double_type, 0.0);
+            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero_i);
+            builder->CreateCondBr(is_empty, exit_bb, init_bb);
+
+            // Init block: get first element as initial accumulator
+            builder->SetInsertPoint(init_bb);
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_float",
+                    llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+            llvm::Value* first_elem = builder->CreateCall(get_helper, {list_boxed, zero_i});
+            llvm::Value* has_more = builder->CreateICmpUGT(size, one);
+            builder->CreateCondBr(has_more, loop_bb, exit_bb);
+
+            // Loop body (starts from index 1)
+            builder->SetInsertPoint(loop_bb);
+            llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
+            llvm::PHINode* acc_phi = builder->CreatePHI(double_type, 2, "acc");
+
+            // Get element at index
+            llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
+
+            // Compare and select minimum
+            llvm::Value* cmp = builder->CreateFCmpOLT(elem, acc_phi);
+            llvm::Value* new_acc = builder->CreateSelect(cmp, elem, acc_phi);
+
+            // Increment index and check loop condition
+            llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
+            llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
+            builder->CreateCondBr(done, exit_bb, loop_bb);
+
+            // Update PHI nodes
+            idx_phi->addIncoming(one, init_bb);
+            idx_phi->addIncoming(next_idx, loop_bb);
+            acc_phi->addIncoming(first_elem, init_bb);
+            acc_phi->addIncoming(new_acc, loop_bb);
+
+            // Exit block - merge results
+            builder->SetInsertPoint(exit_bb);
+            llvm::PHINode* result_phi = builder->CreatePHI(double_type, 3, "minf_result");
+            result_phi->addIncoming(zero_f, preheader);  // Empty list returns 0.0
+            result_phi->addIncoming(first_elem, init_bb);  // Single element
+            result_phi->addIncoming(new_acc, loop_bb);
+
+            values[inst->result.id] = result_phi;
+            return true;
+        }
+        case QoreIROpcode::FoldlMaxInt: {
+            // Native LLVM loop for max reduction on integer list
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+
+            // Get list size
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+
+            // Create loop blocks
+            llvm::BasicBlock* preheader = builder->GetInsertBlock();
+            llvm::BasicBlock* init_bb = llvm::BasicBlock::Create(ctx, "foldl_max_init", llvm_func);
+            llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_max_loop", llvm_func);
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_max_exit", llvm_func);
+
+            // Check if list is empty
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero);
+            builder->CreateCondBr(is_empty, exit_bb, init_bb);
+
+            // Init block: get first element as initial accumulator
+            builder->SetInsertPoint(init_bb);
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* first_elem = builder->CreateCall(get_helper, {list_boxed, zero});
+            llvm::Value* has_more = builder->CreateICmpUGT(size, one);
+            builder->CreateCondBr(has_more, loop_bb, exit_bb);
+
+            // Loop body (starts from index 1)
+            builder->SetInsertPoint(loop_bb);
+            llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
+            llvm::PHINode* acc_phi = builder->CreatePHI(i64_type, 2, "acc");
+
+            // Get element at index
+            llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
+
+            // Compare and select maximum
+            llvm::Value* cmp = builder->CreateICmpSGT(elem, acc_phi);
+            llvm::Value* new_acc = builder->CreateSelect(cmp, elem, acc_phi);
+
+            // Increment index and check loop condition
+            llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
+            llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
+            builder->CreateCondBr(done, exit_bb, loop_bb);
+
+            // Update PHI nodes
+            idx_phi->addIncoming(one, init_bb);
+            idx_phi->addIncoming(next_idx, loop_bb);
+            acc_phi->addIncoming(first_elem, init_bb);
+            acc_phi->addIncoming(new_acc, loop_bb);
+
+            // Exit block - merge results
+            builder->SetInsertPoint(exit_bb);
+            llvm::PHINode* result_phi = builder->CreatePHI(i64_type, 3, "max_result");
+            result_phi->addIncoming(zero, preheader);  // Empty list returns 0
+            result_phi->addIncoming(first_elem, init_bb);  // Single element
+            result_phi->addIncoming(new_acc, loop_bb);
+
+            values[inst->result.id] = result_phi;
+            return true;
+        }
+        case QoreIROpcode::FoldlMaxFloat: {
+            // Native LLVM loop for max reduction on float list
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+
+            // Get list size
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+
+            // Create loop blocks
+            llvm::BasicBlock* preheader = builder->GetInsertBlock();
+            llvm::BasicBlock* init_bb = llvm::BasicBlock::Create(ctx, "foldl_maxf_init", llvm_func);
+            llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_maxf_loop", llvm_func);
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_maxf_exit", llvm_func);
+
+            // Check if list is empty
+            llvm::Value* zero_i = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* zero_f = llvm::ConstantFP::get(double_type, 0.0);
+            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero_i);
+            builder->CreateCondBr(is_empty, exit_bb, init_bb);
+
+            // Init block: get first element as initial accumulator
+            builder->SetInsertPoint(init_bb);
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_float",
+                    llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+            llvm::Value* first_elem = builder->CreateCall(get_helper, {list_boxed, zero_i});
+            llvm::Value* has_more = builder->CreateICmpUGT(size, one);
+            builder->CreateCondBr(has_more, loop_bb, exit_bb);
+
+            // Loop body (starts from index 1)
+            builder->SetInsertPoint(loop_bb);
+            llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
+            llvm::PHINode* acc_phi = builder->CreatePHI(double_type, 2, "acc");
+
+            // Get element at index
+            llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
+
+            // Compare and select maximum
+            llvm::Value* cmp = builder->CreateFCmpOGT(elem, acc_phi);
+            llvm::Value* new_acc = builder->CreateSelect(cmp, elem, acc_phi);
+
+            // Increment index and check loop condition
+            llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
+            llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
+            builder->CreateCondBr(done, exit_bb, loop_bb);
+
+            // Update PHI nodes
+            idx_phi->addIncoming(one, init_bb);
+            idx_phi->addIncoming(next_idx, loop_bb);
+            acc_phi->addIncoming(first_elem, init_bb);
+            acc_phi->addIncoming(new_acc, loop_bb);
+
+            // Exit block - merge results
+            builder->SetInsertPoint(exit_bb);
+            llvm::PHINode* result_phi = builder->CreatePHI(double_type, 3, "maxf_result");
+            result_phi->addIncoming(zero_f, preheader);  // Empty list returns 0.0
+            result_phi->addIncoming(first_elem, init_bb);  // Single element
+            result_phi->addIncoming(new_acc, loop_bb);
+
+            values[inst->result.id] = result_phi;
+            return true;
+        }
         // === Optimized map operations (native runtime helpers) ===
         case QoreIROpcode::MapScaleInt: {
             auto* list = getVal(inst->operands[0].id, error);

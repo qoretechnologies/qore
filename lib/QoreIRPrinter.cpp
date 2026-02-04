@@ -209,6 +209,12 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::FoldlSumFloat: return "foldl.sum.float";
         case QoreIROpcode::FoldlProdInt: return "foldl.prod.int";
         case QoreIROpcode::FoldlProdFloat: return "foldl.prod.float";
+        case QoreIROpcode::FoldlDiffInt: return "foldl.diff.int";
+        case QoreIROpcode::FoldlDiffFloat: return "foldl.diff.float";
+        case QoreIROpcode::FoldlMinInt: return "foldl.min.int";
+        case QoreIROpcode::FoldlMinFloat: return "foldl.min.float";
+        case QoreIROpcode::FoldlMaxInt: return "foldl.max.int";
+        case QoreIROpcode::FoldlMaxFloat: return "foldl.max.float";
         case QoreIROpcode::MapAny: return "map.any";
         case QoreIROpcode::MapInt: return "map.int";
         case QoreIROpcode::MapFloat: return "map.float";

@@ -229,6 +229,12 @@ enum class QoreIROpcode : uint16_t {
     FoldlSumFloat,
     FoldlProdInt,       // foldl $1 * $2, list, init
     FoldlProdFloat,
+    FoldlDiffInt,       // foldl $1 - $2, list, init
+    FoldlDiffFloat,
+    FoldlMinInt,        // foldl min($1, $2), list, init
+    FoldlMinFloat,
+    FoldlMaxInt,        // foldl max($1, $2), list, init
+    FoldlMaxFloat,
     MapAny,
     MapInt,
     MapFloat,
@@ -400,6 +406,12 @@ inline bool isBinaryInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::FoldlSumFloat:
         case QoreIROpcode::FoldlProdInt:
         case QoreIROpcode::FoldlProdFloat:
+        case QoreIROpcode::FoldlDiffInt:
+        case QoreIROpcode::FoldlDiffFloat:
+        case QoreIROpcode::FoldlMinInt:
+        case QoreIROpcode::FoldlMinFloat:
+        case QoreIROpcode::FoldlMaxInt:
+        case QoreIROpcode::FoldlMaxFloat:
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat:

@@ -90,6 +90,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("regex extract invoke single eval", \testJitRegexExtractInvokeSingleEval());
         # Optimized higher-order function tests
         addTestCase("optimized foldl sum/prod", \testJitFoldlSumProd());
+        addTestCase("optimized foldl diff/min/max", \testJitFoldlDiffMinMax());
         addTestCase("optimized map patterns", \testJitMapOptimized());
         addTestCase("optimized select patterns", \testJitSelectOptimized());
         set_return_value(main());
@@ -1237,6 +1238,113 @@ printf(\"%d:%d\\n\", s, p);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(single_code, mode));
             assertEq("42:42", result, sprintf("foldl single element %s", mode));
+        }
+    }
+
+    testJitFoldlDiffMinMax() {
+        # Test optimized foldl with $1 - $2 (diff) pattern
+        string diff_code = "%modern
+list<int> nums = (100, 20, 5, 3);
+int diff_result = (foldl $1 - $2, nums);
+printf(\"%d\\n\", diff_result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(diff_code, mode));
+            # 100 - 20 - 5 - 3 = 72
+            assertEq("72", result, sprintf("foldl int diff %s", mode));
+        }
+
+        # Test min($1, $2) pattern
+        string min_code = "%modern
+list<int> nums = (5, 2, 8, 1, 9);
+int min_result = (foldl min($1, $2), nums);
+printf(\"%d\\n\", min_result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(min_code, mode));
+            assertEq("1", result, sprintf("foldl int min %s", mode));
+        }
+
+        # Test max($1, $2) pattern
+        string max_code = "%modern
+list<int> nums = (5, 2, 8, 1, 9);
+int max_result = (foldl max($1, $2), nums);
+printf(\"%d\\n\", max_result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(max_code, mode));
+            assertEq("9", result, sprintf("foldl int max %s", mode));
+        }
+
+        # Test with floats
+        string float_diff_code = "%modern
+list<float> nums = (10.5, 2.5, 1.0);
+float diff_f = (foldl $1 - $2, nums);
+printf(\"%.1f\\n\", diff_f);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_diff_code, mode));
+            # 10.5 - 2.5 - 1.0 = 7.0
+            assertEq("7.0", result, sprintf("foldl float diff %s", mode));
+        }
+
+        string float_min_code = "%modern
+list<float> nums = (3.5, 1.2, 4.8);
+float min_f = (foldl min($1, $2), nums);
+printf(\"%.1f\\n\", min_f);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_min_code, mode));
+            assertEq("1.2", result, sprintf("foldl float min %s", mode));
+        }
+
+        string float_max_code = "%modern
+list<float> nums = (3.5, 1.2, 4.8);
+float max_f = (foldl max($1, $2), nums);
+printf(\"%.1f\\n\", max_f);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_max_code, mode));
+            assertEq("4.8", result, sprintf("foldl float max %s", mode));
+        }
+
+        # Test with single element (edge case)
+        string single_code = "%modern
+list<int> single = (42,);
+int d = (foldl $1 - $2, single);
+int mi = (foldl min($1, $2), single);
+int ma = (foldl max($1, $2), single);
+printf(\"%d:%d:%d\\n\", d, mi, ma);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(single_code, mode));
+            assertEq("42:42:42", result, sprintf("foldl diff/min/max single element %s", mode));
+        }
+
+        # Test with two elements
+        string two_code = "%modern
+list<int> two = (10, 3);
+int d = (foldl $1 - $2, two);
+int mi = (foldl min($1, $2), two);
+int ma = (foldl max($1, $2), two);
+printf(\"%d:%d:%d\\n\", d, mi, ma);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(two_code, mode));
+            # 10 - 3 = 7, min(10,3) = 3, max(10,3) = 10
+            assertEq("7:3:10", result, sprintf("foldl diff/min/max two elements %s", mode));
+        }
+
+        # Test with negative numbers
+        string neg_code = "%modern
+list<int> nums = (-5, 3, -2, 8);
+int mi = (foldl min($1, $2), nums);
+int ma = (foldl max($1, $2), nums);
+printf(\"%d:%d\\n\", mi, ma);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(neg_code, mode));
+            assertEq("-5:8", result, sprintf("foldl min/max with negatives %s", mode));
         }
     }
 
