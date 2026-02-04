@@ -197,6 +197,11 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access));
     addSymbol("qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat));
 
+    // Optimized list iteration helpers (higher-order optimization)
+    addSymbol("qore_rt_list_size", reinterpret_cast<void*>(&qore_rt_list_size));
+    addSymbol("qore_rt_list_get_int", reinterpret_cast<void*>(&qore_rt_list_get_int));
+    addSymbol("qore_rt_list_get_float", reinterpret_cast<void*>(&qore_rt_list_get_float));
+
     // AOT context-based helpers (Phase 7b)
     addSymbol("qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot));
     addSymbol("qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot));

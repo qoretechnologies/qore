@@ -68,6 +68,17 @@ static inline uint64_t toBits(const QoreValue& v) {
     return bits;
 }
 
+// --- Reference counting helpers ---
+
+// Increments reference count if value is a pointer (node), returns value unchanged
+extern "C" uint64_t qore_rt_ref(uint64_t val) {
+    QoreValue v = fromBits(val);
+    if (v.hasNode()) {
+        return toBits(v.refSelf());
+    }
+    return val;
+}
+
 // --- Arithmetic helpers ---
 
 extern "C" uint64_t qore_rt_add_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
@@ -525,6 +536,37 @@ extern "C" uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, 
     }
     // Not a list, or index out of bounds: return NOTHING
     return toBits(QoreValue());
+}
+
+// Optimized list iteration helpers for foldl/map/select
+extern "C" int64_t qore_rt_list_size(uint64_t list_val) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() == NT_LIST) {
+        return static_cast<int64_t>(v.get<const QoreListNode>()->size());
+    }
+    return 0;
+}
+
+extern "C" int64_t qore_rt_list_get_int(uint64_t list_val, int64_t index) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() == NT_LIST) {
+        const QoreListNode* l = v.get<const QoreListNode>();
+        if (index >= 0 && static_cast<size_t>(index) < l->size()) {
+            return l->retrieveEntry(index).getAsBigInt();
+        }
+    }
+    return 0;
+}
+
+extern "C" double qore_rt_list_get_float(uint64_t list_val, int64_t index) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() == NT_LIST) {
+        const QoreListNode* l = v.get<const QoreListNode>();
+        if (index >= 0 && static_cast<size_t>(index) < l->size()) {
+            return l->retrieveEntry(index).getAsFloat();
+        }
+    }
+    return 0.0;
 }
 
 extern "C" uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink) {

@@ -205,6 +205,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::FoldrAny: return "foldr.any";
         case QoreIROpcode::FoldrInt: return "foldr.int";
         case QoreIROpcode::FoldrFloat: return "foldr.float";
+        case QoreIROpcode::FoldlSumInt: return "foldl.sum.int";
+        case QoreIROpcode::FoldlSumFloat: return "foldl.sum.float";
+        case QoreIROpcode::FoldlProdInt: return "foldl.prod.int";
+        case QoreIROpcode::FoldlProdFloat: return "foldl.prod.float";
         case QoreIROpcode::MapAny: return "map.any";
         case QoreIROpcode::MapInt: return "map.int";
         case QoreIROpcode::MapFloat: return "map.float";

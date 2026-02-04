@@ -4462,6 +4462,61 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
     return lowerExprOpOrInvoke(QoreIROpcode::CallStatic, expr, operands, call->loc, error);
 }
 
+// Pattern analysis for optimized foldl operations
+// Returns optimized opcode if pattern is detected, or FoldlAny for fallback
+static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTypeInfo*& result_type) {
+    const AbstractQoreNode* node = fold_expr.getInternalNode();
+    if (!node) {
+        return QoreIROpcode::FoldlAny;
+    }
+
+    // Check for Plus operator: $1 + $2
+    if (auto* plus_op = dynamic_cast<const QorePlusOperatorNode*>(node)) {
+        QoreValue left = plus_op->getLeft();
+        QoreValue right = plus_op->getRight();
+
+        const auto* arg1 = dynamic_cast<const QoreImplicitArgumentNode*>(left.getInternalNode());
+        const auto* arg2 = dynamic_cast<const QoreImplicitArgumentNode*>(right.getInternalNode());
+
+        // Check if operands are $1 and $2 (offsets 0 and 1)
+        if (arg1 && arg2 && arg1->getOffset() == 0 && arg2->getOffset() == 1) {
+            // Determine result type based on expression type
+            result_type = plus_op->getTypeInfo();
+            if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
+                return QoreIROpcode::FoldlSumInt;
+            } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
+                return QoreIROpcode::FoldlSumFloat;
+            }
+            // Default to int for untyped
+            return QoreIROpcode::FoldlSumInt;
+        }
+    }
+
+    // Check for Multiply operator: $1 * $2
+    if (auto* mul_op = dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
+        QoreValue left = mul_op->getLeft();
+        QoreValue right = mul_op->getRight();
+
+        const auto* arg1 = dynamic_cast<const QoreImplicitArgumentNode*>(left.getInternalNode());
+        const auto* arg2 = dynamic_cast<const QoreImplicitArgumentNode*>(right.getInternalNode());
+
+        // Check if operands are $1 and $2 (offsets 0 and 1)
+        if (arg1 && arg2 && arg1->getOffset() == 0 && arg2->getOffset() == 1) {
+            // Determine result type based on expression type
+            result_type = mul_op->getTypeInfo();
+            if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
+                return QoreIROpcode::FoldlProdInt;
+            } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
+                return QoreIROpcode::FoldlProdFloat;
+            }
+            // Default to int for untyped
+            return QoreIROpcode::FoldlProdInt;
+        }
+    }
+
+    return QoreIROpcode::FoldlAny;
+}
+
 QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     if (dynamic_cast<const QoreFoldrOperatorNode*>(node)) {
@@ -4472,6 +4527,40 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
 
+    // Try to detect optimizable pattern first
+    const QoreTypeInfo* result_type = nullptr;
+    QoreIROpcode opt_opcode = analyzeFoldPattern(foldl->getLeft(), result_type);
+
+    if (opt_opcode != QoreIROpcode::FoldlAny) {
+        // Optimized path: emit specialized opcode with just the list operand
+        QoreIRValue list = lowerExpression(foldl->getRight(), error);
+        if (!list.isValid()) {
+            return QoreIRValue();
+        }
+
+        // Create a dummy NOTHING value for the second operand (initial value is first list element)
+        QoreIRValue init = builder.createConstNothing(foldl->loc)->result;
+
+        QoreIRValue result;
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {list, init}, normal_block, handler, foldl->loc);
+            inst->invoke_opcode = opt_opcode;
+            builder.setBlock(normal_block);
+            result = inst->result;
+        } else {
+            result = builder.createBinaryOp(opt_opcode, list, init, foldl->loc)->result;
+        }
+        maybeInsertNotNothingGuard(result, &expr, foldl->loc, nullptr);
+        return result;
+    }
+
+    // Generic path: try to lower expression (will likely fail for $1/$2)
     QoreIRValue left = lowerExpression(foldl->getLeft(), error);
     if (!left.isValid()) {
         return QoreIRValue();

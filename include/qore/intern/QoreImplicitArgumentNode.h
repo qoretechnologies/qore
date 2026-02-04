@@ -48,6 +48,11 @@ public:
         return "implicit argument reference";
     }
 
+    //! Returns the argument offset (0 for $1, 1 for $2, -1 for $argv)
+    DLLLOCAL int getOffset() const {
+        return offset;
+    }
+
 private:
     int offset;
 

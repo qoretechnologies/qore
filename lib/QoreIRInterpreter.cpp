@@ -686,6 +686,10 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::FoldrAny:
         case QoreIROpcode::FoldrInt:
         case QoreIROpcode::FoldrFloat:
+        case QoreIROpcode::FoldlSumInt:
+        case QoreIROpcode::FoldlSumFloat:
+        case QoreIROpcode::FoldlProdInt:
+        case QoreIROpcode::FoldlProdFloat:
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat:
@@ -1815,6 +1819,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::FoldrAny:
             case QoreIROpcode::FoldrInt:
             case QoreIROpcode::FoldrFloat:
+            case QoreIROpcode::FoldlSumInt:
+            case QoreIROpcode::FoldlSumFloat:
+            case QoreIROpcode::FoldlProdInt:
+            case QoreIROpcode::FoldlProdFloat:
             case QoreIROpcode::MapAny:
             case QoreIROpcode::MapInt:
             case QoreIROpcode::MapFloat:
@@ -2829,6 +2837,99 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreFoldlOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return evalAndRef(*node, xsink);
+        }
+        // Optimized fold operations with native loops
+        case QoreIROpcode::FoldlSumInt: {
+            // left = list, right = initial value (NOTHING means use first element)
+            if (left.getType() != NT_LIST) {
+                return right.isNothing() ? QoreValue(0ll) : QoreValue(right.getAsBigInt());
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            size_t start_idx = 0;
+            int64_t result;
+            if (right.isNothing()) {
+                if (sz == 0) {
+                    return QoreValue(0ll);
+                }
+                result = l->retrieveEntry(0).getAsBigInt();
+                start_idx = 1;
+            } else {
+                result = right.getAsBigInt();
+            }
+            for (size_t i = start_idx; i < sz; ++i) {
+                result += l->retrieveEntry(i).getAsBigInt();
+            }
+            return QoreValue(result);
+        }
+        case QoreIROpcode::FoldlSumFloat: {
+            // left = list, right = initial value (NOTHING means use first element)
+            if (left.getType() != NT_LIST) {
+                return right.isNothing() ? QoreValue(0.0) : QoreValue(right.getAsFloat());
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            size_t start_idx = 0;
+            double result;
+            if (right.isNothing()) {
+                if (sz == 0) {
+                    return QoreValue(0.0);
+                }
+                result = l->retrieveEntry(0).getAsFloat();
+                start_idx = 1;
+            } else {
+                result = right.getAsFloat();
+            }
+            for (size_t i = start_idx; i < sz; ++i) {
+                result += l->retrieveEntry(i).getAsFloat();
+            }
+            return QoreValue(result);
+        }
+        case QoreIROpcode::FoldlProdInt: {
+            // left = list, right = initial value (NOTHING means use first element)
+            if (left.getType() != NT_LIST) {
+                return right.isNothing() ? QoreValue(1ll) : QoreValue(right.getAsBigInt());
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            size_t start_idx = 0;
+            int64_t result;
+            if (right.isNothing()) {
+                if (sz == 0) {
+                    return QoreValue(1ll);
+                }
+                result = l->retrieveEntry(0).getAsBigInt();
+                start_idx = 1;
+            } else {
+                result = right.getAsBigInt();
+            }
+            for (size_t i = start_idx; i < sz; ++i) {
+                result *= l->retrieveEntry(i).getAsBigInt();
+            }
+            return QoreValue(result);
+        }
+        case QoreIROpcode::FoldlProdFloat: {
+            // left = list, right = initial value (NOTHING means use first element)
+            if (left.getType() != NT_LIST) {
+                return right.isNothing() ? QoreValue(1.0) : QoreValue(right.getAsFloat());
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            size_t start_idx = 0;
+            double result;
+            if (right.isNothing()) {
+                if (sz == 0) {
+                    return QoreValue(1.0);
+                }
+                result = l->retrieveEntry(0).getAsFloat();
+                start_idx = 1;
+            } else {
+                result = right.getAsFloat();
+            }
+            for (size_t i = start_idx; i < sz; ++i) {
+                result *= l->retrieveEntry(i).getAsFloat();
+            }
+            return QoreValue(result);
         }
         case QoreIROpcode::FoldrAny:
         case QoreIROpcode::FoldrInt:

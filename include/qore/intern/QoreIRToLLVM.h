@@ -258,6 +258,40 @@ private:
             llvm::CmpInst::Predicate float_pred, int opcode,
             llvm::Value* lhs, llvm::Value* rhs,
             llvm::Function* llvm_func, llvm::Module& module);
+
+    // Emit inline LLVM fast-path for .any compound assignments (AddAssignAny/SubAssignAny/etc).
+    // Type-checks operands for int+int and float+float, falls back to helper for mixed types.
+    // For AddAssignAny (handle_nothing=true), returns rhs if lhs is NOTHING.
+    llvm::Value* emitAnyCompoundAssignFastPath(llvm::Instruction::BinaryOps int_op,
+            llvm::Instruction::BinaryOps float_op, const char* slow_helper,
+            llvm::Value* lhs, llvm::Value* rhs,
+            llvm::Function* llvm_func, llvm::Module& module, bool handle_nothing);
+
+    // Emit inline LLVM fast-path for .any bitwise compound assignments (AndAssignAny/etc).
+    // Type-checks operands for int+int, falls back to qore_rt_binary_op for non-int types.
+    llvm::Value* emitAnyBitwiseFastPath(llvm::Instruction::BinaryOps int_op,
+            const char* slow_helper, int opcode,
+            llvm::Value* lhs, llvm::Value* rhs,
+            llvm::Function* llvm_func, llvm::Module& module);
+
+    // Emit inline LLVM fast-path for .any unary operations (UnaryMinusAny/UnaryPlusAny).
+    // Type-checks operand for int or float, falls back to qore_rt_unary_op for other types.
+    // is_minus=true for UnaryMinusAny, false for UnaryPlusAny.
+    llvm::Value* emitAnyUnaryFastPath(bool is_minus, int opcode,
+            llvm::Value* operand, llvm::Function* llvm_func, llvm::Module& module);
+
+    // Emit inline LLVM fast-path for CmpAny (spaceship operator).
+    // Type-checks operands for int+int and float+float, falls back to qore_rt_comparison_op.
+    // Returns boxed int (-1, 0, or 1).
+    llvm::Value* emitAnyCmpSpaceshipFastPath(llvm::Value* lhs, llvm::Value* rhs,
+            llvm::Function* llvm_func, llvm::Module& module);
+
+    // Emit inline LLVM fast-path for EqHard/NeHard (=== and !==).
+    // Fast-path: if bits are equal and not a float → return true/false
+    // For floats with equal bits, check NaN (NaN !== NaN).
+    // is_eq=true for EqHard (===), false for NeHard (!==).
+    llvm::Value* emitHardEqualityFastPath(bool is_eq, llvm::Value* lhs, llvm::Value* rhs,
+            llvm::Function* llvm_func, llvm::Module& module);
 };
 
 #endif

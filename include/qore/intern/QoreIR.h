@@ -224,6 +224,11 @@ enum class QoreIROpcode : uint16_t {
     FoldrAny,
     FoldrInt,
     FoldrFloat,
+    // Optimized fold operations (native LLVM loops)
+    FoldlSumInt,        // foldl $1 + $2, list, init
+    FoldlSumFloat,
+    FoldlProdInt,       // foldl $1 * $2, list, init
+    FoldlProdFloat,
     MapAny,
     MapInt,
     MapFloat,
@@ -379,6 +384,10 @@ inline bool isBinaryInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::FoldrAny:
         case QoreIROpcode::FoldrInt:
         case QoreIROpcode::FoldrFloat:
+        case QoreIROpcode::FoldlSumInt:
+        case QoreIROpcode::FoldlSumFloat:
+        case QoreIROpcode::FoldlProdInt:
+        case QoreIROpcode::FoldlProdFloat:
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat:

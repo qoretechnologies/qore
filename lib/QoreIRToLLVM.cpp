@@ -232,6 +232,17 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_string_concat",
             llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
 
+    // Optimized list iteration helpers (higher-order optimization)
+    // list_size: (i64) -> i64
+    module.getOrInsertFunction("qore_rt_list_size",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+    // list_get_int: (i64, i64) -> i64
+    module.getOrInsertFunction("qore_rt_list_get_int",
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+    // list_get_float: (i64, i64) -> double
+    module.getOrInsertFunction("qore_rt_list_get_float",
+            llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+
     // AOT context-based helpers (Phase 7b)
     // load_local_aot: (ptr, i32, ptr) -> i64
     auto* aot_load_local_ft = llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false);
@@ -935,22 +946,73 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::DivInt: {
-            // Division by zero must be checked at runtime via helper
+            // Phase 2E: Inline zero-check with native division for non-zero case
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
+            llvm::Value* l_int = unboxInt(lhs);
+            llvm::Value* r_int = unboxInt(rhs);
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* is_zero = builder->CreateICmpEQ(r_int, zero);
+
+            llvm::BasicBlock* div_zero_bb = llvm::BasicBlock::Create(ctx, "div_zero", llvm_func);
+            llvm::BasicBlock* div_ok_bb = llvm::BasicBlock::Create(ctx, "div_ok", llvm_func);
+            llvm::BasicBlock* div_merge_bb = llvm::BasicBlock::Create(ctx, "div_merge", llvm_func);
+            builder->CreateCondBr(is_zero, div_zero_bb, div_ok_bb);
+
+            // Division by zero path: call runtime helper to raise exception
+            builder->SetInsertPoint(div_zero_bb);
             auto helper = module.getOrInsertFunction("qore_rt_div_int",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-            values[inst->result.id] = builder->CreateCall(helper, {unboxInt(lhs), unboxInt(rhs), xsink_arg});
+            llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
+            builder->CreateBr(div_merge_bb);
+
+            // Normal path: native division
+            builder->SetInsertPoint(div_ok_bb);
+            llvm::Value* div_result = builder->CreateSDiv(l_int, r_int);
+            builder->CreateBr(div_merge_bb);
+
+            // Merge results
+            builder->SetInsertPoint(div_merge_bb);
+            llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "div_result");
+            phi->addIncoming(exc_result, div_zero_bb);
+            phi->addIncoming(div_result, div_ok_bb);
+            values[inst->result.id] = phi;
             return true;
         }
         case QoreIROpcode::ModInt: {
+            // Phase 2E: Inline zero-check with native modulo for non-zero case
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
+            llvm::Value* l_int = unboxInt(lhs);
+            llvm::Value* r_int = unboxInt(rhs);
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* is_zero = builder->CreateICmpEQ(r_int, zero);
+
+            llvm::BasicBlock* mod_zero_bb = llvm::BasicBlock::Create(ctx, "mod_zero", llvm_func);
+            llvm::BasicBlock* mod_ok_bb = llvm::BasicBlock::Create(ctx, "mod_ok", llvm_func);
+            llvm::BasicBlock* mod_merge_bb = llvm::BasicBlock::Create(ctx, "mod_merge", llvm_func);
+            builder->CreateCondBr(is_zero, mod_zero_bb, mod_ok_bb);
+
+            // Division by zero path: call runtime helper to raise exception
+            builder->SetInsertPoint(mod_zero_bb);
             auto helper = module.getOrInsertFunction("qore_rt_mod_int",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-            values[inst->result.id] = builder->CreateCall(helper, {unboxInt(lhs), unboxInt(rhs), xsink_arg});
+            llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
+            builder->CreateBr(mod_merge_bb);
+
+            // Normal path: native modulo
+            builder->SetInsertPoint(mod_ok_bb);
+            llvm::Value* mod_result = builder->CreateSRem(l_int, r_int);
+            builder->CreateBr(mod_merge_bb);
+
+            // Merge results
+            builder->SetInsertPoint(mod_merge_bb);
+            llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "mod_result");
+            phi->addIncoming(exc_result, mod_zero_bb);
+            phi->addIncoming(mod_result, mod_ok_bb);
+            values[inst->result.id] = phi;
             return true;
         }
 
@@ -977,12 +1039,36 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::DivFloat: {
+            // Phase 2E: Inline zero-check with native division for non-zero case
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
+            llvm::Value* zero = llvm::ConstantFP::get(double_type, 0.0);
+            llvm::Value* is_zero = builder->CreateFCmpOEQ(rhs, zero);
+
+            llvm::BasicBlock* fdiv_zero_bb = llvm::BasicBlock::Create(ctx, "fdiv_zero", llvm_func);
+            llvm::BasicBlock* fdiv_ok_bb = llvm::BasicBlock::Create(ctx, "fdiv_ok", llvm_func);
+            llvm::BasicBlock* fdiv_merge_bb = llvm::BasicBlock::Create(ctx, "fdiv_merge", llvm_func);
+            builder->CreateCondBr(is_zero, fdiv_zero_bb, fdiv_ok_bb);
+
+            // Division by zero path: call runtime helper to raise exception
+            builder->SetInsertPoint(fdiv_zero_bb);
             auto helper = module.getOrInsertFunction("qore_rt_div_float",
                     llvm::FunctionType::get(double_type, {double_type, double_type, ptr_type}, false));
-            values[inst->result.id] = builder->CreateCall(helper, {lhs, rhs, xsink_arg});
+            llvm::Value* exc_result = builder->CreateCall(helper, {lhs, rhs, xsink_arg});
+            builder->CreateBr(fdiv_merge_bb);
+
+            // Normal path: native division
+            builder->SetInsertPoint(fdiv_ok_bb);
+            llvm::Value* div_result = builder->CreateFDiv(lhs, rhs);
+            builder->CreateBr(fdiv_merge_bb);
+
+            // Merge results
+            builder->SetInsertPoint(fdiv_merge_bb);
+            llvm::PHINode* phi = builder->CreatePHI(double_type, 2, "fdiv_result");
+            phi->addIncoming(exc_result, fdiv_zero_bb);
+            phi->addIncoming(div_result, fdiv_ok_bb);
+            values[inst->result.id] = phi;
             return true;
         }
 
@@ -2170,48 +2256,197 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
-        // CmpAny, CmpInt, CmpFloat, EqHard, NeHard: stay on generic path (complex semantics)
-        case QoreIROpcode::CmpAny:
-        case QoreIROpcode::CmpInt:
-        case QoreIROpcode::CmpFloat:
-        case QoreIROpcode::EqHard:
-        case QoreIROpcode::NeHard: {
+        // === Spaceship comparisons (native lowering) ===
+        case QoreIROpcode::CmpInt: {
+            // Returns -1 if l < r, 1 if l > r, 0 if l == r
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* l = unboxInt(lhs);
+            llvm::Value* r = unboxInt(rhs);
+            llvm::Value* lt = builder->CreateICmpSLT(l, r);
+            llvm::Value* gt = builder->CreateICmpSGT(l, r);
+            llvm::Value* neg_one = llvm::ConstantInt::get(i64_type, -1);
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            // result = lt ? -1 : (gt ? 1 : 0)
+            llvm::Value* inner = builder->CreateSelect(gt, one, zero);
+            values[inst->result.id] = builder->CreateSelect(lt, neg_one, inner);
+            return true;
+        }
+        case QoreIROpcode::CmpFloat: {
+            // Returns -1 if l < r, 1 if l > r, 0 if l == r
+            // NaN comparison raises exception - check with fcmp uno and branch to helper
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            // lhs/rhs are native doubles (not boxed) for typed floats
+            llvm::Value* l = lhs;
+            llvm::Value* r = rhs;
+
+            // Check for NaN: fcmp uno returns true if either operand is NaN
+            llvm::Value* is_nan = builder->CreateFCmpUNO(l, r);
+
+            llvm::BasicBlock* nan_bb = llvm::BasicBlock::Create(ctx, "cmp_nan", llvm_func);
+            llvm::BasicBlock* ok_bb = llvm::BasicBlock::Create(ctx, "cmp_ok", llvm_func);
+            builder->CreateCondBr(is_nan, nan_bb, ok_bb);
+
+            // NaN path: call runtime helper to raise exception
+            builder->SetInsertPoint(nan_bb);
+            llvm::Value* lhs_boxed = boxFloat(l);
+            llvm::Value* rhs_boxed = boxFloat(r);
+            llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
+                    static_cast<int>(QoreIROpcode::CmpFloat));
+            auto helper = module.getOrInsertFunction("qore_rt_comparison_op",
+                    llvm::FunctionType::get(i64_type,
+                        {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
+            llvm::Value* nan_result = builder->CreateCall(helper,
+                    {opcode_val, lhs_boxed, rhs_boxed, xsink_arg});
+            llvm::BasicBlock* nan_end = builder->GetInsertBlock();
+
+            // OK path: native comparison
+            builder->SetInsertPoint(ok_bb);
+            llvm::Value* lt = builder->CreateFCmpOLT(l, r);
+            llvm::Value* gt = builder->CreateFCmpOGT(l, r);
+            llvm::Value* neg_one = llvm::ConstantInt::get(i64_type, -1);
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* inner = builder->CreateSelect(gt, one, zero);
+            llvm::Value* ok_result = builder->CreateSelect(lt, neg_one, inner);
+            llvm::BasicBlock* ok_end = builder->GetInsertBlock();
+
+            // Merge
+            llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "cmp_merge", llvm_func);
+            builder->CreateBr(merge_bb);
+            // Also need to branch from nan_bb
+            builder->SetInsertPoint(nan_end);
+            builder->CreateBr(merge_bb);
+
+            builder->SetInsertPoint(merge_bb);
+            llvm::PHINode* phi = builder->CreatePHI(i64_type, 2);
+            phi->addIncoming(ok_result, ok_end);
+            phi->addIncoming(nan_result, nan_end);
+            values[inst->result.id] = phi;
+            nanboxed_values.insert(inst->result.id);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::CmpAny: {
+            // Fast-path for int+int and float+float, fallback to runtime
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
-                    static_cast<int>(inst->opcode));
-            auto helper = module.getOrInsertFunction("qore_rt_comparison_op",
-                    llvm::FunctionType::get(i64_type,
-                        {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper,
-                    {opcode_val, lhs_boxed, rhs_boxed, xsink_arg});
+            llvm::Value* result = emitAnyCmpSpaceshipFastPath(
+                    lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 
-        // === Dynamic bitwise/shift operations ===
-        case QoreIROpcode::AndAny:
-        case QoreIROpcode::OrAny:
-        case QoreIROpcode::XorAny:
-        case QoreIROpcode::ShlAny:
+        // === Hard equality comparisons (with fast-path) ===
+        case QoreIROpcode::EqHard: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitHardEqualityFastPath(true, lhs_boxed, rhs_boxed,
+                    llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            return true;
+        }
+        case QoreIROpcode::NeHard: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitHardEqualityFastPath(false, lhs_boxed, rhs_boxed,
+                    llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            return true;
+        }
+
+        // === Dynamic bitwise/shift operations (with int fast-path) ===
+        case QoreIROpcode::AndAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyBitwiseFastPath(
+                llvm::Instruction::And, "qore_rt_binary_op",
+                static_cast<int>(QoreIROpcode::AndAny),
+                lhs_boxed, rhs_boxed, llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::OrAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyBitwiseFastPath(
+                llvm::Instruction::Or, "qore_rt_binary_op",
+                static_cast<int>(QoreIROpcode::OrAny),
+                lhs_boxed, rhs_boxed, llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::XorAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyBitwiseFastPath(
+                llvm::Instruction::Xor, "qore_rt_binary_op",
+                static_cast<int>(QoreIROpcode::XorAny),
+                lhs_boxed, rhs_boxed, llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::ShlAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyBitwiseFastPath(
+                llvm::Instruction::Shl, "qore_rt_binary_op",
+                static_cast<int>(QoreIROpcode::ShlAny),
+                lhs_boxed, rhs_boxed, llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
         case QoreIROpcode::ShrAny: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
-                    static_cast<int>(inst->opcode));
-            auto helper = module.getOrInsertFunction("qore_rt_binary_op",
-                    llvm::FunctionType::get(i64_type,
-                        {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper,
-                    {opcode_val, lhs_boxed, rhs_boxed, xsink_arg});
+            llvm::Value* result = emitAnyBitwiseFastPath(
+                llvm::Instruction::AShr, "qore_rt_binary_op",
+                static_cast<int>(QoreIROpcode::ShrAny),
+                lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -2219,19 +2454,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
-        // === Dynamic unary operations ===
-        case QoreIROpcode::UnaryMinusAny:
+        // === Dynamic unary operations (with int/float fast-path) ===
+        case QoreIROpcode::UnaryMinusAny: {
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            llvm::Value* result = emitAnyUnaryFastPath(true,
+                    static_cast<int>(QoreIROpcode::UnaryMinusAny),
+                    val_boxed, llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
         case QoreIROpcode::UnaryPlusAny: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
-            llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
-                    static_cast<int>(inst->opcode));
-            auto helper = module.getOrInsertFunction("qore_rt_unary_op",
-                    llvm::FunctionType::get(i64_type,
-                        {llvm::Type::getInt32Ty(ctx), i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper,
-                    {opcode_val, val_boxed, xsink_arg});
+            llvm::Value* result = emitAnyUnaryFastPath(false,
+                    static_cast<int>(QoreIROpcode::UnaryPlusAny),
+                    val_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -2551,31 +2793,539 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
-        // === Compound assignment operations (binary via runtime) ===
-        case QoreIROpcode::ShlAssignInt:
-        case QoreIROpcode::ShlAssignAny:
-        case QoreIROpcode::ShrAssignInt:
-        case QoreIROpcode::ShrAssignAny:
-        case QoreIROpcode::AddAssignInt:
-        case QoreIROpcode::AddAssignFloat:
-        case QoreIROpcode::AddAssignAny:
-        case QoreIROpcode::SubAssignInt:
-        case QoreIROpcode::SubAssignFloat:
-        case QoreIROpcode::SubAssignAny:
-        case QoreIROpcode::MulAssignInt:
-        case QoreIROpcode::MulAssignFloat:
-        case QoreIROpcode::MulAssignAny:
-        case QoreIROpcode::DivAssignInt:
-        case QoreIROpcode::DivAssignFloat:
+        // === Typed integer compound assignments (native i64) ===
+        case QoreIROpcode::AddAssignInt: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateAdd(unboxInt(lhs), unboxInt(rhs));
+            return true;
+        }
+        case QoreIROpcode::SubAssignInt: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateSub(unboxInt(lhs), unboxInt(rhs));
+            return true;
+        }
+        case QoreIROpcode::MulAssignInt: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateMul(unboxInt(lhs), unboxInt(rhs));
+            return true;
+        }
+        case QoreIROpcode::AndAssignInt: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateAnd(unboxInt(lhs), unboxInt(rhs));
+            return true;
+        }
+        case QoreIROpcode::OrAssignInt: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateOr(unboxInt(lhs), unboxInt(rhs));
+            return true;
+        }
+        case QoreIROpcode::XorAssignInt: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateXor(unboxInt(lhs), unboxInt(rhs));
+            return true;
+        }
+        case QoreIROpcode::ShlAssignInt: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateShl(unboxInt(lhs), unboxInt(rhs));
+            return true;
+        }
+        case QoreIROpcode::ShrAssignInt: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateAShr(unboxInt(lhs), unboxInt(rhs));
+            return true;
+        }
+
+        // === Typed float compound assignments (native double) ===
+        case QoreIROpcode::AddAssignFloat: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateFAdd(lhs, rhs);
+            return true;
+        }
+        case QoreIROpcode::SubAssignFloat: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateFSub(lhs, rhs);
+            return true;
+        }
+        case QoreIROpcode::MulAssignFloat: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            values[inst->result.id] = builder->CreateFMul(lhs, rhs);
+            return true;
+        }
+
+        // === Any-typed compound assignments with fast-path ===
+        case QoreIROpcode::AddAssignAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyCompoundAssignFastPath(
+                llvm::Instruction::Add, llvm::Instruction::FAdd,
+                "qore_rt_add_any", lhs_boxed, rhs_boxed, llvm_func, module, true);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::SubAssignAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyCompoundAssignFastPath(
+                llvm::Instruction::Sub, llvm::Instruction::FSub,
+                "qore_rt_sub_any", lhs_boxed, rhs_boxed, llvm_func, module, false);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::MulAssignAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyCompoundAssignFastPath(
+                llvm::Instruction::Mul, llvm::Instruction::FMul,
+                "qore_rt_mul_any", lhs_boxed, rhs_boxed, llvm_func, module, false);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::AndAssignAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyBitwiseFastPath(
+                llvm::Instruction::And, "qore_rt_binary_op",
+                static_cast<int>(QoreIROpcode::AndAssignAny),
+                lhs_boxed, rhs_boxed, llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::OrAssignAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyBitwiseFastPath(
+                llvm::Instruction::Or, "qore_rt_binary_op",
+                static_cast<int>(QoreIROpcode::OrAssignAny),
+                lhs_boxed, rhs_boxed, llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::XorAssignAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyBitwiseFastPath(
+                llvm::Instruction::Xor, "qore_rt_binary_op",
+                static_cast<int>(QoreIROpcode::XorAssignAny),
+                lhs_boxed, rhs_boxed, llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::ShlAssignAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyBitwiseFastPath(
+                llvm::Instruction::Shl, "qore_rt_binary_op",
+                static_cast<int>(QoreIROpcode::ShlAssignAny),
+                lhs_boxed, rhs_boxed, llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::ShrAssignAny: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            llvm::Value* result = emitAnyBitwiseFastPath(
+                llvm::Instruction::AShr, "qore_rt_binary_op",
+                static_cast<int>(QoreIROpcode::ShrAssignAny),
+                lhs_boxed, rhs_boxed, llvm_func, module);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+
+        // === Division/Modulo compound assignments with inline zero-check ===
+        case QoreIROpcode::DivAssignInt: {
+            // Phase 2E: Inline zero-check with native division for non-zero case
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* l_int = unboxInt(lhs);
+            llvm::Value* r_int = unboxInt(rhs);
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* is_zero = builder->CreateICmpEQ(r_int, zero);
+
+            llvm::BasicBlock* div_zero_bb = llvm::BasicBlock::Create(ctx, "diva_zero", llvm_func);
+            llvm::BasicBlock* div_ok_bb = llvm::BasicBlock::Create(ctx, "diva_ok", llvm_func);
+            llvm::BasicBlock* div_merge_bb = llvm::BasicBlock::Create(ctx, "diva_merge", llvm_func);
+            builder->CreateCondBr(is_zero, div_zero_bb, div_ok_bb);
+
+            // Division by zero path: call runtime helper to raise exception
+            builder->SetInsertPoint(div_zero_bb);
+            auto helper = module.getOrInsertFunction("qore_rt_div_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
+            builder->CreateBr(div_merge_bb);
+
+            // Normal path: native division (result is raw i64)
+            builder->SetInsertPoint(div_ok_bb);
+            llvm::Value* div_result = builder->CreateSDiv(l_int, r_int);
+            builder->CreateBr(div_merge_bb);
+
+            // Merge results
+            builder->SetInsertPoint(div_merge_bb);
+            llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "diva_result");
+            phi->addIncoming(exc_result, div_zero_bb);
+            phi->addIncoming(div_result, div_ok_bb);
+            values[inst->result.id] = phi;
+            return true;
+        }
+        case QoreIROpcode::DivAssignFloat: {
+            // Phase 2E: Inline zero-check with native division for non-zero case
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* l_float = unboxFloat(lhs);
+            llvm::Value* r_float = unboxFloat(rhs);
+            llvm::Value* zero = llvm::ConstantFP::get(double_type, 0.0);
+            llvm::Value* is_zero = builder->CreateFCmpOEQ(r_float, zero);
+
+            llvm::BasicBlock* fdiv_zero_bb = llvm::BasicBlock::Create(ctx, "fdiva_zero", llvm_func);
+            llvm::BasicBlock* fdiv_ok_bb = llvm::BasicBlock::Create(ctx, "fdiva_ok", llvm_func);
+            llvm::BasicBlock* fdiv_merge_bb = llvm::BasicBlock::Create(ctx, "fdiva_merge", llvm_func);
+            builder->CreateCondBr(is_zero, fdiv_zero_bb, fdiv_ok_bb);
+
+            // Division by zero path: call runtime helper to raise exception
+            builder->SetInsertPoint(fdiv_zero_bb);
+            auto helper = module.getOrInsertFunction("qore_rt_div_float",
+                    llvm::FunctionType::get(double_type, {double_type, double_type, ptr_type}, false));
+            llvm::Value* exc_result = builder->CreateCall(helper, {l_float, r_float, xsink_arg});
+            builder->CreateBr(fdiv_merge_bb);
+
+            // Normal path: native division (result is raw double)
+            builder->SetInsertPoint(fdiv_ok_bb);
+            llvm::Value* div_result = builder->CreateFDiv(l_float, r_float);
+            builder->CreateBr(fdiv_merge_bb);
+
+            // Merge results
+            builder->SetInsertPoint(fdiv_merge_bb);
+            llvm::PHINode* phi = builder->CreatePHI(double_type, 2, "fdiva_result");
+            phi->addIncoming(exc_result, fdiv_zero_bb);
+            phi->addIncoming(div_result, fdiv_ok_bb);
+            values[inst->result.id] = phi;
+            return true;
+        }
+        case QoreIROpcode::ModAssignInt: {
+            // Phase 2E: Inline zero-check with native modulo for non-zero case
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* l_int = unboxInt(lhs);
+            llvm::Value* r_int = unboxInt(rhs);
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* is_zero = builder->CreateICmpEQ(r_int, zero);
+
+            llvm::BasicBlock* mod_zero_bb = llvm::BasicBlock::Create(ctx, "moda_zero", llvm_func);
+            llvm::BasicBlock* mod_ok_bb = llvm::BasicBlock::Create(ctx, "moda_ok", llvm_func);
+            llvm::BasicBlock* mod_merge_bb = llvm::BasicBlock::Create(ctx, "moda_merge", llvm_func);
+            builder->CreateCondBr(is_zero, mod_zero_bb, mod_ok_bb);
+
+            // Division by zero path: call runtime helper to raise exception
+            builder->SetInsertPoint(mod_zero_bb);
+            auto helper = module.getOrInsertFunction("qore_rt_mod_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
+            builder->CreateBr(mod_merge_bb);
+
+            // Normal path: native modulo (result is raw i64)
+            builder->SetInsertPoint(mod_ok_bb);
+            llvm::Value* mod_result = builder->CreateSRem(l_int, r_int);
+            builder->CreateBr(mod_merge_bb);
+
+            // Merge results
+            builder->SetInsertPoint(mod_merge_bb);
+            llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "moda_result");
+            phi->addIncoming(exc_result, mod_zero_bb);
+            phi->addIncoming(mod_result, mod_ok_bb);
+            values[inst->result.id] = phi;
+            return true;
+        }
+        // === Optimized fold operations (native LLVM loops) ===
+        case QoreIROpcode::FoldlSumInt: {
+            // Native LLVM loop for sum reduction on integer list
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+
+            // Get list size
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+
+            // Create loop blocks
+            llvm::BasicBlock* preheader = builder->GetInsertBlock();
+            llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_sum_loop", llvm_func);
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_sum_exit", llvm_func);
+
+            // Check if list is empty
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero);
+            builder->CreateCondBr(is_empty, exit_bb, loop_bb);
+
+            // Loop body
+            builder->SetInsertPoint(loop_bb);
+            llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
+            llvm::PHINode* acc_phi = builder->CreatePHI(i64_type, 2, "acc");
+
+            // Get element at index
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
+
+            // Add to accumulator
+            llvm::Value* new_acc = builder->CreateAdd(acc_phi, elem);
+
+            // Increment index and check loop condition
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
+            llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
+            builder->CreateCondBr(done, exit_bb, loop_bb);
+
+            // Update PHI nodes
+            idx_phi->addIncoming(zero, preheader);
+            idx_phi->addIncoming(next_idx, loop_bb);
+            acc_phi->addIncoming(zero, preheader);
+            acc_phi->addIncoming(new_acc, loop_bb);
+
+            // Exit block - merge results
+            builder->SetInsertPoint(exit_bb);
+            llvm::PHINode* result_phi = builder->CreatePHI(i64_type, 2, "sum_result");
+            result_phi->addIncoming(zero, preheader);
+            result_phi->addIncoming(new_acc, loop_bb);
+
+            values[inst->result.id] = result_phi;
+            return true;
+        }
+        case QoreIROpcode::FoldlSumFloat: {
+            // Native LLVM loop for sum reduction on float list
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+
+            // Get list size
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+
+            // Create loop blocks
+            llvm::BasicBlock* preheader = builder->GetInsertBlock();
+            llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_sumf_loop", llvm_func);
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_sumf_exit", llvm_func);
+
+            // Check if list is empty
+            llvm::Value* zero_i = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* zero_f = llvm::ConstantFP::get(double_type, 0.0);
+            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero_i);
+            builder->CreateCondBr(is_empty, exit_bb, loop_bb);
+
+            // Loop body
+            builder->SetInsertPoint(loop_bb);
+            llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
+            llvm::PHINode* acc_phi = builder->CreatePHI(double_type, 2, "acc");
+
+            // Get element at index
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_float",
+                    llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+            llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
+
+            // Add to accumulator
+            llvm::Value* new_acc = builder->CreateFAdd(acc_phi, elem);
+
+            // Increment index and check loop condition
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
+            llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
+            builder->CreateCondBr(done, exit_bb, loop_bb);
+
+            // Update PHI nodes
+            idx_phi->addIncoming(zero_i, preheader);
+            idx_phi->addIncoming(next_idx, loop_bb);
+            acc_phi->addIncoming(zero_f, preheader);
+            acc_phi->addIncoming(new_acc, loop_bb);
+
+            // Exit block - merge results
+            builder->SetInsertPoint(exit_bb);
+            llvm::PHINode* result_phi = builder->CreatePHI(double_type, 2, "sumf_result");
+            result_phi->addIncoming(zero_f, preheader);
+            result_phi->addIncoming(new_acc, loop_bb);
+
+            values[inst->result.id] = result_phi;
+            return true;
+        }
+        case QoreIROpcode::FoldlProdInt: {
+            // Native LLVM loop for product reduction on integer list
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+
+            // Get list size
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+
+            // Create loop blocks
+            llvm::BasicBlock* preheader = builder->GetInsertBlock();
+            llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_prod_loop", llvm_func);
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_prod_exit", llvm_func);
+
+            // Check if list is empty
+            llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero);
+            builder->CreateCondBr(is_empty, exit_bb, loop_bb);
+
+            // Loop body
+            builder->SetInsertPoint(loop_bb);
+            llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
+            llvm::PHINode* acc_phi = builder->CreatePHI(i64_type, 2, "acc");
+
+            // Get element at index
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
+
+            // Multiply with accumulator
+            llvm::Value* new_acc = builder->CreateMul(acc_phi, elem);
+
+            // Increment index and check loop condition
+            llvm::Value* next_idx = builder->CreateAdd(idx_phi, one);
+            llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
+            builder->CreateCondBr(done, exit_bb, loop_bb);
+
+            // Update PHI nodes
+            idx_phi->addIncoming(zero, preheader);
+            idx_phi->addIncoming(next_idx, loop_bb);
+            acc_phi->addIncoming(one, preheader);  // Product identity is 1
+            acc_phi->addIncoming(new_acc, loop_bb);
+
+            // Exit block - merge results
+            builder->SetInsertPoint(exit_bb);
+            llvm::PHINode* result_phi = builder->CreatePHI(i64_type, 2, "prod_result");
+            result_phi->addIncoming(one, preheader);  // Empty list product is 1
+            result_phi->addIncoming(new_acc, loop_bb);
+
+            values[inst->result.id] = result_phi;
+            return true;
+        }
+        case QoreIROpcode::FoldlProdFloat: {
+            // Native LLVM loop for product reduction on float list
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+
+            // Get list size
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+
+            // Create loop blocks
+            llvm::BasicBlock* preheader = builder->GetInsertBlock();
+            llvm::BasicBlock* loop_bb = llvm::BasicBlock::Create(ctx, "foldl_prodf_loop", llvm_func);
+            llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(ctx, "foldl_prodf_exit", llvm_func);
+
+            // Check if list is empty
+            llvm::Value* zero_i = llvm::ConstantInt::get(i64_type, 0);
+            llvm::Value* one_f = llvm::ConstantFP::get(double_type, 1.0);
+            llvm::Value* is_empty = builder->CreateICmpEQ(size, zero_i);
+            builder->CreateCondBr(is_empty, exit_bb, loop_bb);
+
+            // Loop body
+            builder->SetInsertPoint(loop_bb);
+            llvm::PHINode* idx_phi = builder->CreatePHI(i64_type, 2, "idx");
+            llvm::PHINode* acc_phi = builder->CreatePHI(double_type, 2, "acc");
+
+            // Get element at index
+            auto get_helper = module.getOrInsertFunction("qore_rt_list_get_float",
+                    llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+            llvm::Value* elem = builder->CreateCall(get_helper, {list_boxed, idx_phi});
+
+            // Multiply with accumulator
+            llvm::Value* new_acc = builder->CreateFMul(acc_phi, elem);
+
+            // Increment index and check loop condition
+            llvm::Value* one_i = llvm::ConstantInt::get(i64_type, 1);
+            llvm::Value* next_idx = builder->CreateAdd(idx_phi, one_i);
+            llvm::Value* done = builder->CreateICmpEQ(next_idx, size);
+            builder->CreateCondBr(done, exit_bb, loop_bb);
+
+            // Update PHI nodes
+            idx_phi->addIncoming(zero_i, preheader);
+            idx_phi->addIncoming(next_idx, loop_bb);
+            acc_phi->addIncoming(one_f, preheader);  // Product identity is 1.0
+            acc_phi->addIncoming(new_acc, loop_bb);
+
+            // Exit block - merge results
+            builder->SetInsertPoint(exit_bb);
+            llvm::PHINode* result_phi = builder->CreatePHI(double_type, 2, "prodf_result");
+            result_phi->addIncoming(one_f, preheader);  // Empty list product is 1.0
+            result_phi->addIncoming(new_acc, loop_bb);
+
+            values[inst->result.id] = result_phi;
+            return true;
+        }
+
+        // === Division/Modulo Any compound assignments (keep using runtime) ===
         case QoreIROpcode::DivAssignAny:
-        case QoreIROpcode::ModAssignInt:
         case QoreIROpcode::ModAssignAny:
-        case QoreIROpcode::AndAssignInt:
-        case QoreIROpcode::AndAssignAny:
-        case QoreIROpcode::OrAssignInt:
-        case QoreIROpcode::OrAssignAny:
-        case QoreIROpcode::XorAssignInt:
-        case QoreIROpcode::XorAssignAny:
         // === Higher-order operations (binary via runtime) ===
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldlInt:
@@ -3347,4 +4097,404 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
     phi->addIncoming(slow_result, slow_end);
 
     return phi;
+}
+
+// Emit inline LLVM fast-path for .any compound assignments (AddAssignAny/SubAssignAny/etc).
+// Type-checks operands for int+int and float+float, falls back to helper for mixed types.
+// For AddAssignAny (handle_nothing=true), returns rhs if lhs is NOTHING.
+llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::BinaryOps int_op,
+        llvm::Instruction::BinaryOps float_op, const char* slow_helper,
+        llvm::Value* lhs, llvm::Value* rhs,
+        llvm::Function* llvm_func, llvm::Module& module, bool handle_nothing) {
+    // Constants for tag checking
+    llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
+    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
+    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
+    llvm::Value* nothing_val = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+
+    // Create basic blocks
+    llvm::BasicBlock* check_int_bb = handle_nothing
+        ? llvm::BasicBlock::Create(ctx, "ca_check_int", llvm_func)
+        : nullptr;
+    llvm::BasicBlock* fast_int_bb = llvm::BasicBlock::Create(ctx, "ca_fast_int", llvm_func);
+    llvm::BasicBlock* check_float_bb = llvm::BasicBlock::Create(ctx, "ca_check_float", llvm_func);
+    llvm::BasicBlock* fast_float_bb = llvm::BasicBlock::Create(ctx, "ca_fast_float", llvm_func);
+    llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "ca_slow_path", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "ca_merge", llvm_func);
+
+    // For AddAssignAny, if lhs is NOTHING, return rhs with incremented ref count
+    llvm::BasicBlock* nothing_bb = nullptr;
+    llvm::Value* nothing_result = nullptr;
+    if (handle_nothing) {
+        nothing_bb = llvm::BasicBlock::Create(ctx, "ca_nothing", llvm_func);
+        llvm::Value* lhs_is_nothing = builder->CreateICmpEQ(lhs, nothing_val);
+        builder->CreateCondBr(lhs_is_nothing, nothing_bb, check_int_bb);
+
+        // Nothing path: call qore_rt_ref to increment reference count (equivalent to refSelf)
+        builder->SetInsertPoint(nothing_bb);
+        auto ref_fn = module.getOrInsertFunction("qore_rt_ref",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+        nothing_result = builder->CreateCall(ref_fn, {rhs});
+        builder->CreateBr(merge_bb);
+    }
+
+    // Check if both are int48-tagged
+    if (handle_nothing) {
+        builder->SetInsertPoint(check_int_bb);
+    }
+    llvm::Value* lhs_tag = builder->CreateAnd(lhs, tag_mask);
+    llvm::Value* rhs_tag = builder->CreateAnd(rhs, tag_mask);
+    llvm::Value* lhs_is_int = builder->CreateICmpEQ(lhs_tag, tag_int48);
+    llvm::Value* rhs_is_int = builder->CreateICmpEQ(rhs_tag, tag_int48);
+    llvm::Value* both_int = builder->CreateAnd(lhs_is_int, rhs_is_int);
+
+    builder->CreateCondBr(both_int, fast_int_bb, check_float_bb);
+
+    // Fast int path: unbox, native op, box
+    builder->SetInsertPoint(fast_int_bb);
+    llvm::Value* l_int = unboxInt(lhs);
+    llvm::Value* r_int = unboxInt(rhs);
+    llvm::Value* int_result = builder->CreateBinOp(int_op, l_int, r_int);
+    llvm::Value* int_boxed = boxInt(int_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
+
+    // Check float path: double-encoded values satisfy
+    //   bits > DOUBLE_ENCODE_OFFSET && bits < DOUBLE_BOUNDARY (== TAG_INT48)
+    builder->SetInsertPoint(check_float_bb);
+    llvm::Value* double_boundary = llvm::ConstantInt::get(i64_type, TAG_INT48);
+    llvm::Value* lhs_gt_offset = builder->CreateICmpUGT(lhs, double_offset);
+    llvm::Value* lhs_lt_boundary = builder->CreateICmpULT(lhs, double_boundary);
+    llvm::Value* lhs_is_float = builder->CreateAnd(lhs_gt_offset, lhs_lt_boundary);
+    llvm::Value* rhs_gt_offset = builder->CreateICmpUGT(rhs, double_offset);
+    llvm::Value* rhs_lt_boundary = builder->CreateICmpULT(rhs, double_boundary);
+    llvm::Value* rhs_is_float = builder->CreateAnd(rhs_gt_offset, rhs_lt_boundary);
+    llvm::Value* both_float = builder->CreateAnd(lhs_is_float, rhs_is_float);
+    builder->CreateCondBr(both_float, fast_float_bb, slow_bb);
+
+    // Fast float path: unbox, native op, box
+    builder->SetInsertPoint(fast_float_bb);
+    llvm::Value* l_float = unboxFloat(lhs);
+    llvm::Value* r_float = unboxFloat(rhs);
+    llvm::Value* float_result = builder->CreateBinOp(float_op, l_float, r_float);
+    llvm::Value* float_boxed = boxFloat(float_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* fast_float_end = builder->GetInsertBlock();
+
+    // Slow path: call runtime helper
+    builder->SetInsertPoint(slow_bb);
+    auto ca_helper = module.getOrInsertFunction(slow_helper,
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+    llvm::Value* slow_result_val = builder->CreateCall(ca_helper, {lhs, rhs, xsink_arg});
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* slow_end = builder->GetInsertBlock();
+
+    // Merge with PHI
+    builder->SetInsertPoint(merge_bb);
+    int incoming_count = handle_nothing ? 4 : 3;
+    llvm::PHINode* ca_phi = builder->CreatePHI(i64_type, incoming_count);
+    if (handle_nothing) {
+        ca_phi->addIncoming(nothing_result, nothing_bb);
+    }
+    ca_phi->addIncoming(int_boxed, fast_int_end);
+    ca_phi->addIncoming(float_boxed, fast_float_end);
+    ca_phi->addIncoming(slow_result_val, slow_end);
+
+    return ca_phi;
+}
+
+// Emit inline LLVM fast-path for .any bitwise compound assignments (AndAssignAny/etc).
+// Type-checks operands for int+int, falls back to qore_rt_binary_op for non-int types.
+llvm::Value* QoreIRToLLVM::emitAnyBitwiseFastPath(llvm::Instruction::BinaryOps int_op,
+        const char* slow_helper, int opcode_val_int,
+        llvm::Value* lhs, llvm::Value* rhs,
+        llvm::Function* llvm_func, llvm::Module& module) {
+    // Constants for tag checking
+    llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
+    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
+
+    // Check if both are int48-tagged
+    llvm::Value* lhs_tag = builder->CreateAnd(lhs, tag_mask);
+    llvm::Value* rhs_tag = builder->CreateAnd(rhs, tag_mask);
+    llvm::Value* lhs_is_int = builder->CreateICmpEQ(lhs_tag, tag_int48);
+    llvm::Value* rhs_is_int = builder->CreateICmpEQ(rhs_tag, tag_int48);
+    llvm::Value* both_int = builder->CreateAnd(lhs_is_int, rhs_is_int);
+
+    // Create basic blocks
+    llvm::BasicBlock* fast_int_bb = llvm::BasicBlock::Create(ctx, "bw_fast_int", llvm_func);
+    llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "bw_slow_path", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "bw_merge", llvm_func);
+
+    builder->CreateCondBr(both_int, fast_int_bb, slow_bb);
+
+    // Fast int path: unbox, native op, box
+    builder->SetInsertPoint(fast_int_bb);
+    llvm::Value* l_int = unboxInt(lhs);
+    llvm::Value* r_int = unboxInt(rhs);
+    llvm::Value* int_result = builder->CreateBinOp(int_op, l_int, r_int);
+    llvm::Value* int_boxed = boxInt(int_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
+
+    // Slow path: call runtime helper (qore_rt_binary_op)
+    builder->SetInsertPoint(slow_bb);
+    llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), opcode_val_int);
+    auto bw_helper = module.getOrInsertFunction(slow_helper,
+            llvm::FunctionType::get(i64_type,
+                {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
+    llvm::Value* slow_result_val = builder->CreateCall(bw_helper,
+            {opcode_val, lhs, rhs, xsink_arg});
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* slow_end = builder->GetInsertBlock();
+
+    // Merge with PHI
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* bw_phi = builder->CreatePHI(i64_type, 2);
+    bw_phi->addIncoming(int_boxed, fast_int_end);
+    bw_phi->addIncoming(slow_result_val, slow_end);
+
+    return bw_phi;
+}
+
+// Emit inline LLVM fast-path for .any unary operations (UnaryMinusAny/UnaryPlusAny).
+// Type-checks operand for int or float, falls back to qore_rt_unary_op for other types.
+llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_int,
+        llvm::Value* operand, llvm::Function* llvm_func, llvm::Module& module) {
+    // Constants for tag checking
+    llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
+    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
+    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
+
+    // Check if operand is int48-tagged
+    llvm::Value* op_tag = builder->CreateAnd(operand, tag_mask);
+    llvm::Value* is_int = builder->CreateICmpEQ(op_tag, tag_int48);
+
+    // Create basic blocks
+    llvm::BasicBlock* fast_int_bb = llvm::BasicBlock::Create(ctx, "unary_fast_int", llvm_func);
+    llvm::BasicBlock* check_float_bb = llvm::BasicBlock::Create(ctx, "unary_check_float", llvm_func);
+    llvm::BasicBlock* fast_float_bb = llvm::BasicBlock::Create(ctx, "unary_fast_float", llvm_func);
+    llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "unary_slow", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "unary_merge", llvm_func);
+
+    builder->CreateCondBr(is_int, fast_int_bb, check_float_bb);
+
+    // Fast int path: unbox, negate (or identity for plus), box
+    builder->SetInsertPoint(fast_int_bb);
+    llvm::Value* int_val = unboxInt(operand);
+    llvm::Value* int_result = is_minus ? builder->CreateNeg(int_val) : int_val;
+    llvm::Value* int_boxed = boxInt(int_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
+
+    // Check float path: double-encoded values satisfy
+    //   bits > DOUBLE_ENCODE_OFFSET && bits < DOUBLE_BOUNDARY (== TAG_INT48)
+    builder->SetInsertPoint(check_float_bb);
+    llvm::Value* double_boundary = llvm::ConstantInt::get(i64_type, TAG_INT48);
+    llvm::Value* gt_offset = builder->CreateICmpUGT(operand, double_offset);
+    llvm::Value* lt_boundary = builder->CreateICmpULT(operand, double_boundary);
+    llvm::Value* is_float = builder->CreateAnd(gt_offset, lt_boundary);
+    builder->CreateCondBr(is_float, fast_float_bb, slow_bb);
+
+    // Fast float path: unbox, fneg (or identity for plus), box
+    builder->SetInsertPoint(fast_float_bb);
+    llvm::Value* float_val = unboxFloat(operand);
+    llvm::Value* float_result = is_minus ? builder->CreateFNeg(float_val) : float_val;
+    llvm::Value* float_boxed = boxFloat(float_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* fast_float_end = builder->GetInsertBlock();
+
+    // Slow path: call runtime helper
+    builder->SetInsertPoint(slow_bb);
+    llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), opcode_val_int);
+    auto helper = module.getOrInsertFunction("qore_rt_unary_op",
+            llvm::FunctionType::get(i64_type,
+                {llvm::Type::getInt32Ty(ctx), i64_type, ptr_type}, false));
+    llvm::Value* slow_result = builder->CreateCall(helper,
+            {opcode_val, operand, xsink_arg});
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* slow_end = builder->GetInsertBlock();
+
+    // Merge with PHI
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* phi = builder->CreatePHI(i64_type, 3);
+    phi->addIncoming(int_boxed, fast_int_end);
+    phi->addIncoming(float_boxed, fast_float_end);
+    phi->addIncoming(slow_result, slow_end);
+
+    return phi;
+}
+
+// Emit inline LLVM fast-path for CmpAny (spaceship operator).
+// Type-checks operands for int+int and float+float, falls back to qore_rt_comparison_op.
+llvm::Value* QoreIRToLLVM::emitAnyCmpSpaceshipFastPath(llvm::Value* lhs, llvm::Value* rhs,
+        llvm::Function* llvm_func, llvm::Module& module) {
+    // Constants for tag checking
+    llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
+    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
+    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
+
+    // Check if both are int48-tagged
+    llvm::Value* lhs_tag = builder->CreateAnd(lhs, tag_mask);
+    llvm::Value* rhs_tag = builder->CreateAnd(rhs, tag_mask);
+    llvm::Value* lhs_is_int = builder->CreateICmpEQ(lhs_tag, tag_int48);
+    llvm::Value* rhs_is_int = builder->CreateICmpEQ(rhs_tag, tag_int48);
+    llvm::Value* both_int = builder->CreateAnd(lhs_is_int, rhs_is_int);
+
+    // Create basic blocks
+    llvm::BasicBlock* fast_int_bb = llvm::BasicBlock::Create(ctx, "ss_fast_int", llvm_func);
+    llvm::BasicBlock* check_float_bb = llvm::BasicBlock::Create(ctx, "ss_check_float", llvm_func);
+    llvm::BasicBlock* fast_float_bb = llvm::BasicBlock::Create(ctx, "ss_fast_float", llvm_func);
+    llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "ss_slow", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "ss_merge", llvm_func);
+
+    builder->CreateCondBr(both_int, fast_int_bb, check_float_bb);
+
+    // Fast int path: unbox, compare, return -1/0/1
+    builder->SetInsertPoint(fast_int_bb);
+    llvm::Value* l_int = unboxInt(lhs);
+    llvm::Value* r_int = unboxInt(rhs);
+    llvm::Value* lt_int = builder->CreateICmpSLT(l_int, r_int);
+    llvm::Value* gt_int = builder->CreateICmpSGT(l_int, r_int);
+    llvm::Value* neg_one = llvm::ConstantInt::get(i64_type, -1);
+    llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
+    llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
+    llvm::Value* inner_int = builder->CreateSelect(gt_int, one, zero);
+    llvm::Value* int_result = builder->CreateSelect(lt_int, neg_one, inner_int);
+    // Box the result as int
+    llvm::Value* int_boxed = boxInt(int_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
+
+    // Check float path
+    builder->SetInsertPoint(check_float_bb);
+    llvm::Value* double_boundary = llvm::ConstantInt::get(i64_type, TAG_INT48);
+    llvm::Value* lhs_gt_offset = builder->CreateICmpUGT(lhs, double_offset);
+    llvm::Value* lhs_lt_boundary = builder->CreateICmpULT(lhs, double_boundary);
+    llvm::Value* lhs_is_float = builder->CreateAnd(lhs_gt_offset, lhs_lt_boundary);
+    llvm::Value* rhs_gt_offset = builder->CreateICmpUGT(rhs, double_offset);
+    llvm::Value* rhs_lt_boundary = builder->CreateICmpULT(rhs, double_boundary);
+    llvm::Value* rhs_is_float = builder->CreateAnd(rhs_gt_offset, rhs_lt_boundary);
+    llvm::Value* both_float = builder->CreateAnd(lhs_is_float, rhs_is_float);
+    builder->CreateCondBr(both_float, fast_float_bb, slow_bb);
+
+    // Fast float path: unbox, compare (with NaN check via runtime for safety)
+    builder->SetInsertPoint(fast_float_bb);
+    llvm::Value* l_float = unboxFloat(lhs);
+    llvm::Value* r_float = unboxFloat(rhs);
+    // Check for NaN - if either is NaN, go to slow path for exception
+    llvm::Value* is_nan = builder->CreateFCmpUNO(l_float, r_float);
+    llvm::BasicBlock* float_nan_bb = llvm::BasicBlock::Create(ctx, "ss_float_nan", llvm_func);
+    llvm::BasicBlock* float_ok_bb = llvm::BasicBlock::Create(ctx, "ss_float_ok", llvm_func);
+    builder->CreateCondBr(is_nan, float_nan_bb, float_ok_bb);
+
+    // Float NaN path: go to slow path for exception
+    builder->SetInsertPoint(float_nan_bb);
+    builder->CreateBr(slow_bb);
+
+    // Float OK path: native comparison
+    builder->SetInsertPoint(float_ok_bb);
+    llvm::Value* lt_float = builder->CreateFCmpOLT(l_float, r_float);
+    llvm::Value* gt_float = builder->CreateFCmpOGT(l_float, r_float);
+    llvm::Value* inner_float = builder->CreateSelect(gt_float, one, zero);
+    llvm::Value* float_result = builder->CreateSelect(lt_float, neg_one, inner_float);
+    llvm::Value* float_boxed = boxInt(float_result);
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* fast_float_end = builder->GetInsertBlock();
+
+    // Slow path: call runtime helper
+    builder->SetInsertPoint(slow_bb);
+    llvm::Value* opcode_val_cmp = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
+            static_cast<int>(QoreIROpcode::CmpAny));
+    auto cmp_helper = module.getOrInsertFunction("qore_rt_comparison_op",
+            llvm::FunctionType::get(i64_type,
+                {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
+    llvm::Value* slow_result_cmp = builder->CreateCall(cmp_helper,
+            {opcode_val_cmp, lhs, rhs, xsink_arg});
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* slow_end = builder->GetInsertBlock();
+
+    // Merge with PHI
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* ss_phi = builder->CreatePHI(i64_type, 3);
+    ss_phi->addIncoming(int_boxed, fast_int_end);
+    ss_phi->addIncoming(float_boxed, fast_float_end);
+    ss_phi->addIncoming(slow_result_cmp, slow_end);
+
+    return ss_phi;
+}
+
+// Emit inline LLVM fast-path for EqHard/NeHard (=== and !==).
+// Fast-path logic based on QoreValue::isEqualHard():
+// - If bits are equal and NOT a float → true
+// - If bits are equal and IS a float → check NaN (NaN !== NaN)
+// - Otherwise → runtime helper
+llvm::Value* QoreIRToLLVM::emitHardEqualityFastPath(bool is_eq, llvm::Value* lhs, llvm::Value* rhs,
+        llvm::Function* llvm_func, llvm::Module& module) {
+    // Constants
+    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
+    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
+
+    // Create basic blocks
+    llvm::BasicBlock* bits_equal_bb = llvm::BasicBlock::Create(ctx, "he_bits_equal", llvm_func);
+    llvm::BasicBlock* check_float_bb = llvm::BasicBlock::Create(ctx, "he_check_float", llvm_func);
+    llvm::BasicBlock* float_nan_check_bb = llvm::BasicBlock::Create(ctx, "he_float_nan", llvm_func);
+    llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "he_slow", llvm_func);
+    llvm::BasicBlock* result_true_bb = llvm::BasicBlock::Create(ctx, "he_true", llvm_func);
+    llvm::BasicBlock* result_false_bb = llvm::BasicBlock::Create(ctx, "he_false", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "he_merge", llvm_func);
+
+    // Check if bits are equal
+    llvm::Value* bits_equal = builder->CreateICmpEQ(lhs, rhs);
+    builder->CreateCondBr(bits_equal, bits_equal_bb, slow_bb);
+
+    // Bits equal path: check if it's a float (need NaN check)
+    builder->SetInsertPoint(bits_equal_bb);
+    // Float-encoded values satisfy: bits > DOUBLE_ENCODE_OFFSET && bits < TAG_INT48
+    llvm::Value* gt_offset = builder->CreateICmpUGT(lhs, double_offset);
+    llvm::Value* lt_boundary = builder->CreateICmpULT(lhs, tag_int48);
+    llvm::Value* is_float = builder->CreateAnd(gt_offset, lt_boundary);
+    builder->CreateCondBr(is_float, float_nan_check_bb, result_true_bb);
+
+    // Float NaN check: NaN !== NaN even if bits are identical
+    builder->SetInsertPoint(float_nan_check_bb);
+    llvm::Value* float_val = unboxFloat(lhs);
+    // NaN check: fcmp ord returns false if either operand is NaN
+    // So if float_val == float_val returns false, it's NaN
+    llvm::Value* is_ordered = builder->CreateFCmpORD(float_val, float_val);
+    // If ordered (not NaN), result is true; if unordered (NaN), result is false
+    builder->CreateCondBr(is_ordered, result_true_bb, result_false_bb);
+
+    // Slow path: call runtime helper for complex cases (different bits, strings, etc.)
+    builder->SetInsertPoint(slow_bb);
+    QoreIROpcode opcode = is_eq ? QoreIROpcode::EqHard : QoreIROpcode::NeHard;
+    llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
+            static_cast<int>(opcode));
+    auto helper = module.getOrInsertFunction("qore_rt_comparison_op",
+            llvm::FunctionType::get(i64_type,
+                {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
+    llvm::Value* slow_result = builder->CreateCall(helper,
+            {opcode_val, lhs, rhs, xsink_arg});
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* slow_end = builder->GetInsertBlock();
+
+    // True result
+    builder->SetInsertPoint(result_true_bb);
+    llvm::Value* true_result = is_eq ? boxBool(builder->getTrue()) : boxBool(builder->getFalse());
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* true_end = builder->GetInsertBlock();
+
+    // False result
+    builder->SetInsertPoint(result_false_bb);
+    llvm::Value* false_result = is_eq ? boxBool(builder->getFalse()) : boxBool(builder->getTrue());
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* false_end = builder->GetInsertBlock();
+
+    // Merge with PHI
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* he_phi = builder->CreatePHI(i64_type, 3);
+    he_phi->addIncoming(true_result, true_end);
+    he_phi->addIncoming(false_result, false_end);
+    he_phi->addIncoming(slow_result, slow_end);
+
+    return he_phi;
 }

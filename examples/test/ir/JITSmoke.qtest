@@ -45,6 +45,14 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("JIT dynamic bitwise ops", \testJitDynamicBitwise());
         addTestCase("JIT dynamic unary ops", \testJitDynamicUnary());
         addTestCase("JIT compound assignment ops", \testJitCompoundAssign());
+        addTestCase("JIT compound assign bitwise", \testJitCompoundAssignBitwise());
+        addTestCase("JIT compound assign float", \testJitCompoundAssignFloat());
+        addTestCase("JIT compound assign any", \testJitCompoundAssignAny());
+        addTestCase("JIT compound assign any bitwise", \testJitCompoundAssignAnyBitwise());
+        addTestCase("JIT compound assign any NOTHING", \testJitCompoundAssignAnyNothing());
+        addTestCase("JIT compound assign loop", \testJitCompoundAssignLoop());
+        addTestCase("JIT compound assign overflow", \testJitCompoundAssignOverflow());
+        addTestCase("JIT division inline zero-check", \testJitDivisionInlineZeroCheck());
         addTestCase("JIT throw with list args", \testJitThrowList());
         addTestCase("JIT multiple exceptions", \testJitMultipleExceptions());
         addTestCase("JIT scoped object construction", \testJitScopedObjectConstruction());
@@ -80,6 +88,8 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("regex match invoke single eval", \testJitRegexMatchInvokeSingleEval());
         addTestCase("regex extract single eval", \testJitRegexExtractSingleEval());
         addTestCase("regex extract invoke single eval", \testJitRegexExtractInvokeSingleEval());
+        # Optimized higher-order function tests
+        addTestCase("optimized foldl sum/prod", \testJitFoldlSumProd());
         set_return_value(main());
     }
 
@@ -500,6 +510,184 @@ printf(\"%d,%d,%d,%d,%d\\n\", a, b, c, d, e);
 ";
         string result = trim(runScript(code));
         assertEq("15,17,12,5,2", result, "compound assignment operators");
+    }
+
+    testJitCompoundAssignBitwise() {
+        # Test native LLVM lowering for bitwise compound assignments
+        string code = "%modern
+int a = 0xFF;
+a &= 0x0F;      # AND
+int b = 0x0F;
+b |= 0xF0;      # OR
+int c = 0xFF;
+c ^= 0xAA;      # XOR
+int d = 1;
+d <<= 8;        # SHL
+int e = 256;
+e >>= 4;        # SHR
+printf(\"%d,%d,%d,%d,%d\\n\", a, b, c, d, e);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15,255,85,256,16", result, sprintf("bitwise compound assign %s", mode));
+        }
+    }
+
+    testJitCompoundAssignFloat() {
+        # Test native LLVM lowering for float compound assignments
+        string code = "%modern
+float a = 10.0;
+a += 2.5;       # Add
+float b = 20.0;
+b -= 3.5;       # Sub
+float c = 4.0;
+c *= 2.5;       # Mul
+printf(\"%.1f,%.1f,%.1f\\n\", a, b, c);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("12.5,16.5,10.0", result, sprintf("float compound assign %s", mode));
+        }
+    }
+
+    testJitCompoundAssignAny() {
+        # Test fast-path for any-typed compound assignments (int+int and float+float)
+        string code = "%modern
+auto a = 10;
+a += 5;
+auto b = 20;
+b -= 3;
+auto c = 4;
+c *= 3;
+auto fa = 10.0;
+fa += 2.5;
+auto fb = 20.0;
+fb -= 3.5;
+printf(\"%d,%d,%d,%.1f,%.1f\\n\", a, b, c, fa, fb);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15,17,12,12.5,16.5", result, sprintf("any compound assign %s", mode));
+        }
+    }
+
+    testJitCompoundAssignAnyBitwise() {
+        # Test fast-path for any-typed bitwise compound assignments
+        string code = "%modern
+auto a = 0xFF;
+a &= 0x0F;
+auto b = 0x0F;
+b |= 0xF0;
+auto c = 0xFF;
+c ^= 0xAA;
+auto d = 1;
+d <<= 8;
+auto e = 256;
+e >>= 4;
+printf(\"%d,%d,%d,%d,%d\\n\", a, b, c, d, e);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15,255,85,256,16", result, sprintf("any bitwise compound assign %s", mode));
+        }
+    }
+
+    testJitCompoundAssignAnyNothing() {
+        # Test AddAssignAny with NOTHING on left side (special case)
+        string code = "%modern
+auto a;  # NOTHING
+a += 42;
+auto b;
+b += \"hello\";
+printf(\"%d,%s\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42,hello", result, sprintf("any compound assign NOTHING %s", mode));
+        }
+    }
+
+    testJitCompoundAssignLoop() {
+        # Test compound assignments in a tight loop (benchmark scenario)
+        string code = "%modern
+int sum = 0;
+for (int i = 1; i <= 100; i++) {
+    sum += i;
+}
+int prod = 1;
+for (int j = 1; j <= 10; j++) {
+    prod *= j;
+}
+printf(\"%d,%d\\n\", sum, prod);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5050,3628800", result, sprintf("compound assign loop %s", mode));
+        }
+    }
+
+    testJitCompoundAssignOverflow() {
+        # Test compound assignments with large values (edge case)
+        string code = "%modern
+int a = 9223372036854775800;  # Near max int64
+a += 7;
+int b = -9223372036854775800;  # Near min int64
+b -= 8;
+printf(\"%d,%d\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("9223372036854775807,-9223372036854775808", result,
+                    sprintf("compound assign overflow %s", mode));
+        }
+    }
+
+    testJitDivisionInlineZeroCheck() {
+        # Test inline zero-check for division/modulo operations
+        # This verifies that native LLVM division is used for non-zero divisors
+        # and runtime exception is raised for zero divisors
+        string code = "%modern
+int sub test_div_mod() {
+    int sum = 0;
+    # Normal division/modulo in loop (tests inline fast-path)
+    for (int i = 1; i <= 10; i++) {
+        sum += 100 / i;
+        sum += 100 % i;
+    }
+    # Compound division/modulo
+    int a = 1000;
+    a /= 10;
+    int b = 97;
+    b %= 10;
+    # Float division
+    float f = 100.0;
+    float g = 4.0;
+    float fdiv = f / g;
+    float h = 50.0;
+    h /= 5.0;
+    return sum + a + b + int(fdiv) + int(h);
+}
+printf(\"%d\\n\", test_div_mod());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("445", result, sprintf("division inline zero-check %s", mode));
+        }
+
+        # Test that zero divisor still raises exception with inline check
+        string zero_code = "%modern
+%disable-warning unreferenced-variable
+try {
+    int a = 100;
+    int b = 0;
+    int c = a / b;
+    printf(\"ERROR\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\", ex.err);
+}
+";
+        assertEq("DIVISION-BY-ZERO", trim(runScript(zero_code, "jit")),
+                "inline zero-check raises DIVISION-BY-ZERO");
     }
 
     testJitThrowList() {
@@ -1009,6 +1197,44 @@ printf(\"%s:%d\\n\", r[0], counter);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(code, mode));
             assertEq("789:1", result, sprintf("regex extract invoke single eval %s", mode));
+        }
+    }
+
+    testJitFoldlSumProd() {
+        # Test optimized foldl with $1 + $2 and $1 * $2 patterns
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int sum_result = (foldl $1 + $2, nums);
+int prod_result = (foldl $1 * $2, nums);
+printf(\"%d:%d\\n\", sum_result, prod_result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15:120", result, sprintf("foldl int sum/prod %s", mode));
+        }
+
+        # Test with floats
+        string float_code = "%modern
+list<float> nums = (1.5, 2.5, 3.0);
+float sum_f = (foldl $1 + $2, nums);
+float prod_f = (foldl $1 * $2, nums);
+printf(\"%.1f:%.2f\\n\", sum_f, prod_f);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_code, mode));
+            assertEq("7.0:11.25", result, sprintf("foldl float sum/prod %s", mode));
+        }
+
+        # Test with single element (edge case)
+        string single_code = "%modern
+list<int> single = (42,);
+int s = (foldl $1 + $2, single);
+int p = (foldl $1 * $2, single);
+printf(\"%d:%d\\n\", s, p);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(single_code, mode));
+            assertEq("42:42", result, sprintf("foldl single element %s", mode));
         }
     }
 }

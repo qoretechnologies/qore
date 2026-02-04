@@ -146,6 +146,10 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::FoldrAny:
         case QoreIROpcode::FoldrInt:
         case QoreIROpcode::FoldrFloat:
+        case QoreIROpcode::FoldlSumInt:
+        case QoreIROpcode::FoldlSumFloat:
+        case QoreIROpcode::FoldlProdInt:
+        case QoreIROpcode::FoldlProdFloat:
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat:
@@ -348,6 +352,10 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::FoldrAny:
         case QoreIROpcode::FoldrInt:
         case QoreIROpcode::FoldrFloat:
+        case QoreIROpcode::FoldlSumInt:
+        case QoreIROpcode::FoldlSumFloat:
+        case QoreIROpcode::FoldlProdInt:
+        case QoreIROpcode::FoldlProdFloat:
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat:

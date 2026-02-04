@@ -289,6 +289,17 @@ uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSi
 //! Falls back to qore_rt_add_any if either operand is not a string.
 uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
+// --- Optimized list iteration helpers (higher-order optimization) ---
+
+//! Get list size; returns 0 if value is not a list.
+int64_t qore_rt_list_size(uint64_t list_val);
+
+//! Get int element at index; returns 0 if not a list or index out of bounds.
+int64_t qore_rt_list_get_int(uint64_t list_val, int64_t index);
+
+//! Get float element at index; returns 0.0 if not a list or index out of bounds.
+double qore_rt_list_get_float(uint64_t list_val, int64_t index);
+
 // --- AOT context-based helpers (Phase 7b) ---
 // These variants take QoreAOTContext* and a slot index instead of raw pointers.
 // At runtime, they resolve ctx->array[idx] and delegate to the existing helpers.
