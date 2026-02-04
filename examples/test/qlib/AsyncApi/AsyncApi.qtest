@@ -33,6 +33,7 @@ public class AsyncApiTest inherits QUnit::Test {
         addTestCase("ref resolution test", \refResolutionTest());
         addTestCase("channel operations test", \channelOperationsTest());
         addTestCase("validation constraints test", \validationConstraintsTest());
+        addTestCase("example parsing test", \exampleParsingTest());
         addTestCase("public schemas test", \publicSchemasTest());
         set_return_value(main());
     }
@@ -218,6 +219,160 @@ public class AsyncApiTest inherits QUnit::Test {
         }
     }
 
+    #! Test parsing of @example JSON blocks in event and message schemas
+    exampleParsingTest() {
+        checkModules();
+
+        # Test @example parsing in event schema
+        hash<AsyncApi::EventSchemaInfo> event = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock('
+@EVENT WORKFLOW_STATUS_CHANGED
+@summary Workflow status changed event
+@desc Fired when a workflow instance status changes
+@class WORKFLOW
+@severity INFO
+@info
+    - workflow_instanceid (int): Workflow instance ID
+    - name (string): Workflow name
+@example
+{
+  "workflow_instanceid": 12345,
+  "name": "TestWorkflow"
+}
+@example
+{
+  "workflow_instanceid": 99999,
+  "name": "AnotherWorkflow"
+}
+@ENDEVENTSCHEMA
+');
+        assertEq("WORKFLOW_STATUS_CHANGED", event.name);
+        assertEq("Workflow status changed event", event.summary);
+        assertTrue(exists event.examples);
+        assertEq(2, event.examples.size());
+        assertEq(12345, event.examples[0].workflow_instanceid);
+        assertEq("TestWorkflow", event.examples[0].name);
+        assertEq(99999, event.examples[1].workflow_instanceid);
+        assertEq("AnotherWorkflow", event.examples[1].name);
+
+        # Test event schema without examples
+        hash<AsyncApi::EventSchemaInfo> simpleEvent = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock('
+@EVENT SIMPLE_EVENT
+@summary Simple event without examples
+@ENDEVENTSCHEMA
+');
+        assertEq("SIMPLE_EVENT", simpleEvent.name);
+        assertTrue(!simpleEvent.examples || simpleEvent.examples.size() == 0);
+
+        # Test @example parsing in WebSocket channel with messages
+        hash<AsyncApi::ChannelSchemaInfo> channel = AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlock('
+@WEBSOCKET /events
+@summary Event subscription endpoint
+@desc WebSocket endpoint for event subscriptions
+
+@subscribe SubscribeRequest
+- action (string): Action type
+- channel (string): Channel name
+@example
+{
+  "action": "subscribe",
+  "channel": "events"
+}
+
+@publish EventNotification
+- id (string): Event ID
+- name (string): Event name
+@example
+{
+  "id": "evt-123",
+  "name": "TEST_EVENT"
+}
+@example
+{
+  "id": "evt-456",
+  "name": "ANOTHER_EVENT"
+}
+@ENDASYNCAPI
+');
+        assertEq("/events", channel.path);
+        assertEq("Event subscription endpoint", channel.summary);
+
+        # Check subscribe message examples
+        assertTrue(exists channel.subscribe_schemas);
+        assertEq(1, channel.subscribe_schemas.size());
+        assertEq("SubscribeRequest", channel.subscribe_schemas[0].name);
+        assertTrue(exists channel.subscribe_schemas[0].examples);
+        assertEq(1, channel.subscribe_schemas[0].examples.size());
+        assertEq("subscribe", channel.subscribe_schemas[0].examples[0].action);
+        assertEq("events", channel.subscribe_schemas[0].examples[0].channel);
+
+        # Check publish message examples
+        assertTrue(exists channel.publish_schemas);
+        assertEq(1, channel.publish_schemas.size());
+        assertEq("EventNotification", channel.publish_schemas[0].name);
+        assertTrue(exists channel.publish_schemas[0].examples);
+        assertEq(2, channel.publish_schemas[0].examples.size());
+        assertEq("evt-123", channel.publish_schemas[0].examples[0].id);
+        assertEq("TEST_EVENT", channel.publish_schemas[0].examples[0].name);
+        assertEq("evt-456", channel.publish_schemas[0].examples[1].id);
+
+        # Test malformed JSON is silently ignored
+        hash<AsyncApi::EventSchemaInfo> badJsonEvent = AsyncApi::AsyncApiSchemaTokenizer::parseEventBlock('
+@EVENT BAD_JSON_EVENT
+@summary Event with malformed example
+@example
+{ this is not valid json }
+@example
+{
+  "valid": "json"
+}
+@ENDEVENTSCHEMA
+');
+        assertEq("BAD_JSON_EVENT", badJsonEvent.name);
+        # Only the valid example should be parsed
+        assertTrue(exists badJsonEvent.examples);
+        assertEq(1, badJsonEvent.examples.size());
+        assertEq("json", badJsonEvent.examples[0].valid);
+
+        # Test schema generation includes examples in messages
+        AsyncApi::AsyncApiSchemaGenerator gen({"title": "TestApi", "version": "1.0.0"});
+        gen.addChannel(channel);
+        hash<auto> schema = gen.generate();
+
+        assertTrue(exists schema.channels);
+        assertTrue(schema.channels.hasKey("events"));
+
+        # Check that messages component has examples
+        assertTrue(exists schema.components.messages);
+        *hash<auto> msgComponent;
+        foreach string key in (keys schema.components.messages) {
+            if (key =~ /SubscribeRequest/) {
+                msgComponent = schema.components.messages{key};
+                break;
+            }
+        }
+        assertTrue(exists msgComponent);
+        assertTrue(exists msgComponent.examples);
+        assertEq(1, msgComponent.examples.size());
+        assertEq("subscribe", msgComponent.examples[0].payload.action);
+
+        # Test schema generation includes examples in event info schemas
+        gen.addEvent(event);
+        schema = gen.generate();
+
+        assertTrue(exists schema.components.schemas);
+        *hash<auto> eventInfoSchema;
+        foreach string key in (keys schema.components.schemas) {
+            if (key =~ /WORKFLOW_STATUS_CHANGED.*Info/) {
+                eventInfoSchema = schema.components.schemas{key};
+                break;
+            }
+        }
+        assertTrue(exists eventInfoSchema);
+        assertTrue(exists eventInfoSchema.examples);
+        assertEq(2, eventInfoSchema.examples.size());
+        assertEq(12345, eventInfoSchema.examples[0].workflow_instanceid);
+    }
+
     #! Test parsing of public, known-good AsyncAPI 3.0 schemas from GitHub
     publicSchemasTest() {
         checkModules();
@@ -239,8 +394,19 @@ public class AsyncApiTest inherits QUnit::Test {
             },
         );
 
-        HTTPClient client({"url": "https://raw.githubusercontent.com", "timeout": 30s});
-        client.connect();
+        HTTPClient client({
+            "url": "https://raw.githubusercontent.com",
+            "timeout": 10s,
+            "connect_timeout": 10s,
+        });
+        try {
+            client.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err =~ /SOCKET|HTTP|SSL/) {
+                testSkip(sprintf("Network unavailable: %s", ex.desc));
+            }
+            rethrow;
+        }
         on_exit client.disconnect();
 
         bool anyPassed = False;
