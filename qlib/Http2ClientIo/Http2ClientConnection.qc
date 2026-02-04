@@ -98,6 +98,9 @@ public class Http2ClientConnection {
 
         #! Last activity timestamp
         date last_activity;
+
+        #! Reference to AsyncSocketIoController for wake notifications
+        *object controller_ref;
     }
 
     #! Creates a new HTTP/2 client connection
@@ -135,6 +138,23 @@ public class Http2ClientConnection {
     */
     Http2ClientPollOperation getPollOperation() {
         return poll_op;
+    }
+
+    #! Returns the underlying socket
+    /** Use this with AsyncSocketIoController when submitting poll operations.
+    */
+    Socket getSocket() {
+        return poll_op.getSocket();
+    }
+
+    #! Sets the controller reference for wake notifications
+    /** When set, submitRequest() will call controller.wake() after queuing a
+        request to ensure the I/O thread processes it promptly.
+
+        @param controller the AsyncSocketIoController managing this connection
+    */
+    setControllerRef(object controller) {
+        controller_ref = controller;
     }
 
     #! Returns connection info
@@ -222,7 +242,14 @@ public class Http2ClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s", method, path);
-        return poll_op.submitRequest(method, path, headers, body, callback, ctx);
+        int stream_id = poll_op.submitRequest(method, path, headers, body, callback, ctx);
+
+        # Wake controller if in async mode to ensure the I/O thread processes the request
+        if (controller_ref) {
+            controller_ref.wake();
+        }
+
+        return stream_id;
     }
 
     #! Cancels a pending request

@@ -6403,11 +6403,48 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
         response->setKeyValue("headers", headers.release(), xsink);
     }
 
-    // Convert body vector to Qore binary
+    // Convert body vector to Qore binary or string based on content-type
     if (!stream->body.empty()) {
-        SimpleRefHolder<BinaryNode> body(new BinaryNode);
-        body->append(stream->body.data(), stream->body.size());
-        response->setKeyValue("body", body.release(), xsink);
+        // Check if content-type indicates text-based content
+        bool is_text = false;
+        auto ct_it = stream->headers.find("content-type");
+        if (ct_it != stream->headers.end()) {
+            // Extract media type (before any parameters like charset)
+            std::string ct = ct_it->second;
+            size_t semicolon = ct.find(';');
+            if (semicolon != std::string::npos) {
+                ct = ct.substr(0, semicolon);
+            }
+            // Trim whitespace
+            while (!ct.empty() && isspace(static_cast<unsigned char>(ct.back()))) {
+                ct.pop_back();
+            }
+            while (!ct.empty() && isspace(static_cast<unsigned char>(ct.front()))) {
+                ct.erase(0, 1);
+            }
+            // Convert to lowercase for comparison
+            std::transform(ct.begin(), ct.end(), ct.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+
+            // Check for text types
+            is_text = (ct.size() >= 5 && ct.compare(0, 5, "text/") == 0) ||  // text/*
+                      ct == "application/json" ||
+                      ct == "application/xml" ||
+                      ct == "application/javascript" ||
+                      ct == "application/x-www-form-urlencoded" ||
+                      (ct.size() > 5 && ct.compare(ct.size() - 5, 5, "+json") == 0) ||  // *+json
+                      (ct.size() > 4 && ct.compare(ct.size() - 4, 4, "+xml") == 0);    // *+xml
+        }
+
+        if (is_text) {
+            response->setKeyValue("body", new QoreStringNode(
+                reinterpret_cast<const char*>(stream->body.data()),
+                stream->body.size()), xsink);
+        } else {
+            SimpleRefHolder<BinaryNode> body(new BinaryNode);
+            body->append(stream->body.data(), stream->body.size());
+            response->setKeyValue("body", body.release(), xsink);
+        }
     }
 
     // Queue the response

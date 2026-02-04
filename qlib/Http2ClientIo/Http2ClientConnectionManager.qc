@@ -74,8 +74,39 @@ stream.submitAsync("GET", "/api/item/2", NOTHING, NOTHING,
     });
     @endcode
 
-    @note AsyncSocketIoController integration for event-driven I/O is planned
-    for a future release. Currently, connections operate in synchronous mode.
+    @par Async Mode with AsyncSocketIoController
+    For event-driven I/O, set an AsyncSocketIoController via setController().
+    The controller drives all connection I/O in its event loop thread:
+    @code{.py}
+%requires Http2ClientIo
+%requires AsyncSocketIo
+
+# Create manager with async controller
+Http2ClientConnectionManager manager();
+AsyncSocketIoController controller(False);  # autostop=False for persistent use
+manager.setController(controller);
+
+# Start the controller I/O thread
+controller.start();
+
+# Submit async request with callback
+manager.submitRequestAsync("https://example.com", "GET", "/api/resource",
+    NOTHING, NOTHING,
+    sub (hash<auto> response, *hash<auto> error) {
+        if (error) {
+            printf("Error: %y\n", error);
+        } else {
+            printf("Response: %y\n", response);
+        }
+    });
+
+# Controller runs in background, processing I/O events
+# ... do other work ...
+
+# When done
+controller.stop();
+manager.closeAll();
+    @endcode
 
     @par Connection Sharing
     When multiple clients use the same manager, they automatically share
@@ -95,7 +126,10 @@ public class Http2ClientConnectionManager {
         RWLock pool_lock();
 
         #! AsyncSocketIoController for async operations
-        *object controller;
+        *AsyncSocketIo::AsyncSocketIoController controller;
+
+        #! True if using controller for async mode
+        bool controllerMode = False;
 
         #! Logger
         *Logger logger;
@@ -122,15 +156,28 @@ public class Http2ClientConnectionManager {
     }
 
     #! Sets the AsyncSocketIoController for async operations
-    /** @param controller the I/O controller to use
+    /** When set, connections are submitted to the controller for event-driven I/O.
+        The controller must be started before making requests.
+
+        @param controller the I/O controller to use
+
+        @note Call this before acquiring any streams. Existing connections are not
+        automatically transferred to the controller.
     */
-    setController(object controller) {
+    setController(AsyncSocketIo::AsyncSocketIoController controller) {
         self.controller = controller;
+        self.controllerMode = True;
+        log(LoggerLevel::DEBUG, "controller set, async mode enabled");
     }
 
     #! Returns the AsyncSocketIoController (if set)
-    *object getController() {
+    *AsyncSocketIo::AsyncSocketIoController getController() {
         return controller;
+    }
+
+    #! Returns True if the manager is in async controller mode
+    bool isControllerMode() {
+        return controllerMode;
     }
 
     #! Acquires a stream handle for the given URL
@@ -236,7 +283,19 @@ public class Http2ClientConnectionManager {
     }
 
     #! Closes all connections
+    /** In controller mode, cancels all operations by owner before closing
+        connections. This ensures the I/O thread stops polling the connections.
+    */
     closeAll() {
+        # Cancel all operations by owner if using controller
+        if (controllerMode && controller) {
+            try {
+                controller.cancelByOwner(self.uniqueHash());
+            } catch () {
+                # Ignore errors - controller may be stopped already
+            }
+        }
+
         AutoWriteLock al(pool_lock);
         shutdown = True;
 
@@ -354,13 +413,109 @@ public class Http2ClientConnectionManager {
             }
             push pool{key}, conn;
 
-            # TODO: Controller integration for HTTP/2 client multiplexing requires
-            # a different approach than one-shot operations. The multiplex poll operation
-            # is long-running and needs continuous driving. For now, connections work
-            # in synchronous mode. Future work: implement a dedicated HTTP/2 client
-            # event loop or extend AsyncSocketIoController for persistent connections.
+            # Submit to controller for async I/O if in controller mode
+            if (controllerMode && controller) {
+                conn.setControllerRef(controller);
+                submitConnectionToController(key, conn);
+            }
 
             return conn;
+        }
+    }
+
+    #! Internal: submits a connection poll operation to the controller
+    /** Submits the connection's poll operation to the controller with no timeout
+        (timeout = -1s) since HTTP/2 connections are long-running. Uses callback
+        mode for efficient state transitions.
+
+        @param key the pool key (host:port)
+        @param conn the connection to submit
+    */
+    private submitConnectionToController(string key, Http2ClientConnection conn) {
+        if (!controller) {
+            return;
+        }
+
+        Http2ClientPollOperation op = conn.getPollOperation();
+        Socket sock = conn.getSocket();
+        string owner = self.uniqueHash();
+
+        log(LoggerLevel::DEBUG, "submitting connection %d to controller for %s",
+            conn.getConnectionId(), key);
+
+        # Build the info hash for the controller
+        # Use the SocketPollOperationInfo hashdecl from AsyncSocketIo
+        hash<AsyncSocketIo::SocketPollOperationInfo> info = <AsyncSocketIo::SocketPollOperationInfo>{
+            "sock": sock,
+            "spop": op,
+            "owner": owner,
+            "to": -1s,  # no timeout for persistent HTTP/2 connections
+            "callback": sub (hash<AsyncSocketIo::SocketPollResultInfo> result) {
+                handleConnectionResult(key, conn, result);
+            },
+        };
+
+        controller.submit(info);
+    }
+
+    #! Internal: handles connection result from controller callback
+    /** Called when the controller completes a poll cycle on the connection.
+        If the connection is still alive, continues reading by calling
+        continueReading() and re-submitting to the controller.
+
+        @param key the pool key (host:port)
+        @param conn the connection
+        @param result the poll result from the controller
+    */
+    private handleConnectionResult(string key, Http2ClientConnection conn,
+            hash<AsyncSocketIo::SocketPollResultInfo> result) {
+        if (result.canceled) {
+            log(LoggerLevel::DEBUG, "connection %d canceled", conn.getConnectionId());
+            return;
+        }
+
+        if (result.ex) {
+            log(LoggerLevel::ERROR, "connection %d error: %s: %s",
+                conn.getConnectionId(), result.ex.err, result.ex.desc);
+            removeConnectionFromPool(key, conn);
+            return;
+        }
+
+        # Check if connection is still usable
+        Http2ClientPollOperation op = conn.getPollOperation();
+        if (op.isClosed() || op.hasError()) {
+            log(LoggerLevel::DEBUG, "connection %d closed", conn.getConnectionId());
+            removeConnectionFromPool(key, conn);
+            return;
+        }
+
+        # Continue reading on the connection
+        op.continueReading();
+        submitConnectionToController(key, conn);
+    }
+
+    #! Internal: removes a connection from the pool
+    /** Thread-safe removal of a connection from the pool.
+
+        @param key the pool key (host:port)
+        @param conn the connection to remove
+    */
+    private removeConnectionFromPool(string key, Http2ClientConnection conn) {
+        AutoWriteLock al(pool_lock);
+        if (!pool.hasKey(key)) {
+            return;
+        }
+        list<Http2ClientConnection> conns = pool{key};
+        list<Http2ClientConnection> keep = ();
+        foreach Http2ClientConnection c in (conns) {
+            if (c.getConnectionId() != conn.getConnectionId()) {
+                push keep, c;
+            }
+        }
+        if (keep.size() > 0) {
+            pool{key} = keep;
+        } else {
+            remove pool{key};
         }
     }
 

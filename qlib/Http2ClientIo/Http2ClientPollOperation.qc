@@ -475,66 +475,67 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
 
         try {
             auto poll_info = current_op.continuePoll();
+
+            # For HTTP/2 client multiplex, the operation is long-running and never
+            # sets goalReached=True. Instead, responses are available via getOutput()
+            # even when poll_info is returned (indicating more work to do).
+            # Check for output BEFORE returning poll_info.
+            *hash<auto> output = current_op.getOutput();
+            if (output) {
+                empty_read_count = 0;
+
+                # Get the stream ID from the response
+                int stream_id = output.stream_id;
+                string sid = string(stream_id);
+                log(LoggerLevel::DEBUG, "response ready: stream_id=%d status=%d",
+                    stream_id, output.status_code);
+
+                # Dispatch to callback if registered (get callback under lock)
+                *code cb;
+                *hash<auto> stream_ctx;
+                {
+                    AutoLock al(stream_lock);
+                    cb = remove stream_callbacks{sid};
+                    stream_ctx = remove stream_ctxs{sid};
+                    if (cb) {
+                        --active_stream_count;
+                    }
+                }
+                if (cb) {
+                    # Call callback outside lock to avoid deadlocks
+                    try {
+                        cb(output + {"ctx": stream_ctx}, NOTHING);
+                    } catch (hash<ExceptionInfo> ex) {
+                        log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
+                            ex.err, ex.desc);
+                    }
+                }
+
+                # Store for getOutput()
+                completed_response = output;
+                completed_stream_id = stream_id;
+                state = STATE_RESPONSE_READY;
+                return NOTHING;
+            }
+
+            # No response ready yet - check if we need to wait for more data
             if (poll_info) {
                 return poll_info;
             }
 
-            if (current_op.goalReached()) {
-                hash<auto> output = current_op.getOutput();
-                if (output) {
-                    empty_read_count = 0;
-
-                    # Get the stream ID from the response
-                    int stream_id = output.stream_id;
-                    string sid = string(stream_id);
-                    log(LoggerLevel::DEBUG, "response ready: stream_id=%d status=%d",
-                        stream_id, output.status_code);
-
-                    # Dispatch to callback if registered (get callback under lock)
-                    *code cb;
-                    *hash<auto> stream_ctx;
-                    {
-                        AutoLock al(stream_lock);
-                        cb = remove stream_callbacks{sid};
-                        stream_ctx = remove stream_ctxs{sid};
-                        if (cb) {
-                            --active_stream_count;
-                        }
-                    }
-                    if (cb) {
-                        # Call callback outside lock to avoid deadlocks
-                        try {
-                            cb(output + {"ctx": stream_ctx}, NOTHING);
-                        } catch (hash<ExceptionInfo> ex) {
-                            log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
-                                ex.err, ex.desc);
-                        }
-                    }
-
-                    # Store for getOutput()
-                    completed_response = output;
-                    completed_stream_id = stream_id;
-                    state = STATE_RESPONSE_READY;
-                    return NOTHING;
-                }
-
-                # goalReached but no response: control frames processed
-                ++empty_read_count;
-                if (empty_read_count > MAX_EMPTY_READS) {
-                    setError("HTTP2-EMPTY-READ",
-                        sprintf("max consecutive empty reads (%d) exceeded", MAX_EMPTY_READS));
-                    return NOTHING;
-                }
-
-                state = STATE_WAIT_READ;
-                return <SocketPollInfo>{
-                    "events": SOCK_POLLIN,
-                    "socket": sock,
-                };
-            } else {
-                setError("HTTP2-READ-ERROR", "read operation failed");
+            # No poll_info and no output - connection may be processing control frames
+            ++empty_read_count;
+            if (empty_read_count > MAX_EMPTY_READS) {
+                setError("HTTP2-EMPTY-READ",
+                    sprintf("max consecutive empty reads (%d) exceeded", MAX_EMPTY_READS));
                 return NOTHING;
             }
+
+            state = STATE_WAIT_READ;
+            return <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": sock,
+            };
         } catch (hash<ExceptionInfo> ex) {
             setError(ex.err, ex.desc);
             return NOTHING;

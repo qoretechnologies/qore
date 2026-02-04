@@ -25,6 +25,7 @@
 %modern
 
 %requires Logger
+%requires AsyncSocketIo
 
 module Http2ClientIo {
     version = "1.0";
@@ -82,16 +83,21 @@ Http2ClientStreamHandle stream = manager.acquireStream("https://example.com");
 hash<auto> response = stream.request("GET", "/api/resource");
     @endcode
 
-    @par Async Usage (callback API)
+    @par Async Usage (callback API with controller)
     @code{.py}
 %requires Http2ClientIo
 %requires AsyncSocketIo
 
+# Create manager with async controller
 Http2ClientConnectionManager manager();
-AsyncSocketIoController controller();
+AsyncSocketIoController controller(False);  # autostop=False for persistent use
+manager.setController(controller);
+
+# Start the controller I/O thread
+controller.start();
 
 # Submit async request with callback
-manager.submitRequestAsync(controller, "https://example.com", "GET", "/api/resource",
+manager.submitRequestAsync("https://example.com", "GET", "/api/resource",
     NOTHING, NOTHING,
     sub (hash<auto> response, *hash<auto> error) {
         if (error) {
@@ -101,8 +107,12 @@ manager.submitRequestAsync(controller, "https://example.com", "GET", "/api/resou
         }
     });
 
-# Run event loop
-controller.run();
+# Controller runs in background, processing I/O events
+# ... do other work ...
+
+# When done
+controller.stop();
+manager.closeAll();
     @endcode
 
     @section http2clientio_relnotes Release Notes
