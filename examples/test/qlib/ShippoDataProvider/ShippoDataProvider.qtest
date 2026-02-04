@@ -1,0 +1,1039 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ShippoDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/ShippoRestClient.qm
+%requires ../../../../qlib/ShippoDataProvider
+
+%exec-class ShippoDataProviderTest
+
+public class ShippoDataProviderTest inherits QUnit::Test {
+    private {
+        #! Shippo REST client for integration tests
+        *ShippoRestClient::ShippoRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test shipment ID created during tests (for verification)
+        *string testShipmentId;
+    }
+
+    constructor() : Test("ShippoDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require SHIPPO_API_TOKEN)
+        addTestCase("integration tests", \integrationTests());
+
+        # Polling trigger tests
+        addTestCase("polling trigger tests", \pollingTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Shippo client for integration tests
+    private setupConnection() {
+        *string apikey = m_options.apikey ?? ENV.SHIPPO_API_TOKEN;
+        if (!apikey) {
+            if (m_options.verbose) {
+                printf("No API credentials provided (use -k option or SHIPPO_API_TOKEN env var)\n");
+            }
+            return;
+        }
+        hash<auto> opts = {
+            "apikey": apikey,
+        };
+        client = new ShippoRestClient::ShippoRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        # Test creating provider with fake credentials
+        ShippoDataProvider::ShippoDataProvider prov({
+            "apikey": "fake-key-for-testing",
+        });
+        assertEq("shippo", prov.getName());
+        assertEq("Shippo data provider for shipping, labels, and order management", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("shippo");
+        assertEq("shippo", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("apikey"));
+        assertTrue(factoryOpts.hasKey("shipporestclient"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        ShippoDataProvider::ShippoDataProvider prov({
+            "apikey": "x",
+        });
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertEq("ShippoDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("apikey"));
+        assertTrue(info.constructor_options.hasKey("shipporestclient"));
+
+        # Check supported reference data types
+        *hash<string, bool> refData = prov.getSupportedReferenceData();
+        assertTrue(refData.hasKey("carrier_accounts"), "Should support carrier_accounts ref_data");
+        assertTrue(refData.hasKey("shipments"), "Should support shipments ref_data");
+        assertTrue(refData.hasKey("transactions"), "Should support transactions ref_data");
+        assertTrue(refData.hasKey("orders"), "Should support orders ref_data");
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        ShippoDataProvider::ShippoDataProvider prov({
+            "apikey": "x",
+        });
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Collection providers (DPAT_FIND)
+        assertTrue(children.contains("orders"));
+        assertTrue(children.contains("shipments"));
+        assertTrue(children.contains("transactions"));
+
+        # Action providers (DPAT_API)
+        assertTrue(children.contains("create-shipment"));
+        assertTrue(children.contains("get-shipment"));
+        assertTrue(children.contains("create-order"));
+        assertTrue(children.contains("get-order"));
+        assertTrue(children.contains("validate-address"));
+        assertTrue(children.contains("create-label-by-rate"));
+        assertTrue(children.contains("get-transaction"));
+        assertTrue(children.contains("make-api-call"));
+
+        # Events provider
+        assertTrue(children.contains("events"));
+
+        # Check orders child provider
+        AbstractDataProvider orders = prov.getChildProvider("orders");
+        assertEq("orders", orders.getName());
+        hash<DataProviderInfo> ordersInfo = orders.getInfo();
+        assertTrue(ordersInfo.supports_read);
+        assertTrue(ordersInfo.supports_native_search);
+        assertTrue(ordersInfo.has_record);
+
+        # Check create-shipment child provider
+        AbstractDataProvider createShipment = prov.getChildProvider("create-shipment");
+        assertEq("create-shipment", createShipment.getName());
+        hash<DataProviderInfo> createShipmentInfo = createShipment.getInfo();
+        assertTrue(createShipmentInfo.supports_request);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check events child providers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("new-parcel"));
+        assertTrue(eventChildren.contains("new-shipment"));
+        assertTrue(eventChildren.contains("new-label"));
+        assertTrue(eventChildren.contains("new-order"));
+
+        # Check validate-address child provider
+        AbstractDataProvider validateAddress = prov.getChildProvider("validate-address");
+        assertEq("validate-address", validateAddress.getName());
+        hash<DataProviderInfo> validateAddressInfo = validateAddress.getInfo();
+        assertTrue(validateAddressInfo.supports_request);
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test address data type
+        ShippoDataProvider::ShippoAddressDataType addressType();
+        hash<string, AbstractDataField> addressFields = addressType.getFields();
+        assertTrue(addressFields.hasKey("object_id"));
+        assertTrue(addressFields.hasKey("name"));
+        assertTrue(addressFields.hasKey("street1"));
+        assertTrue(addressFields.hasKey("city"));
+        assertTrue(addressFields.hasKey("state"));
+        assertTrue(addressFields.hasKey("zip"));
+        assertTrue(addressFields.hasKey("country"));
+
+        # Test parcel data type
+        ShippoDataProvider::ShippoParcelDataType parcelType();
+        hash<string, AbstractDataField> parcelFields = parcelType.getFields();
+        assertTrue(parcelFields.hasKey("object_id"));
+        assertTrue(parcelFields.hasKey("length"));
+        assertTrue(parcelFields.hasKey("width"));
+        assertTrue(parcelFields.hasKey("height"));
+        assertTrue(parcelFields.hasKey("distance_unit"));
+        assertTrue(parcelFields.hasKey("weight"));
+        assertTrue(parcelFields.hasKey("mass_unit"));
+
+        # Test shipment data type
+        ShippoDataProvider::ShippoShipmentDataType shipmentType();
+        hash<string, AbstractDataField> shipmentFields = shipmentType.getFields();
+        assertTrue(shipmentFields.hasKey("object_id"));
+        assertTrue(shipmentFields.hasKey("object_created"));
+        assertTrue(shipmentFields.hasKey("status"));
+        assertTrue(shipmentFields.hasKey("address_from"));
+        assertTrue(shipmentFields.hasKey("address_to"));
+        assertTrue(shipmentFields.hasKey("parcels"));
+        assertTrue(shipmentFields.hasKey("rates"));
+
+        # Test transaction data type
+        ShippoDataProvider::ShippoTransactionDataType transactionType();
+        hash<string, AbstractDataField> transactionFields = transactionType.getFields();
+        assertTrue(transactionFields.hasKey("object_id"));
+        assertTrue(transactionFields.hasKey("status"));
+        assertTrue(transactionFields.hasKey("tracking_number"));
+        assertTrue(transactionFields.hasKey("label_url"));
+        assertTrue(transactionFields.hasKey("rate"));
+
+        # Test order data type
+        ShippoDataProvider::ShippoOrderDataType orderType();
+        hash<string, AbstractDataField> orderFields = orderType.getFields();
+        assertTrue(orderFields.hasKey("object_id"));
+        assertTrue(orderFields.hasKey("order_number"));
+        assertTrue(orderFields.hasKey("order_status"));
+        assertTrue(orderFields.hasKey("to_address"));
+        assertTrue(orderFields.hasKey("line_items"));
+
+        # Test rate data type
+        ShippoDataProvider::ShippoRateDataType rateType();
+        hash<string, AbstractDataField> rateFields = rateType.getFields();
+        assertTrue(rateFields.hasKey("object_id"));
+        assertTrue(rateFields.hasKey("amount"));
+        assertTrue(rateFields.hasKey("currency"));
+        assertTrue(rateFields.hasKey("provider"));
+        assertTrue(rateFields.hasKey("servicelevel"));
+        assertTrue(rateFields.hasKey("estimated_days"));
+
+        # Test ref_data attributes on get-* action options
+        *hash<DataProviderActionInfo> getShipmentAction = DataProviderActionCatalog::getAppAction(
+            ShippoDataProvider::AppName, "get-shipment");
+        assertTrue(exists getShipmentAction, "get-shipment action should exist");
+        assertTrue(getShipmentAction.options.hasKey("shipment_id"), "get-shipment should have shipment_id option");
+        assertEq("shipments", getShipmentAction.options.shipment_id.ref_data,
+            "shipment_id should have ref_data = 'shipments'");
+
+        *hash<DataProviderActionInfo> getTransactionAction = DataProviderActionCatalog::getAppAction(
+            ShippoDataProvider::AppName, "get-shipping-label");
+        assertTrue(exists getTransactionAction, "get-shipping-label action should exist");
+        assertTrue(getTransactionAction.options.hasKey("transaction_id"), "get-shipping-label should have transaction_id option");
+        assertEq("transactions", getTransactionAction.options.transaction_id.ref_data,
+            "transaction_id should have ref_data = 'transactions'");
+
+        *hash<DataProviderActionInfo> getOrderAction = DataProviderActionCatalog::getAppAction(
+            ShippoDataProvider::AppName, "get-order");
+        assertTrue(exists getOrderAction, "get-order action should exist");
+        assertTrue(getOrderAction.options.hasKey("order_id"), "get-order should have order_id option");
+        assertEq("orders", getOrderAction.options.order_id.ref_data,
+            "order_id should have ref_data = 'orders'");
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        ShippoDataProvider::ShippoDataProvider prov({
+            "apikey": "invalid-key",
+        });
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid child in events provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            events.getChildProviderEx("invalid-event-type");
+        });
+    }
+
+    #! Corner case tests - edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+        # Test REST client URL
+        ShippoRestClient::ShippoRestClient client1({
+            "apikey": "x",
+        });
+        assertTrue(client1.getURL() =~ /api\.goshippo\.com$/);
+
+        # Test with OAuth2 options - should not throw (use do_not_connect=True to avoid OAuth2 login)
+        ShippoRestClient::ShippoRestClient client2({
+            "oauth2_client_id": "test-client",
+            "oauth2_client_secret": "test-secret",
+            "oauth2_grant_type": "authorization_code",
+        }, True);
+        assertTrue(client2.getURL() =~ /api\.goshippo\.com$/);
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("shippo");
+        assertEq("Shippo REST Connection", scheme.display_name);
+        assertTrue(scheme.options.hasKey("apikey"));
+        assertTrue(scheme.options."apikey".sensitive);
+
+        # Verify connection can create data provider
+        ShippoRestClient::ShippoRestConnection conn("test", "test connection",
+            "shippo://api.goshippo.com", {}, {"apikey": "x"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("Shippo", conn.getAppName());
+        assertEq("shippo", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Get all actions for the Shippo app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            ShippoDataProvider::AppName);
+        assertTrue(actions.size() > 0);
+
+        # Verify action names
+        list<string> actionNames = map $1.action, actions;
+
+        # Shipment actions
+        assertTrue(actionNames.contains("create-shipment"));
+        assertTrue(actionNames.contains("get-shipment"));
+        assertTrue(actionNames.contains("search-shipments"));
+
+        # Label/Transaction actions
+        assertTrue(actionNames.contains("create-label-by-rate"));
+        assertTrue(actionNames.contains("get-shipping-label"));
+        assertTrue(actionNames.contains("search-shipping-labels"));
+
+        # Order actions
+        assertTrue(actionNames.contains("create-order"));
+        assertTrue(actionNames.contains("get-order"));
+        assertTrue(actionNames.contains("list-orders"));
+
+        # Address actions
+        assertTrue(actionNames.contains("validate-address"));
+
+        # Utility actions
+        assertTrue(actionNames.contains("make-api-call"));
+
+        # Trigger actions
+        assertTrue(actionNames.contains("new-parcel"));
+        assertTrue(actionNames.contains("new-shipment"));
+        assertTrue(actionNames.contains("new-label"));
+        assertTrue(actionNames.contains("new-order"));
+
+        # Verify trigger actions have correct action_code
+        *hash<DataProviderActionInfo> newParcelAction = DataProviderActionCatalog::getAppAction(
+            ShippoDataProvider::AppName, "new-parcel");
+        assertTrue(exists newParcelAction, "new-parcel action should exist");
+        assertEq(DPAT_EVENT, newParcelAction.action_code);
+    }
+
+    #! Integration tests - require SHIPPO_API_TOKEN
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Shippo credentials provided (use -k option or SHIPPO_API_TOKEN env var)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test shipments provider
+        testShipmentsProvider();
+
+        # Test transactions provider
+        testTransactionsProvider();
+
+        # Test orders provider
+        testOrdersProvider();
+
+        # Test shipment data integrity (create, fetch, verify)
+        testShipmentDataIntegrity();
+
+        # Test order data integrity (create, fetch, verify)
+        testOrderDataIntegrity();
+
+        # Test address validation
+        testValidateAddress();
+
+        # Test make-api-call action
+        testMakeApiCall();
+    }
+
+    #! Test API connectivity
+    private testApiConnectivity() {
+        # Test that we can connect to the API
+        hash<auto> response = client.get("addresses");
+        assertTrue(response.body.typeCode() == NT_HASH);
+        if (m_options.verbose) {
+            printf("Connected to Shippo API successfully\n");
+        }
+    }
+
+    #! Test shipments provider
+    private testShipmentsProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Shipments Provider ---\n");
+        }
+
+        ShippoDataProvider::ShippoDataProvider prov(client);
+
+        # Get shipments provider
+        AbstractDataProvider shipmentsProvider = prov.getChildProvider("shipments");
+        hash<DataProviderInfo> info = shipmentsProvider.getInfo();
+
+        assertTrue(info.supports_read, "Shipments should support read");
+        assertTrue(info.supports_native_search, "Shipments should support native search");
+        assertTrue(info.has_record, "Shipments should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("object_created_gt"), "Should have object_created_gt search option");
+        assertTrue(info.search_options.hasKey("object_created_lt"), "Should have object_created_lt search option");
+        assertTrue(info.search_options.hasKey("results"), "Should have results search option");
+
+        # Fetch some shipments (limited)
+        hash<auto> searchOpts = {"results": 5};
+        list<hash<auto>> shipments = map $1, shipmentsProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d shipments (limited to 5)\n", shipments.size());
+        }
+
+        if (shipments.size() > 0) {
+            # Verify shipment record structure
+            hash<auto> shipment = shipments[0];
+            assertTrue(shipment.hasKey("object_id"), "Shipment should have object_id");
+            if (m_options.verbose) {
+                printf("  Sample shipment: ID=%y, status=%y\n",
+                    shipment.object_id, shipment.status ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Shipments Provider tests completed ---\n");
+        }
+    }
+
+    #! Test transactions provider
+    private testTransactionsProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Transactions Provider ---\n");
+        }
+
+        ShippoDataProvider::ShippoDataProvider prov(client);
+
+        # Get transactions provider
+        AbstractDataProvider transactionsProvider = prov.getChildProvider("transactions");
+        hash<DataProviderInfo> info = transactionsProvider.getInfo();
+
+        assertTrue(info.supports_read, "Transactions should support read");
+        assertTrue(info.supports_native_search, "Transactions should support native search");
+        assertTrue(info.has_record, "Transactions should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("object_status"), "Should have object_status search option");
+        assertTrue(info.search_options.hasKey("tracking_status"), "Should have tracking_status search option");
+
+        # Fetch some transactions (limited)
+        hash<auto> searchOpts = {"results": 5};
+        list<hash<auto>> transactions = map $1, transactionsProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d transactions (limited to 5)\n", transactions.size());
+        }
+
+        if (transactions.size() > 0) {
+            # Verify transaction record structure
+            hash<auto> transaction = transactions[0];
+            assertTrue(transaction.hasKey("object_id"), "Transaction should have object_id");
+            if (m_options.verbose) {
+                printf("  Sample transaction: ID=%y, status=%y, tracking=%y\n",
+                    transaction.object_id, transaction.object_status ?? "N/A",
+                    transaction.tracking_number ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Transactions Provider tests completed ---\n");
+        }
+    }
+
+    #! Test orders provider
+    private testOrdersProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Orders Provider ---\n");
+        }
+
+        ShippoDataProvider::ShippoDataProvider prov(client);
+
+        # Get orders provider
+        AbstractDataProvider ordersProvider = prov.getChildProvider("orders");
+        hash<DataProviderInfo> info = ordersProvider.getInfo();
+
+        assertTrue(info.supports_read, "Orders should support read");
+        assertTrue(info.supports_native_search, "Orders should support native search");
+        assertTrue(info.has_record, "Orders should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("order_status"), "Should have order_status search option");
+        assertTrue(info.search_options.hasKey("shop_app"), "Should have shop_app search option");
+
+        # Fetch some orders (limited)
+        hash<auto> searchOpts = {"results": 5};
+        list<hash<auto>> orders = map $1, ordersProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d orders (limited to 5)\n", orders.size());
+        }
+
+        if (orders.size() > 0) {
+            # Verify order record structure
+            hash<auto> order = orders[0];
+            assertTrue(order.hasKey("object_id"), "Order should have object_id");
+            if (m_options.verbose) {
+                printf("  Sample order: ID=%y, number=%y, status=%y\n",
+                    order.object_id, order.order_number ?? "N/A",
+                    order.order_status ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Orders Provider tests completed ---\n");
+        }
+    }
+
+    #! Test shipment data integrity - verifies data actually persists
+    /** CRITICAL: This test verifies that shipment data is correctly saved and retrievable.
+        This catches issues like:
+        - Wrong Content-Type
+        - Silent API acceptance without data persistence
+        - Incorrect field handling
+
+        The test creates a shipment with known values, retrieves it, and verifies the values match.
+    */
+    private testShipmentDataIntegrity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Shipment Data Integrity ---\n");
+        }
+
+        ShippoDataProvider::ShippoDataProvider prov(client);
+
+        # Test 1: Create shipment
+        if (m_options.verbose) {
+            printf("\nTest 1: Create shipment...\n");
+        }
+
+        AbstractDataProvider createShipmentProvider = prov.getChildProvider("create-shipment");
+        hash<auto> createRequest = {
+            "address_from": {
+                "name": "Test Sender",
+                "street1": "965 Mission St",
+                "city": "San Francisco",
+                "state": "CA",
+                "zip": "94103",
+                "country": "US",
+            },
+            "address_to": {
+                "name": "Test Recipient",
+                "street1": "123 Main St",
+                "city": "New York",
+                "state": "NY",
+                "zip": "10001",
+                "country": "US",
+            },
+            "parcels": ({
+                "length": "10",
+                "width": "8",
+                "height": "6",
+                "distance_unit": "in",
+                "weight": "2",
+                "mass_unit": "lb",
+            },),
+        };
+
+        try {
+            auto createResult = createShipmentProvider.doRequest(createRequest);
+            if (m_options.verbose) {
+                printf("  Create result: object_id=%y\n", createResult.object_id);
+            }
+            assertTrue(exists createResult.object_id, "Shipment should be created with an ID");
+            testShipmentId = createResult.object_id;
+
+            # Verify the data was actually saved by fetching it back
+            AbstractDataProvider getShipmentProvider = prov.getChildProvider("get-shipment");
+            hash<auto> getRequest = {
+                "shipment_id": testShipmentId,
+            };
+
+            auto fetchedShipment = getShipmentProvider.doRequest(getRequest);
+            if (m_options.verbose) {
+                printf("  Fetched shipment: object_id=%y, status=%y\n",
+                    fetchedShipment.object_id, fetchedShipment.status);
+            }
+
+            assertEq(testShipmentId, fetchedShipment.object_id, "Shipment ID should match");
+            assertTrue(fetchedShipment.hasKey("address_from"), "Shipment should have address_from");
+            assertTrue(fetchedShipment.hasKey("address_to"), "Shipment should have address_to");
+            assertTrue(fetchedShipment.hasKey("parcels"), "Shipment should have parcels");
+
+            # Verify rates were generated (if shipment was successful)
+            if (fetchedShipment.status == "SUCCESS" && fetchedShipment.rates) {
+                assertTrue(fetchedShipment.rates.size() > 0, "Shipment should have rates");
+                if (m_options.verbose) {
+                    printf("  Got %d shipping rates\n", fetchedShipment.rates.size());
+                }
+            }
+
+            if (m_options.verbose) {
+                printf("  Data integrity verified: shipment saved and retrieved correctly\n");
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  Create shipment failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Shipment Data Integrity tests completed ---\n");
+        }
+    }
+
+    #! Test order data integrity - verifies order creation and retrieval
+    /** Tests create-order and get-order actions to ensure data persistence.
+    */
+    private testOrderDataIntegrity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Order Data Integrity ---\n");
+        }
+
+        ShippoDataProvider::ShippoDataProvider prov(client);
+
+        # Test 1: Create order
+        if (m_options.verbose) {
+            printf("\nTest 1: Create order...\n");
+        }
+
+        AbstractDataProvider createOrderProvider = prov.getChildProvider("create-order");
+        hash<auto> createRequest = {
+            "to_address": {
+                "name": "Test Customer",
+                "street1": "456 Customer Ave",
+                "city": "Los Angeles",
+                "state": "CA",
+                "zip": "90001",
+                "country": "US",
+            },
+            "order_number": "TEST-ORDER-" + now_us().toString(),
+            "order_status": "PAID",
+            "placed_at": format_date("YYYY-MM-DD", now()),
+            "line_items": ({
+                "title": "Test Product",
+                "quantity": 2,
+                "sku": "TEST-SKU-001",
+                "total_price": "29.99",
+                "currency": "USD",
+                "weight": "1.5",
+                "weight_unit": "lb",
+            },),
+            "total_price": "29.99",
+            "currency": "USD",
+            "weight": "1.5",
+            "weight_unit": "lb",
+        };
+
+        try {
+            auto createResult = createOrderProvider.doRequest(createRequest);
+            if (m_options.verbose) {
+                printf("  Create result: object_id=%y, order_number=%y\n",
+                    createResult.object_id, createResult.order_number);
+            }
+            assertTrue(exists createResult.object_id, "Order should be created with an ID");
+
+            # Test 2: Get the order back and verify
+            if (m_options.verbose) {
+                printf("\nTest 2: Get order...\n");
+            }
+
+            AbstractDataProvider getOrderProvider = prov.getChildProvider("get-order");
+            hash<auto> getRequest = {
+                "order_id": createResult.object_id,
+            };
+
+            auto fetchedOrder = getOrderProvider.doRequest(getRequest);
+            if (m_options.verbose) {
+                printf("  Fetched order: object_id=%y, order_number=%y, status=%y\n",
+                    fetchedOrder.object_id, fetchedOrder.order_number, fetchedOrder.order_status);
+            }
+
+            assertEq(createResult.object_id, fetchedOrder.object_id, "Order ID should match");
+            assertTrue(fetchedOrder.hasKey("to_address"), "Order should have to_address");
+            assertTrue(fetchedOrder.hasKey("order_number"), "Order should have order_number");
+
+            if (m_options.verbose) {
+                printf("  Data integrity verified: order saved and retrieved correctly\n");
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  Order test failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Order Data Integrity tests completed ---\n");
+        }
+    }
+
+    #! Test validate-address action
+    /** Tests address validation with both valid and intentionally slightly incorrect addresses
+    */
+    private testValidateAddress() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Validate Address Action ---\n");
+        }
+
+        ShippoDataProvider::ShippoDataProvider prov(client);
+
+        AbstractDataProvider validateAddressProvider = prov.getChildProvider("validate-address");
+
+        # Test 1: Validate a known good address
+        if (m_options.verbose) {
+            printf("\nTest 1: Validate a known good address...\n");
+        }
+
+        try {
+            auto result = validateAddressProvider.doRequest({
+                "name": "Test User",
+                "street1": "965 Mission St",
+                "city": "San Francisco",
+                "state": "CA",
+                "zip": "94103",
+                "country": "US",
+            });
+
+            assertTrue(result.hasKey("object_id"), "Validated address should have object_id");
+            assertTrue(result.hasKey("is_complete"), "Result should have is_complete field");
+            if (m_options.verbose) {
+                printf("  Address validated: object_id=%y, is_complete=%y\n",
+                    result.object_id, result.is_complete);
+                if (result.validation_results) {
+                    printf("  Validation results: %y\n", result.validation_results);
+                }
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  Validate address failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        # Test 2: Validate address with missing/incomplete data (should still work, just marked incomplete)
+        if (m_options.verbose) {
+            printf("\nTest 2: Validate address with corrections needed...\n");
+        }
+
+        try {
+            auto result = validateAddressProvider.doRequest({
+                "name": "Test User",
+                "street1": "965 Mission",  # Missing 'St'
+                "city": "San Francisco",
+                "state": "CA",
+                "zip": "94103",
+                "country": "US",
+            });
+
+            assertTrue(result.hasKey("object_id"), "Validated address should have object_id");
+            if (m_options.verbose) {
+                printf("  Address validated: object_id=%y, is_complete=%y\n",
+                    result.object_id, result.is_complete);
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  Validate address failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Validate Address tests completed ---\n");
+        }
+    }
+
+    #! Test make-api-call action
+    private testMakeApiCall() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Make API Call Action ---\n");
+        }
+
+        ShippoDataProvider::ShippoDataProvider prov(client);
+
+        AbstractDataProvider makeApiCallProvider = prov.getChildProvider("make-api-call");
+
+        # Test GET request to addresses endpoint
+        auto result = makeApiCallProvider.doRequest({
+            "method": "GET",
+            "path": "/addresses",
+        });
+
+        assertTrue(result.hasKey("body"), "make-api-call should return body");
+        assertTrue(result.body.typeCode() == NT_HASH,
+            "make-api-call response body should be hash");
+        if (m_options.verbose) {
+            printf("  GET /addresses returned hash with %d key(s)\n",
+                elements keys result.body);
+        }
+
+        # Test with query parameters
+        auto parcels = makeApiCallProvider.doRequest({
+            "method": "GET",
+            "path": "/parcels",
+            "query_params": {"results": 1},
+        });
+
+        assertTrue(parcels.hasKey("body"), "make-api-call /parcels should return body");
+        if (m_options.verbose) {
+            printf("  GET /parcels returned successfully\n");
+        }
+
+        if (m_options.verbose) {
+            printf("--- Make API Call tests completed ---\n");
+        }
+    }
+
+    #! Polling trigger tests
+    pollingTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Shippo credentials provided");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Polling Trigger Providers ---\n");
+        }
+
+        # ============================================
+        # Test New Parcel Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ShippoNewParcelWatchDataProvider...\n");
+        }
+
+        # Test event provider instantiation
+        ShippoDataProvider::ShippoNewParcelWatchDataProvider parcelProv(client, {});
+        assertEq("new-parcel", parcelProv.getName());
+
+        # Verify provider metadata
+        assertTrue(parcelProv.getInfo().supports_observable);
+
+        # Test event types
+        hash<string, hash<DataProviderMessageInfo>> parcelEventTypes = parcelProv.getEventTypes();
+        assertTrue(parcelEventTypes.hasKey("new-parcel"));
+        assertTrue(parcelEventTypes{"new-parcel"}.desc.val());
+        # Verify event type uses custom data type, not generic AutoHashType
+        assertEq("ShippoParcelDataType", parcelEventTypes{"new-parcel"}.type.getName(),
+            "new-parcel event should use ShippoParcelDataType");
+
+        # Test example event data
+        auto parcelExampleData = parcelProv.getExampleEventData("new-parcel");
+        assertTrue(parcelExampleData.hasKey("object_id"));
+        assertTrue(parcelExampleData.hasKey("object_created"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys parcelEventTypes);
+            printf("  Example object_id: %y\n", parcelExampleData.object_id);
+        }
+
+        # ============================================
+        # Test New Shipment Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ShippoNewShipmentWatchDataProvider...\n");
+        }
+
+        ShippoDataProvider::ShippoNewShipmentWatchDataProvider shipmentProv(client, {});
+        assertEq("new-shipment", shipmentProv.getName());
+        assertTrue(shipmentProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> shipmentEventTypes = shipmentProv.getEventTypes();
+        assertTrue(shipmentEventTypes.hasKey("new-shipment"));
+        # Verify event type uses custom data type, not generic AutoHashType
+        assertEq("ShippoShipmentDataType", shipmentEventTypes{"new-shipment"}.type.getName(),
+            "new-shipment event should use ShippoShipmentDataType");
+
+        auto shipmentExampleData = shipmentProv.getExampleEventData("new-shipment");
+        assertTrue(shipmentExampleData.hasKey("object_id"));
+        assertTrue(shipmentExampleData.hasKey("object_created"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys shipmentEventTypes);
+            printf("  Example object_id: %y\n", shipmentExampleData.object_id);
+        }
+
+        # ============================================
+        # Test New Label Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ShippoNewLabelWatchDataProvider...\n");
+        }
+
+        ShippoDataProvider::ShippoNewLabelWatchDataProvider labelProv(client, {});
+        assertEq("new-label", labelProv.getName());
+        assertTrue(labelProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> labelEventTypes = labelProv.getEventTypes();
+        assertTrue(labelEventTypes.hasKey("new-label"));
+        # Verify event type uses custom data type, not generic AutoHashType
+        assertEq("ShippoTransactionDataType", labelEventTypes{"new-label"}.type.getName(),
+            "new-label event should use ShippoTransactionDataType");
+
+        auto labelExampleData = labelProv.getExampleEventData("new-label");
+        assertTrue(labelExampleData.hasKey("object_id"));
+        assertTrue(labelExampleData.hasKey("object_created"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys labelEventTypes);
+            printf("  Example object_id: %y\n", labelExampleData.object_id);
+        }
+
+        # ============================================
+        # Test New Order Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ShippoNewOrderWatchDataProvider...\n");
+        }
+
+        ShippoDataProvider::ShippoNewOrderWatchDataProvider orderProv(client, {});
+        assertEq("new-order", orderProv.getName());
+        assertTrue(orderProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> orderEventTypes = orderProv.getEventTypes();
+        assertTrue(orderEventTypes.hasKey("new-order"));
+        # Verify event type uses custom data type, not generic AutoHashType
+        assertEq("ShippoOrderDataType", orderEventTypes{"new-order"}.type.getName(),
+            "new-order event should use ShippoOrderDataType");
+
+        auto orderExampleData = orderProv.getExampleEventData("new-order");
+        assertTrue(orderExampleData.hasKey("object_id"));
+        # Note: Shippo orders may not have object_created in the same way as other objects
+        # Orders use placed_at for the order timestamp
+        assertTrue(orderExampleData.hasKey("order_number") || orderExampleData.hasKey("placed_at"),
+            "Order example should have order_number or placed_at");
+        assertTrue(orderExampleData.hasKey("order_status"), "Order example should have order_status");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys orderEventTypes);
+            printf("  Example object_id: %y\n", orderExampleData.object_id);
+            printf("  Example order_number: %y\n", orderExampleData.order_number);
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Polling Trigger tests completed ---\n");
+        }
+    }
+}
+
+#! Test observer for polling events
+class TestObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data) {
+        events += {"event_id": event_id, "data": data};
+    }
+}

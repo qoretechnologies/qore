@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <circle cx="100" cy="100" r="90" fill="#1E3A5F"/>
+  <path d="M50 100 L80 130 L130 70 L160 100 L130 130 L80 70 L50 100" fill="#4DBBEB" stroke="#FFFFFF" stroke-width="2"/>
+  <text x="100" y="160" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="bold">SHIPPO</text>
+</svg>
