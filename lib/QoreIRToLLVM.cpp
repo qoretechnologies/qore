@@ -2725,6 +2725,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
+        case QoreIROpcode::LoadImplicitArg: {
+            const auto* impl_arg_inst = static_cast<const QoreIRImplicitArgInstruction*>(inst);
+            auto helper = module.getOrInsertFunction("qore_rt_load_implicit_arg",
+                    llvm::FunctionType::get(i64_type, {i32_type, ptr_type}, false));
+            llvm::Value* offset_val = llvm::ConstantInt::get(i32_type, impl_arg_inst->offset);
+            llvm::Value* result = builder->CreateCall(helper, {offset_val, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::LoadImplicitArgv: {
+            auto helper = module.getOrInsertFunction("qore_rt_load_implicit_argv",
+                    llvm::FunctionType::get(i64_type, {ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::LoadImplicitElement: {
+            auto helper = module.getOrInsertFunction("qore_rt_load_implicit_element",
+                    llvm::FunctionType::get(i64_type, {ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            return true;
+        }
         case QoreIROpcode::StoreGlobal:
         case QoreIROpcode::StoreThreadLocal: {
             const auto* vinst = static_cast<const QoreIRVarInstruction*>(inst);

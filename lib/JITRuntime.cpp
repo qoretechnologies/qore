@@ -414,6 +414,35 @@ extern "C" void qore_rt_store_thread_local(Var* var, uint64_t value, ExceptionSi
     qore_rt_store_global(var, value, xsink);
 }
 
+// --- Implicit argument helpers ---
+
+extern "C" uint64_t qore_rt_load_implicit_arg(int offset, ExceptionSink* xsink) {
+    const QoreListNode* argv = thread_get_implicit_args();
+    if (!argv) {
+        return toBits(QoreValue());
+    }
+    QoreValue result = argv->retrieveEntry(offset);
+    if (result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_load_implicit_argv(ExceptionSink* xsink) {
+    const QoreListNode* argv = thread_get_implicit_args();
+    if (!argv) {
+        return toBits(QoreValue());
+    }
+    // Return a reference to the argv list
+    QoreValue result = const_cast<QoreListNode*>(argv);
+    result.refSelf();
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_load_implicit_element(ExceptionSink* xsink) {
+    return toBits(QoreValue(get_implicit_element()));
+}
+
 // --- LValue operation helpers ---
 
 extern "C" uint64_t qore_rt_lvalue_load(uint64_t lvalue_bits, ExceptionSink* xsink) {

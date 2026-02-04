@@ -282,6 +282,18 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         case QoreIROpcode::DotEvalList:
         case QoreIROpcode::DotEvalHash:
         case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::MapAny:
+        case QoreIROpcode::MapInt:
+        case QoreIROpcode::MapFloat:
+        case QoreIROpcode::SelectAny:
+        case QoreIROpcode::SelectInt:
+        case QoreIROpcode::SelectFloat:
+        case QoreIROpcode::FoldlAny:
+        case QoreIROpcode::FoldlInt:
+        case QoreIROpcode::FoldlFloat:
+        case QoreIROpcode::FoldrAny:
+        case QoreIROpcode::FoldrInt:
+        case QoreIROpcode::FoldrFloat:
         case QoreIROpcode::MapSelectAny:
         case QoreIROpcode::MapSelectList:
         case QoreIROpcode::HashMapAny:
@@ -1646,6 +1658,43 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::LoadImplicitArg: {
+                auto* impl_arg_inst = static_cast<QoreIRImplicitArgInstruction*>(inst);
+                const QoreListNode* argv = thread_get_implicit_args();
+                QoreValue out;
+                if (argv) {
+                    out = argv->retrieveEntry(impl_arg_inst->offset);
+                    if (out.hasNode()) {
+                        out = out.refSelf();
+                    }
+                }
+                values[impl_arg_inst->result.id] = out;
+                if (out.hasNode()) {
+                    cleanup.push_back(impl_arg_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::LoadImplicitArgv: {
+                const QoreListNode* argv = thread_get_implicit_args();
+                QoreValue out;
+                if (argv) {
+                    out = const_cast<QoreListNode*>(argv);
+                    out.refSelf();
+                }
+                values[inst->result.id] = out;
+                if (out.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::LoadImplicitElement: {
+                int64 element = get_implicit_element();
+                values[inst->result.id] = element;
                 ++ip;
                 break;
             }

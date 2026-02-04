@@ -1764,13 +1764,17 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return result;
     }
     const AbstractQoreNode* node = expr.getInternalNode();
-    if (dynamic_cast<const QoreImplicitArgumentNode*>(node)) {
-        error = "implicit argument reference not supported for IR lowering";
-        return QoreIRValue();
+    if (auto* impl_arg = dynamic_cast<const QoreImplicitArgumentNode*>(node)) {
+        int offset = impl_arg->getOffset();
+        if (offset == -1) {
+            // $argv - entire argument list
+            return builder.createLoadImplicitArgv(impl_arg->loc)->result;
+        }
+        // $1, $2, etc. - specific argument (offset is 0 for $1, 1 for $2, etc.)
+        return builder.createLoadImplicitArg(offset, impl_arg->loc)->result;
     }
-    if (dynamic_cast<const QoreImplicitElementNode*>(node)) {
-        error = "implicit element reference not supported for IR lowering";
-        return QoreIRValue();
+    if (auto* impl_elem = dynamic_cast<const QoreImplicitElementNode*>(node)) {
+        return builder.createLoadImplicitElement(impl_elem->loc)->result;
     }
     // Delegate unsupported expression types to AST evaluation via ExprOp.
     // The interpreter's evalExpr() default case calls evalExprNode() for any opcode,
@@ -1789,9 +1793,14 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands,
             parse_node ? parse_node->loc : nullptr, error);
     }
-    if (dynamic_cast<const ContextrefNode*>(node) || dynamic_cast<const ComplexContextrefNode*>(node)) {
-        error = "context reference not supported for IR lowering";
-        return QoreIRValue();
+    // Context references are a legacy feature - delegate to AST evaluation
+    if (auto* ctx_ref = dynamic_cast<const ContextrefNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, ctx_ref->loc, error);
+    }
+    if (auto* complex_ctx_ref = dynamic_cast<const ComplexContextrefNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, complex_ctx_ref->loc, error);
     }
     if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
         std::vector<QoreIRValue> operands;
@@ -5259,38 +5268,10 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
         return result;
     }
 
-    // Generic path: try to lower expression (will likely fail for $1/$2)
-    QoreIRValue left = lowerExpression(foldl->getLeft(), error);
-    if (!left.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue right = lowerExpression(foldl->getRight(), error);
-    if (!right.isValid()) {
-        return QoreIRValue();
-    }
-    QoreParseAnalysis expr_analysis;
-    QoreIROpcode opcode = QoreIROpcode::FoldlAny;
-    if (getAnalysis(expr, expr_analysis)) {
-        opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::FoldlAny, QoreIROpcode::FoldlInt,
-            QoreIROpcode::FoldlFloat);
-    }
-    QoreIRValue result;
-    if (!exception_stack.empty()) {
-        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-        if (!normal_block) {
-            error = "IR builder failed to create invoke continuation block";
-            return QoreIRValue();
-        }
-        QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, foldl->loc);
-        inst->invoke_opcode = opcode;
-        builder.setBlock(normal_block);
-        result = inst->result;
-    } else {
-        result = builder.createBinaryOp(opcode, left, right, foldl->loc)->result;
-    }
-    maybeInsertNotNothingGuard(result, &expr, foldl->loc, nullptr);
-    return result;
+    // Fallback: delegate entire operation to AST evaluation
+    // AST handles implicit argument context ($1, $2, $#) correctly
+    std::vector<QoreIRValue> operands;
+    return lowerExprOpOrInvoke(QoreIROpcode::FoldlAny, expr, operands, foldl->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error) {
@@ -5300,37 +5281,10 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
 
-    QoreIRValue left = lowerExpression(foldr->getLeft(), error);
-    if (!left.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue right = lowerExpression(foldr->getRight(), error);
-    if (!right.isValid()) {
-        return QoreIRValue();
-    }
-    QoreParseAnalysis expr_analysis;
-    QoreIROpcode opcode = QoreIROpcode::FoldrAny;
-    if (getAnalysis(expr, expr_analysis)) {
-        opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::FoldrAny, QoreIROpcode::FoldrInt,
-            QoreIROpcode::FoldrFloat);
-    }
-    QoreIRValue result;
-    if (!exception_stack.empty()) {
-        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-        if (!normal_block) {
-            error = "IR builder failed to create invoke continuation block";
-            return QoreIRValue();
-        }
-        QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, foldr->loc);
-        inst->invoke_opcode = opcode;
-        builder.setBlock(normal_block);
-        result = inst->result;
-    } else {
-        result = builder.createBinaryOp(opcode, left, right, foldr->loc)->result;
-    }
-    maybeInsertNotNothingGuard(result, &expr, foldr->loc, nullptr);
-    return result;
+    // Delegate entire operation to AST evaluation
+    // AST handles implicit argument context ($1, $2, $#) correctly
+    std::vector<QoreIRValue> operands;
+    return lowerExprOpOrInvoke(QoreIROpcode::FoldrAny, expr, operands, foldr->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) {
@@ -5460,50 +5414,10 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
         return result;
     }
 
-    // Fallback to regular map lowering
-    QoreIRValue left = lowerExpression(map->getLeft(), error);
-    if (!left.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue right = lowerExpression(map->getRight(), error);
-    if (!right.isValid()) {
-        return QoreIRValue();
-    }
-    QoreParseAnalysis expr_analysis;
-    QoreIROpcode opcode = QoreIROpcode::MapAny;
-    if (getAnalysis(expr, expr_analysis)) {
-        opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::MapAny, QoreIROpcode::MapInt, QoreIROpcode::MapFloat);
-        if (opcode == QoreIROpcode::MapAny
-            && expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-            && expr_analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
-            const QoreTypeInfo* type = selectAnalysisType(expr_analysis);
-            if (QoreTypeInfo::isListType(type)) {
-                const QoreTypeInfo* elem_type = QoreTypeInfo::getElementType(type);
-                if (elem_type && QoreTypeInfo::isType(elem_type, NT_INT)) {
-                    opcode = QoreIROpcode::MapInt;
-                } else if (elem_type && QoreTypeInfo::isType(elem_type, NT_FLOAT)) {
-                    opcode = QoreIROpcode::MapFloat;
-                }
-            }
-        }
-    }
-    QoreIRValue result;
-    if (!exception_stack.empty()) {
-        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-        if (!normal_block) {
-            error = "IR builder failed to create invoke continuation block";
-            return QoreIRValue();
-        }
-        QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, map->loc);
-        inst->invoke_opcode = opcode;
-        builder.setBlock(normal_block);
-        result = inst->result;
-    } else {
-        result = builder.createBinaryOp(opcode, left, right, map->loc)->result;
-    }
-    maybeInsertNotNothingGuard(result, &expr, map->loc, nullptr);
-    return result;
+    // Fallback: delegate entire operation to AST evaluation
+    // AST handles implicit argument context ($1, $#) correctly
+    std::vector<QoreIRValue> operands;
+    return lowerExprOpOrInvoke(QoreIROpcode::MapAny, expr, operands, map->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& error) {
@@ -5567,47 +5481,10 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
         return result;
     }
 
-    // Fallback to regular select lowering
-    QoreIRValue left = lowerExpression(select->getLeft(), error);
-    if (!left.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue right = lowerExpression(select->getRight(), error);
-    if (!right.isValid()) {
-        return QoreIRValue();
-    }
-    QoreParseAnalysis expr_analysis;
-    QoreIROpcode opcode = QoreIROpcode::SelectAny;
-    if (getAnalysis(expr, expr_analysis)) {
-        opcode = selectFoldOpcode(expr_analysis, QoreIROpcode::SelectAny,
-            QoreIROpcode::SelectInt, QoreIROpcode::SelectFloat);
-        if (opcode == QoreIROpcode::SelectAny
-            && expr_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-            && expr_analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
-            const QoreTypeInfo* type = selectAnalysisType(expr_analysis);
-            if (QoreTypeInfo::isListType(type)) {
-                const QoreTypeInfo* elem_type = QoreTypeInfo::getElementType(type);
-                if (elem_type && QoreTypeInfo::isType(elem_type, NT_INT)) {
-                    opcode = QoreIROpcode::SelectInt;
-                } else if (elem_type && QoreTypeInfo::isType(elem_type, NT_FLOAT)) {
-                    opcode = QoreIROpcode::SelectFloat;
-                }
-            }
-        }
-    }
-    if (!exception_stack.empty()) {
-        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-        if (!normal_block) {
-            error = "IR builder failed to create invoke continuation block";
-            return QoreIRValue();
-        }
-        QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {left, right}, normal_block, handler, select->loc);
-        inst->invoke_opcode = opcode;
-        builder.setBlock(normal_block);
-        return inst->result;
-    }
-    return builder.createBinaryOp(opcode, left, right)->result;
+    // Fallback: delegate entire operation to AST evaluation
+    // AST handles implicit argument context ($1, $#) correctly
+    std::vector<QoreIRValue> operands;
+    return lowerExprOpOrInvoke(QoreIROpcode::SelectAny, expr, operands, select->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& error) {
@@ -5617,39 +5494,10 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
         return QoreIRValue();
     }
 
-    QoreIRValue first = lowerExpression(map_select->get(0), error);
-    if (!first.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue second = lowerExpression(map_select->get(1), error);
-    if (!second.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue third = lowerExpression(map_select->get(2), error);
-    if (!third.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIROpcode opcode = QoreIROpcode::MapSelectAny;
-    QoreParseAnalysis analysis;
-    if (getAnalysis(expr, analysis)
-        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-        && analysis.known_type
-        && QoreTypeInfo::parseReturns(analysis.known_type, NT_LIST) != QTI_NOT_EQUAL) {
-        opcode = QoreIROpcode::MapSelectList;
-    }
-    if (!exception_stack.empty()) {
-        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-        if (!normal_block) {
-            error = "IR builder failed to create invoke continuation block";
-            return QoreIRValue();
-        }
-        QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {first, second, third}, normal_block, handler, map_select->loc);
-        inst->invoke_opcode = opcode;
-        builder.setBlock(normal_block);
-        return inst->result;
-    }
-    return builder.createTernaryOp(opcode, first, second, third)->result;
+    // Delegate entire operation to AST evaluation
+    // AST handles implicit argument context ($1, $#) correctly
+    std::vector<QoreIRValue> operands;
+    return lowerExprOpOrInvoke(QoreIROpcode::MapSelectAny, expr, operands, map_select->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& error) {
@@ -5659,43 +5507,10 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
 
-    QoreIRValue first = lowerExpression(map->get(0), error);
-    if (!first.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue second = lowerExpression(map->get(1), error);
-    if (!second.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue third = lowerExpression(map->get(2), error);
-    if (!third.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIROpcode opcode = QoreIROpcode::HashMapAny;
-    QoreParseAnalysis analysis;
-    if (getAnalysis(expr, analysis)
-        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-        && analysis.known_type
-        && QoreTypeInfo::parseReturns(analysis.known_type, NT_HASH) != QTI_NOT_EQUAL) {
-        opcode = QoreIROpcode::HashMap;
-    }
-    QoreIRValue result;
-    if (!exception_stack.empty()) {
-        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-        if (!normal_block) {
-            error = "IR builder failed to create invoke continuation block";
-            return QoreIRValue();
-        }
-        QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {first, second, third}, normal_block, handler, map->loc);
-        inst->invoke_opcode = opcode;
-        builder.setBlock(normal_block);
-        result = inst->result;
-    } else {
-        result = builder.createTernaryOp(opcode, first, second, third, map->loc)->result;
-    }
-    maybeInsertNotNothingGuard(result, &expr, map->loc, nullptr);
-    return result;
+    // Delegate entire operation to AST evaluation
+    // AST handles implicit argument context ($1, $#) correctly
+    std::vector<QoreIRValue> operands;
+    return lowerExprOpOrInvoke(QoreIROpcode::HashMapAny, expr, operands, map->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::string& error) {
@@ -5705,49 +5520,10 @@ QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::strin
         return QoreIRValue();
     }
 
-    QoreIRValue first = lowerExpression(map_select->get(0), error);
-    if (!first.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue second = lowerExpression(map_select->get(1), error);
-    if (!second.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue third = lowerExpression(map_select->get(2), error);
-    if (!third.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIRValue fourth = lowerExpression(map_select->get(3), error);
-    if (!fourth.isValid()) {
-        return QoreIRValue();
-    }
-    QoreIROpcode opcode = QoreIROpcode::HashMapSelectAny;
-    QoreParseAnalysis analysis;
-    if (getAnalysis(expr, analysis)
-        && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-        && analysis.known_type
-        && QoreTypeInfo::parseReturns(analysis.known_type, NT_HASH) != QTI_NOT_EQUAL) {
-        opcode = QoreIROpcode::HashMapSelect;
-    }
-    QoreIRValue result;
-    if (!exception_stack.empty()) {
-        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-        if (!normal_block) {
-            error = "IR builder failed to create invoke continuation block";
-            return QoreIRValue();
-        }
-        QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {first, second, third, fourth}, normal_block, handler,
-            map_select->loc);
-        inst->invoke_opcode = opcode;
-        builder.setBlock(normal_block);
-        result = inst->result;
-    } else {
-        result = builder.createQuaternaryOp(opcode, first, second, third, fourth,
-            map_select->loc)->result;
-    }
-    maybeInsertNotNothingGuard(result, &expr, map_select->loc, nullptr);
-    return result;
+    // Delegate entire operation to AST evaluation
+    // AST handles implicit argument context ($1, $#) correctly
+    std::vector<QoreIRValue> operands;
+    return lowerExprOpOrInvoke(QoreIROpcode::HashMapSelectAny, expr, operands, map_select->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& error) {
