@@ -307,7 +307,10 @@ public class MailgunDataProviderTest inherits QUnit::Test {
     #! Negative tests - test error handling and invalid inputs
     negativeTests() {
         checkJson();
-        MailgunDataProvider::MailgunDataProvider prov({"apikey": "invalid-key"});
+        *MailgunDataProvider::MailgunDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Test getting non-existent child provider
         assertThrows("INVALID-CHILD-PROVIDER", sub() {
@@ -327,15 +330,24 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         # Test with different API regions
         # Note: URL includes credentials since Mailgun uses HTTP Basic Auth
         # Note: Base URL does not include /v3 - version is added per-endpoint to support both v3 and v4 APIs
-        MailgunRestClient::MailgunRestClient clientUS({"apikey": "x", "api_region": "US"});
-        assertTrue(clientUS.getURL() =~ /api\.mailgun\.net$/);
+        # Note: these create actual connections, so catch connection errors in CI
+        try {
+            MailgunRestClient::MailgunRestClient clientUS({"apikey": "x", "api_region": "US"});
+            assertTrue(clientUS.getURL() =~ /api\.mailgun\.net$/);
 
-        MailgunRestClient::MailgunRestClient clientEU({"apikey": "x", "api_region": "EU"});
-        assertTrue(clientEU.getURL() =~ /api\.eu\.mailgun\.net$/);
+            MailgunRestClient::MailgunRestClient clientEU({"apikey": "x", "api_region": "EU"});
+            assertTrue(clientEU.getURL() =~ /api\.eu\.mailgun\.net$/);
 
-        # Test default region
-        MailgunRestClient::MailgunRestClient clientDefault({"apikey": "x"});
-        assertTrue(clientDefault.getURL() =~ /api\.mailgun\.net$/);
+            # Test default region
+            MailgunRestClient::MailgunRestClient clientDefault({"apikey": "x"});
+            assertTrue(clientDefault.getURL() =~ /api\.mailgun\.net$/);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to Mailgun API: %s", ex.desc));
+                return;
+            }
+            rethrow;
+        }
 
         # Test invalid region throws error
         assertThrows("MAILGUN-ERROR", sub() {

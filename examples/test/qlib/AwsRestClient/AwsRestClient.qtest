@@ -130,8 +130,9 @@ class AwsTest inherits QUnit::Test {
             client = new AwsRestTestClient({"url": "https://iotevents.eu-central-1.amazonaws.com"}
                 + (FakeAwsOptions - ("aws_service", "aws_region")));
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "QOREADDRINFO-GETINFO-ERROR") {
-                testSkip("DNS error: " + ex.err + ": " + ex.desc);
+            if (ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
+                    || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip("connection error: " + ex.err + ": " + ex.desc);
             }
             rethrow;
         }
