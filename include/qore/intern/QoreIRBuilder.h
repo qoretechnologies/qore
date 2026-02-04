@@ -75,6 +75,10 @@ public:
     QoreIRVarInstruction* createLoadThreadLocal(Var* var, const QoreProgramLocation* loc = nullptr);
     QoreIRVarInstruction* createStoreThreadLocal(Var* var, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
+    // Implicit argument opcodes
+    QoreIRInstruction* createLoadImplicitArg(int offset, const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createLoadImplicitArgv(const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createLoadImplicitElement(const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createStoreLValue(const QoreValue& lvalue, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);

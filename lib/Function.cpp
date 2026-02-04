@@ -2267,6 +2267,9 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         ir_lower_failed = true;
         delete func;
         printd(2, "UserVariantBase::attemptIRLowering() '%s' failed: %s\n", name, error.c_str());
+        if (pgm) {
+            pgm->recordIRFallback((std::string("lowering: ") + error).c_str());
+        }
         return;
     }
     if (!irBlockHasTerminatorFunc(builder.getBlock())) {
@@ -2276,6 +2279,9 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         ir_lower_failed = true;
         delete func;
         printd(2, "UserVariantBase::attemptIRLowering() '%s' verification failed: %s\n", name, error.c_str());
+        if (pgm) {
+            pgm->recordIRFallback((std::string("verification: ") + error).c_str());
+        }
         return;
     }
     // Initialize type profiling for guards
@@ -2486,6 +2492,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     // IR execution failed without exception — fall through to AST
                     printd(2, "UserVariantBase::evalTiered() IR execution failed for '%s', falling back to AST\n",
                         name);
+                    if (pgm) {
+                        pgm->recordIRFallback("execution: runtime failure");
+                    }
                     val = statements->exec(xsink);
                 }
 

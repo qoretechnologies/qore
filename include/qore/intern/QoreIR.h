@@ -308,6 +308,11 @@ enum class QoreIROpcode : uint16_t {
     LoadThreadLocal,
     StoreThreadLocal,
 
+    // Implicit argument opcodes for closures
+    LoadImplicitArg,    // Load $1, $2, etc. by offset (0 for $1, 1 for $2, etc.)
+    LoadImplicitArgv,   // Load entire $argv list
+    LoadImplicitElement,// Load $# (current element index in map/select)
+
     Call,
     CallIndirect,
     CallMethod,
@@ -734,6 +739,16 @@ public:
     }
 
     Var* var = nullptr;
+};
+
+//! Implicit argument reference instruction - loads $1, $2, etc.
+class QoreIRImplicitArgInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRImplicitArgInstruction(int n_offset)
+            : QoreIRInstruction(QoreIROpcode::LoadImplicitArg), offset(n_offset) {
+    }
+
+    int offset = 0;  // 0 for $1, 1 for $2, etc.
 };
 
 class QoreIRLValueInstruction : public QoreIRInstruction {

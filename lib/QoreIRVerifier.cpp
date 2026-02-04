@@ -257,6 +257,9 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::LoadClosure:
         case QoreIROpcode::LoadGlobal:
         case QoreIROpcode::LoadThreadLocal:
+        case QoreIROpcode::LoadImplicitArg:
+        case QoreIROpcode::LoadImplicitArgv:
+        case QoreIROpcode::LoadImplicitElement:
         case QoreIROpcode::LoadLValue:
         case QoreIROpcode::PreIncLValue:
         case QoreIROpcode::PreDecLValue:

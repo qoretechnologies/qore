@@ -1930,6 +1930,7 @@ static void ensureIrExecMode(qore_program_private* priv) {
         if (!priv->ir_fallback_warned) {
             printe("IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
             priv->ir_fallback_warned = true;
+            priv->recordIRFallback("parse: requires %modern (PO_MODERN)");
         }
         priv->exec_mode = QEM_AST;
     }
@@ -2008,6 +2009,22 @@ void QoreProgram::setIRFallbackWarn(bool warn) {
 
 bool QoreProgram::getIRFallbackWarn() const {
     return priv->ir_fallback_warn;
+}
+
+void QoreProgram::setIRFallbackReport(bool report) {
+    priv->ir_fallback_report = report;
+}
+
+bool QoreProgram::getIRFallbackReport() const {
+    return priv->ir_fallback_report;
+}
+
+void QoreProgram::recordIRFallback(const char* reason) const {
+    priv->recordIRFallback(reason);
+}
+
+void QoreProgram::printIRFallbackReport() const {
+    priv->printIRFallbackReport();
 }
 
 void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {

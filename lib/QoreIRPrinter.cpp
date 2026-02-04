@@ -280,6 +280,9 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::StoreGlobal: return "store.global";
         case QoreIROpcode::LoadThreadLocal: return "load.threadlocal";
         case QoreIROpcode::StoreThreadLocal: return "store.threadlocal";
+        case QoreIROpcode::LoadImplicitArg: return "load.implicit.arg";
+        case QoreIROpcode::LoadImplicitArgv: return "load.implicit.argv";
+        case QoreIROpcode::LoadImplicitElement: return "load.implicit.element";
         case QoreIROpcode::Call: return "call";
         case QoreIROpcode::CallIndirect: return "call.indirect";
         case QoreIROpcode::CallMethod: return "call.method";
@@ -352,6 +355,11 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* var_inst = dynamic_cast<const QoreIRVarInstruction*>(inst.get());
                 if (var_inst && var_inst->var) {
                     out << " $" << var_inst->var->getName();
+                }
+            } else if (inst->opcode == QoreIROpcode::LoadImplicitArg) {
+                auto* impl_arg_inst = dynamic_cast<const QoreIRImplicitArgInstruction*>(inst.get());
+                if (impl_arg_inst) {
+                    out << " $" << (impl_arg_inst->offset + 1);  // $1 is offset 0, etc.
                 }
             } else if (inst->opcode == QoreIROpcode::LoadLValue || inst->opcode == QoreIROpcode::StoreLValue
                     || inst->opcode == QoreIROpcode::PreIncLValue || inst->opcode == QoreIROpcode::PreDecLValue

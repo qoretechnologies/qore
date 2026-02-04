@@ -249,6 +249,27 @@ QoreIRVarInstruction* QoreIRBuilder::createStoreThreadLocal(Var* var, QoreIRValu
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createLoadImplicitArg(int offset, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRImplicitArgInstruction>(offset);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createLoadImplicitArgv(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::LoadImplicitArgv);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createLoadImplicitElement(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::LoadImplicitElement);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
 QoreIRLValueInstruction* QoreIRBuilder::createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRLValueInstruction>(QoreIROpcode::LoadLValue, lvalue);
     inst->loc = loc;

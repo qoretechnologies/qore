@@ -776,6 +776,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         if (qore_program_private::get(*pgm)->ir_fallback_warn) {
                             printe("IR exec fallback to AST: %s\n", error.c_str());
                         }
+                        qore_program_private::get(*pgm)->recordIRFallback(std::string("lowering: ") + error);
                         return;
                     }
                     if (!irBlockHasTerminator(builder.getBlock())) {
@@ -788,6 +789,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         if (qore_program_private::get(*pgm)->ir_fallback_warn) {
                             printe("IR exec fallback to AST: verification failed: %s\n", error.c_str());
                         }
+                        qore_program_private::get(*pgm)->recordIRFallback(std::string("verification: ") + error);
                         return;
                     }
                     cached_toplevel_ir = func;
@@ -830,6 +832,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 if (qore_program_private::get(*pgm)->ir_fallback_warn) {
                     printe("IR exec fallback to AST: execution failed\n");
                 }
+                qore_program_private::get(*pgm)->recordIRFallback("execution: runtime failure");
             }
         }
     }

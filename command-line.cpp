@@ -65,7 +65,7 @@ static cl_mod_list_t cl_mod_list;
 static int64 parse_options = PO_DEFAULT;
 static int warnings = QP_WARN_DEFAULT;
 static int qore_lib_options = QLO_NONE;
-static qore_exec_mode_t exec_mode = QEM_AST;
+static qore_exec_mode_t exec_mode = QEM_IR;
 
 // lock options
 static bool lock_options = false;
@@ -102,6 +102,9 @@ static bool ir_dump = false;
 
 // warn on IR fallback to AST
 static bool ir_fallback_warn = false;
+
+// report IR fallback counts at exit
+static bool ir_fallback_report = false;
 
 // tiered compilation thresholds (0 = use defaults)
 static uint64_t jit_ir_threshold = 0;
@@ -187,10 +190,11 @@ static const char helpstr[] =
    "  -c, --charset=arg            sets default character set encoding\n"
    "  -D, --define=arg             sets the value of a parse define\n"
    "  -e, --exec=arg               execute program given on command-line\n"
-   "      --exec-mode=arg          execution mode: ast (default), ir, jit, or\n"
+   "      --exec-mode=arg          execution mode: ast, ir (default), jit, or\n"
    "                               tiered (auto-promote AST->IR->JIT per function)\n"
    "      --ir-dump                dump IR representation before execution\n"
    "      --ir-fallback-warn       warn on stderr when IR falls back to AST\n"
+   "      --ir-fallback-report     print IR fallback counts by category at exit\n"
    "      --jit-ir-threshold=N     tiered mode: calls before IR promotion (default:\n"
    "                               100)\n"
    "      --jit-jit-threshold=N    tiered mode: calls before JIT promotion (default:\n"
@@ -719,6 +723,10 @@ static void set_ir_fallback_warn(const char* arg) {
     ir_fallback_warn = true;
 }
 
+static void set_ir_fallback_report(const char* arg) {
+    ir_fallback_report = true;
+}
+
 static void set_jit_ir_threshold(const char* arg) {
     if (!arg || !*arg) {
         printe("error: --jit-ir-threshold requires a numeric value\n");
@@ -822,6 +830,7 @@ static struct opt_struct_s {
    { '\0', "exec-mode",            ARG_MAND, set_exec_mode },
    { '\0', "ir-dump",              ARG_NONE, set_ir_dump },
    { '\0', "ir-fallback-warn",    ARG_NONE, set_ir_fallback_warn },
+   { '\0', "ir-fallback-report", ARG_NONE, set_ir_fallback_report },
    { '\0', "jit-ir-threshold",    ARG_MAND, set_jit_ir_threshold },
    { '\0', "jit-jit-threshold",   ARG_MAND, set_jit_jit_threshold },
    { 'g', "disable-gc",            ARG_NONE, disable_gc },
@@ -1142,6 +1151,9 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
       if (ir_fallback_warn) {
           qpgm->setIRFallbackWarn(true);
       }
+      if (ir_fallback_report) {
+          qpgm->setIRFallbackReport(true);
+      }
 
       // set parse defines
       qpgm->parseCmdLineDefines(xsink, wsink, warnings, defmap);
@@ -1323,6 +1335,9 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
 
       // run the default exception handler on any unhandled exceptions in the primary thread or during parsing
       xsink.handleExceptions();
+
+      // print IR fallback report if enabled
+      qpgm->printIRFallbackReport();
 
 exit:
       ;
