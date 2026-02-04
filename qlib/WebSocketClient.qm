@@ -2486,18 +2486,21 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         - \c "start_thread": a closure to start a new thread (signature:
           @verbatim int sub start_thread(code callable) {}@endverbatim)
         - \c "yield": a closure to yield current thread execution
+        - \c "connect_timeout": connection timeout in milliseconds
     */
     *hash<auto> getRuntimeOptions() {
         return {
             "logger": True,
             "start_thread": True,
             "yield": True,
+            "connect_timeout": True,
         };
     }
 
     private hash<PingInfo> pingIntern(hash<PingInfo> rv) {
         date start = now_us();
-        object o = get();
+        # Use a 30-second connect timeout for ping operations to prevent hanging on unresponsive endpoints
+        object o = get(True, {"connect_timeout": 30000});
         on_exit o.disconnect();
         return rv += {
             "ok": True,
@@ -2514,6 +2517,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         - \c "start_thread": a closure to start a new thread (signature:
           @verbatim int sub start_thread(code callable) {}@endverbatim)
         - \c "yield": a closure to yield current thread execution
+        - \c "connect_timeout": connection timeout in milliseconds
 
         @return a @ref WebSocketClient object
     */
@@ -2522,7 +2526,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         if (rtopts) {
             rtopts = {} + rtopts;
         }
-        hash<auto> opts = {"url": url} + rtopts{"logger", "reconnect", "yield", "start_thread"} + self.opts;
+        hash<auto> opts = {"url": url} + rtopts{"logger", "reconnect", "yield", "start_thread", "connect_timeout"} + self.opts;
         if (!opts.logger && logger) {
             opts.logger = logger;
         }
