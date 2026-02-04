@@ -28,7 +28,7 @@
 public namespace QoreRepl {
 
 #! QoreRepl module version
-public const Version = "1.1";
+public const Version = "1.0";
 
 #! REPL result indicating the command requests exit
 public const ReplExit = {"exit": True};
@@ -63,7 +63,7 @@ public class QoreRepl {
         const ContinuationPrompt = "...> ";
 
         #! Version string
-        const Version = "1.1";
+        const Version = "1.0";
     }
 
     private {
@@ -169,7 +169,8 @@ public class QoreRepl {
 
         # Initialize history file path (only if filesystem access is allowed)
         if (!isFilesystemRestricted()) {
-            if (opts.history_file) {
+            if (exists opts.history_file) {
+                # Use explicit value (can be NOTHING to disable history)
                 history_file = opts.history_file;
             } else {
                 # Default to $HOME/.qore-repl-history (or $USERPROFILE on Windows)
@@ -426,9 +427,9 @@ if (!exists result) {
 
             if (show_timing) {
                 date elapsed = now_us() - start;
-                return {"value": result, "timing": elapsed};
+                return {"value": result, "timing": elapsed, "is_eval": True};
             }
-            return {"value": result};
+            return {"value": result, "is_eval": True};
         } catch (hash<ExceptionInfo> ex) {
             return {"error": ex};
         }
@@ -545,7 +546,7 @@ if (!exists result) {
         help += helpLine("/namespaces", "List namespaces (also /ns)");
         help += helpLine("/modules", "List loaded modules");
         help += helpLine("/type <expr>", "Show the type of an expression");
-        help += helpLine("/describe <name>", "Describe a class, function, or namespace");
+        help += helpLine("/describe <name>", "Describe a symbol (class, function, namespace, enum, constant, hashdecl)");
         help += sprintf("\n%s\n", color.key("Files:"));
         help += helpLine("/load <file>", "Load and execute a file");
         help += helpLine("/save <file>", "Save session history to a file");
@@ -1530,6 +1531,10 @@ if (!exists result) {
                 printError(color.error("Error: ") + formatError(result.error) + "\n");
             } else if (exists result.value) {
                 string output = formatValue(result.value);
+                # Add "=> " prefix for evaluated expressions (not command output)
+                if (result.is_eval) {
+                    output = "=> " + output;
+                }
                 # Only add newline if output doesn't already end with one
                 if (!output.endsWith("\n")) {
                     output += "\n";
@@ -1628,7 +1633,7 @@ if (!exists result) {
             Linenoise::history_load(history_file);
         } catch (hash<ExceptionInfo> ex) {
             # Warn but don't fail - history is optional
-            stderr.printf("Warning: Could not load history file: %s\n", ex.desc);
+            printError(sprintf("Warning: Could not load history file: %s\n", ex.desc));
         }
 %endif
     }
@@ -1643,7 +1648,7 @@ if (!exists result) {
             Linenoise::history_save(history_file);
         } catch (hash<ExceptionInfo> ex) {
             # Warn but don't fail - history is optional
-            stderr.printf("Warning: Could not save history file: %s\n", ex.desc);
+            printError(sprintf("Warning: Could not save history file: %s\n", ex.desc));
         }
 %endif
     }
