@@ -4517,6 +4517,149 @@ static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTyp
     return QoreIROpcode::FoldlAny;
 }
 
+// Pattern analysis for optimized map operations
+// Returns optimized opcode if pattern detected, or MapAny for fallback
+// For scale/offset patterns, constant_val is set to the constant operand
+static QoreIROpcode analyzeMapPattern(const QoreValue& map_expr, const QoreTypeInfo*& result_type,
+        QoreValue& constant_val) {
+    const AbstractQoreNode* node = map_expr.getInternalNode();
+    if (!node) {
+        return QoreIROpcode::MapAny;
+    }
+
+    // Check for Multiply operator: $1 * const or const * $1
+    if (auto* mul_op = dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
+        QoreValue left = mul_op->getLeft();
+        QoreValue right = mul_op->getRight();
+
+        const auto* arg_left = dynamic_cast<const QoreImplicitArgumentNode*>(left.getInternalNode());
+        const auto* arg_right = dynamic_cast<const QoreImplicitArgumentNode*>(right.getInternalNode());
+
+        // Pattern: $1 * $1 (square)
+        if (arg_left && arg_right && arg_left->getOffset() == 0 && arg_right->getOffset() == 0) {
+            result_type = mul_op->getTypeInfo();
+            if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
+                return QoreIROpcode::MapSquareInt;
+            } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
+                return QoreIROpcode::MapSquareFloat;
+            }
+            return QoreIROpcode::MapSquareInt;
+        }
+
+        // Pattern: $1 * const
+        if (arg_left && arg_left->getOffset() == 0 && !arg_right) {
+            // Check if right is a constant
+            if (right.getType() == NT_INT || right.getType() == NT_FLOAT || !right.hasNode()) {
+                constant_val = right;
+                result_type = mul_op->getTypeInfo();
+                if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
+                    return QoreIROpcode::MapScaleInt;
+                } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
+                    return QoreIROpcode::MapScaleFloat;
+                }
+                return QoreIROpcode::MapScaleInt;
+            }
+        }
+
+        // Pattern: const * $1
+        if (arg_right && arg_right->getOffset() == 0 && !arg_left) {
+            if (left.getType() == NT_INT || left.getType() == NT_FLOAT || !left.hasNode()) {
+                constant_val = left;
+                result_type = mul_op->getTypeInfo();
+                if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
+                    return QoreIROpcode::MapScaleInt;
+                } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
+                    return QoreIROpcode::MapScaleFloat;
+                }
+                return QoreIROpcode::MapScaleInt;
+            }
+        }
+    }
+
+    // Check for Plus operator: $1 + const or const + $1
+    if (auto* plus_op = dynamic_cast<const QorePlusOperatorNode*>(node)) {
+        QoreValue left = plus_op->getLeft();
+        QoreValue right = plus_op->getRight();
+
+        const auto* arg_left = dynamic_cast<const QoreImplicitArgumentNode*>(left.getInternalNode());
+        const auto* arg_right = dynamic_cast<const QoreImplicitArgumentNode*>(right.getInternalNode());
+
+        // Pattern: $1 + const
+        if (arg_left && arg_left->getOffset() == 0 && !arg_right) {
+            if (right.getType() == NT_INT || right.getType() == NT_FLOAT || !right.hasNode()) {
+                constant_val = right;
+                result_type = plus_op->getTypeInfo();
+                if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
+                    return QoreIROpcode::MapOffsetInt;
+                } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
+                    return QoreIROpcode::MapOffsetFloat;
+                }
+                return QoreIROpcode::MapOffsetInt;
+            }
+        }
+
+        // Pattern: const + $1
+        if (arg_right && arg_right->getOffset() == 0 && !arg_left) {
+            if (left.getType() == NT_INT || left.getType() == NT_FLOAT || !left.hasNode()) {
+                constant_val = left;
+                result_type = plus_op->getTypeInfo();
+                if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
+                    return QoreIROpcode::MapOffsetInt;
+                } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
+                    return QoreIROpcode::MapOffsetFloat;
+                }
+                return QoreIROpcode::MapOffsetInt;
+            }
+        }
+    }
+
+    return QoreIROpcode::MapAny;
+}
+
+// Pattern analysis for optimized select operations
+// Returns optimized opcode if pattern detected, or SelectAny for fallback
+static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr, const QoreTypeInfo*& result_type) {
+    const AbstractQoreNode* node = select_expr.getInternalNode();
+    if (!node) {
+        return QoreIROpcode::SelectAny;
+    }
+
+    // Check for Greater Than operator: $1 > 0
+    if (auto* gt_op = dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)) {
+        QoreValue left = gt_op->getLeft();
+        QoreValue right = gt_op->getRight();
+
+        const auto* arg_left = dynamic_cast<const QoreImplicitArgumentNode*>(left.getInternalNode());
+
+        // Pattern: $1 > 0
+        if (arg_left && arg_left->getOffset() == 0 && !right.hasNode()) {
+            if (right.getAsBigInt() == 0) {
+                result_type = gt_op->getTypeInfo();
+                // Determine type from expression analysis or default to int
+                return QoreIROpcode::SelectPositiveInt;
+            }
+        }
+    }
+
+    // Check for Not Equals operator: $1 != 0
+    if (auto* ne_op = dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
+        QoreValue left = ne_op->getLeft();
+        QoreValue right = ne_op->getRight();
+
+        const auto* arg_left = dynamic_cast<const QoreImplicitArgumentNode*>(left.getInternalNode());
+
+        // Pattern: $1 != 0
+        if (arg_left && arg_left->getOffset() == 0 && !right.hasNode()) {
+            if (right.getAsBigInt() == 0) {
+                result_type = nullptr;  // Type will be inferred from list
+                return QoreIROpcode::SelectNonZeroInt;
+            }
+        }
+    }
+
+    return QoreIROpcode::SelectAny;
+}
+
 QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     if (dynamic_cast<const QoreFoldrOperatorNode*>(node)) {
@@ -4641,6 +4784,51 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
         return QoreIRValue();
     }
 
+    // Try pattern analysis for optimized opcodes
+    const QoreTypeInfo* result_type = nullptr;
+    QoreValue constant_val;
+    QoreIROpcode opt_opcode = analyzeMapPattern(map->getLeft(), result_type, constant_val);
+
+    // For optimized patterns, emit optimized opcode with (list, constant) operands
+    if (opt_opcode != QoreIROpcode::MapAny) {
+        // Lower the list (right operand of map)
+        QoreIRValue list_val = lowerExpression(map->getRight(), error);
+        if (!list_val.isValid()) {
+            return QoreIRValue();
+        }
+
+        QoreIRValue const_ir;
+        if (opt_opcode == QoreIROpcode::MapSquareInt || opt_opcode == QoreIROpcode::MapSquareFloat) {
+            // Square doesn't need a constant, use NOTHING as placeholder
+            const_ir = builder.createConstNothing(map->loc)->result;
+        } else {
+            // Lower the constant value
+            const_ir = lowerConstant(constant_val, error);
+            if (!const_ir.isValid()) {
+                return QoreIRValue();
+            }
+        }
+
+        QoreIRValue result;
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {list_val, const_ir}, normal_block, handler, map->loc);
+            inst->invoke_opcode = opt_opcode;
+            builder.setBlock(normal_block);
+            result = inst->result;
+        } else {
+            result = builder.createBinaryOp(opt_opcode, list_val, const_ir, map->loc)->result;
+        }
+        maybeInsertNotNothingGuard(result, &expr, map->loc, nullptr);
+        return result;
+    }
+
+    // Fallback to regular map lowering
     QoreIRValue left = lowerExpression(map->getLeft(), error);
     if (!left.isValid()) {
         return QoreIRValue();
@@ -4693,6 +4881,61 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
         return QoreIRValue();
     }
 
+    // Try pattern analysis for optimized opcodes
+    // Syntax: (select list, condition) - getLeft() = list, getRight() = condition
+    const QoreTypeInfo* result_type = nullptr;
+    QoreIROpcode opt_opcode = analyzeSelectPattern(select->getRight(), result_type);
+
+    // For optimized patterns, emit optimized opcode with just the list
+    if (opt_opcode != QoreIROpcode::SelectAny) {
+        // Lower the list (left operand of select)
+        QoreIRValue list_val = lowerExpression(select->getLeft(), error);
+        if (!list_val.isValid()) {
+            return QoreIRValue();
+        }
+
+        // Determine if list has float elements to choose Int vs Float variant
+        QoreParseAnalysis list_analysis;
+        const QoreTypeInfo* list_type = nullptr;
+        if (getAnalysis(select->getLeft(), list_analysis) &&
+                list_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+            list_type = list_analysis.known_type;
+        }
+        const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+        bool is_float = QoreTypeInfo::isType(elem_type, NT_FLOAT);
+
+        // Upgrade to Float variant if needed
+        if (is_float) {
+            if (opt_opcode == QoreIROpcode::SelectPositiveInt) {
+                opt_opcode = QoreIROpcode::SelectPositiveFloat;
+            } else if (opt_opcode == QoreIROpcode::SelectNonZeroInt) {
+                opt_opcode = QoreIROpcode::SelectNonZeroFloat;
+            }
+        }
+
+        // Use NOTHING as placeholder for second operand (not used by optimized select)
+        QoreIRValue placeholder = builder.createConstNothing(select->loc)->result;
+
+        QoreIRValue result;
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {list_val, placeholder}, normal_block, handler, select->loc);
+            inst->invoke_opcode = opt_opcode;
+            builder.setBlock(normal_block);
+            result = inst->result;
+        } else {
+            result = builder.createBinaryOp(opt_opcode, list_val, placeholder, select->loc)->result;
+        }
+        maybeInsertNotNothingGuard(result, &expr, select->loc, nullptr);
+        return result;
+    }
+
+    // Fallback to regular select lowering
     QoreIRValue left = lowerExpression(select->getLeft(), error);
     if (!left.isValid()) {
         return QoreIRValue();

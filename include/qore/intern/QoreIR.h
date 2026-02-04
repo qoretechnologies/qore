@@ -232,9 +232,21 @@ enum class QoreIROpcode : uint16_t {
     MapAny,
     MapInt,
     MapFloat,
+    // Optimized map operations (native LLVM loops)
+    MapScaleInt,        // map $1 * const, list
+    MapScaleFloat,
+    MapOffsetInt,       // map $1 + const, list
+    MapOffsetFloat,
+    MapSquareInt,       // map $1 * $1, list
+    MapSquareFloat,
     SelectAny,
     SelectInt,
     SelectFloat,
+    // Optimized select operations (native LLVM loops)
+    SelectPositiveInt,  // select $1 > 0, list
+    SelectPositiveFloat,
+    SelectNonZeroInt,   // select $1 != 0, list
+    SelectNonZeroFloat,
     MapSelectAny,
     HashMapAny,
     HashMapSelectAny,

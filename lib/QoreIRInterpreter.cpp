@@ -693,9 +693,19 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat:
+        case QoreIROpcode::MapScaleInt:
+        case QoreIROpcode::MapScaleFloat:
+        case QoreIROpcode::MapOffsetInt:
+        case QoreIROpcode::MapOffsetFloat:
+        case QoreIROpcode::MapSquareInt:
+        case QoreIROpcode::MapSquareFloat:
         case QoreIROpcode::SelectAny:
         case QoreIROpcode::SelectInt:
         case QoreIROpcode::SelectFloat:
+        case QoreIROpcode::SelectPositiveInt:
+        case QoreIROpcode::SelectPositiveFloat:
+        case QoreIROpcode::SelectNonZeroInt:
+        case QoreIROpcode::SelectNonZeroFloat:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
@@ -1826,9 +1836,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::MapAny:
             case QoreIROpcode::MapInt:
             case QoreIROpcode::MapFloat:
+            case QoreIROpcode::MapScaleInt:
+            case QoreIROpcode::MapScaleFloat:
+            case QoreIROpcode::MapOffsetInt:
+            case QoreIROpcode::MapOffsetFloat:
+            case QoreIROpcode::MapSquareInt:
+            case QoreIROpcode::MapSquareFloat:
             case QoreIROpcode::SelectAny:
             case QoreIROpcode::SelectInt:
             case QoreIROpcode::SelectFloat:
+            case QoreIROpcode::SelectPositiveInt:
+            case QoreIROpcode::SelectPositiveFloat:
+            case QoreIROpcode::SelectNonZeroInt:
+            case QoreIROpcode::SelectNonZeroFloat:
             case QoreIROpcode::RangeAny:
             case QoreIROpcode::RangeInt:
             case QoreIROpcode::RangeFloat:
@@ -2945,12 +2965,157 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             ValueHolder node(QoreValue(new QoreMapOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return evalAndRef(*node, xsink);
         }
+        // Optimized map operations with native loops
+        case QoreIROpcode::MapScaleInt: {
+            // left = list, right = scale factor
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            int64_t scale = right.getAsBigInt();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                result->push(l->retrieveEntry(i).getAsBigInt() * scale, xsink);
+            }
+            return result.release();
+        }
+        case QoreIROpcode::MapScaleFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            double scale = right.getAsFloat();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                result->push(l->retrieveEntry(i).getAsFloat() * scale, xsink);
+            }
+            return result.release();
+        }
+        case QoreIROpcode::MapOffsetInt: {
+            // left = list, right = offset
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            int64_t offset = right.getAsBigInt();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                result->push(l->retrieveEntry(i).getAsBigInt() + offset, xsink);
+            }
+            return result.release();
+        }
+        case QoreIROpcode::MapOffsetFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            double offset = right.getAsFloat();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                result->push(l->retrieveEntry(i).getAsFloat() + offset, xsink);
+            }
+            return result.release();
+        }
+        case QoreIROpcode::MapSquareInt: {
+            // left = list, right = unused
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                result->push(val * val, xsink);
+            }
+            return result.release();
+        }
+        case QoreIROpcode::MapSquareFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                double val = l->retrieveEntry(i).getAsFloat();
+                result->push(val * val, xsink);
+            }
+            return result.release();
+        }
         case QoreIROpcode::SelectAny:
         case QoreIROpcode::SelectInt:
         case QoreIROpcode::SelectFloat: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreSelectOperatorNode(nullptr, left.refSelf(), right.refSelf())), xsink);
             return evalAndRef(*node, xsink);
+        }
+        // Optimized select operations with native loops
+        case QoreIROpcode::SelectPositiveInt: {
+            // left = list (filter $1 > 0)
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                if (val > 0) {
+                    result->push(val, xsink);
+                }
+            }
+            return result.release();
+        }
+        case QoreIROpcode::SelectPositiveFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                double val = l->retrieveEntry(i).getAsFloat();
+                if (val > 0.0) {
+                    result->push(val, xsink);
+                }
+            }
+            return result.release();
+        }
+        case QoreIROpcode::SelectNonZeroInt: {
+            // left = list (filter $1 != 0)
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                if (val != 0) {
+                    result->push(val, xsink);
+                }
+            }
+            return result.release();
+        }
+        case QoreIROpcode::SelectNonZeroFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue(new QoreListNode(autoTypeInfo));
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), xsink);
+            for (size_t i = 0; i < sz; ++i) {
+                double val = l->retrieveEntry(i).getAsFloat();
+                if (val != 0.0) {
+                    result->push(val, xsink);
+                }
+            }
+            return result.release();
         }
         case QoreIROpcode::RangeAny: {
             bool needs_deref = true;

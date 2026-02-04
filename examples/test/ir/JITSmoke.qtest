@@ -90,6 +90,8 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("regex extract invoke single eval", \testJitRegexExtractInvokeSingleEval());
         # Optimized higher-order function tests
         addTestCase("optimized foldl sum/prod", \testJitFoldlSumProd());
+        addTestCase("optimized map patterns", \testJitMapOptimized());
+        addTestCase("optimized select patterns", \testJitSelectOptimized());
         set_return_value(main());
     }
 
@@ -1235,6 +1237,118 @@ printf(\"%d:%d\\n\", s, p);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(single_code, mode));
             assertEq("42:42", result, sprintf("foldl single element %s", mode));
+        }
+    }
+
+    testJitMapOptimized() {
+        # Test optimized map patterns: $1 * const (scale), $1 + const (offset), $1 * $1 (square)
+        string scale_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> scaled = (map $1 * 2, nums);
+printf(\"%s\\n\", (map $1.toString(), scaled).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(scale_code, mode));
+            assertEq("2,4,6,8,10", result, sprintf("map scale int %s", mode));
+        }
+
+        string offset_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> offset = (map $1 + 10, nums);
+printf(\"%s\\n\", (map $1.toString(), offset).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(offset_code, mode));
+            assertEq("11,12,13,14,15", result, sprintf("map offset int %s", mode));
+        }
+
+        string square_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> squared = (map $1 * $1, nums);
+printf(\"%s\\n\", (map $1.toString(), squared).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(square_code, mode));
+            assertEq("1,4,9,16,25", result, sprintf("map square int %s", mode));
+        }
+
+        # Test with floats
+        string float_scale_code = "%modern
+list<float> nums = (1.0, 2.0, 3.0);
+list<float> scaled = (map $1 * 2.5, nums);
+printf(\"%.1f,%.1f,%.1f\\n\", scaled[0], scaled[1], scaled[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_scale_code, mode));
+            assertEq("2.5,5.0,7.5", result, sprintf("map scale float %s", mode));
+        }
+
+        # Test with empty list (edge case)
+        string empty_code = "%modern
+list<int> empty = ();
+list<int> result = (map $1 * 2, empty);
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(empty_code, mode));
+            assertEq("0", result, sprintf("map empty list %s", mode));
+        }
+    }
+
+    testJitSelectOptimized() {
+        # Test optimized select patterns: $1 > 0 (positive), $1 != 0 (nonzero)
+        # Syntax: (select list, condition)
+        string positive_code = "%modern
+list<int> nums = (-3, -2, -1, 0, 1, 2, 3);
+list<int> positive = (select nums, $1 > 0);
+printf(\"%s\\n\", (map $1.toString(), positive).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(positive_code, mode));
+            assertEq("1,2,3", result, sprintf("select positive int %s", mode));
+        }
+
+        string nonzero_code = "%modern
+list<int> nums = (-2, -1, 0, 1, 2);
+list<int> nonzero = (select nums, $1 != 0);
+printf(\"%s\\n\", (map $1.toString(), nonzero).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(nonzero_code, mode));
+            assertEq("-2,-1,1,2", result, sprintf("select nonzero int %s", mode));
+        }
+
+        # Test with floats
+        string float_positive_code = "%modern
+list<float> nums = (-1.5, 0.0, 1.5, 2.5);
+list<float> positive = (select nums, $1 > 0);
+printf(\"%.1f,%.1f\\n\", positive[0], positive[1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_positive_code, mode));
+            assertEq("1.5,2.5", result, sprintf("select positive float %s", mode));
+        }
+
+        # Test with all-filtered-out list (edge case)
+        string all_filtered_code = "%modern
+list<int> nums = (-3, -2, -1);
+list<int> positive = (select nums, $1 > 0);
+printf(\"%d\\n\", positive.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(all_filtered_code, mode));
+            assertEq("0", result, sprintf("select all filtered %s", mode));
+        }
+
+        # Test with empty list (edge case)
+        string empty_code = "%modern
+list<int> empty = ();
+list<int> result = (select empty, $1 > 0);
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(empty_code, mode));
+            assertEq("0", result, sprintf("select empty list %s", mode));
         }
     }
 }
