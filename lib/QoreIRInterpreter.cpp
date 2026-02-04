@@ -636,6 +636,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::AddAny:
         case QoreIROpcode::AddString:
+        case QoreIROpcode::StringConcat:
         case QoreIROpcode::SubInt:
         case QoreIROpcode::SubFloat:
         case QoreIROpcode::SubAny:
@@ -1187,6 +1188,44 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
                 values[inst->result.id] = QoreValue(hash.release());
+                cleanup.push_back(inst->result.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::StringConcat: {
+                // Multi-string concatenation - a + b + c + d in single pass
+                if (inst->operands.empty()) {
+                    values[inst->result.id] = QoreValue(new QoreStringNode());
+                    cleanup.push_back(inst->result.id);
+                    ++ip;
+                    break;
+                }
+                // Get first string to determine encoding
+                QoreValue first = getIRValue(values, inst->operands[0]);
+                const QoreEncoding* enc = QCS_DEFAULT;
+                if (first.getType() == NT_STRING) {
+                    enc = first.get<const QoreStringNode>()->getEncoding();
+                }
+                QoreStringNode* result = new QoreStringNode(enc);
+                // Concatenate all operands
+                for (const auto& operand : inst->operands) {
+                    QoreValue v = getIRValue(values, operand);
+                    if (v.getType() == NT_STRING) {
+                        const QoreStringNode* s = v.get<const QoreStringNode>();
+                        result->concat(s, xsink);
+                        if (xsink && *xsink) {
+                            result->deref();
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupStoredValues(locals, nullptr);
+                            cleanupStoredValues(globals, nullptr);
+                            cleanupStoredValues(threadlocals, nullptr);
+                            cleanupStoredValues(closures, nullptr);
+                            return false;
+                        }
+                    }
+                    // NOTHING values are skipped (treated as empty string)
+                }
+                values[inst->result.id] = QoreValue(result);
                 cleanup.push_back(inst->result.id);
                 ++ip;
                 break;

@@ -68,6 +68,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::AddAny:
         case QoreIROpcode::AddString:
+        case QoreIROpcode::StringConcat:
         case QoreIROpcode::SubInt:
         case QoreIROpcode::SubFloat:
         case QoreIROpcode::SubAny:
@@ -532,6 +533,7 @@ static int expectedOperands(QoreIROpcode op) {
             return 0;
         case QoreIROpcode::MakeList:
         case QoreIROpcode::MakeHash:
+        case QoreIROpcode::StringConcat:
             return -1;
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:

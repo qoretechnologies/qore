@@ -69,6 +69,7 @@ enum class QoreIROpcode : uint16_t {
     AddFloat,
     AddAny,
     AddString,                          // Typed string concatenation (no runtime type checks)
+    StringConcat,                       // Multi-string concatenation (a + b + c + d in one pass)
     SubInt,
     SubFloat,
     SubAny,

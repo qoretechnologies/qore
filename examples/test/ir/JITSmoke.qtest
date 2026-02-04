@@ -100,6 +100,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("typed string equality", \testTypedStringEquality());
         addTestCase("string switch optimization", \testStringSwitchOptimization());
         addTestCase("final class devirtualization", \testFinalClassDevirtualization());
+        addTestCase("string builder optimization", \testStringBuilderOptimization());
         set_return_value(main());
     }
 
@@ -2143,6 +2144,99 @@ printf(\"%s\\n\", sounds.join(\",\"));
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(polymorphic_code, mode));
             assertEq("woof,meow,...", result, sprintf("polymorphic calls (no devirt) %s", mode));
+        }
+    }
+
+    testStringBuilderOptimization() {
+        # Test string builder optimization - chains of string concatenation
+        # should use StringConcat opcode for efficiency
+
+        # Test 1: Simple 3-string chain
+        string simple_chain = "%modern
+string a = \"hello\";
+string b = \" \";
+string c = \"world\";
+string result = a + b + c;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(simple_chain, mode));
+            assertEq("hello world", result, sprintf("simple 3-string chain %s", mode));
+        }
+
+        # Test 2: Longer 5-string chain
+        string long_chain = "%modern
+string a = \"a\";
+string b = \"b\";
+string c = \"c\";
+string d = \"d\";
+string e = \"e\";
+string result = a + b + c + d + e;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(long_chain, mode));
+            assertEq("abcde", result, sprintf("5-string chain %s", mode));
+        }
+
+        # Test 3: Chain with string literals
+        string literal_chain = "%modern
+string prefix = \"Hello, \";
+string result = prefix + \"my \" + \"name \" + \"is \" + \"Qore\";
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(literal_chain, mode));
+            assertEq("Hello, my name is Qore", result, sprintf("chain with literals %s", mode));
+        }
+
+        # Test 4: Chain in function
+        string func_chain = "%modern
+string sub build_message(string name, string action) {
+    return \"User \" + name + \" has \" + action + \" successfully\";
+}
+printf(\"%s\\n\", build_message(\"Alice\", \"logged in\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(func_chain, mode));
+            assertEq("User Alice has logged in successfully", result, sprintf("chain in function %s", mode));
+        }
+
+        # Test 5: Nested chains (verify associativity)
+        string nested_chain = "%modern
+string a = \"1\";
+string b = \"2\";
+string c = \"3\";
+string d = \"4\";
+# (a + b) + (c + d) - both sides are chains
+string left = a + b;
+string right = c + d;
+string result = left + right;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(nested_chain, mode));
+            assertEq("1234", result, sprintf("nested chains %s", mode));
+        }
+
+        # Test 6: Chain inside try block (tests invoke path)
+        string try_chain = "%modern
+string result;
+try {
+    string a = \"try\";
+    string b = \" \";
+    string c = \"block\";
+    string d = \" \";
+    string e = \"test\";
+    result = a + b + c + d + e;
+} catch (hash<auto> ex) {
+    result = \"error\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(try_chain, mode));
+            assertEq("try block test", result, sprintf("chain in try block %s", mode));
         }
     }
 }

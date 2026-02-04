@@ -53,6 +53,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::AddFloat: return "add.float";
         case QoreIROpcode::AddAny: return "add.any";
         case QoreIROpcode::AddString: return "add.string";
+        case QoreIROpcode::StringConcat: return "string.concat";
         case QoreIROpcode::SubInt: return "sub.int";
         case QoreIROpcode::SubFloat: return "sub.float";
         case QoreIROpcode::SubAny: return "sub.any";

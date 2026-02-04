@@ -1114,6 +1114,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
+        case QoreIROpcode::StringConcat: {
+            // Multi-string concatenation - a + b + c + d in single pass
+            int nargs = static_cast<int>(inst->operands.size());
+            llvm::Value* args_array = builder->CreateAlloca(i64_type,
+                    llvm::ConstantInt::get(i32_type, nargs));
+            for (int i = 0; i < nargs; ++i) {
+                auto* val = getVal(inst->operands[i].id, error);
+                if (!val) { return false; }
+                llvm::Value* boxed = boxValue(val, inst->operands[i].id);
+                llvm::Value* ptr = builder->CreateGEP(i64_type, args_array,
+                        llvm::ConstantInt::get(i32_type, i));
+                builder->CreateStore(boxed, ptr);
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_string_concat_multi",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {args_array,
+                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
         case QoreIROpcode::SubAny: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);

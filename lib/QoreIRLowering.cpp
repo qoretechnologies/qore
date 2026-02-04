@@ -3227,6 +3227,95 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
         return QoreIRValue();
     }
 
+    QoreValue left_expr = plus->getLeft();
+    QoreValue right_expr = plus->getRight();
+
+    // Lambda to check if a leaf expression has string type using AST type info
+    auto isStringTypedExpr = [](QoreValue e) -> bool {
+        // Check for string literal
+        if (e.getType() == NT_STRING) {
+            return true;
+        }
+        // Check parse node's type info
+        auto* parse_node = dynamic_cast<const ParseNode*>(e.getInternalNode());
+        if (parse_node) {
+            const QoreTypeInfo* type_info = parse_node->getTypeInfo();
+            if (type_info && QoreTypeInfo::isType(type_info, NT_STRING)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Lambda to recursively check if expression is a string plus chain (all leaves are strings)
+    std::function<bool(QoreValue)> isStringPlusChain = [&](QoreValue e) -> bool {
+        auto* p = dynamic_cast<const QorePlusOperatorNode*>(e.getInternalNode());
+        if (p) {
+            // It's a plus - check if its return type is string
+            const QoreTypeInfo* type_info = p->getTypeInfo();
+            if (!type_info || !QoreTypeInfo::isType(type_info, NT_STRING)) {
+                return false;
+            }
+            // Also recursively check operands
+            return isStringPlusChain(p->getLeft()) && isStringPlusChain(p->getRight());
+        }
+        // It's a leaf - check if it's a string type
+        return isStringTypedExpr(e);
+    };
+
+    // Check for typed string concatenation chain (a + b + c + d)
+    // First check if the whole expression is a string plus chain
+    if (isStringPlusChain(expr)) {
+        // Collect all operands from the chain
+        std::vector<QoreValue> ast_operands;
+
+        // Lambda to recursively collect leaf operands
+        std::function<void(QoreValue)> collectOperands = [&](QoreValue e) {
+            auto* p = dynamic_cast<const QorePlusOperatorNode*>(e.getInternalNode());
+            if (p) {
+                collectOperands(p->getLeft());
+                collectOperands(p->getRight());
+            } else {
+                ast_operands.push_back(e);
+            }
+        };
+        collectOperands(expr);
+
+        // Use StringConcat for 3+ operands (chains), AddString for 2
+        if (ast_operands.size() >= 3) {
+            // Lower all operands
+            std::vector<QoreIRValue> ir_operands;
+            for (const auto& op : ast_operands) {
+                QoreIRValue lowered = lowerExpression(op, error);
+                if (!lowered.isValid()) {
+                    return QoreIRValue();
+                }
+                ir_operands.push_back(lowered);
+            }
+
+            // Create StringConcat instruction using createBinaryOp for first two operands
+            QoreIRInstruction* inst = builder.createBinaryOp(
+                    QoreIROpcode::StringConcat, ir_operands[0], ir_operands[1], plus->loc);
+            // Add remaining operands
+            for (size_t i = 2; i < ir_operands.size(); ++i) {
+                inst->operands.push_back(ir_operands[i]);
+            }
+            return inst->result;
+        }
+
+        // Regular two-operand string concatenation
+        QoreIRValue left = lowerExpression(plus->getLeft(), error);
+        if (!left.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRValue right = lowerExpression(plus->getRight(), error);
+        if (!right.isValid()) {
+            return QoreIRValue();
+        }
+        return lowerBinaryOpOrInvoke(QoreIROpcode::AddString, expr, left, right, plus->loc, error);
+    }
+
+    // Non-string addition
     QoreIRValue left = lowerExpression(plus->getLeft(), error);
     if (!left.isValid()) {
         return QoreIRValue();
@@ -3235,14 +3324,6 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
     if (!right.isValid()) {
         return QoreIRValue();
     }
-
-    // Check for typed string concatenation first
-    QoreValue left_expr = plus->getLeft();
-    QoreValue right_expr = plus->getRight();
-    if (guaranteedStringType(&left_expr) && guaranteedStringType(&right_expr)) {
-        return lowerBinaryOpOrInvoke(QoreIROpcode::AddString, expr, left, right, plus->loc, error);
-    }
-
     QoreIROpcode op = selectNumericOpcode(left_expr, right_expr,
         QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny);
     return lowerBinaryOpOrInvoke(op, expr, left, right, plus->loc, error);

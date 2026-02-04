@@ -984,6 +984,47 @@ extern "C" uint64_t qore_rt_string_add_typed(uint64_t left, uint64_t right, Exce
     return toBits(QoreValue(result));
 }
 
+// Multi-string concatenation - concatenates N strings in a single pass
+// This is more efficient than chaining AddString operations for a + b + c + d patterns
+extern "C" uint64_t qore_rt_string_concat_multi(uint64_t* args, int nargs, ExceptionSink* xsink) {
+    if (nargs == 0) {
+        return toBits(QoreValue(new QoreStringNode()));
+    }
+
+    // First pass: calculate total length and find first non-NOTHING string for encoding
+    size_t total_len = 0;
+    const QoreEncoding* enc = QCS_DEFAULT;
+    for (int i = 0; i < nargs; ++i) {
+        QoreValue v = fromBits(args[i]);
+        if (v.getType() == NT_STRING) {
+            const QoreStringNode* s = v.get<const QoreStringNode>();
+            total_len += s->size();
+            if (i == 0) {
+                enc = s->getEncoding();
+            }
+        }
+    }
+
+    // Second pass: build the result string
+    QoreStringNode* result = new QoreStringNode(enc);
+    result->reserve(total_len);
+
+    for (int i = 0; i < nargs; ++i) {
+        QoreValue v = fromBits(args[i]);
+        if (v.getType() == NT_STRING) {
+            const QoreStringNode* s = v.get<const QoreStringNode>();
+            result->concat(s, xsink);
+            if (xsink && *xsink) {
+                result->deref();
+                return toBits(QoreValue());
+            }
+        }
+        // NOTHING values are skipped (treated as empty string)
+    }
+
+    return toBits(QoreValue(result));
+}
+
 // Typed string equality - both operands are known to be strings at compile time
 extern "C" uint64_t qore_rt_string_eq_typed(uint64_t left, uint64_t right) {
     QoreValue lv = fromBits(left);
