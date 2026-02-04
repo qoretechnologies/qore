@@ -132,13 +132,16 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
             assertEq("softstring", type.getFieldType("name").getName());
             assertEq(("id", "category", "name", "photoUrls", "tags", "status"), keys type.getFields());
 
-            # Note: doRequest() actually connects to external API, so wrap in try/catch
+            # Note: doRequest() actually connects to external API, so check manually
+            # to handle connection errors gracefully in CI
             try {
-                assertThrows("SCHEMA-VALIDATION-ERROR", "enumerated values.*x", \p0.doRequest(),
-                    {"query": {"status": ("x",)}});
+                p0.doRequest({"query": {"status": ("x",)}});
+                fail("expected SCHEMA-VALIDATION-ERROR exception");
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
-                    # Skip this assertion if external API is unavailable
+                    # Skip - external API is unavailable
+                } else if (ex.err == "SCHEMA-VALIDATION-ERROR") {
+                    assertTrue(ex.desc =~ /enumerated values.*x/);
                 } else {
                     rethrow;
                 }

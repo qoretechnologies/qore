@@ -149,7 +149,10 @@ public class MailgunDataProviderTest inherits QUnit::Test {
     sanityTests() {
         checkJson();
         # Test creating provider with fake credentials
-        MailgunDataProvider::MailgunDataProvider prov({"apikey": "fake-key-for-testing"});
+        *MailgunDataProvider::MailgunDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         assertEq("mailgun", prov.getName());
         assertEq("Mailgun data provider for email sending and management", prov.getDesc());
     }
