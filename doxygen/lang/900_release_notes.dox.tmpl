@@ -198,6 +198,10 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       less-or-equal, greater-than, and greater-or-equal comparisons emit inline type checks
       for int-vs-int and float-vs-float, using native CPU comparison instructions for the
       common cases
+
+    JIT-compiled code supports debugger integration via the GDB JIT interface, allowing
+    debuggers like GDB (7.0+) and LLDB to see symbols and source locations in JIT-compiled
+    %Qore functions.  See @ref jit_debugging "Debugging JIT-Compiled Code" for details.
     @endparblock
 
     @par AOT (Ahead-of-Time) Compilation

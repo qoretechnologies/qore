@@ -1,0 +1,269 @@
+/** @page execution_modes Execution Modes
+
+    @tableofcontents
+
+    @section exec_mode_intro Introduction
+
+    %Qore supports multiple execution modes that control how code is executed at runtime. These modes
+    offer different trade-offs between startup time, execution speed, and memory usage, allowing you
+    to optimize for your specific use case.
+
+    @section exec_mode_overview Execution Mode Overview
+
+    |!Mode|!Description|!Best For
+    |@ref exec_mode_ast "AST"|Traditional tree-walking interpreter|Legacy code, maximum compatibility
+    |@ref exec_mode_ir "IR"|Bytecode interpreter (default)|General use, good balance of startup and speed
+    |@ref exec_mode_jit "JIT"|LLVM JIT compilation|CPU-intensive, long-running programs
+    |@ref exec_mode_tiered "Tiered"|Adaptive compilation|Production services, mixed workloads
+    |@ref exec_mode_aot "AOT"|Ahead-of-time compilation|Deployment, IP protection, fastest startup
+
+    @section exec_mode_ast AST Execution Mode
+
+    The AST (Abstract Syntax Tree) mode is the traditional tree-walking interpreter that has been
+    %Qore's execution engine since its inception. In this mode, the parsed AST is directly traversed
+    and evaluated at runtime.
+
+    <b>Characteristics:</b>
+    - No compilation overhead at startup
+    - Supports all %Qore features including non-@ref modern "%modern" code
+    - Mature and well-tested
+    - Lower execution speed compared to IR/JIT for compute-intensive code
+
+    <b>When to use:</b>
+    - Running legacy code that doesn't use @ref modern "%modern"
+    - Short-lived scripts where startup time matters more than execution speed
+    - Debugging scenarios where maximum compatibility is needed
+
+    @code{.sh}
+    qore --exec-mode=ast script.q
+    @endcode
+
+    @section exec_mode_ir IR Execution Mode
+
+    The IR (Intermediate Representation) mode compiles %Qore code to a bytecode intermediate
+    representation, which is then executed by a bytecode interpreter. This is the default execution
+    mode in %Qore 2.3+.
+
+    <b>Characteristics:</b>
+    - Faster execution than AST for most code
+    - Low compilation overhead
+    - Requires @ref modern "%modern" code (automatically falls back to AST for non-modern)
+    - Good balance of startup time and execution speed
+
+    <b>When to use:</b>
+    - General-purpose scripting
+    - Applications where both startup time and execution speed matter
+    - Default choice for most use cases
+
+    @code{.sh}
+    qore --exec-mode=ir script.q
+    @endcode
+
+    @section exec_mode_jit JIT Execution Mode
+
+    The JIT (Just-In-Time) mode compiles %Qore IR to native machine code using LLVM. This provides
+    the fastest execution speed but has compilation overhead at startup.
+
+    <b>Characteristics:</b>
+    - Fastest execution speed for compute-intensive code
+    - Higher startup time due to LLVM compilation
+    - Requires @ref modern "%modern" code
+    - Automatic fallback to IR for operations not yet natively implemented
+    - Preserves all %Qore semantics including exception handling
+
+    <b>Native optimizations include:</b>
+    - Inline arithmetic fast-paths for int+int and float+float operations
+    - Direct hash key access for constant string keys
+    - Direct list index access with bounds checking
+    - Specialized string concatenation
+    - Inline comparison operations for common types
+
+    <b>When to use:</b>
+    - CPU-intensive algorithms and loops
+    - Long-running services where compilation cost is amortized
+    - Performance-critical applications
+
+    @code{.sh}
+    qore --exec-mode=jit script.q
+    @endcode
+
+    @subsection jit_debugging Debugging JIT-Compiled Code
+
+    JIT-compiled %Qore code supports debugger integration via the GDB JIT interface. This allows
+    debuggers like GDB and LLDB to see JIT-compiled function symbols and source locations.
+
+    <b>Requirements:</b>
+    - GDB 7.0 or later
+    - LLDB with the jit-loader.gdb plugin enabled
+
+    <b>Using GDB with JIT-compiled code:</b>
+
+    To debug JIT-compiled code, set a pending breakpoint on the JIT registration function, then
+    query for symbols after code is compiled:
+
+    @code{.sh}
+    $ gdb --args qore --exec-mode=jit script.q
+    (gdb) set breakpoint pending on
+    (gdb) break __jit_debug_register_code
+    (gdb) run
+    # GDB stops when JIT code is registered
+    (gdb) continue
+    # After program runs, query JIT symbols:
+    (gdb) info functions _toplevel
+    File script.q:
+    6:    void _toplevel(void);
+    @endcode
+
+    JIT-compiled functions appear with their source file and line number, allowing you to set
+    breakpoints and inspect JIT-compiled code just like native code.
+
+    @note The GDB JIT interface registers symbols dynamically as code is compiled. Symbols become
+    visible to the debugger after the \c __jit_debug_register_code function is called.
+
+    @section exec_mode_tiered Tiered Execution Mode
+
+    The tiered mode provides adaptive compilation by automatically promoting hot functions through
+    execution tiers: AST → IR → JIT. Functions start on the AST interpreter and are promoted
+    based on call frequency.
+
+    <b>Characteristics:</b>
+    - Fast startup (starts with AST)
+    - Hot code paths automatically optimized
+    - Configurable promotion thresholds
+    - Best of both worlds for mixed workloads
+
+    <b>Promotion thresholds:</b>
+    - \c --jit-ir-threshold=N: Calls before IR promotion (default: 100)
+    - \c --jit-jit-threshold=N: Calls before JIT promotion (default: 1000)
+
+    <b>When to use:</b>
+    - Long-running services with varied workloads
+    - Applications with both startup-sensitive and compute-intensive code paths
+    - When you want automatic optimization without explicit mode selection
+
+    @code{.sh}
+    qore --exec-mode=tiered script.q
+    qore --exec-mode=tiered --jit-ir-threshold=50 --jit-jit-threshold=500 script.q
+    @endcode
+
+    @section exec_mode_aot AOT Compilation
+
+    AOT (Ahead-of-Time) compilation compiles %Qore scripts and modules to standalone native
+    executables or binary modules before deployment. This eliminates parse-time overhead and
+    can protect intellectual property.
+
+    @subsection aot_scripts Compiling Scripts
+
+    The \c --compile option compiles a %Qore script to a standalone ELF executable:
+
+    @code{.sh}
+    qore --compile script.q --output script
+    ./script [args...]
+    @endcode
+
+    The resulting executable:
+    - Links against \c libqore.so at runtime
+    - Contains compiled native code for all functions
+    - Includes embedded source by default (for error messages)
+    - Supports all command-line arguments
+
+    @subsection aot_modules Compiling Modules
+
+    The \c --compile-module option compiles a %Qore module (\c .qm) to a binary module (\c .qmod):
+
+    @code{.sh}
+    qore --compile-module MyModule.qm
+    # Creates MyModule.qmod
+    @endcode
+
+    Binary modules:
+    - Load faster than source modules (no parse phase)
+    - Are searched before source modules with the same base name
+    - Support all module features
+
+    @subsection aot_strip_source Source Stripping
+
+    The \c --strip-source option removes source code from compiled binaries for IP protection:
+
+    @code{.sh}
+    qore --compile script.q --strip-source --output script
+    qore --compile-module MyModule.qm --strip-source
+    @endcode
+
+    Source-stripped binaries:
+    - Contain no readable source code
+    - Use binary metadata serialization (QORD format)
+    - Show \c "[AOT-compiled]" in stack traces
+    - Cannot be decompiled
+
+    @subsection aot_options AOT Options
+
+    |!Option|!Description
+    |\c --compile|Compile script to standalone executable
+    |\c --compile-module|Compile module to binary module (\c .qmod)
+    |\c --output=PATH|Specify output path
+    |\c --strip-source|Remove source code from binary
+    |\c --opt-level=N|LLVM optimization level (0-3, default: 2)
+    |\c --static|Static link (requires \c libqore_static.a)
+    |\c --target=TRIPLE|Cross-compilation target triple
+
+    @section exec_mode_programmatic Programmatic Control
+
+    The execution mode can be controlled programmatically using the @ref Qore::Program "Program" class:
+
+    @code{.py}
+    %modern
+
+    # Create a program with JIT execution
+    Program pgm(PO_MODERN);
+    pgm.setExecMode(ExecMode::EM_JIT);
+    pgm.parse("int sub compute() { return 42; }", "code");
+    int result = pgm.callFunction("compute");
+
+    # Query current execution mode
+    ExecMode mode = pgm.getExecMode();
+    if (mode == ExecMode::EM_JIT) {
+        printf("Using JIT compilation\n");
+    }
+    @endcode
+
+    @subsection exec_mode_enum ExecMode Enum
+
+    The @ref Qore::ExecMode "ExecMode" enum provides type-safe execution mode values:
+
+    |!Value|!Description
+    |@ref Qore::ExecMode::EM_AST "EM_AST"|AST interpreter
+    |@ref Qore::ExecMode::EM_IR "EM_IR"|IR bytecode interpreter
+    |@ref Qore::ExecMode::EM_JIT "EM_JIT"|LLVM JIT compilation
+    |@ref Qore::ExecMode::EM_TIERED "EM_TIERED"|Tiered adaptive compilation
+
+    @subsection exec_mode_methods Program Methods
+
+    - @ref Qore::Program::setExecMode() "Program::setExecMode(enum<ExecMode>)" - Set the execution mode
+    - @ref Qore::Program::getExecMode() "Program::getExecMode()" - Get the current execution mode
+
+    @note The execution mode should be set before parsing code. JIT and IR modes require
+    @ref modern "%modern" parse options; non-modern code automatically falls back to AST.
+
+    @section exec_mode_requirements Requirements
+
+    @subsection exec_mode_llvm LLVM Requirement
+
+    JIT and AOT compilation require LLVM 16 or later. Install the LLVM development packages:
+
+    - <b>Debian/Ubuntu:</b> \c llvm-dev (or version-specific, e.g., \c llvm-20-dev)
+    - <b>RHEL/Fedora:</b> \c llvm-devel
+    - <b>Alpine:</b> \c llvm-dev
+
+    @subsection exec_mode_modern Modern Code Requirement
+
+    IR, JIT, and AOT modes require @ref modern "%modern" code. Non-modern code automatically
+    falls back to AST execution. Use the @ref modern "%modern" parse directive or the \c .qr
+    file extension to enable modern mode.
+
+    @see
+    - @ref Qore::Program "Program class"
+    - @ref Qore::ExecMode "ExecMode enum"
+    - @ref modern "%modern parse directive"
+    - @ref command_line_processing "Command-line processing"
+*/
