@@ -5871,19 +5871,19 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     return out.release();
 }
 
-Http2Session* SocketHttp2ServerPollOperation::takeSession() {
+Http2SessionPtr SocketHttp2ServerPollOperation::takeSession() {
     return nullptr;
 }
 
 SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(ExceptionSink* xsink,
-        QoreSocketObject* sock, Http2Session* /*unused_h2_session*/, int32_t stream_id, int status_code,
+        QoreSocketObject* sock, const Http2SessionPtr& h2_session_param, int32_t stream_id, int status_code,
         const QoreHashNode* headers, const BinaryNode* body, bool is_connect)
-        : SocketPollSocketOperationBase(sock), stream_id(stream_id) {
+        : SocketPollSocketOperationBase(sock), h2_session(h2_session_param), stream_id(stream_id) {
 
     AutoLocker al(sock->priv->m);
 
     // Get HTTP/2 session from socket (stored by previous read operation)
-    Http2Session* session = sock->priv->socket->priv->h2_session;
+    Http2Session* session = sock->priv->socket->priv->h2_session.get();
     if (!session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available; startPollSendHttp2Response() must be "
             "called after startPollReadHttp2Request() completes on an active HTTP/2 connection");
@@ -5949,7 +5949,7 @@ QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* 
     AutoLocker al(sock->priv->m);
 
     // Get session from socket
-    Http2Session* session = sock->priv->socket->priv->h2_session;
+    Http2Session* session = sock->priv->socket->priv->h2_session.get();
     if (!session) {
         xsink->raiseException("HTTP2-ERROR", "HTTP/2 session no longer available");
         return nullptr;
@@ -6046,7 +6046,7 @@ QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* 
     }
 }
 
-Http2Session* SocketHttp2SendResponsePollOperation::takeSession() {
+Http2SessionPtr SocketHttp2SendResponsePollOperation::takeSession() {
     // Session is now managed by socket, not this operation
     return nullptr;
 }
@@ -6061,7 +6061,7 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
     AutoLocker al(sock->priv->m);
 
     // Get HTTP/2 session from socket
-    Http2Session* session = sock->priv->socket->priv->h2_session;
+    Http2Session* session = sock->priv->socket->priv->h2_session.get();
     if (!session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available; "
             "startPollSendHttp2StreamingResponse() must be called after "
@@ -6133,7 +6133,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
 
     AutoLocker al(sock->priv->m);
 
-    Http2Session* session = sock->priv->socket->priv->h2_session;
+    Http2Session* session = sock->priv->socket->priv->h2_session.get();
     if (!session) {
         xsink->raiseException("HTTP2-ERROR", "HTTP/2 session no longer available");
         return nullptr;
@@ -6359,17 +6359,32 @@ SocketHttp2ClientMultiplexPollOperation::SocketHttp2ClientMultiplexPollOperation
 }
 
 SocketHttp2ClientMultiplexPollOperation::~SocketHttp2ClientMultiplexPollOperation() {
-    // Clear stream completion callback
+    printd(5, "~SocketHttp2ClientMultiplexPollOperation() starting\n");
+    // Clear stream completion callback - session is guaranteed valid via shared_ptr
     if (h2_session) {
+        printd(5, "~SocketHttp2ClientMultiplexPollOperation() clearing callback\n");
         h2_session->clearStreamCompleteCallback();
+        printd(5, "~SocketHttp2ClientMultiplexPollOperation() callback cleared\n");
     }
 
     // Deref any queued responses
+    printd(5, "~SocketHttp2ClientMultiplexPollOperation() getting lock for responses\n");
+    if (getenv("QORE_HTTP2_DEBUG")) {
+        fprintf(stderr, "HTTP2 DEBUG: ~SocketHttp2ClientMultiplexPollOperation() getting lock for responses\n");
+        fflush(stderr);
+    }
     AutoLocker al(response_lock);
+    printd(5, "~SocketHttp2ClientMultiplexPollOperation() derefing %zu responses\n", completed_responses.size());
+    if (getenv("QORE_HTTP2_DEBUG")) {
+        fprintf(stderr, "HTTP2 DEBUG: ~SocketHttp2ClientMultiplexPollOperation() derefing %zu responses\n",
+            completed_responses.size());
+        fflush(stderr);
+    }
     for (QoreHashNode* h : completed_responses) {
         h->deref(nullptr);
     }
     completed_responses.clear();
+    printd(5, "~SocketHttp2ClientMultiplexPollOperation() done\n");
 }
 
 int SocketHttp2ClientMultiplexPollOperation::initSession(ExceptionSink* xsink) {

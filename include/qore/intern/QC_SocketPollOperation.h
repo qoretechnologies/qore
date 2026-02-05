@@ -533,7 +533,7 @@ public:
     }
 
     //! Returns nullptr - session is managed by socket
-    DLLLOCAL Http2Session* takeSession();
+    DLLLOCAL Http2SessionPtr takeSession();
 
     //! Returns the stream ID of the completed request
     DLLLOCAL int32_t getStreamId() const { return stream_id; }
@@ -545,7 +545,7 @@ public:
     }
 
 private:
-    Http2Session* h2_session = nullptr;
+    Http2SessionPtr h2_session;
     int h2_state = H2S_NONE;
     int32_t stream_id = 0;
     bool peer_closed = false;
@@ -578,7 +578,7 @@ public:
         @param is_connect if true, use submitConnectResponse for RFC 8441 WebSocket
     */
     DLLLOCAL SocketHttp2SendResponsePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
-        Http2Session* h2_session, int32_t stream_id, int status_code,
+        const Http2SessionPtr& h2_session, int32_t stream_id, int status_code,
         const QoreHashNode* headers, const BinaryNode* body, bool is_connect = false);
 
     DLLLOCAL ~SocketHttp2SendResponsePollOperation();
@@ -610,9 +610,10 @@ public:
     }
 
     //! Returns nullptr - session is managed by socket
-    DLLLOCAL Http2Session* takeSession();
+    DLLLOCAL Http2SessionPtr takeSession();
 
 private:
+    Http2SessionPtr h2_session;
     int h2_state = H2S_NONE;
     int32_t stream_id = 0;
 
@@ -827,7 +828,7 @@ public:
     DLLLOCAL bool isOpen() const { return h2_state != H2C_CLOSED; }
 
     //! Returns the HTTP/2 session for submitting requests
-    DLLLOCAL Http2Session* getSession() const { return h2_session; }
+    DLLLOCAL Http2SessionPtr getSession() const { return h2_session; }
 
     //! Submit an HTTP/2 request on this multiplexed connection
     /** @param method HTTP method
@@ -850,7 +851,7 @@ public:
     }
 
 private:
-    Http2Session* h2_session = nullptr;
+    Http2SessionPtr h2_session;
     int h2_state = H2C_NONE;
     bool peer_closed = false;
 

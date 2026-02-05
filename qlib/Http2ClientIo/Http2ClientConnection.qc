@@ -101,6 +101,9 @@ public class Http2ClientConnection {
 
         #! Reference to AsyncSocketIoController for wake notifications
         *object controller_ref;
+
+        #! True when a thread is actively driving to ready
+        bool driving = False;
     }
 
     #! Creates a new HTTP/2 client connection
@@ -174,6 +177,11 @@ public class Http2ClientConnection {
     #! Returns True if the connection is ready for new requests
     bool isReady() {
         AutoLock al(lock);
+        return isReadyLocked();
+    }
+
+    #! Internal: check ready state when lock is already held
+    private bool isReadyLocked() {
         return state == Http2ClientConnectionState::Ready && poll_op.isReady();
     }
 
@@ -330,6 +338,8 @@ public class Http2ClientConnection {
     /** This method polls the connection in a loop until the HTTP/2 handshake
         completes and the connection is ready for requests.
 
+        If another thread is already driving, this thread waits for it to finish.
+
         @param timeout_ms maximum time to wait
 
         @return True if the connection is ready, False on timeout
@@ -338,6 +348,45 @@ public class Http2ClientConnection {
     */
     bool driveToReady(timeout timeout_ms = 30s) {
         date end_time = now_us() + timeout_ms;
+
+        # Check if already ready or if another thread is driving
+        {
+            AutoLock al(lock);
+            if (isReadyLocked()) {
+                return True;
+            }
+            if (state == Http2ClientConnectionState::Closed) {
+                *hash<auto> err = poll_op.getError();
+                throw "HTTP2-CONNECT-ERROR",
+                    sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
+            }
+            # If another thread is driving, wait for it
+            while (driving) {
+                date remaining = end_time - now_us();
+                if (remaining <= 0us) {
+                    return False;
+                }
+                ready_cond.wait(lock, remaining);
+                # After waking, check if ready or closed
+                if (isReadyLocked()) {
+                    return True;
+                }
+                if (state == Http2ClientConnectionState::Closed) {
+                    *hash<auto> err = poll_op.getError();
+                    throw "HTTP2-CONNECT-ERROR",
+                        sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
+                }
+            }
+            # We are the driving thread
+            driving = True;
+        }
+
+        # Cleanup on any exit path
+        on_exit {
+            AutoLock al(lock);
+            driving = False;
+            ready_cond.broadcast();
+        }
 
         while (!isReady() && !isClosed()) {
             date remaining = end_time - now_us();

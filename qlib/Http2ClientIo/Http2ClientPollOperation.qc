@@ -359,6 +359,8 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     abort() {
         if (current_op) {
             current_op.abort();
+            # Clear current_op reference to allow C++ object to be destroyed
+            delete current_op;
         }
         state = STATE_CLOSED;
 
@@ -509,9 +511,16 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                         log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
                             ex.err, ex.desc);
                     }
+                    # Callback handled the response - continue reading for more frames
+                    # (don't set STATE_RESPONSE_READY, loop continues in continuePoll)
+                    state = STATE_WAIT_READ;
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": sock,
+                    };
                 }
 
-                # Store for getOutput()
+                # No callback - store for getOutput() polling
                 completed_response = output;
                 completed_stream_id = stream_id;
                 state = STATE_RESPONSE_READY;

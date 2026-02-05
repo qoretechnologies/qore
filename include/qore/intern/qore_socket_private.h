@@ -588,8 +588,9 @@ struct qore_socket_private {
     //! HTTP/2 session for persistent HTTP/2 connections
     /** The session is created during startPollReadHttp2Request() and reused
         for subsequent operations on the same connection.
+        Uses shared_ptr for thread-safe atomic reference counting.
     */
-    Http2Session* h2_session = nullptr;
+    Http2SessionPtr h2_session;
 
     //! Active HTTP/2 stream ID for WebSocket or other bidirectional streams
     /** When set to a positive value, send() and recv() operations will use
@@ -802,10 +803,8 @@ struct qore_socket_private {
             remote_cert->deref(nullptr);
             remote_cert = nullptr;
         }
-        if (h2_session) {
-            delete h2_session;
-            h2_session = nullptr;
-        }
+        // Reset shared_ptr - will delete session if this is the last reference
+        h2_session.reset();
         // Clear HTTP/2 client multiplexing state
         {
             AutoLocker al(h2_stream_callbacks_lock);
@@ -1648,7 +1647,7 @@ struct qore_socket_private {
         int32_t h2_active_stream_id = getH2ActiveStreamId();
         bool h2_cond = h2_session && h2_session->isServer() && h2_active_stream_id > 0 && !h2_receiving_frames;
         printd(5, "isDataAvailable() h2_session=%p isServer=%d h2_active=%d h2_recv=%d h2_cond=%d\n",
-            h2_session, h2_session ? h2_session->isServer() : -1, h2_active_stream_id, h2_receiving_frames, h2_cond);
+            h2_session.get(), h2_session ? h2_session->isServer() : -1, h2_active_stream_id, h2_receiving_frames, h2_cond);
         if (h2_cond) {
             Http2StreamInfo* stream = h2_session->getStream(h2_active_stream_id);
             printd(5, "isDataAvailable() stream=%p body_size=%d\n", stream, stream ? (int)stream->body.size() : -1);

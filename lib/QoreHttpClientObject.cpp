@@ -96,7 +96,7 @@ public:
             const void* body, size_t body_len, const char* scheme = "https")
             : sock(sock) {
         // Create HTTP/2 session
-        h2_session.reset(Http2Session::createClient(sock, xsink, scheme));
+        h2_session = Http2Session::createClient(sock, xsink, scheme);
         if (*xsink || !h2_session) {
             return;
         }
@@ -122,7 +122,7 @@ public:
     DLLLOCAL Http2Session* getSession() const { return h2_session.get(); }
 
     //! Takes ownership of the HTTP/2 session
-    DLLLOCAL std::unique_ptr<Http2Session> takeSession() { return std::move(h2_session); }
+    DLLLOCAL Http2SessionPtr takeSession() { return std::move(h2_session); }
 
     //! Returns the stream ID
     DLLLOCAL int32_t getStreamId() const { return stream_id; }
@@ -244,7 +244,7 @@ public:
 
 private:
     qore_socket_private* sock;
-    std::unique_ptr<Http2Session> h2_session;
+    Http2SessionPtr h2_session;
     int32_t stream_id = -1;
 };
 
@@ -696,24 +696,19 @@ struct qore_httpclient_priv {
     // NOTE: The h2_session is now stored on the socket, not HTTPClient,
     // so that all layers (Socket, HTTPClient) share the same session
     DLLLOCAL Http2Session* getH2Session() const {
-        return msock ? msock->socket->priv->h2_session : nullptr;
+        return msock ? msock->socket->priv->h2_session.get() : nullptr;
     }
 
-    DLLLOCAL void setH2Session(Http2Session* session) {
+    DLLLOCAL void setH2Session(const Http2SessionPtr& session) {
         if (msock) {
             msock->socket->priv->h2_session = session;
         }
     }
 
     DLLLOCAL void clearH2Session() {
-        // Delete the session - HTTPClient manages the lifecycle even though
-        // it's stored on the socket for shared access
-        if (msock && msock->socket->priv->h2_session) {
-            delete msock->socket->priv->h2_session;
-            msock->socket->priv->h2_session = nullptr;
-        }
-        // Also clear the stream ID
+        // Reset the shared_ptr - will delete session if this is the last reference
         if (msock) {
+            msock->socket->priv->h2_session.reset();
             msock->socket->priv->setH2ActiveStreamId(-1);
         }
         h2_stream_id = 0;
@@ -3095,9 +3090,9 @@ int HttpClientConnectSendRecvPollOperation::processH2Response(ExceptionSink* xsi
     }
 
     // Transfer HTTP/2 session to client for potential reuse
-    std::unique_ptr<Http2Session> session = h2_poll->takeSession();
+    Http2SessionPtr session = h2_poll->takeSession();
     if (session) {
-        client->http_priv->setH2Session(session.release());
+        client->http_priv->setH2Session(session);
     }
 
     // Clear the poll state

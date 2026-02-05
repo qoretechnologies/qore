@@ -69,22 +69,24 @@ Http2Session::~Http2Session() {
     }
 }
 
-Http2Session* Http2Session::createClient(qore_socket_private* sock, ExceptionSink* xsink,
+std::shared_ptr<Http2Session> Http2Session::createClient(qore_socket_private* sock, ExceptionSink* xsink,
         const char* scheme) {
-    std::unique_ptr<Http2Session> h2(new Http2Session(sock, false, scheme));
+    // Use shared_ptr with raw pointer since constructor is private
+    std::shared_ptr<Http2Session> h2(new Http2Session(sock, false, scheme));
     if (h2->init(xsink)) {
         return nullptr;
     }
-    return h2.release();
+    return h2;
 }
 
-Http2Session* Http2Session::createServer(qore_socket_private* sock, ExceptionSink* xsink,
+std::shared_ptr<Http2Session> Http2Session::createServer(qore_socket_private* sock, ExceptionSink* xsink,
         const char* scheme) {
-    std::unique_ptr<Http2Session> h2(new Http2Session(sock, true, scheme));
+    // Use shared_ptr with raw pointer since constructor is private
+    std::shared_ptr<Http2Session> h2(new Http2Session(sock, true, scheme));
     if (h2->init(xsink)) {
         return nullptr;
     }
-    return h2.release();
+    return h2;
 }
 
 int Http2Session::init(ExceptionSink* xsink) {
@@ -383,6 +385,14 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
         provider_ctx->no_end_stream = is_extended_connect;
         provider_ctx->remove_on_empty = !is_extended_connect;
         data_prd = &provider_ctx->provider;
+    }
+
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: submitRequest sending %zu headers:\n", nva.size());
+        for (const auto& nv : nva) {
+            fprintf(stderr, "  %.*s: %.*s\n", (int)nv.namelen, nv.name, (int)nv.valuelen, nv.value);
+        }
+        fflush(stderr);
     }
 
     int32_t stream_id = nghttp2_submit_request(session, nullptr, nva.data(), nva.size(),
@@ -930,7 +940,17 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
 }
 
 int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p isServer=%d tid=%d about to lock\n",
+            this, is_server, q_gettid());
+        fflush(stderr);
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p isServer=%d tid=%d locked\n",
+            this, is_server, q_gettid());
+        fflush(stderr);
+    }
     char* buf;
     printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock, is_server, timeout_ms);
     // Use suppress_exception=true to avoid exception on timeout
@@ -940,14 +960,29 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         // Check for timeout (QSE_TIMEOUT = -3)
         if (len == QSE_TIMEOUT) {
             printd(5, "receiveData() timeout (no data)\n");
+            if (http2DebugEnabled()) {
+                fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (timeout)\n",
+                    this, q_gettid());
+                fflush(stderr);
+            }
             return 0;  // Not an error, just no data available
         }
         printd(5, "receiveData() error len=%zd\n", len);
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (recv error)\n",
+                this, q_gettid());
+            fflush(stderr);
+        }
         return -1;
     }
     if (len == 0) {
         // EOF received - connection was closed by peer
         printd(5, "receiveData() len=0 (connection closed by peer)\n");
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (EOF)\n",
+                this, q_gettid());
+            fflush(stderr);
+        }
         return 1;  // Connection closed - distinct from timeout (0)
     }
     if (len >= 9) {
@@ -970,9 +1005,19 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
             nghttp2_strerror(static_cast<int>(rv)), rv);
         xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_recv failed: %s",
             nghttp2_strerror(static_cast<int>(rv)));
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (error)\n",
+                this, q_gettid());
+            fflush(stderr);
+        }
         return -1;
     }
 
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (success)\n",
+            this, q_gettid());
+        fflush(stderr);
+    }
     return 0;
 }
 
@@ -1184,6 +1229,11 @@ ssize_t Http2Session::sendCallback(nghttp2_session* session, const uint8_t* data
 int Http2Session::onFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: onFrameRecvCallback session=%p isServer=%d type=%d stream=%d\n",
+            h2, h2 ? h2->is_server : -1, frame->hd.type, frame->hd.stream_id);
+        fflush(stderr);
+    }
     if (h2 && h2->local_settings.max_frame_size
         && frame->hd.length > h2->local_settings.max_frame_size) {
         printd(1, "HTTP2 WARN: incoming frame length %d exceeds local max_frame_size %u\n",
@@ -1479,6 +1529,12 @@ int Http2Session::onHeaderCallback(nghttp2_session* session, const nghttp2_frame
 
     std::string header_name(reinterpret_cast<const char*>(name), namelen);
     std::string header_value(reinterpret_cast<const char*>(value), valuelen);
+
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: onHeaderCallback stream=%d header=%s: %s\n",
+            frame->hd.stream_id, header_name.c_str(), header_value.c_str());
+        fflush(stderr);
+    }
 
     // Handle pseudo-headers
     if (header_name == ":status") {
