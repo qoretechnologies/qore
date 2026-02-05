@@ -35,10 +35,12 @@
 
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/QC_Socket.h"
 #include "qore/QoreSocketObject.h"
 #include "qore/InputStream.h"
 
 #include <memory>
+#include <deque>
 
 // goals: connect, connect-ssl
 constexpr int SPG_CONNECT = 1;
@@ -532,7 +534,7 @@ public:
     }
 
     //! Returns nullptr - session is managed by socket
-    DLLLOCAL Http2Session* takeSession();
+    DLLLOCAL Http2SessionPtr takeSession();
 
     //! Returns the stream ID of the completed request
     DLLLOCAL int32_t getStreamId() const { return stream_id; }
@@ -544,7 +546,7 @@ public:
     }
 
 private:
-    Http2Session* h2_session = nullptr;
+    Http2SessionPtr h2_session;
     int h2_state = H2S_NONE;
     int32_t stream_id = 0;
     bool peer_closed = false;
@@ -577,7 +579,7 @@ public:
         @param is_connect if true, use submitConnectResponse for RFC 8441 WebSocket
     */
     DLLLOCAL SocketHttp2SendResponsePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
-        Http2Session* h2_session, int32_t stream_id, int status_code,
+        const Http2SessionPtr& h2_session, int32_t stream_id, int status_code,
         const QoreHashNode* headers, const BinaryNode* body, bool is_connect = false);
 
     DLLLOCAL ~SocketHttp2SendResponsePollOperation();
@@ -609,9 +611,10 @@ public:
     }
 
     //! Returns nullptr - session is managed by socket
-    DLLLOCAL Http2Session* takeSession();
+    DLLLOCAL Http2SessionPtr takeSession();
 
 private:
+    Http2SessionPtr h2_session;
     int h2_state = H2S_NONE;
     int32_t stream_id = 0;
 
@@ -750,6 +753,133 @@ private:
     DLLLOCAL virtual bool abortNeedsClose() const {
         return true;
     }
+};
+
+// HTTP/2 client multiplex poll operation states
+constexpr int H2C_NONE = 0;
+constexpr int H2C_SEND_PREFACE = 1;
+constexpr int H2C_RECV_PREFACE = 2;
+constexpr int H2C_READING = 3;
+constexpr int H2C_RESPONSE_READY = 4;
+constexpr int H2C_CLOSED = 5;
+
+//! Poll operation for HTTP/2 client multiplexed connection handling
+/** This poll operation manages an HTTP/2 client connection with multiple concurrent streams:
+    1. Exchange connection preface (SETTINGS frames)
+    2. Continuously read HTTP/2 frames
+    3. Dispatch completed responses to registered stream callbacks
+    4. Support submitting new requests while reading responses
+
+    Unlike the server-side operation, this operation:
+    - Queues completed responses for retrieval via getOutput()
+    - Supports continuous reading mode for true multiplexing
+    - goalReached() returns true when a response is ready or connection closed
+
+    @since Qore 2.3
+*/
+class SocketHttp2ClientMultiplexPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketHttp2ClientMultiplexPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+
+    DLLLOCAL ~SocketHttp2ClientMultiplexPollOperation();
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    //! Returns true when a response is ready or connection is closed
+    DLLLOCAL virtual bool goalReached() const {
+        AutoLocker al(response_lock);
+        return !completed_responses.empty() || h2_state == H2C_CLOSED;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+
+    //! Returns the next completed response, or NOTHING if none available
+    DLLLOCAL virtual QoreValue getOutput() const {
+        AutoLocker al(response_lock);
+        if (completed_responses.empty()) {
+            return QoreValue();
+        }
+        // Return and remove the first response
+        QoreHashNode* response = completed_responses.front();
+        completed_responses.pop_front();
+        return response;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const {
+        switch (h2_state) {
+            case H2C_NONE: return "none";
+            case H2C_SEND_PREFACE: return "sending-preface";
+            case H2C_RECV_PREFACE: return "receiving-preface";
+            case H2C_READING: return "reading-frames";
+            case H2C_RESPONSE_READY: return "response-ready";
+            case H2C_CLOSED: return "closed";
+            default: return "unknown";
+        }
+    }
+
+    //! Returns true if the connection is still open for multiplexing
+    DLLLOCAL bool isOpen() const { return h2_state != H2C_CLOSED; }
+
+    //! Returns the HTTP/2 session for submitting requests
+    DLLLOCAL Http2SessionPtr getSession() const { return h2_session; }
+
+    //! Submit an HTTP/2 request on this multiplexed connection
+    /** @param method HTTP method
+        @param path request path
+        @param headers request headers
+        @param body request body (optional)
+        @param xsink exception sink
+        @return stream ID on success, -1 on error
+    */
+    DLLLOCAL int32_t submitRequest(const char* method, const char* path,
+        const std::map<std::string, std::string>& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink);
+
+    //! Cancel a pending stream
+    DLLLOCAL void cancelStream(int32_t stream_id, ExceptionSink* xsink);
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        h2_state = H2C_CLOSED;
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
+private:
+    Http2SessionPtr h2_session;
+    int h2_state = H2C_NONE;
+    bool peer_closed = false;
+
+    //! Queue of completed responses (thread-safe)
+    mutable std::deque<QoreHashNode*> completed_responses;
+    mutable QoreThreadLock response_lock;
+
+    //! Shared state for safe callback handling during destruction
+    /** This struct is captured by the stream completion callback lambda (via shared_ptr).
+        The mutex ensures that:
+        1. The guard flag is only checked/modified while holding the mutex
+        2. The destructor waits for any in-flight callback to complete
+        3. No TOCTOU race between checking the flag and using 'this'
+    */
+    struct CallbackGuard {
+        std::mutex mutex;
+        bool destroyed = false;
+    };
+    std::shared_ptr<CallbackGuard> callback_guard = std::make_shared<CallbackGuard>();
+
+    DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+
+    //! Initialize HTTP/2 client session
+    DLLLOCAL int initSession(ExceptionSink* xsink);
+
+    //! Callback invoked when a stream completes
+    DLLLOCAL void onStreamComplete(int32_t stream_id, Http2StreamInfo* stream, ExceptionSink* xsink);
 };
 
 DLLLOCAL QoreClass* initSocketPollOperationClass(QoreNamespace& qorens);

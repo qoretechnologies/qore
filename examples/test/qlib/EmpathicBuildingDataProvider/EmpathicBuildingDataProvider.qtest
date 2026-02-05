@@ -78,7 +78,15 @@ public class Main inherits QUnit::Test {
             testSkip("no connection");
         }
 
-        AbstractDataProvider prov = ebrc.getDataProvider();
+        AbstractDataProvider prov;
+        try {
+            prov = ebrc.getDataProvider();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to EmpathicBuilding API: %s", ex.desc));
+            }
+            rethrow;
+        }
         assertEq("empathicbuilding", prov.getName());
         prov = prov.getChildProviderPath("measurements/create");
         assertEq("create", prov.getName());

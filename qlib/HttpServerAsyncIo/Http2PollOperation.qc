@@ -123,17 +123,33 @@ public class Http2PollOperation inherits AbstractPollOperation {
     */
     *hash<SocketPollInfo> continuePoll() {
         while (True) {
+            @debug {
+                if (getenv("QORE_H2OP_TRACE")) {
+                    printf("Http2PollOperation::continuePoll() state=%s sock=%s\n",
+                        state, sock.uniqueHash()[0..8]);
+                }
+            }
 
             switch (state) {
                 case STATE_INIT:
                 case STATE_READING: {
                     if (!current_op) {
-
+                        @debug {
+                            if (getenv("QORE_H2OP_TRACE")) {
+                                printf("Http2PollOperation: no current_op, closing\n");
+                            }
+                        }
                         state = STATE_CLOSED;
                         return NOTHING;
                     }
                     try {
                         auto poll_info = current_op.continuePoll();
+                        @debug {
+                            if (getenv("QORE_H2OP_TRACE")) {
+                                printf("Http2PollOperation: current_op.continuePoll() returned poll_info=%y goal=%y\n",
+                                    poll_info != NOTHING, current_op.goalReached());
+                            }
+                        }
                         if (poll_info) {
                             return poll_info;
                         }

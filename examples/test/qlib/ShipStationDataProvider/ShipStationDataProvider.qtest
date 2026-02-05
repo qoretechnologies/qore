@@ -128,14 +128,32 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
 %endif
     }
 
+    #! Creates a ShipStationDataProvider for unit tests
+    /** Catches connection errors and skips the test (for CI where external APIs may be unavailable)
+        @return the provider, or NOTHING if the test should be skipped
+    */
+    private *ShipStationDataProvider::ShipStationDataProvider tryCreateProvider() {
+        try {
+            return new ShipStationDataProvider::ShipStationDataProvider({
+                "api_key": "x",
+                "api_secret": "y",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to ShipStation API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
     #! Basic sanity tests - provider instantiation
     sanityTests() {
         checkJson();
         # Test creating provider with fake credentials
-        ShipStationDataProvider::ShipStationDataProvider prov({
-            "api_key": "fake-key-for-testing",
-            "api_secret": "fake-secret-for-testing",
-        });
+        *ShipStationDataProvider::ShipStationDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         assertEq("shipstation", prov.getName());
         assertEq("ShipStation data provider for shipping and fulfillment management", prov.getDesc());
     }
@@ -161,10 +179,10 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
     #! Metadata tests - verify provider info structure
     metadataTests() {
         checkJson();
-        ShipStationDataProvider::ShipStationDataProvider prov({
-            "api_key": "x",
-            "api_secret": "y",
-        });
+        *ShipStationDataProvider::ShipStationDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         hash<DataProviderInfo> info = prov.getInfo();
 
         assertTrue(info.supports_children);
@@ -181,10 +199,10 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
     #! Child provider tests - verify hierarchy
     childProviderTests() {
         checkJson();
-        ShipStationDataProvider::ShipStationDataProvider prov({
-            "api_key": "x",
-            "api_secret": "y",
-        });
+        *ShipStationDataProvider::ShipStationDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Check child provider names
         list<string> children = prov.getChildProviderNames();
@@ -318,10 +336,10 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
     #! Negative tests - test error handling and invalid inputs
     negativeTests() {
         checkJson();
-        ShipStationDataProvider::ShipStationDataProvider prov({
-            "api_key": "invalid-key",
-            "api_secret": "invalid-secret",
-        });
+        *ShipStationDataProvider::ShipStationDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Test getting non-existent child provider
         assertThrows("INVALID-CHILD-PROVIDER", sub() {
@@ -339,11 +357,20 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
     cornerCaseTests() {
         checkJson();
         # Test REST client URL
-        ShipStationRestClient::ShipStationRestClient client1({
-            "api_key": "x",
-            "api_secret": "y",
-        });
-        assertTrue(client1.getURL() =~ /ssapi\.shipstation\.com$/);
+        # Note: this creates an actual connection, so catch connection errors in CI
+        try {
+            ShipStationRestClient::ShipStationRestClient client1({
+                "api_key": "x",
+                "api_secret": "y",
+            });
+            assertTrue(client1.getURL() =~ /ssapi\.shipstation\.com$/);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to ShipStation API: %s", ex.desc));
+                return;
+            }
+            rethrow;
+        }
 
         # Test missing credentials throws error
         assertThrows("SHIPSTATION-ERROR", sub() {

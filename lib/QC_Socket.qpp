@@ -4393,6 +4393,26 @@ nothing Socket::setHttp2ConnectProtocolEnabled(bool enable = True) {
     s->setHttp2ConnectProtocolEnabled(enable);
 }
 
+//! Submits an HTTP/2 CONNECT response without creating a poll operation (RFC 8441)
+/** Queues the CONNECT response in the nghttp2 session without END_STREAM, keeping
+    the stream open for bidirectional data transfer (WebSocket over HTTP/2). The actual
+    socket write is handled by the active read poll operation's sendPendingData() calls.
+
+    This is designed for HTTP/2 multiplexing where the read operation stays on the I/O
+    thread and CONNECT responses are submitted from handler threads.
+
+    @param stream_id the HTTP/2 stream ID from the CONNECT request
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param headers hash of response headers
+
+    @throw HTTP2-ERROR no HTTP/2 session active or submission failed
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
+    s->submitHttp2ConnectResponse(stream_id, status_code, headers, xsink);
+}
+
 //! Returns a poll operation for sending an HTTP/2 CONNECT response (RFC 8441)
 /** This poll operation sends an HTTP/2 response for an extended CONNECT request
     (RFC 8441), used for WebSocket over HTTP/2. Unlike a regular HTTP/2 response,
@@ -4508,4 +4528,113 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
 */
 *binary Socket::readHttp2StreamData(int stream_id, int max_bytes = 0) {
     return s->readHttp2StreamData((int32_t)stream_id, (size_t)max_bytes, xsink);
+}
+
+//! Returns a poll operation for HTTP/2 client multiplexed connection handling
+/** This poll operation manages an HTTP/2 client connection with support for multiple
+    concurrent streams (true HTTP/2 multiplexing). Unlike simple request-response patterns,
+    this operation:
+    - Continuously reads HTTP/2 frames from the server
+    - Dispatches completed responses via the session's stream completion callback
+    - Supports submitting new requests while responses are being received
+    - Handles flow control, PING, and GOAWAY frames automatically
+
+    @par Example:
+    @code{.py}
+    # After establishing an HTTP/2 connection
+    AbstractPollOperation op = sock.startPollHttp2ClientMultiplex();
+
+    # The operation continuously reads responses - use callbacks for dispatch
+    while (op.getState() != "closed") {
+        *hash<SocketPollInfo> info = op.continuePoll();
+        if (!info) {
+            break;
+        }
+        Socket::poll((info,), 1s);
+    }
+    @endcode
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object for the multiplexed connection
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw HTTP2-ERROR if HTTP/2 session initialization failed
+
+    @note This operation is designed for use with @ref Http2ClientConnectionManager which handles
+    stream callback registration and request submission.
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollHttp2ClientMultiplex() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketHttp2ClientMultiplexPollOperation(xsink, s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("http2-client-multiplex"), xsink);
+    }
+    return rv.release();
+}
+
+//! Submits an HTTP/2 request on an active multiplexed client connection
+/** @par Example:
+    @code{.py}
+    int stream_id = sock.submitHttp2Request(headers, body);
+    @endcode
+
+    @param headers HTTP/2 pseudo-headers and regular headers (must include :method, :path, :scheme, :authority)
+    @param body optional request body
+
+    @return the stream ID assigned to this request
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active or an error occurs
+
+    @note This method requires an active HTTP/2 client session, typically established via
+    @ref startPollHttp2ClientMultiplex()
+
+    @since %Qore 2.3
+*/
+int Socket::submitHttp2Request(hash<auto> headers, *data body) {
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (body) {
+        switch (body->getType()) {
+            case NT_BINARY: {
+                const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
+                body_ptr = b->getPtr();
+                body_len = b->size();
+                break;
+            }
+            case NT_STRING: {
+                const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+                body_ptr = str->c_str();
+                body_len = str->size();
+                break;
+            }
+            default:
+                xsink->raiseException("HTTP2-ERROR", "body must be string or binary, got type '%s'",
+                    body->getTypeName());
+                return -1;
+        }
+    }
+
+    return s->submitHttp2Request(headers, body_ptr, body_len, xsink);
+}
+
+//! Cancels a pending HTTP/2 stream
+/** @par Example:
+    @code{.py}
+    sock.cancelHttp2Stream(stream_id);
+    @endcode
+
+    @param stream_id the stream ID to cancel
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active or an error occurs
+
+    @since %Qore 2.3
+*/
+nothing Socket::cancelHttp2Stream(int stream_id) {
+    s->cancelHttp2Stream(stream_id, xsink);
 }

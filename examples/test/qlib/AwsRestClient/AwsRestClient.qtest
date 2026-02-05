@@ -118,24 +118,34 @@ class AwsTest inherits QUnit::Test {
         }
 
         # https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08
-        AwsRestTestClient client({"url": "https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08"} + FakeAwsOptions);
+        AwsRestTestClient aws_client;
+        try {
+            aws_client = new AwsRestTestClient({"url": "https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08"} + FakeAwsOptions);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
+                    || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip("connection error: " + ex.err + ": " + ex.desc);
+            }
+            rethrow;
+        }
         # test the signature generation algorithm against a known good value for a certain request
         hash<auto> hdr = {"Content-Type": "application/x-www-form-urlencoded; charset=utf-8"};
         # this creates a request that matches the example request in the AWS docs, so the generated signature must match
-        string sig = client.getSignatureTest("GET", "/?Action=ListUsers&Version=2010-05-08", hdr, NOTHING,
+        string sig = aws_client.getSignatureTest("GET", "/?Action=ListUsers&Version=2010-05-08", hdr, NOTHING,
             2015-08-30T12:36:00Z, "20150830/us-east-1/iam/aws4_request");
         assertEq("5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7", sig);
 
         try {
-            client = new AwsRestTestClient({"url": "https://iotevents.eu-central-1.amazonaws.com"}
+            aws_client = new AwsRestTestClient({"url": "https://iotevents.eu-central-1.amazonaws.com"}
                 + (FakeAwsOptions - ("aws_service", "aws_region")));
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "QOREADDRINFO-GETINFO-ERROR") {
-                testSkip("DNS error: " + ex.err + ": " + ex.desc);
+            if (ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-CONNECT-ERROR"
+                    || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip("connection error: " + ex.err + ": " + ex.desc);
             }
             rethrow;
         }
-        sig = client.getSignatureTest("GET", "/?Action=ListUsers&Version=2010-05-08", hdr, NOTHING,
+        sig = aws_client.getSignatureTest("GET", "/?Action=ListUsers&Version=2010-05-08", hdr, NOTHING,
             2015-08-30T12:36:00Z, "20150830/us-east-1/iam/aws4_request");
         assertEq(Type::String, sig.type());
     }

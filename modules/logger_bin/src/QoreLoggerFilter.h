@@ -1,9 +1,9 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
-/** @file QC_LoggerFilter.h LoggerFilter class definition */
+/** @file QoreLoggerFilter.h QoreLoggerFilter class definition */
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -28,25 +28,18 @@
     information.
 */
 
-#ifndef _QORE_MODULE_LOGGER_QC_LOGGERFILTER_H
+#ifndef _QORE_MODULE_LOGGER_LOGGERFILTER_H
 
-#define _QORE_MODULE_LOGGER_QC_LOGGERFILTER_H
+#define _QORE_MODULE_LOGGER_LOGGERFILTER_H
 
-#include "QoreLoggerFilter.h"
+#include <qore/AbstractPrivateData.h>
 
-//! The event will be processed
-constexpr int ACCEPT = 1;
+class QoreLoggerFilter : public AbstractPrivateData {
+public:
+    DLLLOCAL QoreLoggerFilter() {
+    }
 
-//! No decision could be made, further filtering should occur
-constexpr int NEUTRAL = 0;
-
-//! The event should not be processed
-constexpr int DENY = -1;
-
-DLLEXPORT extern qore_classid_t CID_LOGGERFILTER;
-DLLLOCAL extern QoreClass* QC_LOGGERFILTER;
-
-DLLLOCAL void preinitLoggerFilterClass();
-DLLLOCAL QoreClass* initLoggerFilterClass(QoreNamespace& ns);
+    DLLLOCAL virtual ~QoreLoggerFilter() = default;
+};
 
 #endif

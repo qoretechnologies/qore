@@ -28,17 +28,30 @@ namespace {
 const char kMagicGuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const int kTimeoutSeconds = 12;
 
+struct StreamState {
+    int32_t stream_id = -1;
+    std::map<std::string, std::string> headers;
+    std::string body;
+    bool headers_complete = false;
+    bool complete = false;  // END_STREAM received
+};
+
 struct ClientState {
     SSL_CTX* ctx = nullptr;
     SSL* ssl = nullptr;
     int fd = -1;
     nghttp2_session* session = nullptr;
-    int32_t stream_id = -1;
-    std::map<std::string, std::string> headers;
+    int32_t stream_id = -1;  // WebSocket stream ID
+    std::map<std::string, std::string> headers;  // WebSocket headers
     bool headers_complete = false;
     bool sent_text = false;
     std::string ws_buffer;
     std::vector<std::string> messages;
+
+    // Additional HTTP streams for multiplexed test
+    StreamState get_stream;       // regular GET
+    StreamState stream_stream;    // streaming GET
+    bool sent_after_http = false; // sent "after-http" message
 };
 
 struct DataProvider {
@@ -293,25 +306,56 @@ static int flushPending(ClientState* st) {
 static int onHeader(nghttp2_session*, const nghttp2_frame* frame, const uint8_t* name,
         size_t namelen, const uint8_t* value, size_t valuelen, uint8_t, void* user_data) {
     ClientState* st = static_cast<ClientState*>(user_data);
-    if (frame->hd.stream_id != st->stream_id) {
-        return 0;
-    }
     std::string key(reinterpret_cast<const char*>(name), namelen);
     std::string val(reinterpret_cast<const char*>(value), valuelen);
-    st->headers[toLower(key)] = val;
+    int32_t sid = frame->hd.stream_id;
+
+    if (sid == st->stream_id) {
+        // WebSocket stream
+        st->headers[toLower(key)] = val;
+    } else if (sid == st->get_stream.stream_id) {
+        st->get_stream.headers[toLower(key)] = val;
+    } else if (sid == st->stream_stream.stream_id) {
+        st->stream_stream.headers[toLower(key)] = val;
+    }
     return 0;
 }
 
 static int onFrameRecv(nghttp2_session*, const nghttp2_frame* frame, void* user_data) {
     ClientState* st = static_cast<ClientState*>(user_data);
-    if (frame->hd.stream_id != st->stream_id) {
-        return 0;
+    int32_t sid = frame->hd.stream_id;
+
+    if (sid == st->stream_id) {
+        // WebSocket stream
+        if ((frame->hd.type == NGHTTP2_HEADERS || frame->hd.type == NGHTTP2_CONTINUATION)
+            && (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS)) {
+            st->headers_complete = true;
+            logDebug("nghttp2-ws-client: WebSocket response headers complete");
+        }
+    } else if (sid == st->get_stream.stream_id) {
+        // Regular GET stream
+        if ((frame->hd.type == NGHTTP2_HEADERS || frame->hd.type == NGHTTP2_CONTINUATION)
+            && (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS)) {
+            st->get_stream.headers_complete = true;
+            logDebug("nghttp2-ws-client: GET response headers complete");
+        }
+        if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+            st->get_stream.complete = true;
+            logDebug("nghttp2-ws-client: GET stream complete");
+        }
+    } else if (sid == st->stream_stream.stream_id) {
+        // Streaming GET
+        if ((frame->hd.type == NGHTTP2_HEADERS || frame->hd.type == NGHTTP2_CONTINUATION)
+            && (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS)) {
+            st->stream_stream.headers_complete = true;
+            logDebug("nghttp2-ws-client: streaming response headers complete");
+        }
+        if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+            st->stream_stream.complete = true;
+            logDebug("nghttp2-ws-client: streaming stream complete");
+        }
     }
-    if ((frame->hd.type == NGHTTP2_HEADERS || frame->hd.type == NGHTTP2_CONTINUATION)
-        && (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS)) {
-        st->headers_complete = true;
-        logDebug("nghttp2-ws-client: response headers complete");
-    }
+
     if (frame->hd.type == NGHTTP2_GOAWAY) {
         logDebug("nghttp2-ws-client: received GOAWAY");
     } else if (frame->hd.type == NGHTTP2_RST_STREAM) {
@@ -323,11 +367,18 @@ static int onFrameRecv(nghttp2_session*, const nghttp2_frame* frame, void* user_
 static int onDataChunkRecv(nghttp2_session*, uint8_t, int32_t stream_id, const uint8_t* data,
         size_t len, void* user_data) {
     ClientState* st = static_cast<ClientState*>(user_data);
-    if (stream_id != st->stream_id) {
-        return 0;
+
+    if (stream_id == st->stream_id) {
+        // WebSocket stream
+        st->ws_buffer.append(reinterpret_cast<const char*>(data), len);
+        tryParseWsMessages(st);
+    } else if (stream_id == st->get_stream.stream_id) {
+        // Regular GET stream
+        st->get_stream.body.append(reinterpret_cast<const char*>(data), len);
+    } else if (stream_id == st->stream_stream.stream_id) {
+        // Streaming GET
+        st->stream_stream.body.append(reinterpret_cast<const char*>(data), len);
     }
-    st->ws_buffer.append(reinterpret_cast<const char*>(data), len);
-    tryParseWsMessages(st);
     return 0;
 }
 
@@ -413,16 +464,39 @@ static HeaderBlock makeRequestHeaders(const std::string& authority,
     return hb;
 }
 
+static HeaderBlock makeGetHeaders(const std::string& authority, const std::string& path) {
+    HeaderBlock hb;
+    hb.fields.reserve(4);
+    hb.nva.reserve(4);
+    hb.fields.emplace_back(":method", "GET");
+    hb.fields.emplace_back(":path", path);
+    hb.fields.emplace_back(":scheme", "https");
+    hb.fields.emplace_back(":authority", authority);
+    for (const auto& f : hb.fields) {
+        nghttp2_nv nv;
+        nv.name = reinterpret_cast<uint8_t*>(const_cast<char*>(f.first.c_str()));
+        nv.value = reinterpret_cast<uint8_t*>(const_cast<char*>(f.second.c_str()));
+        nv.namelen = f.first.size();
+        nv.valuelen = f.second.size();
+        nv.flags = NGHTTP2_NV_FLAG_NONE;
+        hb.nva.push_back(nv);
+    }
+    return hb;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     if (argc < 7) {
-        fprintf(stderr, "Usage: nghttp2-ws-client -host <host> -port <port> -path <path>\n");
+        fprintf(stderr, "Usage: nghttp2-ws-client -host <host> -port <port> -path <path> "
+            "[-get-path <path>] [-stream-path <path>]\n");
         return 2;
     }
     std::string host;
     std::string port;
     std::string path;
+    std::string get_path;
+    std::string stream_path;
     for (int i = 1; i < argc; ++i) {
         if (!strcmp(argv[i], "-host") && i + 1 < argc) {
             host = argv[++i];
@@ -430,12 +504,18 @@ int main(int argc, char** argv) {
             port = argv[++i];
         } else if (!strcmp(argv[i], "-path") && i + 1 < argc) {
             path = argv[++i];
+        } else if (!strcmp(argv[i], "-get-path") && i + 1 < argc) {
+            get_path = argv[++i];
+        } else if (!strcmp(argv[i], "-stream-path") && i + 1 < argc) {
+            stream_path = argv[++i];
         }
     }
     if (host.empty() || port.empty() || path.empty()) {
-        fprintf(stderr, "Usage: nghttp2-ws-client -host <host> -port <port> -path <path>\n");
+        fprintf(stderr, "Usage: nghttp2-ws-client -host <host> -port <port> -path <path> "
+            "[-get-path <path>] [-stream-path <path>]\n");
         return 2;
     }
+    bool multiplexed_mode = !get_path.empty() || !stream_path.empty();
 
     SSL_library_init();
     SSL_load_error_strings();
@@ -470,7 +550,15 @@ int main(int argc, char** argv) {
 
     bool handshake_ok = false;
     bool exchange_ok = false;
+    bool http_requests_submitted = false;
     const std::string message_text = "nghttp2-test";
+    const std::string after_http_msg = "after-http";
+
+    // Determine expected message count based on mode
+    // Legacy mode (Http2.qtest): expects ["welcome", "<msg>"]
+    // Multiplexed mode: expects ["ECHO:<msg>", "ECHO:after-http"]
+    size_t expected_msg_count = 2;
+
     time_t deadline = time(nullptr) + kTimeoutSeconds;
     while (time(nullptr) < deadline) {
         if (nghttp2_session_want_write(st.session)) {
@@ -526,9 +614,78 @@ int main(int argc, char** argv) {
             }
         }
 
-        if (st.messages.size() >= 2) {
-            if (st.messages[0] != "welcome" || st.messages[1] != message_text) {
-                die("unexpected websocket message exchange");
+        // In multiplexed mode, submit GET requests after sending the first WS message
+        if (multiplexed_mode && st.sent_text && !http_requests_submitted) {
+            nghttp2_priority_spec get_pri;
+            nghttp2_priority_spec_init(&get_pri, 0, NGHTTP2_DEFAULT_WEIGHT, 0);
+
+            if (!get_path.empty()) {
+                HeaderBlock get_hdr = makeGetHeaders(authority, get_path);
+                // Submit with END_HEADERS | END_STREAM (GET has no body)
+                st.get_stream.stream_id = nghttp2_submit_headers(st.session,
+                    NGHTTP2_FLAG_END_HEADERS | NGHTTP2_FLAG_END_STREAM, -1,
+                    &get_pri, get_hdr.nva.data(), get_hdr.nva.size(), nullptr);
+                if (st.get_stream.stream_id < 0) {
+                    die("failed to submit GET request");
+                }
+                logDebug("nghttp2-ws-client: submitted GET on stream " +
+                    std::to_string(st.get_stream.stream_id));
+            }
+
+            if (!stream_path.empty()) {
+                HeaderBlock stream_hdr = makeGetHeaders(authority, stream_path);
+                st.stream_stream.stream_id = nghttp2_submit_headers(st.session,
+                    NGHTTP2_FLAG_END_HEADERS | NGHTTP2_FLAG_END_STREAM, -1,
+                    &get_pri, stream_hdr.nva.data(), stream_hdr.nva.size(), nullptr);
+                if (st.stream_stream.stream_id < 0) {
+                    die("failed to submit streaming GET request");
+                }
+                logDebug("nghttp2-ws-client: submitted streaming GET on stream " +
+                    std::to_string(st.stream_stream.stream_id));
+            }
+
+            http_requests_submitted = true;
+            if (flushPending(&st) != 0) {
+                die("failed to flush HTTP requests");
+            }
+        }
+
+        // In multiplexed mode, after GET(s) complete, send "after-http" message
+        if (multiplexed_mode && http_requests_submitted && !st.sent_after_http) {
+            bool get_done = get_path.empty() || st.get_stream.complete;
+            bool stream_done = stream_path.empty() || st.stream_stream.complete;
+
+            if (get_done && stream_done) {
+                logDebug("nghttp2-ws-client: HTTP requests complete, sending after-http message");
+                if (submitWsData(&st, encodeWsFrame(0x1, after_http_msg), true) != 0) {
+                    die("failed to send after-http websocket message");
+                }
+                st.sent_after_http = true;
+                if (flushPending(&st) != 0) {
+                    die("failed to flush after-http message");
+                }
+            }
+        }
+
+        // Check if we have received enough messages
+        if (st.messages.size() >= expected_msg_count) {
+            if (multiplexed_mode) {
+                // Multiplexed mode: expect ["ECHO:nghttp2-test", "ECHO:after-http"]
+                std::string expected_first = "ECHO:" + message_text;
+                std::string expected_second = "ECHO:" + after_http_msg;
+                if (st.messages[0] != expected_first) {
+                    die("unexpected first websocket message: '" + st.messages[0] +
+                        "' expected '" + expected_first + "'");
+                }
+                if (st.messages[1] != expected_second) {
+                    die("unexpected second websocket message: '" + st.messages[1] +
+                        "' expected '" + expected_second + "'");
+                }
+            } else {
+                // Legacy mode: expect ["welcome", "nghttp2-test"]
+                if (st.messages[0] != "welcome" || st.messages[1] != message_text) {
+                    die("unexpected websocket message exchange");
+                }
             }
             exchange_ok = true;
             logDebug("nghttp2-ws-client: message exchange ok");
@@ -542,7 +699,40 @@ int main(int argc, char** argv) {
         die("timeout waiting for websocket handshake (status=" + status + " accept=" + accept + ")");
     }
     if (!exchange_ok) {
-        die("timeout waiting for websocket messages");
+        die("timeout waiting for websocket messages (received " +
+            std::to_string(st.messages.size()) + " of " +
+            std::to_string(expected_msg_count) + " expected)");
+    }
+
+    // Validate HTTP responses in multiplexed mode
+    if (multiplexed_mode) {
+        if (!get_path.empty()) {
+            auto status_it = st.get_stream.headers.find(":status");
+            if (status_it == st.get_stream.headers.end() || status_it->second != "200") {
+                std::string status = status_it != st.get_stream.headers.end()
+                    ? status_it->second : "missing";
+                die("GET request failed with status: " + status);
+            }
+            if (st.get_stream.body.empty()) {
+                die("GET response body is empty");
+            }
+            logDebug("nghttp2-ws-client: GET response verified (body size=" +
+                std::to_string(st.get_stream.body.size()) + ")");
+        }
+
+        if (!stream_path.empty()) {
+            auto status_it = st.stream_stream.headers.find(":status");
+            if (status_it == st.stream_stream.headers.end() || status_it->second != "200") {
+                std::string status = status_it != st.stream_stream.headers.end()
+                    ? status_it->second : "missing";
+                die("streaming GET request failed with status: " + status);
+            }
+            if (st.stream_stream.body.empty()) {
+                die("streaming GET response body is empty");
+            }
+            logDebug("nghttp2-ws-client: streaming response verified (body size=" +
+                std::to_string(st.stream_stream.body.size()) + ")");
+        }
     }
 
     nghttp2_session_del(st.session);
