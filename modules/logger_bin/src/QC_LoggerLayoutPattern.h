@@ -33,6 +33,7 @@
 #define _QORE_MODULE_LOGGER_QC_LOGGERLAYOUTPATTERN_H
 
 #include "QC_LoggerLayout.h"
+#include "QC_LoggerPattern.h"
 #include "QoreLoggerLayoutPattern.h"
 
 DLLEXPORT extern qore_classid_t CID_LOGGERLAYOUTPATTERN;

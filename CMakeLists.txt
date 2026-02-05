@@ -1429,7 +1429,9 @@ add_custom_target(install-docs
     COMMENT "Installing API documentation to: ${CMAKE_INSTALL_PREFIX}/share/doc/qore"
     VERBATIM
 )
-add_dependencies(install-docs docs)
+if (DOXYGEN_FOUND)
+    add_dependencies(install-docs docs)
+endif (DOXYGEN_FOUND)
 # end of documentation
 
 # astparser module
