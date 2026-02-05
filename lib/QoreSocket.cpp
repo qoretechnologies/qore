@@ -6343,8 +6343,19 @@ SocketHttp2ClientMultiplexPollOperation::SocketHttp2ClientMultiplexPollOperation
     }
 
     // Set up stream completion callback to queue responses
+    // Capture callback_guard by value (shared_ptr copy) to ensure it outlives this object.
+    // The mutex in the guard ensures no TOCTOU race between checking the destroyed flag
+    // and using 'this' - both happen while holding the mutex.
+    auto guard = callback_guard;
     h2_session->setStreamCompleteCallback(
-        [this](int32_t stream_id, Http2StreamInfo* stream, ExceptionSink* xsink) {
+        [this, guard](int32_t stream_id, Http2StreamInfo* stream, ExceptionSink* xsink) {
+            // Lock mutex and check if poll operation is being destroyed
+            // The lock ensures we don't race with the destructor
+            std::lock_guard<std::mutex> lg(guard->mutex);
+            if (guard->destroyed) {
+                printd(5, "onStreamComplete: poll operation destroyed, ignoring callback\n");
+                return;
+            }
             this->onStreamComplete(stream_id, stream, xsink);
         });
 
@@ -6360,6 +6371,16 @@ SocketHttp2ClientMultiplexPollOperation::SocketHttp2ClientMultiplexPollOperation
 
 SocketHttp2ClientMultiplexPollOperation::~SocketHttp2ClientMultiplexPollOperation() {
     printd(5, "~SocketHttp2ClientMultiplexPollOperation() starting\n");
+
+    // Set destroyed flag while holding the mutex.
+    // This ensures any in-flight callback completes before we proceed, and any
+    // callback that starts after this will see destroyed=true and return early.
+    // The mutex eliminates the TOCTOU race between flag check and 'this' usage.
+    {
+        std::lock_guard<std::mutex> lg(callback_guard->mutex);
+        callback_guard->destroyed = true;
+    }
+
     // Clear stream completion callback - session is guaranteed valid via shared_ptr
     if (h2_session) {
         printd(5, "~SocketHttp2ClientMultiplexPollOperation() clearing callback\n");

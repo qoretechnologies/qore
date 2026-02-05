@@ -860,6 +860,19 @@ private:
     mutable std::deque<QoreHashNode*> completed_responses;
     mutable QoreThreadLock response_lock;
 
+    //! Shared state for safe callback handling during destruction
+    /** This struct is captured by the stream completion callback lambda (via shared_ptr).
+        The mutex ensures that:
+        1. The guard flag is only checked/modified while holding the mutex
+        2. The destructor waits for any in-flight callback to complete
+        3. No TOCTOU race between checking the flag and using 'this'
+    */
+    struct CallbackGuard {
+        std::mutex mutex;
+        bool destroyed = false;
+    };
+    std::shared_ptr<CallbackGuard> callback_guard = std::make_shared<CallbackGuard>();
+
     DLLLOCAL virtual bool abortNeedsClose() const { return true; }
 
     //! Initialize HTTP/2 client session
