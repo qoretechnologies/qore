@@ -1724,6 +1724,8 @@ public hashdecl EventSchemaInfo {
     *string severity;
     #! Schema for the event's info/payload field
     *hash<auto> info_schema;
+    #! JSON examples for the event info payload
+    *list<auto> examples;
 }
 
 #! WebSocket channel information parsed from \@WEBSOCKET blocks
@@ -1839,6 +1841,8 @@ public class AsyncApiSchemaTokenizer {
 
         # Parse @info schema
         event.info_schema = parseInfoSchema(block);
+        # Parse @example JSON blocks (optional)
+        event.examples = parseJsonExamples(block);
 
         return event;
     }
@@ -2005,6 +2009,78 @@ public class AsyncApiSchemaTokenizer {
         };
     }
 
+    #! Parse @example JSON blocks (payload examples)
+    private static list<auto> parseJsonExamples(string block) {
+        list<auto> examples = ();
+        list<string> lines = block.split("\n");
+        bool in_example = False;
+        string buf = "";
+
+        foreach string line in (lines) {
+            string trimmed = trim(line);
+
+            # Start of example block
+            if (trimmed == "@example" || trimmed =~ /^@example\s+/) {
+                if (in_example && trim(buf)) {
+                    auto ex = parseExampleJson(buf);
+                    if (ex) {
+                        examples += ex;
+                    }
+                }
+                in_example = True;
+                buf = "";
+
+                # Inline JSON on the @example line, if any
+                if (trimmed.size() > 8) {
+                    buf += trimmed.substr(8) + "\n";
+                }
+                continue;
+            }
+
+            if (in_example) {
+                # Stop at next tag line
+                if (trimmed =~ /^@\w+/) {
+                    if (trim(buf)) {
+                        auto ex = parseExampleJson(buf);
+                        if (ex) {
+                            examples += ex;
+                        }
+                    }
+                    in_example = False;
+                    buf = "";
+                    continue;
+                }
+                buf += line + "\n";
+            }
+        }
+
+        if (in_example && trim(buf)) {
+            auto ex = parseExampleJson(buf);
+            if (ex) {
+                examples += ex;
+            }
+        }
+
+        return examples;
+    }
+
+    private static *auto parseExampleJson(string buf) {
+        string ex = trim(buf);
+        if (!ex) {
+            return NOTHING;
+        }
+%ifdef NoJson
+        return NOTHING;
+%else
+        try {
+            return parse_json(ex);
+        } catch () {
+            # Silently ignore malformed JSON examples
+            return NOTHING;
+        }
+%endif
+    }
+
     #! Parse a \@WEBSOCKET block and extract channel information
     /** @param block the text content of the \@WEBSOCKET block
         @return the parsed channel schema information
@@ -2107,10 +2183,15 @@ public class AsyncApiSchemaTokenizer {
             }
 
             if (name) {
+                string msg_block = block.substr(start, line_start - start);
+                list<auto> examples = parseJsonExamples(msg_block);
                 hash<auto> msg = {
                     "name": name,
                     "schema": parseMessageFields(fields_text),
                 };
+                if (examples) {
+                    msg.examples = examples;
+                }
                 messages += msg;
             }
 
@@ -2681,6 +2762,15 @@ public class AsyncApiSchemaGenerator {
         if (msg.desc) {
             component.description = msg.desc;
         }
+        if (msg.examples) {
+            list<hash<auto>> example_msgs;
+            foreach auto ex in (msg.examples) {
+                example_msgs += {
+                    "payload": ex,
+                };
+            }
+            component.examples = example_msgs;
+        }
         message_components{component_key} = component;
 
         return {
@@ -2821,6 +2911,9 @@ public class AsyncApiSchemaGenerator {
 
             hash<auto> event_schema = event.info_schema ?? {"type": "object"};
             event_schema.description = event.desc ?? event.summary ?? sprintf("Info payload for %s event", event.name);
+            if (event.examples) {
+                event_schema.examples = event.examples;
+            }
 
             component_schemas{schema_name} = event_schema;
         }

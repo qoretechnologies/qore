@@ -73,6 +73,8 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/OpenAiRestClient.qm \
 	qlib/ServiceNowRestClient.qm \
 	qlib/ShipStationRestClient.qm \
+	qlib/ShippoRestClient.qm \
+	qlib/Cin7CoreRestClient.qm \
 	qlib/FilePoller.qm \
 	qlib/FreetdsSqlUtil.qm \
 	qlib/FtpPoller.qm \
@@ -135,6 +137,8 @@ DOX_SPLIT_MODULES = \
     qlib/ServerSentEventHandler \
     qlib/ServiceNowRestDataProvider \
     qlib/ShipStationDataProvider \
+    qlib/ShippoDataProvider \
+    qlib/Cin7CoreDataProvider \
     qlib/SwaggerDataProvider \
     qlib/ZohoBooksDataProvider \
     qlib/ZohoInvoiceDataProvider \
@@ -186,6 +190,8 @@ ServerSentEventClient_modverdir = $(modverdir)/ServerSentEventClient
 ServerSentEventHandler_modverdir = $(modverdir)/ServerSentEventHandler
 ServiceNowRestDataProvider_modverdir = $(modverdir)/ServiceNowRestDataProvider
 ShipStationDataProvider_modverdir = $(modverdir)/ShipStationDataProvider
+ShippoDataProvider_modverdir = $(modverdir)/ShippoDataProvider
+Cin7CoreDataProvider_modverdir = $(modverdir)/Cin7CoreDataProvider
 SqlUtil_modverdir = $(modverdir)/SqlUtil
 SwaggerDataProvider_modverdir = $(modverdir)/SwaggerDataProvider
 ZohoBooksDataProvider_modverdir = $(modverdir)/ZohoBooksDataProvider
@@ -232,6 +238,8 @@ dist_ServerSentEventClient_modver_DATA = $(wildcard qlib/ServerSentEventClient/*
 dist_ServerSentEventHandler_modver_DATA = $(wildcard qlib/ServerSentEventHandler/*.q[cm])
 dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestDataProvider/*.q[cm])
 dist_ShipStationDataProvider_modver_DATA = $(wildcard qlib/ShipStationDataProvider/*.q[cm]) $(wildcard qlib/ShipStationDataProvider/*.svg)
+dist_ShippoDataProvider_modver_DATA = $(wildcard qlib/ShippoDataProvider/*.q[cm]) $(wildcard qlib/ShippoDataProvider/*.svg)
+dist_Cin7CoreDataProvider_modver_DATA = $(wildcard qlib/Cin7CoreDataProvider/*.q[cm]) $(wildcard qlib/Cin7CoreDataProvider/*.svg)
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
 dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[cm])
 dist_ZohoBooksDataProvider_modver_DATA = $(wildcard qlib/ZohoBooksDataProvider/*.q[cm]) $(wildcard qlib/ZohoBooksDataProvider/*.svg)

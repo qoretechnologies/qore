@@ -75,6 +75,7 @@ public class DataProvider {
             "busylight": "BusyLightDataProvider",
 
             "cdsrest": "CdsRestDataProvider",
+            "cin7core": "Cin7CoreDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
             "db": "DbDataProvider",
@@ -122,6 +123,7 @@ public class DataProvider {
             "salesforcerest": "SalesforceRestDataProvider",
             "sax": "SaxDataProvider",
             "servicenowrest": "ServiceNowRestDataProvider",
+            "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
 
             # provided by the ssh2 module

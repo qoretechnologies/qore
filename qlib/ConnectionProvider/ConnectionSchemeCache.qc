@@ -105,6 +105,8 @@ public class ConnectionSchemeCache {
             "cdsrests": "CdsRestClient",
             "dynamics": "CdsRestClient",
 
+            "cin7core": "Cin7CoreRestClient",
+
             "discord": "DiscordRestClient",
             "discordws": "DiscordWebSocketClient",
             "discordwss": "DiscordWebSocketClient",
@@ -192,6 +194,8 @@ public class ConnectionSchemeCache {
             "esmtp": "SmtpClient",
             "esmtps": "SmtpClient",
             "esmtptls": "SmtpClient",
+
+            "shippo": "ShippoRestClient",
 
             "shipstation": "ShipStationRestClient",
 

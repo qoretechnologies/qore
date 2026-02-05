@@ -631,6 +631,18 @@ qore --compile-module MyModule.qm --strip-source
       - polling-based event triggers for new invoices, contacts, estimates, expenses, items, and projects
       - action catalog integration with reference data support for organizations, customers, and contacts
       - connection support with \c zohoinvoice:// URL scheme
+    - @ref shipporestclientintro "ShippoRestClient" module
+      - new module providing a REST client for Shippo's shipping API
+      - supports dual authentication: OAuth2 and API token (\c ShippoToken header)
+      - provides ShippoRestConnection for connection management with \c shippo:// URL scheme
+    - @ref shippodataproviderintro "ShippoDataProvider" module
+      - new module providing a data provider API for Shippo shipping services
+      - shipment and rate management (create shipments, get shipping rates)
+      - shipping label creation and management (create labels from rates, get transaction details)
+      - order management (create and retrieve orders)
+      - polling-based event triggers for new parcels, shipments, and labels
+      - action catalog integration with 10 actions and 3 triggers
+      - connection support with \c shippo:// URL scheme
     - @ref shipstationrestclientintro "ShipStationRestClient" module
       - new module providing a REST client for ShipStation's shipping and logistics API
       - supports HTTP Basic Authentication with API Key and API Secret
@@ -642,6 +654,21 @@ qore --compile-module MyModule.qm --strip-source
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref cin7corerestclientintro "Cin7CoreRestClient" module
+      - new module providing a REST client for Cin7Core (DEAR Inventory) API
+      - supports Account ID and API Key authentication via headers
+      - provides Cin7CoreRestConnection for connection management with \c cin7core:// URL scheme
+    - @ref cin7coredataproviderintro "Cin7CoreDataProvider" module
+      - new module providing a data provider API for Cin7Core inventory management and ERP
+      - customer and supplier management (create, read, update, search)
+      - product catalog and availability tracking
+      - sales order management (create, read, update, delete)
+      - payment processing (add, update, delete payments)
+      - stock adjustment management
+      - assembly/finished goods tracking
+      - polling-based event triggers for payments, invoices, credit notes, tracking, stock levels, and contact updates
+      - action catalog integration with 35 actions and 8 triggers
+      - connection support with \c cin7core:// URL scheme
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
