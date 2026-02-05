@@ -136,19 +136,19 @@ public class Cin7CoreSaleDataType inherits HashDataType {
                 "desc": "The shipping address for the sale",
             },
             "SaleOrderDate": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Order Date",
                 "short_desc": "Sale order date",
                 "desc": "Date when the sale order was created",
             },
             "RequiredBy": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Required By",
                 "short_desc": "Required delivery date",
                 "desc": "Date by which the order must be delivered",
             },
             "ShipBy": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Ship By",
                 "short_desc": "Ship by date",
                 "desc": "Date by which the order must be shipped",
@@ -244,10 +244,10 @@ public class Cin7CoreSaleDataType inherits HashDataType {
                 "desc": "List of credit note records",
             },
             "LastModifiedOn": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Last Modified",
                 "short_desc": "Last modification date",
-                "desc": "ISO 8601 timestamp when the sale was last modified",
+                "desc": "Timestamp when the sale was last modified",
             },
         };
     }
@@ -301,19 +301,19 @@ public class Cin7CoreCreateSaleRequestDataType inherits HashDataType {
                 "desc": "The shipping address for the sale",
             },
             "SaleOrderDate": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Order Date",
                 "short_desc": "Sale order date",
                 "desc": "Date when the sale order was created (defaults to today)",
             },
             "RequiredBy": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Required By",
                 "short_desc": "Required delivery date",
                 "desc": "Date by which the order must be delivered",
             },
             "ShipBy": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Ship By",
                 "short_desc": "Ship by date",
                 "desc": "Date by which the order must be shipped",

@@ -29,10 +29,12 @@ public namespace Cin7CoreDataProvider {
 public class Cin7CoreStockLevelUpdateWatchDataProvider inherits Cin7CoreWatchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = BaseWatchProviderInfo + <DataProviderInfo>{
+        const ProviderInfo = <DataProviderInfo>{
             "name": EVENT_STOCK_LEVEL_UPDATE,
             "desc": "Triggers when stock/inventory levels change",
             "type": "Cin7CoreStockLevelUpdateWatchDataProvider",
+            "supports_observable": True,
+            "constructor_options": WatchConstructorOptions,
         };
     }
 
@@ -92,6 +94,25 @@ public class Cin7CoreStockLevelUpdateWatchDataProvider inherits Cin7CoreWatchDat
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Returns resource-specific fake example data for stock levels
+    hash<auto> getFakeExampleData() {
+        return {
+            "ID": "12345678-1234-1234-1234-123456789012",
+            "ProductID": "abcdef12-3456-7890-abcd-ef1234567890",
+            "SKU": "WIDGET-001",
+            "Name": "Standard Widget",
+            "Barcode": "1234567890123",
+            "Location": "Main Warehouse",
+            "Bin": "A1-B2",
+            "OnHand": 150.0,
+            "Allocated": 25.0,
+            "Available": 125.0,
+            "OnOrder": 50.0,
+            "InTransit": 10.0,
+            "LastModifiedOn": "2026-01-15T09:15:00Z",
+        };
     }
 }
 

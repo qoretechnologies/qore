@@ -80,9 +80,9 @@ public class Cin7CoreUpdateSaleDataProvider inherits Cin7CoreDataProviderBase {
 
         # Optional fields - only include if provided
         if (exists req.Customer) body.Customer = req.Customer;
-        if (exists req.SaleOrderDate) body.SaleOrderDate = req.SaleOrderDate;
-        if (exists req.ShipBy) body.ShipBy = req.ShipBy;
-        if (exists req.RequiredBy) body.RequiredBy = req.RequiredBy;
+        if (exists req.SaleOrderDate) body.SaleOrderDate = Cin7CoreDataProviderBase::formatDate(req.SaleOrderDate);
+        if (exists req.ShipBy) body.ShipBy = Cin7CoreDataProviderBase::formatDate(req.ShipBy);
+        if (exists req.RequiredBy) body.RequiredBy = Cin7CoreDataProviderBase::formatDate(req.RequiredBy);
         if (exists req.Location) body.Location = req.Location;
         if (exists req.Status) body.Status = req.Status;
         if (exists req.Currency) body.Currency = req.Currency;

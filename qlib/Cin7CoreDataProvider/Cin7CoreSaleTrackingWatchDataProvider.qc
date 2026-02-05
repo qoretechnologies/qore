@@ -29,10 +29,12 @@ public namespace Cin7CoreDataProvider {
 public class Cin7CoreSaleTrackingWatchDataProvider inherits Cin7CoreWatchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = BaseWatchProviderInfo + <DataProviderInfo>{
+        const ProviderInfo = <DataProviderInfo>{
             "name": EVENT_SALE_TRACKING_CHANGED,
             "desc": "Triggers when sale tracking/shipment information changes",
             "type": "Cin7CoreSaleTrackingWatchDataProvider",
+            "supports_observable": True,
+            "constructor_options": WatchConstructorOptions,
         };
     }
 
@@ -91,6 +93,25 @@ public class Cin7CoreSaleTrackingWatchDataProvider inherits Cin7CoreWatchDataPro
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Returns resource-specific fake example data for tracking/fulfilment
+    hash<auto> getFakeExampleData() {
+        return {
+            "TaskID": "12345678-1234-1234-1234-123456789012",
+            "SaleID": "abcdef12-3456-7890-abcd-ef1234567890",
+            "SaleOrderNumber": "SO-00001",
+            "Status": "SHIP",
+            "Location": "Main Warehouse",
+            "Carrier": "FedEx",
+            "TrackingNumber": "794644790196",
+            "ShipDate": "2026-01-16",
+            "PackedBy": "John Smith",
+            "PackedDate": "2026-01-15",
+            "Customer": "Acme Corporation",
+            "ShipToAddress": "123 Main St, New York, NY 10001",
+            "LastModifiedOn": "2026-01-16T08:30:00Z",
+        };
     }
 }
 

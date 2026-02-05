@@ -318,24 +318,6 @@ public class ShippoRestConnection inherits RestClient::RestConnection {
                         "- Test: `shippo_test_xxxxx`\n\n"
                         "Keep your tokens secure and never share them publicly.",
                 },
-                <UiMessageInfo>{
-                    "title": "API Capabilities",
-                    "intent": "info",
-                    "content": "The Shippo API enables you to:\n\n"
-                        "**Shipping:**\n"
-                        "- Compare rates across 85+ carriers\n"
-                        "- Create shipping labels\n"
-                        "- Track shipments in real-time\n\n"
-                        "**Address Management:**\n"
-                        "- Validate addresses\n"
-                        "- Store address book entries\n\n"
-                        "**Orders:**\n"
-                        "- Create and manage orders\n"
-                        "- Link shipments to orders\n\n"
-                        "**International:**\n"
-                        "- Create customs declarations\n"
-                        "- Generate commercial invoices",
-                },
             ),
         };
     }

@@ -96,8 +96,10 @@ public class Cin7CoreUpdateCustomerDataProvider inherits Cin7CoreDataProviderBas
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updating customer %y", body.ID));
         hash<auto> response = doPut("/Customer", body);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updated customer %y", response.ID));
-        return response;
+        # API returns CustomerList array, extract the updated customer
+        hash<auto> customer = response.CustomerList[0] ?? response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updated customer %y", customer.ID));
+        return customer;
     }
 
     #! Returns the request type

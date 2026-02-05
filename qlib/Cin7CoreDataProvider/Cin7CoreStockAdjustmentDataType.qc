@@ -54,7 +54,7 @@ public class Cin7CoreStockAdjustmentDataType inherits HashDataType {
                 ),
             },
             "AdjustmentDate": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Adjustment Date",
                 "short_desc": "Date of adjustment",
                 "desc": "The date the adjustment was made",
@@ -84,10 +84,10 @@ public class Cin7CoreStockAdjustmentDataType inherits HashDataType {
                 "desc": "List of stock adjustment line items",
             },
             "LastModifiedOn": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Last Modified",
                 "short_desc": "Last modification date",
-                "desc": "ISO 8601 timestamp when the adjustment was last modified",
+                "desc": "Timestamp when the adjustment was last modified",
             },
         };
     }
@@ -104,7 +104,7 @@ public class Cin7CoreCreateStockAdjustmentRequestDataType inherits HashDataType 
         #! Field definitions
         const Fields = {
             "AdjustmentDate": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Adjustment Date",
                 "short_desc": "Date of adjustment",
                 "desc": "The date of the adjustment (defaults to today)",
@@ -192,7 +192,7 @@ public class Cin7CoreStockAdjustmentLineDataType inherits HashDataType {
                 "desc": "The batch number",
             },
             "ExpiryDate": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Expiry Date",
                 "short_desc": "Expiration date",
                 "desc": "The product's expiry date",

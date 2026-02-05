@@ -29,10 +29,12 @@ public namespace Cin7CoreDataProvider {
 public class Cin7CoreNewPaymentWatchDataProvider inherits Cin7CoreWatchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = BaseWatchProviderInfo + <DataProviderInfo>{
+        const ProviderInfo = <DataProviderInfo>{
             "name": EVENT_NEW_PAYMENT,
             "desc": "Triggers when a new payment is added to a sale",
             "type": "Cin7CoreNewPaymentWatchDataProvider",
+            "supports_observable": True,
+            "constructor_options": WatchConstructorOptions,
         };
     }
 
@@ -91,6 +93,22 @@ public class Cin7CoreNewPaymentWatchDataProvider inherits Cin7CoreWatchDataProvi
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Returns resource-specific fake example data for payments
+    hash<auto> getFakeExampleData() {
+        return {
+            "ID": "12345678-1234-1234-1234-123456789012",
+            "SaleID": "abcdef12-3456-7890-abcd-ef1234567890",
+            "SaleOrderNumber": "SO-00001",
+            "InvoiceNumber": "INV-00001",
+            "Reference": "TXN-12345",
+            "Amount": 150.00,
+            "DatePaid": "2026-01-15",
+            "PaymentMethod": "Credit Card",
+            "Account": "Cash on Hand",
+            "CurrencyRate": 1.0,
+        };
     }
 }
 

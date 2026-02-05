@@ -80,7 +80,7 @@ public class Cin7CoreAddSalePackDataProvider inherits Cin7CoreDataProviderBase {
         # Optional fields
         if (exists req.Lines) body.Lines = req.Lines;
         if (exists req.Memo) body.Memo = req.Memo;
-        if (exists req.PickDate) body.PickDate = req.PickDate;
+        if (exists req.PickDate) body.PickDate = Cin7CoreDataProviderBase::formatDate(req.PickDate);
         if (exists req.Location) body.Location = req.Location;
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: adding pack to sale %y", req.SaleID));

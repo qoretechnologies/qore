@@ -137,10 +137,10 @@ public class Cin7CoreCustomerDataType inherits HashDataType {
                 "desc": "Comma-separated tags for the customer",
             },
             "LastModifiedOn": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Last Modified",
                 "short_desc": "Last modification date",
-                "desc": "ISO 8601 timestamp when the customer was last modified",
+                "desc": "Timestamp when the customer was last modified",
             },
         };
     }

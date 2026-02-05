@@ -80,12 +80,12 @@ public class Cin7CoreAddSaleShipmentDataProvider inherits Cin7CoreDataProviderBa
         # Optional fields
         if (exists req.TaskID) body.TaskID = req.TaskID;
         if (exists req.Lines) body.Lines = req.Lines;
-        if (exists req.ShipDate) body.ShipDate = req.ShipDate;
+        if (exists req.ShipDate) body.ShipDate = Cin7CoreDataProviderBase::formatDate(req.ShipDate);
         if (exists req.Carrier) body.Carrier = req.Carrier;
         if (exists req.TrackingNumber) body.TrackingNumber = req.TrackingNumber;
         if (exists req.TrackingUrl) body.TrackingUrl = req.TrackingUrl;
         if (exists req.ShippingNotes) body.ShippingNotes = req.ShippingNotes;
-        if (exists req.RequireBy) body.RequireBy = req.RequireBy;
+        if (exists req.RequireBy) body.RequireBy = Cin7CoreDataProviderBase::formatDate(req.RequireBy);
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: adding shipment to sale %y", req.SaleID));
         hash<auto> response = doPost("/SaleShip", body);

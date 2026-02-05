@@ -63,7 +63,8 @@ module Cin7CoreDataProvider {
                 "- Track shipments and fulfillment\n\n"
                 "**Authentication:**\n"
                 "Cin7Core uses Account ID and API Key authentication. Both credentials are required and can be "
-                "obtained from the Cin7Core application under Integrations > API > Cin7 Core API.",
+                "obtained at https://inventory.dearsystems.com/ExternalApi - create or select an Application, "
+                "then find the credentials on the Setup tab.",
             "scheme": "cin7core",
             "logo": Cin7CoreLogo,
             "logo_file_name": "cin7core-logo.svg",
@@ -769,9 +770,9 @@ module Cin7CoreDataProvider {
     @par Authentication:
     Cin7Core uses Account ID and API Key authentication. Both credentials are required
     and can be obtained from the Cin7Core application:
-    1. Log in to https://inventory.dearsystems.com
-    2. Navigate to **Integrations > API > Cin7 Core API**
-    3. Create an application if you haven't already
+    1. Go to https://inventory.dearsystems.com/ExternalApi
+    2. Create a New Application or select an existing one
+    3. Open the **Setup** tab for the Application
     4. Copy the **Account ID** and **Application Key**
 
     @par Example:

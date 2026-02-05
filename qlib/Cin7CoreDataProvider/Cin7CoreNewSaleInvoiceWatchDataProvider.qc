@@ -29,10 +29,12 @@ public namespace Cin7CoreDataProvider {
 public class Cin7CoreNewSaleInvoiceWatchDataProvider inherits Cin7CoreWatchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = BaseWatchProviderInfo + <DataProviderInfo>{
+        const ProviderInfo = <DataProviderInfo>{
             "name": EVENT_NEW_SALE_INVOICE_AUTHORIZED,
             "desc": "Triggers when a new sale invoice is authorized",
             "type": "Cin7CoreNewSaleInvoiceWatchDataProvider",
+            "supports_observable": True,
+            "constructor_options": WatchConstructorOptions,
         };
     }
 
@@ -92,6 +94,27 @@ public class Cin7CoreNewSaleInvoiceWatchDataProvider inherits Cin7CoreWatchDataP
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Returns resource-specific fake example data for invoices
+    hash<auto> getFakeExampleData() {
+        return {
+            "ID": "12345678-1234-1234-1234-123456789012",
+            "InvoiceNumber": "INV-00001",
+            "SaleID": "abcdef12-3456-7890-abcd-ef1234567890",
+            "SaleOrderNumber": "SO-00001",
+            "Status": "AUTHORISED",
+            "InvoiceDate": "2026-01-15",
+            "DueDate": "2026-02-14",
+            "Customer": "Acme Corporation",
+            "CustomerID": "fedcba09-8765-4321-fedc-ba0987654321",
+            "Currency": "USD",
+            "Total": 1250.00,
+            "AmountPaid": 0.00,
+            "Balance": 1250.00,
+            "TaxTotal": 100.00,
+            "LastModifiedOn": "2026-01-15T11:30:00Z",
+        };
     }
 }
 

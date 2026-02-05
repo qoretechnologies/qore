@@ -119,10 +119,10 @@ public class Cin7CoreSupplierDataType inherits HashDataType {
                 "desc": "Comma-separated tags for the supplier",
             },
             "LastModifiedOn": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Last Modified",
                 "short_desc": "Last modification date",
-                "desc": "ISO 8601 timestamp when the supplier was last modified",
+                "desc": "Timestamp when the supplier was last modified",
             },
         };
     }

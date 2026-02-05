@@ -29,10 +29,12 @@ public namespace Cin7CoreDataProvider {
 public class Cin7CoreSupplierUpdatedWatchDataProvider inherits Cin7CoreWatchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = BaseWatchProviderInfo + <DataProviderInfo>{
+        const ProviderInfo = <DataProviderInfo>{
             "name": EVENT_SUPPLIER_UPDATED,
             "desc": "Triggers when a supplier is created or updated",
             "type": "Cin7CoreSupplierUpdatedWatchDataProvider",
+            "supports_observable": True,
+            "constructor_options": WatchConstructorOptions,
         };
     }
 
@@ -91,6 +93,25 @@ public class Cin7CoreSupplierUpdatedWatchDataProvider inherits Cin7CoreWatchData
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Returns resource-specific fake example data for suppliers
+    hash<auto> getFakeExampleData() {
+        return {
+            "ID": "12345678-1234-1234-1234-123456789012",
+            "Name": "Global Supplies Inc",
+            "Status": "Active",
+            "Currency": "USD",
+            "PaymentTerm": "Net 45",
+            "AccountPayable": "300",
+            "ExpenseAccount": "500",
+            "TaxRule": "Standard Tax",
+            "Discount": 2.5,
+            "Comments": "Primary supplier for electronics",
+            "TaxNumber": "987-654-321",
+            "Tags": "electronics,preferred",
+            "LastModifiedOn": "2026-01-15T14:20:00Z",
+        };
     }
 }
 

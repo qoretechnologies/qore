@@ -80,7 +80,7 @@ public class Cin7CoreAddSalePaymentDataProvider inherits Cin7CoreDataProviderBas
         };
 
         # Optional fields
-        if (exists req.DatePaid) body.DatePaid = req.DatePaid;
+        if (exists req.DatePaid) body.DatePaid = Cin7CoreDataProviderBase::formatDate(req.DatePaid);
         if (exists req.Account) body.Account = req.Account;
         if (exists req.PaymentMethod) body.PaymentMethod = req.PaymentMethod;
         if (exists req.Reference) body.Reference = req.Reference;

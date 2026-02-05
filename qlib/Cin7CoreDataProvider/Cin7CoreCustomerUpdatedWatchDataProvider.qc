@@ -29,10 +29,12 @@ public namespace Cin7CoreDataProvider {
 public class Cin7CoreCustomerUpdatedWatchDataProvider inherits Cin7CoreWatchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = BaseWatchProviderInfo + <DataProviderInfo>{
+        const ProviderInfo = <DataProviderInfo>{
             "name": EVENT_CUSTOMER_UPDATED,
             "desc": "Triggers when a customer is created or updated",
             "type": "Cin7CoreCustomerUpdatedWatchDataProvider",
+            "supports_observable": True,
+            "constructor_options": WatchConstructorOptions,
         };
     }
 
@@ -91,6 +93,27 @@ public class Cin7CoreCustomerUpdatedWatchDataProvider inherits Cin7CoreWatchData
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Returns resource-specific fake example data for customers
+    hash<auto> getFakeExampleData() {
+        return {
+            "ID": "12345678-1234-1234-1234-123456789012",
+            "Name": "Acme Corporation",
+            "Status": "Active",
+            "Currency": "USD",
+            "PaymentTerm": "Net 30",
+            "AccountReceivable": "200",
+            "RevenueAccount": "400",
+            "TaxRule": "Standard Tax",
+            "Discount": 5.0,
+            "Comments": "Preferred customer",
+            "TaxNumber": "123-456-789",
+            "CreditLimit": 10000.00,
+            "IsOnCreditHold": False,
+            "Tags": "wholesale,priority",
+            "LastModifiedOn": "2026-01-15T10:30:00Z",
+        };
     }
 }
 

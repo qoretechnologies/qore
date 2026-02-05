@@ -29,10 +29,12 @@ public namespace Cin7CoreDataProvider {
 public class Cin7CoreSaleVoidedWatchDataProvider inherits Cin7CoreWatchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = BaseWatchProviderInfo + <DataProviderInfo>{
+        const ProviderInfo = <DataProviderInfo>{
             "name": EVENT_SALE_VOIDED,
             "desc": "Triggers when a sale is voided",
             "type": "Cin7CoreSaleVoidedWatchDataProvider",
+            "supports_observable": True,
+            "constructor_options": WatchConstructorOptions,
         };
     }
 
@@ -92,6 +94,25 @@ public class Cin7CoreSaleVoidedWatchDataProvider inherits Cin7CoreWatchDataProvi
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Returns resource-specific fake example data for voided sales
+    hash<auto> getFakeExampleData() {
+        return {
+            "ID": "12345678-1234-1234-1234-123456789012",
+            "SaleOrderNumber": "SO-00001",
+            "Status": "Voided",
+            "Customer": "Acme Corporation",
+            "CustomerID": "abcdef12-3456-7890-abcd-ef1234567890",
+            "SaleOrderDate": "2026-01-10",
+            "ShipBy": "2026-01-20",
+            "Location": "Main Warehouse",
+            "Currency": "USD",
+            "Total": 1500.00,
+            "TotalPaid": 0.00,
+            "Comments": "Order cancelled by customer",
+            "LastModifiedOn": "2026-01-15T16:45:00Z",
+        };
     }
 }
 

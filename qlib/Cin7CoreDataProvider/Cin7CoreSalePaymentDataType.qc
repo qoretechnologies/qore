@@ -73,7 +73,7 @@ public class Cin7CoreSalePaymentDataType inherits HashDataType {
                 "desc": "The payment amount",
             },
             "DatePaid": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Date Paid",
                 "short_desc": "Payment date",
                 "desc": "The date the payment was made",
@@ -116,6 +116,7 @@ public class Cin7CoreAddSalePaymentRequestDataType inherits HashDataType {
                 "short_desc": "Sale identifier",
                 "desc": "The GUID of the sale to add the payment to (required)",
                 "required": True,
+                "ref_data": "sales",
             },
             "Reference": {
                 "type": SoftStringOrNothingType,
@@ -131,7 +132,7 @@ public class Cin7CoreAddSalePaymentRequestDataType inherits HashDataType {
                 "required": True,
             },
             "DatePaid": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Date Paid",
                 "short_desc": "Payment date",
                 "desc": "The date the payment was made (defaults to today)",

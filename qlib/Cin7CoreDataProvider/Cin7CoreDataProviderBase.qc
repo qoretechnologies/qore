@@ -146,7 +146,7 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
             if (exists val) {
                 # Cin7Core uses ISO format for dates
                 if (val.typeCode() == NT_DATE) {
-                    val = format_date("YYYY-MM-DDTHH:mm:ss", val);
+                    val = format_date("YYYY-MM-DDTHH:mm:SS", val);
                 }
                 parts += sprintf("%s=%s", key, encode_url(string(val), True));
             }
@@ -236,6 +236,17 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
                 err_msg, response.status_code));
             throw "CIN7CORE-API-ERROR", err_msg, response.body;
         }
+    }
+
+    #! Formats a date value for the Cin7Core API
+    /** @param val the date value to format
+        @return the formatted date string in ISO 8601 format without timezone (YYYY-MM-DDTHH:mm:SS)
+
+        Cin7Core API expects dates in ISO 8601 format: yyyy-MM-ddTHH:mm:ss.fff
+        This method formats dates consistently for both query strings and request bodies.
+    */
+    static string formatDate(date val) {
+        return format_date("YYYY-MM-DDTHH:mm:SS", val);
     }
 
     #! Helper method to get client options from constructor options

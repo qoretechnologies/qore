@@ -107,21 +107,21 @@ public namespace Cin7CoreRestClient {
     - API Key: api-auth-applicationkey header
 
     @par API Information:
-    - Base URL: https://inventory.dearsystems.com/externalapi
+    - Base URL: https://inventory.dearsystems.com/ExternalApi/v2
     - JSON format only
     - Pagination: page and limit query parameters
 
     @par Authentication:
     Both Account ID and API Key are required for all API requests.
     These can be obtained from the Cin7Core application:
-    1. Log in to https://inventory.dearsystems.com
-    2. Navigate to Integrations > API > Cin7 Core API
-    3. Create an application and note down the Account ID and Application Key
+    1. Go to https://inventory.dearsystems.com/ExternalApi
+    2. Create a New Application or select an existing one
+    3. Find the Account ID and Application Key on the Setup tab for the Application
 */
 public class Cin7CoreRestClient inherits RestClient::RestClient {
     public {
         #! Cin7Core API base URL
-        const DefaultApiUrl = "https://inventory.dearsystems.com/externalapi";
+        const DefaultApiUrl = "https://inventory.dearsystems.com/ExternalApi/v2";
 
         #! Account ID header name
         const AccountIdHeader = "api-auth-accountid";
@@ -220,7 +220,7 @@ Cin7CoreRestClient cin7core({
 public class Cin7CoreRestConnection inherits RestClient::RestConnection {
     public {
         #! Default Cin7Core API URL
-        const DefaultConnectionUrl = "cin7core://inventory.dearsystems.com/externalapi";
+        const DefaultConnectionUrl = "cin7core://inventory.dearsystems.com/ExternalApi/v2";
 
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
@@ -257,13 +257,11 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "desc": "Your Cin7Core Account ID used for API authentication.\n\n"
                         "**To obtain your Account ID:**\n"
-                        "1. Log in to https://inventory.dearsystems.com\n"
-                        "2. Navigate to **Integrations > API > Cin7 Core API**\n"
-                        "3. Create an application if you haven't already\n"
-                        "4. Copy your **Account ID**\n\n"
+                        "1. Go to https://inventory.dearsystems.com/ExternalApi\n"
+                        "2. Create a New Application or select an existing one\n"
+                        "3. Find your **Account ID** on the **Setup** tab\n\n"
                         "**Note:** Both Account ID and API Key are required for authentication.",
                     "sensitive": True,
-                    "required": True,
                     "preselected": True,
                 },
                 "apikey": <ConnectionOptionInfo>{
@@ -272,13 +270,11 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "desc": "Your Cin7Core Application/API Key for authentication.\n\n"
                         "**To obtain your API Key:**\n"
-                        "1. Log in to https://inventory.dearsystems.com\n"
-                        "2. Navigate to **Integrations > API > Cin7 Core API**\n"
-                        "3. Create an application if you haven't already\n"
-                        "4. Copy your **Application Key**\n\n"
+                        "1. Go to https://inventory.dearsystems.com/ExternalApi\n"
+                        "2. Create a New Application or select an existing one\n"
+                        "3. Find your **Application Key** on the **Setup** tab\n\n"
                         "**Note:** Both Account ID and API Key are required for authentication.",
                     "sensitive": True,
-                    "required": True,
                     "preselected": True,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
@@ -299,47 +295,16 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
                     "title": "How to Get Your API Credentials",
                     "intent": "info",
                     "content": "To connect to Cin7Core, you need both an Account ID and API Key:\n\n"
-                        "1. Log in to https://inventory.dearsystems.com\n"
-                        "2. Navigate to **Integrations > API > Cin7 Core API**\n"
-                        "3. Click **Create Application** if you haven't already\n"
-                        "4. Note down both credentials:\n"
+                        "1. Go to https://inventory.dearsystems.com/ExternalApi\n"
+                        "2. Create a New Application or select an existing one\n"
+                        "3. Open the **Setup** tab for the Application\n"
+                        "4. Copy both credentials:\n"
                         "   - **Account ID** - Your unique account identifier\n"
                         "   - **Application Key** - Your API authentication key\n\n"
                         "Keep your credentials secure and never share them publicly.",
                 },
-                <UiMessageInfo>{
-                    "title": "API Capabilities",
-                    "intent": "info",
-                    "content": "The Cin7Core API enables you to:\n\n"
-                        "**Inventory:**\n"
-                        "- Track stock levels across locations\n"
-                        "- Manage stock adjustments and transfers\n"
-                        "- View product availability\n\n"
-                        "**Sales:**\n"
-                        "- Create and manage sales orders\n"
-                        "- Process payments and invoices\n"
-                        "- Track shipments and fulfillment\n"
-                        "- Handle credit notes and refunds\n\n"
-                        "**Contacts:**\n"
-                        "- Manage customers and suppliers\n"
-                        "- Access contact details and history\n\n"
-                        "**Products:**\n"
-                        "- Query product catalog\n"
-                        "- Access pricing and inventory data\n"
-                        "- Manage product families and categories",
-                },
-                <UiMessageInfo>{
-                    "title": "API Rate Limits",
-                    "intent": "warning",
-                    "content": "Cin7Core API has the following rate limits:\n\n"
-                        "- Maximum page size: 1000 records\n"
-                        "- Default page size: 100 records\n\n"
-                        "**Best Practices:**\n"
-                        "- Use pagination for large data sets\n"
-                        "- Filter by date ranges when possible\n"
-                        "- Cache frequently accessed data",
-                },
             ),
+            "required_options": "account_id,apikey",
         };
     }
 

@@ -80,7 +80,7 @@ public class Cin7CoreUpdateStockAdjustmentDataProvider inherits Cin7CoreDataProv
         # Optional fields
         if (exists req.Location) body.Location = req.Location;
         if (exists req.Lines) body.Lines = req.Lines;
-        if (exists req.AdjustmentDate) body.AdjustmentDate = req.AdjustmentDate;
+        if (exists req.AdjustmentDate) body.AdjustmentDate = Cin7CoreDataProviderBase::formatDate(req.AdjustmentDate);
         if (exists req.Account) body.Account = req.Account;
         if (exists req.Memo) body.Memo = req.Memo;
         if (exists req.Status) body.Status = req.Status;

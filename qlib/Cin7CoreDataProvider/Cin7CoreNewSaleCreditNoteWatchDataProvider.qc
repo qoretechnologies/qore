@@ -29,10 +29,12 @@ public namespace Cin7CoreDataProvider {
 public class Cin7CoreNewSaleCreditNoteWatchDataProvider inherits Cin7CoreWatchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = BaseWatchProviderInfo + <DataProviderInfo>{
+        const ProviderInfo = <DataProviderInfo>{
             "name": EVENT_NEW_SALE_CREDIT_NOTE_AUTHORIZED,
             "desc": "Triggers when a new sale credit note is authorized",
             "type": "Cin7CoreNewSaleCreditNoteWatchDataProvider",
+            "supports_observable": True,
+            "constructor_options": WatchConstructorOptions,
         };
     }
 
@@ -92,6 +94,26 @@ public class Cin7CoreNewSaleCreditNoteWatchDataProvider inherits Cin7CoreWatchDa
     #! Returns data provider static info
     private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Returns resource-specific fake example data for credit notes
+    hash<auto> getFakeExampleData() {
+        return {
+            "ID": "12345678-1234-1234-1234-123456789012",
+            "CreditNoteNumber": "CN-00001",
+            "SaleID": "abcdef12-3456-7890-abcd-ef1234567890",
+            "SaleOrderNumber": "SO-00001",
+            "InvoiceNumber": "INV-00001",
+            "Status": "AUTHORISED",
+            "CreditNoteDate": "2026-01-18",
+            "Customer": "Acme Corporation",
+            "CustomerID": "fedcba09-8765-4321-fedc-ba0987654321",
+            "Currency": "USD",
+            "Total": 250.00,
+            "TaxTotal": 20.00,
+            "Reason": "Defective product returned",
+            "LastModifiedOn": "2026-01-18T14:00:00Z",
+        };
     }
 }
 

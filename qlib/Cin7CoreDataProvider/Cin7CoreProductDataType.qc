@@ -173,10 +173,10 @@ public class Cin7CoreProductDataType inherits HashDataType {
                 "desc": "Comma-separated tags",
             },
             "LastModifiedOn": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Last Modified",
                 "short_desc": "Last modification date",
-                "desc": "ISO 8601 timestamp when the product was last modified",
+                "desc": "Timestamp when the product was last modified",
             },
         };
     }
@@ -229,7 +229,7 @@ public class Cin7CoreProductAvailabilityDataType inherits HashDataType {
                 "desc": "The batch number",
             },
             "ExpiryDate": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Expiry Date",
                 "short_desc": "Expiration date",
                 "desc": "The product's expiry date",

@@ -80,7 +80,7 @@ public class Cin7CoreCreateStockAdjustmentDataProvider inherits Cin7CoreDataProv
         };
 
         # Optional fields
-        if (exists req.AdjustmentDate) body.AdjustmentDate = req.AdjustmentDate;
+        if (exists req.AdjustmentDate) body.AdjustmentDate = Cin7CoreDataProviderBase::formatDate(req.AdjustmentDate);
         if (exists req.AdjustmentNumber) body.AdjustmentNumber = req.AdjustmentNumber;
         if (exists req.Account) body.Account = req.Account;
         if (exists req.Memo) body.Memo = req.Memo;

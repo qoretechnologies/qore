@@ -95,8 +95,10 @@ public class Cin7CoreCreateCustomerDataProvider inherits Cin7CoreDataProviderBas
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: creating customer %y", body.Name));
         hash<auto> response = doPost("/Customer", body);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: created customer %y", response.ID));
-        return response;
+        # API returns CustomerList array, extract the created customer
+        hash<auto> customer = response.CustomerList[0] ?? response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: created customer %y", customer.ID));
+        return customer;
     }
 
     #! Returns the request type

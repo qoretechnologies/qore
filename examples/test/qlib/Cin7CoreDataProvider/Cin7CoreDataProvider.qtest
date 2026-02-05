@@ -132,7 +132,7 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
             "apikey": "fake-key-for-testing",
         });
         assertEq("cin7core", prov.getName());
-        assertEq("Cin7Core data provider for inventory, sales, and accounting management", prov.getDesc());
+        assertEq("Cin7Core data provider for inventory management, sales, and order processing", prov.getDesc());
     }
 
     #! Factory tests - verify factory registration
@@ -330,6 +330,19 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
         assertTrue(getSupplierAction.options.hasKey("ID"), "get-supplier should have ID option");
         assertEq("suppliers", getSupplierAction.options.ID.ref_data,
             "ID should have ref_data = 'suppliers'");
+
+        # Test date formatting for Cin7Core API
+        # Cin7Core requires dates in ISO 8601 format without timezone: yyyy-MM-ddTHH:mm:ss
+        date testDate = 2024-06-15T14:30:45;
+        string formattedDate = Cin7CoreDataProvider::Cin7CoreDataProviderBase::formatDate(testDate);
+        assertEq("2024-06-15T14:30:45", formattedDate,
+            "Date should be formatted as ISO 8601 without timezone");
+
+        # Test with a date at midnight
+        date midnightDate = 2024-01-01T00:00:00;
+        string formattedMidnight = Cin7CoreDataProvider::Cin7CoreDataProviderBase::formatDate(midnightDate);
+        assertEq("2024-01-01T00:00:00", formattedMidnight,
+            "Midnight date should be formatted correctly");
     }
 
     #! Negative tests - test error handling and invalid inputs
@@ -379,7 +392,7 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
             "cin7core://inventory.dearsystems.com/externalapi", {},
             {"account_id": "x", "apikey": "x"});
         assertTrue(conn.hasDataProvider());
-        assertEq("Cin7 Core", conn.getAppName());
+        assertEq("Cin7Core", conn.getAppName());
         assertEq("cin7core", conn.getType());
     }
 
@@ -409,7 +422,7 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
         # Product actions
         assertTrue(actionNames.contains("get-product"));
         assertTrue(actionNames.contains("search-products"));
-        assertTrue(actionNames.contains("search-product-availability"));
+        assertTrue(actionNames.contains("find-product-availability"));
 
         # Sale actions
         assertTrue(actionNames.contains("create-sale"));
@@ -432,7 +445,7 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
         assertTrue(actionNames.contains("search-stock-adjustments"));
 
         # Assembly actions
-        assertTrue(actionNames.contains("search-assemblies"));
+        assertTrue(actionNames.contains("find-assembly"));
 
         # Utility actions
         assertTrue(actionNames.contains("make-api-call"));
@@ -488,7 +501,7 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
     #! Test API connectivity
     private testApiConnectivity() {
         # Test that we can connect to the API
-        hash<auto> response = client.get("v2/me");
+        hash<auto> response = client.get("me");
         assertTrue(response.body.typeCode() == NT_HASH);
         if (m_options.verbose) {
             printf("Connected to Cin7Core API successfully\n");
@@ -700,7 +713,11 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
         hash<auto> createRequest = {
             "Name": testName,
             "Status": "Active",
-            "Currency": "USD",
+            "Currency": "CZK",
+            "PaymentTerm": "30 days",
+            "TaxRule": "Auto Look Up",
+            "AccountReceivable": "1200",
+            "RevenueAccount": "4000",
             "Comments": "Test customer created by integration test",
         };
 
@@ -727,7 +744,7 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
             assertEq(testCustomerId, fetchedCustomer.ID, "Customer ID should match");
             assertEq(testName, fetchedCustomer.Name, "Customer Name should match");
             assertEq("Active", fetchedCustomer.Status, "Customer Status should match");
-            assertEq("USD", fetchedCustomer.Currency, "Customer Currency should match");
+            assertEq("CZK", fetchedCustomer.Currency, "Customer Currency should match");
 
             if (m_options.verbose) {
                 printf("  Data integrity verified: customer saved and retrieved correctly\n");
@@ -796,15 +813,15 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
                 elements keys result.body);
         }
 
-        # Test with v2/me endpoint
+        # Test with /me endpoint
         auto meResult = makeApiCallProvider.doRequest({
             "method": "GET",
-            "path": "/v2/me",
+            "path": "/me",
         });
 
-        assertTrue(meResult.hasKey("body"), "make-api-call /v2/me should return body");
+        assertTrue(meResult.hasKey("body"), "make-api-call /me should return body");
         if (m_options.verbose) {
-            printf("  GET /v2/me returned successfully\n");
+            printf("  GET /me returned successfully\n");
         }
 
         if (m_options.verbose) {

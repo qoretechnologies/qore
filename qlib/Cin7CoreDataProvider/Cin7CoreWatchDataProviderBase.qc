@@ -26,7 +26,7 @@
 public namespace Cin7CoreDataProvider {
 
 #! Watch constructor options for Cin7Core polling triggers
-public const WatchConstructorOptions = BaseConstructorOptions + {
+public const WatchConstructorOptions = Cin7CoreDataProviderBase::BaseConstructorOptions + {
     "poll_interval": <DataProviderOptionInfo>{
         "display_name": "Poll Interval",
         "short_desc": "Polling interval in seconds",
@@ -44,14 +44,11 @@ public const WatchConstructorOptions = BaseConstructorOptions + {
 };
 
 #! Base class for Cin7Core watch/trigger data providers
-public class Cin7CoreWatchDataProviderBase inherits Cin7CoreDataProviderBase, Observable {
+public class Cin7CoreWatchDataProviderBase inherits Cin7CoreDataProviderBase,
+        DataProvider::DelayedObservable {
     public {
-        #! Base watch provider info
-        const BaseWatchProviderInfo = <DataProviderInfo>{
-            "supports_observable": True,
-            "supports_messages": MSG_None,
-            "constructor_options": WatchConstructorOptions,
-        };
+        #! Constructor options for watch providers
+        const WatchProviderConstructorOptions = WatchConstructorOptions;
     }
 
     private {
@@ -73,24 +70,34 @@ public class Cin7CoreWatchDataProviderBase inherits Cin7CoreDataProviderBase, Ob
 
     #! Creates the object with a REST client
     constructor(Cin7CoreRestClient::Cin7CoreRestClient rest, *hash<auto> options)
-            : Cin7CoreDataProviderBase(rest), Observable() {
+            : Cin7CoreDataProviderBase(rest) {
         initOptions(options);
     }
 
     #! Creates the object with a connection
     constructor(Cin7CoreRestClient::Cin7CoreRestConnection conn, *hash<auto> options)
-            : Cin7CoreDataProviderBase(conn), Observable() {
+            : Cin7CoreDataProviderBase(conn) {
         initOptions(options);
     }
 
     #! Creates the object with options
-    constructor(*hash<auto> options) : Cin7CoreDataProviderBase(options), Observable() {
+    constructor(*hash<auto> options) : Cin7CoreDataProviderBase(options) {
         initOptions(options);
     }
 
     #! Destructor
     destructor() {
-        stopObserver();
+        stopEventsIntern();
+    }
+
+    #! Stops event generation
+    stopEvents() {
+        stopEventsIntern();
+    }
+
+    #! Returns True if events are still being generated
+    bool isActive() {
+        return running;
     }
 
     #! Initialize poll options
@@ -112,8 +119,8 @@ public class Cin7CoreWatchDataProviderBase inherits Cin7CoreDataProviderBase, Ob
         background pollLoop();
     }
 
-    #! Stop the observer/polling
-    private stopObserver() {
+    #! Internal method to stop events
+    private stopEventsIntern() {
         running = False;
         thread_counter.waitForZero();
     }
@@ -186,10 +193,23 @@ public class Cin7CoreWatchDataProviderBase inherits Cin7CoreDataProviderBase, Ob
         };
     }
 
-    #! Returns example event data - override in subclasses for specific data
+    #! Returns example event data - tries real API data first, falls back to fake data
     private auto getExampleEventDataImpl(string event_id) {
-        return getEventDataType().getExampleValue();
+        # Try to get real data from the API first
+        try {
+            list<hash<auto>> records = pollOnce();
+            if (records.size() > 0) {
+                return records[0];
+            }
+        } catch () {
+            # Fall through to fake data
+        }
+        # Return resource-specific fake data
+        return getFakeExampleData();
     }
+
+    #! Returns resource-specific fake example data - override in subclasses
+    abstract hash<auto> getFakeExampleData();
 }
 
 } # namespace Cin7CoreDataProvider
