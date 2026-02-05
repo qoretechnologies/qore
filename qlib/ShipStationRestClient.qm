@@ -396,26 +396,6 @@ public class ShipStationRestConnection inherits RestClient::RestConnection {
                         "- HTTP 429 (Too Many Requests) is returned\n"
                         "- Wait for `X-Rate-Limit-Reset` seconds before retrying",
                 },
-                <UiMessageInfo>{
-                    "title": "API Capabilities",
-                    "intent": "info",
-                    "content": "The ShipStation API enables you to:\n\n"
-                        "**Order Management:**\n"
-                        "- Create, update, and delete orders\n"
-                        "- Assign users and tags to orders\n"
-                        "- Mark orders as shipped\n\n"
-                        "**Shipping:**\n"
-                        "- Compare carrier rates\n"
-                        "- Create and void shipping labels\n"
-                        "- Track shipments\n\n"
-                        "**Inventory:**\n"
-                        "- Manage products\n"
-                        "- Track fulfillments\n\n"
-                        "**Integrations:**\n"
-                        "- Manage connected stores\n"
-                        "- Configure warehouses\n"
-                        "- Subscribe to webhooks for real-time notifications",
-                },
             ),
         };
     }

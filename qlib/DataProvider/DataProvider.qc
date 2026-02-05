@@ -75,6 +75,7 @@ public class DataProvider {
             "busylight": "BusyLightDataProvider",
 
             "cdsrest": "CdsRestDataProvider",
+            "cin7core": "Cin7CoreDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
             "db": "DbDataProvider",

@@ -1576,6 +1576,7 @@ qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient"
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ShipStationRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ShippoRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/Cin7CoreRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZohoBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZohoInvoiceRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/AwsRestClient.qm" "ConnectionProvider;RestClient;RestSchemaValidator")
@@ -1609,6 +1610,7 @@ qore_user_module("qlib/ZohoBooksDataProvider" "ZohoBooksRestClient;RestClient;Da
 qore_user_module("qlib/ZohoInvoiceDataProvider" "ZohoInvoiceRestClient;RestClient;DataProvider" "zohoinvoice-logo.svg")
 qore_user_module("qlib/ShipStationDataProvider" "ShipStationRestClient;RestClient;DataProvider" "shipstation-logo.svg")
 qore_user_module("qlib/ShippoDataProvider" "ShippoRestClient;RestClient;DataProvider" "shippo-logo.svg")
+qore_user_module("qlib/Cin7CoreDataProvider" "Cin7CoreRestClient;RestClient;DataProvider" "cin7core-logo.svg")
 
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
     if (DOXYGEN_FOUND)

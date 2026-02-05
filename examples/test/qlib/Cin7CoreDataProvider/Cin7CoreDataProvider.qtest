@@ -1,0 +1,1019 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Cin7CoreDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%require-types
+%enable-all-warnings
+%new-style
+%strict-args
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/Cin7CoreRestClient.qm
+%requires ../../../../qlib/Cin7CoreDataProvider
+
+%exec-class Cin7CoreDataProviderTest
+
+public class Cin7CoreDataProviderTest inherits QUnit::Test {
+    private {
+        #! Cin7Core REST client for integration tests
+        *Cin7CoreRestClient::Cin7CoreRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "account_id": "a,account-id=s",
+            "apikey": "k,apikey=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test customer ID created during tests (for verification)
+        *string testCustomerId;
+
+        #! Test sale ID created during tests (for verification)
+        *string testSaleId;
+    }
+
+    constructor() : Test("Cin7CoreDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require CIN7CORE_ACCOUNT_ID and CIN7CORE_API_KEY)
+        addTestCase("integration tests", \integrationTests());
+
+        # Polling trigger tests
+        addTestCase("polling trigger tests", \pollingTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Cin7Core client for integration tests
+    private setupConnection() {
+        *string account_id = m_options.account_id ?? ENV.CIN7CORE_ACCOUNT_ID;
+        *string apikey = m_options.apikey ?? ENV.CIN7CORE_API_KEY;
+        if (!account_id || !apikey) {
+            if (m_options.verbose) {
+                printf("No API credentials provided (use -a and -k options or CIN7CORE_ACCOUNT_ID "
+                    "and CIN7CORE_API_KEY env vars)\n");
+            }
+            return;
+        }
+        hash<auto> opts = {
+            "account_id": account_id,
+            "apikey": apikey,
+        };
+        client = new Cin7CoreRestClient::Cin7CoreRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        # Test creating provider with fake credentials
+        Cin7CoreDataProvider::Cin7CoreDataProvider prov({
+            "account_id": "fake-account-id",
+            "apikey": "fake-key-for-testing",
+        });
+        assertEq("cin7core", prov.getName());
+        assertEq("Cin7Core data provider for inventory management, sales, and order processing", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("cin7core");
+        assertEq("cin7core", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("account_id"));
+        assertTrue(factoryOpts.hasKey("apikey"));
+        assertTrue(factoryOpts.hasKey("cin7corerestclient"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        Cin7CoreDataProvider::Cin7CoreDataProvider prov({
+            "account_id": "x",
+            "apikey": "x",
+        });
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertEq("Cin7CoreDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("account_id"));
+        assertTrue(info.constructor_options.hasKey("apikey"));
+        assertTrue(info.constructor_options.hasKey("cin7corerestclient"));
+
+        # Check supported reference data types
+        *hash<string, bool> refData = prov.getSupportedReferenceData();
+        assertTrue(refData.hasKey("customers"), "Should support customers ref_data");
+        assertTrue(refData.hasKey("suppliers"), "Should support suppliers ref_data");
+        assertTrue(refData.hasKey("products"), "Should support products ref_data");
+        assertTrue(refData.hasKey("sales"), "Should support sales ref_data");
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        Cin7CoreDataProvider::Cin7CoreDataProvider prov({
+            "account_id": "x",
+            "apikey": "x",
+        });
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Collection providers (DPAT_FIND)
+        assertTrue(children.contains("customers"));
+        assertTrue(children.contains("suppliers"));
+        assertTrue(children.contains("products"));
+        assertTrue(children.contains("sales"));
+        assertTrue(children.contains("sale-payments"));
+        assertTrue(children.contains("stock-adjustments"));
+
+        # Action providers (DPAT_API)
+        assertTrue(children.contains("create-customer"));
+        assertTrue(children.contains("get-customer"));
+        assertTrue(children.contains("update-customer"));
+        assertTrue(children.contains("create-supplier"));
+        assertTrue(children.contains("get-supplier"));
+        assertTrue(children.contains("update-supplier"));
+        assertTrue(children.contains("get-product"));
+        assertTrue(children.contains("create-sale"));
+        assertTrue(children.contains("get-sale"));
+        assertTrue(children.contains("update-sale"));
+        assertTrue(children.contains("delete-sale"));
+        assertTrue(children.contains("make-api-call"));
+
+        # Events provider
+        assertTrue(children.contains("events"));
+
+        # Check customers child provider
+        AbstractDataProvider customers = prov.getChildProvider("customers");
+        assertEq("customers", customers.getName());
+        hash<DataProviderInfo> customersInfo = customers.getInfo();
+        assertTrue(customersInfo.supports_read);
+        assertTrue(customersInfo.supports_native_search);
+        assertTrue(customersInfo.has_record);
+
+        # Check create-customer child provider
+        AbstractDataProvider createCustomer = prov.getChildProvider("create-customer");
+        assertEq("create-customer", createCustomer.getName());
+        hash<DataProviderInfo> createCustomerInfo = createCustomer.getInfo();
+        assertTrue(createCustomerInfo.supports_request);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check events child providers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("new-payment"));
+        assertTrue(eventChildren.contains("new-sale-credit-note-authorized"));
+        assertTrue(eventChildren.contains("new-sale-invoice-authorized"));
+        assertTrue(eventChildren.contains("sale-tracking-changed"));
+        assertTrue(eventChildren.contains("sale-voided"));
+        assertTrue(eventChildren.contains("stock-level-update"));
+        assertTrue(eventChildren.contains("customer-updated"));
+        assertTrue(eventChildren.contains("supplier-updated"));
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test customer data type
+        Cin7CoreDataProvider::Cin7CoreCustomerDataType customerType();
+        hash<string, AbstractDataField> customerFields = customerType.getFields();
+        assertTrue(customerFields.hasKey("ID"));
+        assertTrue(customerFields.hasKey("Name"));
+        assertTrue(customerFields.hasKey("Status"));
+        assertTrue(customerFields.hasKey("Currency"));
+        assertTrue(customerFields.hasKey("PaymentTerm"));
+
+        # Test supplier data type
+        Cin7CoreDataProvider::Cin7CoreSupplierDataType supplierType();
+        hash<string, AbstractDataField> supplierFields = supplierType.getFields();
+        assertTrue(supplierFields.hasKey("ID"));
+        assertTrue(supplierFields.hasKey("Name"));
+        assertTrue(supplierFields.hasKey("Status"));
+        assertTrue(supplierFields.hasKey("Currency"));
+
+        # Test product data type
+        Cin7CoreDataProvider::Cin7CoreProductDataType productType();
+        hash<string, AbstractDataField> productFields = productType.getFields();
+        assertTrue(productFields.hasKey("ID"));
+        assertTrue(productFields.hasKey("SKU"));
+        assertTrue(productFields.hasKey("Name"));
+        assertTrue(productFields.hasKey("Category"));
+        assertTrue(productFields.hasKey("Brand"));
+
+        # Test sale data type
+        Cin7CoreDataProvider::Cin7CoreSaleDataType saleType();
+        hash<string, AbstractDataField> saleFields = saleType.getFields();
+        assertTrue(saleFields.hasKey("ID"));
+        assertTrue(saleFields.hasKey("SaleOrderNumber"));
+        assertTrue(saleFields.hasKey("Status"));
+        assertTrue(saleFields.hasKey("Customer"));
+        assertTrue(saleFields.hasKey("Lines"));
+
+        # Test sale payment data type
+        Cin7CoreDataProvider::Cin7CoreSalePaymentDataType paymentType();
+        hash<string, AbstractDataField> paymentFields = paymentType.getFields();
+        assertTrue(paymentFields.hasKey("ID"));
+        assertTrue(paymentFields.hasKey("SaleID"));
+        assertTrue(paymentFields.hasKey("Amount"));
+
+        # Test stock adjustment data type
+        Cin7CoreDataProvider::Cin7CoreStockAdjustmentDataType stockType();
+        hash<string, AbstractDataField> stockFields = stockType.getFields();
+        assertTrue(stockFields.hasKey("TaskID"));
+        assertTrue(stockFields.hasKey("Location"));
+        assertTrue(stockFields.hasKey("Status"));
+        assertTrue(stockFields.hasKey("Lines"));
+
+        # Test address data type
+        Cin7CoreDataProvider::Cin7CoreAddressDataType addressType();
+        hash<string, AbstractDataField> addressFields = addressType.getFields();
+        assertTrue(addressFields.hasKey("Line1"));
+        assertTrue(addressFields.hasKey("City"));
+        assertTrue(addressFields.hasKey("State"));
+        assertTrue(addressFields.hasKey("Country"));
+        assertTrue(addressFields.hasKey("Postcode"));
+
+        # Test ref_data attributes on get-* action options
+        *hash<DataProviderActionInfo> getCustomerAction = DataProviderActionCatalog::getAppAction(
+            Cin7CoreDataProvider::AppName, "get-customer");
+        assertTrue(exists getCustomerAction, "get-customer action should exist");
+        assertTrue(getCustomerAction.options.hasKey("ID"), "get-customer should have ID option");
+        assertEq("customers", getCustomerAction.options.ID.ref_data,
+            "ID should have ref_data = 'customers'");
+
+        *hash<DataProviderActionInfo> getSaleAction = DataProviderActionCatalog::getAppAction(
+            Cin7CoreDataProvider::AppName, "get-sale");
+        assertTrue(exists getSaleAction, "get-sale action should exist");
+        assertTrue(getSaleAction.options.hasKey("ID"), "get-sale should have ID option");
+        assertEq("sales", getSaleAction.options.ID.ref_data,
+            "ID should have ref_data = 'sales'");
+
+        *hash<DataProviderActionInfo> getSupplierAction = DataProviderActionCatalog::getAppAction(
+            Cin7CoreDataProvider::AppName, "get-supplier");
+        assertTrue(exists getSupplierAction, "get-supplier action should exist");
+        assertTrue(getSupplierAction.options.hasKey("ID"), "get-supplier should have ID option");
+        assertEq("suppliers", getSupplierAction.options.ID.ref_data,
+            "ID should have ref_data = 'suppliers'");
+
+        # Test date formatting for Cin7Core API
+        # Cin7Core requires dates in ISO 8601 format without timezone: yyyy-MM-ddTHH:mm:ss
+        date testDate = 2024-06-15T14:30:45;
+        string formattedDate = Cin7CoreDataProvider::Cin7CoreDataProviderBase::formatDate(testDate);
+        assertEq("2024-06-15T14:30:45", formattedDate,
+            "Date should be formatted as ISO 8601 without timezone");
+
+        # Test with a date at midnight
+        date midnightDate = 2024-01-01T00:00:00;
+        string formattedMidnight = Cin7CoreDataProvider::Cin7CoreDataProviderBase::formatDate(midnightDate);
+        assertEq("2024-01-01T00:00:00", formattedMidnight,
+            "Midnight date should be formatted correctly");
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        Cin7CoreDataProvider::Cin7CoreDataProvider prov({
+            "account_id": "invalid-account",
+            "apikey": "invalid-key",
+        });
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid child in events provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            events.getChildProviderEx("invalid-event-type");
+        });
+    }
+
+    #! Corner case tests - edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+        # Test REST client URL
+        Cin7CoreRestClient::Cin7CoreRestClient client1({
+            "account_id": "x",
+            "apikey": "x",
+        });
+        assertTrue(client1.getURL() =~ /inventory\.dearsystems\.com/);
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("cin7core");
+        assertEq("Cin7Core REST Connection", scheme.display_name);
+        assertTrue(scheme.options.hasKey("account_id"));
+        assertTrue(scheme.options."account_id".sensitive);
+        assertTrue(scheme.options.hasKey("apikey"));
+        assertTrue(scheme.options."apikey".sensitive);
+
+        # Verify connection can create data provider
+        Cin7CoreRestClient::Cin7CoreRestConnection conn("test", "test connection",
+            "cin7core://inventory.dearsystems.com/externalapi", {},
+            {"account_id": "x", "apikey": "x"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("Cin7Core", conn.getAppName());
+        assertEq("cin7core", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Get all actions for the Cin7Core app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            Cin7CoreDataProvider::AppName);
+        assertTrue(actions.size() > 0);
+
+        # Verify action names
+        list<string> actionNames = map $1.action, actions;
+
+        # Customer actions
+        assertTrue(actionNames.contains("create-customer"));
+        assertTrue(actionNames.contains("get-customer"));
+        assertTrue(actionNames.contains("update-customer"));
+        assertTrue(actionNames.contains("search-customers"));
+
+        # Supplier actions
+        assertTrue(actionNames.contains("create-supplier"));
+        assertTrue(actionNames.contains("get-supplier"));
+        assertTrue(actionNames.contains("update-supplier"));
+        assertTrue(actionNames.contains("search-suppliers"));
+
+        # Product actions
+        assertTrue(actionNames.contains("get-product"));
+        assertTrue(actionNames.contains("search-products"));
+        assertTrue(actionNames.contains("find-product-availability"));
+
+        # Sale actions
+        assertTrue(actionNames.contains("create-sale"));
+        assertTrue(actionNames.contains("get-sale"));
+        assertTrue(actionNames.contains("update-sale"));
+        assertTrue(actionNames.contains("delete-sale"));
+        assertTrue(actionNames.contains("search-sales"));
+
+        # Sale payment actions
+        assertTrue(actionNames.contains("add-sale-payment"));
+        assertTrue(actionNames.contains("update-sale-payment"));
+        assertTrue(actionNames.contains("delete-sale-payment"));
+        assertTrue(actionNames.contains("search-sale-payments"));
+
+        # Stock adjustment actions
+        assertTrue(actionNames.contains("create-stock-adjustment"));
+        assertTrue(actionNames.contains("get-stock-adjustment"));
+        assertTrue(actionNames.contains("update-stock-adjustment"));
+        assertTrue(actionNames.contains("delete-stock-adjustment"));
+        assertTrue(actionNames.contains("search-stock-adjustments"));
+
+        # Assembly actions
+        assertTrue(actionNames.contains("find-assembly"));
+
+        # Utility actions
+        assertTrue(actionNames.contains("make-api-call"));
+
+        # Trigger actions
+        assertTrue(actionNames.contains("new-payment"));
+        assertTrue(actionNames.contains("new-sale-credit-note-authorized"));
+        assertTrue(actionNames.contains("new-sale-invoice-authorized"));
+        assertTrue(actionNames.contains("sale-tracking-changed"));
+        assertTrue(actionNames.contains("sale-voided"));
+        assertTrue(actionNames.contains("stock-level-update"));
+        assertTrue(actionNames.contains("customer-updated"));
+        assertTrue(actionNames.contains("supplier-updated"));
+
+        # Verify trigger actions have correct action_code
+        *hash<DataProviderActionInfo> newPaymentAction = DataProviderActionCatalog::getAppAction(
+            Cin7CoreDataProvider::AppName, "new-payment");
+        assertTrue(exists newPaymentAction, "new-payment action should exist");
+        assertEq(DPAT_EVENT, newPaymentAction.action_code);
+    }
+
+    #! Integration tests - require CIN7CORE_ACCOUNT_ID and CIN7CORE_API_KEY
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Cin7Core credentials provided (use -a/-k options or "
+                "CIN7CORE_ACCOUNT_ID/CIN7CORE_API_KEY env vars)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test customers provider
+        testCustomersProvider();
+
+        # Test suppliers provider
+        testSuppliersProvider();
+
+        # Test products provider
+        testProductsProvider();
+
+        # Test sales provider
+        testSalesProvider();
+
+        # Test customer data integrity (create, fetch, verify)
+        testCustomerDataIntegrity();
+
+        # Test make-api-call action
+        testMakeApiCall();
+    }
+
+    #! Test API connectivity
+    private testApiConnectivity() {
+        # Test that we can connect to the API
+        hash<auto> response = client.get("me");
+        assertTrue(response.body.typeCode() == NT_HASH);
+        if (m_options.verbose) {
+            printf("Connected to Cin7Core API successfully\n");
+        }
+    }
+
+    #! Test customers provider
+    private testCustomersProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Customers Provider ---\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreDataProvider prov(client);
+
+        # Get customers provider
+        AbstractDataProvider customersProvider = prov.getChildProvider("customers");
+        hash<DataProviderInfo> info = customersProvider.getInfo();
+
+        assertTrue(info.supports_read, "Customers should support read");
+        assertTrue(info.supports_native_search, "Customers should support native search");
+        assertTrue(info.has_record, "Customers should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("ID"), "Should have ID search option");
+        assertTrue(info.search_options.hasKey("Name"), "Should have Name search option");
+        assertTrue(info.search_options.hasKey("ModifiedSince"), "Should have ModifiedSince search option");
+        assertTrue(info.search_options.hasKey("Page"), "Should have Page search option");
+        assertTrue(info.search_options.hasKey("Limit"), "Should have Limit search option");
+
+        # Fetch some customers (limited)
+        hash<auto> searchOpts = {"Limit": 5};
+        list<hash<auto>> customers = map $1, customersProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d customers (limited to 5)\n", customers.size());
+        }
+
+        if (customers.size() > 0) {
+            # Verify customer record structure
+            hash<auto> customer = customers[0];
+            assertTrue(customer.hasKey("ID"), "Customer should have ID");
+            assertTrue(customer.hasKey("Name"), "Customer should have Name");
+            if (m_options.verbose) {
+                printf("  Sample customer: ID=%y, Name=%y\n",
+                    customer.ID, customer.Name ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Customers Provider tests completed ---\n");
+        }
+    }
+
+    #! Test suppliers provider
+    private testSuppliersProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Suppliers Provider ---\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreDataProvider prov(client);
+
+        # Get suppliers provider
+        AbstractDataProvider suppliersProvider = prov.getChildProvider("suppliers");
+        hash<DataProviderInfo> info = suppliersProvider.getInfo();
+
+        assertTrue(info.supports_read, "Suppliers should support read");
+        assertTrue(info.supports_native_search, "Suppliers should support native search");
+        assertTrue(info.has_record, "Suppliers should have record type");
+
+        # Fetch some suppliers (limited)
+        hash<auto> searchOpts = {"Limit": 5};
+        list<hash<auto>> suppliers = map $1, suppliersProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d suppliers (limited to 5)\n", suppliers.size());
+        }
+
+        if (suppliers.size() > 0) {
+            # Verify supplier record structure
+            hash<auto> supplier = suppliers[0];
+            assertTrue(supplier.hasKey("ID"), "Supplier should have ID");
+            assertTrue(supplier.hasKey("Name"), "Supplier should have Name");
+            if (m_options.verbose) {
+                printf("  Sample supplier: ID=%y, Name=%y\n",
+                    supplier.ID, supplier.Name ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Suppliers Provider tests completed ---\n");
+        }
+    }
+
+    #! Test products provider
+    private testProductsProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Products Provider ---\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreDataProvider prov(client);
+
+        # Get products provider
+        AbstractDataProvider productsProvider = prov.getChildProvider("products");
+        hash<DataProviderInfo> info = productsProvider.getInfo();
+
+        assertTrue(info.supports_read, "Products should support read");
+        assertTrue(info.supports_native_search, "Products should support native search");
+        assertTrue(info.has_record, "Products should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("ID"), "Should have ID search option");
+        assertTrue(info.search_options.hasKey("SKU"), "Should have SKU search option");
+        assertTrue(info.search_options.hasKey("Name"), "Should have Name search option");
+        assertTrue(info.search_options.hasKey("ModifiedSince"), "Should have ModifiedSince search option");
+
+        # Fetch some products (limited)
+        hash<auto> searchOpts = {"Limit": 5};
+        list<hash<auto>> products = map $1, productsProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d products (limited to 5)\n", products.size());
+        }
+
+        if (products.size() > 0) {
+            # Verify product record structure
+            hash<auto> product = products[0];
+            assertTrue(product.hasKey("ID"), "Product should have ID");
+            if (m_options.verbose) {
+                printf("  Sample product: ID=%y, SKU=%y, Name=%y\n",
+                    product.ID, product.SKU ?? "N/A", product.Name ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Products Provider tests completed ---\n");
+        }
+    }
+
+    #! Test sales provider
+    private testSalesProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Sales Provider ---\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreDataProvider prov(client);
+
+        # Get sales provider
+        AbstractDataProvider salesProvider = prov.getChildProvider("sales");
+        hash<DataProviderInfo> info = salesProvider.getInfo();
+
+        assertTrue(info.supports_read, "Sales should support read");
+        assertTrue(info.supports_native_search, "Sales should support native search");
+        assertTrue(info.has_record, "Sales should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("SaleID"), "Should have SaleID search option");
+        assertTrue(info.search_options.hasKey("Status"), "Should have Status search option");
+        assertTrue(info.search_options.hasKey("ModifiedSince"), "Should have ModifiedSince search option");
+        assertTrue(info.search_options.hasKey("Page"), "Should have Page search option");
+        assertTrue(info.search_options.hasKey("Limit"), "Should have Limit search option");
+
+        # Fetch some sales (limited)
+        hash<auto> searchOpts = {"Limit": 5};
+        list<hash<auto>> sales = map $1, salesProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d sales (limited to 5)\n", sales.size());
+        }
+
+        if (sales.size() > 0) {
+            # Verify sale record structure
+            hash<auto> sale = sales[0];
+            assertTrue(sale.hasKey("SaleID") || sale.hasKey("ID"), "Sale should have SaleID or ID");
+            if (m_options.verbose) {
+                printf("  Sample sale: ID=%y, OrderNumber=%y, Status=%y\n",
+                    sale.SaleID ?? sale.ID, sale.SaleOrderNumber ?? "N/A",
+                    sale.Status ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Sales Provider tests completed ---\n");
+        }
+    }
+
+    #! Test customer data integrity - verifies data actually persists
+    /** CRITICAL: This test verifies that customer data is correctly saved and retrievable.
+        This catches issues like:
+        - Wrong Content-Type
+        - Silent API acceptance without data persistence
+        - Incorrect field handling
+
+        The test creates a customer with known values, retrieves it, and verifies the values match.
+    */
+    private testCustomerDataIntegrity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Customer Data Integrity ---\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreDataProvider prov(client);
+
+        # Test 1: Create customer
+        if (m_options.verbose) {
+            printf("\nTest 1: Create customer...\n");
+        }
+
+        AbstractDataProvider createCustomerProvider = prov.getChildProvider("create-customer");
+        string testName = "Test Customer " + now_us().toString();
+        hash<auto> createRequest = {
+            "Name": testName,
+            "Status": "Active",
+            "Currency": "CZK",
+            "PaymentTerm": "30 days",
+            "TaxRule": "Auto Look Up",
+            "AccountReceivable": "1200",
+            "RevenueAccount": "4000",
+            "Comments": "Test customer created by integration test",
+        };
+
+        try {
+            auto createResult = createCustomerProvider.doRequest(createRequest);
+            if (m_options.verbose) {
+                printf("  Create result: ID=%y\n", createResult.ID);
+            }
+            assertTrue(exists createResult.ID, "Customer should be created with an ID");
+            testCustomerId = createResult.ID;
+
+            # Verify the data was actually saved by fetching it back
+            AbstractDataProvider getCustomerProvider = prov.getChildProvider("get-customer");
+            hash<auto> getRequest = {
+                "ID": testCustomerId,
+            };
+
+            auto fetchedCustomer = getCustomerProvider.doRequest(getRequest);
+            if (m_options.verbose) {
+                printf("  Fetched customer: ID=%y, Name=%y\n",
+                    fetchedCustomer.ID, fetchedCustomer.Name);
+            }
+
+            assertEq(testCustomerId, fetchedCustomer.ID, "Customer ID should match");
+            assertEq(testName, fetchedCustomer.Name, "Customer Name should match");
+            assertEq("Active", fetchedCustomer.Status, "Customer Status should match");
+            assertEq("CZK", fetchedCustomer.Currency, "Customer Currency should match");
+
+            if (m_options.verbose) {
+                printf("  Data integrity verified: customer saved and retrieved correctly\n");
+            }
+
+            # Test 2: Update customer
+            if (m_options.verbose) {
+                printf("\nTest 2: Update customer...\n");
+            }
+
+            AbstractDataProvider updateCustomerProvider = prov.getChildProvider("update-customer");
+            string updatedName = "Updated Test Customer " + now_us().toString();
+            hash<auto> updateRequest = {
+                "ID": testCustomerId,
+                "Name": updatedName,
+                "Comments": "Updated by integration test",
+            };
+
+            auto updateResult = updateCustomerProvider.doRequest(updateRequest);
+            if (m_options.verbose) {
+                printf("  Update result: ID=%y, Name=%y\n", updateResult.ID, updateResult.Name);
+            }
+
+            # Verify the update
+            auto updatedCustomer = getCustomerProvider.doRequest(getRequest);
+            assertEq(updatedName, updatedCustomer.Name, "Customer Name should be updated");
+
+            if (m_options.verbose) {
+                printf("  Update verified: customer updated correctly\n");
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  Customer test failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Customer Data Integrity tests completed ---\n");
+        }
+    }
+
+    #! Test make-api-call action
+    private testMakeApiCall() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Make API Call Action ---\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreDataProvider prov(client);
+
+        AbstractDataProvider makeApiCallProvider = prov.getChildProvider("make-api-call");
+
+        # Test GET request to customers endpoint
+        auto result = makeApiCallProvider.doRequest({
+            "method": "GET",
+            "path": "/Customer",
+            "query_params": {"Page": 1, "Limit": 1},
+        });
+
+        assertTrue(result.hasKey("body"), "make-api-call should return body");
+        assertTrue(result.body.typeCode() == NT_HASH,
+            "make-api-call response body should be hash");
+        if (m_options.verbose) {
+            printf("  GET /Customer returned hash with %d key(s)\n",
+                elements keys result.body);
+        }
+
+        # Test with /me endpoint
+        auto meResult = makeApiCallProvider.doRequest({
+            "method": "GET",
+            "path": "/me",
+        });
+
+        assertTrue(meResult.hasKey("body"), "make-api-call /me should return body");
+        if (m_options.verbose) {
+            printf("  GET /me returned successfully\n");
+        }
+
+        if (m_options.verbose) {
+            printf("--- Make API Call tests completed ---\n");
+        }
+    }
+
+    #! Polling trigger tests
+    pollingTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Cin7Core credentials provided");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Polling Trigger Providers ---\n");
+        }
+
+        # ============================================
+        # Test New Payment Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting Cin7CoreNewPaymentWatchDataProvider...\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreNewPaymentWatchDataProvider paymentProv(client, {});
+        assertEq("new-payment", paymentProv.getName());
+
+        # Verify provider metadata
+        assertTrue(paymentProv.getInfo().supports_observable);
+
+        # Test event types
+        hash<string, hash<DataProviderMessageInfo>> paymentEventTypes = paymentProv.getEventTypes();
+        assertTrue(paymentEventTypes.hasKey("new-payment"));
+        assertTrue(paymentEventTypes{"new-payment"}.desc.val());
+        # Verify event type uses custom data type
+        assertEq("Cin7CoreSalePaymentDataType", paymentEventTypes{"new-payment"}.type.getName(),
+            "new-payment event should use Cin7CoreSalePaymentDataType");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys paymentEventTypes);
+        }
+
+        # ============================================
+        # Test Customer Updated Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting Cin7CoreCustomerUpdatedWatchDataProvider...\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreCustomerUpdatedWatchDataProvider customerProv(client, {});
+        assertEq("customer-updated", customerProv.getName());
+        assertTrue(customerProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> customerEventTypes = customerProv.getEventTypes();
+        assertTrue(customerEventTypes.hasKey("customer-updated"));
+        # Verify event type uses custom data type
+        assertEq("Cin7CoreCustomerDataType", customerEventTypes{"customer-updated"}.type.getName(),
+            "customer-updated event should use Cin7CoreCustomerDataType");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys customerEventTypes);
+        }
+
+        # ============================================
+        # Test Supplier Updated Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting Cin7CoreSupplierUpdatedWatchDataProvider...\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreSupplierUpdatedWatchDataProvider supplierProv(client, {});
+        assertEq("supplier-updated", supplierProv.getName());
+        assertTrue(supplierProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> supplierEventTypes = supplierProv.getEventTypes();
+        assertTrue(supplierEventTypes.hasKey("supplier-updated"));
+        assertEq("Cin7CoreSupplierDataType", supplierEventTypes{"supplier-updated"}.type.getName(),
+            "supplier-updated event should use Cin7CoreSupplierDataType");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys supplierEventTypes);
+        }
+
+        # ============================================
+        # Test Sale Voided Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting Cin7CoreSaleVoidedWatchDataProvider...\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreSaleVoidedWatchDataProvider voidedProv(client, {});
+        assertEq("sale-voided", voidedProv.getName());
+        assertTrue(voidedProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> voidedEventTypes = voidedProv.getEventTypes();
+        assertTrue(voidedEventTypes.hasKey("sale-voided"));
+        assertEq("Cin7CoreSaleDataType", voidedEventTypes{"sale-voided"}.type.getName(),
+            "sale-voided event should use Cin7CoreSaleDataType");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys voidedEventTypes);
+        }
+
+        # ============================================
+        # Test Stock Level Update Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting Cin7CoreStockLevelUpdateWatchDataProvider...\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreStockLevelUpdateWatchDataProvider stockProv(client, {});
+        assertEq("stock-level-update", stockProv.getName());
+        assertTrue(stockProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> stockEventTypes = stockProv.getEventTypes();
+        assertTrue(stockEventTypes.hasKey("stock-level-update"));
+        assertEq("Cin7CoreProductAvailabilityDataType", stockEventTypes{"stock-level-update"}.type.getName(),
+            "stock-level-update event should use Cin7CoreProductAvailabilityDataType");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys stockEventTypes);
+        }
+
+        # ============================================
+        # Test New Sale Invoice Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting Cin7CoreNewSaleInvoiceWatchDataProvider...\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreNewSaleInvoiceWatchDataProvider invoiceProv(client, {});
+        assertEq("new-sale-invoice-authorized", invoiceProv.getName());
+        assertTrue(invoiceProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> invoiceEventTypes = invoiceProv.getEventTypes();
+        assertTrue(invoiceEventTypes.hasKey("new-sale-invoice-authorized"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys invoiceEventTypes);
+        }
+
+        # ============================================
+        # Test New Sale Credit Note Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting Cin7CoreNewSaleCreditNoteWatchDataProvider...\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreNewSaleCreditNoteWatchDataProvider creditNoteProv(client, {});
+        assertEq("new-sale-credit-note-authorized", creditNoteProv.getName());
+        assertTrue(creditNoteProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> creditNoteEventTypes = creditNoteProv.getEventTypes();
+        assertTrue(creditNoteEventTypes.hasKey("new-sale-credit-note-authorized"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys creditNoteEventTypes);
+        }
+
+        # ============================================
+        # Test Sale Tracking Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting Cin7CoreSaleTrackingWatchDataProvider...\n");
+        }
+
+        Cin7CoreDataProvider::Cin7CoreSaleTrackingWatchDataProvider trackingProv(client, {});
+        assertEq("sale-tracking-changed", trackingProv.getName());
+        assertTrue(trackingProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> trackingEventTypes = trackingProv.getEventTypes();
+        assertTrue(trackingEventTypes.hasKey("sale-tracking-changed"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys trackingEventTypes);
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Polling Trigger tests completed ---\n");
+        }
+    }
+}
+
+#! Test observer for polling events
+class TestObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data) {
+        events += {"event_id": event_id, "data": data};
+    }
+}
