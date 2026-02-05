@@ -716,7 +716,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
 
         # Wait for all to complete
-        counter.waitForZero(30s);
+        int remaining = counter.waitForZero(30s);
+        if (remaining > 0) {
+            fail(sprintf("%d requests did not complete within timeout", remaining));
+        }
 
         # All should have completed (success or error)
         assertEq(5, responses.size(), "all 5 responses received");
@@ -871,7 +874,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
 
         # Wait for all to complete
-        counter.waitForZero(30s);
+        int remaining = counter.waitForZero(30s);
+        if (remaining > 0) {
+            fail(sprintf("controller mode: %d requests did not complete within timeout", remaining));
+        }
 
         # All should have completed (success or error)
         assertEq(5, responses.size(), "controller mode: all 5 responses received");

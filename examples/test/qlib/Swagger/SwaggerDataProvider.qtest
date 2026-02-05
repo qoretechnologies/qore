@@ -138,7 +138,8 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
                 p0.doRequest({"query": {"status": ("x",)}});
                 fail("expected SCHEMA-VALIDATION-ERROR exception");
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                        || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
                     # Skip - external API is unavailable
                 } else if (ex.err == "SCHEMA-VALIDATION-ERROR") {
                     assertTrue(ex.desc =~ /enumerated values.*x/);
