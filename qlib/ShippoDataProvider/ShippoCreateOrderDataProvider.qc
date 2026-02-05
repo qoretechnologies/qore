@@ -80,7 +80,7 @@ public class ShippoCreateOrderDataProvider inherits ShippoDataProviderBase {
 
         # Required fields
         body.to_address = req.to_address;
-        body.placed_at = format_date("YYYY-MM-DDTHH:mm:SSZ", req.placed_at);
+        body.placed_at = format_date("YYYY-MM-DDTHH:mm:ssZ", req.placed_at);
         body.weight = req.weight;
         body.weight_unit = req.weight_unit;
 
