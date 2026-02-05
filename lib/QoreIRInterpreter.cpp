@@ -185,24 +185,44 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
             return QoreValue(left.getAsBigInt() < right.getAsBigInt());
         case QoreIROpcode::LtFloat:
             return QoreValue(left.getAsFloat() < right.getAsFloat());
+        case QoreIROpcode::LtString: {
+            const QoreStringNode* lstr = left.get<const QoreStringNode>();
+            const QoreStringNode* rstr = right.get<const QoreStringNode>();
+            return QoreValue(lstr && rstr && (lstr->compare(rstr) < 0));
+        }
         case QoreIROpcode::LtAny:
             return QoreValue(QoreLogicalLessThanOperatorNode::doLessThan(left, right, xsink));
         case QoreIROpcode::LeInt:
             return QoreValue(left.getAsBigInt() <= right.getAsBigInt());
         case QoreIROpcode::LeFloat:
             return QoreValue(left.getAsFloat() <= right.getAsFloat());
+        case QoreIROpcode::LeString: {
+            const QoreStringNode* lstr = left.get<const QoreStringNode>();
+            const QoreStringNode* rstr = right.get<const QoreStringNode>();
+            return QoreValue(lstr && rstr && (lstr->compare(rstr) <= 0));
+        }
         case QoreIROpcode::LeAny:
             return QoreValue(QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals(left, right, xsink));
         case QoreIROpcode::GtInt:
             return QoreValue(left.getAsBigInt() > right.getAsBigInt());
         case QoreIROpcode::GtFloat:
             return QoreValue(left.getAsFloat() > right.getAsFloat());
+        case QoreIROpcode::GtString: {
+            const QoreStringNode* lstr = left.get<const QoreStringNode>();
+            const QoreStringNode* rstr = right.get<const QoreStringNode>();
+            return QoreValue(lstr && rstr && (lstr->compare(rstr) > 0));
+        }
         case QoreIROpcode::GtAny:
             return QoreValue(QoreLogicalGreaterThanOperatorNode::doGreaterThan(left, right, xsink));
         case QoreIROpcode::GeInt:
             return QoreValue(left.getAsBigInt() >= right.getAsBigInt());
         case QoreIROpcode::GeFloat:
             return QoreValue(left.getAsFloat() >= right.getAsFloat());
+        case QoreIROpcode::GeString: {
+            const QoreStringNode* lstr = left.get<const QoreStringNode>();
+            const QoreStringNode* rstr = right.get<const QoreStringNode>();
+            return QoreValue(lstr && rstr && (lstr->compare(rstr) >= 0));
+        }
         case QoreIROpcode::GeAny:
             return QoreValue(QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals(left, right, xsink));
         case QoreIROpcode::CmpInt: {
@@ -221,6 +241,16 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
                 return QoreValue();
             }
             return QoreValue(l < r ? -1 : (l > r ? 1 : 0));
+        }
+        case QoreIROpcode::CmpString: {
+            const QoreStringNode* lstr = left.get<const QoreStringNode>();
+            const QoreStringNode* rstr = right.get<const QoreStringNode>();
+            int64_t result = 0;
+            if (lstr && rstr) {
+                int cmp = lstr->compare(rstr);
+                result = cmp < 0 ? -1 : (cmp > 0 ? 1 : 0);  // normalize to -1/0/1
+            }
+            return QoreValue(result);
         }
         case QoreIROpcode::CmpAny:
             return QoreValue(QoreLogicalComparisonOperatorNode::doComparison(left, right, xsink));
@@ -718,18 +748,23 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::NeHard:
         case QoreIROpcode::LtInt:
         case QoreIROpcode::LtFloat:
+        case QoreIROpcode::LtString:
         case QoreIROpcode::LtAny:
         case QoreIROpcode::LeInt:
         case QoreIROpcode::LeFloat:
+        case QoreIROpcode::LeString:
         case QoreIROpcode::LeAny:
         case QoreIROpcode::GtInt:
         case QoreIROpcode::GtFloat:
+        case QoreIROpcode::GtString:
         case QoreIROpcode::GtAny:
         case QoreIROpcode::GeInt:
         case QoreIROpcode::GeFloat:
+        case QoreIROpcode::GeString:
         case QoreIROpcode::GeAny:
         case QoreIROpcode::CmpInt:
         case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::CmpString:
         case QoreIROpcode::CmpAny:
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldlInt:
@@ -2323,18 +2358,23 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::NeHard:
             case QoreIROpcode::LtInt:
             case QoreIROpcode::LtFloat:
+            case QoreIROpcode::LtString:
             case QoreIROpcode::LtAny:
             case QoreIROpcode::LeInt:
             case QoreIROpcode::LeFloat:
+            case QoreIROpcode::LeString:
             case QoreIROpcode::LeAny:
             case QoreIROpcode::GtInt:
             case QoreIROpcode::GtFloat:
+            case QoreIROpcode::GtString:
             case QoreIROpcode::GtAny:
             case QoreIROpcode::GeInt:
             case QoreIROpcode::GeFloat:
+            case QoreIROpcode::GeString:
             case QoreIROpcode::GeAny:
             case QoreIROpcode::CmpInt:
             case QoreIROpcode::CmpFloat:
+            case QoreIROpcode::CmpString:
             case QoreIROpcode::CmpAny: {
                 if (inst->operands.size() < 2) {
                     if (xsink) {
@@ -4116,18 +4156,23 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::NeHard:
         case QoreIROpcode::LtInt:
         case QoreIROpcode::LtFloat:
+        case QoreIROpcode::LtString:
         case QoreIROpcode::LtAny:
         case QoreIROpcode::LeInt:
         case QoreIROpcode::LeFloat:
+        case QoreIROpcode::LeString:
         case QoreIROpcode::LeAny:
         case QoreIROpcode::GtInt:
         case QoreIROpcode::GtFloat:
+        case QoreIROpcode::GtString:
         case QoreIROpcode::GtAny:
         case QoreIROpcode::GeInt:
         case QoreIROpcode::GeFloat:
+        case QoreIROpcode::GeString:
         case QoreIROpcode::GeAny:
         case QoreIROpcode::CmpInt:
         case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::CmpString:
         case QoreIROpcode::CmpAny:
             return evalComparison(op, left, right, xsink);
         default:

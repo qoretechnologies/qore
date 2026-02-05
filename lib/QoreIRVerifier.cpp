@@ -127,18 +127,23 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::NeHard:
         case QoreIROpcode::LtInt:
         case QoreIROpcode::LtFloat:
+        case QoreIROpcode::LtString:
         case QoreIROpcode::LtAny:
         case QoreIROpcode::LeInt:
         case QoreIROpcode::LeFloat:
+        case QoreIROpcode::LeString:
         case QoreIROpcode::LeAny:
         case QoreIROpcode::GtInt:
         case QoreIROpcode::GtFloat:
+        case QoreIROpcode::GtString:
         case QoreIROpcode::GtAny:
         case QoreIROpcode::GeInt:
         case QoreIROpcode::GeFloat:
+        case QoreIROpcode::GeString:
         case QoreIROpcode::GeAny:
         case QoreIROpcode::CmpInt:
         case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::CmpString:
         case QoreIROpcode::CmpAny:
         case QoreIROpcode::ToBool:
         case QoreIROpcode::Not:
@@ -385,18 +390,23 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::NeHard:
         case QoreIROpcode::LtInt:
         case QoreIROpcode::LtFloat:
+        case QoreIROpcode::LtString:
         case QoreIROpcode::LtAny:
         case QoreIROpcode::LeInt:
         case QoreIROpcode::LeFloat:
+        case QoreIROpcode::LeString:
         case QoreIROpcode::LeAny:
         case QoreIROpcode::GtInt:
         case QoreIROpcode::GtFloat:
+        case QoreIROpcode::GtString:
         case QoreIROpcode::GtAny:
         case QoreIROpcode::GeInt:
         case QoreIROpcode::GeFloat:
+        case QoreIROpcode::GeString:
         case QoreIROpcode::GeAny:
         case QoreIROpcode::CmpInt:
         case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::CmpString:
         case QoreIROpcode::CmpAny:
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldlInt:

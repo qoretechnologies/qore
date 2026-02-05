@@ -54,6 +54,40 @@
 #include <qore/intern/FunctionalOperatorInterface.h>
 #include <qore/intern/QoreClassIntern.h>
 
+// Fast string comparison helper matching QoreString::compare() semantics
+// Returns: negative if l < r, 0 if equal, positive if l > r
+// Empty strings sort at end (both "" vs "x" and "x" vs "" return 1)
+static inline int fast_string_compare(const QoreStringNode* ls, const QoreStringNode* rs) {
+    size_t llen = ls->size();
+    size_t rlen = rs->size();
+
+    // Handle empty strings - empty sorts at end (returns 1 if either is empty but not both)
+    if (!llen) {
+        return rlen ? 1 : 0;
+    }
+    if (!rlen) {
+        return 1;  // right is empty, left is not -> left > right (empty at end)
+    }
+
+    // Compare bytes
+    const char* lbuf = ls->c_str();
+    const char* rbuf = rs->c_str();
+    size_t minlen = llen < rlen ? llen : rlen;
+    int rc = memcmp(lbuf, rbuf, minlen);
+    if (rc != 0) {
+        return rc < 0 ? -1 : 1;  // normalize like QoreString::compare
+    }
+
+    // Same prefix, compare lengths
+    if (llen < rlen) {
+        return -1;
+    }
+    if (llen > rlen) {
+        return 1;
+    }
+    return 0;
+}
+
 // Helper: bit-cast between uint64_t and QoreValue.
 // QoreValue is NaN-boxed and has the same size as uint64_t.
 static_assert(sizeof(QoreValue) == sizeof(uint64_t), "QoreValue must be 64 bits for JIT ABI");
@@ -1071,6 +1105,59 @@ extern "C" uint64_t qore_rt_string_ne_typed(uint64_t left, uint64_t right) {
     const QoreStringNode* ls = lv.get<const QoreStringNode>();
     const QoreStringNode* rs = rv.get<const QoreStringNode>();
     bool result = !ls || !rs || !ls->equal(rs);
+    return toBits(QoreValue(result));
+}
+
+// Typed string less than - both operands are known to be strings at compile time
+extern "C" uint64_t qore_rt_string_lt_typed(uint64_t left, uint64_t right) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreStringNode* ls = lv.get<const QoreStringNode>();
+    const QoreStringNode* rs = rv.get<const QoreStringNode>();
+    // If either is null/NOTHING, result is false (consistent with Qore semantics)
+    bool result = ls && rs && (fast_string_compare(ls, rs) < 0);
+    return toBits(QoreValue(result));
+}
+
+// Typed string less than or equal - both operands are known to be strings at compile time
+extern "C" uint64_t qore_rt_string_le_typed(uint64_t left, uint64_t right) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreStringNode* ls = lv.get<const QoreStringNode>();
+    const QoreStringNode* rs = rv.get<const QoreStringNode>();
+    bool result = ls && rs && (fast_string_compare(ls, rs) <= 0);
+    return toBits(QoreValue(result));
+}
+
+// Typed string greater than - both operands are known to be strings at compile time
+extern "C" uint64_t qore_rt_string_gt_typed(uint64_t left, uint64_t right) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreStringNode* ls = lv.get<const QoreStringNode>();
+    const QoreStringNode* rs = rv.get<const QoreStringNode>();
+    bool result = ls && rs && (fast_string_compare(ls, rs) > 0);
+    return toBits(QoreValue(result));
+}
+
+// Typed string greater than or equal - both operands are known to be strings at compile time
+extern "C" uint64_t qore_rt_string_ge_typed(uint64_t left, uint64_t right) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreStringNode* ls = lv.get<const QoreStringNode>();
+    const QoreStringNode* rs = rv.get<const QoreStringNode>();
+    bool result = ls && rs && (fast_string_compare(ls, rs) >= 0);
+    return toBits(QoreValue(result));
+}
+
+// Typed string comparison (spaceship) - both operands are known to be strings at compile time
+// Returns -1, 0, or 1 as an integer
+extern "C" uint64_t qore_rt_string_cmp_typed(uint64_t left, uint64_t right) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreStringNode* ls = lv.get<const QoreStringNode>();
+    const QoreStringNode* rs = rv.get<const QoreStringNode>();
+    // fast_string_compare already returns normalized -1/0/1
+    int64_t result = (ls && rs) ? fast_string_compare(ls, rs) : 0;
     return toBits(QoreValue(result));
 }
 

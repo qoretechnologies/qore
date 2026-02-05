@@ -3509,8 +3509,16 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThan(const QoreValue& expr, std::str
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectComparisonOpcode(lt->getLeft(), lt->getRight(),
-        QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny);
+    // Check for typed string comparison first
+    QoreValue left_expr = lt->getLeft();
+    QoreValue right_expr = lt->getRight();
+    QoreIROpcode op;
+    if (guaranteedStringType(&left_expr) && guaranteedStringType(&right_expr)) {
+        op = QoreIROpcode::LtString;
+    } else {
+        op = selectComparisonOpcode(lt->getLeft(), lt->getRight(),
+            QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny);
+    }
     return lowerBinaryOpOrInvoke(op, expr, left, right, lt->loc, error);
 }
 
@@ -3529,8 +3537,16 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThanOrEquals(const QoreValue& expr, 
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectComparisonOpcode(le->getLeft(), le->getRight(),
-        QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny);
+    // Check for typed string comparison first
+    QoreValue left_expr = le->getLeft();
+    QoreValue right_expr = le->getRight();
+    QoreIROpcode op;
+    if (guaranteedStringType(&left_expr) && guaranteedStringType(&right_expr)) {
+        op = QoreIROpcode::LeString;
+    } else {
+        op = selectComparisonOpcode(le->getLeft(), le->getRight(),
+            QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny);
+    }
     return lowerBinaryOpOrInvoke(op, expr, left, right, le->loc, error);
 }
 
@@ -3549,8 +3565,16 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThan(const QoreValue& expr, std::
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectComparisonOpcode(gt->getLeft(), gt->getRight(),
-        QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny);
+    // Check for typed string comparison first
+    QoreValue left_expr = gt->getLeft();
+    QoreValue right_expr = gt->getRight();
+    QoreIROpcode op;
+    if (guaranteedStringType(&left_expr) && guaranteedStringType(&right_expr)) {
+        op = QoreIROpcode::GtString;
+    } else {
+        op = selectComparisonOpcode(gt->getLeft(), gt->getRight(),
+            QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny);
+    }
     return lowerBinaryOpOrInvoke(op, expr, left, right, gt->loc, error);
 }
 
@@ -3569,8 +3593,16 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThanOrEquals(const QoreValue& exp
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectComparisonOpcode(ge->getLeft(), ge->getRight(),
-        QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny);
+    // Check for typed string comparison first
+    QoreValue left_expr = ge->getLeft();
+    QoreValue right_expr = ge->getRight();
+    QoreIROpcode op;
+    if (guaranteedStringType(&left_expr) && guaranteedStringType(&right_expr)) {
+        op = QoreIROpcode::GeString;
+    } else {
+        op = selectComparisonOpcode(ge->getLeft(), ge->getRight(),
+            QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny);
+    }
     return lowerBinaryOpOrInvoke(op, expr, left, right, ge->loc, error);
 }
 
@@ -3589,8 +3621,16 @@ QoreIRValue QoreIRLowering::lowerLogicalComparison(const QoreValue& expr, std::s
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectComparisonOpcode(cmp->getLeft(), cmp->getRight(),
-        QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny);
+    // Check for typed string comparison first
+    QoreValue left_expr = cmp->getLeft();
+    QoreValue right_expr = cmp->getRight();
+    QoreIROpcode op;
+    if (guaranteedStringType(&left_expr) && guaranteedStringType(&right_expr)) {
+        op = QoreIROpcode::CmpString;
+    } else {
+        op = selectComparisonOpcode(cmp->getLeft(), cmp->getRight(),
+            QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny);
+    }
     return lowerBinaryOpOrInvoke(op, expr, left, right, cmp->loc, error);
 }
 
