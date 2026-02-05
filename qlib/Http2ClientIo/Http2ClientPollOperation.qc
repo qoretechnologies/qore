@@ -110,6 +110,9 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
 
         #! Logger
         *Logger logger;
+
+        #! Callback invoked when connection becomes ready (HTTP/2 handshake complete)
+        *code ready_callback;
     }
 
     #! Creates the poll operation for a new connection
@@ -168,6 +171,17 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     #! Returns True if the connection is ready for requests
     bool isReady() {
         return state == STATE_READING || state == STATE_WAIT_READ || state == STATE_RESPONSE_READY;
+    }
+
+    #! Sets a callback to be invoked when the connection becomes ready
+    /** The callback is invoked once when the HTTP/2 handshake completes and the
+        connection is ready for requests. This allows callers to be notified
+        without polling.
+
+        @param callback the callback to invoke (takes no arguments)
+    */
+    setReadyCallback(code callback) {
+        ready_callback = callback;
     }
 
     #! Returns True if an error occurred
@@ -468,6 +482,15 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         # Go directly to READING state - the C++ operation handles preface internally
         # and allows requests to be submitted even before preface completes
         state = STATE_READING;
+
+        # Notify that the connection is now ready for requests
+        if (ready_callback) {
+            try {
+                ready_callback();
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "ready callback exception: %s: %s", ex.err, ex.desc);
+            }
+        }
     }
 
     #! Internal: handles reading state

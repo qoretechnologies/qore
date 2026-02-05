@@ -134,6 +134,19 @@ public class Http2ClientConnection {
         # Create poll operation for this connection
         poll_op = new Http2ClientPollOperation(url_info, connect_timeout, logger,
             ssl_verify_mode, accept_all_certs);
+
+        # Set callback to be notified when connection becomes ready
+        poll_op.setReadyCallback(\onConnectionReady());
+    }
+
+    #! Internal: called by poll operation when connection becomes ready
+    private onConnectionReady() {
+        AutoLock al(lock);
+        if (state == Http2ClientConnectionState::Connecting) {
+            state = Http2ClientConnectionState::Ready;
+            log(LoggerLevel::DEBUG, "connection ready (notified via callback)");
+            ready_cond.broadcast();
+        }
     }
 
     #! Returns the poll operation for this connection
@@ -326,34 +339,27 @@ public class Http2ClientConnection {
 
         @throw HTTP2-STATE-ERROR if the connection is closed or in error state
 
-        @note In controller mode, this method periodically checks if the poll operation
-        is ready, since the controller drives I/O and may not call handlePollResult()
-        until the operation completes.
+        @note The poll operation invokes the ready callback when the HTTP/2 handshake
+        completes, which broadcasts ready_cond. This method waits on that condition.
     */
     bool waitForReady(timeout timeout_ms = 30s) {
         date end_time = now_us() + timeout_ms;
 
         AutoLock al(lock);
         while (state == Http2ClientConnectionState::Connecting) {
-            # Check if poll operation became ready (HTTP/2 handshake complete)
-            # This is needed in controller mode where handlePollResult() is only
-            # called when the poll operation completes, not during establishment
-            if (poll_op.isReady()) {
-                state = Http2ClientConnectionState::Ready;
-                break;
-            }
-            if (poll_op.isClosed() || poll_op.hasError()) {
-                state = Http2ClientConnectionState::Closed;
-                break;
-            }
             date remaining = end_time - now_us();
             if (remaining <= 0us) {
                 return False;
             }
-            # Use 100ms intervals to poll poll_op.isReady() frequently since in
-            # controller mode there's no broadcast when the connection becomes ready -
-            # we must actively check the poll operation's state
-            ready_cond.wait(lock, min(remaining, 100ms));
+            # Wait for the ready callback to broadcast ready_cond
+            # The callback is invoked by the poll operation when HTTP/2 handshake completes
+            ready_cond.wait(lock, remaining);
+
+            # Check for error/closed states after waking
+            if (poll_op.isClosed() || poll_op.hasError()) {
+                state = Http2ClientConnectionState::Closed;
+                break;
+            }
         }
 
         if (state == Http2ClientConnectionState::Closed) {
