@@ -1330,10 +1330,20 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
     if (isFloatConstant(left) && isFloatConstant(right)) {
         return float_op;
     }
+    // Mixed int/float constants → promote to float (int * 0.1 → float)
+    if ((isIntConstant(left) && isFloatConstant(right))
+            || (isFloatConstant(left) && isIntConstant(right))) {
+        return float_op;
+    }
     if (guaranteedIntType(&left) && guaranteedIntType(&right)) {
         return int_op;
     }
     if (guaranteedFloatType(&left) && guaranteedFloatType(&right)) {
+        return float_op;
+    }
+    // Mixed int/float guaranteed types → promote to float
+    if ((guaranteedIntType(&left) && guaranteedFloatType(&right))
+            || (guaranteedFloatType(&left) && guaranteedIntType(&right))) {
         return float_op;
     }
     if (parse_context) {
@@ -1346,6 +1356,11 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
             if (analysisIndicatesFloat(left_analysis) && analysisIndicatesFloat(right_analysis)) {
                 return float_op;
             }
+            // Mixed int/float analysis → promote to float
+            if ((analysisIndicatesInt(left_analysis) && analysisIndicatesFloat(right_analysis))
+                    || (analysisIndicatesFloat(left_analysis) && analysisIndicatesInt(right_analysis))) {
+                return float_op;
+            }
             const QoreTypeInfo* left_known = selectAnalysisType(left_analysis);
             const QoreTypeInfo* right_known = selectAnalysisType(right_analysis);
             if (left_known && right_known && QoreTypeInfo::isType(left_known, NT_INT)
@@ -1355,6 +1370,16 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
             if (left_known && right_known && QoreTypeInfo::isType(left_known, NT_FLOAT)
                     && QoreTypeInfo::isType(right_known, NT_FLOAT)) {
                 return float_op;
+            }
+            // Mixed int/float known types → promote to float
+            if (left_known && right_known) {
+                bool left_is_int = QoreTypeInfo::isType(left_known, NT_INT);
+                bool left_is_float = QoreTypeInfo::isType(left_known, NT_FLOAT);
+                bool right_is_int = QoreTypeInfo::isType(right_known, NT_INT);
+                bool right_is_float = QoreTypeInfo::isType(right_known, NT_FLOAT);
+                if ((left_is_int && right_is_float) || (left_is_float && right_is_int)) {
+                    return float_op;
+                }
             }
         }
     }
