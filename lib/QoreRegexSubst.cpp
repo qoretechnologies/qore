@@ -5,7 +5,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,8 +37,6 @@
 #include <cctype>
 #include <cstdlib>
 #include <strings.h>
-
-static constexpr size_t qore_pcre2_errorbuf_size = 512;
 
 // constructor used when parsing
 QoreRegexSubst::QoreRegexSubst() : QoreRegexBase(new QoreString), newstr(new QoreString) {

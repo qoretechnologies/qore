@@ -2,7 +2,7 @@
 /*
     QoreRegex.cpp
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -71,8 +71,6 @@ void QoreRegex::parseRT(const QoreString* pattern, ExceptionSink* xsink) {
 
     parseRT(t->c_str(), xsink);
 }
-
-static constexpr size_t qore_pcre2_errorbuf_size = 512;
 
 void QoreRegex::parseRT(const char* pattern, ExceptionSink* xsink) {
     int errorcode;

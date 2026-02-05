@@ -621,7 +621,26 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     #! Test POST request with body
     testPostRequestWithBody() {
-        testSkip("HTTP/2 client-to-server integration needs further work");
+        Http2ClientIo::Http2ClientConnectionManager manager(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+
+        # Test POST with string body
+        Http2ClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("POST", "/echo", NOTHING, "test-body-content");
+
+        assertEq(200, response.status_code, "POST /echo status code");
+        assertRegex("method=POST", response.body, "POST method in response");
+        assertRegex("body=test-body-content", response.body, "POST body in response");
+
+        # Test POST with binary body
+        stream = manager.acquireStream(mSslUrl);
+        response = stream.request("POST", "/echo", {"content-type": "application/octet-stream"}, <48656c6c6f>);
+
+        assertEq(200, response.status_code, "POST binary body status code");
+        assertRegex("method=POST", response.body, "POST method with binary body");
+        assertRegex("body=Hello", response.body, "POST binary body content");
     }
 
     #! Test error response handling
