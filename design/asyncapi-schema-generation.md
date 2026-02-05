@@ -32,6 +32,16 @@ Document events using the `@EVENT` block format:
     - old_status (string): Previous status
     - new_status (string): New status
     - modified (date): Timestamp of the change
+    @example
+    {
+      "workflow_instanceid": 12345,
+      "workflowid": 42,
+      "name": "Onboarding",
+      "version": "1.0.0",
+      "old_status": "PENDING",
+      "new_status": "RUNNING",
+      "modified": "2026-02-04T12:34:56Z"
+    }
     @ENDEVENTSCHEMA
 */
 ```
@@ -47,6 +57,7 @@ Document events using the `@EVENT` block format:
 | `@class` | Event classification (e.g., WORKFLOW, SYSTEM, USER) | No |
 | `@severity` | Event severity: INFO, WARNING, MINOR, MAJOR, FATAL | No |
 | `@info` | Event payload field definitions | No |
+| `@example` | JSON example payload (can appear multiple times) | No |
 | `@ENDEVENTSCHEMA` | Marks the end of event schema | Yes |
 
 ### Event Severity Levels
@@ -142,6 +153,7 @@ When parsing channels with multiple message types:
 | `@desc` | Detailed description | No |
 | `@subscribe` | Message schema for client-to-server messages (can appear multiple times) | No |
 | `@publish` | Message schema for server-to-client messages (can appear multiple times) | No |
+| `@example` | JSON example payload for the preceding message block (can appear multiple times) | No |
 | `@ENDASYNCAPI` | Marks the end of AsyncAPI schema | Yes |
 
 ### Message Field Definitions
@@ -170,6 +182,15 @@ Examples:
 - channel (*string): Optional channel filter
 - events (*list<string>): Optional list of event names
 - options (*hash<auto>): Optional subscription options
+@example
+{
+  "action": "subscribe",
+  "channel": "events",
+  "events": ["WORKFLOW_STATUS_CHANGED"],
+  "options": {
+    "key": "value"
+  }
+}
 
 @publish EventNotification
 - id (string): Unique event ID
@@ -177,6 +198,16 @@ Examples:
 - payload (hash<auto>): Event data
 - timestamp (date): Event timestamp
 - correlation_id (*string): Optional correlation ID for request tracking
+@example
+{
+  "id": "evt-12345",
+  "name": "WORKFLOW_STATUS_CHANGED",
+  "payload": {
+    "key": "value"
+  },
+  "timestamp": "2026-02-04T12:34:56Z",
+  "correlation_id": "corr-1"
+}
 ```
 
 ## Type Specifications
