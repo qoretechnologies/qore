@@ -155,6 +155,15 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
 
+    // Collect ALL body locals from the statement tree (includes nested blocks from
+    // for/while/if/try/switch statements).  Mark them as pre-instantiated so the
+    // LLVM lowerer doesn't emit instantiation/uninstantiation calls - the caller
+    // (evalTiered) handles instantiation at runtime.
+    collectAllStatementLocals(statements, ir_func->all_body_locals);
+    for (LocalVar* lv : ir_func->all_body_locals) {
+        ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+    }
+
     return 0;
 }
 

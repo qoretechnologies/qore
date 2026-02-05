@@ -741,7 +741,31 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // AOT pre-compiled top-level function — execute directly if registered
     if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
         if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
+            // Instantiate nested body locals before AOT execution.
+            // Top-level locals are pre-instantiated by QoreProgram, but nested
+            // locals from for/while/try blocks need to be instantiated here.
+            const LVList* toplevel_lvars = getLVList();
+            std::unordered_set<const LocalVar*> toplevel_set;
+            if (toplevel_lvars) {
+                for (unsigned i = 0; i < toplevel_lvars->size(); ++i) {
+                    toplevel_set.insert(toplevel_lvars->lv[i]);
+                }
+            }
+            std::vector<LocalVar*> nested_locals;
+            for (LocalVar* lv : cached_toplevel_aot_ctx->all_body_locals) {
+                if (toplevel_set.count(lv) == 0) {
+                    lv->instantiate(runtime_parse_options);
+                    nested_locals.push_back(lv);
+                }
+            }
+
             uint64_t result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+
+            // Uninstantiate nested locals after AOT execution (reverse order)
+            for (auto it = nested_locals.rbegin(); it != nested_locals.rend(); ++it) {
+                (*it)->uninstantiate(xsink);
+            }
+
             QoreValue result;
             std::memcpy(&result, &result_bits, sizeof(result));
             if (!*xsink) {

@@ -402,6 +402,10 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
         return nullptr;
     }
 
+    // Collect ALL body locals from the statement tree (includes nested blocks from
+    // for/while/if/try/switch statements) so they can be instantiated at runtime.
+    collectAllStatementLocals(statements, ir_func->all_body_locals);
+
     // Build the context from the fresh IR (same walk order → same slot indices)
     QoreAOTContext* ctx = buildAOTContext(*ir_func, aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts);
     delete ir_func;
