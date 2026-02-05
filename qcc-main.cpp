@@ -143,24 +143,38 @@ static int parse_options_cmdline(int argc, char** argv) {
     return 0;
 }
 
-static std::string read_file(const char* path) {
+static bool read_file(const char* path, std::string& content) {
     FILE* f = fopen(path, "rb");
     if (!f) {
         fprintf(stderr, "error: cannot open '%s': %s\n", path, strerror(errno));
-        return "";
+        return false;
     }
 
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fprintf(stderr, "error: cannot seek '%s': %s\n", path, strerror(errno));
+        fclose(f);
+        return false;
+    }
 
-    std::string content;
+    long fsize = ftell(f);
+    if (fsize < 0) {
+        fprintf(stderr, "error: cannot get size of '%s': %s\n", path, strerror(errno));
+        fclose(f);
+        return false;
+    }
+
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        fprintf(stderr, "error: cannot seek '%s': %s\n", path, strerror(errno));
+        fclose(f);
+        return false;
+    }
+
     content.resize(fsize);
     size_t nread = fread(&content[0], 1, fsize, f);
     fclose(f);
     content.resize(nread);
 
-    return content;
+    return true;
 }
 
 static std::string get_default_output(const char* input_path, bool is_module) {
@@ -229,6 +243,11 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Warn about ignored options
+    if (static_link && module_mode) {
+        fprintf(stderr, "warning: --static is ignored when compiling modules\n");
+    }
+
     // Determine output path
     std::string output;
     if (output_path) {
@@ -238,8 +257,8 @@ int main(int argc, char** argv) {
     }
 
     // Read source file
-    std::string source_text = read_file(source_file);
-    if (source_text.empty() && errno != 0) {
+    std::string source_text;
+    if (!read_file(source_file, source_text)) {
         return 1;
     }
 

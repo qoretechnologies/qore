@@ -5,7 +5,7 @@
 %strict-args
 %require-types
 
-# Benchmark script to compare AST, IR, JIT, and AOT execution modes
+# Benchmark script to compare AST, IR, and JIT execution modes
 
 const ITERATIONS = 1000000;
 const WARMUP = 100000;
@@ -148,7 +148,7 @@ hash<auto> sub run_benchmark(string name, string code, string mode) {
 }
 
 sub main() {
-    printf("Performance Benchmark: AST vs IR vs JIT vs AOT\n");
+    printf("Performance Benchmark: AST vs IR vs JIT\n");
     printf("======================================================================\n\n");
 
     list<string> modes = ("ast", "ir", "jit");  # AOT excluded - has LLVM terminator bug
@@ -163,12 +163,14 @@ sub main() {
 
         hash<string, float> test_results;
         string expected_output;
+        bool have_expected = False;
 
         foreach string mode in (modes) {
             hash<auto> r = run_benchmark(test_name, code, mode);
             test_results{mode} = r.elapsed_ms;
-            if (!expected_output.val()) {
+            if (!have_expected) {
                 expected_output = r.output;
+                have_expected = True;
             }
             string status = r.output == expected_output ? "OK" : "MISMATCH";
             printf("  %-4s: %8.2f ms  [%s]\n", mode, r.elapsed_ms, status);
@@ -192,12 +194,12 @@ sub main() {
     printf("======================================================================\n");
     printf("SUMMARY (times in ms)\n");
     printf("======================================================================\n");
-    printf("%-15s %10s %10s %10s %10s\n", "Test", "AST", "IR", "JIT", "AOT");
+    printf("%-15s %10s %10s %10s\n", "Test", "AST", "IR", "JIT");
     printf("----------------------------------------------------------------------\n");
     foreach string test_name in (keys results) {
         hash<string, float> r = results{test_name};
-        printf("%-15s %10.2f %10.2f %10.2f %10.2f\n",
-            test_name, r.ast, r.ir, r.jit, r.aot);
+        printf("%-15s %10.2f %10.2f %10.2f\n",
+            test_name, r.ast, r.ir, r.jit);
     }
     printf("----------------------------------------------------------------------\n");
 
