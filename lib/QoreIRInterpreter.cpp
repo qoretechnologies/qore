@@ -402,19 +402,16 @@ static void removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
     }
 }
 
-// Sets a value slot, discarding any old value first. This is needed when
-// instructions execute multiple times (e.g., in loops) to avoid leaking
-// the previous iteration's value.
+// Sets a value slot. In loops, previous values may be overwritten without
+// cleanup, which could cause memory leaks. A proper fix would track and
+// clean up old values, but that needs careful implementation to avoid
+// double-frees.
 static void setValueSlot(std::unordered_map<uint32_t, QoreValue>& values,
-        uint32_t id, QoreValue new_val, ExceptionSink* xsink) {
-    auto it = values.find(id);
-    if (it != values.end() && it->second.hasNode()) {
-        it->second.discard(xsink);
-    }
+        uint32_t id, QoreValue new_val, ExceptionSink* /* xsink */) {
     values[id] = new_val;
 }
 
-static void cleanupValues(const std::unordered_map<uint32_t, QoreValue>& values, std::vector<uint32_t>& cleanup,
+static void cleanupValues(std::unordered_map<uint32_t, QoreValue>& values, std::vector<uint32_t>& cleanup,
         ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log) {
     // Track cleaned value slot IDs to handle duplicates from loop iterations.
     // When an instruction executes multiple times, it may push its result ID multiple
@@ -441,6 +438,11 @@ static void cleanupValues(const std::unordered_map<uint32_t, QoreValue>& values,
             }
         }
         temp.discard(no_throw ? nullptr : xsink);
+        // Clear the entry to prevent stale pointer access if execution
+        // continues (e.g., after an exception is caught in a loop).
+        // Set to NOTHING (bits=0) instead of erasing to avoid potential
+        // map rehashing issues.
+        val_it->second = QoreValue();
     }
     cleanup.clear();
 }
