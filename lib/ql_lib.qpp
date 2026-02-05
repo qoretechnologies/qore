@@ -1392,7 +1392,7 @@ list<hash<NetIfInfo>> get_netif_list() [dom=EXTERNAL_INFO] {
                 }
                 break;
             }
-#ifdef AF_PACKET
+#if defined(AF_PACKET) && defined(HAVE_LINUX_IF_PACKET_H)
             case AF_PACKET: {
                 struct sockaddr_ll* s = (struct sockaddr_ll*)ifa->ifa_addr;
                 QoreStringNode* addrstr = new QoreStringNode;
