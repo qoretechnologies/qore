@@ -1574,7 +1574,13 @@ public class HttpAsyncSocketIoController {
                     try {
                         cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
                     } catch () {}
-                    # Do NOT close the connection — h2op is still reading other streams
+                    # Send 500 error response for this stream — do NOT close the connection
+                    try {
+                        cinfo.sock.submitHttp2Response(stream_id, 500,
+                            {"content-type": "text/plain"},
+                            "Internal Server Error");
+                    } catch () {}
+                    controllers[cinfo.controller_idx].wake();
                 }
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -1664,7 +1670,13 @@ public class HttpAsyncSocketIoController {
                     try {
                         cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
                     } catch () {}
-                    # Do NOT close the connection — h2op is still reading other streams
+                    # Send 500 error response for this stream — do NOT close the connection
+                    try {
+                        cinfo.sock.submitHttp2Response(stream_id, 500,
+                            {"content-type": "text/plain"},
+                            "Internal Server Error");
+                    } catch () {}
+                    controllers[cinfo.controller_idx].wake();
                 }
             });
         } catch (hash<ExceptionInfo> ex) {

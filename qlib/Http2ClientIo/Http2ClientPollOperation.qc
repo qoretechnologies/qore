@@ -273,8 +273,11 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         }
 
         string sid = string(stream_id);
-        if (!stream_callbacks.hasKey(sid)) {
-            throw "HTTP2-STREAM-ERROR", sprintf("stream %d not found", stream_id);
+        {
+            AutoLock al(stream_lock);
+            if (!stream_callbacks.hasKey(sid)) {
+                throw "HTTP2-STREAM-ERROR", sprintf("stream %d not found", stream_id);
+            }
         }
 
         # Convert to binary if needed

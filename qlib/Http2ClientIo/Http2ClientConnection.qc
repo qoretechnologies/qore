@@ -41,9 +41,12 @@ public namespace Http2ClientIo {
 # Create connection
 Http2ClientConnection conn({"host": "example.com", "port": 443, "scheme": "https"});
 
-# Register with controller
+# Register with controller using submit()
 AsyncSocketIoController controller();
-controller.registerPollOperation(conn.getPollOperation(), \conn.handlePollResult());
+controller.submit(<SocketPollOperationInfo>{
+    "socket": conn.getSocket(),
+    "operation": conn.getPollOperation(),
+});
 
 # Submit requests
 int stream1 = conn.submitRequest("GET", "/api/v1/users", NOTHING, NOTHING,
