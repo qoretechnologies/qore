@@ -283,7 +283,9 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         {
             AutoLock al(stream_lock);
             if (!stream_callbacks.hasKey(sid)) {
-                throw "HTTP2-STREAM-ERROR", sprintf("stream %d not found", stream_id);
+                # Stream may have already completed and been removed - not an error
+                log(LoggerLevel::DEBUG, "cancel ignored: stream %d not found (already completed)", stream_id);
+                return;
             }
 
             # Send RST_STREAM via the socket's HTTP/2 session

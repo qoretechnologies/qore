@@ -104,6 +104,12 @@ public class Http2ClientConnection {
 
         #! True when a thread is actively driving to ready
         bool driving = False;
+
+        #! Condition for waiting on responses in controller mode
+        Condition response_cond();
+
+        #! Map of stream_id (as string) -> response hash for sync waiting in controller mode
+        hash<string, hash<auto>> pending_responses;
     }
 
     #! Creates a new HTTP/2 client connection
@@ -158,6 +164,51 @@ public class Http2ClientConnection {
     */
     setControllerRef(object controller) {
         controller_ref = controller;
+    }
+
+    #! Returns True if the connection is in controller mode
+    /** In controller mode, an AsyncSocketIoController drives all I/O operations
+        and the synchronous request() method must wait on conditions rather than
+        driving poll directly.
+    */
+    bool isControllerMode() {
+        return exists controller_ref;
+    }
+
+    #! Notifies waiting threads that a response is ready
+    /** Called by the controller callback when a response arrives.
+        Stores the response in pending_responses and broadcasts on response_cond.
+
+        @param stream_id the stream ID of the response
+        @param response the response hash
+    */
+    notifyResponse(int stream_id, hash<auto> response) {
+        AutoLock al(lock);
+        pending_responses{string(stream_id)} = response;
+        response_cond.broadcast();
+    }
+
+    #! Waits for a response in controller mode
+    /** Used by synchronous callers when the controller drives I/O.
+
+        @param stream_id the stream ID to wait for
+        @param timeout_ms maximum time to wait
+
+        @return the response hash, or NOTHING on timeout
+    */
+    *hash<auto> waitForResponse(int stream_id, timeout timeout_ms) {
+        date end_time = now_us() + timeout_ms;
+        string sid = string(stream_id);
+
+        AutoLock al(lock);
+        while (!pending_responses.hasKey(sid)) {
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return NOTHING;
+            }
+            response_cond.wait(lock, remaining);
+        }
+        return remove pending_responses{sid};
     }
 
     #! Returns connection info
@@ -312,17 +363,33 @@ public class Http2ClientConnection {
         @return True if the connection is ready, False on timeout
 
         @throw HTTP2-STATE-ERROR if the connection is closed or in error state
+
+        @note In controller mode, this method periodically checks if the poll operation
+        is ready, since the controller drives I/O and may not call handlePollResult()
+        until the operation completes.
     */
     bool waitForReady(timeout timeout_ms = 30s) {
         date end_time = now_us() + timeout_ms;
 
         AutoLock al(lock);
         while (state == Http2ClientConnectionState::Connecting) {
+            # Check if poll operation became ready (HTTP/2 handshake complete)
+            # This is needed in controller mode where handlePollResult() is only
+            # called when the poll operation completes, not during establishment
+            if (poll_op.isReady()) {
+                state = Http2ClientConnectionState::Ready;
+                break;
+            }
+            if (poll_op.isClosed() || poll_op.hasError()) {
+                state = Http2ClientConnectionState::Closed;
+                break;
+            }
             date remaining = end_time - now_us();
             if (remaining <= 0us) {
                 return False;
             }
-            ready_cond.wait(lock, remaining);
+            # Use short wait intervals to check poll_op state more frequently
+            ready_cond.wait(lock, min(remaining, 100ms));
         }
 
         if (state == Http2ClientConnectionState::Closed) {

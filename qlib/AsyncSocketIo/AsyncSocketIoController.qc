@@ -213,17 +213,25 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     }
 
     #! Starts monitoring
-    /** @throw CONTROLLER-START-ERROR if the I/O thread is already running
+    /** This method starts the I/O thread and waits for it to signal that it's ready
+        before returning. This ensures deterministic behavior where callers can
+        immediately submit operations after start() returns.
+
+        @throw CONTROLLER-START-ERROR if the I/O thread is already running
     */
     start() {
-        AutoLock al(m);
+        {
+            AutoLock al(m);
 
-        if (tid) {
-            throw "CONTROLLER-START-ERROR", sprintf("I/O thread is already running in TID %d", tid);
+            if (tid) {
+                throw "CONTROLLER-START-ERROR", sprintf("I/O thread is already running in TID %d", tid);
+            }
+
+            shutting_down = False;
+            startIntern();
         }
-
-        shutting_down = False;
-        startIntern();
+        # Wait for the I/O thread to signal it's ready (outside lock)
+        waitReady();
     }
 
     #! Stops monitoring

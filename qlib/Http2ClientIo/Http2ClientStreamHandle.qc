@@ -177,19 +177,31 @@ public class Http2ClientStreamHandle {
             *timeout timeout_ms) {
         timeout wait_timeout = timeout_ms ?? request_timeout;
         date end_time = now_us() + wait_timeout;
+        bool controller_mode = conn.isControllerMode();
 
-        # Drive connection to ready state first (for synchronous use)
+        # Wait for connection to become ready
         if (!conn.isReady()) {
             date remaining = end_time - now_us();
-            if (remaining <= 0us || !conn.driveToReady(remaining)) {
+            if (remaining <= 0us) {
                 throw "HTTP2-TIMEOUT", "connection establishment timed out";
+            }
+            if (controller_mode) {
+                # In controller mode, wait for the controller to drive the connection
+                if (!conn.waitForReady(remaining)) {
+                    throw "HTTP2-TIMEOUT", "connection establishment timed out";
+                }
+            } else {
+                # In sync mode, drive the connection directly
+                if (!conn.driveToReady(remaining)) {
+                    throw "HTTP2-TIMEOUT", "connection establishment timed out";
+                }
             }
         }
 
         # Submit async and wait
         submitAsync(method, path, headers, body, \handleAsyncResponse());
 
-        # Drive poll operation and wait for response
+        # Wait for response
         {
             AutoLock al(lock);
             while (state != Http2ClientStreamState::Complete
@@ -204,10 +216,15 @@ public class Http2ClientStreamHandle {
                         sprintf("request timed out after %d ms", int(wait_timeout));
                 }
 
-                # Release lock while driving poll (callbacks may need it)
-                delete al;
-                conn.drivePoll(min(remaining, 100ms));
-                al = new AutoLock(lock);
+                if (controller_mode) {
+                    # In controller mode, wait on condition - controller drives I/O
+                    response_cond.wait(lock, min(remaining, 1s));
+                } else {
+                    # In sync mode, release lock and drive poll directly
+                    delete al;
+                    conn.drivePoll(min(remaining, 100ms));
+                    al = new AutoLock(lock);
+                }
             }
 
             if (error_info) {
@@ -240,6 +257,29 @@ public class Http2ClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = Http2ClientStreamState::Open;
+        }
+
+        # Wait for connection to become ready if not already
+        if (!conn.isReady()) {
+            if (conn.isControllerMode()) {
+                # In controller mode, wait for the controller to drive the connection
+                if (!conn.waitForReady(request_timeout)) {
+                    {
+                        AutoLock al(lock);
+                        state = Http2ClientStreamState::Pending;
+                    }
+                    throw "HTTP2-TIMEOUT", "connection establishment timed out";
+                }
+            } else {
+                # In sync mode, drive the connection directly
+                if (!conn.driveToReady(request_timeout)) {
+                    {
+                        AutoLock al(lock);
+                        state = Http2ClientStreamState::Pending;
+                    }
+                    throw "HTTP2-TIMEOUT", "connection establishment timed out";
+                }
+            }
         }
 
         log(LoggerLevel::DEBUG, "submitting async request: %s %s", method, path);

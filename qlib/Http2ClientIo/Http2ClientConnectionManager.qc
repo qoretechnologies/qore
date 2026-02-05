@@ -481,6 +481,9 @@ public class Http2ClientConnectionManager {
             return;
         }
 
+        # Update connection state (important for transitioning to Ready state)
+        conn.handlePollResult();
+
         # Check if connection is still usable
         Http2ClientPollOperation op = conn.getPollOperation();
         if (op.isClosed() || op.hasError()) {
