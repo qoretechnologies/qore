@@ -702,10 +702,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             string path = sprintf("/json?idx=%d", i);
             background sub () {
                 on_exit counter.dec();
-                hash<auto> resp = stream.request("GET", path);
-                {
+                try {
+                    hash<auto> resp = stream.request("GET", path);
+                    {
+                        AutoLock al(resp_lock);
+                        push responses, resp;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
                     AutoLock al(resp_lock);
-                    push responses, resp;
+                    push responses, {"error": ex.err, "desc": ex.desc};
                 }
             }();
         }
@@ -713,9 +718,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Wait for all to complete
         counter.waitForZero(30s);
 
-        # All should have succeeded
+        # All should have completed (success or error)
         assertEq(5, responses.size(), "all 5 responses received");
         foreach hash<auto> resp in (responses) {
+            # Check for successful responses
+            if (resp.hasKey("error")) {
+                fail(sprintf("request failed with %s: %s", resp.error, resp.desc));
+            }
             assertEq(200, resp.status_code, "concurrent request status code");
         }
 
@@ -848,10 +857,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             string path = sprintf("/json?idx=%d", i);
             background sub () {
                 on_exit counter.dec();
-                hash<auto> resp = stream.request("GET", path);
-                {
+                try {
+                    hash<auto> resp = stream.request("GET", path);
+                    {
+                        AutoLock al(resp_lock);
+                        push responses, resp;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
                     AutoLock al(resp_lock);
-                    push responses, resp;
+                    push responses, {"error": ex.err, "desc": ex.desc};
                 }
             }();
         }
@@ -859,9 +873,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Wait for all to complete
         counter.waitForZero(30s);
 
-        # All should have succeeded
+        # All should have completed (success or error)
         assertEq(5, responses.size(), "controller mode: all 5 responses received");
         foreach hash<auto> resp in (responses) {
+            # Check for successful responses
+            if (resp.hasKey("error")) {
+                fail(sprintf("controller mode: request failed with %s: %s", resp.error, resp.desc));
+            }
             assertEq(200, resp.status_code, "controller mode: concurrent request status code");
         }
 

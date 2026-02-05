@@ -215,9 +215,9 @@ class FtpTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex1) {
                 ex = ex1;
             }
-            # With very short timeouts, various errors can occur: timeout, connection error, or closed
+            # With very short timeouts, various errors can occur: timeout, connection error, closed, or send error
             assertTrue(ex.err == "SOCKET-TIMEOUT" || ex.err == "FTP-RECEIVE-ERROR"
-                || ex.err == "FTP-CONNECT-ERROR" || ex.err == "SOCKET-CLOSED");
+                || ex.err == "FTP-CONNECT-ERROR" || ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-SEND-ERROR");
         }
 
         # reconnect after timeout to ensure clean FTP protocol state
@@ -244,9 +244,9 @@ class FtpTest inherits QUnit::Test {
             catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
             }
-            # With very short timeouts, various errors can occur: timeout, connection error, or closed
+            # With very short timeouts, various errors can occur: timeout, connection error, closed, or send error
             assertTrue(err == "SOCKET-TIMEOUT" || err == "FTP-RECEIVE-ERROR"
-                || err == "FTP-CONNECT-ERROR" || err == "SOCKET-CLOSED");
+                || err == "FTP-CONNECT-ERROR" || err == "SOCKET-CLOSED" || err == "SOCKET-SEND-ERROR");
         }
 
         # reconnect after timeout to ensure clean FTP protocol state
@@ -354,9 +354,9 @@ class FtpTest inherits QUnit::Test {
             catch (hash<ExceptionInfo> ex1) {
                 ex = ex1;
             }
-            # With very short timeouts, various errors can occur: timeout, connection error, or closed
+            # With very short timeouts, various errors can occur: timeout, connection error, closed, or send error
             assertTrue(ex.err == "SOCKET-TIMEOUT" || ex.err == "FTP-RECEIVE-ERROR"
-                || ex.err == "FTP-CONNECT-ERROR" || ex.err == "SOCKET-CLOSED");
+                || ex.err == "FTP-CONNECT-ERROR" || ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-SEND-ERROR");
         }
 
         # reconnect after timeout to ensure clean FTP protocol state
@@ -383,9 +383,9 @@ class FtpTest inherits QUnit::Test {
             catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
             }
-            # With very short timeouts, various errors can occur: timeout, connection error, or closed
+            # With very short timeouts, various errors can occur: timeout, connection error, closed, or send error
             assertTrue(err == "SOCKET-TIMEOUT" || err == "FTP-RECEIVE-ERROR"
-                || err == "FTP-CONNECT-ERROR" || err == "SOCKET-CLOSED");
+                || err == "FTP-CONNECT-ERROR" || err == "SOCKET-CLOSED" || err == "SOCKET-SEND-ERROR");
         }
 
         # reconnect after timeout to ensure clean FTP protocol state
