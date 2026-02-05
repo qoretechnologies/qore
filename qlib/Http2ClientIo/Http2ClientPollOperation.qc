@@ -273,6 +273,9 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         }
 
         string sid = string(stream_id);
+        # Advisory check for better error messages; nghttp2 handles the actual stream state
+        # validation in sendHttp2StreamData() and will raise an error if the stream was
+        # cancelled between this check and the send (TOCTOU race handled gracefully)
         {
             AutoLock al(stream_lock);
             if (!stream_callbacks.hasKey(sid)) {
