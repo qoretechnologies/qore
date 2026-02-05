@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreHttpClientObject.h>
 #include "qore/intern/QC_File.h"
 
 DLLEXPORT extern QoreClass* QC_FILEINPUTSTREAM;

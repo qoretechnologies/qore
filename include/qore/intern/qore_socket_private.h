@@ -51,6 +51,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <unordered_map>
 #include <strings.h>
@@ -587,8 +588,9 @@ struct qore_socket_private {
     //! HTTP/2 session for persistent HTTP/2 connections
     /** The session is created during startPollReadHttp2Request() and reused
         for subsequent operations on the same connection.
+        Uses shared_ptr for thread-safe atomic reference counting.
     */
-    Http2Session* h2_session = nullptr;
+    Http2SessionPtr h2_session;
 
     //! Active HTTP/2 stream ID for WebSocket or other bidirectional streams
     /** When set to a positive value, send() and recv() operations will use
@@ -618,6 +620,20 @@ struct qore_socket_private {
         Defaults to true.
     */
     bool h2_enable_connect_protocol = true;
+
+    //! Per-stream callbacks for HTTP/2 client multiplexing
+    /** Maps stream_id -> QoreValue callback for response dispatch.
+        Used by Http2ClientMultiplexPollOperation to route completed responses
+        to the appropriate handler.
+    */
+    std::unordered_map<int32_t, QoreValue> h2_stream_callbacks;
+    mutable QoreThreadLock h2_stream_callbacks_lock;
+
+    //! Stream completion callback for HTTP/2 client multiplexing
+    /** Called when a stream completes (response received or error).
+        Set by Http2ClientMultiplexPollOperation for response routing.
+    */
+    std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> h2_stream_complete_callback;
 
     DLLLOCAL qore_socket_private(int n_sock = QORE_INVALID_SOCKET, int n_sfamily = AF_UNSPEC,
             int n_stype = SOCK_STREAM, int n_prot = 0, const QoreEncoding* n_enc = QCS_DEFAULT) :
@@ -667,6 +683,60 @@ struct qore_socket_private {
         } else {
             h2_active_stream_id = stream_id;
         }
+    }
+
+    //! Registers a callback for HTTP/2 stream completion (client multiplexing)
+    /** @param stream_id the stream ID to register
+        @param callback the callback value (typically a code reference)
+    */
+    DLLLOCAL void registerH2StreamCallback(int32_t stream_id, const QoreValue& callback) {
+        AutoLocker al(h2_stream_callbacks_lock);
+        h2_stream_callbacks[stream_id] = callback.refSelf();
+    }
+
+    //! Unregisters a callback for HTTP/2 stream completion
+    /** @param stream_id the stream ID to unregister
+        @param xsink exception sink for dereferencing the callback
+    */
+    DLLLOCAL void unregisterH2StreamCallback(int32_t stream_id, ExceptionSink* xsink) {
+        QoreValue callback;
+        {
+            AutoLocker al(h2_stream_callbacks_lock);
+            auto it = h2_stream_callbacks.find(stream_id);
+            if (it != h2_stream_callbacks.end()) {
+                callback = it->second;
+                h2_stream_callbacks.erase(it);
+            }
+        }
+        if (callback) {
+            callback.discard(xsink);
+        }
+    }
+
+    //! Gets and removes a callback for HTTP/2 stream completion
+    /** @param stream_id the stream ID
+        @return the callback value (caller takes ownership), or nothing if not found
+    */
+    DLLLOCAL QoreValue takeH2StreamCallback(int32_t stream_id) {
+        AutoLocker al(h2_stream_callbacks_lock);
+        auto it = h2_stream_callbacks.find(stream_id);
+        if (it != h2_stream_callbacks.end()) {
+            QoreValue callback = it->second;
+            h2_stream_callbacks.erase(it);
+            return callback;
+        }
+        return QoreValue();
+    }
+
+    //! Sets the stream completion callback for HTTP/2 client multiplexing
+    DLLLOCAL void setH2StreamCompleteCallback(
+            std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> callback) {
+        h2_stream_complete_callback = std::move(callback);
+    }
+
+    //! Clears the stream completion callback
+    DLLLOCAL void clearH2StreamCompleteCallback() {
+        h2_stream_complete_callback = nullptr;
     }
 
     //! Returns true if ALPN protocols have been configured
@@ -733,10 +803,17 @@ struct qore_socket_private {
             remote_cert->deref(nullptr);
             remote_cert = nullptr;
         }
-        if (h2_session) {
-            delete h2_session;
-            h2_session = nullptr;
+        // Reset shared_ptr - will delete session if this is the last reference
+        h2_session.reset();
+        // Clear HTTP/2 client multiplexing state
+        {
+            AutoLocker al(h2_stream_callbacks_lock);
+            for (auto& it : h2_stream_callbacks) {
+                it.second.discard(nullptr);
+            }
+            h2_stream_callbacks.clear();
         }
+        h2_stream_complete_callback = nullptr;
         if (sock >= 0) {
             // if an SSL connection has been established, shut it down first
             if (ssl) {
@@ -1570,7 +1647,7 @@ struct qore_socket_private {
         int32_t h2_active_stream_id = getH2ActiveStreamId();
         bool h2_cond = h2_session && h2_session->isServer() && h2_active_stream_id > 0 && !h2_receiving_frames;
         printd(5, "isDataAvailable() h2_session=%p isServer=%d h2_active=%d h2_recv=%d h2_cond=%d\n",
-            h2_session, h2_session ? h2_session->isServer() : -1, h2_active_stream_id, h2_receiving_frames, h2_cond);
+            h2_session.get(), h2_session ? h2_session->isServer() : -1, h2_active_stream_id, h2_receiving_frames, h2_cond);
         if (h2_cond) {
             Http2StreamInfo* stream = h2_session->getStream(h2_active_stream_id);
             printd(5, "isDataAvailable() stream=%p body_size=%d\n", stream, stream ? (int)stream->body.size() : -1);
@@ -3852,8 +3929,9 @@ struct qore_socket_private {
             // DEBUG
             //printd(5, "QoreSocket::readHTTPChunkedBodyBinary(): received binary chunk: size: %d br=" QSD " total=" QSD "\n", size, br, b->size());
 
-            // read crlf after chunk
-            // FIXME: bytes read are not checked if they equal CRLF
+            // read CRLF after chunk
+            // NOTE: we don't validate that the bytes are actually \r\n - malformed responses
+            // with other bytes are silently accepted (defensive but non-conformant)
             br = 0;
             while (br < 2) {
                 char* buf;
@@ -4031,8 +4109,9 @@ struct qore_socket_private {
             // DEBUG
             //printd(5, "got chunk (" QSD " bytes): %s\n", br, buf->c_str() + buf->strlen() -  size);
 
-            // read crlf after chunk
-            // FIXME: bytes read are not checked if they equal CRLF
+            // read CRLF after chunk
+            // NOTE: we don't validate that the bytes are actually \r\n - malformed responses
+            // with other bytes are silently accepted (defensive but non-conformant)
             br = 0;
             while (br < 2) {
                 char* tbuf;

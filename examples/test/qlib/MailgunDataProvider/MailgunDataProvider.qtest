@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-/*  MailgunDataProvider.qtest Copyright 2025 Qore Technologies, s.r.o.
+/*  MailgunDataProvider.qtest Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -100,6 +100,21 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! Creates a MailgunDataProvider for unit tests
+    /** Catches connection errors and skips the test (for CI where external APIs may be unavailable)
+        @return the provider, or NOTHING if the test should be skipped
+    */
+    private *MailgunDataProvider::MailgunDataProvider tryCreateProvider() {
+        try {
+            return new MailgunDataProvider::MailgunDataProvider({"apikey": "x"});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to Mailgun API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
     #! Sets up the Mailgun client for integration tests
     private setupConnection() {
         *string apikey = m_options.apikey ?? ENV.MAILGUN_API_KEY;
@@ -134,7 +149,10 @@ public class MailgunDataProviderTest inherits QUnit::Test {
     sanityTests() {
         checkJson();
         # Test creating provider with fake credentials
-        MailgunDataProvider::MailgunDataProvider prov({"apikey": "fake-key-for-testing"});
+        *MailgunDataProvider::MailgunDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         assertEq("mailgun", prov.getName());
         assertEq("Mailgun data provider for email sending and management", prov.getDesc());
     }
@@ -160,7 +178,10 @@ public class MailgunDataProviderTest inherits QUnit::Test {
     #! Metadata tests - verify provider info structure
     metadataTests() {
         checkJson();
-        MailgunDataProvider::MailgunDataProvider prov({"apikey": "x"});
+        *MailgunDataProvider::MailgunDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         hash<DataProviderInfo> info = prov.getInfo();
 
         assertTrue(info.supports_children);
@@ -178,7 +199,10 @@ public class MailgunDataProviderTest inherits QUnit::Test {
     #! Child provider tests - verify hierarchy
     childProviderTests() {
         checkJson();
-        MailgunDataProvider::MailgunDataProvider prov({"apikey": "x"});
+        *MailgunDataProvider::MailgunDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Check child provider names
         list<string> children = prov.getChildProviderNames();
@@ -286,7 +310,10 @@ public class MailgunDataProviderTest inherits QUnit::Test {
     #! Negative tests - test error handling and invalid inputs
     negativeTests() {
         checkJson();
-        MailgunDataProvider::MailgunDataProvider prov({"apikey": "invalid-key"});
+        *MailgunDataProvider::MailgunDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Test getting non-existent child provider
         assertThrows("INVALID-CHILD-PROVIDER", sub() {
@@ -306,15 +333,24 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         # Test with different API regions
         # Note: URL includes credentials since Mailgun uses HTTP Basic Auth
         # Note: Base URL does not include /v3 - version is added per-endpoint to support both v3 and v4 APIs
-        MailgunRestClient::MailgunRestClient clientUS({"apikey": "x", "api_region": "US"});
-        assertTrue(clientUS.getURL() =~ /api\.mailgun\.net$/);
+        # Note: these create actual connections, so catch connection errors in CI
+        try {
+            MailgunRestClient::MailgunRestClient clientUS({"apikey": "x", "api_region": "US"});
+            assertTrue(clientUS.getURL() =~ /api\.mailgun\.net$/);
 
-        MailgunRestClient::MailgunRestClient clientEU({"apikey": "x", "api_region": "EU"});
-        assertTrue(clientEU.getURL() =~ /api\.eu\.mailgun\.net$/);
+            MailgunRestClient::MailgunRestClient clientEU({"apikey": "x", "api_region": "EU"});
+            assertTrue(clientEU.getURL() =~ /api\.eu\.mailgun\.net$/);
 
-        # Test default region
-        MailgunRestClient::MailgunRestClient clientDefault({"apikey": "x"});
-        assertTrue(clientDefault.getURL() =~ /api\.mailgun\.net$/);
+            # Test default region
+            MailgunRestClient::MailgunRestClient clientDefault({"apikey": "x"});
+            assertTrue(clientDefault.getURL() =~ /api\.mailgun\.net$/);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to Mailgun API: %s", ex.desc));
+                return;
+            }
+            rethrow;
+        }
 
         # Test invalid region throws error
         assertThrows("MAILGUN-ERROR", sub() {

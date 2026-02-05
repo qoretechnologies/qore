@@ -142,6 +142,7 @@ class QoreSocket {
     friend class SocketHttp2ServerPollOperation;
     friend class SocketHttp2SendResponsePollOperation;
     friend class SocketHttp2SendStreamingResponsePollOperation;
+    friend class SocketHttp2ClientMultiplexPollOperation;
 
 public:
     //! creates an empty, unconnected socket
@@ -1908,6 +1909,46 @@ public:
     DLLEXPORT int submitHttp2Response(int32_t stream_id, int status_code,
             const QoreHashNode* headers, const void* body, size_t body_len,
             ExceptionSink* xsink);
+
+    //! Submits an HTTP/2 CONNECT response without creating a poll operation (RFC 8441)
+    /** Queues the CONNECT response in the nghttp2 session without END_STREAM, keeping
+        the stream open for bidirectional data transfer. The actual socket write is handled
+        by the active read poll operation's sendPendingData() calls.
+
+        This is designed for HTTP/2 multiplexing where the read operation stays on the I/O
+        thread and CONNECT responses are submitted from handler threads.
+
+        @param stream_id the HTTP/2 stream ID from the CONNECT request
+        @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+        @param headers response headers
+        @param xsink exception sink for error reporting
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2ConnectResponse(int32_t stream_id, int status_code,
+            const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Submits an HTTP/2 client request on an active multiplexed connection
+    /** @param headers request headers (must include :method, :path, :scheme, :authority)
+        @param body request body (optional)
+        @param body_len body length
+        @param xsink exception sink for error reporting
+
+        @return the stream ID assigned to this request, or -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int32_t submitHttp2Request(const QoreHashNode* headers, const void* body,
+            size_t body_len, ExceptionSink* xsink);
+
+    //! Cancels a pending HTTP/2 stream by sending RST_STREAM
+    /** @param stream_id the stream ID to cancel
+        @param xsink exception sink for error reporting
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink);
 
     //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** Must be called before the HTTP/2 session is created (i.e., before the connection

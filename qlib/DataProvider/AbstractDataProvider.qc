@@ -80,6 +80,14 @@ public hashdecl BaseOptionInfo inherits DisplayDescInfo {
 
     #! Any image info for the option
     *string image;
+
+    #! Optional UI type override for frontend rendering
+    /** If not set, the UI should derive ui_type from the base type (e.g., @c "string" → @c "richtext").
+        Set this to override the default mapping (e.g., @c "processor", @c "password", @c "file-picker").
+
+        @since %DataProvider 3.3
+    */
+    *string ui_type;
 }
 
 #! Data provider option info

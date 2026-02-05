@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-/*  JotformDataProvider.qtest Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformDataProvider.qtest Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -120,11 +120,29 @@ public class JotformDataProviderTest inherits QUnit::Test {
 %endif
     }
 
+    #! Creates a JotformDataProvider for unit tests
+    /** Catches connection errors and skips the test (for CI where external APIs may be unavailable)
+        @return the provider, or NOTHING if the test should be skipped
+    */
+    private *JotformDataProvider::JotformDataProvider tryCreateProvider() {
+        try {
+            return new JotformDataProvider::JotformDataProvider({"apikey": "x"});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to JotForm API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
     #! Basic sanity tests - provider instantiation
     sanityTests() {
         checkJson();
         # Test creating provider with fake credentials
-        JotformDataProvider::JotformDataProvider prov({"apikey": "fake-token-for-testing"});
+        *JotformDataProvider::JotformDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         assertEq("jotform", prov.getName());
         assertEq("JotForm data provider for form and submission management", prov.getDesc());
     }
@@ -149,7 +167,10 @@ public class JotformDataProviderTest inherits QUnit::Test {
     #! Metadata tests - verify provider info structure
     metadataTests() {
         checkJson();
-        JotformDataProvider::JotformDataProvider prov({"apikey": "x"});
+        *JotformDataProvider::JotformDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         hash<DataProviderInfo> info = prov.getInfo();
 
         assertTrue(info.supports_children);
@@ -166,7 +187,10 @@ public class JotformDataProviderTest inherits QUnit::Test {
     #! Child provider tests - verify hierarchy
     childProviderTests() {
         checkJson();
-        JotformDataProvider::JotformDataProvider prov({"apikey": "x"});
+        *JotformDataProvider::JotformDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Check child provider names
         list<string> children = prov.getChildProviderNames();
@@ -298,18 +322,26 @@ public class JotformDataProviderTest inherits QUnit::Test {
     cornerCaseTests() {
         checkJson();
         # Test with different API domains
-        JotformRestClient::JotformRestClient clientStandard({"apikey": "x", "api_domain": "api.jotform.com"});
-        assertEq("https://api.jotform.com", clientStandard.getURL());
+        # Note: these create actual connections, so catch connection errors in CI
+        try {
+            JotformRestClient::JotformRestClient clientStandard({"apikey": "x", "api_domain": "api.jotform.com"});
+            assertEq("https://api.jotform.com", clientStandard.getURL());
 
-        JotformRestClient::JotformRestClient clientEU({"apikey": "x", "api_domain": "eu-api.jotform.com"});
-        assertEq("https://eu-api.jotform.com", clientEU.getURL());
+            JotformRestClient::JotformRestClient clientEU({"apikey": "x", "api_domain": "eu-api.jotform.com"});
+            assertEq("https://eu-api.jotform.com", clientEU.getURL());
 
-        JotformRestClient::JotformRestClient clientHIPAA({"apikey": "x", "api_domain": "hipaa-api.jotform.com"});
-        assertEq("https://hipaa-api.jotform.com", clientHIPAA.getURL());
+            JotformRestClient::JotformRestClient clientHIPAA({"apikey": "x", "api_domain": "hipaa-api.jotform.com"});
+            assertEq("https://hipaa-api.jotform.com", clientHIPAA.getURL());
 
-        # Test default domain
-        JotformRestClient::JotformRestClient clientDefault({"apikey": "x"});
-        assertEq("https://api.jotform.com", clientDefault.getURL());
+            # Test default domain
+            JotformRestClient::JotformRestClient clientDefault({"apikey": "x"});
+            assertEq("https://api.jotform.com", clientDefault.getURL());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to JotForm API: %s", ex.desc));
+            }
+            rethrow;
+        }
     }
 
     #! Connection tests - verify connection scheme registration

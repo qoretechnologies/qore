@@ -85,6 +85,12 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             assertEq(1, q.firstValue().lsize());
             assertNothing(i.getValue());
         } catch (hash<ExceptionInfo> ex) {
+            # Handle connection/protocol errors
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "HTTP2-ERROR") {
+                delete mews;
+                testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
+            }
             *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
                 ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
             if (!status_code) {
@@ -142,6 +148,12 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             # assertLe(bound, actual) asserts actual <= bound
             assertLe(2, recs.size());
         } catch (hash<ExceptionInfo> ex) {
+            # Handle connection/protocol errors
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "HTTP2-ERROR") {
+                delete mews;
+                testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
+            }
             *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
                 ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
             if (!status_code) {
