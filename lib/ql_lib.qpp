@@ -36,6 +36,7 @@
 #include "qore/intern/ExecArgList.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/ModuleInfo.h"
 
 #include <cerrno>
 #include <csignal>

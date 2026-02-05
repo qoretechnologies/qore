@@ -43,6 +43,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreTypeInfo.h"
+#include "qore/intern/ModuleInfo.h"
 
 #include <atomic>
 #include <cctype>

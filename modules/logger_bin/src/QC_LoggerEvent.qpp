@@ -30,6 +30,7 @@
 
 #include "qore_logger.h"
 
+#include "QC_Logger.h"
 #include "QC_LoggerEvent.h"
 #include "QC_LoggerLevel.h"
 

@@ -38,6 +38,8 @@
 #include <cstdlib>
 #include <strings.h>
 
+static constexpr size_t qore_pcre2_errorbuf_size = 512;
+
 // constructor used when parsing
 QoreRegexSubst::QoreRegexSubst() : QoreRegexBase(new QoreString), newstr(new QoreString) {
     //printd(5, "QoreRegexSubst::QoreRegexSubst() this=%p\n", this);

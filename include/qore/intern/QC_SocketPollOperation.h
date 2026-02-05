@@ -35,6 +35,7 @@
 
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/QC_Socket.h"
 #include "qore/QoreSocketObject.h"
 #include "qore/InputStream.h"
 
