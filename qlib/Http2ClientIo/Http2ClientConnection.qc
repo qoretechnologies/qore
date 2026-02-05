@@ -104,12 +104,6 @@ public class Http2ClientConnection {
 
         #! True when a thread is actively driving to ready
         bool driving = False;
-
-        #! Condition for waiting on responses in controller mode
-        Condition response_cond();
-
-        #! Map of stream_id (as string) -> response hash for sync waiting in controller mode
-        hash<string, hash<auto>> pending_responses;
     }
 
     #! Creates a new HTTP/2 client connection
@@ -170,45 +164,13 @@ public class Http2ClientConnection {
     /** In controller mode, an AsyncSocketIoController drives all I/O operations
         and the synchronous request() method must wait on conditions rather than
         driving poll directly.
+
+        @note Response notification in controller mode works through the callback
+        mechanism in Http2ClientStreamHandle.submitAsync(), which invokes
+        handleResponse() to signal the stream's response_cond when data arrives.
     */
     bool isControllerMode() {
         return exists controller_ref;
-    }
-
-    #! Notifies waiting threads that a response is ready
-    /** Called by the controller callback when a response arrives.
-        Stores the response in pending_responses and broadcasts on response_cond.
-
-        @param stream_id the stream ID of the response
-        @param response the response hash
-    */
-    notifyResponse(int stream_id, hash<auto> response) {
-        AutoLock al(lock);
-        pending_responses{string(stream_id)} = response;
-        response_cond.broadcast();
-    }
-
-    #! Waits for a response in controller mode
-    /** Used by synchronous callers when the controller drives I/O.
-
-        @param stream_id the stream ID to wait for
-        @param timeout_ms maximum time to wait
-
-        @return the response hash, or NOTHING on timeout
-    */
-    *hash<auto> waitForResponse(int stream_id, timeout timeout_ms) {
-        date end_time = now_us() + timeout_ms;
-        string sid = string(stream_id);
-
-        AutoLock al(lock);
-        while (!pending_responses.hasKey(sid)) {
-            date remaining = end_time - now_us();
-            if (remaining <= 0us) {
-                return NOTHING;
-            }
-            response_cond.wait(lock, remaining);
-        }
-        return remove pending_responses{sid};
     }
 
     #! Returns connection info
@@ -388,7 +350,9 @@ public class Http2ClientConnection {
             if (remaining <= 0us) {
                 return False;
             }
-            # Use short wait intervals to check poll_op state more frequently
+            # Use 100ms intervals to poll poll_op.isReady() frequently since in
+            # controller mode there's no broadcast when the connection becomes ready -
+            # we must actively check the poll operation's state
             ready_cond.wait(lock, min(remaining, 100ms));
         }
 

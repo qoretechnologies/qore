@@ -800,8 +800,58 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     #! Test controller mode with concurrent multiplexed requests
     testControllerModeConcurrent() {
-        # TODO: Skip until deadlock is resolved
-        testSkip("controller mode concurrent test needs investigation");
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        Http2ClientIo::Http2ClientConnectionManager manager(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+        manager.setController(controller);
+        controller.start();
+
+        on_exit {
+            controller.stop();
+            manager.closeAll();
+        }
+
+        # Acquire streams first (creates connection)
+        list<Http2ClientIo::Http2ClientStreamHandle> streams = ();
+        for (int i = 0; i < 5; i++) {
+            push streams, manager.acquireStream(mSslUrl);
+        }
+
+        # Launch concurrent requests
+        Counter counter(5);
+        Mutex resp_lock();
+        list<hash<auto>> responses = ();
+
+        for (int i = 0; i < 5; i++) {
+            Http2ClientIo::Http2ClientStreamHandle stream = streams[i];
+            string path = sprintf("/json?idx=%d", i);
+            background sub () {
+                on_exit counter.dec();
+                hash<auto> resp = stream.request("GET", path);
+                {
+                    AutoLock al(resp_lock);
+                    push responses, resp;
+                }
+            }();
+        }
+
+        # Wait for all to complete
+        counter.waitForZero(30s);
+
+        # All should have succeeded
+        assertEq(5, responses.size(), "controller mode: all 5 responses received");
+        foreach hash<auto> resp in (responses) {
+            assertEq(200, resp.status_code, "controller mode: concurrent request status code");
+        }
+
+        # Should have used connections efficiently (multiplexed)
+        # Note: In controller mode with rapid concurrent requests, the connection pool
+        # may create multiple connections before the first one is ready for reuse
+        hash<auto> stats = manager.getStats();
+        assertTrue(stats.total_connections >= 1 && stats.total_connections <= 5,
+            "controller mode: should have reasonable connection count");
     }
 
     #! Test controller mode with async callback
@@ -840,7 +890,30 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     #! Test controller mode timeout handling
     testControllerModeTimeout() {
-        # TODO: Skip until deadlock is resolved
-        testSkip("controller mode timeout test needs investigation");
+        AsyncSocketIo::AsyncSocketIoController controller(False);
+        Http2ClientIo::Http2ClientConnectionManager manager(<Http2ClientIo::Http2ClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+        manager.setController(controller);
+        controller.start();
+
+        on_exit {
+            controller.stop();
+            manager.closeAll();
+        }
+
+        # Request to slow endpoint with short timeout should time out
+        Http2ClientIo::Http2ClientStreamHandle stream = manager.acquireStream(mSslUrl);
+        bool timed_out = False;
+        try {
+            # /slow waits 2 seconds, we timeout after 500ms
+            stream.request("GET", "/slow", NOTHING, NOTHING, 500ms);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP2-TIMEOUT") {
+                timed_out = True;
+            }
+        }
+        assertTrue(timed_out, "controller mode: request should timeout");
     }
 }
