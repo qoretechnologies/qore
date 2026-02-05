@@ -1118,6 +1118,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!value.isValid()) {
             return false;
         }
+        // Emit ScopeExit for all active scopes with is_error=true before throwing
+        // This ensures on_error handlers are executed
+        emitScopeExits(0, true);
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
         builder.createThrow(value, handler, stmt->loc);
         return true;
@@ -1129,9 +1132,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (!value.isValid()) {
                 return false;
             }
+            // Emit ScopeExit for all active scopes with is_error=true before throwing
+            emitScopeExits(0, true);
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
             builder.createThrow(value, handler, stmt->loc);
         } else {
+            // Emit ScopeExit for all active scopes with is_error=true before rethrowing
+            emitScopeExits(0, true);
             builder.createRethrow(stmt->loc);
         }
         return true;
@@ -1161,6 +1168,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         builder.createScopeEnter(scope_id);
     }
 
+    // Get the block's local variables for cleanup
+    const LVList* lvars = block->getLVList();
+
     bool terminated = false;
     for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
         if (!*it) {
@@ -1185,6 +1195,14 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             builder.createScopeExit(scope_id, false);
         }
         scope_stack.pop_back();
+    }
+
+    // Emit UninstantiateLocal for block-scoped local variables in reverse order
+    // (reverse order ensures destructors are called in LIFO order like in AST mode)
+    if (lvars && !terminated) {
+        for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
+            builder.createUninstantiateLocal(lvars->lv[i], block->loc);
+        }
     }
 
     return true;
@@ -4828,9 +4846,11 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
         QoreIRValue result;
         bool should_invoke = !exception_stack.empty();  // method calls can always throw
         if (should_invoke) {
-            // For invoke path, we still need to use the expr-based path for now
-            // because the exception handling needs the AST node for context
-            // TODO: Add InvokeMethodDirect for proper exception handling
+            // For invoke path within try/catch, we use the expr-based path.
+            // This works correctly - the invoke_opcode hint allows the interpreter/JIT
+            // to use the devirtualized call while still having AST context for exceptions.
+            // FUTURE OPTIMIZATION: Add dedicated InvokeMethodDirect opcode that carries
+            // the method pointer directly, avoiding AST evaluation overhead.
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
                 error = "IR builder failed to create invoke continuation block";
@@ -4884,14 +4904,15 @@ static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTyp
         // Check if operands are $1 and $2 (offsets 0 and 1)
         if (arg1 && arg2 && arg1->getOffset() == 0 && arg2->getOffset() == 1) {
             // Determine result type based on expression type
+            // Only use optimized opcodes for numeric types; strings use native lowering
             result_type = plus_op->getTypeInfo();
             if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
                 return QoreIROpcode::FoldlSumInt;
             } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
                 return QoreIROpcode::FoldlSumFloat;
             }
-            // Default to int for untyped
-            return QoreIROpcode::FoldlSumInt;
+            // For strings and other types, use native lowering (FoldlAny)
+            // This ensures string concatenation works correctly
         }
     }
 
@@ -4906,14 +4927,14 @@ static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTyp
         // Check if operands are $1 and $2 (offsets 0 and 1)
         if (arg1 && arg2 && arg1->getOffset() == 0 && arg2->getOffset() == 1) {
             // Determine result type based on expression type
+            // Only use optimized opcodes for numeric types
             result_type = mul_op->getTypeInfo();
             if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
                 return QoreIROpcode::FoldlProdInt;
             } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
                 return QoreIROpcode::FoldlProdFloat;
             }
-            // Default to int for untyped
-            return QoreIROpcode::FoldlProdInt;
+            // For non-numeric types, use native lowering
         }
     }
 
@@ -4928,14 +4949,14 @@ static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTyp
         // Check if operands are $1 and $2 (offsets 0 and 1)
         if (arg1 && arg2 && arg1->getOffset() == 0 && arg2->getOffset() == 1) {
             // Determine result type based on expression type
+            // Only use optimized opcodes for numeric types
             result_type = minus_op->getTypeInfo();
             if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
                 return QoreIROpcode::FoldlDiffInt;
             } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
                 return QoreIROpcode::FoldlDiffFloat;
             }
-            // Default to int for untyped
-            return QoreIROpcode::FoldlDiffInt;
+            // For non-numeric types, use native lowering
         }
     }
 
@@ -5268,10 +5289,8 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
         return result;
     }
 
-    // Fallback: delegate entire operation to AST evaluation
-    // AST handles implicit argument context ($1, $2, $#) correctly
-    std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::FoldlAny, expr, operands, foldl->loc, error);
+    // Native IR lowering with implicit argument context ($1, $2)
+    return lowerFoldlNative(foldl, expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error) {
@@ -5414,10 +5433,8 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
         return result;
     }
 
-    // Fallback: delegate entire operation to AST evaluation
-    // AST handles implicit argument context ($1, $#) correctly
-    std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::MapAny, expr, operands, map->loc, error);
+    // Native IR lowering with implicit argument context ($1, $#)
+    return lowerMapNative(map, expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& error) {
@@ -5481,10 +5498,8 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
         return result;
     }
 
-    // Fallback: delegate entire operation to AST evaluation
-    // AST handles implicit argument context ($1, $#) correctly
-    std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::SelectAny, expr, operands, select->loc, error);
+    // Native IR lowering with implicit argument context ($1, $#)
+    return lowerSelectNative(select, expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& error) {
@@ -5524,6 +5539,305 @@ QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::strin
     // AST handles implicit argument context ($1, $#) correctly
     std::vector<QoreIRValue> operands;
     return lowerExprOpOrInvoke(QoreIROpcode::HashMapSelectAny, expr, operands, map_select->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const QoreValue& expr,
+        std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    // Create basic blocks for the loop structure
+    QoreIRBasicBlock* entry_block = builder.getBlock();
+    QoreIRBasicBlock* header_block = createBlock("map.header");
+    QoreIRBasicBlock* body_block = createBlock("map.body");
+    QoreIRBasicBlock* exit_block = createBlock("map.exit");
+    if (!header_block || !body_block || !exit_block) {
+        error = "IR builder failed to create blocks for map";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
+
+    // Create empty result list
+    QoreIRValue result_list = builder.createEmptyList(map->loc)->result;
+
+    // Evaluate the input list (right operand of map)
+    QoreIRValue input_list = lowerExpression(map->getRight(), error);
+    if (!input_list.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Create iterator from input list
+    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, map->loc);
+    QoreIRValue iter_val = iter_inst->result;
+
+    // Initial index value (0)
+    QoreIRValue init_index = builder.createConstInt(0, map->loc)->result;
+
+    // Branch to header
+    builder.createBranch(header_block, map->loc);
+
+    // Header block: create phi for index and check for next value
+    builder.setBlock(header_block);
+
+    // Create phi for index - will be completed after body block
+    auto* index_phi = builder.createPhi({}, map->loc);
+    QoreIRValue index_val = index_phi->result;
+
+    // Get next element from iterator (branches to exit if done, body if has element)
+    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, map->loc);
+    QoreIRValue element_val = next_inst->result;
+
+    // Body block: set up context, evaluate expression, append result
+    builder.setBlock(body_block);
+
+    // Push implicit element ($#) - save old value for restoration
+    QoreIRValue old_element = builder.createPushImplicitElement(index_val, map->loc)->result;
+
+    // Push implicit argument ($1 = current element) - save old context
+    QoreIRValue old_argv = builder.createPushImplicitArg(element_val, map->loc)->result;
+
+    // Lower the map expression - now $1 and $# are available in thread-local context
+    QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
+
+    // Always restore contexts, even if expression lowering failed
+    // Restore in reverse order: pop $1, then $#
+    builder.createPopImplicitArg(old_argv, map->loc);
+    builder.createPopImplicitElement(old_element, map->loc);
+
+    if (!expr_result.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Append result to output list
+    builder.createListAppend(result_list, expr_result, map->loc);
+
+    // Increment index for next iteration
+    QoreIRValue one = builder.createConstInt(1, map->loc)->result;
+    QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, map->loc)->result;
+
+    // Record the body exit block before branching
+    QoreIRBasicBlock* body_exit_block = builder.getBlock();
+
+    // Branch back to header
+    builder.createBranch(header_block, map->loc);
+
+    // Complete the phi node with incoming values
+    index_phi->incoming.push_back({init_index, entry_block});
+    index_phi->incoming.push_back({next_index, body_exit_block});
+    index_phi->operands.push_back(init_index);
+    index_phi->operands.push_back(next_index);
+
+    // Exit block: return result list
+    builder.setBlock(exit_block);
+
+    return result_list;
+}
+
+QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* select, const QoreValue& expr,
+        std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    // Create basic blocks for the loop structure
+    QoreIRBasicBlock* entry_block = builder.getBlock();
+    QoreIRBasicBlock* header_block = createBlock("select.header");
+    QoreIRBasicBlock* body_block = createBlock("select.body");
+    QoreIRBasicBlock* append_block = createBlock("select.append");
+    QoreIRBasicBlock* cont_block = createBlock("select.cont");
+    QoreIRBasicBlock* exit_block = createBlock("select.exit");
+    if (!header_block || !body_block || !append_block || !cont_block || !exit_block) {
+        error = "IR builder failed to create blocks for select";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
+
+    // Create empty result list
+    QoreIRValue result_list = builder.createEmptyList(select->loc)->result;
+
+    // Evaluate the input list (left operand of select)
+    QoreIRValue input_list = lowerExpression(select->getLeft(), error);
+    if (!input_list.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Create iterator from input list
+    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, select->loc);
+    QoreIRValue iter_val = iter_inst->result;
+
+    // Initial index value (0)
+    QoreIRValue init_index = builder.createConstInt(0, select->loc)->result;
+
+    // Branch to header
+    builder.createBranch(header_block, select->loc);
+
+    // Header block: create phi for index and check for next value
+    builder.setBlock(header_block);
+
+    // Create phi for index
+    auto* index_phi = builder.createPhi({}, select->loc);
+    QoreIRValue index_val = index_phi->result;
+
+    // Get next element from iterator
+    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, select->loc);
+    QoreIRValue element_val = next_inst->result;
+
+    // Body block: set up context, evaluate predicate
+    builder.setBlock(body_block);
+
+    // Push implicit contexts
+    QoreIRValue old_element = builder.createPushImplicitElement(index_val, select->loc)->result;
+    QoreIRValue old_argv = builder.createPushImplicitArg(element_val, select->loc)->result;
+
+    // Lower the predicate expression (right operand of select)
+    QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
+
+    // Restore contexts
+    builder.createPopImplicitArg(old_argv, select->loc);
+    builder.createPopImplicitElement(old_element, select->loc);
+
+    if (!predicate_result.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Convert predicate to bool
+    QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result, select->loc)->result;
+
+    // Branch based on predicate: if true append, else skip
+    builder.createBranchIf(predicate_bool, append_block, cont_block, select->loc);
+
+    // Append block: add element to result list
+    builder.setBlock(append_block);
+    builder.createListAppend(result_list, element_val, select->loc);
+    builder.createBranch(cont_block, select->loc);
+
+    // Continue block: increment index and loop back
+    builder.setBlock(cont_block);
+
+    // Increment index
+    QoreIRValue one = builder.createConstInt(1, select->loc)->result;
+    QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, select->loc)->result;
+
+    QoreIRBasicBlock* cont_exit_block = builder.getBlock();
+
+    // Branch back to header
+    builder.createBranch(header_block, select->loc);
+
+    // Complete the phi node
+    index_phi->incoming.push_back({init_index, entry_block});
+    index_phi->incoming.push_back({next_index, cont_exit_block});
+    index_phi->operands.push_back(init_index);
+    index_phi->operands.push_back(next_index);
+
+    // Exit block
+    builder.setBlock(exit_block);
+
+    return result_list;
+}
+
+QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl, const QoreValue& expr,
+        std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    // Create basic blocks for the loop structure
+    QoreIRBasicBlock* entry_block = builder.getBlock();
+    QoreIRBasicBlock* init_block = createBlock("foldl.init");
+    QoreIRBasicBlock* header_block = createBlock("foldl.header");
+    QoreIRBasicBlock* body_block = createBlock("foldl.body");
+    QoreIRBasicBlock* exit_block = createBlock("foldl.exit");
+    if (!init_block || !header_block || !body_block || !exit_block) {
+        error = "IR builder failed to create blocks for foldl";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
+
+    // Evaluate the input list (right operand of foldl)
+    QoreIRValue input_list = lowerExpression(foldl->getRight(), error);
+    if (!input_list.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Create iterator from input list
+    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, foldl->loc);
+    QoreIRValue iter_val = iter_inst->result;
+
+    // Branch to init block to get first element
+    builder.createBranch(init_block, foldl->loc);
+
+    // Init block: get first element as initial accumulator
+    builder.setBlock(init_block);
+    auto* first_inst = builder.createIteratorNext(iter_val, exit_block, header_block, foldl->loc);
+    QoreIRValue first_val = first_inst->result;
+
+    // Header block: check for next element
+    builder.setBlock(header_block);
+
+    // Create phi for accumulator - will be completed after body block
+    auto* accum_phi = builder.createPhi({}, foldl->loc);
+    QoreIRValue accum_val = accum_phi->result;
+
+    // Get next element from iterator
+    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, foldl->loc);
+    QoreIRValue element_val = next_inst->result;
+
+    // Body block: set up context with both $1 (accumulator) and $2 (element)
+    builder.setBlock(body_block);
+
+    // Create a 2-element list for argv: [accumulator, element]
+    // $1 = accumulator (index 0), $2 = element (index 1)
+    QoreIRValue argv_list = builder.createEmptyList(foldl->loc)->result;
+    builder.createListAppend(argv_list, accum_val, foldl->loc);
+    builder.createListAppend(argv_list, element_val, foldl->loc);
+
+    // Set the list directly as implicit args using SetImplicitArgv
+    // This allows LoadImplicitArg(0) to return $1 and LoadImplicitArg(1) to return $2
+    QoreIRValue old_argv = builder.createSetImplicitArgv(argv_list, foldl->loc)->result;
+
+    // Lower the fold expression - now $1 and $2 are available
+    QoreIRValue fold_result = lowerExpression(foldl->getLeft(), error);
+
+    // Restore context
+    builder.createPopImplicitArg(old_argv, foldl->loc);
+
+    if (!fold_result.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Record body exit block
+    QoreIRBasicBlock* body_exit_block = builder.getBlock();
+
+    // Branch back to header with new accumulator
+    builder.createBranch(header_block, foldl->loc);
+
+    // Complete the accumulator phi node
+    accum_phi->incoming.push_back({first_val, init_block});
+    accum_phi->incoming.push_back({fold_result, body_exit_block});
+    accum_phi->operands.push_back(first_val);
+    accum_phi->operands.push_back(fold_result);
+
+    // Exit block: return accumulator (via phi from different sources)
+    builder.setBlock(exit_block);
+
+    // Create phi for final result
+    // - If empty list, exit from init_block with NOTHING (first_inst goes to exit)
+    // - If single element, exit from init_block with that element
+    // - If multiple elements, exit from header with accumulator
+    // The IteratorNext handles this: done_target is exit_block
+    // So we get: NOTHING from init (empty list) or accum_val from header
+
+    // For empty list case, we need to return NOTHING
+    QoreIRValue nothing_val = builder.createConstNothing(foldl->loc)->result;
+
+    std::vector<QoreIRPhiIncoming> result_incoming;
+    result_incoming.push_back({nothing_val, init_block});  // Empty list case
+    result_incoming.push_back({accum_val, header_block});  // Normal case after iterations
+
+    auto* result_phi = builder.createPhi(result_incoming, foldl->loc);
+
+    return result_phi->result;
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& error) {

@@ -991,6 +991,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     std::unordered_map<const void*, QoreValue> closures;
     // on_block_exit handlers collected during IR execution
     std::vector<IROnBlockExitHandler> on_block_exit_handlers;
+    // Scope stack: tracks handler list indices at each ScopeEnter
+    // Used to know which handlers to execute on ScopeExit
+    std::vector<size_t> scope_stack;
     struct LocalInstantiationCleanup {
         std::unordered_set<const LocalVar*>& locals;
         ExceptionSink* xsink;
@@ -1329,6 +1332,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     return false;
                 }
                 QoreValue res = evalInvoke(inv, values, xsink);
+                // Invalidate all variable caches after Invoke - the AST call may have modified
+                // globals, thread-locals, or closure variables
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     prev_block = block;
@@ -1336,10 +1345,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     ip = 0;
                     break;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
                 setValueSlot(values, inv->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(inv->result.id);
@@ -1793,6 +1798,27 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ++ip;
                 break;
             }
+            case QoreIROpcode::SetImplicitArgv: {
+                QoreValue argv_val = getIRValue(values, inst->operands[0]);
+                // Save old context
+                const QoreListNode* old_argv = thread_get_implicit_args();
+                if (old_argv) {
+                    const_cast<QoreListNode*>(old_argv)->ref();
+                }
+                // Set the list directly as implicit args (used for foldl $1/$2)
+                QoreListNode* new_argv = argv_val.get<QoreListNode>();
+                if (new_argv) {
+                    new_argv->ref();  // Take a reference since we're using it directly
+                }
+                thread_set_implicit_args(new_argv);
+                // Store old context as result for later restoration
+                setValueSlot(values, inst->result.id, QoreValue(const_cast<QoreListNode*>(old_argv)), xsink);
+                if (old_argv) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::PopImplicitArg: {
                 QoreValue old_val = getIRValue(values, inst->operands[0]);
                 QoreListNode* old_argv = old_val.get<QoreListNode>();
@@ -2045,6 +2071,63 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // which requires the thread on_block_exit stack to be set up by StatementBlock,
                 // but the IR interpreter doesn't go through StatementBlock::execIntern().
                 on_block_exit_handlers.push_back({obe_inst->stmt->getType(), obe_inst->stmt->getCode()});
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ScopeEnter: {
+                // Record current handler list size so ScopeExit knows which handlers to execute
+                scope_stack.push_back(on_block_exit_handlers.size());
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ScopeExit: {
+                auto* scope_inst = static_cast<QoreIRScopeExitInstruction*>(inst);
+                // Execute handlers registered since matching ScopeEnter
+                if (!scope_stack.empty()) {
+                    size_t scope_start = scope_stack.back();
+                    scope_stack.pop_back();
+                    // Execute handlers in reverse order (LIFO) from current to scope_start
+                    if (on_block_exit_handlers.size() > scope_start) {
+                        ExceptionSink obe_xsink;
+                        bool error = scope_inst->is_error || (xsink && xsink->isException());
+                        for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
+                            obe_type_e type = on_block_exit_handlers[i - 1].type;
+                            if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
+                                if (on_block_exit_handlers[i - 1].code) {
+                                    // Instantiate exception for on_error blocks as an implicit arg
+                                    std::unique_ptr<SingleArgvContextHelper> argv_helper;
+                                    std::unique_ptr<CatchExceptionHelper> ex_helper;
+                                    if (type == OBE_Error && xsink) {
+                                        QoreException* except = xsink->getException();
+                                        if (except) {
+                                            ex_helper.reset(new CatchExceptionHelper(except));
+                                            argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
+                                        }
+                                    }
+                                    QoreValue rv;
+                                    int rc = on_block_exit_handlers[i - 1].code->exec(rv, &obe_xsink);
+                                    if (type == OBE_Error) {
+                                        if (qore_es_private::get(obe_xsink)->rethrown) {
+                                            if (xsink) {
+                                                xsink->clear();
+                                            }
+                                        }
+                                    }
+                                    if (obe_xsink) {
+                                        if (xsink) {
+                                            xsink->assimilate(obe_xsink);
+                                        }
+                                        if (!error) {
+                                            error = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Remove executed handlers
+                        on_block_exit_handlers.resize(scope_start);
+                    }
+                }
                 ++ip;
                 break;
             }
