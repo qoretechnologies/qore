@@ -3276,6 +3276,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_result = builder->CreateCall(helper, {arr, count_val, xsink_arg});
             values[inst->result.id] = list_result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(list_result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -3300,6 +3301,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* hash_result = builder->CreateCall(helper, {arr, count_val, xsink_arg});
             values[inst->result.id] = hash_result;
             nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(hash_result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
