@@ -152,6 +152,9 @@ public class HttpAsyncSocketIoController {
         #! True after stop() has been called; prevents new listeners from being added
         bool has_been_stopped = False;
 
+        #! True if the handler pool has been stopped and needs recreation in start()
+        bool pool_stopped = False;
+
         #! Registered listeners: listener unique hash -> listener info
         hash<string, hash<HttpListenerInfo>> listeners;
 
@@ -225,6 +228,16 @@ public class HttpAsyncSocketIoController {
         {
             AutoLock al(m);
             has_been_stopped = False;
+            # Recreate handler pool if it was stopped (stop() doesn't recreate to avoid
+            # leaving worker threads running that would block process exit)
+            if (pool_stopped) {
+                handler_pool = new ThreadPool(
+                    pool_opts.max_handler_threads ?? 0,
+                    pool_opts.min_idle_handler_threads ?? 0,
+                    pool_opts.max_idle_handler_threads ?? 0,
+                );
+                pool_stopped = False;
+            }
         }
         foreach AsyncSocketIoController c in (controllers) {
             if (!c.running()) {
@@ -287,12 +300,10 @@ public class HttpAsyncSocketIoController {
         # Wait for in-flight handler tasks to complete; the stopping flag prevents
         # them from submitting new operations to the controllers
         handler_pool.stopWait();
-        # Recreate the pool so the controller can be restarted
-        handler_pool = new ThreadPool(
-            pool_opts.max_handler_threads ?? 0,
-            pool_opts.min_idle_handler_threads ?? 0,
-            pool_opts.max_idle_handler_threads ?? 0,
-        );
+        pool_stopped = True;  # Mark for recreation in start()
+        # NOTE: We don't recreate the pool here anymore. The pool will be recreated
+        # in start() if the controller is restarted. Recreating here would leave
+        # a worker thread running that blocks process exit.
         # Second pass: cancel any operations that handler tasks managed to submit
         # before observing the stopping flag (narrow race window)
         {
