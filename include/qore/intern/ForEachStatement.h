@@ -72,6 +72,10 @@ public:
         return iterator_func;
     }
 
+    DLLLOCAL const LVList* getLVList() const {
+        return lvars;
+    }
+
 private:
     QoreValue var,
         list;

@@ -45,6 +45,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/IfStatement.h"
 #include "qore/intern/ForStatement.h"
+#include "qore/intern/ForEachStatement.h"
 #include "qore/intern/WhileStatement.h"
 #include "qore/intern/TryStatement.h"
 #include "qore/intern/SwitchStatement.h"
@@ -2198,10 +2199,17 @@ static void collectStatementLocals(const AbstractStatement* stmt, std::vector<Lo
             collectAllStatementLocals(cn->code, locals);
             cn = cn->next;
         }
+    } else if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
+        // Only collect foreach locals for non-reference iteration (fully lowered to IR).
+        // Reference iteration falls back to AST which handles locals via LVListInstantiator.
+        if (!foreach_stmt->isRef()) {
+            collectBlockLocals(foreach_stmt->getLVList(), locals);
+            collectAllStatementLocals(foreach_stmt->getCode(), locals);
+        }
     }
-    // ForEachStatement, OnBlockExitStatement, ContextStatement, SummarizeStatement,
-    // DebugStatement, AssertStatement: these generate special IR opcodes that call
-    // into the AST, which handles their locals via LVListInstantiator. Skip them.
+    // OnBlockExitStatement, ContextStatement, SummarizeStatement, DebugStatement,
+    // AssertStatement: these generate special IR opcodes that call into the AST,
+    // which handles their locals via LVListInstantiator. Skip them.
 }
 
 // Recursively collect all local variables from a StatementBlock and all nested blocks

@@ -52,6 +52,9 @@
 #include "qore/intern/Variable.h"
 #include "qore/intern/qore_thread_intern.h"
 
+// Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
+extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
@@ -815,15 +818,13 @@ bool QoreAOT::compile(QoreProgram* pgm,
         TopLevelStatementBlock& sb = pp->sb;
         QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
 
-        // Top-level locals are pre-instantiated by QoreProgram for each thread,
-        // so we must mark them in pre_instantiated_locals to prevent the LLVM
-        // lowerer from emitting qore_rt_instantiate_local/uninstantiate_local calls.
-        const LVList* lv_list = sb.getLVList();
-        if (lv_list) {
-            for (unsigned i = 0; i < lv_list->size(); ++i) {
-                ir_func->pre_instantiated_locals.insert(
-                    reinterpret_cast<const void*>(lv_list->lv[i]));
-            }
+        // Collect ALL body locals from the statement tree (top-level + nested blocks
+        // from fully-lowered statements like if/for/while/try/switch).  These are
+        // marked as pre-instantiated so the LLVM lowerer doesn't emit
+        // qore_rt_instantiate_local/uninstantiate_local calls.
+        collectAllStatementLocals(&sb, ir_func->all_body_locals);
+        for (LocalVar* lv : ir_func->all_body_locals) {
+            ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
         }
 
         QoreIRBuilder builder(ir_func);

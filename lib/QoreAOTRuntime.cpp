@@ -56,6 +56,9 @@
 #include <string>
 #include <unordered_map>
 
+// Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
+extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+
 // ---- Slot Map Context Builder (V2 — no IR re-lowering) ----
 
 //! Helper to convert a QoreValue to NaN-boxed bits
@@ -784,13 +787,10 @@ extern "C" int qore_aot_run(
                     // Re-lower top-level code to IR to build context
                     QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
 
-                    // Top-level locals are pre-instantiated
-                    const LVList* lv_list = sb.getLVList();
-                    if (lv_list) {
-                        for (unsigned i = 0; i < lv_list->size(); ++i) {
-                            ir_func->pre_instantiated_locals.insert(
-                                reinterpret_cast<const void*>(lv_list->lv[i]));
-                        }
+                    // Collect ALL body locals (top-level + nested blocks) as pre-instantiated
+                    collectAllStatementLocals(&sb, ir_func->all_body_locals);
+                    for (LocalVar* lv : ir_func->all_body_locals) {
+                        ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
                     }
 
                     QoreIRBuilder builder(ir_func);
@@ -1062,12 +1062,11 @@ extern "C" int qore_aot_run_v2(
                     TopLevelStatementBlock& fb_sb = fb_pp->sb;
 
                     QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
-                    const LVList* lv_list = fb_sb.getLVList();
-                    if (lv_list) {
-                        for (unsigned i = 0; i < lv_list->size(); ++i) {
-                            ir_func->pre_instantiated_locals.insert(
-                                reinterpret_cast<const void*>(lv_list->lv[i]));
-                        }
+
+                    // Collect ALL body locals (top-level + nested blocks) as pre-instantiated
+                    collectAllStatementLocals(&fb_sb, ir_func->all_body_locals);
+                    for (LocalVar* lv : ir_func->all_body_locals) {
+                        ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
                     }
 
                     QoreIRBuilder builder(ir_func);
