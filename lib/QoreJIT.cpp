@@ -79,12 +79,10 @@ bool QoreJIT::initialize(std::string& error) {
     jit = std::move(*jit_or_err);
 
     // Phase 5c: Enable GDB/LLDB debugger support for JIT-compiled code
-    // NOTE: Disabled — enableDebuggerSupport registers a debug object plugin that
-    // causes hangs in subprocess execution scenarios. The plugin appears to have
-    // issues when multiple qore processes are JIT-compiling concurrently.
-    // TODO: Investigate LLVM's ELFDebugObjectPlugin/GDBJITDebugInfoRegistrationPlugin
-    // for the root cause, or wait for upstream fixes.
-    //llvm::consumeError(llvm::orc::enableDebuggerSupport(*jit));
+    // This registers JIT-compiled functions with the debugger via the GDB JIT interface,
+    // allowing debuggers to see symbols and source locations in JIT-compiled code.
+    // Requires GDB 7.0+ or LLDB with jit-loader.gdb plugin enabled.
+    llvm::consumeError(llvm::orc::enableDebuggerSupport(*jit));
 
     if (!registerRuntimeSymbols(error)) {
         jit.reset();
