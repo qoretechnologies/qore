@@ -1519,9 +1519,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
 
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
     // because the parser static_casts to it)
+    // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
+    // the "module Name" declaration, and calling it twice triggers an assertion.
     {
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink);
-        mod_ctx.setNameInit(mod_info.name.c_str());
 
         qpgm->parse(source_text, label, &xsink, &wsink, QP_WARN_DEFAULT);
 

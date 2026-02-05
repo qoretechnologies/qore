@@ -1177,9 +1177,10 @@ extern "C" QoreStringNode* qore_aot_module_init(
 
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
     // because the parser static_casts to it)
+    // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
+    // the "module Name" declaration, and calling it twice triggers an assertion.
     {
         QoreUserModuleDefContextHelper mod_ctx(mod_name, label, aot_module_pgm, xsink);
-        mod_ctx.setNameInit(mod_name);
 
         // Parse the embedded source
         QoreString src_str(source, source_len);
@@ -1321,8 +1322,9 @@ extern "C" QoreStringNode* qore_aot_module_init_v2(
     if (deserializer.hasFallbackSource()) {
         ExceptionSink wsink;
         // Set up module context for parsing fallback source
+        // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
+        // the "module Name" declaration, and calling it twice triggers an assertion.
         QoreUserModuleDefContextHelper mod_ctx(mod_name, label, aot_module_pgm, xsink);
-        mod_ctx.setNameInit(mod_name);
 
         aot_module_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
             QP_WARN_DEFAULT);

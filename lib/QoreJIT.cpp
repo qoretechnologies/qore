@@ -82,7 +82,14 @@ bool QoreJIT::initialize(std::string& error) {
     // This registers JIT-compiled functions with the debugger via the GDB JIT interface,
     // allowing debuggers to see symbols and source locations in JIT-compiled code.
     // Requires GDB 7.0+ or LLDB with jit-loader.gdb plugin enabled.
-    llvm::consumeError(llvm::orc::enableDebuggerSupport(*jit));
+    //
+    // NOTE: Disabled due to thread safety issues. enableDebuggerSupport() registers a shared
+    // ObjectLinkingLayer plugin that is not safe for concurrent compilations. When multiple
+    // threads compile JIT functions simultaneously (e.g., in subprocess test runners), this
+    // causes deadlocks or "Emitting values inside a locked bundle is forbidden" crashes.
+    // TODO: Re-enable once LLVM's GDB JIT interface is thread-safe or we serialize all
+    // compilation to a single thread.
+    // llvm::consumeError(llvm::orc::enableDebuggerSupport(*jit));
 
     if (!registerRuntimeSymbols(error)) {
         jit.reset();
