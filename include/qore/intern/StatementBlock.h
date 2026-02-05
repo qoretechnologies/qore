@@ -67,6 +67,14 @@ public:
         //printd(5, "LVList::LVList() populated with %d vars\n", lv.size());
     }
 
+    //! Constructor from an array of LocalVar pointers (for AOT deserialization)
+    DLLLOCAL LVList(LocalVar** vars, int num) {
+        lv.resize(num);
+        for (int i = 0; i < num; ++i) {
+            lv[i] = vars[i];
+        }
+    }
+
     DLLLOCAL ~LVList() {
     }
 
@@ -291,6 +299,13 @@ public:
         cached_toplevel_aot_fn = fn;
         cached_toplevel_aot_ctx = ctx;
     }
+
+    //! Set the local variable list from AOT context (for stripped binary deserialization)
+    /** This must be called after registerPrecompiledAOTTopLevel() so that doTopLevelInstantiation()
+        can properly instantiate the local variables before the JIT code runs.
+        @param ctx the AOT context containing LocalVar* pointers
+    */
+    DLLLOCAL void setLVarsFromAOTContext(QoreAOTContext* ctx);
 };
 
 // parse variable stack

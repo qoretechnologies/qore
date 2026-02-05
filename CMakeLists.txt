@@ -368,6 +368,7 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/218_enums.dox.tmpl
     doxygen/lang/220_threading.dox.tmpl
     doxygen/lang/222_sandboxing.dox.tmpl
+    doxygen/lang/223_execution_modes.dox.tmpl
     doxygen/lang/225_exception_handling.dox.tmpl
     doxygen/lang/230_signal_handling.dox.tmpl
     doxygen/lang/235_event_handling.dox.tmpl
@@ -1134,6 +1135,10 @@ target_link_libraries(qore libqore)
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)
 
+# qcc - Qore Code Compiler
+add_executable(qcc qcc-main.cpp)
+target_link_libraries(qcc libqore)
+
 if (QORE_BUILD_IR_SMOKE)
     if (SINGLE_COMPILATION_UNIT)
         add_executable(qore-ir-smoke
@@ -1198,7 +1203,7 @@ qore_dist(${VERSION})
 install(PROGRAMS ${QORE_BIN_FILES}
         DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
-install(TARGETS qore qpp libqore
+install(TARGETS qore qcc qpp libqore
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 #install(TARGETS qore qpp qr libqore

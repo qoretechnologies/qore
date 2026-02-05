@@ -115,6 +115,15 @@ private:
     // Ordered list of unique LocalVar* pointers that need instantiation/uninstantiation
     std::vector<LocalVar*> function_locals;
 
+    // Locals first accessed in the entry block (should be instantiated at function entry)
+    std::vector<LocalVar*> entry_locals;
+
+    // Set of entry-block locals (for quick lookup)
+    std::unordered_set<const void*> entry_locals_set;
+
+    // Track which non-entry-block locals have had their instantiation code emitted
+    std::unordered_set<const void*> instantiated_non_entry_locals;
+
     // Track which value IDs already contain NaN-boxed i64 (from Invoke, Call, CatchException,
     // make_string, .any ops, LoadLocal).  Values NOT in this set are raw typed values.
     std::unordered_set<uint32_t> nanboxed_values;

@@ -702,6 +702,25 @@ TopLevelStatementBlock::~TopLevelStatementBlock() {
     delete cached_toplevel_ir;
 }
 
+void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
+    // Copy LocalVar* pointers from the AOT context to the statement block's LVList
+    // This ensures pointer consistency between AOT-compiled code and runtime
+    if (!ctx || !ctx->locals || ctx->num_locals == 0) {
+        return;
+    }
+    const LVList* lv_list = getLVList();
+    if (!lv_list) {
+        return;
+    }
+    // Update the LVList entries from the AOT context
+    size_t count = std::min(static_cast<size_t>(lv_list->size()),
+                            static_cast<size_t>(ctx->num_locals));
+    for (size_t i = 0; i < count; ++i) {
+        // Note: this modifies const data, but it's needed for pointer consistency
+        const_cast<LVList*>(lv_list)->lv[i] = ctx->locals[i];
+    }
+}
+
 int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return execImpl(rc, return_value, xsink);

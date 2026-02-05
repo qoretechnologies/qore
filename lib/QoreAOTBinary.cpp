@@ -1322,6 +1322,10 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 case AOTExprKind::SELF_VARREF:
                     // no additional data
                     break;
+                case AOTExprKind::LOCAL_VARREF:
+                    // ref1 = local slot index (as string)
+                    writer.writeStringRef(expr.ref1.c_str());
+                    break;
                 case AOTExprKind::GENERIC_EVAL:
                 default:
                     // no additional data — function needs source fallback

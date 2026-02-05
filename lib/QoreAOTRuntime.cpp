@@ -48,6 +48,7 @@
 #include "qore/intern/QoreIRVerifier.h"
 
 #include "qore/intern/ModuleInfo.h"
+#include "qore/intern/VarRefNode.h"
 #include "qore/intern/qore_thread_intern.h"
 
 #include <cassert>
@@ -277,10 +278,28 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::RUNTIME_CONST_REF:
                 ref1 = reader.readStringRef(ptr);
                 break;
+            case AOTExprKind::LOCAL_VARREF:
+                ref1 = reader.readStringRef(ptr);
+                break;
             case AOTExprKind::SELF_VARREF:
             case AOTExprKind::GENERIC_EVAL:
             default:
                 break;
+        }
+
+        // Handle LOCAL_VARREF directly since it needs ctx->locals
+        if (kind == AOTExprKind::LOCAL_VARREF && ref1) {
+            int local_slot = std::atoi(ref1);
+            if (local_slot >= 0 && local_slot < ctx->num_locals && ctx->locals[local_slot]) {
+                // Create a VarRefNode pointing to the local variable
+                VarRefNode* vrn = new VarRefNode(&loc_builtin, strdup(ctx->locals[local_slot]->getName()),
+                    ctx->locals[local_slot], false);
+                ctx->exprs[i] = toBitsNB(QoreValue(vrn));
+                continue;
+            } else {
+                printd(0, "AOT v2: invalid local slot %d for LOCAL_VARREF expr slot %d (num_locals=%d)\n",
+                    local_slot, i, ctx->num_locals);
+            }
         }
 
         uint64_t bits = resolveExprSlot(kind, ref1, ref2, pgm);
@@ -983,6 +1002,8 @@ extern "C" int qore_aot_run_v2(
                                 if (ctx) {
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);
+                                    // Set LVList so doTopLevelInstantiation() can instantiate the locals
+                                    pp->sb.setLVarsFromAOTContext(ctx);
                                     ++registered;
                                     toplevel_registered = true;
                                     printd(2, "AOT v2: registered _toplevel from slot map\n");
@@ -1073,6 +1094,8 @@ extern "C" int qore_aot_run_v2(
                                 toplevel_func->num_exprs, toplevel_func->num_stmts);
                             if (ctx) {
                                 pp->sb.registerPrecompiledAOTTopLevel(toplevel_func->fn_ptr, ctx);
+                                // Set LVList so doTopLevelInstantiation() can instantiate the locals
+                                pp->sb.setLVarsFromAOTContext(ctx);
                                 ++registered;
                                 ctx_ok = true;
                                 printd(2, "AOT v2: registered _toplevel via fallback IR\n");

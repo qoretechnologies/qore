@@ -846,6 +846,29 @@ const PO_BROKEN_NARROWED_TYPES = PO_BROKEN_NARROWED_TYPES;
 const PO_NO_ENUM = PO_NO_ENUM;
 ///@}
 
+//! Execution mode for @ref Qore::Program "Program" objects
+/** This enum determines how code is executed:
+    - @ref EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
+    - @ref EM_IR: Bytecode interpreter (default; good balance of startup time and speed)
+    - @ref EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
+    - @ref EM_TIERED: Adaptive compilation (starts with AST, promotes hot code to IR/JIT)
+
+    @see Program::setExecMode()
+    @see Program::getExecMode()
+
+    @since %Qore 2.3
+*/
+enum Qore::ExecMode : int {
+    //! AST execution mode - traditional tree-walking interpreter; most mature, no compilation overhead
+    EM_AST = QEM_AST,
+    //! IR execution mode - bytecode interpreter (default); good balance of startup time and speed
+    EM_IR = QEM_IR,
+    //! JIT execution mode - compile to native code via LLVM; fastest execution but has compilation overhead
+    EM_JIT = QEM_JIT,
+    //! Tiered execution mode - adaptive compilation; auto-promotes hot functions from AST to IR to JIT
+    EM_TIERED = QEM_TIERED,
+};
+
 /** @defgroup warning_constants Warning Constants
     These are the possible values that can be or'ed together to set the @ref Qore::Program "Program" warning mask
 */
@@ -1996,6 +2019,54 @@ if (sm) {
    }
    sm->ref();  // ref for the returned object
    return new QoreObject(QC_SANDBOXMANAGER, 0, sm);
+}
+
+//! Sets the execution mode for the Program object
+/** The execution mode determines how code is executed:
+    - @ref EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
+    - @ref EM_IR: Bytecode interpreter (default; good balance of startup time and speed)
+    - @ref EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
+    - @ref EM_TIERED: Adaptive compilation (starts with AST, promotes hot code to IR/JIT)
+
+    @param mode The execution mode to set
+
+    @par Example:
+    @code{.py}
+# Use JIT compilation for performance-critical code
+pgm.setExecMode(EM_JIT);
+    @endcode
+
+    @note The execution mode must be set before parsing code. Setting it after parsing
+    has no effect on already-parsed code.
+
+    @note JIT and IR modes require @ref PO_MODERN "%modern" parse options. If the program
+    does not have @ref PO_MODERN set, the mode will automatically fall back to AST.
+
+    @see Program::getExecMode()
+
+    @since %Qore 2.3
+ */
+nothing Program::setExecMode(enum<ExecMode> mode) {
+   p->setExecMode(static_cast<qore_exec_mode_t>(mode));
+}
+
+//! Returns the current execution mode for the Program object
+/** @return The current execution mode
+
+    @par Example:
+    @code{.py}
+ExecMode mode = pgm.getExecMode();
+if (mode == EM_JIT) {
+    printf("Using JIT compilation\n");
+}
+    @endcode
+
+    @see Program::setExecMode()
+
+    @since %Qore 2.3
+ */
+enum<ExecMode> Program::getExecMode() [flags=CONSTANT] {
+   return static_cast<int64>(p->getExecMode());
 }
 
 //! Sets a @ref conditional_parsing "parse define" for the current Program

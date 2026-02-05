@@ -594,3 +594,33 @@ All issues have been completed:
 - **Issue 3 (Native IR):** ✅ Implemented with iterator-based loops. See `design/native-ir-functional-operators-plan.md` for details.
 
 All tests pass. Valgrind shows no memory leaks.
+
+---
+
+## Performance Analysis (2026-02-05)
+
+### Benchmark Results (IR vs AST)
+
+| Test | IR vs AST | JIT vs AST | Notes |
+|------|-----------|------------|-------|
+| loop (1M iterations) | 0.87x | 0.89x | `AddAssignAny` creates AST nodes per iteration |
+| method_try (InvokeMethodDirect) | 0.92x | 0.92x | 8% overhead, acceptable for exception safety |
+| method_direct (CallMethodDirect) | 1.00x | 0.94x | Matches AST performance |
+| foldl (10K elements) | 1.01x | 0.96x | Slightly faster |
+| map (10K elements) | 1.08x | 1.02x | **8% faster in IR** |
+| fibonacci (fib(30)) | 1.02x | 1.02x | Slightly faster |
+| **Average** | **0.98x** | **0.96x** | ~2-4% overall overhead |
+
+### Key Findings
+
+1. **InvokeMethodDirect works correctly** with ~8% overhead vs AST - acceptable for maintaining exception handling semantics.
+
+2. **Functional operators (map, foldl) are fast** when using `range()` for list creation instead of loop-based `nums += i` pattern.
+
+3. **Known limitation: `AddAssignAny` overhead** - List append operations (`+=`) in loops create AST nodes per iteration. This affects benchmarks using loop-based list creation. Use `range()` or pre-allocated lists for performance-critical code.
+
+4. **AOT compilation has LLVM terminator bug** - Loops generate "Basic Block does not have terminator" errors. This is a separate issue unrelated to InvokeMethodDirect.
+
+### Benchmark Script
+
+See `benchmark_modes.q` in the repository root for the performance comparison script.

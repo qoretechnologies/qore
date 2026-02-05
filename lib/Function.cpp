@@ -2186,6 +2186,10 @@ static void collectStatementLocals(const AbstractStatement* stmt, std::vector<Lo
         collectAllStatementLocals(while_stmt->getCode(), locals);
     } else if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
         collectAllStatementLocals(try_stmt->getTryBlock(), locals);
+        // Collect the catch variable (it's a separate LocalVar, not part of catch_block's LVList)
+        if (LocalVar* catch_var = try_stmt->getCatchVar()) {
+            locals.push_back(catch_var);
+        }
         collectAllStatementLocals(try_stmt->getCatchBlock(), locals);
     } else if (auto* sw_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
         collectBlockLocals(sw_stmt->lvars, locals);
@@ -2203,7 +2207,9 @@ static void collectStatementLocals(const AbstractStatement* stmt, std::vector<Lo
 // Recursively collect all local variables from a StatementBlock and all nested blocks
 // that are fully lowered to IR.  This collects the block's own LVList plus all nested
 // block locals from if/for/while/try/switch statements.
-static void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals) {
+// Note: this function is non-static because it's also used by StatementBlock.cpp for
+// top-level code IR lowering.
+void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals) {
     if (!block) {
         return;
     }

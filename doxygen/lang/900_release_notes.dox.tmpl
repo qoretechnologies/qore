@@ -256,6 +256,29 @@ qore --compile-module MyModule.qm --strip-source
     - Debug information (line numbers, variable names) is preserved for diagnostics
     @endparblock
 
+    @par Programmatic Execution Mode Control
+    @parblock
+    The @ref Qore::ExecMode "ExecMode" enum and @ref Qore::Program "Program" class methods provide
+    type-safe programmatic control over execution modes:
+
+    - new @ref Qore::ExecMode "ExecMode" enum with values @ref Qore::ExecMode::EM_AST "EM_AST",
+      @ref Qore::ExecMode::EM_IR "EM_IR", @ref Qore::ExecMode::EM_JIT "EM_JIT", and
+      @ref Qore::ExecMode::EM_TIERED "EM_TIERED"
+    - new @ref Qore::Program::setExecMode() "Program::setExecMode(enum<ExecMode>)" method to set the
+      execution mode for a @ref Qore::Program "Program" object
+    - new @ref Qore::Program::getExecMode() "Program::getExecMode()" method to query the current
+      execution mode
+
+    Example:
+    @code{.py}
+    Program pgm(PO_MODERN);
+    pgm.setExecMode(ExecMode::EM_JIT);  # Use JIT for this program
+    pgm.parse("int sub compute() { return 42; }", "code");
+    @endcode
+
+    See @ref execution_modes for complete documentation of execution modes.
+    @endparblock
+
     - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>
       - new @ref modern "%modern" parse directive combines all recommended parse options into one:
         @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args",

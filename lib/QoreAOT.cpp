@@ -47,6 +47,7 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/VarRefNode.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/Variable.h"
 #include "qore/intern/qore_thread_intern.h"
@@ -155,7 +156,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
 }
 
 // Forward declarations for slot identity extraction (defined after buildAOTContext)
-static AOTExprSlotId classifyExpression(uint64_t bits);
+static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots);
 static void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slots,
         UserVariantBase* uvb, AOTSlotIdentities& out);
 
@@ -2007,7 +2008,7 @@ static std::string getSlotTypePath(const QoreTypeInfo* ti) {
 /** Checks the AST node type and extracts identity info for supported types.
     Returns AOTExprKind::GENERIC_EVAL for unsupported types (function needs source fallback).
 */
-static AOTExprSlotId classifyExpression(uint64_t bits) {
+static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) {
     AOTExprSlotId id;
     QoreValue v;
     memcpy(&v, &bits, sizeof(v));
@@ -2071,6 +2072,22 @@ static AOTExprSlotId classifyExpression(uint64_t bits) {
     if (dynamic_cast<const SelfVarrefNode*>(node)) {
         id.kind = AOTExprKind::SELF_VARREF;
         return id;
+    }
+
+    // VarRefNode: local variable reference (for lvalue operations)
+    if (auto* varref = dynamic_cast<const VarRefNode*>(node)) {
+        if (varref->getType() == VT_LOCAL || varref->getType() == VT_LOCAL_TS ||
+            varref->getType() == VT_CLOSURE) {
+            // Look up the local slot index
+            const void* lv_ptr = reinterpret_cast<const void*>(varref->ref.id);
+            auto it = slots.local_slots.find(lv_ptr);
+            if (it != slots.local_slots.end()) {
+                id.kind = AOTExprKind::LOCAL_VARREF;
+                id.ref1 = std::to_string(it->second); // Store slot index as string
+                return id;
+            }
+        }
+        // Global variables fall through to GENERIC_EVAL for now
     }
 
     // Unsupported expression type — function needs source fallback
@@ -2149,7 +2166,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     out.exprs.resize(slots.expr_slots.size());
     out.has_unsupported_exprs = false;
     for (auto& [bits, slot] : slots.expr_slots) {
-        out.exprs[slot] = classifyExpression(bits);
+        out.exprs[slot] = classifyExpression(bits, slots);
         if (out.exprs[slot].kind == AOTExprKind::GENERIC_EVAL) {
             out.has_unsupported_exprs = true;
         }

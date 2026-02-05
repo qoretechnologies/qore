@@ -365,7 +365,11 @@ llvm::Value* QoreIRToLLVM::unboxBool(llvm::Value* qv) {
 
 void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     function_locals.clear();
+    entry_locals.clear();
+    entry_locals_set.clear();
+    instantiated_non_entry_locals.clear();
     std::unordered_set<const void*> seen;
+    bool is_first_block = true;
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
             const QoreIRInstruction* inst = inst_ptr.get();
@@ -376,17 +380,25 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                 const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
                 if (linst->local && seen.insert(linst->local).second) {
                     function_locals.push_back(linst->local);
+                    // Track if this local is first accessed in the entry block
+                    if (is_first_block) {
+                        entry_locals.push_back(linst->local);
+                        entry_locals_set.insert(reinterpret_cast<const void*>(linst->local));
+                    }
                 }
             }
         }
+        is_first_block = false;
     }
 }
 
 void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
+    // Only instantiate entry-block locals at function entry.
+    // Non-entry-block locals are instantiated lazily on first store.
     if (aot_mode) {
         auto helper = module.getOrInsertFunction("qore_rt_instantiate_local_aot",
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
-        for (LocalVar* var : function_locals) {
+        for (LocalVar* var : entry_locals) {
             if (pre_instantiated_locals &&
                     pre_instantiated_locals->count(reinterpret_cast<const void*>(var))) {
                 continue;
@@ -399,7 +411,7 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
     } else {
         auto helper = module.getOrInsertFunction("qore_rt_instantiate_local",
                 llvm::FunctionType::get(void_type, {ptr_type}, false));
-        for (LocalVar* var : function_locals) {
+        for (LocalVar* var : entry_locals) {
             if (pre_instantiated_locals &&
                     pre_instantiated_locals->count(reinterpret_cast<const void*>(var))) {
                 continue;
@@ -450,10 +462,13 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
 }
 
 void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
+    // Only uninstantiate entry-block locals at function exit.
+    // Non-entry-block locals have their own UninstantiateLocal instructions
+    // in the IR that handle their lifecycle.
     if (aot_mode) {
         auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
-        for (auto it = function_locals.rbegin(); it != function_locals.rend(); ++it) {
+        for (auto it = entry_locals.rbegin(); it != entry_locals.rend(); ++it) {
             if (pre_instantiated_locals &&
                     pre_instantiated_locals->count(reinterpret_cast<const void*>(*it))) {
                 continue;
@@ -466,7 +481,7 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
     } else {
         auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
                 llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
-        for (auto it = function_locals.rbegin(); it != function_locals.rend(); ++it) {
+        for (auto it = entry_locals.rbegin(); it != entry_locals.rend(); ++it) {
             if (pre_instantiated_locals &&
                     pre_instantiated_locals->count(reinterpret_cast<const void*>(*it))) {
                 continue;
@@ -554,6 +569,16 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
         llvm::Function* llvm_func) {
     auto alloca_it = local_allocas.find(key);
     if (alloca_it == local_allocas.end()) {
+        return;
+    }
+
+    // Only reload locals that are guaranteed to be instantiated at all times:
+    // - Entry-block locals (instantiated at function entry)
+    // - Pre-instantiated locals (instantiated by caller)
+    // Skip non-entry-block locals as they may have been uninstantiated.
+    bool is_entry_local = entry_locals_set.count(key) > 0;
+    bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
+    if (!is_entry_local && !is_pre_instantiated) {
         return;
     }
 
@@ -705,6 +730,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         error = "failed to create LLVM function '" + func.name + "'";
         return false;
     }
+
+    // RAII cleanup: remove incomplete function from module on failure
+    struct FunctionCleanup {
+        llvm::Function* func;
+        bool committed = false;
+        ~FunctionCleanup() {
+            if (!committed && func) {
+                func->eraseFromParent();
+            }
+        }
+    } func_cleanup{llvm_func};
 
     // Name parameters
     if (aot_mode) {
@@ -883,6 +919,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         di_builder->finalize();
     }
 
+    // Check all blocks have terminators before LLVM verification
+    for (auto& bb : *llvm_func) {
+        if (!bb.getTerminator()) {
+            error = "missing terminator in LLVM block '" + bb.getName().str() + "'";
+            return false;
+        }
+    }
+
     // Verify the generated LLVM IR
     std::string verify_error;
     llvm::raw_string_ostream verify_os(verify_error);
@@ -897,6 +941,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     di_sp = nullptr;
     di_file_cache.clear();
 
+    // Commit the function - don't clean it up on return
+    func_cleanup.committed = true;
     return true;
 }
 
@@ -1424,6 +1470,39 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             auto key = reinterpret_cast<const void*>(linst->local);
+
+            // For non-entry-block locals that are not pre-instantiated:
+            // emit instantiation on first store (lazy instantiation).
+            //
+            // INVARIANT: The first StoreLocal encountered during IR lowering must be the
+            // first one to execute at runtime. This holds because:
+            // 1. Block-scoped variables in Qore are declared at a single point
+            // 2. IR generation emits InstantiateLocal/StoreLocal at the declaration site
+            // 3. The variable cannot be stored to before its declaration due to scoping rules
+            //
+            // If IR generation ever allows multiple entry points to a block-scoped variable
+            // (e.g., via computed gotos), this assumption would need to be revisited.
+            bool is_entry_local = entry_locals_set.count(key) > 0;
+            bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
+            if (!is_entry_local && !is_pre_instantiated &&
+                    instantiated_non_entry_locals.insert(key).second) {
+                // First store to this non-entry local - emit instantiation
+                if (aot_mode) {
+                    auto inst_helper = module.getOrInsertFunction("qore_rt_instantiate_local_aot",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    builder->CreateCall(inst_helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot)});
+                } else {
+                    auto inst_helper = module.getOrInsertFunction("qore_rt_instantiate_local",
+                            llvm::FunctionType::get(void_type, {ptr_type}, false));
+                    llvm::Value* var_ptr_inst = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr_inst = builder->CreateIntToPtr(var_ptr_inst, ptr_type);
+                    builder->CreateCall(inst_helper, {var_as_ptr_inst});
+                }
+            }
+
             auto it = local_allocas.find(key);
             if (it == local_allocas.end()) {
                 llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
@@ -1468,6 +1547,58 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
                     builder->CreateCall(assign_helper, {var_as_ptr, boxed, xsink_arg});
                 }
+            }
+            return true;
+        }
+        case QoreIROpcode::UninstantiateLocal: {
+            // Cleanup for block-scoped local variables at scope exit.
+            // This pairs with the lazy instantiation in StoreLocal - we only uninstantiate
+            // locals that were actually instantiated during this execution path.
+            // See the INVARIANT comment in StoreLocal for the assumption this relies on.
+            const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
+            if (!linst->local) {
+                // No local variable specified - this is a no-op
+                return true;
+            }
+            auto key = reinterpret_cast<const void*>(linst->local);
+
+            // Skip if this was pre-instantiated by the caller (will be cleaned up by caller)
+            if (pre_instantiated_locals && pre_instantiated_locals->count(key)) {
+                return true;
+            }
+
+            // Skip entry-block locals - they are uninstantiated by emitLocalUninstantiation
+            // at function return, not by explicit UninstantiateLocal instructions
+            if (entry_locals_set.count(key)) {
+                return true;
+            }
+
+            // Skip non-entry locals that were never instantiated (never had a first store).
+            // This check is critical: if StoreLocal was never executed for this local
+            // (e.g., control flow skipped the declaration), we must not uninstantiate it.
+            if (instantiated_non_entry_locals.count(key) == 0) {
+                return true;
+            }
+
+            // Call runtime helper to uninstantiate the local variable
+            if (aot_mode) {
+                auto it = aot_slots->local_slots.find(linst->local);
+                if (it == aot_slots->local_slots.end()) {
+                    error = "UninstantiateLocal: local variable not in AOT slot map";
+                    return false;
+                }
+                int32_t slot_idx = it->second;
+                auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
+                        llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot_idx), xsink_arg});
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
+                        llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+                llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(linst->local));
+                llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                builder->CreateCall(helper, {var_as_ptr, xsink_arg});
             }
             return true;
         }

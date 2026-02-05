@@ -46,7 +46,9 @@ class VarRefNode;
 class AbstractStatement;
 class StatementBlock;
 class QoreTypeInfo;
-class QoreTypeInfo;
+class QoreMapOperatorNode;
+class QoreSelectOperatorNode;
+class QoreFoldlOperatorNode;
 
 class QoreIRLowering {
 public:
@@ -138,6 +140,13 @@ private:
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerHashMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerHashMapSelect(const QoreValue& expr, std::string& error);
+
+    //! Native IR lowering for map operator with implicit argument context
+    QoreIRValue lowerMapNative(const QoreMapOperatorNode* map, const QoreValue& expr, std::string& error);
+    //! Native IR lowering for select operator with implicit argument context
+    QoreIRValue lowerSelectNative(const QoreSelectOperatorNode* select, const QoreValue& expr, std::string& error);
+    //! Native IR lowering for foldl operator with implicit argument context
+    QoreIRValue lowerFoldlNative(const QoreFoldlOperatorNode* foldl, const QoreValue& expr, std::string& error);
     QoreIRValue lowerCast(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFunctionCall(const QoreValue& expr, std::string& error);
     QoreIRValue lowerCallReference(const QoreValue& expr, std::string& error);

@@ -474,6 +474,7 @@ enum class AOTExprKind : uint8_t {
     NEW_OBJECT         = 4,   //!< New object constructor: ref1=class_name
     RUNTIME_CONST_REF  = 5,   //!< Runtime constant reference: ref1=const_name
     SELF_VARREF        = 6,   //!< Self variable reference (self keyword)
+    LOCAL_VARREF       = 7,   //!< Local variable reference: ref1=local_slot_index (as string)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
 };
 
