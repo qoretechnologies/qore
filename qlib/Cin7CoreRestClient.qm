@@ -342,7 +342,17 @@ public class Cin7CoreRestConnection inherits RestClient::RestConnection {
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
-    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(Cin7CoreRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref Cin7CoreRestConnection::constructor()
+    /** Constructs the connection URL (Cin7Core has only one API endpoint)
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        return config + {
+            "url": DefaultConnectionUrl,
+        };
     }
 
     #! returns \c "cin7core"
