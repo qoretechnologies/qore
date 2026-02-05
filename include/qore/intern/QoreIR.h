@@ -64,6 +64,8 @@ enum class QoreIROpcode : uint16_t {
     ConstDate,
     MakeList,
     MakeHash,
+    CreateEmptyList,    // Create empty list for functional operator results
+    ListAppend,         // Append value to list (for map/select loops)
 
     AddInt,
     AddFloat,
@@ -300,6 +302,7 @@ enum class QoreIROpcode : uint16_t {
 
     LoadLocal,
     StoreLocal,
+    UninstantiateLocal,  // Uninstantiate a local variable at block scope exit
     LoadArg,
     LoadClosure,
     StoreClosure,
@@ -312,11 +315,18 @@ enum class QoreIROpcode : uint16_t {
     LoadImplicitArg,    // Load $1, $2, etc. by offset (0 for $1, 1 for $2, etc.)
     LoadImplicitArgv,   // Load entire $argv list
     LoadImplicitElement,// Load $# (current element index in map/select)
+    // Context setup/teardown for functional operators (map, select, foldl, etc.)
+    PushImplicitArg,    // Push value as $1, result = old context for restoration
+    SetImplicitArgv,    // Set list directly as implicit args (for foldl $1/$2), result = old context
+    PopImplicitArg,     // Restore previous $1 context (operand = old context)
+    PushImplicitElement,// Push index as $#, result = old element for restoration
+    PopImplicitElement, // Restore previous $# context (operand = old element)
 
     Call,
     CallIndirect,
     CallMethod,
-    CallMethodDirect,  // Direct method call - no dispatch needed (final class/method)
+    CallMethodDirect,   // Direct method call - no dispatch needed (final class/method)
+    InvokeMethodDirect, // Direct method call with exception handling (final class in try/catch)
     CallStatic,
     Invoke,
 
@@ -790,6 +800,25 @@ public:
 
     const QoreMethod* method = nullptr;     //!< The resolved method pointer
     const QoreClass* qc = nullptr;          //!< The class containing the method
+    //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
+};
+
+//! Direct method call with exception handling - bypasses virtual dispatch for final classes
+//! in try/catch blocks. Combines the devirtualization of CallMethodDirect with the exception
+//! routing of Invoke, avoiding AST evaluation overhead.
+class QoreIRInvokeMethodDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRInvokeMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
+            QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
+            : QoreIRInstruction(QoreIROpcode::InvokeMethodDirect),
+              method(n_method), qc(n_qc),
+              normal_target(n_normal), exception_target(n_exception) {
+    }
+
+    const QoreMethod* method = nullptr;         //!< The resolved method pointer
+    const QoreClass* qc = nullptr;              //!< The class containing the method
+    QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
+    QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
 };
 

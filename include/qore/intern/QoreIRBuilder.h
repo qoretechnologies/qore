@@ -56,6 +56,9 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createMakeHash(const std::vector<QoreIRValue>& values,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createEmptyList(const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListAppend(QoreIRValue list, QoreIRValue value,
+        const QoreProgramLocation* loc = nullptr);
 
     QoreIRInstruction* createBinaryOp(QoreIROpcode op, QoreIRValue lhs, QoreIRValue rhs,
         const QoreProgramLocation* loc = nullptr);
@@ -67,6 +70,7 @@ public:
     QoreIRLocalInstruction* createLoadLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createStoreLocal(LocalVar* local, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRLocalInstruction* createUninstantiateLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createLoadClosure(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createStoreClosure(LocalVar* local, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
@@ -79,6 +83,12 @@ public:
     QoreIRInstruction* createLoadImplicitArg(int offset, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createLoadImplicitArgv(const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createLoadImplicitElement(const QoreProgramLocation* loc = nullptr);
+    // Context setup/teardown for functional operators
+    QoreIRInstruction* createPushImplicitArg(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createSetImplicitArgv(QoreIRValue argv_list, const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createPopImplicitArg(QoreIRValue old_context, const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createPushImplicitElement(QoreIRValue index, const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createPopImplicitElement(QoreIRValue old_element, const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createStoreLValue(const QoreValue& lvalue, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
@@ -92,6 +102,9 @@ public:
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
     QoreIRCallMethodDirectInstruction* createCallMethodDirect(const QoreMethod* method, const QoreClass* qc,
         const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc = nullptr);
+    QoreIRInvokeMethodDirectInstruction* createInvokeMethodDirect(const QoreMethod* method, const QoreClass* qc,
+        const std::vector<QoreIRValue>& args, QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRInvokeInstruction* createInvoke(const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);

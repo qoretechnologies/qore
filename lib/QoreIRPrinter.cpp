@@ -49,6 +49,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ConstDate: return "const.date";
         case QoreIROpcode::MakeList: return "make.list";
         case QoreIROpcode::MakeHash: return "make.hash";
+        case QoreIROpcode::CreateEmptyList: return "create.empty.list";
+        case QoreIROpcode::ListAppend: return "list.append";
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";
         case QoreIROpcode::AddAny: return "add.any";
@@ -273,6 +275,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ReturnNothing: return "return.nothing";
         case QoreIROpcode::LoadLocal: return "load.local";
         case QoreIROpcode::StoreLocal: return "store.local";
+        case QoreIROpcode::UninstantiateLocal: return "uninstantiate.local";
         case QoreIROpcode::LoadArg: return "load.arg";
         case QoreIROpcode::LoadClosure: return "load.closure";
         case QoreIROpcode::StoreClosure: return "store.closure";
@@ -283,10 +286,16 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::LoadImplicitArg: return "load.implicit.arg";
         case QoreIROpcode::LoadImplicitArgv: return "load.implicit.argv";
         case QoreIROpcode::LoadImplicitElement: return "load.implicit.element";
+        case QoreIROpcode::PushImplicitArg: return "push.implicit.arg";
+        case QoreIROpcode::SetImplicitArgv: return "set.implicit.argv";
+        case QoreIROpcode::PopImplicitArg: return "pop.implicit.arg";
+        case QoreIROpcode::PushImplicitElement: return "push.implicit.element";
+        case QoreIROpcode::PopImplicitElement: return "pop.implicit.element";
         case QoreIROpcode::Call: return "call";
         case QoreIROpcode::CallIndirect: return "call.indirect";
         case QoreIROpcode::CallMethod: return "call.method";
         case QoreIROpcode::CallMethodDirect: return "call.method.direct";
+        case QoreIROpcode::InvokeMethodDirect: return "invoke.method.direct";
         case QoreIROpcode::CallStatic: return "call.static";
         case QoreIROpcode::Invoke: return "invoke";
         case QoreIROpcode::GuardInt: return "guard.int";
@@ -382,6 +391,18 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* direct_inst = dynamic_cast<const QoreIRCallMethodDirectInstruction*>(inst.get());
                 if (direct_inst && direct_inst->method && direct_inst->qc) {
                     out << " @" << direct_inst->qc->getName() << "::" << direct_inst->method->getName();
+                }
+            } else if (inst->opcode == QoreIROpcode::InvokeMethodDirect) {
+                // Print the devirtualized method name and targets
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst.get());
+                if (invoke_inst && invoke_inst->method && invoke_inst->qc) {
+                    out << " @" << invoke_inst->qc->getName() << "::" << invoke_inst->method->getName();
+                    if (invoke_inst->normal_target) {
+                        out << " normal:" << invoke_inst->normal_target->name;
+                    }
+                    if (invoke_inst->exception_target) {
+                        out << " exception:" << invoke_inst->exception_target->name;
+                    }
                 }
             } else if (inst->opcode == QoreIROpcode::Call
                     || inst->opcode == QoreIROpcode::CallIndirect

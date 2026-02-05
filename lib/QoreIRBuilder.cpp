@@ -147,6 +147,22 @@ QoreIRInstruction* QoreIRBuilder::createMakeHash(const std::vector<QoreIRValue>&
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createEmptyList(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CreateEmptyList);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListAppend(QoreIRValue list, QoreIRValue value,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListAppend);
+    inst->loc = loc;
+    inst->operands.push_back(list);
+    inst->operands.push_back(value);
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createBinaryOp(QoreIROpcode op, QoreIRValue lhs, QoreIRValue rhs,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(op);
@@ -201,6 +217,12 @@ QoreIRLocalInstruction* QoreIRBuilder::createStoreLocal(LocalVar* local, QoreIRV
     auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::StoreLocal, local);
     inst->loc = loc;
     inst->operands.push_back(value);
+    return inst;
+}
+
+QoreIRLocalInstruction* QoreIRBuilder::createUninstantiateLocal(LocalVar* local, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::UninstantiateLocal, local);
+    inst->loc = loc;
     return inst;
 }
 
@@ -270,6 +292,46 @@ QoreIRInstruction* QoreIRBuilder::createLoadImplicitElement(const QoreProgramLoc
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createPushImplicitArg(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
+    inst->loc = loc;
+    inst->operands.push_back(value);
+    inst->result = func->createValue();  // Result is old context for later restoration
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createSetImplicitArgv(QoreIRValue argv_list, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::SetImplicitArgv);
+    inst->loc = loc;
+    inst->operands.push_back(argv_list);
+    inst->result = func->createValue();  // Result is old context for later restoration
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createPopImplicitArg(QoreIRValue old_context, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PopImplicitArg);
+    inst->loc = loc;
+    inst->operands.push_back(old_context);
+    // No result - this is just a context restoration
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createPushImplicitElement(QoreIRValue index, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
+    inst->loc = loc;
+    inst->operands.push_back(index);
+    inst->result = func->createValue();  // Result is old element for later restoration
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createPopImplicitElement(QoreIRValue old_element, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PopImplicitElement);
+    inst->loc = loc;
+    inst->operands.push_back(old_element);
+    // No result - this is just a context restoration
+    return inst;
+}
+
 QoreIRLValueInstruction* QoreIRBuilder::createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRLValueInstruction>(QoreIROpcode::LoadLValue, lvalue);
     inst->loc = loc;
@@ -325,6 +387,17 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
 QoreIRCallMethodDirectInstruction* QoreIRBuilder::createCallMethodDirect(const QoreMethod* method,
         const QoreClass* qc, const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRCallMethodDirectInstruction>(method, qc);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = args;
+    return inst;
+}
+
+QoreIRInvokeMethodDirectInstruction* QoreIRBuilder::createInvokeMethodDirect(const QoreMethod* method,
+        const QoreClass* qc, const std::vector<QoreIRValue>& args, QoreIRBasicBlock* normal_target,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInvokeMethodDirectInstruction>(
+            method, qc, normal_target, exception_target);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
@@ -492,6 +565,7 @@ QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreate(QoreIRValue
         FunctionalOperator* iterator_func, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRIteratorCreateInstruction>(iterable, iterator_func);
     inst->loc = loc;
+    inst->result = func->createValue();
     return inst;
 }
 
@@ -499,6 +573,7 @@ QoreIRIteratorNextInstruction* QoreIRBuilder::createIteratorNext(QoreIRValue ite
         QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRIteratorNextInstruction>(iterator, done_target, continue_target);
     inst->loc = loc;
+    inst->result = func->createValue();
     return inst;
 }
 

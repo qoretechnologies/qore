@@ -4846,19 +4846,16 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
         QoreIRValue result;
         bool should_invoke = !exception_stack.empty();  // method calls can always throw
         if (should_invoke) {
-            // For invoke path within try/catch, we use the expr-based path.
-            // This works correctly - the invoke_opcode hint allows the interpreter/JIT
-            // to use the devirtualized call while still having AST context for exceptions.
-            // FUTURE OPTIMIZATION: Add dedicated InvokeMethodDirect opcode that carries
-            // the method pointer directly, avoiding AST evaluation overhead.
+            // Use InvokeMethodDirect for devirtualized calls in try/catch.
+            // This avoids AST evaluation overhead while maintaining proper exception routing.
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
                 error = "IR builder failed to create invoke continuation block";
                 return QoreIRValue();
             }
             QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvoke(expr, operands, normal_block, handler, call->loc);
-            inst->invoke_opcode = QoreIROpcode::CallMethodDirect;
+            auto* inst = builder.createInvokeMethodDirect(method, qc, operands,
+                    normal_block, handler, call->loc);
             builder.setBlock(normal_block);
             result = inst->result;
         } else {

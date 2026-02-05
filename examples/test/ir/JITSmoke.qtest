@@ -101,6 +101,11 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("string switch optimization", \testStringSwitchOptimization());
         addTestCase("final class devirtualization", \testFinalClassDevirtualization());
         addTestCase("string builder optimization", \testStringBuilderOptimization());
+        addTestCase("native map with method call", \testNativeMapWithMethodCall());
+        addTestCase("native select with comparison", \testNativeSelectWithComparison());
+        addTestCase("native foldl with function call", \testNativeFoldlWithFunctionCall());
+        addTestCase("on_block_exit handlers", \testOnBlockExitHandlers());
+        addTestCase("invoke method direct", \testInvokeMethodDirect());
         set_return_value(main());
     }
 
@@ -2237,6 +2242,362 @@ printf(\"%s\\n\", result);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(try_chain, mode));
             assertEq("try block test", result, sprintf("chain in try block %s", mode));
+        }
+    }
+
+    testNativeMapWithMethodCall() {
+        # Test native IR lowering for map with method calls (non-optimized patterns)
+        # These patterns use the new native loop with implicit argument context
+
+        # Test map with toString() method call
+        string map_tostring = "%modern
+list<int> input = (1, 2, 3);
+list<string> result = (map $1.toString(), input);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_tostring, mode));
+            assertEq("[\"1\", \"2\", \"3\"]", result, sprintf("map toString %s", mode));
+        }
+
+        # Test map with $# (element index)
+        string map_with_index = "%modern
+list<int> input = (10, 20, 30);
+list<int> result = (map $1 + $#, input);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_with_index, mode));
+            assertEq("[10, 21, 32]", result, sprintf("map with index %s", mode));
+        }
+
+        # Test map with function call
+        string map_strlen = "%modern
+list<string> input = (\"a\", \"bb\", \"ccc\");
+list<int> result = (map $1.length(), input);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_strlen, mode));
+            assertEq("[1, 2, 3]", result, sprintf("map length %s", mode));
+        }
+    }
+
+    testNativeSelectWithComparison() {
+        # Test native IR lowering for select with non-optimized predicates
+
+        # Test select with > 5 comparison (not the optimized > 0 pattern)
+        string select_gt5 = "%modern
+list<int> input = (1, 5, 2, 8, 3, 10);
+list<int> result = (select input, $1 > 5);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(select_gt5, mode));
+            assertEq("[8, 10]", result, sprintf("select > 5 %s", mode));
+        }
+
+        # Test select with method call predicate
+        string select_method = "%modern
+list<string> input = (\"a\", \"bb\", \"ccc\", \"d\");
+list<string> result = (select input, $1.length() > 1);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(select_method, mode));
+            assertEq("[\"bb\", \"ccc\"]", result, sprintf("select method %s", mode));
+        }
+
+        # Test select with $# (element index) - select even indices
+        string select_even_idx = "%modern
+list<string> input = (\"a\", \"b\", \"c\", \"d\", \"e\");
+list<string> result = (select input, $# % 2 == 0);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(select_even_idx, mode));
+            assertEq("[\"a\", \"c\", \"e\"]", result, sprintf("select even idx %s", mode));
+        }
+    }
+
+    testNativeFoldlWithFunctionCall() {
+        # Test native IR lowering for foldl with non-optimized operations
+
+        # Test foldl with string concatenation
+        string foldl_concat = "%modern
+list<string> input = (\"a\", \"b\", \"c\");
+string result = foldl $1 + $2, input;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_concat, mode));
+            assertEq("abc", result, sprintf("foldl concat %s", mode));
+        }
+
+        # Test foldl with complex expression
+        string foldl_complex = "%modern
+list<int> input = (1, 2, 3, 4);
+int result = foldl $1 + $2 * $2, input;
+printf(\"%d\\n\", result);
+";
+        # Result: ((1 + 2*2) + 3*3) + 4*4 = (5 + 9) + 16 = 30
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_complex, mode));
+            assertEq("30", result, sprintf("foldl complex %s", mode));
+        }
+
+        # Test foldl with single element (should return element)
+        string foldl_single = "%modern
+list<int> input = (42,);
+int result = foldl $1 + $2, input;
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_single, mode));
+            assertEq("42", result, sprintf("foldl single %s", mode));
+        }
+    }
+
+    testOnBlockExitHandlers() {
+        # Test on_exit (unconditional - runs on both normal and exception exit)
+        string on_exit_test = "%modern
+list<string> log = ();
+sub test() {
+    on_exit log += \"exit\";
+    log += \"body\";
+}
+test();
+printf(\"%y\\n\", log);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_exit_test, mode));
+            assertEq("[\"body\", \"exit\"]", result, sprintf("on_exit %s", mode));
+        }
+
+        # Test on_success (runs only on normal exit, not on exception)
+        string on_success_test = "%modern
+list<string> log = ();
+sub test() {
+    on_success log += \"success\";
+    on_error log += \"error\";
+    log += \"body\";
+}
+test();
+printf(\"%y\\n\", log);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_success_test, mode));
+            assertEq("[\"body\", \"success\"]", result, sprintf("on_success %s", mode));
+        }
+
+        # Test on_error (runs only when exception occurs)
+        string on_error_test = "%modern
+list<string> log = ();
+sub test() {
+    on_success log += \"success\";
+    on_error log += \"error\";
+    log += \"body\";
+    throw \"TEST\", \"test exception\";
+}
+try {
+    test();
+} catch (hash<ExceptionInfo> ex) {
+    log += \"caught\";
+}
+printf(\"%y\\n\", log);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_error_test, mode));
+            assertEq("[\"body\", \"error\", \"caught\"]", result, sprintf("on_error %s", mode));
+        }
+
+        # Test nested scopes with on_error
+        string nested_error_test = "%modern
+list<string> log = ();
+sub inner() {
+    on_error log += \"inner_error\";
+    throw \"TEST\", \"inner exception\";
+}
+sub outer() {
+    on_error log += \"outer_error\";
+    inner();
+}
+try {
+    outer();
+} catch (hash<ExceptionInfo> ex) {
+    log += \"caught\";
+}
+printf(\"%y\\n\", log);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(nested_error_test, mode));
+            assertEq("[\"inner_error\", \"outer_error\", \"caught\"]", result, sprintf("nested on_error %s", mode));
+        }
+    }
+
+    testInvokeMethodDirect() {
+        # Test InvokeMethodDirect opcode - devirtualized method calls in try/catch blocks
+        # This tests the optimization path where final class method calls in try/catch
+        # use the direct InvokeMethodDirect opcode instead of falling back to AST evaluation
+
+        # Test 1: Multiple successive self method calls in try/catch (success path)
+        string success_test = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class MethodCounter {
+    public {
+        int count = 0;
+    }
+
+    int increment() {
+        return ++count;
+    }
+
+    int run() {
+        int result;
+        try {
+            result = self.increment();
+            result += self.increment();
+            result += self.increment();
+        } catch (hash<auto> ex) {
+            result = -1;
+        }
+        return result;
+    }
+}
+
+MethodCounter c();
+printf(\"%d,%d\\n\", c.run(), c.count);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string out = trim(runScript(success_test, mode));
+            # increment returns 1, 2, 3; sum = 6; count = 3
+            assertEq("6,3", out, sprintf("invoke.method.direct success path %s", mode));
+        }
+
+        # Test 2: Exception in self method call routes to catch block correctly
+        string exception_test = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class Thrower {
+    nothing doThrow() {
+        throw \"TEST\", \"test error\";
+    }
+
+    string run() {
+        string result;
+        try {
+            self.doThrow();
+            result = \"no-catch\";
+        } catch (hash<auto> ex) {
+            result = \"caught:\" + ex.err;
+        }
+        return result;
+    }
+}
+
+Thrower t();
+printf(\"%s\\n\", t.run());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string out = trim(runScript(exception_test, mode));
+            assertEq("caught:TEST", out, sprintf("invoke.method.direct exception path %s", mode));
+        }
+
+        # Test 3: Mix of successful calls and exception - verify state consistency
+        string mixed_test = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class MixedOps {
+    public {
+        int count = 0;
+    }
+
+    int inc() {
+        return ++count;
+    }
+
+    nothing maybeThrow(int limit) {
+        if (count >= limit) {
+            throw \"LIMIT\", \"limit reached\";
+        }
+    }
+
+    int run() {
+        int result = 0;
+        try {
+            result += self.inc();      # count=1, result=1
+            self.maybeThrow(5);        # no throw
+            result += self.inc();      # count=2, result=3
+            self.maybeThrow(5);        # no throw
+            result += self.inc();      # count=3, result=6
+            self.maybeThrow(3);        # throws!
+            result += self.inc();      # not reached
+        } catch (hash<auto> ex) {
+            result = -result;          # negate to indicate exception path
+        }
+        return result;
+    }
+}
+
+MixedOps m();
+printf(\"%d,%d\\n\", m.run(), m.count);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string out = trim(runScript(mixed_test, mode));
+            # result was 6 before throw, negated to -6; count stays at 3
+            assertEq("-6,3", out, sprintf("invoke.method.direct mixed path %s", mode));
+        }
+
+        # Test 4: Nested try/catch with devirtualized self method calls
+        string nested_test = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class NestedOps {
+    int level1(int x) {
+        if (x <= 0) {
+            throw \"NEGATIVE\", \"x is non-positive\";
+        }
+        return x * 2;
+    }
+
+    int level2(int x) {
+        int result;
+        try {
+            result = self.level1(x);
+        } catch (hash<auto> ex) {
+            result = -1;
+        }
+        return result;
+    }
+
+    list<int> run() {
+        list<int> results = ();
+        try {
+            results += self.level2(5);   # returns 10
+            results += self.level2(0);   # inner catch, returns -1
+            results += self.level2(3);   # returns 6
+        } catch (hash<auto> ex) {
+            results += -100;  # not reached
+        }
+        return results;
+    }
+}
+
+NestedOps n();
+printf(\"%y\\n\", n.run());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string out = trim(runScript(nested_test, mode));
+            assertEq("[10, -1, 6]", out, sprintf("invoke.method.direct nested try/catch %s", mode));
         }
     }
 }

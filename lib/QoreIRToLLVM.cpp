@@ -2325,6 +2325,71 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
+        // === InvokeMethodDirect (devirtualized method call with exception routing) ===
+        case QoreIROpcode::InvokeMethodDirect: {
+            const auto* invoke_inst = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
+
+            // Build args array from operands
+            int nargs = static_cast<int>(inst->operands.size());
+
+            llvm::Value* args_array;
+            if (nargs > 0) {
+                args_array = builder->CreateAlloca(i64_type,
+                        llvm::ConstantInt::get(i32_type, nargs));
+                for (int i = 0; i < nargs; ++i) {
+                    auto* arg_val = getVal(inst->operands[i].id, error);
+                    if (!arg_val) { return false; }
+                    llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[i].id);
+                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
+                            llvm::ConstantInt::get(i32_type, i));
+                    builder->CreateStore(arg_boxed, gep);
+                }
+            } else {
+                // For zero args, pass a null pointer using i64 constant cast to pointer
+                args_array = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type, 0), ptr_type);
+            }
+
+            // Pass method pointer directly to runtime helper as a pointer constant
+            llvm::Value* method_ptr = builder->CreateIntToPtr(
+                    llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(invoke_inst->method)),
+                    ptr_type);
+
+            auto helper = module.getOrInsertFunction("qore_rt_call_method_direct",
+                    llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type, i32_type, ptr_type}, false));
+            llvm::Value* call_result = builder->CreateCall(helper, {method_ptr, args_array,
+                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+
+            // Calls can modify local variables through side effects
+            reloadAllLocalsFromRuntime(module, llvm_func);
+
+            values[inst->result.id] = call_result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(call_result, inst->result.id, llvm_func);
+
+            // Check for exception and branch accordingly (like Invoke)
+            auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
+                    llvm::FunctionType::get(i64_type, {ptr_type}, false));
+            llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
+            llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
+                    llvm::ConstantInt::get(i64_type, 0));
+
+            // Find normal and exception target blocks
+            auto normal_it = block_map.find(invoke_inst->normal_target);
+            auto except_it = block_map.find(invoke_inst->exception_target);
+            if (normal_it == block_map.end()) {
+                error = "invoke.method.direct normal target block not found";
+                return false;
+            }
+            if (except_it == block_map.end()) {
+                error = "invoke.method.direct exception target block not found";
+                return false;
+            }
+            builder->CreateCondBr(has_exception, except_it->second, normal_it->second);
+            return true;
+        }
+
         // === IsNullOrNothing ===
         case QoreIROpcode::IsNullOrNothing: {
             auto* val = getVal(inst->operands[0].id, error);
@@ -2751,6 +2816,79 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = builder->CreateCall(helper, {xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            return true;
+        }
+        case QoreIROpcode::PushImplicitArg: {
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_push_implicit_arg",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {val_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);  // Old context is a nanboxed QoreListNode*
+            return true;
+        }
+        case QoreIROpcode::SetImplicitArgv: {
+            auto* argv_val = getVal(inst->operands[0].id, error);
+            if (!argv_val) { return false; }
+            llvm::Value* argv_boxed = boxValue(argv_val, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_set_implicit_argv",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {argv_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);  // Old context is a nanboxed QoreListNode*
+            return true;
+        }
+        case QoreIROpcode::PopImplicitArg: {
+            auto* old_ctx = getVal(inst->operands[0].id, error);
+            if (!old_ctx) { return false; }
+            llvm::Value* old_ctx_boxed = boxValue(old_ctx, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_pop_implicit_arg",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {old_ctx_boxed, xsink_arg});
+            return true;
+        }
+        case QoreIROpcode::PushImplicitElement: {
+            auto* idx = getVal(inst->operands[0].id, error);
+            if (!idx) { return false; }
+            // Unbox to get raw int64
+            llvm::Value* idx_unboxed = unboxInt(idx);
+            auto helper = module.getOrInsertFunction("qore_rt_push_implicit_element",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {idx_unboxed});
+            values[inst->result.id] = result;
+            // Result is raw int64 (old element index), not nanboxed
+            return true;
+        }
+        case QoreIROpcode::PopImplicitElement: {
+            auto* old_elem = getVal(inst->operands[0].id, error);
+            if (!old_elem) { return false; }
+            // Old element is raw int64
+            auto helper = module.getOrInsertFunction("qore_rt_pop_implicit_element",
+                    llvm::FunctionType::get(void_type, {i64_type}, false));
+            builder->CreateCall(helper, {old_elem});
+            return true;
+        }
+        case QoreIROpcode::CreateEmptyList: {
+            auto helper = module.getOrInsertFunction("qore_rt_create_empty_list",
+                    llvm::FunctionType::get(i64_type, {ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::ListAppend: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* value = getVal(inst->operands[1].id, error);
+            if (!value) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* value_boxed = boxValue(value, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_append",
+                    llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {list_boxed, value_boxed, xsink_arg});
             return true;
         }
         case QoreIROpcode::StoreGlobal:
@@ -4729,8 +4867,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto it = scope_obe_counts.find(sinst->scope_id);
             if (it != scope_obe_counts.end()) {
                 llvm::Value* saved_count = it->second;
-                // TODO: Handle is_error flag - for now we pass false (normal exit)
-                // The runtime helper executes handlers from current count back to saved_count
+                // The runtime helper determines error state by checking xsink->isException()
+                // at the time of the call, which correctly handles on_error/on_success semantics
                 auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
                         llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
                 builder->CreateCall(helper, {saved_count, xsink_arg});

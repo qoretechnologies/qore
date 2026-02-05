@@ -38,6 +38,7 @@
 static bool isTerminator(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::Invoke:
+        case QoreIROpcode::InvokeMethodDirect:
         case QoreIROpcode::Br:
         case QoreIROpcode::BrIf:
         case QoreIROpcode::SwitchInt:
@@ -203,6 +204,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RangeSliceFloat:
         case QoreIROpcode::MakeList:
         case QoreIROpcode::MakeHash:
+        case QoreIROpcode::CreateEmptyList:
         case QoreIROpcode::CastAny:
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
@@ -260,6 +262,9 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::LoadImplicitArg:
         case QoreIROpcode::LoadImplicitArgv:
         case QoreIROpcode::LoadImplicitElement:
+        case QoreIROpcode::PushImplicitArg:     // Returns old context
+        case QoreIROpcode::SetImplicitArgv:     // Returns old context (for foldl)
+        case QoreIROpcode::PushImplicitElement: // Returns old element
         case QoreIROpcode::LoadLValue:
         case QoreIROpcode::PreIncLValue:
         case QoreIROpcode::PreDecLValue:
@@ -284,6 +289,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
         case QoreIROpcode::CallStatic:
         case QoreIROpcode::Invoke:
         case QoreIROpcode::CatchException:
@@ -542,6 +548,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
         case QoreIROpcode::CallStatic:
         case QoreIROpcode::Invoke:
             return -1;
@@ -578,7 +585,8 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
         for (const auto& inst : block->instructions) {
             if (requiresResult(inst->opcode)) {
                 if (!inst->result.isValid()) {
-                    error = "instruction missing result value";
+                    error = "instruction missing result value: opcode=" + std::to_string(static_cast<int>(inst->opcode))
+                        + " in block '" + block->name + "'";
                     return false;
                 }
                 if (!value_ids.insert(inst->result.id).second) {
@@ -600,6 +608,16 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || !invoke_inst->exception_target
                     || block_set.find(invoke_inst->exception_target) == block_set.end()) {
                     error = "invoke missing valid targets";
+                    return false;
+                }
+            }
+            if (inst->opcode == QoreIROpcode::InvokeMethodDirect) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst.get());
+                if (!invoke_inst || !invoke_inst->normal_target
+                    || block_set.find(invoke_inst->normal_target) == block_set.end()
+                    || !invoke_inst->exception_target
+                    || block_set.find(invoke_inst->exception_target) == block_set.end()) {
+                    error = "invoke.method.direct missing valid targets";
                     return false;
                 }
             }

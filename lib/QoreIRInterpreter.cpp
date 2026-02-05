@@ -2825,6 +2825,67 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ++ip;
                 break;
             }
+            case QoreIROpcode::InvokeMethodDirect: {
+                // Direct method call with exception routing for devirtualized final class methods
+                auto* invoke_inst = static_cast<QoreIRInvokeMethodDirectInstruction*>(inst);
+                const QoreMethod* method = invoke_inst->method;
+
+                // Get self object from runtime stack
+                QoreObject* self = runtime_get_stack_object();
+                if (!self) {
+                    if (xsink) {
+                        xsink->raiseException("IR-INTERPRETER-ERROR",
+                            "no self object in invoke method direct");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+
+                // Build argument list from operands
+                ReferenceHolder<QoreListNode> arg_list(
+                    invoke_inst->operands.empty() ? nullptr
+                        : new QoreListNode(autoTypeInfo), xsink);
+                for (const auto& operand : invoke_inst->operands) {
+                    QoreValue arg_val = getIRValue(values, operand);
+                    if (arg_val.hasNode()) {
+                        arg_val.refSelf();
+                    }
+                    arg_list->push(arg_val, xsink);
+                }
+
+                // Get runtime config and call the method directly
+                RuntimeConfig& rc = rc_get_current_ref();
+                QoreValue res = qore_method_private::eval(*method, xsink, rc, self, *arg_list);
+
+                // Invalidate all variable caches after method call - the call may have modified
+                // globals, thread-locals, or closure variables
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+
+                if (xsink && *xsink) {
+                    // On exception, branch to exception target
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    prev_block = block;
+                    block = invoke_inst->exception_target;
+                    ip = 0;
+                    break;
+                }
+                setValueSlot(values, invoke_inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(invoke_inst->result.id);
+                }
+                // On success, branch to normal target
+                prev_block = block;
+                block = invoke_inst->normal_target;
+                ip = 0;
+                break;
+            }
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexNMatchBool: {
             // Handle regex match/nmatch using the IR operand (the actual runtime value)
