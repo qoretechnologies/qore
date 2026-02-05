@@ -544,6 +544,34 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(url, client.getUrl());
         assertEq("user", client.getUsername());
         assertEq("pass", client.getPassword());
+
+        # Test polling API support
+        {
+            url = "ws://localhost:" + linfo.port;
+            conn = new WebSocketConnectionObject("test", "test", url);
+            assertTrue(conn.supportsPollingApi(), "WebSocketConnectionObject should support polling API");
+
+            # Test async ping with polling API
+            AbstractPollOperation poll_op = conn.startPollConnect(logger);
+            assertEq("ws-ping", poll_op.getGoal(), "WebSocket poll operation goal should be 'ws-ping'");
+
+            # Drive the poll operation to completion
+            date start = now_us();
+            date timeout = 10s;
+            while (!poll_op.goalReached()) {
+                if (now_us() - start > timeout) {
+                    throw "TIMEOUT", "WebSocket poll operation timed out";
+                }
+                *hash<SocketPollInfo> info = poll_op.continuePoll();
+                if (info) {
+                    # Wait for socket readiness using Socket::poll() with list argument
+                    Socket::poll((info,), 1s);
+                }
+            }
+            assertTrue(poll_op.goalReached(), "WebSocket poll operation should reach goal");
+            hash<auto> output = poll_op.getOutput();
+            assertEq(101, output.code, "WebSocket handshake should return 101 Switching Protocols");
+        }
     }
 
     #! HTTP/2 WebSocket tests (RFC 8441)

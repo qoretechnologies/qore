@@ -31,6 +31,8 @@
 #include "qore_logger.h"
 
 #include "QC_LoggerInterface.h"
+#include "QC_LoggerLevel.h"
+#include "QC_LoggerEvent.h"
 
 static QoreHashNode* LoggerInterface_serializer(const QoreObject& self, const QoreLoggerInterface& level,
         QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {

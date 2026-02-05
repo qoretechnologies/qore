@@ -32,8 +32,7 @@
 
 #define _QORE_MODULE_LOGGER_LOGGEREVENT_H
 
-// forward references
-class QoreLoggerLevel;
+#include "QoreLoggerLevel.h"
 
 class QoreLoggerEvent : public AbstractPrivateData {
 public:

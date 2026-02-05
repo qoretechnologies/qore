@@ -1499,17 +1499,14 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
                 assert(false);
             }
 
-            // Generate type_vec_t initialization
-            std::string type_vec = "type_vec_t{";
+            // Generate type_vec_t initialization - build element by element for GCC 15
+            std::string type_vec = "[&]() { type_vec_t v; ";
             for (size_t j = 0; j < subtypes.size(); ++j) {
                 std::string subtype_qt;
                 get_qore_type(subtypes[j], subtype_qt);
-                if (j > 0) {
-                    type_vec += ", ";
-                }
-                type_vec += subtype_qt;
+                type_vec += "v.push_back(" + subtype_qt + "); ";
             }
-            type_vec += "}";
+            type_vec += "return v; }()";
 
             if (on) {
                 qc = "qore_get_union_or_nothing_type(" + type_vec + ")";
@@ -1566,21 +1563,18 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
                 get_qore_type(ret_type, ret_type_qt);
             }
 
-            // Parse param types
-            std::string params_vec = "type_vec_t{";
+            // Parse param types - build element by element for GCC 15
+            std::string params_vec = "[&]() { type_vec_t v; ";
             if (!params_str.empty()) {
                 std::vector<std::string> param_types;
                 parseSubtypes(params_str, param_types);
                 for (size_t j = 0; j < param_types.size(); ++j) {
                     std::string param_qt;
                     get_qore_type(param_types[j], param_qt);
-                    if (j > 0) {
-                        params_vec += ", ";
-                    }
-                    params_vec += param_qt;
+                    params_vec += "v.push_back(" + param_qt + "); ";
                 }
             }
-            params_vec += "}";
+            params_vec += "return v; }()";
 
             if (on) {
                 qc = "qore_get_complex_code_or_nothing_type(" + ret_type_qt + ", " + params_vec +
@@ -2755,47 +2749,42 @@ protected:
     }
 
     // Generate vector-based arguments for abstract methods to avoid varargs ABI issues
+    // Build vectors element by element to avoid GCC 15 initializer_list issues
     int serializeBindingArgsVectors(FILE* fp) const {
         size_t size = params.size();
         if (size && params[size - 1].type == "...")
             --size;
 
-        // Generate type_vec_t
-        fputs(", type_vec_t{", fp);
+        // Generate type_vec_t - build element by element
+        fputs(", [&]() { type_vec_t v; ", fp);
         for (unsigned i = 0; i < size; ++i) {
-            if (i > 0)
-                fputs(", ", fp);
             std::string str;
             if (get_qore_type(params[i].type, str))
                 return -1;
-            fputs(str.c_str(), fp);
+            fprintf(fp, "v.push_back(%s); ", str.c_str());
         }
-        fputs("}", fp);
+        fputs("return v; }()", fp);
 
-        // Generate arg_vec_t
-        fputs(", arg_vec_t{", fp);
+        // Generate arg_vec_t - build element by element
+        fputs(", [&]() { arg_vec_t v; ", fp);
         for (unsigned i = 0; i < size; ++i) {
-            if (i > 0)
-                fputs(", ", fp);
             if (params[i].val.empty())
-                fputs("QoreValue()", fp);
+                fputs("v.push_back(QoreValue()); ", fp);
             else {
                 std::string vs;
                 if (get_qore_value(params[i].val, vs, nullptr, nullptr, true))
                     return -1;
-                fputs(vs.c_str(), fp);
+                fprintf(fp, "v.push_back(%s); ", vs.c_str());
             }
         }
-        fputs("}", fp);
+        fputs("return v; }()", fp);
 
-        // Generate name_vec_t
-        fputs(", name_vec_t{", fp);
+        // Generate name_vec_t - build element by element
+        fputs(", [&]() { name_vec_t v; ", fp);
         for (unsigned i = 0; i < size; ++i) {
-            if (i > 0)
-                fputs(", ", fp);
-            fprintf(fp, "\"%s\"", params[i].name.c_str());
+            fprintf(fp, "v.push_back(\"%s\"); ", params[i].name.c_str());
         }
-        fputs("}", fp);
+        fputs("return v; }()", fp);
 
         return 0;
     }

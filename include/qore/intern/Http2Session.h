@@ -38,12 +38,13 @@
 
 #include <qore/Qore.h>
 
-#include <string>
-#include <vector>
+#include <functional>
 #include <map>
-#include <queue>
 #include <memory>
 #include <mutex>
+#include <queue>
+#include <string>
+#include <vector>
 
 // Forward declarations
 struct qore_socket_private;
@@ -141,7 +142,7 @@ public:
         @param scheme URL scheme - "https" for h2 (default), "http" for h2c
         @return New Http2Session or nullptr on error
     */
-    DLLLOCAL static Http2Session* createClient(qore_socket_private* sock, ExceptionSink* xsink,
+    DLLLOCAL static std::shared_ptr<Http2Session> createClient(qore_socket_private* sock, ExceptionSink* xsink,
         const char* scheme = "https");
 
     //! Create a server-side HTTP/2 session
@@ -150,7 +151,7 @@ public:
         @param scheme URL scheme - "https" for h2 (default), "http" for h2c
         @return New Http2Session or nullptr on error
     */
-    DLLLOCAL static Http2Session* createServer(qore_socket_private* sock, ExceptionSink* xsink,
+    DLLLOCAL static std::shared_ptr<Http2Session> createServer(qore_socket_private* sock, ExceptionSink* xsink,
         const char* scheme = "https");
 
     DLLLOCAL ~Http2Session();
@@ -331,6 +332,54 @@ public:
     //! Returns true if there are completed streams waiting
     DLLLOCAL bool hasCompletedStreams() const { return !completed_streams.empty(); }
 
+    //! Callback type for stream completion notification (HTTP/2 client multiplexing)
+    /** @param stream_id the completed stream ID
+        @param stream the stream info (may be nullptr if stream was reset before completion)
+        @param xsink exception sink for error reporting
+    */
+    using StreamCompleteCallback = std::function<void(int32_t stream_id, Http2StreamInfo* stream,
+        ExceptionSink* xsink)>;
+
+    //! Sets the stream completion callback for HTTP/2 client multiplexing
+    /** When set, this callback is invoked each time a stream completes (response received,
+        stream reset, or error). This enables multiplexed response routing in client scenarios.
+
+        @param callback the callback to invoke on stream completion
+    */
+    DLLLOCAL void setStreamCompleteCallback(StreamCompleteCallback callback) {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        stream_complete_callback = std::move(callback);
+    }
+
+    //! Clears the stream completion callback
+    DLLLOCAL void clearStreamCompleteCallback() {
+        printd(5, "clearStreamCompleteCallback() session=%p about to lock\n", this);
+        if (getenv("QORE_HTTP2_DEBUG")) {
+            fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p isServer=%d tid=%d about to lock\n",
+                this, is_server ? 1 : 0, q_gettid());
+            fflush(stderr);
+        }
+        std::lock_guard<std::recursive_mutex> lg(m);
+        printd(5, "clearStreamCompleteCallback() locked, clearing callback\n");
+        if (getenv("QORE_HTTP2_DEBUG")) {
+            fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p tid=%d locked, clearing callback\n",
+                this, q_gettid());
+            fflush(stderr);
+        }
+        stream_complete_callback = nullptr;
+        printd(5, "clearStreamCompleteCallback() done\n");
+        if (getenv("QORE_HTTP2_DEBUG")) {
+            fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p tid=%d done\n", this, q_gettid());
+            fflush(stderr);
+        }
+    }
+
+    //! Returns true if a stream completion callback is set
+    DLLLOCAL bool hasStreamCompleteCallback() const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        return static_cast<bool>(stream_complete_callback);
+    }
+
     //! Returns the number of active streams
     DLLLOCAL size_t getActiveStreamCount() const { return streams.size(); }
 
@@ -420,6 +469,9 @@ private:
     std::map<int32_t, std::unique_ptr<Http2StreamInfo>> streams;
     std::queue<std::unique_ptr<Http2StreamInfo>> completed_streams;
 
+    // Stream completion callback for client multiplexing
+    StreamCompleteCallback stream_complete_callback;
+
     // Send buffer
     std::vector<char> send_buffer;
     size_t send_offset = 0;
@@ -461,5 +513,8 @@ private:
         uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
         void* user_data);
 };
+
+//! Shared pointer type for Http2Session with thread-safe atomic reference counting
+using Http2SessionPtr = std::shared_ptr<Http2Session>;
 
 #endif // _QORE_HTTP2_SESSION_H

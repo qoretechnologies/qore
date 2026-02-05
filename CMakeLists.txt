@@ -1429,7 +1429,9 @@ add_custom_target(install-docs
     COMMENT "Installing API documentation to: ${CMAKE_INSTALL_PREFIX}/share/doc/qore"
     VERBATIM
 )
-add_dependencies(install-docs docs)
+if (DOXYGEN_FOUND)
+    add_dependencies(install-docs docs)
+endif (DOXYGEN_FOUND)
 # end of documentation
 
 # astparser module
@@ -1518,6 +1520,7 @@ qore_user_module("qlib/DebugCmdLine.qm" "ConnectionProvider;DebugUtil;DebugProgr
 qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/HttpServer.qm" "HttpServerUtil;Mime;Util")
 qore_user_module("qlib/HttpServerAsyncIo" "HttpServer")
+qore_user_module("qlib/Http2ClientIo" "Logger")
 qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime")
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")
 qore_user_module("qlib/SewioWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")

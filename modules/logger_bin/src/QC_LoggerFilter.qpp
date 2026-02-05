@@ -33,14 +33,6 @@
 #include "QC_LoggerFilter.h"
 #include "QC_LoggerEvent.h"
 
-class QoreLoggerFilter : public AbstractPrivateData {
-public:
-    DLLLOCAL QoreLoggerFilter() {
-    }
-
-    DLLLOCAL virtual ~QoreLoggerFilter() = default;
-};
-
 //! Abstract class that defines the interface for logger filters
 /** Event data (@ref LoggerEvent) are formatted before the record is passed to the target
 */
