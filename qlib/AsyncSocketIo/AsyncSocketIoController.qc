@@ -563,6 +563,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     int cancelByOwner(string owner) {
         int rv;
         bool signal = False;
+        Condition done_cond();
         {
             AutoLock al(m);
             if (!tid || !cache) {
@@ -577,16 +578,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             if (!rv) {
                 return 0;
             }
-            signal = enqueueCmdLocked(IoCommand::CancelOwner, (owner,));
+            signal = enqueueCmdLocked(IoCommand::CancelOwner, (owner, done_cond));
         }
         if (signal) {
             notifier.notify();
         }
-        # wait for the I/O thread to complete cancellation
-        # we use a simple polling approach since multiple operations may be canceled
-        while (True) {
-            {
-                AutoLock al(m);
+        # wait for the I/O thread to complete cancellation using condition variable
+        {
+            AutoLock al(m);
+            while (True) {
                 bool found = False;
                 foreach string key in (keys cache) {
                     if (cache{key}.owner == owner) {
@@ -597,8 +597,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 if (!found) {
                     break;
                 }
+                done_cond.wait(m);
             }
-            usleep(1ms);
         }
         return rv;
     }
@@ -1098,6 +1098,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     case IoCommand::CancelOwner: {
                         # Cancel all operations belonging to a specific owner
                         string owner = args[0];
+                        *Condition done_cond = args[1];
                         list<hash<PollInfo>> cancel_list = ();
                         list<Condition> cond_list = ();
                         {
@@ -1120,6 +1121,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         # This ensures socket references are released before callers return
                         map doCancelIntern($1), cancel_list;
                         map $1.broadcast(), cond_list;
+                        # Notify the caller that all cancellations are complete
+                        if (done_cond) {
+                            done_cond.broadcast();
+                        }
                         @debug(log(LoggerLevel::INFO, "AsyncSocketIoController canceled %d operations for owner %s",
                             cancel_list.size(), owner));
                         break;

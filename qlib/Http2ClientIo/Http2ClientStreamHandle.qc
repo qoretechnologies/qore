@@ -218,9 +218,9 @@ public class Http2ClientStreamHandle {
 
                 if (controller_mode) {
                     # In controller mode, wait on condition - controller drives I/O
-                    # Use 1s interval since the callback will broadcast immediately when
-                    # response arrives; this is just a safety timeout for edge cases
-                    response_cond.wait(lock, min(remaining, 1s));
+                    # The callback will broadcast response_cond when response arrives,
+                    # or when an error/abort occurs via notifyPendingStreams()
+                    response_cond.wait(lock, remaining);
                 } else {
                     # In sync mode, release lock and drive poll directly
                     delete al;
