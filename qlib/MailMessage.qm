@@ -37,7 +37,7 @@
 # enables all warnings
 
 module MailMessage {
-    version = "1.5";
+    version = "1.5.1";
     desc = "defines the MailMessage class and supporting definitions";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -74,6 +74,12 @@ msg.addTO("My Best Friend <you@friend.com>");
     @endcode
 
     @section mailmessage_relnotes MailMessage Release Notes
+
+    @subsection mailmessage_v1_5_1 MailMessage 1.5.1
+    - Added backward-compatible constant declarations for deprecated encoding constants:
+      - @ref MailMessage::EncDefault "EncDefault", @ref MailMessage::EncNone "EncNone",
+        @ref MailMessage::EncBase64 "EncBase64", @ref MailMessage::EncQuotedPrintable "EncQuotedPrintable"
+      - These constants are deprecated; use the @ref MailMessage::ContentEncoding "ContentEncoding" enum instead
 
     @subsection mailmessage_v1_5 MailMessage 1.5
     - Enhanced attachment handling:
@@ -272,6 +278,26 @@ public const Encodings = (
     ContentEncoding::Base64,
     ContentEncoding::QuotedPrintable,
 );
+
+#! default content transfer encoding depending on attachment type
+/** @deprecated Use @ref ContentEncoding::Default instead
+*/
+public const EncDefault = ContentEncoding::Default;
+
+#! no content transfer encoding (not recommended as SMTP servers break up long lines automatically)
+/** @deprecated Use @ref ContentEncoding::None instead
+*/
+public const EncNone = ContentEncoding::None;
+
+#! base-64 content transfer encoding
+/** @deprecated Use @ref ContentEncoding::Base64 instead
+*/
+public const EncBase64 = ContentEncoding::Base64;
+
+#! "quoted-printable" content transfer encoding
+/** @deprecated Use @ref ContentEncoding::QuotedPrintable instead
+*/
+public const EncQuotedPrintable = ContentEncoding::QuotedPrintable;
 #/@}
 
 #! Encodes a filename for use in MIME headers according to RFC 2231

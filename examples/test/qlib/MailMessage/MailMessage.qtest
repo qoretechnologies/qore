@@ -24,6 +24,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Test RFC 2231 filename encoding", \testRfc2231FilenameEncoding(), NOTHING);
         addTestCase("Test inline attachments", \testInlineAttachments(), NOTHING);
         addTestCase("Test Part and Attachment classes", \testPartAndAttachmentClasses(), NOTHING);
+        addTestCase("Test deprecated encoding constants", \testDeprecatedEncodingConstants(), NOTHING);
 
         set_return_value(main());
     }
@@ -997,6 +998,46 @@ lorem ipsum\r
             assertEq("att1.txt", info.attachments[0].name);
             assertEq("att2.png", info.attachments[1].name);
             assertEq("cid2", info.attachments[1].content_id);
+        }
+    }
+
+    # Test backward-compatible deprecated encoding constants
+    testDeprecatedEncodingConstants() {
+        # Test that deprecated constants have the same values as the enum members
+        assertEq(ContentEncoding::Default, EncDefault, "EncDefault matches ContentEncoding::Default");
+        assertEq(ContentEncoding::None, EncNone, "EncNone matches ContentEncoding::None");
+        assertEq(ContentEncoding::Base64, EncBase64, "EncBase64 matches ContentEncoding::Base64");
+        assertEq(ContentEncoding::QuotedPrintable, EncQuotedPrintable,
+            "EncQuotedPrintable matches ContentEncoding::QuotedPrintable");
+
+        # Test that the string values are correct
+        assertEq("default", EncDefault, "EncDefault is 'default'");
+        assertEq("none", EncNone, "EncNone is 'none'");
+        assertEq("base64", EncBase64, "EncBase64 is 'base64'");
+        assertEq("quoted-printable", EncQuotedPrintable, "EncQuotedPrintable is 'quoted-printable'");
+
+        # Test that deprecated constants work with the Encodings list
+        assertTrue(inlist(EncDefault, Encodings), "EncDefault in Encodings list");
+        assertTrue(inlist(EncNone, Encodings), "EncNone in Encodings list");
+        assertTrue(inlist(EncBase64, Encodings), "EncBase64 in Encodings list");
+        assertTrue(inlist(EncQuotedPrintable, Encodings), "EncQuotedPrintable in Encodings list");
+
+        # Test that deprecated constants can be used in Message API calls
+        {
+            Message msg(Sender, Subject);
+            msg.setBody("test body", EncDefault);
+            msg.addTO(To);
+            msg.attach("file.txt", MimeTypeText, "content", EncBase64);
+            string serialized = msg.serialize();
+            assertRegex("Content-Transfer-Encoding: base64", serialized,
+                "EncBase64 works with attach()");
+        }
+
+        # Test that deprecated constants can be used with Attachment constructor
+        {
+            Attachment att("doc.pdf", MimeTypePdf, <25504446>, EncBase64);
+            assertEq(ContentEncoding::Base64, att.getTransferEncoding(),
+                "EncBase64 works with Attachment constructor");
         }
     }
 }
