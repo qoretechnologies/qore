@@ -1004,8 +1004,18 @@ static void do_version_animation(const char* arg) {
             target.tv_sec++;
             target.tv_nsec -= 1000000000L;
         }
-        // clock_nanosleep resumes after signal interrupts
-        while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &target, nullptr) != 0) {
+        // Sleep until the target time (portable: works on macOS and Linux)
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        long sleep_ns = (target.tv_sec - now.tv_sec) * 1000000000L
+            + (target.tv_nsec - now.tv_nsec);
+        if (sleep_ns > 0) {
+            struct timespec rem, req;
+            req.tv_sec = sleep_ns / 1000000000L;
+            req.tv_nsec = sleep_ns % 1000000000L;
+            while (nanosleep(&req, &rem) != 0) {
+                req = rem;
+            }
         }
     }
 
