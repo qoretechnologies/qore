@@ -459,12 +459,14 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RangeFloat:
         case QoreIROpcode::RangeDate:
             return 2;
+        // These *Any opcodes are used in delegate-to-AST mode with 0 operands
         case QoreIROpcode::MapSelectAny:
-        case QoreIROpcode::MapSelectList:
         case QoreIROpcode::HashMapAny:
+        case QoreIROpcode::HashMapSelectAny:
+            return -1;  // Variable operands (delegate-to-AST stores expr in instruction)
+        case QoreIROpcode::MapSelectList:
         case QoreIROpcode::HashMap:
             return 3;
-        case QoreIROpcode::HashMapSelectAny:
         case QoreIROpcode::HashMapSelect:
             return 4;
         case QoreIROpcode::CastAny:
@@ -646,7 +648,8 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
             }
             int expected = expectedOperands(inst->opcode);
             if (expected >= 0 && expected != static_cast<int>(inst->operands.size())) {
-                error = "unexpected operand count";
+                error = "unexpected operand count for opcode " + std::to_string(static_cast<int>(inst->opcode))
+                    + " (expected " + std::to_string(expected) + ", got " + std::to_string(inst->operands.size()) + ")";
                 return false;
             }
             if ((inst->opcode == QoreIROpcode::LoadArg || inst->opcode == QoreIROpcode::LoadClosure)
