@@ -584,16 +584,84 @@ static int expectedOperands(QoreIROpcode op) {
     }
 }
 
+// Collect all branch targets (blocks that can be reached)
+static std::unordered_set<const QoreIRBasicBlock*> collectBranchTargets(const QoreIRFunction& func) {
+    std::unordered_set<const QoreIRBasicBlock*> targets;
+    // Entry block is always reachable
+    if (!func.blocks.empty()) {
+        targets.insert(func.blocks[0].get());
+    }
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            // Collect branch targets
+            if (auto* br = dynamic_cast<const QoreIRBranchInstruction*>(inst.get())) {
+                if (br->target) {
+                    targets.insert(br->target);
+                }
+            } else if (auto* brif = dynamic_cast<const QoreIRBranchIfInstruction*>(inst.get())) {
+                if (brif->true_target) {
+                    targets.insert(brif->true_target);
+                }
+                if (brif->false_target) {
+                    targets.insert(brif->false_target);
+                }
+            } else if (auto* invoke = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get())) {
+                if (invoke->normal_target) {
+                    targets.insert(invoke->normal_target);
+                }
+                if (invoke->exception_target) {
+                    targets.insert(invoke->exception_target);
+                }
+            } else if (auto* sw_int = dynamic_cast<const QoreIRSwitchIntInstruction*>(inst.get())) {
+                for (const auto& case_info : sw_int->cases) {
+                    if (case_info.target) {
+                        targets.insert(case_info.target);
+                    }
+                }
+                if (sw_int->default_target) {
+                    targets.insert(sw_int->default_target);
+                }
+            } else if (auto* sw_str = dynamic_cast<const QoreIRSwitchStringInstruction*>(inst.get())) {
+                for (const auto& case_info : sw_str->cases) {
+                    if (case_info.target) {
+                        targets.insert(case_info.target);
+                    }
+                }
+                if (sw_str->default_target) {
+                    targets.insert(sw_str->default_target);
+                }
+            } else if (auto* thr = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+                if (thr->exception_target) {
+                    targets.insert(thr->exception_target);
+                }
+            }
+            // Also check base class exception_target for other opcodes
+            if (inst->exception_target) {
+                targets.insert(inst->exception_target);
+            }
+        }
+    }
+    return targets;
+}
+
 bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
     if (func.blocks.empty()) {
         error = "function has no basic blocks";
         return false;
     }
+
+    // Collect branch targets to identify reachable blocks
+    std::unordered_set<const QoreIRBasicBlock*> reachable = collectBranchTargets(func);
+
     std::unordered_set<const QoreIRBasicBlock*> block_set;
     for (const auto& block : func.blocks) {
         if (!block_set.insert(block.get()).second) {
             error = "duplicate basic block pointer";
             return false;
+        }
+        // Skip unreachable blocks - they may be empty/unterminated dead code
+        if (reachable.find(block.get()) == reachable.end()) {
+            continue;
         }
         if (block->instructions.empty()) {
             error = "basic block '" + block->name + "' has no instructions";

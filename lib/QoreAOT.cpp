@@ -169,12 +169,19 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         ir_func = nullptr;
         return -1;
     }
-    // Ensure terminator
-    if (ir_func->blocks.back()->instructions.empty() ||
-            (ir_func->blocks.back()->instructions.back()->opcode != QoreIROpcode::Return &&
-             ir_func->blocks.back()->instructions.back()->opcode != QoreIROpcode::ReturnNothing &&
-             ir_func->blocks.back()->instructions.back()->opcode != QoreIROpcode::Br &&
-             ir_func->blocks.back()->instructions.back()->opcode != QoreIROpcode::Rethrow)) {
+    // Ensure terminator for the current block (where the builder is pointing)
+    // After lowering control flow constructs like try-catch, the builder may be pointing
+    // to a merge block that needs an implicit return
+    QoreIRBasicBlock* current_block = builder.getBlock();
+    if (current_block && (current_block->instructions.empty() ||
+            (current_block->instructions.back()->opcode != QoreIROpcode::Return &&
+             current_block->instructions.back()->opcode != QoreIROpcode::ReturnNothing &&
+             current_block->instructions.back()->opcode != QoreIROpcode::Br &&
+             current_block->instructions.back()->opcode != QoreIROpcode::BrIf &&
+             current_block->instructions.back()->opcode != QoreIROpcode::Throw &&
+             current_block->instructions.back()->opcode != QoreIROpcode::Rethrow &&
+             current_block->instructions.back()->opcode != QoreIROpcode::SwitchInt &&
+             current_block->instructions.back()->opcode != QoreIROpcode::SwitchString))) {
         builder.createReturnNothing();
     }
     if (!QoreIRVerifier::verify(*ir_func, error)) {
