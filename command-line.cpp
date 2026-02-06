@@ -45,8 +45,10 @@
 #include <ctype.h>
 #include <strings.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 #include <string>
+#include <vector>
 #include <map>
 
 #define is_assign_char(a) ((((a) == '=') || ((a) == ':')))
@@ -546,44 +548,255 @@ static void show_build_options(const char* arg) {
    exit(0);
 }
 
+// word-wrap a string to max_width, returning wrapped lines
+// indent is prepended to continuation lines
+static std::vector<std::string> wrap_line(const std::string& line, int max_width,
+        const std::string& indent) {
+    std::vector<std::string> result;
+    if (max_width <= 0 || (int)line.size() <= max_width) {
+        result.push_back(line);
+        return result;
+    }
+
+    std::string remaining = line;
+    bool first = true;
+    while (!remaining.empty()) {
+        int width = first ? max_width : max_width - (int)indent.size();
+        if (width <= 0) {
+            width = 1;
+        }
+        if ((int)remaining.size() <= width) {
+            result.push_back(first ? remaining : indent + remaining);
+            break;
+        }
+        // find last space within width
+        int split = width;
+        while (split > 0 && remaining[split] != ' ') {
+            --split;
+        }
+        if (split == 0) {
+            // no space found; hard break
+            split = width;
+        }
+        result.push_back((first ? "" : indent) + remaining.substr(0, split));
+        // skip the space at the split point
+        remaining = remaining.substr(remaining[split] == ' ' ? split + 1 : split);
+        first = false;
+    }
+    return result;
+}
+
 static void do_version(const char* arg) {
-    printf("QORE for %s %s (%d-bit build), Copyright (C) 2003 - 2026 David Nichols\n", qore_target_os,
-        qore_target_arch, qore_target_bits);
+    bool is_tty = isatty(STDOUT_FILENO);
 
-    printf("version %s", qore_version_string);
-    FeatureList::iterator i = qoreFeatureList.begin();
-    if (i != qoreFeatureList.end()) {
-        printf(" (builtin features: ");
-        while (i != qoreFeatureList.end()) {
-            fputs((*i).c_str(), stdout);
-            i++;
-            if (i != qoreFeatureList.end())
-                printf(", ");
+    // Non-TTY: plain text output for machine parseability
+    if (!is_tty) {
+        printf("QORE for %s %s (%d-bit build), Copyright (C) 2003 - 2026 David Nichols\n",
+            qore_target_os, qore_target_arch, qore_target_bits);
+
+        printf("version %s", qore_version_string);
+        FeatureList::iterator i = qoreFeatureList.begin();
+        if (i != qoreFeatureList.end()) {
+            printf(" (builtin features: ");
+            while (i != qoreFeatureList.end()) {
+                fputs((*i).c_str(), stdout);
+                i++;
+                if (i != qoreFeatureList.end()) {
+                    printf(", ");
+                }
+            }
+            putchar(')');
         }
-        putchar(')');
-    }
 
-    // show git hash
-    printf("\n  git hash: %s", qore_git_hash);
+        printf("\n  git hash: %s", qore_git_hash);
 
-    // show module api and compatible module apis
-    printf("\n  module API: %d.%d", qore_mod_api_list[0].major, qore_mod_api_list[0].minor);
-    if (qore_mod_api_list_len == 1)
-        printf("\n");
-    else {
-        printf(" (");
-        for (unsigned j = 1; j < qore_mod_api_list_len; ++j) {
-            printf("%d.%d", qore_mod_api_list[j].major, qore_mod_api_list[j].minor);
-            if (j != (qore_mod_api_list_len - 1))
-                printf(", ");
+        printf("\n  module API: %d.%d", qore_mod_api_list[0].major, qore_mod_api_list[0].minor);
+        if (qore_mod_api_list_len > 1) {
+            printf(" (");
+            for (unsigned j = 1; j < qore_mod_api_list_len; ++j) {
+                printf("%d.%d", qore_mod_api_list[j].major, qore_mod_api_list[j].minor);
+                if (j != (qore_mod_api_list_len - 1)) {
+                    printf(", ");
+                }
+            }
+            printf(")");
         }
-        printf(")\n");
-    }
 
-    printf("  build host: %s\n  C++ compiler: %s\n  CFLAGS: %s\n  LDFLAGS: %s\n  MPFR: %s\n",
+        printf("\n  build host: %s\n  C++ compiler: %s\n  CFLAGS: %s\n  LDFLAGS: %s\n  MPFR: %s\n",
             qore_build_host, qore_cplusplus_compiler, qore_cflags, qore_ldflags, mpfrInfo.getBuffer());
 
-    printf("use -B to show build options\n");
+        printf("use -B to show build options\n");
+
+        exit(0);
+    }
+
+    // TTY: colored ASCII art with version info on the right
+    bool use_color = !getenv("NO_COLOR");
+    const char* qc = use_color ? "\033[1;38;2;255;50;140m" : "";
+    const char* reset = use_color ? "\033[0m" : "";
+
+    static const char* art[] = {
+        "                  .,l~-?-~l,.                 ",
+        "             ',l~-]]]]]]]]]-<l,.             ",
+        "         ',!~?]]]]?????????]]]]?~!,'         ",
+        "     ':!+?]]]]???????]]]???????]]]]?~!,'     ",
+        "    !?]]]]??????]]]]]_~-]]]]???????]]]]?!    ",
+        "   ']]????]]]]]]]_>;^  .^I>_]]]]]]]????]]'   ",
+        "   '???]]]]]]?>;`           ^;<??]]]]]?\?\?'   ",
+        "   '?]?]]]]?]?.               .?]?]]]]?]?'   ",
+        "   '?]?]]]]?]?`               `?]?]]]]?]?'   ",
+        "   '?]?]]]]?]?'               '?]?]]]]?]?'   ",
+        "   '?]?]]]]?]?^               ^?]?]]]]?]?'   ",
+        "   '???]]]]]]]-~!,'      .`,l~-?]]]]]]?\?\?'   ",
+        "   .?]]????]]]]]]]?~!,'  ;~]]]]]??????]]?.   ",
+        "    \">_]]]]]??????]]]]?+i:^`,l~?]]]]]]_>^    ",
+        "      .^;>_]]]]]??????]]]]?+!:^`\"I<>I^.      ",
+        "           `;i_?]]]]??????]]]]]_i:`          ",
+        "               `:i+?]]]]???????]]]]?~:       ",
+        "                   ',!~-]]]]]]]]?+i;^.       ",
+        "                       ',!+-?_>;`            ",
+    };
+    static const int ART_LINES = 19;
+    static const int ART_WIDTH = 45;
+    static const int GAP = 2;
+
+    // Determine terminal width
+    int term_width = 0;
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
+        term_width = ws.ws_col;
+    }
+    // max width available for info text (0 = unlimited)
+    int max_info = term_width > ART_WIDTH + GAP ? term_width - ART_WIDTH - GAP : 0;
+
+    // Build raw info lines
+    std::vector<std::string> raw_info;
+
+    QoreString buf;
+    buf.sprintf("QORE for %s %s (%d-bit build), Copyright (C) 2003 - 2026 David Nichols",
+        qore_target_os, qore_target_arch, qore_target_bits);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("version %s", qore_version_string);
+    FeatureList::iterator i = qoreFeatureList.begin();
+    if (i != qoreFeatureList.end()) {
+        buf.concat(" (builtin features: ");
+        while (i != qoreFeatureList.end()) {
+            buf.concat((*i).c_str());
+            i++;
+            if (i != qoreFeatureList.end()) {
+                buf.concat(", ");
+            }
+        }
+        buf.concat(')');
+    }
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("git hash: %s", qore_git_hash);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("module API: %d.%d", qore_mod_api_list[0].major, qore_mod_api_list[0].minor);
+    if (qore_mod_api_list_len > 1) {
+        buf.concat(" (");
+        for (unsigned j = 1; j < qore_mod_api_list_len; ++j) {
+            buf.sprintf("%d.%d", qore_mod_api_list[j].major, qore_mod_api_list[j].minor);
+            if (j != (qore_mod_api_list_len - 1)) {
+                buf.concat(", ");
+            }
+        }
+        buf.concat(")");
+    }
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("build host: %s", qore_build_host);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("C++ compiler: %s", qore_cplusplus_compiler);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("CFLAGS: %s", qore_cflags);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("LDFLAGS: %s", qore_ldflags);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("MPFR: %s", mpfrInfo.getBuffer());
+    raw_info.push_back(buf.c_str());
+
+    raw_info.push_back("use -B to show build options");
+
+    // Word-wrap info lines to fit terminal width
+    std::vector<std::string> info;
+    for (const auto& line : raw_info) {
+        // determine indent for continuation lines: use leading whitespace + some extra
+        std::string indent;
+        size_t pos = line.find_first_not_of(' ');
+        if (pos != std::string::npos && pos > 0) {
+            indent = std::string(pos + 2, ' ');
+        } else {
+            indent = "    ";
+        }
+        auto wrapped = wrap_line(line, max_info, indent);
+        for (const auto& wl : wrapped) {
+            info.push_back(wl);
+        }
+    }
+
+    // Center info vertically against the art
+    int info_start = (ART_LINES - (int)info.size()) / 2;
+    if (info_start < 0) {
+        info_start = 0;
+    }
+
+    int total_lines = ART_LINES;
+    if (info_start + (int)info.size() > total_lines) {
+        total_lines = info_start + (int)info.size();
+    }
+
+    for (int line = 0; line < total_lines; ++line) {
+        if (line < ART_LINES) {
+            // Print art with foreground color on non-space characters
+            const char* a = art[line];
+            int len = (int)strlen(a);
+            bool in_color = false;
+            for (int c = 0; c < ART_WIDTH; ++c) {
+                char ch = c < len ? a[c] : ' ';
+                if (ch != ' ') {
+                    if (!in_color && use_color) {
+                        fputs(qc, stdout);
+                        in_color = true;
+                    }
+                    putchar(ch);
+                } else {
+                    if (in_color) {
+                        fputs(reset, stdout);
+                        in_color = false;
+                    }
+                    putchar(' ');
+                }
+            }
+            if (in_color) {
+                fputs(reset, stdout);
+            }
+        } else {
+            printf("%-*s", ART_WIDTH, "");
+        }
+
+        int info_idx = line - info_start;
+        if (info_idx >= 0 && info_idx < (int)info.size()) {
+            printf("  %s", info[info_idx].c_str());
+        }
+
+        putchar('\n');
+    }
 
     exit(0);
 }
