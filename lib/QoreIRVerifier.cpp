@@ -863,7 +863,6 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::RegexMatchAny
                     || inst->opcode == QoreIROpcode::RegexMatchBool
                     || inst->opcode == QoreIROpcode::RegexNMatchBool
-                    || inst->opcode == QoreIROpcode::SwitchRegexMatch
                     || inst->opcode == QoreIROpcode::RegexExtractAny
                     || inst->opcode == QoreIROpcode::RegexExtractList
                     || inst->opcode == QoreIROpcode::RegexSubstAny
@@ -894,6 +893,12 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 if (!expr_inst || !expr_inst->expr.hasNode()) {
                     error = "expr instruction missing expr";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::SwitchRegexMatch) {
+                auto* regex_inst = dynamic_cast<const QoreIRSwitchRegexMatchInstruction*>(inst.get());
+                if (!regex_inst || !regex_inst->regex_case) {
+                    error = "SwitchRegexMatch instruction missing regex_case";
                     return false;
                 }
             } else if (inst->opcode == QoreIROpcode::Invoke) {
