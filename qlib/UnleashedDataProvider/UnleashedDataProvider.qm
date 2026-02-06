@@ -1,0 +1,564 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore UnleashedDataProvider module definition
+
+/*  UnleashedDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# strict argument handling
+%strict-args
+# enable all warnings
+%enable-all-warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) UnleashedRestClient
+%requires json
+
+module UnleashedDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Unleashed inventory management services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new UnleashedDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": UnleashedDataProvider::AppName,
+            "display_name": "Unleashed Software",
+            "short_desc": "Unleashed inventory and sales management platform",
+            "desc": "Unleashed is a comprehensive cloud-based inventory management system that enables you to manage "
+                "products, customers, sales orders, purchase orders, stock levels, and more.\n\n"
+                "**Features:**\n"
+                "- Manage customers and suppliers\n"
+                "- Create and track sales orders\n"
+                "- Manage product catalog and inventory\n"
+                "- Process credit notes and refunds\n"
+                "- Track stock levels across warehouses\n"
+                "- Handle assemblies and manufacturing\n\n"
+                "**Authentication:**\n"
+                "Unleashed uses API ID and API Key authentication via HMAC signature. Both credentials are required "
+                "and can be obtained from your Unleashed account settings under Integration > API Access.",
+            "scheme": "unleashed",
+            "logo": UnleashedLogo,
+            "logo_file_name": "unleashed-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AccountingErp,),
+        });
+
+        # ========== CUSTOMER ACTIONS ==========
+
+        # Search Customers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/customers",
+            "action": "search-customers",
+            "groups": "Customers",
+            "display_name": "Search Customers",
+            "short_desc": "List and search customers",
+            "desc": "Retrieve a list of customers from Unleashed with optional filtering by customer code, name, "
+                "email, customer type, or modification date.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": UnleashedCustomersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CustomerList", new UnleashedCustomerDataType(), True);
+            },
+        });
+
+        # Create Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/create-customer",
+            "action": "create-customer",
+            "groups": "Customers",
+            "display_name": "Create Customer",
+            "short_desc": "Create a new customer",
+            "desc": "Create a new customer in Unleashed with contact information and settings.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedCreateCustomerDataProvider::ProviderInfo,
+        });
+
+        # Get Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/get-customer",
+            "action": "get-customer",
+            "groups": "Customers",
+            "display_name": "Get Customer",
+            "short_desc": "Get a customer by GUID",
+            "desc": "Retrieve detailed information about a specific customer by their unique identifier (GUID).",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedGetCustomerDataProvider::ProviderInfo,
+            "options": {
+                "guid": <ActionOptionInfo>{
+                    "display_name": "Customer GUID",
+                    "short_desc": "The customer GUID",
+                    "desc": "The unique identifier (GUID) of the customer to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Update Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/update-customer",
+            "action": "update-customer",
+            "groups": "Customers",
+            "display_name": "Update Customer",
+            "short_desc": "Update an existing customer",
+            "desc": "Update an existing customer's information in Unleashed.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedUpdateCustomerDataProvider::ProviderInfo,
+        });
+
+        # ========== PRODUCT ACTIONS ==========
+
+        # Search Products
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/products",
+            "action": "search-products",
+            "groups": "Products",
+            "display_name": "Search Products",
+            "short_desc": "List and search products",
+            "desc": "Retrieve a list of products from Unleashed with optional filtering by product code, description, "
+                "or barcode.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": UnleashedProductsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ProductList", new UnleashedProductDataType(), True);
+            },
+        });
+
+        # Create Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/create-product",
+            "action": "create-product",
+            "groups": "Products",
+            "display_name": "Create Product",
+            "short_desc": "Create a new product",
+            "desc": "Create a new product in Unleashed with product code, description, and pricing.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedCreateProductDataProvider::ProviderInfo,
+        });
+
+        # Get Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/get-product",
+            "action": "get-product",
+            "groups": "Products",
+            "display_name": "Get Product",
+            "short_desc": "Get a product by GUID",
+            "desc": "Retrieve detailed information about a specific product.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedGetProductDataProvider::ProviderInfo,
+            "options": {
+                "guid": <ActionOptionInfo>{
+                    "display_name": "Product GUID",
+                    "short_desc": "The product GUID",
+                    "desc": "The unique identifier (GUID) of the product to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        # Update Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/update-product",
+            "action": "update-product",
+            "groups": "Products",
+            "display_name": "Update Product",
+            "short_desc": "Update an existing product",
+            "desc": "Update an existing product's information in Unleashed.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedUpdateProductDataProvider::ProviderInfo,
+        });
+
+        # Obsolete Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/obsolete-product",
+            "action": "obsolete-product",
+            "groups": "Products",
+            "display_name": "Obsolete Product",
+            "short_desc": "Mark a product as obsolete",
+            "desc": "Mark a product as obsolete in Unleashed, removing it from active use.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedObsoleteProductDataProvider::ProviderInfo,
+        });
+
+        # ========== SALES ORDER ACTIONS ==========
+
+        # Search Sales Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/sales-orders",
+            "action": "search-sales-orders",
+            "groups": "Sales",
+            "display_name": "Search Sales Orders",
+            "short_desc": "List and search sales orders",
+            "desc": "Retrieve a list of sales orders from Unleashed with optional filtering.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": UnleashedSalesOrdersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("SalesOrderList", new UnleashedSalesOrderDataType(), True);
+            },
+        });
+
+        # Create Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/create-sales-order",
+            "action": "create-sales-order",
+            "groups": "Sales",
+            "display_name": "Create Sales Order",
+            "short_desc": "Create a new sales order",
+            "desc": "Create a new sales order in Unleashed with customer, line items, and delivery information.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedCreateSalesOrderDataProvider::ProviderInfo,
+        });
+
+        # Get Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/get-sales-order",
+            "action": "get-sales-order",
+            "groups": "Sales",
+            "display_name": "Get Sales Order",
+            "short_desc": "Get a sales order by GUID",
+            "desc": "Retrieve detailed information about a specific sales order.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedGetSalesOrderDataProvider::ProviderInfo,
+            "options": {
+                "guid": <ActionOptionInfo>{
+                    "display_name": "Sales Order GUID",
+                    "short_desc": "The sales order GUID",
+                    "desc": "The unique identifier (GUID) of the sales order to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "salesorders",
+                },
+            },
+        });
+
+        # Update Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/update-sales-order",
+            "action": "update-sales-order",
+            "groups": "Sales",
+            "display_name": "Update Sales Order",
+            "short_desc": "Update an existing sales order",
+            "desc": "Update an existing sales order in Unleashed.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedUpdateSalesOrderDataProvider::ProviderInfo,
+        });
+
+        # Delete Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/delete-sales-order",
+            "action": "delete-sales-order",
+            "groups": "Sales",
+            "display_name": "Delete Sales Order",
+            "short_desc": "Delete a sales order",
+            "desc": "Delete a sales order from Unleashed.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedDeleteSalesOrderDataProvider::ProviderInfo,
+        });
+
+        # Complete Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/complete-sales-order",
+            "action": "complete-sales-order",
+            "groups": "Sales",
+            "display_name": "Complete Sales Order",
+            "short_desc": "Complete a sales order",
+            "desc": "Mark a sales order as completed in Unleashed.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedCompleteSalesOrderDataProvider::ProviderInfo,
+        });
+
+        # ========== CREDIT NOTE ACTIONS ==========
+
+        # Search Credit Notes
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/credit-notes",
+            "action": "search-credit-notes",
+            "groups": "Credit Notes",
+            "display_name": "Search Credit Notes",
+            "short_desc": "List and search credit notes",
+            "desc": "Retrieve a list of credit notes from Unleashed with optional filtering.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": UnleashedCreditNotesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CreditNoteList", new UnleashedCreditNoteDataType(), True);
+            },
+        });
+
+        # Create Credit Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/create-credit-note",
+            "action": "create-credit-note",
+            "groups": "Credit Notes",
+            "display_name": "Create Credit Note",
+            "short_desc": "Create a new credit note",
+            "desc": "Create a new free credit note in Unleashed.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedCreateCreditNoteDataProvider::ProviderInfo,
+        });
+
+        # Get Credit Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/get-credit-note",
+            "action": "get-credit-note",
+            "groups": "Credit Notes",
+            "display_name": "Get Credit Note",
+            "short_desc": "Get a credit note by GUID",
+            "desc": "Retrieve detailed information about a specific credit note.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedGetCreditNoteDataProvider::ProviderInfo,
+            "options": {
+                "guid": <ActionOptionInfo>{
+                    "display_name": "Credit Note GUID",
+                    "short_desc": "The credit note GUID",
+                    "desc": "The unique identifier (GUID) of the credit note to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "creditnotes",
+                },
+            },
+        });
+
+        # Update Credit Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/update-credit-note",
+            "action": "update-credit-note",
+            "groups": "Credit Notes",
+            "display_name": "Update Credit Note",
+            "short_desc": "Update an existing credit note",
+            "desc": "Update an existing credit note in Unleashed.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedUpdateCreditNoteDataProvider::ProviderInfo,
+        });
+
+        # Delete Credit Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/delete-credit-note",
+            "action": "delete-credit-note",
+            "groups": "Credit Notes",
+            "display_name": "Delete Credit Note",
+            "short_desc": "Delete a credit note",
+            "desc": "Delete a credit note from Unleashed.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedDeleteCreditNoteDataProvider::ProviderInfo,
+        });
+
+        # Complete Credit Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/complete-credit-note",
+            "action": "complete-credit-note",
+            "groups": "Credit Notes",
+            "display_name": "Complete Credit Note",
+            "short_desc": "Complete a credit note",
+            "desc": "Mark a credit note as completed in Unleashed.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedCompleteCreditNoteDataProvider::ProviderInfo,
+        });
+
+        # ========== CREDIT NOTE LINE ACTIONS ==========
+
+        # Create Credit Note Line
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/create-credit-note-line",
+            "action": "create-credit-note-line",
+            "groups": "Credit Notes",
+            "display_name": "Create Credit Note Line",
+            "short_desc": "Add a line item to a credit note",
+            "desc": "Create a new line item on an existing credit note.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedCreateCreditNoteLineDataProvider::ProviderInfo,
+        });
+
+        # Update Credit Note Line
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/update-credit-note-line",
+            "action": "update-credit-note-line",
+            "groups": "Credit Notes",
+            "display_name": "Update Credit Note Line",
+            "short_desc": "Update a credit note line item",
+            "desc": "Update an existing line item on a credit note.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedUpdateCreditNoteLineDataProvider::ProviderInfo,
+        });
+
+        # Delete Credit Note Line
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/delete-credit-note-line",
+            "action": "delete-credit-note-line",
+            "groups": "Credit Notes",
+            "display_name": "Delete Credit Note Line",
+            "short_desc": "Delete a credit note line item",
+            "desc": "Remove a line item from a credit note.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedDeleteCreditNoteLineDataProvider::ProviderInfo,
+        });
+
+        # ========== UTILITY ACTIONS ==========
+
+        # Make API Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/make-api-call",
+            "action": "make-api-call",
+            "groups": "Utility",
+            "display_name": "Make API Call",
+            "short_desc": "Make a generic API call",
+            "desc": "Make a generic API call to the Unleashed API. This allows accessing API endpoints "
+                "not covered by other actions.",
+            "action_code": DPAT_API,
+            "data_provider_info": UnleashedMakeApiCallDataProvider::ProviderInfo,
+        });
+
+        # ========== TRIGGER ACTIONS (POLLING EVENTS) ==========
+
+        # New Customer Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_CUSTOMER,
+            "action": EVENT_NEW_CUSTOMER,
+            "groups": "Triggers",
+            "display_name": "New Customer",
+            "short_desc": "Trigger when a customer is created or updated",
+            "desc": "Fires when a new customer is detected or an existing customer is modified via polling.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_CUSTOMER,
+            "data_provider_info": UnleashedNewCustomerEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new UnleashedCustomerDataType(); },
+        });
+
+        # New Sales Order Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnleashedDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_SALES_ORDER,
+            "action": EVENT_NEW_SALES_ORDER,
+            "groups": "Triggers",
+            "display_name": "New Sales Order",
+            "short_desc": "Trigger when a sales order is created or updated",
+            "desc": "Fires when a new sales order is detected or an existing sales order is modified via polling.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_SALES_ORDER,
+            "data_provider_info": UnleashedNewSalesOrderEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new UnleashedSalesOrderDataType(); },
+        });
+    };
+}
+
+/** @mainpage UnleashedDataProvider Module
+
+    @tableofcontents
+
+    @section unleashedataproviderintro UnleashedDataProvider Introduction
+
+    The %UnleashedDataProvider module provides a data provider API for Unleashed
+    inventory management services through the Unleashed REST API.
+
+    To use this module, use \c "%requires UnleashedDataProvider" in your code.
+
+    All the public symbols in the module are defined in the UnleashedDataProvider namespace.
+
+    The main classes are:
+    - @ref UnleashedDataProvider::UnleashedDataProvider "UnleashedDataProvider":
+      the root data provider for Unleashed with child providers for customers, products,
+      sales orders, credit notes, and more
+
+    @par Authentication:
+    Unleashed uses API ID and API Key authentication with HMAC signatures. Both credentials
+    are required and can be obtained from your Unleashed account:
+    1. Log in to your Unleashed account
+    2. Go to Settings > Integration > API Access
+    3. Create a new API key or use an existing one
+    4. Copy the **API ID** and **API Key**
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires UnleashedDataProvider
+
+UnleashedDataProvider unleashed({
+    "api_id": ENV.UNLEASHED_API_ID,
+    "apikey": ENV.UNLEASHED_API_KEY,
+});
+
+# Search for customers
+list<hash<auto>> customers = unleashed.getChildProvider("customers").searchRecords({}, {
+    "pageSize": 10,
+});
+printf("Found %d customers\n", customers.size());
+
+# Create a new customer
+hash<auto> new_customer = unleashed.getChildProvider("create-customer").doRequest({
+    "CustomerCode": "TEST001",
+    "CustomerName": "Test Customer",
+});
+printf("Created customer: %s\n", new_customer.CustomerCode);
+    @endcode
+
+    @section unleashedataproviderrelnotes Release Notes
+
+    @subsection unleashedataproviderv1_0 UnleashedDataProvider v1.0
+    - the initial version of the %UnleashedDataProvider module
+*/
+
+#! Contains all public definitions in the UnleashedDataProvider module
+public namespace UnleashedDataProvider {
+}

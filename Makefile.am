@@ -75,6 +75,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/ShipStationRestClient.qm \
 	qlib/ShippoRestClient.qm \
 	qlib/Cin7CoreRestClient.qm \
+	qlib/UnleashedRestClient.qm \
 	qlib/FilePoller.qm \
 	qlib/FreetdsSqlUtil.qm \
 	qlib/FtpPoller.qm \
@@ -127,6 +128,8 @@ DOX_SPLIT_MODULES = \
     qlib/HttpClientDataProvider \
     qlib/GmailDataProvider \
     qlib/GoogleCalendarDataProvider \
+    qlib/JotformDataProvider \
+    qlib/MailgunDataProvider \
     qlib/MemcachedDataProvider \
     qlib/MewsRestDataProvider \
     qlib/OpenAiDataProvider \
@@ -139,6 +142,7 @@ DOX_SPLIT_MODULES = \
     qlib/ShipStationDataProvider \
     qlib/ShippoDataProvider \
     qlib/Cin7CoreDataProvider \
+    qlib/UnleashedDataProvider \
     qlib/SwaggerDataProvider \
     qlib/ZohoBooksDataProvider \
     qlib/ZohoInvoiceDataProvider \
@@ -174,6 +178,8 @@ GoogleCalendarDataProvider_modverdir = $(modverdir)/GoogleCalendarDataProvider
 HttpClientDataProvider_modverdir = $(modverdir)/HttpClientDataProvider
 HttpServerAsyncIo_modverdir = $(modverdir)/HttpServerAsyncIo
 Http2ClientIo_modverdir = $(modverdir)/Http2ClientIo
+JotformDataProvider_modverdir = $(modverdir)/JotformDataProvider
+MailgunDataProvider_modverdir = $(modverdir)/MailgunDataProvider
 MemcachedDataProvider_modverdir = $(modverdir)/MemcachedDataProvider
 MewsRestDataProvider_modverdir = $(modverdir)/MewsRestDataProvider
 MongoDbDataProvider_modverdir = $(modverdir)/MongoDbDataProvider
@@ -194,6 +200,7 @@ ServiceNowRestDataProvider_modverdir = $(modverdir)/ServiceNowRestDataProvider
 ShipStationDataProvider_modverdir = $(modverdir)/ShipStationDataProvider
 ShippoDataProvider_modverdir = $(modverdir)/ShippoDataProvider
 Cin7CoreDataProvider_modverdir = $(modverdir)/Cin7CoreDataProvider
+UnleashedDataProvider_modverdir = $(modverdir)/UnleashedDataProvider
 SqlUtil_modverdir = $(modverdir)/SqlUtil
 SwaggerDataProvider_modverdir = $(modverdir)/SwaggerDataProvider
 ZohoBooksDataProvider_modverdir = $(modverdir)/ZohoBooksDataProvider
@@ -223,6 +230,8 @@ dist_GoogleCalendarDataProvider_modver_DATA = $(wildcard qlib/GoogleCalendarData
 dist_HttpClientDataProvider_modver_DATA = $(wildcard qlib/HttpClientDataProvider/*.q[cm])
 dist_HttpServerAsyncIo_modver_DATA = $(wildcard qlib/HttpServerAsyncIo/*.q[cm])
 dist_Http2ClientIo_modver_DATA = $(wildcard qlib/Http2ClientIo/*.q[cm])
+dist_JotformDataProvider_modver_DATA = $(wildcard qlib/JotformDataProvider/*.q[cm])
+dist_MailgunDataProvider_modver_DATA = $(wildcard qlib/MailgunDataProvider/*.q[cm])
 dist_MemcachedDataProvider_modver_DATA = $(wildcard qlib/MemcachedDataProvider/*.q[cm])
 dist_MewsRestDataProvider_modver_DATA = $(wildcard qlib/MewsRestDataProvider/*.q[cm]) $(wildcard qlib/MewsRestDataProvider/*.yaml)
 dist_MongoDbDataProvider_modver_DATA = $(wildcard qlib/MongoDbDataProvider/*.q[cm])
@@ -243,6 +252,7 @@ dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestData
 dist_ShipStationDataProvider_modver_DATA = $(wildcard qlib/ShipStationDataProvider/*.q[cm]) $(wildcard qlib/ShipStationDataProvider/*.svg)
 dist_ShippoDataProvider_modver_DATA = $(wildcard qlib/ShippoDataProvider/*.q[cm]) $(wildcard qlib/ShippoDataProvider/*.svg)
 dist_Cin7CoreDataProvider_modver_DATA = $(wildcard qlib/Cin7CoreDataProvider/*.q[cm]) $(wildcard qlib/Cin7CoreDataProvider/*.svg)
+dist_UnleashedDataProvider_modver_DATA = $(wildcard qlib/UnleashedDataProvider/*.q[cm]) $(wildcard qlib/UnleashedDataProvider/*.svg)
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
 dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[cm])
 dist_ZohoBooksDataProvider_modver_DATA = $(wildcard qlib/ZohoBooksDataProvider/*.q[cm]) $(wildcard qlib/ZohoBooksDataProvider/*.svg)
@@ -1186,6 +1196,8 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/FtpClientDataProvider/ftp-logo-black.svg \
 	qlib/GmailDataProvider/gmail-logo.svg \
 	qlib/GoogleCalendarDataProvider/google-calendar-logo.svg \
+	qlib/JotformDataProvider/jotform-logo.svg \
+	qlib/MailgunDataProvider/mailgun-logo.svg \
 	qlib/MewsRestDataProvider/mews-M-white.svg \
 	qlib/OpenAiDataProvider/openai-logo.svg \
 	qlib/Pop3ClientDataProvider/pop3-logo-white.svg \
@@ -1394,6 +1406,14 @@ doxygen/qlib/Doxyfile.ElasticSearchLoggerAppender: doxygen/qlib/Doxyfile.tmpl $(
 # to provide the graphic file
 doxygen/qlib/Doxyfile.EmpathicBuildingDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/EmpathicBuildingDataProvider:doxygen/qlib/EmpathicBuildingDataProvider -tDataProvider.tag=../../DataProvider/html -tRestClient.tag=../../RestClient/html -X=doxygen/ -E=Haltian-EmpathicBuilding.svg $< $@
+
+# to provide the graphic file
+doxygen/qlib/Doxyfile.JotformDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/JotformDataProvider:doxygen/qlib/JotformDataProvider -tDataProvider.tag=../../DataProvider/html -tRestClient.tag=../../RestClient/html -tJotformRestClient.tag=../../JotformRestClient/html -X=doxygen/ -E=jotform-logo.svg $< $@
+
+# to provide the graphic file
+doxygen/qlib/Doxyfile.MailgunDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/MailgunDataProvider:doxygen/qlib/MailgunDataProvider -tDataProvider.tag=../../DataProvider/html -tRestClient.tag=../../RestClient/html -tMailgunRestClient.tag=../../MailgunRestClient/html -X=doxygen/ -E=mailgun-logo.svg $< $@
 
 # to provide the graphic file
 doxygen/qlib/Doxyfile.MewsRestDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
