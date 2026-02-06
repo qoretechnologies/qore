@@ -2897,6 +2897,10 @@ void QoreClass::addBaseClass(QoreClass* qc, bool virt) {
     priv->addBaseClass(qc, virt);
 }
 
+void QoreClass::addBaseClass(QoreClass* qc, ClassAccess access, bool virt) {
+    priv->addBaseClass(qc, access, virt);
+}
+
 int QoreClass::runtimeCheckInstantiateClass(ExceptionSink* xsink) const {
     return priv->runtimeCheckInstantiateClass(xsink);
 }
@@ -2908,6 +2912,21 @@ void qore_class_private::addBaseClass(QoreClass* qc, bool virt) {
         scl = new BCList;
     }
     scl->push_back(new BCNode(&loc_builtin, qc, virt));
+
+    // add parent classes of new base class
+    if (qc->priv->scl && qc->priv->scl->valid) {
+        qc->priv->scl->addBaseClassesToSubclass(qc, cls, virt);
+    }
+    scl->sml.add(cls, qc, virt);
+}
+
+void qore_class_private::addBaseClass(QoreClass* qc, ClassAccess access, bool virt) {
+    assert(qc);
+    //printd(5, "adding %s as base class to %s (virt: %d access: %d)\n", qc->priv->name.c_str(), name.c_str(), virt, access);
+    if (!scl) {
+        scl = new BCList;
+    }
+    scl->push_back(new BCNode(&loc_builtin, qc, access, virt));
 
     // add parent classes of new base class
     if (qc->priv->scl && qc->priv->scl->valid) {

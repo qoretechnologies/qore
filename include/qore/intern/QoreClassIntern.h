@@ -1482,6 +1482,11 @@ public:
             access(Public), is_virtual(n_virtual) {
     }
 
+    // for builtin base classes with explicit access level
+    DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, ClassAccess a, bool n_virtual = false)
+            : loc(loc), sclass(qc), access(a), is_virtual(n_virtual) {
+    }
+
     // called at runtime with committed classes
     DLLLOCAL BCNode(const BCNode &old) : loc(old.loc), sclass(old.sclass), access(old.access),
             is_virtual(old.is_virtual) {
@@ -2037,6 +2042,9 @@ public:
 
     // add a base class to this class
     DLLLOCAL void addBaseClass(QoreClass* qc, bool virt);
+
+    // add a base class to this class with explicit access level
+    DLLLOCAL void addBaseClass(QoreClass* qc, ClassAccess access, bool virt);
 
     // This function must only be called from QoreObject
     DLLLOCAL QoreValue evalMemberGate(QoreObject* self, const char* nme, ExceptionSink* xsink) const;

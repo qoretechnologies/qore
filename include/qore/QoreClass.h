@@ -872,6 +872,17 @@ public:
     */
     DLLEXPORT void addBaseClass(QoreClass* qc, bool virt = false);
 
+    //! Adds a base class to the current class with an explicit access level
+    /** @param qc the class to add
+        @param access the access level for the base class (Public, Private, or Internal)
+        @param virt if the base class is "virtual", meaning that the current class's binary object is also compatible
+        with this base class's data (meaning that the base class's private data object is also a base class of this
+        class's private data object)
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void addBaseClass(QoreClass* qc, ClassAccess access, bool virt = false);
+
     //! call this function if your builtin class requires *all* methods (except the constructor) to be run in an RMutex lock
     /** use this for classes that require exclusive access to the private data in all functions
     */

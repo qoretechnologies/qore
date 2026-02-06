@@ -1410,10 +1410,7 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
     if (!resolveClassBases(error)) {
         return false;
     }
-    // Resolve static members after types are available
-    if (!resolveStaticMembers(error)) {
-        return false;
-    }
+    // Deserialize hashdecls and enums before static members so type references resolve
     if (!deserializeHashDecls(error)) {
         return false;
     }
@@ -1421,6 +1418,27 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
         return false;
     }
     if (!deserializeTypedefs(error)) {
+        return false;
+    }
+    // Resolve typedefs first (multi-pass for forward refs), then enum base types and hashdecl members
+    // Order matters: enum base types and hashdecl members may reference typedefs
+    if (!resolveTypedefs(error)) {
+        return false;
+    }
+    if (!resolveEnumBaseTypes(error)) {
+        return false;
+    }
+    if (!resolveHashdeclMembers(error)) {
+        return false;
+    }
+    // Resolve class members and constants after all types are available
+    if (!resolveInstanceMembers(error)) {
+        return false;
+    }
+    if (!resolveStaticMembers(error)) {
+        return false;
+    }
+    if (!resolveClassConstants(error)) {
         return false;
     }
     if (!deserializeConstants(error)) {
@@ -1570,8 +1588,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         }
         pending_bases.push_back(std::move(bases));
 
-        // Read instance members
+        // Read instance members (store for later resolution after hashdecls/enums)
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
+        std::vector<PendingInstanceMember> instance_members;
+        instance_members.reserve(num_members);
         for (uint32_t j = 0; j < num_members; ++j) {
             const char* mname = reader.readStringRef(ptr);
             const char* mtype_path = reader.readStringRef(ptr);
@@ -1585,14 +1605,16 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 }
             }
 
-            const QoreTypeInfo* ti = type_resolver->resolve(mtype_path, error);
-            if (!error.empty()) {
-                error.clear();  // non-fatal: use auto type
-                ti = nullptr;
+            if (mname && *mname) {
+                PendingInstanceMember pim;
+                pim.name = mname;
+                pim.type_path = mtype_path ? mtype_path : "";
+                pim.access = maccess;
+                pim.default_val = default_val;
+                instance_members.push_back(std::move(pim));
             }
-            priv->addMember(mname, static_cast<ClassAccess>(maccess), ti,
-                default_val.takeNode());
         }
+        pending_instance_members.push_back(std::move(instance_members));
 
         // Read static members (store for later resolution)
         uint32_t num_static = QoreAOTBinaryReader::readU32(ptr);
@@ -1612,8 +1634,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         }
         pending_static_members.push_back(std::move(static_members));
 
-        // Read class constants
+        // Read class constants (store for later resolution after hashdecls/enums)
         uint32_t num_consts = QoreAOTBinaryReader::readU32(ptr);
+        std::vector<PendingClassConstant> class_constants;
+        class_constants.reserve(num_consts);
         for (uint32_t j = 0; j < num_consts; ++j) {
             const char* cname = reader.readStringRef(ptr);
             const char* ctype_path = reader.readStringRef(ptr);
@@ -1623,13 +1647,16 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 return false;
             }
 
-            const QoreTypeInfo* cti = type_resolver->resolve(ctype_path, error);
-            if (!error.empty()) {
-                error.clear();
-                cti = nullptr;
+            if (cname && *cname) {
+                PendingClassConstant pcc;
+                pcc.name = cname;
+                pcc.type_path = ctype_path ? ctype_path : "";
+                pcc.access = caccess;
+                pcc.value = cval;
+                class_constants.push_back(std::move(pcc));
             }
-            priv->addBuiltinConstant(cname, cval, static_cast<ClassAccess>(caccess), cti);
         }
+        pending_class_constants.push_back(std::move(class_constants));
     }
 
     return true;
@@ -1651,13 +1678,16 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                 xsink.clear();
             }
             if (base) {
-                // Add base class to this class using the public API
-                qc->addBaseClass(const_cast<QoreClass*>(base), pbc.is_virtual);
-                printd(5, "AOT deser: resolved base class '%s' for class '%s'\n",
-                    pbc.base_path.c_str(), qc->getName());
+                // Add base class to this class with proper access level
+                qc->addBaseClass(const_cast<QoreClass*>(base),
+                    static_cast<ClassAccess>(pbc.access), pbc.is_virtual);
+                printd(5, "AOT deser: resolved base class '%s' for class '%s' (access: %d)\n",
+                    pbc.base_path.c_str(), qc->getName(), pbc.access);
             } else {
-                printd(2, "AOT deser: cannot resolve base class '%s' for class '%s'\n",
-                    pbc.base_path.c_str(), qc->getName());
+                error = "cannot resolve base class '" + pbc.base_path + "' for class '" +
+                    std::string(qc->getName()) + "'";
+                pending_bases.clear();
+                return false;
             }
         }
     }
@@ -1667,8 +1697,46 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
     return true;
 }
 
+bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
+    // Second pass: create instance members now that types are resolved
+    // NOTE: hashdecls and enums must be deserialized before calling this method
+    // so that type references to them can be resolved
+    for (uint32_t i = 0; i < class_list.size() && i < pending_instance_members.size(); ++i) {
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+
+        qore_class_private* priv = qore_class_private::get(*qc);
+        for (auto& pim : pending_instance_members[i]) {
+            const QoreTypeInfo* ti = nullptr;
+            if (!pim.type_path.empty()) {
+                ti = type_resolver->resolve(pim.type_path.c_str(), error);
+                if (!error.empty()) {
+                    error = "cannot resolve type '" + pim.type_path + "' for instance member '" +
+                        pim.name + "' in class '" + std::string(qc->getName()) + "': " + error;
+                    pending_instance_members.clear();
+                    return false;
+                }
+            }
+
+            priv->addMember(pim.name.c_str(), static_cast<ClassAccess>(pim.access), ti,
+                pim.default_val.takeNode());
+
+            printd(5, "AOT deser: added instance member '%s' to class '%s'\n",
+                pim.name.c_str(), qc->getName());
+        }
+    }
+
+    // Clear pending data
+    pending_instance_members.clear();
+    return true;
+}
+
 bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
     // Second pass: create static members now that types are resolved
+    // NOTE: hashdecls and enums must be deserialized before calling this method
+    // so that type references to them can be resolved
     for (uint32_t i = 0; i < class_list.size() && i < pending_static_members.size(); ++i) {
         QoreClass* qc = class_list[i];
         if (!qc) {
@@ -1681,8 +1749,10 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             if (!psm.type_path.empty()) {
                 ti = type_resolver->resolve(psm.type_path.c_str(), error);
                 if (!error.empty()) {
-                    error.clear();  // non-fatal: use auto type
-                    ti = nullptr;
+                    error = "cannot resolve type '" + psm.type_path + "' for static member '" +
+                        psm.name + "' in class '" + std::string(qc->getName()) + "': " + error;
+                    pending_static_members.clear();
+                    return false;
                 }
             }
 
@@ -1700,6 +1770,123 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
 
     // Clear pending data
     pending_static_members.clear();
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
+    // Second pass: add class constants now that types are resolved
+    // NOTE: hashdecls and enums must be deserialized before calling this method
+    // so that type references to them can be resolved
+    for (uint32_t i = 0; i < class_list.size() && i < pending_class_constants.size(); ++i) {
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+
+        qore_class_private* priv = qore_class_private::get(*qc);
+        for (auto& pcc : pending_class_constants[i]) {
+            const QoreTypeInfo* ti = nullptr;
+            if (!pcc.type_path.empty()) {
+                ti = type_resolver->resolve(pcc.type_path.c_str(), error);
+                if (!error.empty()) {
+                    error = "cannot resolve type '" + pcc.type_path + "' for constant '" +
+                        pcc.name + "' in class '" + std::string(qc->getName()) + "': " + error;
+                    pending_class_constants.clear();
+                    return false;
+                }
+            }
+
+            priv->addBuiltinConstant(pcc.name.c_str(), pcc.value,
+                static_cast<ClassAccess>(pcc.access), ti);
+
+            printd(5, "AOT deser: added constant '%s' to class '%s'\n",
+                pcc.name.c_str(), qc->getName());
+        }
+    }
+
+    // Clear pending data
+    pending_class_constants.clear();
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
+    // Second pass: add hashdecl members now that all types exist
+    for (auto& entry : pending_hashdecl_members) {
+        TypedHashDecl* hd = entry.first;
+        typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
+
+        for (auto& phm : entry.second) {
+            const QoreTypeInfo* mti = type_resolver->resolve(phm.type_path.c_str(), error);
+            if (!error.empty()) {
+                error = "cannot resolve type '" + phm.type_path + "' for member '" +
+                    phm.name + "' in hashdecl '" + std::string(hd->getName()) + "': " + error;
+                pending_hashdecl_members.clear();
+                return false;
+            }
+            hdp->addMember(phm.name.c_str(), mti, phm.default_val);
+
+            printd(5, "AOT deser: added member '%s' to hashdecl '%s'\n",
+                phm.name.c_str(), hd->getName());
+        }
+    }
+
+    // Clear pending data
+    pending_hashdecl_members.clear();
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveTypedefs(std::string& error) {
+    // Multi-pass resolution to handle forward references between typedefs
+    // Keep iterating until all are resolved or no progress is made
+    while (!pending_typedefs.empty()) {
+        size_t resolved_count = 0;
+        std::vector<PendingTypedef> unresolved;
+
+        for (auto& pt : pending_typedefs) {
+            std::string temp_error;
+            const QoreTypeInfo* ti = type_resolver->resolve(pt.type_path.c_str(), temp_error);
+            if (temp_error.empty() && ti) {
+                ns_list[pt.ns_idx]->typedefMap[pt.name.c_str()] =
+                    new TypedefEntry(nullptr, ti, nullptr, pt.is_pub);
+                ++resolved_count;
+                printd(5, "AOT deser: created typedef '%s'\n", pt.name.c_str());
+            } else {
+                unresolved.push_back(std::move(pt));
+            }
+        }
+
+        if (resolved_count == 0 && !unresolved.empty()) {
+            // No progress - circular reference or genuinely missing type
+            error = "cannot resolve type '" + unresolved[0].type_path +
+                "' for typedef '" + unresolved[0].name + "'";
+            pending_typedefs.clear();
+            return false;
+        }
+
+        pending_typedefs = std::move(unresolved);
+    }
+
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveEnumBaseTypes(std::string& error) {
+    // Resolve enum base types now that typedefs are available
+    for (auto& pebt : pending_enum_base_types) {
+        const QoreTypeInfo* base_ti = type_resolver->resolve(pebt.base_type_path.c_str(), error);
+        if (!error.empty()) {
+            error = "cannot resolve base type '" + pebt.base_type_path +
+                "' for enum '" + std::string(pebt.ed->getName()) + "': " + error;
+            pending_enum_base_types.clear();
+            return false;
+        }
+        if (base_ti) {
+            qore_enum_decl_private::get(*pebt.ed)->setBaseTypeInfo(base_ti);
+            printd(5, "AOT deser: set base type for enum '%s'\n", pebt.ed->getName());
+        }
+    }
+
+    // Clear pending data
+    pending_enum_base_types.clear();
     return true;
 }
 
@@ -1774,15 +1961,17 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         // Set namespace
         hdp->setNamespace(ns_list[ns_idx]);
 
-        // Add members
+        // Store members for later resolution (after all hashdecls/enums/typedefs exist)
+        std::vector<PendingHashdeclMember> pending_members;
+        pending_members.reserve(members.size());
         for (auto& mi : members) {
-            const QoreTypeInfo* mti = type_resolver->resolve(mi.type_path.c_str(), error);
-            if (!error.empty()) {
-                error.clear();  // non-fatal: use auto type
-                mti = nullptr;
-            }
-            hdp->addMember(mi.name.c_str(), mti, mi.default_val);
+            PendingHashdeclMember phm;
+            phm.name = std::move(mi.name);
+            phm.type_path = std::move(mi.type_path);
+            phm.default_val = mi.default_val;
+            pending_members.push_back(std::move(phm));
         }
+        pending_hashdecl_members.push_back({hd, std::move(pending_members)});
 
         // Add to namespace's hashDeclList
         if (ns_list[ns_idx]->hashDeclList.add(hd) != 0) {
@@ -1860,18 +2049,16 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
             continue;
         }
 
-        // Resolve base type
-        const QoreTypeInfo* base_ti = type_resolver->resolve(base_type_path, error);
-        if (!error.empty()) {
-            error.clear();  // non-fatal: default to int
-            base_ti = bigIntTypeInfo;
-        }
-        if (!base_ti) {
-            base_ti = bigIntTypeInfo;
-        }
+        // Create the QoreEnumDecl with default base type (will be resolved later if needed)
+        QoreEnumDecl* ed = new QoreEnumDecl(name, nspath, bigIntTypeInfo);
 
-        // Create the QoreEnumDecl
-        QoreEnumDecl* ed = new QoreEnumDecl(name, nspath, base_ti);
+        // Store base type path for later resolution if it's not the default
+        if (base_type_path && *base_type_path) {
+            PendingEnumBaseType pebt;
+            pebt.ed = ed;
+            pebt.base_type_path = base_type_path;
+            pending_enum_base_types.push_back(std::move(pebt));
+        }
         qore_enum_decl_private* edp = qore_enum_decl_private::get(*ed);
 
         // Set visibility
@@ -1911,23 +2098,27 @@ bool QoreAOTBinaryDeserializer::deserializeTypedefs(std::string& error) {
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
 
+    // Store typedefs for later resolution (after all hashdecls/enums exist)
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
         const char* type_path = reader.readStringRef(ptr);
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint8_t is_pub = QoreAOTBinaryReader::readU8(ptr);
 
-        // Create typedef entry in the namespace
-        if (ns_idx < ns_list.size() && ns_list[ns_idx]) {
-            const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
-            if (!error.empty()) {
-                error.clear();  // non-fatal
-                continue;
-            }
-            if (ti && name && *name) {
-                ns_list[ns_idx]->typedefMap[name] =
-                    new TypedefEntry(nullptr, ti, nullptr, is_pub != 0);
-            }
+        // Validate namespace index
+        if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
+            error = "invalid namespace index " + std::to_string(ns_idx) +
+                " for typedef '" + std::string(name ? name : "(null)") + "'";
+            return false;
+        }
+
+        if (name && *name) {
+            PendingTypedef pt;
+            pt.name = name;
+            pt.type_path = type_path ? type_path : "";
+            pt.ns_idx = ns_idx;
+            pt.is_pub = (is_pub != 0);
+            pending_typedefs.push_back(std::move(pt));
         }
     }
 
@@ -1960,17 +2151,27 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         }
 
         // Add constant to namespace
-        if (ns_idx < ns_list.size() && ns_list[ns_idx] && name && *name) {
-            const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
-            if (!error.empty()) {
-                error.clear();
-                ti = nullptr;
-            }
-            ns_list[ns_idx]->constant.add(name, val, ti,
-                static_cast<ClassAccess>(access));
-        } else {
+        if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
             val.discard(nullptr);
+            error = "invalid namespace index " + std::to_string(ns_idx) +
+                " for constant '" + std::string(name ? name : "(null)") + "'";
+            return false;
         }
+        if (!name || !*name) {
+            val.discard(nullptr);
+            error = "invalid empty name for namespace constant";
+            return false;
+        }
+
+        const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
+        if (!error.empty()) {
+            val.discard(nullptr);
+            error = "cannot resolve type '" + std::string(type_path ? type_path : "(null)") +
+                "' for constant '" + std::string(name) + "': " + error;
+            return false;
+        }
+        ns_list[ns_idx]->constant.add(name, val, ti,
+            static_cast<ClassAccess>(access));
 
         (void)is_pub;
     }
@@ -1998,24 +2199,33 @@ bool QoreAOTBinaryDeserializer::deserializeGlobals(std::string& error) {
         uint8_t is_thread_local = QoreAOTBinaryReader::readU8(ptr);
         uint8_t is_pub = QoreAOTBinaryReader::readU8(ptr);
 
-        if (ns_idx < ns_list.size() && ns_list[ns_idx] && name && *name) {
-            const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
-            if (!error.empty()) {
-                error.clear();
-                ti = nullptr;
-            }
-
-            // Create the global variable directly
-            Var* var = new Var(get_runtime_location(), name, ti, false,
-                is_thread_local != 0);
-            if (is_pub) {
-                var->setPublic();
-            }
-            ns_list[ns_idx]->var_list.vmap[var->getName()] = var;
-
-            printd(5, "AOT deser: created global var '%s' (type=%s, thread_local=%d)\n",
-                name, type_path, is_thread_local);
+        if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
+            error = "invalid namespace index " + std::to_string(ns_idx) +
+                " for global variable '" + std::string(name ? name : "(null)") + "'";
+            return false;
         }
+        if (!name || !*name) {
+            error = "invalid empty name for global variable";
+            return false;
+        }
+
+        const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
+        if (!error.empty()) {
+            error = "cannot resolve type '" + std::string(type_path ? type_path : "(null)") +
+                "' for global variable '" + std::string(name) + "': " + error;
+            return false;
+        }
+
+        // Create the global variable directly
+        Var* var = new Var(get_runtime_location(), name, ti, false,
+            is_thread_local != 0);
+        if (is_pub) {
+            var->setPublic();
+        }
+        ns_list[ns_idx]->var_list.vmap[var->getName()] = var;
+
+        printd(5, "AOT deser: created global var '%s' (type=%s, thread_local=%d)\n",
+            name, type_path, is_thread_local);
     }
 
     return true;
@@ -2057,8 +2267,13 @@ static bool readAndSetupVariantSignature(
 
         const QoreTypeInfo* pti = type_resolver->resolve(ptype_path, error);
         if (!error.empty()) {
-            error.clear();  // non-fatal
-            pti = nullptr;
+            // Clean up already-read defaults
+            for (uint32_t k = 0; k < j; ++k) {
+                param_defaults[k].discard(nullptr);
+            }
+            error = "cannot resolve type '" + std::string(ptype_path ? ptype_path : "(null)") +
+                "' for parameter '" + param_names[j] + "': " + error;
+            return false;
         }
         param_types[j] = pti;
 
@@ -2077,8 +2292,13 @@ static bool readAndSetupVariantSignature(
     // Resolve return type
     const QoreTypeInfo* ret_ti = type_resolver->resolve(ret_type_path, error);
     if (!error.empty()) {
-        error.clear();
-        ret_ti = nullptr;
+        // Clean up param defaults
+        for (auto& pd : param_defaults) {
+            pd.discard(nullptr);
+        }
+        error = "cannot resolve return type '" + std::string(ret_type_path ? ret_type_path : "(null)") +
+            "': " + error;
+        return false;
     }
 
     // Set up the variant's signature from metadata

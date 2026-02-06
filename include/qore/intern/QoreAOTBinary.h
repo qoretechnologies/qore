@@ -577,10 +577,19 @@ class QoreAOTBinaryDeserializer {
     // Pending base class info for two-pass class resolution
     struct PendingBaseClass {
         std::string base_path;
-        uint8_t access;
+        uint8_t access;  //!< ClassAccess value for the base class inheritance
         bool is_virtual;
     };
     std::vector<std::vector<PendingBaseClass>> pending_bases;
+
+    // Pending instance member info for two-pass class resolution
+    struct PendingInstanceMember {
+        std::string name;
+        std::string type_path;
+        uint8_t access;
+        QoreValue default_val;
+    };
+    std::vector<std::vector<PendingInstanceMember>> pending_instance_members;
 
     // Pending static member info for two-pass class resolution
     struct PendingStaticMember {
@@ -590,10 +599,49 @@ class QoreAOTBinaryDeserializer {
     };
     std::vector<std::vector<PendingStaticMember>> pending_static_members;
 
+    // Pending class constant info for two-pass class resolution
+    struct PendingClassConstant {
+        std::string name;
+        std::string type_path;
+        uint8_t access;
+        QoreValue value;
+    };
+    std::vector<std::vector<PendingClassConstant>> pending_class_constants;
+
+    // Pending hashdecl member info for two-pass resolution
+    struct PendingHashdeclMember {
+        std::string name;
+        std::string type_path;
+        QoreValue default_val;
+    };
+    // Map from hashdecl pointer to pending members
+    std::vector<std::pair<TypedHashDecl*, std::vector<PendingHashdeclMember>>> pending_hashdecl_members;
+
+    // Pending typedef info for two-pass resolution
+    struct PendingTypedef {
+        std::string name;
+        std::string type_path;
+        uint32_t ns_idx;
+        bool is_pub;
+    };
+    std::vector<PendingTypedef> pending_typedefs;
+
+    // Pending enum base type info for two-pass resolution
+    struct PendingEnumBaseType {
+        QoreEnumDecl* ed;
+        std::string base_type_path;
+    };
+    std::vector<PendingEnumBaseType> pending_enum_base_types;
+
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);
     bool resolveClassBases(std::string& error);
+    bool resolveInstanceMembers(std::string& error);
     bool resolveStaticMembers(std::string& error);
+    bool resolveClassConstants(std::string& error);
+    bool resolveHashdeclMembers(std::string& error);
+    bool resolveTypedefs(std::string& error);
+    bool resolveEnumBaseTypes(std::string& error);
     bool deserializeHashDecls(std::string& error);
     bool deserializeEnums(std::string& error);
     bool deserializeTypedefs(std::string& error);
