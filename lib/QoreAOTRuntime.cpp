@@ -59,6 +59,9 @@
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
+// Defined in QoreAOT.cpp - generates unique variant key with parameter types
+extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
+
 // ---- Slot Map Context Builder (V2 — no IR re-lowering) ----
 
 //! Helper to convert a QoreValue to NaN-boxed bits
@@ -539,9 +542,17 @@ static void registerAOTFunctionsFromSlotMaps(
         const QoreAOTFunc* aot_func = it->second;
 
         // Find the UserVariantBase in the namespace tree
-        // Function names can be "funcName" or "ClassName::methodName"
+        // Function names can be "funcName(types)" or "ClassName::methodName(types)"
+        // We need to extract just the function name for lookup
         UserVariantBase* uvb = nullptr;
         std::string fname_str(func_name);
+
+        // Strip signature suffix if present (e.g., "add(int,int)" -> "add")
+        size_t paren = fname_str.find('(');
+        if (paren != std::string::npos) {
+            fname_str = fname_str.substr(0, paren);
+        }
+
         size_t sep = fname_str.find("::");
 
         if (sep != std::string::npos) {
@@ -633,7 +644,9 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
             }
 
             const char* fname = func->getName();
-            auto it = func_map.find(fname);
+            // Generate unique key including parameter types to match compiled variant
+            std::string variant_key = getVariantKey(fname, variant);
+            auto it = func_map.find(variant_key);
             if (it != func_map.end()) {
                 const QoreAOTFunc* aot_func = it->second;
                 QoreAOTContext* ctx = buildContextForVariant(uvb, fname, pgm, *aot_func);
@@ -641,9 +654,9 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
                     uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
                     ++registered;
                     printd(2, "AOT: registered pre-compiled function '%s' (locals=%d, globals=%d, exprs=%d)\n",
-                        fname, aot_func->num_locals, aot_func->num_globals, aot_func->num_exprs);
+                        variant_key.c_str(), aot_func->num_locals, aot_func->num_globals, aot_func->num_exprs);
                 } else {
-                    printd(1, "AOT: failed to build context for function '%s'\n", fname);
+                    printd(1, "AOT: failed to build context for function '%s'\n", variant_key.c_str());
                 }
             }
         }
@@ -676,7 +689,9 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
                 }
 
                 std::string method_name = std::string(class_name) + "::" + meth->getName();
-                auto it = func_map.find(method_name);
+                // Generate unique key including parameter types to match compiled variant
+                std::string variant_key = getVariantKey(method_name.c_str(), variant);
+                auto it = func_map.find(variant_key);
                 if (it != func_map.end()) {
                     const QoreAOTFunc* aot_func = it->second;
                     QoreAOTContext* ctx = buildContextForVariant(uvb, method_name.c_str(), pgm, *aot_func);
@@ -684,9 +699,9 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
                         uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
                         ++registered;
                         printd(2, "AOT: registered pre-compiled method '%s' (locals=%d, globals=%d, exprs=%d)\n",
-                            method_name.c_str(), aot_func->num_locals, aot_func->num_globals, aot_func->num_exprs);
+                            variant_key.c_str(), aot_func->num_locals, aot_func->num_globals, aot_func->num_exprs);
                     } else {
-                        printd(1, "AOT: failed to build context for method '%s'\n", method_name.c_str());
+                        printd(1, "AOT: failed to build context for method '%s'\n", variant_key.c_str());
                     }
                 }
             }
@@ -1159,6 +1174,147 @@ static std::string aot_module_name;
 static const QoreAOTFunc* aot_module_funcs = nullptr;
 static int aot_module_num_funcs = 0;
 
+//! Extract dependency module names from source %requires directives
+/** Parses the source to find all %requires directives and extracts the module names.
+    Skips "qore" since it's always available.
+    @param source the source text
+    @param source_len length of source
+    @return vector of dependency module names
+*/
+static std::vector<std::string> extractDependencies(const char* source, int source_len) {
+    std::vector<std::string> deps;
+    const char* p = source;
+    const char* end = source + source_len;
+
+    while (p < end) {
+        // Skip leading whitespace
+        while (p < end && (*p == ' ' || *p == '\t')) {
+            ++p;
+        }
+
+        // Check for %requires directive
+        if (p + 9 <= end && strncmp(p, "%requires", 9) == 0) {
+            p += 9;
+            // Skip whitespace after %requires
+            while (p < end && (*p == ' ' || *p == '\t')) {
+                ++p;
+            }
+            // Skip optional (reexport)
+            if (p + 10 <= end && strncmp(p, "(reexport)", 10) == 0) {
+                p += 10;
+                while (p < end && (*p == ' ' || *p == '\t')) {
+                    ++p;
+                }
+            }
+            // Extract module name (until whitespace, newline, or version operator)
+            const char* name_start = p;
+            while (p < end && *p != '\n' && *p != ' ' && *p != '\t' &&
+                   *p != '<' && *p != '>' && *p != '=') {
+                ++p;
+            }
+            if (p > name_start) {
+                std::string dep_name(name_start, p - name_start);
+                // Skip "qore" as it's always available
+                if (dep_name != "qore") {
+                    deps.push_back(dep_name);
+                }
+            }
+        }
+
+        // Skip to end of line
+        while (p < end && *p != '\n') {
+            ++p;
+        }
+        if (p < end) {
+            ++p;  // skip newline
+        }
+    }
+
+    return deps;
+}
+
+//! Strip %requires directives from source code
+/** AOT modules have already resolved their dependencies at compile time, so we must
+    not process %requires directives when parsing the embedded source at runtime.
+    Processing %requires would cause a deadlock because module loading holds the
+    module manager lock, and parsing %requires tries to acquire the same lock.
+
+    We also need to strip %try-module ... %endtry blocks entirely, since the module
+    availability check doesn't make sense at runtime (modules are pre-loaded).
+*/
+static std::string stripRequiresDirectives(const char* source, int source_len) {
+    std::string result;
+    result.reserve(source_len);
+
+    const char* p = source;
+    const char* end = source + source_len;
+    int try_module_depth = 0;  // Track nested %try-module blocks
+
+    while (p < end) {
+        // Find start of line
+        const char* line_start = p;
+
+        // Skip leading whitespace
+        while (p < end && (*p == ' ' || *p == '\t')) {
+            ++p;
+        }
+
+        // Check for %requires directive
+        if (p + 9 <= end && strncmp(p, "%requires", 9) == 0) {
+            // Skip the entire line (including the newline)
+            while (p < end && *p != '\n') {
+                ++p;
+            }
+            if (p < end) {
+                ++p;  // skip the newline
+            }
+            // Replace with a comment to preserve line numbers
+            result += "# [AOT: %requires stripped]\n";
+        } else if (p + 11 <= end && strncmp(p, "%try-module", 11) == 0) {
+            // Start of %try-module block - skip everything until matching %endtry
+            ++try_module_depth;
+            while (p < end && *p != '\n') {
+                ++p;
+            }
+            if (p < end) {
+                ++p;
+            }
+            result += "# [AOT: %try-module stripped]\n";
+        } else if (p + 7 <= end && strncmp(p, "%endtry", 7) == 0) {
+            // End of %try-module block
+            if (try_module_depth > 0) {
+                --try_module_depth;
+            }
+            while (p < end && *p != '\n') {
+                ++p;
+            }
+            if (p < end) {
+                ++p;
+            }
+            result += "# [AOT: %endtry stripped]\n";
+        } else if (try_module_depth > 0) {
+            // Inside a %try-module block - strip this line too
+            while (p < end && *p != '\n') {
+                ++p;
+            }
+            if (p < end) {
+                ++p;
+            }
+            result += "# [AOT: try-module content stripped]\n";
+        } else {
+            // Copy the line as-is
+            while (p < end && *p != '\n') {
+                result += *p++;
+            }
+            if (p < end) {
+                result += *p++;  // copy the newline
+            }
+        }
+    }
+
+    return result;
+}
+
 extern "C" QoreStringNode* qore_aot_module_init(
     const char* source, int source_len,
     const char* label,
@@ -1178,6 +1334,33 @@ extern "C" QoreStringNode* qore_aot_module_init(
     // Set JIT execution mode so functions without pre-compiled code will JIT on demand
     aot_module_pgm->setExecMode(QEM_JIT);
 
+    // Extract dependencies from source and import their namespaces
+    // Dependencies were already loaded by the module manager (from qore_module_dependencies symbol)
+    // but their namespaces need to be imported into aot_module_pgm before we parse
+    std::vector<std::string> deps = extractDependencies(source, source_len);
+    fprintf(stderr, "AOT module '%s': found %d dependencies to import\n", mod_name, (int)deps.size());
+    for (const std::string& dep : deps) {
+        fprintf(stderr, "AOT module '%s': importing dependency namespace '%s'\n", mod_name, dep.c_str());
+        int rc = QMM.importModuleNSUnlocked(dep.c_str(), aot_module_pgm, xsink);
+        fprintf(stderr, "AOT module '%s': import rc=%d\n", mod_name, rc);
+        if (rc < 0) {
+            QoreStringNode* err = new QoreStringNode("AOT module dependency import error: ");
+            QoreValue ex_err = xsink.getExceptionErr();
+            QoreValue ex_desc = xsink.getExceptionDesc();
+            if (ex_err.getType() == NT_STRING) {
+                err->concat(ex_err.get<const QoreStringNode>()->c_str());
+            }
+            if (ex_desc.getType() == NT_STRING) {
+                err->concat(": ");
+                err->concat(ex_desc.get<const QoreStringNode>()->c_str());
+            }
+            xsink.clear();
+            aot_module_pgm->waitForTerminationAndDeref(nullptr);
+            aot_module_pgm = nullptr;
+            return err;
+        }
+    }
+
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
     // because the parser static_casts to it)
     // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
@@ -1185,9 +1368,16 @@ extern "C" QoreStringNode* qore_aot_module_init(
     {
         QoreUserModuleDefContextHelper mod_ctx(mod_name, label, aot_module_pgm, xsink);
 
-        // Parse the embedded source
-        QoreString src_str(source, source_len);
-        aot_module_pgm->parse(src_str.c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
+        // Strip %requires directives from embedded source to avoid deadlock.
+        // The module manager holds a lock when calling this init function, and
+        // parsing %requires would try to acquire the same lock.
+        // Note: We've already imported the dependency namespaces above.
+        std::string stripped_src = stripRequiresDirectives(source, source_len);
+
+        printd(2, "AOT module '%s': source_len=%d stripped_len=%d deps=%d\n",
+            mod_name, source_len, (int)stripped_src.size(), (int)deps.size());
+
+        aot_module_pgm->parse(stripped_src.c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
 
         mod_ctx.close();
     }
@@ -1199,11 +1389,21 @@ extern "C" QoreStringNode* qore_aot_module_init(
     if (xsink.isException()) {
         QoreStringNode* err = new QoreStringNode("AOT module parse error: ");
         // Get error description
-        QoreValue ex = xsink.getExceptionErr();
-        if (ex.getType() == NT_STRING) {
-            err->concat(ex.get<const QoreStringNode>()->c_str());
+        QoreValue ex_err = xsink.getExceptionErr();
+        QoreValue ex_desc = xsink.getExceptionDesc();
+        QoreValue ex_arg = xsink.getExceptionArg();
+        if (ex_err.getType() == NT_STRING) {
+            err->concat(ex_err.get<const QoreStringNode>()->c_str());
         } else {
             err->concat("unknown parse error");
+        }
+        if (ex_desc.getType() == NT_STRING) {
+            err->concat(", desc: ");
+            err->concat(ex_desc.get<const QoreStringNode>()->c_str());
+        }
+        if (ex_arg.getType() == NT_STRING) {
+            err->concat(", arg: ");
+            err->concat(ex_arg.get<const QoreStringNode>()->c_str());
         }
         xsink.clear();
         aot_module_pgm->waitForTerminationAndDeref(nullptr);
@@ -1247,7 +1447,8 @@ extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* q
     // User modules typically define a public namespace matching the module name
     qore_ns_private* mod_root_priv = qore_ns_private::get(*mod_root);
 
-    // Copy all user-defined child namespaces from the module to root_ns
+    // Copy namespaces that BELONG to this module (not from dependencies)
+    // Use the namespace's from_module field to identify ownership
     for (auto ni = mod_root_priv->nsl.nsmap.begin(), ne = mod_root_priv->nsl.nsmap.end(); ni != ne; ++ni) {
         QoreNamespace* child_ns = ni->second;
         if (!child_ns) {
@@ -1259,25 +1460,24 @@ extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* q
             continue;
         }
 
+        // Skip namespaces from other modules (dependencies)
+        qore_ns_private* ns_priv = qore_ns_private::get(*child_ns);
+        const char* ns_module = ns_priv->getModuleName();
+        fprintf(stderr, "AOT module ns_init: namespace '%s' from_module='%s' aot_module='%s'\n",
+            ns_name, ns_module ? ns_module : "(null)", aot_module_name.c_str());
+        if (ns_module && strcmp(ns_module, aot_module_name.c_str()) != 0) {
+            printd(2, "AOT module ns_init: skipping namespace '%s' from module '%s' (exporting '%s')\n",
+                ns_name, ns_module, aot_module_name.c_str());
+            continue;
+        }
+
         // Copy the namespace and add it to root_ns
+        // NOTE: The copy shares variants by reference with the original, so the
+        // AOT contexts registered in qore_aot_module_init are automatically inherited
         QoreNamespace* ns_copy = child_ns->copy();
         root_ns->addNamespace(ns_copy);
-
-        // Now register AOT functions on the copied namespace
-        // The copy has fresh function variants that need AOT registration
-        if (aot_module_num_funcs > 0 && aot_module_funcs) {
-            std::unordered_map<std::string, const QoreAOTFunc*> func_map;
-            for (int i = 0; i < aot_module_num_funcs; ++i) {
-                if (aot_module_funcs[i].name && aot_module_funcs[i].fn_ptr) {
-                    func_map[aot_module_funcs[i].name] = &aot_module_funcs[i];
-                }
-            }
-            int registered = 0;
-            registerAOTFunctionsInNamespace(qore_ns_private::get(*ns_copy),
-                aot_module_pgm, func_map, registered);
-            printd(2, "AOT module ns_init: registered %d AOT functions in namespace '%s'\n",
-                registered, ns_name);
-        }
+        printd(2, "AOT module ns_init: added namespace '%s' to root (AOT contexts inherited from source)\n",
+            ns_name);
     }
 }
 
@@ -1329,8 +1529,10 @@ extern "C" QoreStringNode* qore_aot_module_init_v2(
         // the "module Name" declaration, and calling it twice triggers an assertion.
         QoreUserModuleDefContextHelper mod_ctx(mod_name, label, aot_module_pgm, xsink);
 
-        aot_module_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
-            QP_WARN_DEFAULT);
+        // Strip %requires directives from fallback source to avoid deadlock
+        const char* fallback = deserializer.getFallbackSource();
+        std::string stripped_src = stripRequiresDirectives(fallback, strlen(fallback));
+        aot_module_pgm->parse(stripped_src.c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
         mod_ctx.close();
 
         if (wsink.isException()) {
