@@ -35,6 +35,8 @@ class ConditionalParsingTest inherits QUnit::Test {
         addTestCase("else branch skipped", \testElseBranchSkipped());
         addTestCase("combined if condition", \testCombinedIfCondition());
         addTestCase("all directives with comments", \testAllDirectivesWithComments());
+        addTestCase("elif non-taken branch not parsed", \testElifNonTakenBranchNotParsed());
+        addTestCase("if/elif variable scoping", \testIfElifVariableScoping());
         set_return_value(main());
     }
 
@@ -699,5 +701,233 @@ int sub getValue() { return 205; }
 %endif /* block comment on outer endif */
 ", "mixed-comments-test");
         assertEq(205, p3.callFunction("getValue"));
+    }
+
+    # Test that non-taken %elif branches are not parsed for symbol resolution
+    # Bug: %elif branches that evaluate to false still trigger PARSE-EXCEPTION
+    # for undefined types, unlike %ifdef/%endif which correctly skips parsing
+    testElifNonTakenBranchNotParsed() {
+        # Define a class conditionally - OtherClass only exists when Bar is defined
+        # Then use %if/%elif to reference it - the non-taken branch should not be parsed
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("Foo", True);
+            # Bar is NOT defined, so OtherClass does not exist
+            p.parse("
+%new-style
+%strict-args
+%require-types
+
+class MyClass {
+    string getData() {
+        return \"hello\";
+    }
+}
+
+%ifdef Bar
+class OtherClass {
+    int getValue() {
+        return 42;
+    }
+}
+%endif
+
+%if defined(Foo)
+string sub getResult() {
+    MyClass mc();
+    return mc.getData();
+}
+%elif defined(Bar)
+string sub getResult() {
+    OtherClass oc();
+    return oc.getValue();
+}
+%endif
+", "elif-non-taken-type-test");
+            assertEq("hello", p.callFunction("getResult"));
+        }
+
+        # Simpler case: non-taken %elif references a completely undefined type
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("Foo", True);
+            p.parse("
+%new-style
+%strict-args
+%require-types
+
+%if defined(Foo)
+int sub getResult() {
+    return 1;
+}
+%elif defined(Bar)
+NoSuchType sub getResult() {
+    return 2;
+}
+%endif
+", "elif-non-taken-undefined-type-test");
+            assertEq(1, p.callFunction("getResult"));
+        }
+
+        # Non-taken %else branch should also not be parsed for symbols
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("Foo", True);
+            p.parse("
+%new-style
+%strict-args
+%require-types
+
+%if defined(Foo)
+int sub getResult() {
+    return 10;
+}
+%else
+CompletelyUndefinedClass sub getResult() {
+    return 20;
+}
+%endif
+", "else-non-taken-undefined-type-test");
+            assertEq(10, p.callFunction("getResult"));
+        }
+
+        # Multiple %elif branches - only the taken one should be parsed
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("Option2", True);
+            p.parse("
+%new-style
+%strict-args
+%require-types
+
+%if defined(Option1)
+UndefinedTypeA sub getResult() { return 1; }
+%elif defined(Option2)
+int sub getResult() { return 2; }
+%elif defined(Option3)
+UndefinedTypeB sub getResult() { return 3; }
+%else
+UndefinedTypeC sub getResult() { return 4; }
+%endif
+", "elif-multiple-non-taken-types-test");
+            assertEq(2, p.callFunction("getResult"));
+        }
+
+        # Non-taken branch references undefined method - should not cause error
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("Foo", True);
+            p.parse("
+%new-style
+%strict-args
+%require-types
+
+class TestClass {
+    string getData() {
+        return \"data\";
+    }
+}
+
+%if defined(Foo)
+string sub getResult() {
+    TestClass tc();
+    return tc.getData();
+}
+%elif defined(Bar)
+string sub getResult() {
+    TestClass tc();
+    return tc.nonExistentMethod();
+}
+%endif
+", "elif-non-taken-undefined-method-test");
+            assertEq("data", p.callFunction("getResult"));
+        }
+    }
+
+    # Test that variables declared in taken %if/%elif branch are visible after %endif
+    # Verifies %if/%elif/%endif variable scoping matches %ifdef/%endif behavior
+    testIfElifVariableScoping() {
+        # Baseline: %ifdef/%endif - variable IS visible after %endif
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("Foo", True);
+            p.parse("
+%new-style
+%strict-args
+%require-types
+
+int sub getResult() {
+%ifdef Foo
+    int rv = 1;
+%endif
+%ifndef Foo
+    int rv = 2;
+%endif
+    return rv;
+}
+", "ifdef-var-scoping-baseline-test");
+            assertEq(1, p.callFunction("getResult"));
+        }
+
+        # %if/%endif - variable should be visible after %endif (like %ifdef)
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("Foo", True);
+            p.parse("
+%new-style
+%strict-args
+%require-types
+
+int sub getResult() {
+%if defined(Foo)
+    int rv = 10;
+%endif
+    return rv;
+}
+", "if-var-scoping-test");
+            assertEq(10, p.callFunction("getResult"));
+        }
+
+        # %if/%elif/%endif - variable should be visible after %endif
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("Foo", True);
+            p.parse("
+%new-style
+%strict-args
+%require-types
+
+int sub getResult() {
+%if defined(Foo)
+    int rv2 = 10;
+%elif !defined(Foo)
+    int rv2 = 20;
+%endif
+    return rv2;
+}
+", "if-elif-var-scoping-test");
+            assertEq(10, p.callFunction("getResult"));
+        }
+
+        # Variable scoping with %else
+        {
+            Program p(PO_NEW_STYLE);
+            p.define("Foo", True);
+            p.parse("
+%new-style
+%strict-args
+%require-types
+
+int sub getResult() {
+%if defined(Foo)
+    int rv3 = 100;
+%else
+    int rv3 = 200;
+%endif
+    return rv3;
+}
+", "if-else-var-scoping-test");
+            assertEq(100, p.callFunction("getResult"));
+        }
     }
 }
