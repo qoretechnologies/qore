@@ -2413,7 +2413,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::MapSelectList:
             case QoreIROpcode::HashMapAny:
             case QoreIROpcode::HashMap: {
-                if (inst->operands.size() < 3) {
+                QoreValue res;
+                if (inst->operands.empty()) {
+                    // Delegate-to-AST: operands are empty, expression stored in inst->expr
+                    auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                    res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                } else if (inst->operands.size() < 3) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "ternary op missing operands");
                     }
@@ -2423,11 +2428,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(threadlocals, nullptr);
                     cleanupStoredValues(closures, nullptr);
                     return false;
+                } else {
+                    QoreValue first = getIRValue(values, inst->operands[0]);
+                    QoreValue second = getIRValue(values, inst->operands[1]);
+                    QoreValue third = getIRValue(values, inst->operands[2]);
+                    res = QoreIRInterpreter::evalTernary(inst->opcode, first, second, third, xsink);
                 }
-                QoreValue first = getIRValue(values, inst->operands[0]);
-                QoreValue second = getIRValue(values, inst->operands[1]);
-                QoreValue third = getIRValue(values, inst->operands[2]);
-                QoreValue res = QoreIRInterpreter::evalTernary(inst->opcode, first, second, third, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, nullptr);
@@ -2445,7 +2451,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             case QoreIROpcode::HashMapSelectAny:
             case QoreIROpcode::HashMapSelect: {
-                if (inst->operands.size() < 4) {
+                QoreValue res;
+                if (inst->operands.empty()) {
+                    // Delegate-to-AST: operands are empty, expression stored in inst->expr
+                    auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                    res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                } else if (inst->operands.size() < 4) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "quaternary op missing operands");
                     }
@@ -2455,12 +2466,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(threadlocals, nullptr);
                     cleanupStoredValues(closures, nullptr);
                     return false;
+                } else {
+                    QoreValue first = getIRValue(values, inst->operands[0]);
+                    QoreValue second = getIRValue(values, inst->operands[1]);
+                    QoreValue third = getIRValue(values, inst->operands[2]);
+                    QoreValue fourth = getIRValue(values, inst->operands[3]);
+                    res = QoreIRInterpreter::evalQuaternary(inst->opcode, first, second, third, fourth, xsink);
                 }
-                QoreValue first = getIRValue(values, inst->operands[0]);
-                QoreValue second = getIRValue(values, inst->operands[1]);
-                QoreValue third = getIRValue(values, inst->operands[2]);
-                QoreValue fourth = getIRValue(values, inst->operands[3]);
-                QoreValue res = QoreIRInterpreter::evalQuaternary(inst->opcode, first, second, third, fourth, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, nullptr);
