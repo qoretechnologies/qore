@@ -2571,15 +2571,13 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     bool force_int = dynamic_cast<const QoreIntPlusEqualsOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Object += hash changes semantics in the load -> add -> store decomposition:
-    // object + hash = hash (not object), so storing the result back to the
-    // object-typed variable would fail with RUNTIME-TYPE-ERROR.  The AST
-    // QorePlusEqualsOperatorNode handles this as an in-place lvalue member merge,
-    // so fall back to AST evaluation for object-typed variables.
+    // Object += hash requires in-place member merge. Treat object-typed variables like
+    // complex lvalues and use AddAssignLValue (which uses QorePlusEqualsOperatorNode
+    // with proper lvalue semantics). This is because object + hash = hash (not object),
+    // so the load-compute-store decomposition doesn't work for objects.
     if (left_var && left_var->getTypeInfo()
             && QoreTypeInfo::getUniqueReturnClass(left_var->getTypeInfo())) {
-        error = "object plus-equals not supported for IR lowering";
-        return QoreIRValue();
+        left_var = nullptr;  // Force lvalue path
     }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);

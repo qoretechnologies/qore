@@ -111,6 +111,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/QoreListNode.h>
 #include <qore/QoreStringNode.h>
 #include <qore/intern/QoreHashNodeIntern.h>
+#include <qore/intern/QoreObjectIntern.h>
 #include <qore/intern/qore_list_private.h>
 
 // Helper: evaluate a node and ensure the caller owns a reference to the result.
