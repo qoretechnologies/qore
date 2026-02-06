@@ -5874,7 +5874,6 @@ llvm::Value* QoreIRToLLVM::emitHardEqualityFastPath(bool is_eq, llvm::Value* lhs
 
     // Create basic blocks
     llvm::BasicBlock* bits_equal_bb = llvm::BasicBlock::Create(ctx, "he_bits_equal", llvm_func);
-    llvm::BasicBlock* check_float_bb = llvm::BasicBlock::Create(ctx, "he_check_float", llvm_func);
     llvm::BasicBlock* float_nan_check_bb = llvm::BasicBlock::Create(ctx, "he_float_nan", llvm_func);
     llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "he_slow", llvm_func);
     llvm::BasicBlock* result_true_bb = llvm::BasicBlock::Create(ctx, "he_true", llvm_func);
