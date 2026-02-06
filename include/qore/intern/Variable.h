@@ -106,6 +106,7 @@ private:
     const QoreProgramLocation* loc;      // location of the initial definition
     QoreLValue<qore_gvar_ref_u> val;
     std::string name;
+    std::string from_module;              // module that defined this variable
     mutable QoreVarRWLock rwl;
     QoreParseTypeInfo* parseTypeInfo = nullptr;
     const QoreTypeInfo* typeInfo = nullptr;
@@ -342,6 +343,14 @@ public:
         narrowedTypeInfo = nullptr;
         narrowedLoc = nullptr;
     }
+
+    //! Returns the module name that defined this variable, or nullptr if not set
+    DLLLOCAL const char* getModuleName() const {
+        return from_module.empty() ? nullptr : from_module.c_str();
+    }
+
+    //! Assigns the current module context to this variable
+    DLLLOCAL void assignModule();
 };
 
 DLLLOCAL void delete_global_variables();

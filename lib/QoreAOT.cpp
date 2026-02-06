@@ -1977,7 +1977,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         std::vector<std::string> all_deps = extractAllDependencies(source_text, source_len);
         serializeDependencies(writer, all_deps);
 
-        if (!serializeNamespaceTree(writer, root_ns)) {
+        // Pass module name to filter out items from reexported dependencies
+        if (!serializeNamespaceTree(writer, root_ns, mod_info.name.c_str())) {
             error = "failed to serialize module namespace tree";
             return false;
         }
@@ -2265,7 +2266,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 static_cast<int>(combined_source.size()));
             serializeDependencies(writer, all_deps);
 
-            if (!serializeNamespaceTree(writer, root_ns)) {
+            // Pass module name to filter out items from reexported dependencies
+            if (!serializeNamespaceTree(writer, root_ns, mod_info.name.c_str())) {
                 error = "failed to serialize split module namespace tree";
                 return false;
             }

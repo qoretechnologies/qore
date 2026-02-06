@@ -40,6 +40,7 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/FunctionList.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreIR.h"
@@ -671,6 +672,12 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
         }
         qore_class_private* qcp = qore_class_private::get(*qc);
         const char* class_name = qc->getName();
+
+        // Skip system classes - they can't be modified and their methods are already set up
+        if (qcp->sys) {
+            printd(2, "AOT: skipping system class '%s' in method registration\n", class_name);
+            continue;
+        }
 
         // Helper lambda for method registration
         auto processMethod = [&](QoreMethod* meth) {
@@ -1504,49 +1511,54 @@ extern "C" QoreStringNode* qore_aot_module_init(
 
 extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* qore_ns) {
     if (!aot_module_pgm) {
+        printd(5, "AOT module ns_init: no program!\n");
         return;
     }
 
     // Get the module program's root namespace
-    QoreNamespace* mod_root = aot_module_pgm->getRootNS();
+    RootQoreNamespace* mod_root = aot_module_pgm->getRootNS();
     if (!mod_root) {
+        printd(5, "AOT module ns_init: no root namespace!\n");
         return;
     }
 
-    // Find the module's namespace by name and add a copy to root_ns
-    // User modules typically define a public namespace matching the module name
-    qore_ns_private* mod_root_priv = qore_ns_private::get(*mod_root);
+    // Use the same namespace merge mechanism as user modules to properly handle
+    // class hierarchy references. Simple copy() doesn't work because base class
+    // pointers would still reference classes from the AOT module's program.
+    ExceptionSink xsink;
+    RootQoreNamespace* target_root = static_cast<RootQoreNamespace*>(root_ns);
 
-    // Copy namespaces that BELONG to this module (not from dependencies)
-    // Use the namespace's from_module field to identify ownership
-    for (auto ni = mod_root_priv->nsl.nsmap.begin(), ne = mod_root_priv->nsl.nsmap.end(); ni != ne; ++ni) {
-        QoreNamespace* child_ns = ni->second;
-        if (!child_ns) {
-            continue;
-        }
-        // Skip system namespaces (Qore::, etc.)
-        const char* ns_name = child_ns->getName();
-        if (!strcmp(ns_name, "Qore") || !strcmp(ns_name, "::")) {
-            continue;
-        }
+    printd(5, "AOT module ns_init '%s': starting merge\n", aot_module_name.c_str());
 
-        // Skip namespaces from other modules (dependencies)
-        qore_ns_private* ns_priv = qore_ns_private::get(*child_ns);
-        const char* ns_module = ns_priv->getModuleName();
-        if (ns_module && strcmp(ns_module, aot_module_name.c_str()) != 0) {
-            printd(2, "AOT module ns_init: skipping namespace '%s' from module '%s' (exporting '%s')\n",
-                ns_name, ns_module, aot_module_name.c_str());
-            continue;
-        }
+    QoreModuleContext qmc(aot_module_name.c_str(), qore_root_ns_private::get(*target_root), xsink);
+    printd(5, "AOT module ns_init '%s': calling scanMergeCommittedNamespace\n", aot_module_name.c_str());
+    qore_root_ns_private::scanMergeCommittedNamespace(*target_root, *mod_root, qmc);
+    printd(5, "AOT module ns_init '%s': scanMergeCommittedNamespace done\n", aot_module_name.c_str());
 
-        // Copy the namespace and add it to root_ns
-        // NOTE: The copy shares variants by reference with the original, so the
-        // AOT contexts registered in qore_aot_module_init are automatically inherited
-        QoreNamespace* ns_copy = child_ns->copy();
-        root_ns->addNamespace(ns_copy);
-        printd(2, "AOT module ns_init: added namespace '%s' to root (AOT contexts inherited from source)\n",
-            ns_name);
+    if (qmc.hasError()) {
+        printd(5, "AOT module ns_init '%s': error during namespace scan/merge\n",
+            aot_module_name.c_str());
+        qmc.rollback();
+        return;
     }
+
+    printd(5, "AOT module ns_init '%s': calling copyMergeCommittedNamespace\n", aot_module_name.c_str());
+    qore_root_ns_private::copyMergeCommittedNamespace(*target_root, *mod_root);
+    printd(5, "AOT module ns_init '%s': copyMergeCommittedNamespace done\n", aot_module_name.c_str());
+
+    // Rebuild indexes so the merged items can be found during name resolution
+    // This is needed because copyMergeCommittedNamespace adds items directly without
+    // going through the module commit mechanism that normally rebuilds indexes
+    printd(5, "AOT module ns_init '%s': calling rebuildAllIndexes\n", aot_module_name.c_str());
+    qore_root_ns_private::get(*target_root)->rebuildAllIndexes();
+
+    // Check for exceptions during merge operations
+    if (xsink) {
+        fprintf(stderr, "AOT module ns_init '%s': WARNING - exception during namespace merge: %s\n",
+            aot_module_name.c_str(), xsink.getExceptionErr().c_str());
+    }
+
+    printd(5, "AOT module ns_init '%s': merge complete\n", aot_module_name.c_str());
 }
 
 extern "C" void qore_aot_module_delete() {
@@ -1590,19 +1602,23 @@ extern "C" QoreStringNode* qore_aot_module_init_v2(
         return err;
     }
 
-    // Load each dependency module
+    // Load each dependency module into this program.
+    // runTimeLoadModule will call addToProgram which imports the namespace.
     for (const std::string& dep : deps) {
+        printd(5, "AOT module v2 '%s': loading dependency '%s'\n", mod_name, dep.c_str());
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), aot_module_pgm);
         if (rc < 0 || xsink) {
             // Circular dependency or other issue - clear error and continue
             // The types might be resolved later when the requiring script is parsed
+            printd(5, "AOT module v2 '%s': dependency '%s' load error (rc=%d)\n", mod_name, dep.c_str(), rc);
             xsink.clear();
         }
     }
 
-    printd(2, "AOT module v2 '%s': loaded %d dependencies\n", mod_name, (int)deps.size());
+    printd(5, "AOT module v2 '%s': loaded %d dependencies\n", mod_name, (int)deps.size());
 
     // Deserialize namespace tree from metadata (replaces source parsing)
+    printd(5, "AOT module v2 '%s': starting namespace deserialization\n", mod_name);
     QoreAOTBinaryDeserializer deserializer;
     std::string deser_error;
     if (!deserializer.deserializeIntoProgram(aot_module_pgm,
@@ -1614,36 +1630,17 @@ extern "C" QoreStringNode* qore_aot_module_init_v2(
         return err;
     }
 
-    // If any functions need source fallback, parse the fallback source
+    // For strip-source (v2) modules, we don't support fallback source parsing.
+    // The fallback source contains the full module source which cannot be incrementally
+    // parsed after the namespace tree has been deserialized. If functions couldn't be
+    // fully compiled (due to unsupported expressions), they will not be available at runtime.
+    // Users should ensure all functions compile successfully for strip-source modules.
     if (deserializer.hasFallbackSource()) {
-        ExceptionSink wsink;
-        // Set up module context for parsing fallback source
-        // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
-        // the "module Name" declaration, and calling it twice triggers an assertion.
-        QoreUserModuleDefContextHelper mod_ctx(mod_name, label, aot_module_pgm, xsink);
-
-        // Strip %requires directives from fallback source to avoid deadlock
-        const char* fallback = deserializer.getFallbackSource();
-        std::string stripped_src = stripRequiresDirectives(fallback, strlen(fallback));
-        aot_module_pgm->parse(stripped_src.c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
-        mod_ctx.close();
-
-        if (wsink.isException()) {
-            wsink.handleWarnings();
-        }
-        if (xsink.isException()) {
-            QoreStringNode* err = new QoreStringNode("AOT module fallback parse error: ");
-            QoreValue ex = xsink.getExceptionErr();
-            if (ex.getType() == NT_STRING) {
-                err->concat(ex.get<const QoreStringNode>()->c_str());
-            } else {
-                err->concat("unknown parse error");
-            }
-            xsink.clear();
-            aot_module_pgm->waitForTerminationAndDeref(nullptr);
-            aot_module_pgm = nullptr;
-            return err;
-        }
+        // Log a warning but continue - the module will work, just without fallback functions
+        size_t fb_len = deserializer.getFallbackSourceLen();
+        printd(0, "AOT v2 module '%s': WARNING - %zu bytes of fallback source ignored; "
+            "some functions may not be available\n",
+            mod_name, fb_len);
     }
 
     // Register pre-compiled AOT functions

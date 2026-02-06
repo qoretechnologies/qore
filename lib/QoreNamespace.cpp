@@ -225,6 +225,7 @@ GVEntryBase::GVEntryBase(const QoreProgramLocation* loc, char* n, const QoreType
         ? new Var(loc, name->getIdentifier(), typeInfo, false, type == VT_THREAD_LOCAL)
         : new Var(loc, name->getIdentifier(), parseTypeInfo, type == VT_THREAD_LOCAL)
     ) {
+    var->assignModule();
 }
 
 void GVEntryBase::clear() {
@@ -2650,6 +2651,7 @@ bool qore_root_ns_private::parseResolveGlobalVarsAndClassHierarchiesIntern() {
 Var* qore_root_ns_private::parseAddResolvedGlobalVarDefIntern(const QoreProgramLocation* loc, const NamedScope& vname,
         const QoreTypeInfo* typeInfo, qore_var_t type) {
     Var* v = new Var(loc, vname.getIdentifier(), typeInfo, false, type == VT_THREAD_LOCAL);
+    v->assignModule();
     pend_gvlist.push_back(GVEntry(this, vname, v));
 
     checkGlobalVarDecl(v, vname);
@@ -2659,6 +2661,7 @@ Var* qore_root_ns_private::parseAddResolvedGlobalVarDefIntern(const QoreProgramL
 Var* qore_root_ns_private::parseAddGlobalVarDefIntern(const QoreProgramLocation* loc, const NamedScope& vname,
         QoreParseTypeInfo* typeInfo, qore_var_t type) {
     Var* v = new Var(loc, vname.getIdentifier(), typeInfo, type == VT_THREAD_LOCAL);
+    v->assignModule();
     pend_gvlist.push_back(GVEntry(this, vname, v));
 
     checkGlobalVarDecl(v, vname);

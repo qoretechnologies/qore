@@ -377,13 +377,15 @@ public:
 
         int err = 0;
 
-        // must be called even if "statements" is NULL
-        if (!mf->isStatic()) {
-            if (!isAbstract()) {
-                err = statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this);
+        // For AOT-compiled methods, statements is null (pre-compiled code)
+        if (statements) {
+            if (!mf->isStatic()) {
+                if (!isAbstract()) {
+                    err = statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this);
+                }
+            } else {
+                err = statements->parseInit(this, mf->MethodFunctionBase::getClass());
             }
-        } else {
-            err = statements->parseInit(this, mf->MethodFunctionBase::getClass());
         }
 
         // recheck types against committed types if necessary
@@ -453,9 +455,11 @@ public:
         // push return type on stack (no return value can be used)
         ParseCodeInfoHelper rtih("destructor", nothingTypeInfo);
 
-        // must be called even if statements is NULL
-        if (statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this) && !err) {
-            err = -1;
+        // For AOT-compiled methods, statements is null (pre-compiled code)
+        if (statements) {
+            if (statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this) && !err) {
+                err = -1;
+            }
         }
 
         // only 1 variant is possible, no need to recheck types
@@ -2549,6 +2553,12 @@ public:
         if (!sys) {
             sys = committed = true;
         }
+        constlist.add(cname, value, cTypeInfo, access);
+    }
+
+    //! Add a constant to a user class during AOT deserialization (does NOT set sys flag)
+    DLLLOCAL void addUserConstant(const char* cname, QoreValue value, ClassAccess access = Public, const QoreTypeInfo* cTypeInfo = nullptr) {
+        assert(!constlist.inList(cname));
         constlist.add(cname, value, cTypeInfo, access);
     }
 

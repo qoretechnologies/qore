@@ -461,9 +461,12 @@ private:
 
     @param writer the binary writer to write to
     @param root_ns pointer to the root namespace private data
+    @param module_name optional module name; when provided, only items belonging to this module are
+           serialized (items from reexported dependencies are filtered out)
     @return true on success, false if serialization failed
 */
-bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns);
+bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
+    const char* module_name = nullptr);
 
 //! Serialize module dependencies into the DEPENDENCIES binary section
 /** Writes all module dependencies (including reexport) so they can be loaded

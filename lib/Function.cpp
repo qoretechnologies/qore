@@ -3051,8 +3051,8 @@ int UserFunctionVariant::parseInit(QoreFunction* f) {
     // set implicit argv arg type as unknown
     ParseImplicitArgTypeHelper pia(nullptr);
 
-    // can (and must) be called even if statements is NULL
-    int err = statements->parseInit(this);
+    // For AOT-compiled functions, statements is null (pre-compiled code)
+    int err = statements ? statements->parseInit(this) : 0;
 
     // recheck types against committed types if necessary
     if (recheck && f->parseCheckDuplicateSignatureCommitted(&signature) && !err) {
@@ -3069,8 +3069,11 @@ int UserClosureVariant::parseInit(QoreFunction* f) {
     // resolve and push current return type on stack
     ParseCodeInfoHelper rtih(f->getName(), signature.getReturnTypeInfo());
 
-    if (statements->parseInitClosure(this, cf) && !err) {
-        err = -1;
+    // For AOT-compiled closures, statements is null (pre-compiled code)
+    if (statements) {
+        if (statements->parseInitClosure(this, cf) && !err) {
+            err = -1;
+        }
     }
 
     // only one variant is possible, no need to recheck types

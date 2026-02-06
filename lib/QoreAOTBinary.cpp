@@ -780,8 +780,29 @@ struct AOTSerializeState {
     std::vector<MethodInfo> methods;
 };
 
+//! Helper to check if an item should be skipped (from a different module than the one being compiled)
+/** @param item_module the module name of the item (from getModuleName())
+    @param current_module the module being compiled (nullptr means include all items)
+    @return true if the item should be skipped, false otherwise
+*/
+static inline bool shouldSkipReexportedItem(const char* item_module, const char* current_module) {
+    // If no current module specified, include all items (non-strip-source mode)
+    if (!current_module) {
+        return false;
+    }
+    // If item has a module and it differs from current module, skip it
+    return item_module && strcmp(item_module, current_module) != 0;
+}
+
 //! Recursively collect all user-defined items from the namespace tree
-static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t parent_idx) {
+/** @param state the state object to collect items into
+    @param ns the namespace to collect from
+    @param parent_idx the parent namespace index
+    @param current_module optional module name to filter items; when provided, only items from this
+           module are collected (items from reexported dependencies are filtered out)
+*/
+static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t parent_idx,
+        const char* current_module) {
     uint32_t ns_idx = static_cast<uint32_t>(state.namespaces.size());
     state.namespaces.push_back({ns, parent_idx});
 
@@ -792,6 +813,16 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             QoreClass* cls = cli.get();
             qore_class_private* priv = qore_class_private::get(*cls);
             if (!priv->sys) {
+                // Filter out classes from reexported dependencies
+                const char* class_module = priv->getModuleName();
+                printd(5, "AOT serialize class '%s': module='%s' current_module='%s' skip=%d\n",
+                    cls->getName(), class_module ? class_module : "n/a",
+                    current_module ? current_module : "n/a",
+                    shouldSkipReexportedItem(class_module, current_module));
+                if (shouldSkipReexportedItem(class_module, current_module)) {
+                    continue;
+                }
+
                 uint32_t class_idx = static_cast<uint32_t>(state.classes.size());
                 state.classes.push_back({cls, priv, ns_idx});
 
@@ -816,6 +847,11 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         while (hdi.next()) {
             TypedHashDecl* hd = hdi.get();
             if (!hd->isSystem()) {
+                // Filter out hashdecls from reexported dependencies
+                const char* hd_module = typed_hash_decl_private::get(*hd)->getModuleName();
+                if (shouldSkipReexportedItem(hd_module, current_module)) {
+                    continue;
+                }
                 state.hashdecls.push_back({hd, ns_idx});
             }
         }
@@ -827,12 +863,18 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         while (eli.next()) {
             QoreEnumDecl* ed = eli.get();
             if (!ed->isSystem()) {
+                // Filter out enums from reexported dependencies
+                const char* ed_module = qore_enum_decl_private::get(*ed)->getModuleName();
+                if (shouldSkipReexportedItem(ed_module, current_module)) {
+                    continue;
+                }
                 state.enums.push_back({ed, ns_idx});
             }
         }
     }
 
     // Collect user typedefs (only resolved ones)
+    // NOTE: Typedefs don't have their own module tracking; they inherit from namespace
     for (auto& ti : ns->typedefMap) {
         if (ti.second->typeInfo) {
             state.typedefs.push_back({ti.first, ti.second->typeInfo, ti.second->pub, ns_idx});
@@ -845,6 +887,11 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         while (cli.next()) {
             ConstantEntry* ce = cli.getEntry();
             if (!ce->isSystem()) {
+                // Filter out constants from reexported dependencies
+                const char* const_module = ce->getModuleName();
+                if (shouldSkipReexportedItem(const_module, current_module)) {
+                    continue;
+                }
                 state.constants.push_back({ce, ns_idx});
             }
         }
@@ -854,6 +901,11 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
     for (auto& vi : ns->var_list.vmap) {
         Var* var = vi.second;
         if (!var->isBuiltin()) {
+            // Filter out globals from reexported dependencies
+            const char* var_module = var->getModuleName();
+            if (shouldSkipReexportedItem(var_module, current_module)) {
+                continue;
+            }
             state.globals.push_back({var, ns_idx});
         }
     }
@@ -863,15 +915,30 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         FunctionEntry* entry = fi->second;
         QoreFunction* func = entry->getFunction();
         if (func && !entry->hasBuiltin()) {
+            // Filter out functions from reexported dependencies
+            const char* func_module = func->getModuleName();
+            if (shouldSkipReexportedItem(func_module, current_module)) {
+                continue;
+            }
             state.functions.push_back({entry, func, ns_idx});
         }
     }
 
-    // Recurse into child namespaces
+    // Recurse into child namespaces (filter out namespaces from reexported dependencies)
     for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
-            collectItems(state, qore_ns_private::get(*child_ns), ns_idx);
+            qore_ns_private* child_priv = qore_ns_private::get(*child_ns);
+            // Filter out namespaces from reexported dependencies
+            const char* ns_module = child_priv->getModuleName();
+            printd(5, "AOT serialize: checking namespace '%s' from module '%s' (current_module='%s') skip=%d\n",
+                child_ns->getName(), ns_module ? ns_module : "n/a",
+                current_module ? current_module : "n/a",
+                shouldSkipReexportedItem(ns_module, current_module));
+            if (shouldSkipReexportedItem(ns_module, current_module)) {
+                continue;
+            }
+            collectItems(state, child_priv, ns_idx, current_module);
         }
     }
 }
@@ -996,10 +1063,18 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             writer.writeU32(0);
         }
 
-        // members
-        uint32_t num_members = static_cast<uint32_t>(priv->members.size());
+        // members - only serialize local (non-inherited) members
+        uint32_t num_members = 0;
+        for (auto& mi : priv->members.member_list) {
+            if (mi.second->local()) {
+                ++num_members;
+            }
+        }
         writer.writeU32(num_members);
         for (auto& mi : priv->members.member_list) {
+            if (!mi.second->local()) {
+                continue;
+            }
             writer.writeStringRef(mi.first);
             writer.writeStringRef(getTypePath(mi.second->getTypeInfo()));
             writer.writeU8(static_cast<uint8_t>(mi.second->access));
@@ -1562,6 +1637,8 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
                 QoreNamespace* ns = new QoreNamespace(name);
                 qore_ns_private* nsp = qore_ns_private::get(*ns);
                 nsp->pub = (flags & 0x0001) != 0;
+                // Mark as non-builtin so it's treated as user-defined and can be merged
+                nsp->builtin = false;
                 ns_list[parent_idx]->ns->addNamespace(ns);
                 ns_list[i] = nsp;
             }
@@ -1607,7 +1684,14 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         if (flags & 0x0002) {
             priv->final = true;
         }
-        ns_list[ns_idx]->classList.add(qc);
+        int add_rv = ns_list[ns_idx]->classList.add(qc);
+        if (add_rv != 0) {
+            printd(2, "AOT deser: class '%s' already exists in namespace, using existing\n", name);
+            // Class already exists - use the existing one and delete the new one
+            QoreClass* existing = ns_list[ns_idx]->classList.find(name);
+            qore_class_private::get(*qc)->deref(true, true);
+            qc = existing;
+        }
         class_list[i] = qc;
 
         // Read base classes (store paths for later resolution)
@@ -1841,7 +1925,8 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
                 }
             }
 
-            priv->addBuiltinConstant(pcc.name.c_str(), pcc.value,
+            // Use addUserConstant to avoid setting sys=true on user classes
+            priv->addUserConstant(pcc.name.c_str(), pcc.value,
                 static_cast<ClassAccess>(pcc.access), ti);
 
             printd(5, "AOT deser: added constant '%s' to class '%s'\n",
@@ -2565,10 +2650,13 @@ bool QoreAOTBinaryDeserializer::deserializeFallbackSources(std::string& error) {
     return true;
 }
 
-bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns) {
+bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns, const char* module_name) {
     // Phase 1: Collect all user-defined items into indexed vectors
+    // When module_name is provided, filter out items from reexported dependencies
+    printd(5, "serializeNamespaceTree: module_name='%s' root_ns='%s'\n",
+        module_name ? module_name : "n/a", root_ns->ns->getName());
     AOTSerializeState state;
-    collectItems(state, root_ns, UINT32_MAX);
+    collectItems(state, root_ns, UINT32_MAX, module_name);
 
     // Phase 2: Write each section
     writeNamespacesSection(writer, state);

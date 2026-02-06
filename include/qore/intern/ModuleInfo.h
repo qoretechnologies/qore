@@ -453,6 +453,17 @@ public:
     */
     DLLLOCAL int importModuleNSUnlocked(const char* name, QoreProgram* pgm, ExceptionSink& xsink);
 
+    //! Import a module's namespace into a program (locked version)
+    /** @param name the module feature name
+        @param pgm the target QoreProgram
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int importModuleNS(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
+        AutoLocker al(mutex);
+        return importModuleNSUnlocked(name, pgm, xsink);
+    }
+
     DLLLOCAL int parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
             bool reexport = false);
     DLLLOCAL int runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
