@@ -153,6 +153,8 @@ public class DataProvider {
             # provided by the zip module
             "zip": "ZipDataProvider",
 
+            "unleashed": "UnleashedDataProvider",
+
             "zohobooks": "ZohoBooksDataProvider",
             "zohoinvoice": "ZohoInvoiceDataProvider",
         };
