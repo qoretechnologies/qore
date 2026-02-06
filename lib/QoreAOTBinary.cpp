@@ -874,9 +874,13 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
     }
 
     // Collect user typedefs (only resolved ones)
-    // NOTE: Typedefs don't have their own module tracking; they inherit from namespace
     for (auto& ti : ns->typedefMap) {
         if (ti.second->typeInfo) {
+            // Filter out typedefs from reexported dependencies
+            const char* td_module = ti.second->getModuleName();
+            if (shouldSkipReexportedItem(td_module, current_module)) {
+                continue;
+            }
             state.typedefs.push_back({ti.first, ti.second->typeInfo, ti.second->pub, ns_idx});
         }
     }
