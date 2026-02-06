@@ -9,9 +9,12 @@
 #include <qore/intern/QoreIRLowering.h>
 
 #include <qore/DateTimeNode.h>
+#include <qore/QoreObject.h>
 #include <qore/QoreValue.h>
 #include <qore/QoreHashNode.h>
 #include <qore/QoreListNode.h>
+#include <qore/QoreNumberNode.h>
+#include <qore/BinaryNode.h>
 #include <qore/intern/QoreLibIntern.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>
@@ -110,6 +113,7 @@
 #include <qore/intern/NewComplexTypeNode.h>
 #include <qore/intern/ParseReferenceNode.h>
 #include <qore/intern/SelfVarrefNode.h>
+#include <qore/intern/StaticClassVarRefNode.h>
 #include <qore/intern/ExpressionStatement.h>
 #include <qore/intern/ForStatement.h>
 #include <qore/intern/IfStatement.h>
@@ -1849,6 +1853,11 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, self_ref->loc, error);
     }
+    // Static class variable references (e.g., AbstractDataProviderType::anyDataType)
+    if (auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, static_var->loc, error);
+    }
     if (auto* backquote = dynamic_cast<const BackquoteNode*>(node)) {
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, backquote->loc, error);
@@ -1887,6 +1896,22 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (auto* scoped_obj = dynamic_cast<const ScopedObjectCallNode*>(node)) {
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, scoped_obj->loc, error);
+    }
+    // QoreObject values (e.g., Type constants like AutoListOrNothingType)
+    // These are already evaluated to objects at parse time, delegate to AST evaluation
+    if (dynamic_cast<const QoreObject*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
+    }
+    // QoreNumberNode arbitrary-precision number values
+    if (dynamic_cast<const QoreNumberNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
+    }
+    // BinaryNode literals (e.g., <abcd>)
+    if (dynamic_cast<const BinaryNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
     }
     error = "unsupported expression node for IR lowering";
     return QoreIRValue();

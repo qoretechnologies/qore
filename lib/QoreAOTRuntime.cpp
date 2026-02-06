@@ -1554,8 +1554,10 @@ extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* q
 
     // Check for exceptions during merge operations
     if (xsink) {
+        const QoreValue err = xsink.getExceptionErr();
+        const char* err_str = (err.getType() == NT_STRING) ? err.get<const QoreStringNode>()->c_str() : "(unknown)";
         fprintf(stderr, "AOT module ns_init '%s': WARNING - exception during namespace merge: %s\n",
-            aot_module_name.c_str(), xsink.getExceptionErr().c_str());
+            aot_module_name.c_str(), err_str);
     }
 
     printd(5, "AOT module ns_init '%s': merge complete\n", aot_module_name.c_str());

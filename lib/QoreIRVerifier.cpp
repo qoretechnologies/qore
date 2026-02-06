@@ -329,6 +329,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::PopAny:
         case QoreIROpcode::PushAny:
             return 0;
+        case QoreIROpcode::ListAppend:    // 2 operands: list and value to append
         case QoreIROpcode::AddInt:
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::AddAny:
@@ -542,7 +543,17 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::Throw:
             return 1;
         case QoreIROpcode::InvokeSimError:
+        case QoreIROpcode::LoadImplicitArgv:   // No operands - load entire $argv
+        case QoreIROpcode::LoadImplicitElement:// No operands - load current $#
             return 0;
+        case QoreIROpcode::LoadImplicitArg:    // Uses QoreIRImplicitArgInstruction with offset field, no operands
+            return 0;
+        case QoreIROpcode::PushImplicitArg:    // 1 operand: value to push as $1
+        case QoreIROpcode::SetImplicitArgv:    // 1 operand: list to set as $argv
+        case QoreIROpcode::PopImplicitArg:     // 1 operand: old context to restore
+        case QoreIROpcode::PushImplicitElement:// 1 operand: index value to push as $#
+        case QoreIROpcode::PopImplicitElement: // 1 operand: old element to restore
+            return 1;
         case QoreIROpcode::RangeSliceAny:
         case QoreIROpcode::RangeSliceInt:
         case QoreIROpcode::RangeSliceFloat:

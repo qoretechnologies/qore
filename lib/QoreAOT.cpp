@@ -1297,7 +1297,7 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
                     if (rc < 0 || xsink) {
                         fprintf(stderr, "AOT warning: optional module '%s' is not available during compilation\n",
                             mod_name.c_str());
-                        fprintf(stderr, "             the compiled module will only work on systems where '%s' is also unavailable\n",
+                        fprintf(stderr, "             '%s'-dependent functionality will be disabled in the compiled module\n",
                             mod_name.c_str());
                     }
                     xsink.clear();

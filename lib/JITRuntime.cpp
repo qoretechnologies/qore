@@ -477,6 +477,80 @@ extern "C" uint64_t qore_rt_load_implicit_element(ExceptionSink* xsink) {
     return toBits(QoreValue(get_implicit_element()));
 }
 
+extern "C" uint64_t qore_rt_push_implicit_arg(uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue value = fromBits(value_bits);
+    // Get current implicit args (if any), save for restoration
+    const QoreListNode* old_argv = thread_get_implicit_args();
+    QoreValue old_context = old_argv ? const_cast<QoreListNode*>(old_argv)->refSelf() : QoreValue();
+
+    // Create new single-element list with the value
+    ReferenceHolder<QoreListNode> new_argv(new QoreListNode(autoTypeInfo), xsink);
+    new_argv->push(value.refSelf(), xsink);
+    if (*xsink) {
+        // Exception occurred; clean up old_context and don't set new implicit args
+        old_context.discard(xsink);
+        return toBits(QoreValue());
+    }
+    thread_set_implicit_args(new_argv.release());
+
+    return toBits(old_context);
+}
+
+extern "C" uint64_t qore_rt_set_implicit_argv(uint64_t argv_bits, ExceptionSink* xsink) {
+    QoreValue argv_val = fromBits(argv_bits);
+    // Get current implicit args (if any), save for restoration
+    const QoreListNode* old_argv = thread_get_implicit_args();
+    QoreValue old_context = old_argv ? const_cast<QoreListNode*>(old_argv)->refSelf() : QoreValue();
+
+    // Set new implicit args (argv_val should be a list or nothing)
+    QoreListNode* new_argv = argv_val.get<QoreListNode>();
+    if (new_argv) {
+        new_argv->ref();
+    }
+    thread_set_implicit_args(new_argv);
+
+    return toBits(old_context);
+}
+
+extern "C" void qore_rt_pop_implicit_arg(uint64_t old_context_bits, ExceptionSink* xsink) {
+    QoreValue old_context = fromBits(old_context_bits);
+
+    // Get current implicit args and deref
+    const QoreListNode* current = thread_get_implicit_args();
+    if (current) {
+        const_cast<QoreListNode*>(current)->deref(xsink);
+    }
+
+    // Restore old context
+    QoreListNode* old_argv = old_context.get<QoreListNode>();
+    thread_set_implicit_args(old_argv);
+}
+
+extern "C" uint64_t qore_rt_push_implicit_element(int64_t index, ExceptionSink* xsink) {
+    // save_implicit_element sets the new value and returns the old value
+    int old_element = save_implicit_element(static_cast<int>(index));
+    return static_cast<uint64_t>(old_element);
+}
+
+extern "C" void qore_rt_pop_implicit_element(uint64_t old_element) {
+    save_implicit_element(static_cast<int>(old_element));
+}
+
+extern "C" uint64_t qore_rt_create_empty_list(ExceptionSink* xsink) {
+    QoreListNode* list = new QoreListNode(autoTypeInfo);
+    return toBits(QoreValue(list));
+}
+
+extern "C" void qore_rt_list_append(uint64_t list_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue list_val = fromBits(list_bits);
+    QoreValue value = fromBits(value_bits);
+
+    QoreListNode* list = list_val.get<QoreListNode>();
+    if (list) {
+        list->push(value.refSelf(), xsink);
+    }
+}
+
 // --- LValue operation helpers ---
 
 extern "C" uint64_t qore_rt_lvalue_load(uint64_t lvalue_bits, ExceptionSink* xsink) {
