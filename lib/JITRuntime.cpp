@@ -53,6 +53,7 @@
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/FunctionalOperatorInterface.h>
 #include <qore/intern/QoreClassIntern.h>
+#include <qore/intern/CaseNodeRegex.h>
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
@@ -549,6 +550,19 @@ extern "C" void qore_rt_list_append(uint64_t list_bits, uint64_t value_bits, Exc
     if (list) {
         list->push(value.refSelf(), xsink);
     }
+}
+
+extern "C" uint64_t qore_rt_switch_regex_match(uint64_t regex_case_ptr, uint64_t switch_val_bits, ExceptionSink* xsink) {
+    CaseNodeRegex* regex_case = reinterpret_cast<CaseNodeRegex*>(regex_case_ptr);
+    QoreValue switch_val = fromBits(switch_val_bits);
+
+    if (!regex_case) {
+        return toBits(QoreValue(false));
+    }
+
+    // CaseNodeRegex::matches() returns bool
+    bool match = regex_case->matches(switch_val, xsink);
+    return toBits(QoreValue(match));
 }
 
 // --- LValue operation helpers ---

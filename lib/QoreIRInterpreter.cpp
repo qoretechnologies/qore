@@ -31,6 +31,7 @@
 #include <qore/intern/QoreRegexMatchOperatorNode.h>
 #include <qore/intern/QoreRegexNMatchOperatorNode.h>
 #include <qore/intern/QoreRegexExtractOperatorNode.h>
+#include <qore/intern/CaseNodeRegex.h>
 #include <qore/intern/StatementBlock.h>
 #include <qore/intern/QoreException.h>
 #include <qore/intern/qore_thread_intern.h>
@@ -2969,6 +2970,31 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (res.hasNode()) {
                 cleanup.push_back(expr_inst->result.id);
             }
+            ++ip;
+            break;
+        }
+        case QoreIROpcode::SwitchRegexMatch: {
+            // Handle switch regex case match using CaseNodeRegex::matches()
+            auto* regex_inst = static_cast<QoreIRSwitchRegexMatchInstruction*>(inst);
+            QoreValue res;
+            if (!regex_inst->operands.empty() && regex_inst->regex_case) {
+                QoreValue switch_val = getIRValue(values, regex_inst->operands[0]);
+                // CaseNodeRegex::matches() is non-const, but we don't modify anything
+                bool match = const_cast<CaseNodeRegex*>(regex_inst->regex_case)->matches(switch_val, xsink);
+                res = QoreValue(match);
+            } else {
+                res = QoreValue(false);
+            }
+            if (xsink && *xsink) {
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                return false;
+            }
+            setValueSlot(values, regex_inst->result.id, res, xsink);
             ++ip;
             break;
         }

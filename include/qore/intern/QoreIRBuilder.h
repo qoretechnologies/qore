@@ -150,6 +150,8 @@ public:
     QoreIRContextInstruction* createContext(const ContextStatement* stmt, const QoreProgramLocation* loc = nullptr);
     QoreIRSummarizeInstruction* createSummarize(const SummarizeStatement* stmt,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRSwitchRegexMatchInstruction* createSwitchRegexMatch(const CaseNodeRegex* regex_case,
+        QoreIRValue switch_val, const QoreProgramLocation* loc = nullptr);
 
 private:
     QoreIRFunction* func = nullptr;

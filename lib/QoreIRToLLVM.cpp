@@ -35,6 +35,7 @@
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/OnBlockExitStatement.h"
+#include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
 #include "qore/intern/VarRefNode.h"
@@ -4688,6 +4689,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+
+        // === Switch regex match (uses CaseNodeRegex::matches()) ===
+        case QoreIROpcode::SwitchRegexMatch: {
+            const auto* regex_inst = static_cast<const QoreIRSwitchRegexMatchInstruction*>(inst);
+            if (regex_inst->operands.empty() || !regex_inst->regex_case) {
+                error = "SwitchRegexMatch requires operand and regex_case";
+                return false;
+            }
+            auto* operand = getVal(regex_inst->operands[0].id, error);
+            if (!operand) { return false; }
+            llvm::Value* operand_boxed = boxValue(operand, regex_inst->operands[0].id);
+
+            // Pass the CaseNodeRegex pointer directly to the runtime helper
+            llvm::Value* regex_case_ptr = llvm::ConstantInt::get(i64_type,
+                    reinterpret_cast<uint64_t>(regex_inst->regex_case));
+
+            auto helper = module.getOrInsertFunction("qore_rt_switch_regex_match",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper,
+                    {regex_case_ptr, operand_boxed, xsink_arg});
+
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

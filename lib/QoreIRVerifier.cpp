@@ -231,6 +231,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexNMatchBool:
+        case QoreIROpcode::SwitchRegexMatch:    // Returns bool for switch regex case match
         case QoreIROpcode::RegexExtractAny:
         case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
@@ -489,6 +490,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:
         case QoreIROpcode::RegexNMatchBool:
+        case QoreIROpcode::SwitchRegexMatch:  // 1 operand: switch value
         case QoreIROpcode::RegexExtractAny:
         case QoreIROpcode::RegexExtractList:
         case QoreIROpcode::RegexSubstAny:
@@ -809,6 +811,7 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::RegexMatchAny
                     || inst->opcode == QoreIROpcode::RegexMatchBool
                     || inst->opcode == QoreIROpcode::RegexNMatchBool
+                    || inst->opcode == QoreIROpcode::SwitchRegexMatch
                     || inst->opcode == QoreIROpcode::RegexExtractAny
                     || inst->opcode == QoreIROpcode::RegexExtractList
                     || inst->opcode == QoreIROpcode::RegexSubstAny

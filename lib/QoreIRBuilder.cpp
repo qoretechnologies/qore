@@ -622,3 +622,12 @@ QoreIRSummarizeInstruction* QoreIRBuilder::createSummarize(const SummarizeStatem
     inst->loc = loc;
     return inst;
 }
+
+QoreIRSwitchRegexMatchInstruction* QoreIRBuilder::createSwitchRegexMatch(const CaseNodeRegex* regex_case,
+        QoreIRValue switch_val, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRSwitchRegexMatchInstruction>(regex_case);
+    inst->operands.push_back(switch_val);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}

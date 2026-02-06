@@ -50,6 +50,7 @@ class DebugStatement;
 class AssertStatement;
 class ContextStatement;
 class SummarizeStatement;
+class CaseNodeRegex;
 class QoreTypeInfo;
 class QoreMethod;
 class QoreClass;
@@ -349,6 +350,8 @@ enum class QoreIROpcode : uint16_t {
     Incref,
     Decref,
     DecrefNoThrow,
+
+    SwitchRegexMatch,   // Test switch regex case: (switch_val, regex_case_ptr) -> bool
 };
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -952,6 +955,18 @@ public:
     QoreIROpcode invoke_opcode = QoreIROpcode::Invoke;
     QoreIRBasicBlock* normal_target = nullptr;
     QoreIRBasicBlock* exception_target = nullptr;
+};
+
+//! Switch regex case match instruction - tests if switch value matches a regex case
+//! operands[0] is the switch value to test
+//! result is a bool indicating match
+class QoreIRSwitchRegexMatchInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRSwitchRegexMatchInstruction(const CaseNodeRegex* n_regex_case)
+            : QoreIRInstruction(QoreIROpcode::SwitchRegexMatch), regex_case(n_regex_case) {
+    }
+
+    const CaseNodeRegex* regex_case = nullptr;  //!< The regex case node containing the regex
 };
 
 class QoreIRBasicBlock {

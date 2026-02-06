@@ -965,13 +965,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
 
             QoreIRValue match_value;
-            if (dynamic_cast<const CaseNodeRegex*>(node)) {
-                // Bail out: regex switch cases cannot be lowered to IR because the
-                // lowering process creates a temporary QoreRegexMatchOperatorNode
-                // that corrupts the AST switch statement's regex case nodes, making
-                // subsequent AST execution fail
-                error = "switch regex case not supported in IR lowering";
-                return false;
+            if (auto* regex_case = dynamic_cast<const CaseNodeRegex*>(node)) {
+                // Use SwitchRegexMatch instruction which directly calls CaseNodeRegex::matches()
+                // without creating temporary AST nodes that would corrupt the switch statement
+                auto* inst = builder.createSwitchRegexMatch(regex_case, switch_val, node->loc);
+                if (!exception_stack.empty()) {
+                    inst->exception_target = exception_stack.back();
+                }
+                match_value = inst->result;
             } else if (auto* op_case = dynamic_cast<const CaseNodeWithOperator*>(node)) {
                 QoreIRValue case_val = lowerExpression(node->val, error);
                 if (!case_val.isValid()) {

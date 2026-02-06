@@ -138,6 +138,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::RegexMatchAny: return "regex.match.any";
         case QoreIROpcode::RegexMatchBool: return "regex.match.bool";
         case QoreIROpcode::RegexNMatchBool: return "regex.nmatch.bool";
+        case QoreIROpcode::SwitchRegexMatch: return "switch.regex.match";
         case QoreIROpcode::RegexExtractAny: return "regex.extract.any";
         case QoreIROpcode::RegexExtractList: return "regex.extract.list";
         case QoreIROpcode::RegexSubstAny: return "regex.subst.any";
