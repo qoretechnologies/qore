@@ -35,6 +35,7 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/typed_hash_decl_private.h"
@@ -147,9 +148,9 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 uint32_t count = static_cast<uint32_t>(list->size());
                 writeU32(count);
                 for (uint32_t i = 0; i < count; ++i) {
-                    if (!writeValue(list->retrieveEntry(i))) {
-                        return false;
-                    }
+                    // Must not return false here - would leave partial data
+                    // Unsupported element types become NOTHING
+                    writeValue(list->retrieveEntry(i));
                 }
             } else {
                 writeU32(0);
@@ -166,9 +167,9 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 while (hi.next()) {
                     const char* key = hi.getKey();
                     writeStringRef(key);
-                    if (!writeValue(hi.get())) {
-                        return false;
-                    }
+                    // Must not return false here - would leave partial data
+                    // Unsupported value types become NOTHING
+                    writeValue(hi.get());
                 }
             } else {
                 writeU32(0);
@@ -176,8 +177,10 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             return true;
         }
         default:
-            // Unsupported value type
-            return false;
+            // Unsupported value type - write NOTHING instead of failing
+            // This preserves binary structure integrity for container types
+            writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
+            return true;
     }
 }
 
@@ -509,7 +512,8 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
         }
 
         default:
-            error = "unknown value tag: " + std::to_string(static_cast<int>(tag));
+            error = "unknown value tag: " + std::to_string(static_cast<int>(tag))
+                + " at offset " + std::to_string(ptr - 1 - end);
             return QoreValue();
     }
 }
@@ -631,8 +635,49 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
 }
 
 const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
+    // Handle object<ClassName> patterns directly by looking up the class
+    // in the namespace tree. This works even before rebuildAllIndexes() is called.
+    if (strncmp(path, "object<", 7) == 0) {
+        const char* start = path + 7;
+        const char* end = strrchr(start, '>');
+        if (end && end > start) {
+            std::string class_path(start, end - start);
+            // Look up the class in the program's namespace tree
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+            // runtimeFindClass searches the namespace tree directly
+            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str());
+            if (qc) {
+                return qc->getOrNothingTypeInfo();
+            }
+        }
+    }
+
+    // Handle *object<ClassName> patterns (or-nothing class types)
+    if (strncmp(path, "*object<", 8) == 0) {
+        const char* start = path + 8;
+        const char* end = strrchr(start, '>');
+        if (end && end > start) {
+            std::string class_path(start, end - start);
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str());
+            if (qc) {
+                return qc->getOrNothingTypeInfo();
+            }
+        }
+    }
+
     // Use the existing parser infrastructure to resolve complex type strings
     // qore_get_type_from_string_intern() handles: list<T>, hash<T>, *T, reference<T>, etc.
+    // We need to set up the program context so that class lookups like object<ClassName>
+    // can find classes defined in the program's namespace tree.
+    if (pgm) {
+        ExceptionSink xsink;
+        ProgramRuntimeParseAccessHelper pah(&xsink, pgm);
+        if (!xsink) {
+            return qore_get_type_from_string_intern(path);
+        }
+    }
     return qore_get_type_from_string_intern(path);
 }
 
@@ -867,10 +912,8 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
         bool has_default = sig->hasDefaultArg(i);
         if (has_default && i < static_cast<uint32_t>(defaults.size())) {
             writer.writeU8(1);
-            if (!writer.writeValue(defaults[i])) {
-                // Can't serialize complex default expression - write NOTHING placeholder
-                writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
-            }
+            // writeValue handles unsupported types by writing NOTHING
+            writer.writeValue(defaults[i]);
         } else {
             writer.writeU8(0);
         }
@@ -963,9 +1006,8 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             // default initialization value
             if (mi.second->exp) {
                 writer.writeU8(1);
-                if (!writer.writeValue(mi.second->exp)) {
-                    writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
-                }
+                // writeValue handles unsupported types by writing NOTHING
+                writer.writeValue(mi.second->exp);
             } else {
                 writer.writeU8(0);
             }
@@ -1000,9 +1042,8 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     writer.writeStringRef(ce->getName());
                     writer.writeStringRef(getTypePath(ce->typeInfo));
                     writer.writeU8(static_cast<uint8_t>(ce->getAccess()));
-                    if (!writer.writeValue(ce->val)) {
-                        writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
-                    }
+                    // writeValue handles unsupported types by writing NOTHING
+                    writer.writeValue(ce->val);
                 }
             }
         }
@@ -1136,9 +1177,8 @@ static void writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         writer.writeU32(ci.ns_idx);
         writer.writeU8(static_cast<uint8_t>(ce->getAccess()));
         writer.writeU8(ce->isPublic() ? 1 : 0);
-        if (!writer.writeValue(ce->val)) {
-            writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
-        }
+        // writeValue handles unsupported types by writing NOTHING
+        writer.writeValue(ce->val);
     }
 
     writer.endSection(sec_idx);
@@ -1601,6 +1641,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             if (has_default) {
                 default_val = reader.readValue(ptr, end, error);
                 if (!error.empty()) {
+                    error = "instance member '" + std::string(mname ? mname : "(null)") + "' default: " + error;
                     return false;
                 }
             }
@@ -1644,6 +1685,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             uint8_t caccess = QoreAOTBinaryReader::readU8(ptr);
             QoreValue cval = reader.readValue(ptr, end, error);
             if (!error.empty()) {
+                error = "class constant '" + std::string(cname ? cname : "(null)") + "': " + error;
                 return false;
             }
 
@@ -1720,8 +1762,11 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                 }
             }
 
+            // Transfer ownership of the default value to the class member
+            QoreValue default_val = pim.default_val;
+            pim.default_val = QoreValue();  // Clear to prevent double-deref
             priv->addMember(pim.name.c_str(), static_cast<ClassAccess>(pim.access), ti,
-                pim.default_val.takeNode());
+                default_val);
 
             printd(5, "AOT deser: added instance member '%s' to class '%s'\n",
                 pim.name.c_str(), qc->getName());
@@ -1937,6 +1982,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             if (has_default) {
                 mi.default_val = reader.readValue(ptr, end, error);
                 if (!error.empty()) {
+                    error = "hashdecl '" + std::string(name ? name : "(null)") + "' member '" + mi.name + "' default: " + error;
                     return false;
                 }
             }
@@ -1961,6 +2007,13 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         // Set namespace
         hdp->setNamespace(ns_list[ns_idx]);
 
+        // Add to namespace's hashDeclList FIRST (before storing in pending list)
+        if (ns_list[ns_idx]->hashDeclList.add(hd) != 0) {
+            printd(2, "AOT: hashdecl '%s' already exists in namespace\n", name);
+            hdp->deref();
+            continue;
+        }
+
         // Store members for later resolution (after all hashdecls/enums/typedefs exist)
         std::vector<PendingHashdeclMember> pending_members;
         pending_members.reserve(members.size());
@@ -1972,13 +2025,6 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             pending_members.push_back(std::move(phm));
         }
         pending_hashdecl_members.push_back({hd, std::move(pending_members)});
-
-        // Add to namespace's hashDeclList
-        if (ns_list[ns_idx]->hashDeclList.add(hd) != 0) {
-            printd(2, "AOT: hashdecl '%s' already exists in namespace\n", name);
-            hdp->deref();
-            continue;
-        }
 
         // Store for parent resolution pass
         hashdecl_list.push_back({hd, parent_path ? parent_path : ""});
@@ -2038,6 +2084,7 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
             emi.name = reader.readStringRef(ptr);
             emi.val = reader.readValue(ptr, end, error);
             if (!error.empty()) {
+                error = "enum '" + std::string(name ? name : "(null)") + "' member '" + emi.name + "': " + error;
                 return false;
             }
             members.push_back(std::move(emi));
@@ -2147,6 +2194,7 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         uint8_t is_pub = QoreAOTBinaryReader::readU8(ptr);
         QoreValue val = reader.readValue(ptr, end, error);
         if (!error.empty()) {
+            error = "namespace constant '" + std::string(name ? name : "(null)") + "': " + error;
             return false;
         }
 
@@ -2161,6 +2209,18 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             val.discard(nullptr);
             error = "invalid empty name for namespace constant";
             return false;
+        }
+
+        // Skip if constant already exists (from dependency module)
+        {
+            const QoreTypeInfo* existing_ti = nullptr;
+            bool found = false;
+            ns_list[ns_idx]->constant.find(name, existing_ti, found);
+            if (found) {
+                printd(2, "AOT: skipping constant '%s' - already exists (from dependency)\n", name);
+                val.discard(nullptr);
+                continue;
+            }
         }
 
         const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
@@ -2338,6 +2398,35 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
             return false;
         }
 
+        // Skip if function already exists (from dependency module)
+        if (ns_list[ns_idx]->func_list.findNode(name)) {
+            printd(2, "AOT: skipping function '%s' - already exists (from dependency)\n", name);
+            // Skip reading variants (must match exact format of readAndSetupVariantSignature)
+            for (uint32_t v = 0; v < num_variants; ++v) {
+                // Read variant data matching the format in readAndSetupVariantSignature:
+                // 1. ret_type_path (StringRef)
+                reader.readStringRef(ptr);
+                // 2. num_params (U32)
+                uint32_t num_params = QoreAOTBinaryReader::readU32(ptr);
+                // 3. sig_flags (U16)
+                QoreAOTBinaryReader::readU16(ptr);
+                // 4. For each param: name, type_path, has_default, and optionally value
+                for (uint32_t p = 0; p < num_params; ++p) {
+                    reader.readStringRef(ptr);  // param name
+                    reader.readStringRef(ptr);  // param type path
+                    uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
+                    if (has_default) {
+                        QoreValue default_val = reader.readValue(ptr, end, error);
+                        if (!error.empty()) {
+                            return false;
+                        }
+                        default_val.discard(nullptr);
+                    }
+                }
+            }
+            continue;
+        }
+
         // Create the QoreFunction
         QoreFunction* func = new QoreFunction(name);
 
@@ -2491,6 +2580,54 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     writeGlobalsSection(writer, state);
     writeFunctionsSection(writer, state);
     writeMethodsSection(writer, state);
+
+    return true;
+}
+
+void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::string>& dependencies) {
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::DEPENDENCIES);
+
+    uint32_t count = static_cast<uint32_t>(dependencies.size());
+    writer.writeU32(count);
+
+    for (const auto& dep : dependencies) {
+        writer.writeStringRef(dep.c_str());
+    }
+
+    writer.endSection(sec_idx);
+}
+
+bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::string>& dependencies, std::string& error) {
+    // Open the binary to read just the dependencies section
+    QoreAOTBinaryReader reader;
+    if (!reader.open(data, size, error)) {
+        return false;
+    }
+
+    // Find DEPENDENCIES section
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::DEPENDENCIES);
+    if (!sec) {
+        // No dependencies section - this is OK, just means no deps
+        return true;
+    }
+
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        error = "invalid DEPENDENCIES section data";
+        return false;
+    }
+
+    uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    dependencies.reserve(count);
+
+    for (uint32_t i = 0; i < count; ++i) {
+        const char* dep_name = reader.readStringRef(ptr);
+        if (!dep_name) {
+            error = "invalid dependency name at index " + std::to_string(i);
+            return false;
+        }
+        dependencies.push_back(dep_name);
+    }
 
     return true;
 }

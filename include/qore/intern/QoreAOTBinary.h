@@ -69,6 +69,7 @@ enum class QoreAOTSectionType : uint16_t {
     SLOT_MAPS     = 11,
     TOPLEVEL      = 12,
     FUNC_SOURCES  = 13,
+    DEPENDENCIES  = 14,  //!< Module dependencies (for strip-source modules)
 };
 
 //! Value type tags for serialized constant values
@@ -463,6 +464,28 @@ private:
     @return true on success, false if serialization failed
 */
 bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns);
+
+//! Serialize module dependencies into the DEPENDENCIES binary section
+/** Writes all module dependencies (including reexport) so they can be loaded
+    before deserializing the namespace tree in strip-source mode.
+
+    @param writer the binary writer to write to
+    @param dependencies vector of dependency module names
+*/
+void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::string>& dependencies);
+
+//! Read module dependencies from binary metadata
+/** Reads the DEPENDENCIES section from serialized binary metadata.
+    This should be called before deserializeIntoProgram() to load dependencies
+    that are needed for namespace tree deserialization (e.g., base classes).
+
+    @param data pointer to the binary metadata blob
+    @param size size of the binary metadata blob
+    @param dependencies receives the list of dependency module names
+    @param error receives error message on failure
+    @return true on success, false on failure
+*/
+bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::string>& dependencies, std::string& error);
 
 // ---- Slot Map Serialization (Phase 5) ----
 

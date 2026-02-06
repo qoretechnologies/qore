@@ -1018,6 +1018,95 @@ bool QoreAOT::compile(QoreProgram* pgm,
     return true;
 }
 
+//! Extract ALL module dependencies from source (including reexport)
+/** For strip-source mode, we need to serialize all dependencies so they can be loaded
+    at runtime before deserializing the namespace tree.
+*/
+static std::vector<std::string> extractAllDependencies(const char* source, int source_len) {
+    std::vector<std::string> deps;
+    const char* p = source;
+    const char* end = source + source_len;
+    bool in_block_comment = false;
+
+    while (p < end) {
+        // Check for block comment start/end
+        if (!in_block_comment && p + 1 < end && p[0] == '/' && p[1] == '*') {
+            in_block_comment = true;
+            p += 2;
+            continue;
+        }
+        if (in_block_comment && p + 1 < end && p[0] == '*' && p[1] == '/') {
+            in_block_comment = false;
+            p += 2;
+            continue;
+        }
+        if (in_block_comment) {
+            ++p;
+            continue;
+        }
+
+        // Skip whitespace at start of line
+        while (p < end && (*p == ' ' || *p == '\t')) {
+            ++p;
+        }
+
+        // Skip line comments (# ...)
+        if (p < end && *p == '#') {
+            while (p < end && *p != '\n') {
+                ++p;
+            }
+            if (p < end) {
+                ++p;
+            }
+            continue;
+        }
+
+        // Check for %requires directive (include reexport)
+        if (p + 9 <= end && strncmp(p, "%requires", 9) == 0) {
+            p += 9;
+            // Skip whitespace after %requires
+            while (p < end && (*p == ' ' || *p == '\t')) {
+                ++p;
+            }
+            // Skip optional (reexport) - but still include the module!
+            if (p + 10 <= end && strncmp(p, "(reexport)", 10) == 0) {
+                p += 10;
+                while (p < end && (*p == ' ' || *p == '\t')) {
+                    ++p;
+                }
+            }
+            // Now read the module name (stop at whitespace, newline, or version operators)
+            const char* name_start = p;
+            while (p < end && *p != '\n' && *p != ' ' && *p != '\t' &&
+                   *p != '<' && *p != '>' && *p != '=') {
+                ++p;
+            }
+            if (p > name_start) {
+                std::string dep_name(name_start, p - name_start);
+                // Skip "qore" as it's always available
+                if (dep_name != "qore") {
+                    deps.push_back(dep_name);
+                }
+            }
+        }
+
+        // Skip to end of line
+        while (p < end && *p != '\n') {
+            if (p + 1 < end && p[0] == '/' && p[1] == '*') {
+                in_block_comment = true;
+                p += 2;
+                break;
+            }
+            ++p;
+        }
+        if (p < end && *p == '\n') {
+            ++p;
+        }
+    }
+
+    return deps;
+}
+
 //! Parse module metadata from .qm source text
 /** Extracts name, version, desc, author, url, and license from the module { ... } block.
     Falls back to deriving the module name from the filename label.
@@ -1883,6 +1972,11 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         hdr.parse_options = mod_po;
         hdr.label_offset = writer.strings.add(label);
 
+        // Serialize ALL dependencies (including reexport) so they can be loaded
+        // at runtime before deserializing the namespace tree
+        std::vector<std::string> all_deps = extractAllDependencies(source_text, source_len);
+        serializeDependencies(writer, all_deps);
+
         if (!serializeNamespaceTree(writer, root_ns)) {
             error = "failed to serialize module namespace tree";
             return false;
@@ -2164,6 +2258,12 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             hdr.flags = QORE_AOT_FLAG_IS_MODULE;
             hdr.parse_options = mod_po;
             hdr.label_offset = writer.strings.add(qm_path.c_str());
+
+            // Serialize ALL dependencies (including reexport) so they can be loaded
+            // at runtime before deserializing the namespace tree
+            std::vector<std::string> all_deps = extractAllDependencies(combined_source.c_str(),
+                static_cast<int>(combined_source.size()));
+            serializeDependencies(writer, all_deps);
 
             if (!serializeNamespaceTree(writer, root_ns)) {
                 error = "failed to serialize split module namespace tree";

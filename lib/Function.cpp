@@ -770,7 +770,10 @@ void UserSignature::setupFromAOTMetadata(
 
     // Set flags
     varargs = hasVarargs;
-    resolved = true;
+    // NOTE: Don't set resolved = true here. The signature will be marked as resolved
+    // when parseCommit() is called on the function (which calls resolve() on each variant).
+    // Setting it to true here would cause parseCheckDuplicateSignature() to fail when
+    // adding multiple variants, as it expects all pending variants to be unresolved.
 
     // Count param types
     num_param_types = 0;

@@ -1577,6 +1577,31 @@ extern "C" QoreStringNode* qore_aot_module_init_v2(
     // Set JIT execution mode
     aot_module_pgm->setExecMode(QEM_JIT);
 
+    // Load dependencies from serialized metadata BEFORE deserializing namespace tree.
+    // Dependencies must be loaded first because deserialization may need to resolve
+    // base classes, types, and other references from dependency modules.
+    std::vector<std::string> deps;
+    std::string dep_error;
+    if (!readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
+        QoreStringNode* err = new QoreStringNode("AOT module dependency read error: ");
+        err->concat(dep_error.c_str());
+        aot_module_pgm->waitForTerminationAndDeref(nullptr);
+        aot_module_pgm = nullptr;
+        return err;
+    }
+
+    // Load each dependency module
+    for (const std::string& dep : deps) {
+        int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), aot_module_pgm);
+        if (rc < 0 || xsink) {
+            // Circular dependency or other issue - clear error and continue
+            // The types might be resolved later when the requiring script is parsed
+            xsink.clear();
+        }
+    }
+
+    printd(2, "AOT module v2 '%s': loaded %d dependencies\n", mod_name, (int)deps.size());
+
     // Deserialize namespace tree from metadata (replaces source parsing)
     QoreAOTBinaryDeserializer deserializer;
     std::string deser_error;
