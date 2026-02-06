@@ -546,6 +546,10 @@ bool SSLSocketHelper::isHttp2() const {
     return getAlpnProtocol() == "h2";
 }
 
+int SSLSocketHelper::pending() const {
+    return ssl ? SSL_pending(ssl) : 0;
+}
+
 // returns 0 for success
 int SSLSocketHelper::connect(const char* mname, int timeout_ms, ExceptionSink* xsink) {
     SSLSocketReferenceHelper ssrh(this, true);
@@ -3279,15 +3283,19 @@ int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
     const void* ptr = data ? data->getPtr() : nullptr;
     size_t len = data ? data->size() : 0;
 
-    if (priv->h2_session->sendStreamData(stream_id, ptr, len, end_stream, xsink) < 0) {
+    int rv = priv->h2_session->sendStreamData(stream_id, ptr, len, end_stream, xsink);
+    if (rv < 0) {
         return -1;
     }
-
-    int rv = priv->h2_session->sendPendingData(0, xsink);
-    if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
-        return 0;
+    if (rv > 0) {
+        xsink->raiseException("HTTP2-FLOW-CONTROL",
+            "stream %d buffer full: data dropped", stream_id);
+        return -1;
     }
-    return rv < 0 ? -1 : 0;
+    // Data queued; nghttp2_session_resume_data() already called by sendStreamData().
+    // I/O thread flushes via continuePoll() -> sendPendingData().
+    // WebSocket caller wakes I/O thread via wsc.getAsyncCtrl().wake().
+    return 0;
 }
 
 BinaryNode* QoreSocket::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {

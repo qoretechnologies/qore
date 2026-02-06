@@ -646,6 +646,20 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         #! default heartbeat message
         const DefaultHeartbeatMsg = "heartbeat";
 
+        #! Maximum retries when HTTP/2 flow control backpressure is detected
+        /** When sendFrame() encounters \c HTTP2-FLOW-CONTROL (per-stream buffer > 1MB),
+            it pumps I/O to drain the buffer and retries up to this many times before
+            dropping the frame.
+        */
+        const FlowControlMaxRetries = 10;
+
+        #! Timeout per flow control retry iteration (milliseconds)
+        /** Each retry calls @ref Qore::Socket::isDataAvailable() "Socket::isDataAvailable()"
+            with this timeout to flush outgoing data and read incoming HTTP/2 frames
+            (including \c WINDOW_UPDATE) from the peer.
+        */
+        const FlowControlRetryMs = 50ms;
+
         #! known constructor options
         const Options = (
             "heartbeat",
@@ -1040,7 +1054,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             if (stop || lsh{lid} || wsc.stop_flag) {
                 logDebug("WebSocketHandler::startImpl() cid: %y stopping; stop: %y lsh{%y}: %y, "
                     "wsc.stop_flag: %y", cx.id, stop, lid, lsh{lid}, wsc.stop_flag);
-                sendClose(wsc, sock, WSCC_GoingAway);
+                try {
+                    sendClose(wsc, sock, WSCC_GoingAway);
+                } catch (hash<ExceptionInfo> ex) {
+                    logError("failed to send close frame: %s: %s", ex.err, ex.desc);
+                }
                 exit_reason = "stopping";
                 break;
             }
@@ -1319,7 +1337,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 # error in websocket handler server, log and close the connection
                 string err = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
                 logError(err);
-                sendClose(wsc, sock, WSCC_InternalServerError, err);
+                try {
+                    sendClose(wsc, sock, WSCC_InternalServerError, err);
+                } catch (hash<ExceptionInfo> ex2) {
+                    logError("failed to send close frame: %s: %s", ex2.err, ex2.desc);
+                }
                 exit_reason = "exception";
                 break;
             }
@@ -1585,21 +1607,48 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     private sendFrame(WebSocketConnection wsc, Socket sock, binary frame) {
         *AsyncSocketIo::Http2StreamContext h2_ctx = wsc.getHttp2StreamContext();
         if (h2_ctx) {
-            try {
-                h2_ctx.sendData(frame, False);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "HTTP2-ERROR" && ex.desc =~ /no HTTP\/2 session active/) {
-                    @debug {
-                        logDebug("HTTP/2 WS sendFrame: stream session inactive; stopping connection");
+            int flow_control_retry = 0;
+            while (True) {
+                try {
+                    h2_ctx.sendData(frame, False);
+                    break;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "HTTP2-ERROR" && ex.desc =~ /no HTTP\/2 session active/) {
+                        @debug {
+                            logDebug("HTTP/2 WS sendFrame: stream session inactive; stopping connection");
+                        }
+                        wsc.stop();
+                        return;
                     }
-                    wsc.stop();
-                    return;
+                    if (ex.err == "SOCKET-NOT-OPEN") {
+                        wsc.stop();
+                        return;
+                    }
+                    if (ex.err == "HTTP2-FLOW-CONTROL") {
+                        if (wsc.stop_flag || ++flow_control_retry > FlowControlMaxRetries) {
+                            if (!wsc.stop_flag) {
+                                logWarn("HTTP/2 WS sendFrame: flow control backpressure after %d retries, "
+                                    "frame dropped (%d bytes)", FlowControlMaxRetries, frame.size());
+                            }
+                            return;
+                        }
+                        # Pump I/O: flush outgoing buffer to TCP and read incoming HTTP/2 frames
+                        # (including WINDOW_UPDATE) from the peer to free flow control window
+                        try {
+                            sock.isDataAvailable(FlowControlRetryMs);
+                        } catch () {
+                            # Socket error during I/O pump - next sendData() will detect and handle
+                        }
+                        continue;
+                    }
+                    if (ex.err == "SOCKET-SSL-ERROR") {
+                        # SSL connection dead - stop gracefully
+                        logError("HTTP/2 WS sendFrame: SSL error; stopping: %s", ex.desc);
+                        wsc.stop();
+                        return;
+                    }
+                    throw ex.err, ex.desc, ex.arg;
                 }
-                if (ex.err == "SOCKET-NOT-OPEN") {
-                    wsc.stop();
-                    return;
-                }
-                throw ex.err, ex.desc, ex.arg;
             }
             if (wsc.isAsyncMode() && wsc.getAsyncCtrl()) {
                 wsc.getAsyncCtrl().wake();

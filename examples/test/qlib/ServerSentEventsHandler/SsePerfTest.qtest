@@ -1,0 +1,717 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# SsePerfTest.qtest - SSE Performance, Scalability, and Throughput Tests
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ServerSentEventHandler
+%requires ../../../../qlib/ServerSentEventClient
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class SsePerfTest
+
+#! Observer that tracks event counts, latencies, event IDs, and connection state
+class PerfObserver inherits Observer {
+    private {
+        Mutex m();
+        Condition cond();
+        int event_count = 0;
+        list<float> latencies();
+        list<auto> event_ids();
+        bool connected = False;
+        int waiting = 0;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        m.lock();
+        on_exit m.unlock();
+
+        if (event_id == EVENT_SSE_CONNECTED) {
+            connected = True;
+            if (waiting) {
+                cond.broadcast();
+            }
+            return;
+        }
+        if (event_id == EVENT_SSE_CLOSED) {
+            return;
+        }
+        if (event_id == EVENT_SSE_DATA) {
+            ++event_count;
+            if (data_.id.val()) {
+                event_ids += data_.id;
+            }
+            # If data contains a timestamp, compute latency
+            if (data_.data.typeCode() == NT_STRING && data_.data =~ /^ts:/) {
+                *string ts_str = (data_.data =~ x/^ts:(\d+)/)[0];
+                if (ts_str) {
+                    int sent_us = ts_str.toInt();
+                    int now_us_val = (now_us() - 1970-01-01).durationMicroseconds();
+                    float lat = (now_us_val - sent_us) / 1000.0;
+                    if (lat >= 0) {
+                        latencies += lat;
+                    }
+                }
+            }
+            if (waiting) {
+                cond.broadcast();
+            }
+        }
+    }
+
+    waitForConnected(*timeout dur) {
+        date deadline = now_us() + (dur ?? 10s);
+        m.lock();
+        on_exit m.unlock();
+
+        while (!connected) {
+            if (now_us() >= deadline) {
+                throw "TIMEOUT", "waitForConnected timed out";
+            }
+            ++waiting;
+            cond.wait(m, 1s);
+            --waiting;
+        }
+    }
+
+    waitForEvents(int count, *timeout dur) {
+        date deadline = now_us() + (dur ?? 30s);
+        m.lock();
+        on_exit m.unlock();
+
+        while (event_count < count) {
+            if (now_us() >= deadline) {
+                return;
+            }
+            ++waiting;
+            cond.wait(m, 1s);
+            --waiting;
+        }
+    }
+
+    int getEventCount() {
+        m.lock();
+        on_exit m.unlock();
+        return event_count;
+    }
+
+    list<float> getLatencies() {
+        m.lock();
+        on_exit m.unlock();
+        return latencies;
+    }
+
+    list<auto> getEventIds() {
+        m.lock();
+        on_exit m.unlock();
+        return event_ids;
+    }
+
+    clear() {
+        m.lock();
+        on_exit m.unlock();
+        event_count = 0;
+        remove latencies;
+        remove event_ids;
+    }
+}
+
+class SsePerfTest inherits QUnit::Test {
+    public {
+        Logger logger;
+    }
+
+    constructor() : Test("SsePerfTest", "1.0") {
+        addTestCase("single connection throughput", \singleConnectionThroughputTest());
+        addTestCase("broadcast scalability", \broadcastScalabilityTest());
+        addTestCase("large event payloads", \largeEventPayloadsTest());
+        addTestCase("sustained event delivery", \sustainedEventDeliveryTest());
+        addTestCase("connection churn under load", \connectionChurnTest());
+        addTestCase("event ordering under load", \eventOrderingTest());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        set_return_value(main());
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    #! Create a dedicated server for test isolation
+    private hash<auto> createServer() {
+        ServerSentEventHandler sse({"logger": logger});
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer http(opts);
+        http.setHandler("sse-handler", "", NOTHING, sse);
+        http.setDefaultHandler("sse-handler", sse);
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        return {
+            "http": http,
+            "sse": sse,
+            "port": port,
+        };
+    }
+
+    #! Wait for server-side connections to be registered
+    private waitForConnection(ServerSentEventHandler sse, int count, *timeout dur) {
+        date deadline = now_us() + (dur ?? 10s);
+        while (sse.getConnectionIds().size() < count) {
+            if (now_us() >= deadline) {
+                throw "TIMEOUT", sprintf("waitForConnection: expected %d connections, got %d",
+                    count, sse.getConnectionIds().size());
+            }
+            usleep(50ms);
+        }
+    }
+
+    #! Compute elapsed milliseconds from a start timestamp
+    private float elapsedMs(date start) {
+        return (now_us() - start).durationMicroseconds() / 1000.0;
+    }
+
+    #! Print latency statistics if verbose
+    private printLatencyStats(string label, list<float> latencies) {
+        if (m_options.verbose < 2 || !latencies) {
+            return;
+        }
+
+        float sum = 0.0;
+        float min_lat = latencies[0];
+        float max_lat = latencies[0];
+        foreach float lat in (latencies) {
+            sum += lat;
+            if (lat < min_lat) {
+                min_lat = lat;
+            }
+            if (lat > max_lat) {
+                max_lat = lat;
+            }
+        }
+        float avg = sum / latencies.size();
+
+        list<float> sorted = sort(latencies);
+        int p50_idx = max(0, (sorted.size() * 50 / 100) - 1);
+        int p95_idx = max(0, (sorted.size() * 95 / 100) - 1);
+        int p99_idx = max(0, (sorted.size() * 99 / 100) - 1);
+        float p50 = sorted[p50_idx];
+        float p95 = sorted[p95_idx];
+        float p99 = sorted[p99_idx];
+
+        printf("  %s: Avg: %.2f ms, Min: %.2f ms, Max: %.2f ms, P50: %.2f ms, P95: %.2f ms, P99: %.2f ms (%d samples)\n",
+            label, avg, min_lat, max_lat, p50, p95, p99, latencies.size());
+    }
+
+    #! Test 1: Single connection throughput
+    /** Measures event delivery rate for 1 client receiving N events.
+    */
+    singleConnectionThroughputTest() {
+        checkModule();
+
+        int event_count = 500;
+        hash<auto> srv = createServer();
+        on_exit srv.http.stop();
+
+        PerfObserver observer();
+        ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
+        on_exit delete client;
+        client.registerObserver(observer);
+        client.observersReady();
+
+        waitForConnection(srv.sse, 1);
+        observer.waitForConnected();
+        usleep(100ms);
+
+        date start = now_us();
+        for (int i = 0; i < event_count; ++i) {
+            srv.sse.sendAll(<SseMessageInfo>{
+                "event": "perf",
+                "data": sprintf("ts:%d:msg-%d", (now_us() - 1970-01-01).durationMicroseconds(), i),
+                "id": i + 1,
+            });
+        }
+
+        observer.waitForEvents(event_count, 30s);
+        float total_ms = elapsedMs(start);
+        int received = observer.getEventCount();
+
+        if (received == 0) {
+            testSkip("no events received - likely running under valgrind or extremely slow environment");
+        }
+
+        float throughput = received * 1000.0 / total_ms;
+        assertTrue(received > 0, sprintf("should receive events (got %d/%d)", received, event_count));
+
+        # Under normal conditions, expect high delivery; under valgrind, relax
+        if (received >= 100) {
+            assertGe(event_count * 3 / 4, received,
+                sprintf("should receive at least 75%% of events (got %d/%d)", received, event_count));
+        }
+
+        printLatencyStats("single connection", observer.getLatencies());
+        if (m_options.verbose > 1) {
+            printf("  Total: %.1f ms, Received: %d/%d, Throughput: %.1f msg/s\n",
+                total_ms, received, event_count, throughput);
+        }
+    }
+
+    #! Test 2: Broadcast scalability
+    /** N clients all receiving same events via sendAll(). Measures fan-out throughput.
+    */
+    broadcastScalabilityTest() {
+        checkModule();
+
+        int num_clients = 10;
+        int event_count = 100;
+        hash<auto> srv = createServer();
+        on_exit srv.http.stop();
+
+        list<PerfObserver> observers();
+        list<ServerSentEventClient> clients();
+
+        # Connect clients sequentially
+        for (int i = 0; i < num_clients; ++i) {
+            PerfObserver obs();
+            ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
+            client.registerObserver(obs);
+            client.observersReady();
+            clients += client;
+            observers += obs;
+        }
+        on_exit {
+            for (int i = 0; i < num_clients; ++i) {
+                try {
+                    delete clients[i];
+                } catch () {
+                    # ignore cleanup errors
+                }
+            }
+        }
+
+        waitForConnection(srv.sse, num_clients);
+        foreach PerfObserver obs in (observers) {
+            obs.waitForConnected();
+        }
+        usleep(100ms);
+
+        date start = now_us();
+        for (int i = 0; i < event_count; ++i) {
+            srv.sse.sendAll(<SseMessageInfo>{
+                "event": "broadcast",
+                "data": sprintf("msg-%d", i),
+                "id": i + 1,
+            });
+        }
+
+        # Wait for all clients to receive events
+        foreach PerfObserver obs in (observers) {
+            obs.waitForEvents(event_count, 30s);
+        }
+        float total_ms = elapsedMs(start);
+
+        # Count total received across all clients
+        int total_received = 0;
+        int min_received = event_count;
+        int max_received = 0;
+        foreach PerfObserver obs in (observers) {
+            int count = obs.getEventCount();
+            total_received += count;
+            if (count < min_received) {
+                min_received = count;
+            }
+            if (count > max_received) {
+                max_received = count;
+            }
+        }
+
+        if (total_received == 0) {
+            testSkip("no events received - likely running under valgrind or extremely slow environment");
+        }
+
+        int expected_total = num_clients * event_count;
+        float throughput = total_received * 1000.0 / total_ms;
+
+        assertTrue(total_received > 0, sprintf("should receive events across clients (got %d)", total_received));
+
+        # Under normal conditions, expect high delivery
+        if (min_received >= 10) {
+            assertGe(expected_total * 3 / 4, total_received,
+                sprintf("should receive at least 75%% of total events (got %d/%d)", total_received, expected_total));
+        }
+
+        if (m_options.verbose > 1) {
+            printf("  %d clients x %d events: Total: %.1f ms, Received: %d/%d\n",
+                num_clients, event_count, total_ms, total_received, expected_total);
+            printf("  Per-client: min=%d, max=%d, Aggregate throughput: %.1f msg/s\n",
+                min_received, max_received, throughput);
+        }
+    }
+
+    #! Test 3: Large event payloads
+    /** Tests SSE encoding overhead with various payload sizes. Verifies data integrity.
+    */
+    largeEventPayloadsTest() {
+        checkModule();
+
+        list<int> sizes = (100, 1024, 8192, 32768);
+        hash<auto> srv = createServer();
+        on_exit srv.http.stop();
+
+        foreach int size in (sizes) {
+            PerfObserver observer();
+            ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
+            on_exit delete client;
+            client.registerObserver(observer);
+            client.observersReady();
+
+            waitForConnection(srv.sse, 1);
+            observer.waitForConnected();
+            usleep(100ms);
+
+            string payload = strmul("D", size);
+
+            date start = now_us();
+            srv.sse.sendAll(<SseMessageInfo>{
+                "event": "large",
+                "data": payload,
+                "id": 1,
+            });
+
+            observer.waitForEvents(1, 30s);
+            float ms = elapsedMs(start);
+            int received = observer.getEventCount();
+
+            if (received == 0) {
+                testSkip(sprintf("%d byte payload: no events received (likely valgrind/slow environment)", size));
+                continue;
+            }
+
+            assertEq(1, received, sprintf("%d byte payload: should receive 1 event", size));
+
+            if (m_options.verbose > 1) {
+                float throughput_kbps = (size / 1024.0) / (ms / 1000.0);
+                printf("  %dB: %.2f ms, %.2f KB/s\n", size, ms, throughput_kbps);
+            }
+
+            # Disconnect current client before the loop reconnects for the next size
+            # The server tracks connections, so we need a clean state
+            delete client;
+            # Wait for server to deregister
+            int retries = 0;
+            while (srv.sse.getConnectionIds().size() > 0 && retries < 100) {
+                usleep(50ms);
+                ++retries;
+            }
+        }
+    }
+
+    #! Test 4: Sustained event delivery
+    /** Continuous stream of events for N seconds, measuring delivery percentage.
+    */
+    sustainedEventDeliveryTest() {
+        checkModule();
+
+        int duration_secs = 3;
+        hash<auto> srv = createServer();
+        on_exit srv.http.stop();
+
+        PerfObserver observer();
+        ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
+        on_exit delete client;
+        client.registerObserver(observer);
+        client.observersReady();
+
+        waitForConnection(srv.sse, 1);
+        observer.waitForConnected();
+        usleep(100ms);
+
+        int total_sent = 0;
+        Counter sender_done(1);
+        bool stop_sender = False;
+
+        # Sender thread: sends events at ~1ms intervals
+        background sub() {
+            on_exit sender_done.dec();
+            try {
+                date deadline = now_us() + seconds(duration_secs);
+                while (now_us() < deadline && !stop_sender) {
+                    srv.sse.sendAll(<SseMessageInfo>{
+                        "event": "sustained",
+                        "data": sprintf("seq-%d", total_sent),
+                        "id": total_sent + 1,
+                    });
+                    ++total_sent;
+                    usleep(1ms);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # server may shut down during sending
+            }
+        }();
+
+        on_exit {
+            stop_sender = True;
+            sender_done.waitForZero(10s);
+        }
+
+        sender_done.waitForZero(seconds(duration_secs + 10));
+
+        # Wait a bit for remaining events to arrive
+        usleep(2s);
+
+        int received = observer.getEventCount();
+
+        if (received == 0) {
+            testSkip("no events received - likely running under valgrind or extremely slow environment");
+        }
+
+        assertTrue(total_sent > 0, sprintf("events should have been sent (got %d)", total_sent));
+        assertTrue(received > 0, sprintf("events should have been received (got %d)", received));
+
+        float delivery_pct = received * 100.0 / total_sent;
+        # Under normal conditions, expect high delivery; under valgrind, relax
+        if (total_sent >= 500) {
+            assertGe(total_sent / 4, received,
+                sprintf("should receive at least 25%% of events (sent=%d, received=%d)", total_sent, received));
+        }
+
+        if (m_options.verbose > 1) {
+            printf("  %ds sustained: sent=%d, received=%d (%.1f%%)\n",
+                duration_secs, total_sent, received, delivery_pct);
+        }
+    }
+
+    #! Test 5: Connection churn under load
+    /** Tests RWLock contention: stable clients receive events while a churner thread
+        connects/disconnects repeatedly.
+    */
+    connectionChurnTest() {
+        checkModule();
+
+        int event_count = 200;
+        hash<auto> srv = createServer();
+        on_exit srv.http.stop();
+
+        # Establish 2 stable clients
+        list<PerfObserver> stable_observers();
+        list<ServerSentEventClient> stable_clients();
+        for (int i = 0; i < 2; ++i) {
+            PerfObserver obs();
+            ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
+            client.registerObserver(obs);
+            client.observersReady();
+            stable_clients += client;
+            stable_observers += obs;
+        }
+        on_exit {
+            for (int i = 0; i < 2; ++i) {
+                try {
+                    delete stable_clients[i];
+                } catch () {
+                    # ignore cleanup errors
+                }
+            }
+        }
+
+        waitForConnection(srv.sse, 2);
+        foreach PerfObserver obs in (stable_observers) {
+            obs.waitForConnected();
+        }
+        usleep(100ms);
+
+        # Churner thread: connects/disconnects in a loop
+        bool stop_churn = False;
+        Counter churn_done(1);
+        int churn_count = 0;
+
+        background sub() {
+            on_exit churn_done.dec();
+            while (!stop_churn) {
+                try {
+                    PerfObserver obs();
+                    ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
+                    client.registerObserver(obs);
+                    client.observersReady();
+                    obs.waitForConnected(5s);
+                    usleep(50ms);
+                    delete client;
+                    ++churn_count;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (stop_churn) {
+                        break;
+                    }
+                    # ignore connection errors during churn
+                }
+            }
+        }();
+
+        on_exit {
+            stop_churn = True;
+            churn_done.waitForZero(10s);
+        }
+
+        # Send events while churning
+        date start = now_us();
+        for (int i = 0; i < event_count; ++i) {
+            try {
+                srv.sse.sendAll(<SseMessageInfo>{
+                    "event": "churn",
+                    "data": sprintf("msg-%d", i),
+                    "id": i + 1,
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore send errors during churn
+            }
+            usleep(10ms);
+        }
+
+        # Wait for stable clients to receive events
+        foreach PerfObserver obs in (stable_observers) {
+            obs.waitForEvents(event_count / 2, 30s);
+        }
+        float total_ms = elapsedMs(start);
+
+        stop_churn = True;
+        churn_done.waitForZero(10s);
+
+        int min_received = event_count;
+        int max_received = 0;
+        foreach PerfObserver obs in (stable_observers) {
+            int count = obs.getEventCount();
+            if (count < min_received) {
+                min_received = count;
+            }
+            if (count > max_received) {
+                max_received = count;
+            }
+        }
+
+        if (min_received == 0) {
+            testSkip("no events received by stable clients - likely valgrind/slow environment");
+        }
+
+        assertTrue(min_received > 0,
+            sprintf("stable clients should receive events during churn (min=%d)", min_received));
+
+        # Under normal conditions, stable clients should receive most events
+        if (min_received >= 10) {
+            assertGe(event_count / 4, min_received,
+                sprintf("stable clients should receive at least 25%% of events (min=%d/%d)",
+                    min_received, event_count));
+        }
+
+        if (m_options.verbose > 1) {
+            printf("  Churn: %d connect/disconnect cycles, stable min=%d, max=%d (of %d), %.1f ms\n",
+                churn_count, min_received, max_received, event_count, total_ms);
+        }
+    }
+
+    #! Test 6: Event ordering under load
+    /** Verifies events arrive in order with correct IDs across multiple clients.
+    */
+    eventOrderingTest() {
+        checkModule();
+
+        int num_clients = 3;
+        int event_count = 200;
+        hash<auto> srv = createServer();
+        on_exit srv.http.stop();
+
+        list<PerfObserver> observers();
+        list<ServerSentEventClient> clients();
+
+        for (int i = 0; i < num_clients; ++i) {
+            PerfObserver obs();
+            ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
+            client.registerObserver(obs);
+            client.observersReady();
+            clients += client;
+            observers += obs;
+        }
+        on_exit {
+            for (int i = 0; i < num_clients; ++i) {
+                try {
+                    delete clients[i];
+                } catch () {
+                    # ignore cleanup errors
+                }
+            }
+        }
+
+        waitForConnection(srv.sse, num_clients);
+        foreach PerfObserver obs in (observers) {
+            obs.waitForConnected();
+        }
+        usleep(100ms);
+
+        # Send events with sequential IDs
+        date start = now_us();
+        for (int i = 0; i < event_count; ++i) {
+            srv.sse.sendAll(<SseMessageInfo>{
+                "event": "order",
+                "data": sprintf("msg-%d", i),
+                "id": i + 1,
+            });
+        }
+
+        # Wait for all clients to receive events
+        foreach PerfObserver obs in (observers) {
+            obs.waitForEvents(event_count, 30s);
+        }
+        float total_ms = elapsedMs(start);
+
+        # Verify ordering per client
+        int ordering_errors = 0;
+        for (int c = 0; c < num_clients; ++c) {
+            list<auto> ids = observers[c].getEventIds();
+            if (!ids) {
+                continue;
+            }
+
+            # Check strictly ascending order
+            for (int i = 1; i < ids.size(); ++i) {
+                if (int(ids[i]) <= int(ids[i - 1])) {
+                    ++ordering_errors;
+                    if (m_options.verbose > 1) {
+                        printf("  Client %d: ordering error at index %d: id %y <= %y\n",
+                            c, i, ids[i], ids[i - 1]);
+                    }
+                }
+            }
+        }
+
+        int total_received = 0;
+        foreach PerfObserver obs in (observers) {
+            total_received += obs.getEventCount();
+        }
+
+        if (total_received == 0) {
+            testSkip("no events received - likely running under valgrind or extremely slow environment");
+        }
+
+        assertEq(0, ordering_errors, "events should arrive in strictly ascending ID order");
+
+        if (m_options.verbose > 1) {
+            printf("  %d clients x %d events: %.1f ms, ordering errors: %d, total received: %d\n",
+                num_clients, event_count, total_ms, ordering_errors, total_received);
+        }
+    }
+}

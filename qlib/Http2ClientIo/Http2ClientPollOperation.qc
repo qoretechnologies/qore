@@ -99,6 +99,12 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         #! Counter for consecutive empty reads
         int empty_read_count = 0;
 
+        #! Flag set when a stream callback is dispatched during continuePoll()
+        /** Allows callers to skip blocking on Socket::poll() when a response
+            was already delivered to a callback during the same continuePoll() call.
+        */
+        bool callback_dispatched = False;
+
         #! Target URL info
         hash<auto> url_info;
 
@@ -171,6 +177,20 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     #! Returns True if the connection is ready for requests
     bool isReady() {
         return state == STATE_READING || state == STATE_WAIT_READ || state == STATE_RESPONSE_READY;
+    }
+
+    #! Returns True if a callback was dispatched during the last continuePoll() call, then clears the flag
+    /** This allows callers to avoid blocking on Socket::poll() when a response
+        was already delivered to a stream callback. Without this check, the caller
+        would block for the full poll timeout even though the response is already
+        available to the waiting thread.
+    */
+    bool checkAndClearCallbackDispatched() {
+        if (callback_dispatched) {
+            callback_dispatched = False;
+            return True;
+        }
+        return False;
     }
 
     #! Sets a callback to be invoked when the connection becomes ready
@@ -324,6 +344,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     /** @return poll info for the next poll() call, or NOTHING if complete
     */
     *hash<SocketPollInfo> continuePoll() {
+        callback_dispatched = False;
         while (True) {
             switch (state) {
                 case STATE_CONNECTING: {
@@ -535,6 +556,10 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                     }
                 }
                 if (cb) {
+                    # Signal that a callback was dispatched so callers can avoid
+                    # blocking on Socket::poll() when the response is already available
+                    callback_dispatched = True;
+
                     # Call callback outside lock to avoid deadlocks
                     try {
                         cb(output + {"ctx": stream_ctx}, NOTHING);
