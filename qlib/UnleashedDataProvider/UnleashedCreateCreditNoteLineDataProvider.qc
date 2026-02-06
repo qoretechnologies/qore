@@ -113,7 +113,7 @@ public class UnleashedCreateCreditNoteLineRequestDataType inherits HashDataType 
                 "required": True,
             },
             "Product": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Product",
                 "short_desc": "Product information",
                 "desc": "The product for this line (must include Guid)",

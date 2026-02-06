@@ -87,8 +87,8 @@ public class UnleashedUpdateProductDataProvider inherits UnleashedDataProviderBa
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updating product %y", guid));
         # Unleashed uses POST for updates
         hash<auto> response = doPost("/Products/" + guid, body);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updated product %y", response.Guid));
-        return response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updated product %y", response.Product.Guid));
+        return response.Product;
     }
 
     #! Returns the request type

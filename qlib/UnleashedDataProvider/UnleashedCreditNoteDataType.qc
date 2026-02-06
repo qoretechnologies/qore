@@ -58,19 +58,19 @@ public class UnleashedCreditNoteDataType inherits HashDataType {
                 ),
             },
             "Customer": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Customer",
                 "short_desc": "Customer details",
                 "desc": "The customer for this credit note",
             },
             "Warehouse": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Warehouse",
                 "short_desc": "Warehouse details",
                 "desc": "The warehouse for this credit note",
             },
             "Currency": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Currency",
                 "short_desc": "Currency details",
                 "desc": "The currency for this credit note",
@@ -161,7 +161,7 @@ public class UnleashedCreditNoteLineDataType inherits HashDataType {
                 "desc": "The unique GUID identifier of the credit note line",
             },
             "Product": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Product",
                 "short_desc": "Product details",
                 "desc": "The product for this line (Guid or ProductCode)",
@@ -213,126 +213,6 @@ public class UnleashedCreditNoteLineDataType inherits HashDataType {
 
     #! Creates the object
     constructor() : HashDataType("UnleashedCreditNoteLineDataType") {
-        addQoreFields(Fields);
-    }
-}
-
-#! Credit note creation request data type
-public class UnleashedCreateCreditNoteRequestDataType inherits HashDataType {
-    private {
-        const Fields = {
-            "CreditDate": {
-                "type": SoftDateType,
-                "display_name": "Credit Date",
-                "short_desc": "Credit note date",
-                "desc": "The date of the credit note (required)",
-                "required": True,
-            },
-            "Customer": {
-                "type": SoftAutoHashType,
-                "display_name": "Customer",
-                "short_desc": "Customer details",
-                "desc": "The customer for this credit note (Guid or CustomerCode required)",
-                "required": True,
-            },
-            "Warehouse": {
-                "type": SoftAutoHashType,
-                "display_name": "Warehouse",
-                "short_desc": "Warehouse details",
-                "desc": "The warehouse for this credit note (Guid or WarehouseCode required)",
-                "required": True,
-            },
-            "ExchangeRate": {
-                "type": SoftFloatType,
-                "display_name": "Exchange Rate",
-                "short_desc": "Currency exchange rate",
-                "desc": "The exchange rate for this credit note (required)",
-                "required": True,
-            },
-            "CreditLines": {
-                "type": SoftAutoListType,
-                "display_name": "Credit Lines",
-                "short_desc": "Credit note line items",
-                "desc": "The line items for this credit note (required)",
-                "required": True,
-            },
-            "Comments": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Comments",
-                "short_desc": "Credit note comments",
-                "desc": "Comments or notes for this credit note (max 1024 characters)",
-            },
-            "Reference": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Reference",
-                "short_desc": "Reference number",
-                "desc": "Reference number for this credit note (max 500 characters)",
-            },
-        };
-    }
-
-    #! Creates the object
-    constructor() : HashDataType("UnleashedCreateCreditNoteRequestDataType") {
-        addQoreFields(Fields);
-    }
-}
-
-#! Credit note line creation request data type
-public class UnleashedCreateCreditNoteLineRequestDataType inherits HashDataType {
-    private {
-        const Fields = {
-            "creditNoteGuid": {
-                "type": SoftStringType,
-                "display_name": "Credit Note GUID",
-                "short_desc": "Parent credit note ID",
-                "desc": "The GUID of the credit note to add the line to (required)",
-                "required": True,
-            },
-            "Product": {
-                "type": SoftAutoHashType,
-                "display_name": "Product",
-                "short_desc": "Product details",
-                "desc": "The product for this line (Guid or ProductCode required)",
-                "required": True,
-            },
-            "CreditQuantity": {
-                "type": SoftFloatType,
-                "display_name": "Credit Quantity",
-                "short_desc": "Quantity credited",
-                "desc": "The quantity being credited (required)",
-                "required": True,
-            },
-            "CreditPrice": {
-                "type": SoftFloatType,
-                "display_name": "Credit Price",
-                "short_desc": "Price per unit",
-                "desc": "The price per unit for this credit (required)",
-                "required": True,
-            },
-            "Reason": {
-                "type": SoftStringType,
-                "display_name": "Reason",
-                "short_desc": "Reason for credit",
-                "desc": "The reason for this credit (required)",
-                "required": True,
-            },
-            "Return": {
-                "type": SoftBoolOrNothingType,
-                "display_name": "Return",
-                "short_desc": "Is a return",
-                "desc": "Whether this is a return of goods",
-            },
-            "Comments": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Comments",
-                "short_desc": "Line comments",
-                "desc": "Comments for this line item (max 1024 characters)",
-            },
-        };
-    }
-
-    #! Creates the object
-    constructor() : HashDataType("UnleashedCreateCreditNoteLineRequestDataType") {
         addQoreFields(Fields);
     }
 }

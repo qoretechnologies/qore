@@ -107,7 +107,7 @@ public class UnleashedCreateCreditNoteRequestDataType inherits HashDataType {
         #! Field definitions
         const Fields = {
             "Customer": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Customer",
                 "short_desc": "Customer information",
                 "desc": "The customer for this credit note (must include Guid)",

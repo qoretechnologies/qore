@@ -90,8 +90,8 @@ public class UnleashedCreateProductDataProvider inherits UnleashedDataProviderBa
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: creating product %y", body.ProductCode));
         hash<auto> response = doPost("/Products", body);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: created product %y", response.Guid));
-        return response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: created product %y", response.Product.Guid));
+        return response.Product;
     }
 
     #! Returns the request type

@@ -106,7 +106,7 @@ public namespace UnleashedRestClient {
     - api-auth-signature: HMAC-SHA256 signature of the query string (base64 encoded)
 
     @par API Information:
-    - Base URL: https://go.unleashedsoftware.com/v2
+    - Base URL: https://api.unleashedsoftware.com
     - JSON format supported
     - Pagination: pageSize query parameter
 
@@ -125,7 +125,7 @@ public namespace UnleashedRestClient {
 public class UnleashedRestClient inherits RestClient::RestClient {
     public {
         #! Unleashed API base URL
-        const DefaultApiUrl = "https://go.unleashedsoftware.com/v2";
+        const DefaultApiUrl = "https://api.unleashedsoftware.com";
 
         #! API ID header name
         const ApiIdHeader = "api-auth-id";
@@ -224,8 +224,8 @@ UnleashedRestClient unleashed({
         @return the base64-encoded HMAC-SHA256 signature
     */
     private string computeSignature(string query_string) {
-        binary key = apikey.toBinary("UTF-8");
-        binary data = query_string.toBinary("UTF-8");
+        binary key = apikey.toBinary();
+        binary data = query_string.toBinary();
         binary hmac = Qore::hmac("sha256", data, key);
         return hmac.toBase64();
     }
@@ -242,76 +242,25 @@ UnleashedRestClient unleashed({
         return "";
     }
 
-    #! Adds authentication headers to the request
-    /** @param path the request path (used to extract query string for signature)
-        @param headers optional existing headers to augment
-        @return headers hash with authentication headers added
+    #! Signs requests with HMAC-SHA256 authentication
+    /** This override ensures all requests (including ping) are authenticated with HMAC signatures.
+        The signRequest method is called by prepareToSend() which is used by both normal requests
+        and the RestConnectionPingHelper for ping operations.
+
+        @param method the HTTP method
+        @param path the URI path (may include query string)
+        @param body the request body (not used for signing in Unleashed API)
+        @param hdr reference to headers hash - auth headers will be added
     */
-    private hash<auto> addAuthHeaders(string path, *hash<auto> headers) {
-        string query_string = extractQueryString(path);
+    private signRequest(string method, *string path, *data body, reference<hash<auto>> hdr) {
+        string query_string = extractQueryString(path ?? "");
         string signature = computeSignature(query_string);
 
-        hash<auto> auth_headers = {
+        hdr += {
             ApiIdHeader: api_id,
             SignatureHeader: signature,
             ClientTypeHeader: DefaultClientType,
         };
-
-        return headers + auth_headers;
-    }
-
-    #! Performs a GET request with automatic authentication
-    /** @param path the URI path to request
-        @param headers optional headers to include in the request
-        @param info an optional reference to a hash that will be set with request info
-        @param decode_errors decode the body of error responses (default: True)
-
-        @return the response from the server
-    */
-    hash<auto> get(string path, *hash<auto> headers, *reference<hash<auto>> info, *softbool decode_errors) {
-        return RestClient::get(path, addAuthHeaders(path, headers), \info, decode_errors);
-    }
-
-    #! Performs a POST request with automatic authentication
-    /** @param path the URI path to request
-        @param body the message body to send
-        @param headers optional headers to include in the request
-        @param info an optional reference to a hash that will be set with request info
-        @param decode_errors decode the body of error responses (default: True)
-
-        @return the response from the server
-    */
-    hash<auto> post(string path, auto body, *hash<auto> headers, *reference<hash<auto>> info,
-            *softbool decode_errors) {
-        return RestClient::post(path, body, addAuthHeaders(path, headers), \info, decode_errors);
-    }
-
-    #! Performs a PUT request with automatic authentication
-    /** @param path the URI path to request
-        @param body the message body to send
-        @param headers optional headers to include in the request
-        @param info an optional reference to a hash that will be set with request info
-        @param decode_errors decode the body of error responses (default: True)
-
-        @return the response from the server
-    */
-    hash<auto> put(string path, auto body, *hash<auto> headers, *reference<hash<auto>> info,
-            *softbool decode_errors) {
-        return RestClient::put(path, body, addAuthHeaders(path, headers), \info, decode_errors);
-    }
-
-    #! Performs a DELETE request with automatic authentication
-    /** @param path the URI path to request
-        @param body optional message body to send
-        @param headers optional headers to include in the request
-        @param info an optional reference to a hash that will be set with request info
-        @param decode_errors decode the body of error responses (default: True)
-
-        @return the response from the server
-    */
-    hash<auto> del(string path, auto body, *hash<auto> headers, *reference<hash<auto>> info,
-            *softbool decode_errors) {
-        return RestClient::del(path, body, addAuthHeaders(path, headers), \info, decode_errors);
     }
 }
 
@@ -326,7 +275,7 @@ UnleashedRestClient unleashed({
 public class UnleashedRestConnection inherits RestClient::RestConnection {
     public {
         #! Default Unleashed API URL
-        const DefaultConnectionUrl = "unleashed://go.unleashedsoftware.com/v2";
+        const DefaultConnectionUrl = "unleashed://api.unleashedsoftware.com";
 
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
@@ -479,7 +428,7 @@ public class UnleashedRestConnection inherits RestClient::RestConnection {
     /** @return the data provider application name this connection serves, if any
     */
     *string getAppName() {
-        return "Unleashed";
+        return "UnleashedSoftware";
     }
 
     #! returns a data provider object for this connection

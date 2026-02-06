@@ -76,8 +76,8 @@ public class UnleashedGetProductDataProvider inherits UnleashedDataProviderBase 
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: getting product %y", guid));
         auto response = doGet("/Products/" + guid);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: retrieved product %y", response.ProductCode));
-        return response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: retrieved product %y", response.Product.ProductCode));
+        return response.Product;
     }
 
     #! Returns the request type

@@ -25,7 +25,7 @@
 #! Contains all public definitions in the UnleashedDataProvider module
 public namespace UnleashedDataProvider {
     #! Application name constant
-    public const AppName = "Unleashed";
+    public const AppName = "UnleashedSoftware";
 
     #! Unleashed logo
     public const UnleashedLogo = File::readTextFile(get_script_dir() + "/unleashed-logo.svg");

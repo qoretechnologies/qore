@@ -74,7 +74,9 @@ public class UnleashedUpdateCustomerDataProvider inherits UnleashedDataProviderB
         string guid = req.guid;
         @assert(guid.val(), "guid is required");
 
-        hash<auto> body = {};
+        hash<auto> body = {
+            "CustomerCode": req.CustomerCode,
+        };
 
         # Optional fields
         if (exists req.CustomerName) body.CustomerName = req.CustomerName;
@@ -91,8 +93,8 @@ public class UnleashedUpdateCustomerDataProvider inherits UnleashedDataProviderB
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updating customer %y", guid));
         # Unleashed uses POST for updates
         hash<auto> response = doPost("/Customers/" + guid, body);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updated customer %y", response.Guid));
-        return response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updated customer %y", response.Customer.Guid));
+        return response.Customer;
     }
 
     #! Returns the request type
@@ -123,6 +125,13 @@ public class UnleashedUpdateCustomerRequestDataType inherits HashDataType {
                 "desc": "The unique identifier (GUID) of the customer to update",
                 "required": True,
                 "ref_data": "customers",
+            },
+            "CustomerCode": {
+                "type": SoftStringType,
+                "display_name": "Customer Code",
+                "short_desc": "Customer code",
+                "desc": "The customer code (must match the existing code)",
+                "required": True,
             },
             "CustomerName": {
                 "type": SoftStringOrNothingType,

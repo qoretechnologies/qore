@@ -150,31 +150,31 @@ public class UnleashedProductDataType inherits HashDataType {
                 "desc": "Whether the product is marked as obsolete",
             },
             "ProductGroup": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Product Group",
                 "short_desc": "Product group",
                 "desc": "The product group",
             },
             "ProductSubGroup": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Product Sub Group",
                 "short_desc": "Product sub group",
                 "desc": "The product sub group",
             },
             "ProductBrand": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Product Brand",
                 "short_desc": "Product brand",
                 "desc": "The product brand",
             },
             "Supplier": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Supplier",
                 "short_desc": "Default supplier",
                 "desc": "The default supplier for this product",
             },
             "UnitOfMeasure": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Unit of Measure",
                 "short_desc": "Unit of measure",
                 "desc": "The base unit of measure for this product",
@@ -196,75 +196,6 @@ public class UnleashedProductDataType inherits HashDataType {
 
     #! Creates the object
     constructor() : HashDataType("UnleashedProductDataType") {
-        addQoreFields(Fields);
-    }
-}
-
-#! Product creation request data type
-public class UnleashedCreateProductRequestDataType inherits HashDataType {
-    private {
-        const Fields = {
-            "ProductCode": {
-                "type": SoftStringType,
-                "display_name": "Product Code",
-                "short_desc": "Unique product code",
-                "desc": "The unique product code (required, cannot be modified after creation)",
-                "required": True,
-            },
-            "ProductDescription": {
-                "type": SoftStringType,
-                "display_name": "Product Description",
-                "short_desc": "Product name/description",
-                "desc": "The product's description/name (required)",
-                "required": True,
-            },
-            "DefaultPurchasePrice": {
-                "type": SoftFloatOrNothingType,
-                "display_name": "Default Purchase Price",
-                "short_desc": "Default purchase price",
-                "desc": "The default purchase price for this product",
-            },
-            "DefaultSellPrice": {
-                "type": SoftFloatOrNothingType,
-                "display_name": "Default Sell Price",
-                "short_desc": "Default sell price",
-                "desc": "The default sell price for this product",
-            },
-            "MinimumSellPrice": {
-                "type": SoftFloatOrNothingType,
-                "display_name": "Minimum Sell Price",
-                "short_desc": "Minimum sell price",
-                "desc": "The minimum sell price for this product",
-            },
-            "IsSerialized": {
-                "type": SoftBoolOrNothingType,
-                "display_name": "Is Serialized",
-                "short_desc": "Serial number tracking",
-                "desc": "Whether the product uses serial number tracking",
-            },
-            "IsBatchTracked": {
-                "type": SoftBoolOrNothingType,
-                "display_name": "Is Batch Tracked",
-                "short_desc": "Batch tracking",
-                "desc": "Whether the product uses batch tracking",
-            },
-            "IsSellable": {
-                "type": SoftBoolOrNothingType,
-                "display_name": "Is Sellable",
-                "short_desc": "Can be sold",
-                "desc": "Whether the product can be sold (defaults to true)",
-            },
-            "IsPurchasable": {
-                "type": SoftBoolOrNothingType,
-                "display_name": "Is Purchasable",
-                "short_desc": "Can be purchased",
-                "desc": "Whether the product can be purchased (defaults to true)",
-            },
-        };
-    }
-
-    #! Creates the object
-    constructor() : HashDataType("UnleashedCreateProductRequestDataType") {
         addQoreFields(Fields);
     }
 }

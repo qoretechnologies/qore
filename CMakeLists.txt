@@ -1573,6 +1573,8 @@ qore_user_module("qlib/DiscordRestClient.qm" "ConnectionProvider;Mime;RestClient
 qore_user_module("qlib/LinearRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/GoogleRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/HueRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/JotformRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/MailgunRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/MewsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/NetSuiteRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -1604,6 +1606,8 @@ qore_user_module("qlib/AwsRestClientDataProvider" "RestClient;DataProvider;RestC
 qore_user_module("qlib/GoogleDataProvider" "GoogleRestClient;RestClient;DataProvider")
 qore_user_module("qlib/DiscordDataProvider" "DiscordRestClient;RestClient;DataProvider" "discord-logo.svg")
 qore_user_module("qlib/LinearDataProvider" "LinearRestClient;RestClient;DataProvider" "linear-logo.svg")
+qore_user_module("qlib/JotformDataProvider" "JotformRestClient;RestClient;DataProvider" "jotform-logo.svg")
+qore_user_module("qlib/MailgunDataProvider" "MailgunRestClient;RestClient;DataProvider" "mailgun-logo.svg")
 qore_user_module("qlib/MewsRestDataProvider" "MewsRestClient;RestClient;DataProvider;SwaggerDataProvider" "mews-logo-white.svg")
 qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient" "openai-logo.svg")
 

@@ -74,19 +74,19 @@ public class UnleashedSalesOrderDataType inherits HashDataType {
                 "desc": "The required delivery date",
             },
             "Customer": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Customer",
                 "short_desc": "Customer details",
                 "desc": "The customer for this order",
             },
             "Warehouse": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Warehouse",
                 "short_desc": "Warehouse details",
                 "desc": "The warehouse for this order",
             },
             "Currency": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Currency",
                 "short_desc": "Currency details",
                 "desc": "The currency for this order",
@@ -104,7 +104,7 @@ public class UnleashedSalesOrderDataType inherits HashDataType {
                 "desc": "The discount rate applied to this order",
             },
             "Tax": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Tax",
                 "short_desc": "Tax details",
                 "desc": "The tax configuration for this order",
@@ -140,7 +140,7 @@ public class UnleashedSalesOrderDataType inherits HashDataType {
                 "desc": "The line items for this sales order",
             },
             "Salesperson": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Salesperson",
                 "short_desc": "Assigned salesperson",
                 "desc": "The salesperson assigned to this order",
@@ -237,7 +237,7 @@ public class UnleashedSalesOrderLineDataType inherits HashDataType {
                 "desc": "The line number within the order",
             },
             "Product": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Product",
                 "short_desc": "Product details",
                 "desc": "The product for this line",
@@ -289,117 +289,6 @@ public class UnleashedSalesOrderLineDataType inherits HashDataType {
 
     #! Creates the object
     constructor() : HashDataType("UnleashedSalesOrderLineDataType") {
-        addQoreFields(Fields);
-    }
-}
-
-#! Sales order creation request data type
-public class UnleashedCreateSalesOrderRequestDataType inherits HashDataType {
-    private {
-        const Fields = {
-            "OrderNumber": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Order Number",
-                "short_desc": "Sales order number",
-                "desc": "The sales order number (auto-generated if not provided)",
-            },
-            "OrderDate": {
-                "type": SoftDateOrNothingType,
-                "display_name": "Order Date",
-                "short_desc": "Order date",
-                "desc": "The date the order was placed",
-            },
-            "OrderStatus": {
-                "type": SoftStringType,
-                "display_name": "Order Status",
-                "short_desc": "Status of the order",
-                "desc": "The status of the sales order (required)",
-                "required": True,
-                "allowed_values": (
-                    <AllowedValueInfo>{"value": "Open", "desc": "Order is open"},
-                    <AllowedValueInfo>{"value": "Parked", "desc": "Order is parked/on hold"},
-                ),
-            },
-            "Customer": {
-                "type": SoftAutoHashType,
-                "display_name": "Customer",
-                "short_desc": "Customer details",
-                "desc": "The customer for this order (Guid or CustomerCode required)",
-                "required": True,
-            },
-            "Warehouse": {
-                "type": SoftAutoHashType,
-                "display_name": "Warehouse",
-                "short_desc": "Warehouse details",
-                "desc": "The warehouse for this order (Guid or WarehouseCode required)",
-                "required": True,
-            },
-            "Currency": {
-                "type": SoftAutoHashType,
-                "display_name": "Currency",
-                "short_desc": "Currency details",
-                "desc": "The currency for this order (Guid or CurrencyCode required)",
-                "required": True,
-            },
-            "ExchangeRate": {
-                "type": SoftFloatType,
-                "display_name": "Exchange Rate",
-                "short_desc": "Currency exchange rate",
-                "desc": "The exchange rate for this order (required)",
-                "required": True,
-            },
-            "Tax": {
-                "type": SoftAutoHashType,
-                "display_name": "Tax",
-                "short_desc": "Tax details",
-                "desc": "The tax configuration (TaxCode or TaxRate required)",
-                "required": True,
-            },
-            "SalesOrderLines": {
-                "type": SoftAutoListType,
-                "display_name": "Sales Order Lines",
-                "short_desc": "Order line items",
-                "desc": "The line items for this sales order (at least one required)",
-                "required": True,
-            },
-            "SubTotal": {
-                "type": SoftFloatType,
-                "display_name": "Sub Total",
-                "short_desc": "Order subtotal",
-                "desc": "The subtotal before tax (required)",
-                "required": True,
-            },
-            "TaxTotal": {
-                "type": SoftFloatType,
-                "display_name": "Tax Total",
-                "short_desc": "Total tax",
-                "desc": "The total tax amount (required)",
-                "required": True,
-            },
-            "Total": {
-                "type": SoftFloatType,
-                "display_name": "Total",
-                "short_desc": "Order total",
-                "desc": "The total order amount including tax (required)",
-                "required": True,
-            },
-            "Comments": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Comments",
-                "short_desc": "Order comments",
-                "desc": "Comments or notes for this order",
-            },
-            "CustomerRef": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Customer Reference",
-                "short_desc": "Customer reference",
-                "desc": "Customer's reference number for this order",
-            },
-        };
-    }
-
-    #! Creates the object
-    constructor() : HashDataType("UnleashedCreateSalesOrderRequestDataType") {
         addQoreFields(Fields);
     }
 }

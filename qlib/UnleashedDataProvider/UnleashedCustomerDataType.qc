@@ -48,7 +48,7 @@ public class UnleashedCustomerDataType inherits HashDataType {
                 "desc": "The customer's display name",
             },
             "Currency": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Currency",
                 "short_desc": "Currency details",
                 "desc": "Currency information including code and description",
@@ -138,19 +138,19 @@ public class UnleashedCustomerDataType inherits HashDataType {
                 "desc": "List of customer contacts",
             },
             "Salesperson": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Salesperson",
                 "short_desc": "Assigned salesperson",
                 "desc": "The salesperson assigned to this customer",
             },
             "DefaultWarehouse": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Default Warehouse",
                 "short_desc": "Default warehouse",
                 "desc": "The default warehouse for this customer",
             },
             "PaymentTerm": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Payment Term",
                 "short_desc": "Payment terms",
                 "desc": "The payment terms for this customer",
@@ -190,81 +190,6 @@ public class UnleashedCustomerDataType inherits HashDataType {
 
     #! Creates the object
     constructor() : HashDataType("UnleashedCustomerDataType") {
-        addQoreFields(Fields);
-    }
-}
-
-#! Customer creation request data type
-public class UnleashedCreateCustomerRequestDataType inherits HashDataType {
-    private {
-        const Fields = {
-            "CustomerCode": {
-                "type": SoftStringType,
-                "display_name": "Customer Code",
-                "short_desc": "Unique customer code",
-                "desc": "The unique customer code (required, cannot be modified after creation)",
-                "required": True,
-            },
-            "CustomerName": {
-                "type": SoftStringType,
-                "display_name": "Customer Name",
-                "short_desc": "Customer name",
-                "desc": "The customer's display name (required)",
-                "required": True,
-            },
-            "ContactFirstName": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Contact First Name",
-                "short_desc": "Primary contact first name",
-                "desc": "First name of the primary contact",
-            },
-            "ContactLastName": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Contact Last Name",
-                "short_desc": "Primary contact last name",
-                "desc": "Last name of the primary contact",
-            },
-            "Email": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Email",
-                "short_desc": "Primary email address",
-                "desc": "Primary email address for the customer",
-            },
-            "PhoneNumber": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Phone Number",
-                "short_desc": "Phone number",
-                "desc": "Customer's phone number",
-            },
-            "MobileNumber": {
-                "type": SoftStringOrNothingType,
-                "display_name": "Mobile Number",
-                "short_desc": "Mobile phone number",
-                "desc": "Customer's mobile phone number",
-            },
-            "CreditLimit": {
-                "type": SoftFloatOrNothingType,
-                "display_name": "Credit Limit",
-                "short_desc": "Customer credit limit",
-                "desc": "The customer's credit limit",
-            },
-            "DiscountRate": {
-                "type": SoftFloatOrNothingType,
-                "display_name": "Discount Rate",
-                "short_desc": "Default discount rate",
-                "desc": "The customer's default discount rate",
-            },
-            "Taxable": {
-                "type": SoftBoolOrNothingType,
-                "display_name": "Taxable",
-                "short_desc": "Is customer taxable",
-                "desc": "Whether the customer is taxable",
-            },
-        };
-    }
-
-    #! Creates the object
-    constructor() : HashDataType("UnleashedCreateCustomerRequestDataType") {
         addQoreFields(Fields);
     }
 }

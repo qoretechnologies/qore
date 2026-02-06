@@ -76,8 +76,8 @@ public class UnleashedGetCustomerDataProvider inherits UnleashedDataProviderBase
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: getting customer %y", guid));
         auto response = doGet("/Customers/" + guid);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: retrieved customer %y", response.CustomerCode));
-        return response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: retrieved customer %y", response.Customer.CustomerCode));
+        return response.Customer;
     }
 
     #! Returns the request type

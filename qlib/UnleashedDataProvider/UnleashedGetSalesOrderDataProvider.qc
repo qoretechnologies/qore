@@ -76,8 +76,8 @@ public class UnleashedGetSalesOrderDataProvider inherits UnleashedDataProviderBa
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: getting sales order %y", guid));
         auto response = doGet("/SalesOrders/" + guid);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: retrieved sales order %y", response.OrderNumber));
-        return response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: retrieved sales order %y", response.SalesOrder.OrderNumber));
+        return response.SalesOrder;
     }
 
     #! Returns the request type

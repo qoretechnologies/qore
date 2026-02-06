@@ -77,7 +77,7 @@ public class UnleashedDeleteSalesOrderDataProvider inherits UnleashedDataProvide
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: deleting sales order %y", guid));
         hash<auto> response = doDelete("/SalesOrders/" + guid);
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: deleted sales order %y", guid));
-        return response;
+        return response.SalesOrder;
     }
 
     #! Returns the request type

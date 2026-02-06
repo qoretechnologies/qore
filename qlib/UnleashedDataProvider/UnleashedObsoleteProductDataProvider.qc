@@ -76,8 +76,8 @@ public class UnleashedObsoleteProductDataProvider inherits UnleashedDataProvider
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: marking product %y as obsolete", guid));
         hash<auto> response = doPost("/Products/Obsolete/" + guid);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: product %y marked obsolete", response.Guid));
-        return response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: product %y marked obsolete", response.Product.Guid));
+        return response.Product;
     }
 
     #! Returns the request type

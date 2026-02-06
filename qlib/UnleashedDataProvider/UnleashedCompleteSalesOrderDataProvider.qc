@@ -76,8 +76,8 @@ public class UnleashedCompleteSalesOrderDataProvider inherits UnleashedDataProvi
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: completing sales order %y", guid));
         hash<auto> response = doPost("/SalesOrders/" + guid + "/Complete");
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: completed sales order %y", response.Guid));
-        return response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: completed sales order %y", response.SalesOrder.Guid));
+        return response.SalesOrder;
     }
 
     #! Returns the request type

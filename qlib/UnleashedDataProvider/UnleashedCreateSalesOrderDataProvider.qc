@@ -91,8 +91,8 @@ public class UnleashedCreateSalesOrderDataProvider inherits UnleashedDataProvide
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: creating sales order"));
         hash<auto> response = doPost("/SalesOrders", body);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: created sales order %y", response.OrderNumber));
-        return response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: created sales order %y", response.SalesOrder.OrderNumber));
+        return response.SalesOrder;
     }
 
     #! Returns the request type
@@ -117,7 +117,7 @@ public class UnleashedCreateSalesOrderRequestDataType inherits HashDataType {
         #! Field definitions
         const Fields = {
             "Customer": {
-                "type": SoftAutoHashOrNothingType,
+                "type": AutoHashOrNothingType,
                 "display_name": "Customer",
                 "short_desc": "Customer information",
                 "desc": "The customer for this sales order (must include Guid)",

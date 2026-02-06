@@ -135,7 +135,7 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
             "apikey": "fake-key-for-testing",
         });
         assertEq("unleashed", prov.getName());
-        assertEq("Unleashed data provider for inventory management, sales, and purchasing", prov.getDesc());
+        assertEq("Unleashed data provider for inventory management, sales orders, and customer management", prov.getDesc());
     }
 
     #! Factory tests - verify factory registration
@@ -269,6 +269,38 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
         assertTrue(customerFields.hasKey("CustomerCode"));
         assertTrue(customerFields.hasKey("CustomerName"));
         assertTrue(customerFields.hasKey("Currency"));
+        assertTrue(customerFields.hasKey("Addresses"));
+
+        # Test create customer request data type
+        UnleashedDataProvider::UnleashedCreateCustomerRequestDataType createCustomerType();
+        hash<string, AbstractDataField> createCustomerFields = createCustomerType.getFields();
+        assertTrue(createCustomerFields.hasKey("CustomerCode"), "Should have CustomerCode field");
+        assertTrue(createCustomerFields.hasKey("CustomerName"), "Should have CustomerName field");
+        assertTrue(createCustomerFields.hasKey("Currency"), "Should have Currency field");
+        assertTrue(createCustomerFields.hasKey("Addresses"), "Should have Addresses field");
+
+        # Verify Currency field is a proper complex type (HashDataType)
+        AbstractDataField currencyField = createCustomerFields.Currency;
+        AbstractDataProviderType currencyType = currencyField.getType();
+        assertEq("UnleashedCustomerCurrencyDataType", currencyType.getName(),
+            "Currency should use UnleashedCustomerCurrencyDataType");
+        hash<string, AbstractDataField> currencyFields = currencyType.getFields();
+        assertTrue(currencyFields.hasKey("CurrencyCode"), "Currency should have CurrencyCode field");
+
+        # Verify Addresses field is a proper list of complex types (SoftListDataType)
+        AbstractDataField addressesField = createCustomerFields.Addresses;
+        AbstractDataProviderType addressesType = addressesField.getType();
+        assertRegex("list", addressesType.getBaseTypeName(), "Addresses should be a list type");
+        AbstractDataProviderType addressElementType = addressesType.getElementType();
+        assertEq("UnleashedCustomerAddressDataType", addressElementType.getName(),
+            "Addresses should contain UnleashedCustomerAddressDataType elements");
+        hash<string, AbstractDataField> addressFields = addressElementType.getFields();
+        assertTrue(addressFields.hasKey("AddressType"), "Address should have AddressType field");
+        assertTrue(addressFields.hasKey("AddressName"), "Address should have AddressName field");
+        assertTrue(addressFields.hasKey("StreetAddress"), "Address should have StreetAddress field");
+        assertTrue(addressFields.hasKey("City"), "Address should have City field");
+        assertTrue(addressFields.hasKey("PostalCode"), "Address should have PostalCode field");
+        assertTrue(addressFields.hasKey("Country"), "Address should have Country field");
 
         # Test product data type
         UnleashedDataProvider::UnleashedProductDataType productType();
@@ -350,8 +382,8 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
             "api_id": "x",
             "apikey": "x",
         });
-        assertTrue(client1.getURL() =~ /go\.unleashedsoftware\.com/);
-        assertTrue(client1.getURL() =~ /\/v2$/);
+        assertTrue(client1.getURL() =~ /api\.unleashedsoftware\.com/);
+        assertFalse(client1.getURL() =~ /\/v2$/);
     }
 
     #! Connection tests - verify connection scheme registration
@@ -367,10 +399,10 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
 
         # Verify connection can create data provider
         UnleashedRestClient::UnleashedRestConnection conn("test", "test connection",
-            "unleashed://go.unleashedsoftware.com/v2", {},
+            "unleashed://api.unleashedsoftware.com", {},
             {"api_id": "x", "apikey": "x"});
         assertTrue(conn.hasDataProvider());
-        assertEq("Unleashed", conn.getAppName());
+        assertEq("UnleashedSoftware", conn.getAppName());
         assertEq("unleashed", conn.getType());
     }
 
@@ -465,7 +497,7 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
     #! Test API connectivity
     private testApiConnectivity() {
         # Test that we can connect to the API
-        hash<auto> response = client.get("Customers", {"pageSize": 1});
+        hash<auto> response = client.get("Customers?pageSize=1");
         assertTrue(response.body.typeCode() == NT_HASH);
         if (m_options.verbose) {
             printf("Connected to Unleashed API successfully\n");
@@ -680,16 +712,16 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
             "CustomerCode": testCode,
             "CustomerName": testName,
             "Currency": {
-                "CurrencyCode": "NZD",
+                "CurrencyCode": "CZK",
             },
             "Addresses": (
                 {
                     "AddressType": "Shipping",
                     "AddressName": "Main Office",
                     "StreetAddress": "123 Test Street",
-                    "City": "Auckland",
-                    "PostalCode": "1010",
-                    "Country": "New Zealand",
+                    "City": "Prague",
+                    "PostalCode": "110 00",
+                    "Country": "Czech Republic",
                 },
             ),
         };
@@ -718,8 +750,35 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
             assertEq(testCode, fetchedCustomer.CustomerCode, "Customer Code should match");
             assertEq(testName, fetchedCustomer.CustomerName, "Customer Name should match");
 
+            # Verify Currency was persisted
+            assertTrue(exists fetchedCustomer.Currency, "Customer should have Currency");
+            assertEq("CZK", fetchedCustomer.Currency.CurrencyCode, "Currency code should match");
+
+            # Verify Addresses were persisted
+            # Note: XML parsing returns {Address: {...}} for single address or {Address: [{...}]} for multiple
+            if (m_options.verbose) {
+                printf("  Addresses in response: %N\n", fetchedCustomer.Addresses);
+            }
+            if (exists fetchedCustomer.Addresses.Address) {
+                auto addressData = fetchedCustomer.Addresses.Address;
+                # Handle both single address (hash) and multiple addresses (list)
+                hash<auto> address = addressData.typeCode() == NT_HASH ? addressData : addressData[0];
+                assertEq("Shipping", address.AddressType, "Address type should match");
+                assertEq("Main Office", address.AddressName, "Address name should match");
+                assertEq("123 Test Street", address.StreetAddress, "Street address should match");
+                assertEq("Prague", address.City, "City should match");
+                assertEq("110 00", address.PostalCode, "Postal code should match");
+                assertEq("Czech Republic", address.Country, "Country should match");
+            } else {
+                if (m_options.verbose) {
+                    printf("  WARNING: Addresses were not persisted by the API\n");
+                }
+            }
+
             if (m_options.verbose) {
                 printf("  Data integrity verified: customer saved and retrieved correctly\n");
+                printf("  Currency: %y\n", fetchedCustomer.Currency);
+                printf("  Addresses: %y\n", fetchedCustomer.Addresses);
             }
 
             # Test 2: Update customer
@@ -730,9 +789,9 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
             AbstractDataProvider updateCustomerProvider = prov.getChildProvider("update-customer");
             string updatedName = "Updated Test Customer " + now_us().toString();
             hash<auto> updateRequest = {
-                "Guid": testCustomerGuid,
-                "CustomerCode": testCode,
+                "guid": testCustomerGuid,
                 "CustomerName": updatedName,
+                "CustomerCode": testCode,
             };
 
             auto updateResult = updateCustomerProvider.doRequest(updateRequest);
@@ -835,6 +894,17 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
         assertEq("UnleashedCustomerDataType", customerEventTypes{"new-customer"}.type.getName(),
             "new-customer event should use UnleashedCustomerDataType");
 
+        # Test example event data - should return resource-specific data
+        auto customerExampleData = customerProv.getExampleEventData("new-customer");
+        assertTrue(exists customerExampleData, "getExampleEventData should return data for new-customer");
+        assertTrue(customerExampleData.typeCode() == NT_HASH, "Example data should be a hash");
+        # Verify resource-specific fields exist (either from API or fake data)
+        assertTrue(customerExampleData.hasKey("Guid") || customerExampleData.hasKey("CustomerCode"),
+            "Customer example data should have Guid or CustomerCode");
+        if (m_options.verbose) {
+            printf("  Example data keys: %y\n", keys customerExampleData);
+        }
+
         if (m_options.verbose) {
             printf("  Event types: %y\n", keys customerEventTypes);
         }
@@ -855,6 +925,17 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
         # Verify event type uses custom data type
         assertEq("UnleashedSalesOrderDataType", salesOrderEventTypes{"new-sales-order"}.type.getName(),
             "new-sales-order event should use UnleashedSalesOrderDataType");
+
+        # Test example event data - should return resource-specific data
+        auto salesOrderExampleData = salesOrderProv.getExampleEventData("new-sales-order");
+        assertTrue(exists salesOrderExampleData, "getExampleEventData should return data for new-sales-order");
+        assertTrue(salesOrderExampleData.typeCode() == NT_HASH, "Example data should be a hash");
+        # Verify resource-specific fields exist (either from API or fake data)
+        assertTrue(salesOrderExampleData.hasKey("Guid") || salesOrderExampleData.hasKey("OrderNumber"),
+            "Sales order example data should have Guid or OrderNumber");
+        if (m_options.verbose) {
+            printf("  Example data keys: %y\n", keys salesOrderExampleData);
+        }
 
         if (m_options.verbose) {
             printf("  Event types: %y\n", keys salesOrderEventTypes);

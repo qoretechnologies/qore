@@ -84,8 +84,8 @@ public class UnleashedUpdateSalesOrderDataProvider inherits UnleashedDataProvide
 
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updating sales order %y", guid));
         hash<auto> response = doPut("/SalesOrders/" + guid, body);
-        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updated sales order %y", response.Guid));
-        return response;
+        @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updated sales order %y", response.SalesOrder.Guid));
+        return response.SalesOrder;
     }
 
     #! Returns the request type
