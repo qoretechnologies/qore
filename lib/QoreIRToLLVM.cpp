@@ -707,6 +707,12 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
     llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
             llvm::ConstantInt::get(i64_type, 0));
     llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception", llvm_func);
+    if (getenv("QORE_LLVM_DEBUG")) {
+        fprintf(stderr, "LLVM-EXCEPT-CHECK: creating no_exception block, moving from %s to %s\n",
+                builder->GetInsertBlock()->getName().str().c_str(),
+                cont->getName().str().c_str());
+        fflush(stderr);
+    }
     builder->CreateCondBr(has_exception, except_it->second, cont);
     builder->SetInsertPoint(cont);
 }
@@ -824,6 +830,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     block_map.reserve(func.blocks.size());
     for (const auto& block : func.blocks) {
         block_map[block.get()] = llvm::BasicBlock::Create(ctx, block->name, llvm_func);
+        if (getenv("QORE_LLVM_DEBUG")) {
+            fprintf(stderr, "LLVM-BLOCK-CREATE: %s (IR=%p LLVM=%p)\n",
+                    block->name.c_str(), (void*)block.get(), (void*)block_map[block.get()]);
+            fflush(stderr);
+        }
     }
 
     // Create IR builder
@@ -865,6 +876,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             error = "missing LLVM basic block mapping for '" + block->name + "'";
             return false;
         }
+        if (getenv("QORE_LLVM_DEBUG")) {
+            fprintf(stderr, "LLVM-BLOCK-PROCESS: %s (IR=%p LLVM=%p) instructions=%zu\n",
+                    block->name.c_str(), (void*)block.get(), (void*)llvm_block, block->instructions.size());
+            fflush(stderr);
+        }
         builder->SetInsertPoint(llvm_block);
 
         for (const auto& inst_ptr : block->instructions) {
@@ -875,10 +891,20 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // If the current block already has a terminator (e.g., from an Invoke that
             // created a conditional branch), skip remaining instructions in this block.
             if (builder->GetInsertBlock()->getTerminator()) {
+                if (getenv("QORE_LLVM_DEBUG")) {
+                    fprintf(stderr, "LLVM-SKIP: block %s already has terminator\n",
+                            builder->GetInsertBlock()->getName().str().c_str());
+                    fflush(stderr);
+                }
                 break;
             }
             // Phase 5c: Set debug location for this instruction
             setDebugLocation(inst);
+            if (getenv("QORE_LLVM_DEBUG")) {
+                fprintf(stderr, "LLVM-INST: opcode=%d in block=%s\n",
+                        static_cast<int>(inst->opcode), builder->GetInsertBlock()->getName().str().c_str());
+                fflush(stderr);
+            }
             if (!lowerInstruction(inst, llvm_func, module, error)) {
                 return false;
             }
@@ -890,6 +916,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         if (!llvm_block->getTerminator()) {
             // The builder may have moved to a guard continuation block; check that too
             if (!builder->GetInsertBlock()->getTerminator()) {
+                if (getenv("QORE_LLVM_DEBUG")) {
+                    fprintf(stderr, "LLVM-NO-TERM: block %s and insert block %s both have no terminator\n",
+                            block->name.c_str(), builder->GetInsertBlock()->getName().str().c_str());
+                    fflush(stderr);
+                }
                 error = "missing terminator in lowered block '" + block->name + "'";
                 return false;
             }
@@ -903,13 +934,27 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (!val) {
                 return false;
             }
-            // Box to i64 if needed (PHI type is i64 for NaN-boxed values)
-            val = boxValue(val, inc.value.id);
             llvm::BasicBlock* bb = block_map[inc.block];
             if (!bb) {
                 error = "PHI incoming block not found";
                 return false;
             }
+            // Box to i64 if needed (PHI type is i64 for NaN-boxed values)
+            // IMPORTANT: Set builder insert point to BEFORE the terminator of the predecessor block
+            // so that boxing instructions are placed in the correct block, not in whatever
+            // block the builder was left pointing at (which may already have a terminator)
+            if (getenv("QORE_LLVM_DEBUG")) {
+                fprintf(stderr, "PHI-FIXUP: incoming from block=%s insert_before_term=%s\n",
+                        bb->getName().str().c_str(),
+                        bb->getTerminator() ? bb->getTerminator()->getOpcodeName() : "NO_TERM");
+                fflush(stderr);
+            }
+            if (bb->getTerminator()) {
+                builder->SetInsertPoint(bb->getTerminator());
+            } else {
+                builder->SetInsertPoint(bb);
+            }
+            val = boxValue(val, inc.value.id);
             phi_node->addIncoming(val, bb);
         }
     }
@@ -3064,8 +3109,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Unbox to get raw int64
             llvm::Value* idx_unboxed = unboxInt(idx);
             auto helper = module.getOrInsertFunction("qore_rt_push_implicit_element",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {idx_unboxed});
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {idx_unboxed, xsink_arg});
             values[inst->result.id] = result;
             // Result is raw int64 (old element index), not nanboxed
             return true;

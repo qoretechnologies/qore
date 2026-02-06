@@ -47,6 +47,7 @@
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/QoreIRToLLVM.h"
+#include "qore/intern/QoreIRPrinter.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/FunctionCallNode.h"
@@ -237,6 +238,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 QoreIRToLLVM lowerer(ctx);
                 lowerer.setAOTMode(&slots);
                 std::string llvm_error;
+                // Debug: dump IR before LLVM lowering if requested
+                if (getenv("QORE_AOT_DUMP_IR")) {
+                    fprintf(stderr, "=== IR for %s ===\n", variant_key.c_str());
+                    QoreIRPrinter::print(*ir_func, std::cerr);
+                    fprintf(stderr, "=================\n");
+                }
                 if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
                     AOTCompiledFunc cf;
                     cf.name = variant_key;  // Use variant key instead of plain name
@@ -254,11 +261,17 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         (int)slots.expr_slots.size(), (int)slots.stmt_slots.size());
                 } else {
                     printd(2, "AOT: LLVM lowering failed for '%s': %s\n", variant_key.c_str(), llvm_error.c_str());
+                    if (getenv("QORE_AOT_DEBUG")) {
+                        fprintf(stderr, "AOT: LLVM lowering failed for '%s': %s\n", variant_key.c_str(), llvm_error.c_str());
+                    }
                     ++failed_count;
                 }
                 delete ir_func;
             } else {
                 printd(2, "AOT: IR lowering failed for '%s': %s\n", variant_key.c_str(), lower_error.c_str());
+                if (getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr, "AOT: IR lowering failed for '%s': %s\n", variant_key.c_str(), lower_error.c_str());
+                }
                 ++failed_count;
             }
         }
@@ -326,12 +339,20 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     } else {
                         printd(2, "AOT: LLVM lowering failed for '%s': %s\n",
                             variant_key.c_str(), llvm_error.c_str());
+                        if (getenv("QORE_AOT_DEBUG")) {
+                            fprintf(stderr, "AOT: LLVM lowering failed for '%s': %s\n",
+                                variant_key.c_str(), llvm_error.c_str());
+                        }
                         ++failed_count;
                     }
                     delete ir_func;
                 } else {
                     printd(2, "AOT: IR lowering failed for '%s': %s\n",
                         variant_key.c_str(), lower_error.c_str());
+                    if (getenv("QORE_AOT_DEBUG")) {
+                        fprintf(stderr, "AOT: IR lowering failed for '%s': %s\n",
+                            variant_key.c_str(), lower_error.c_str());
+                    }
                     ++failed_count;
                 }
             }
