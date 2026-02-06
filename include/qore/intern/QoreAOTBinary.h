@@ -574,8 +574,26 @@ class QoreAOTBinaryDeserializer {
     size_t fallback_source_len = 0;              //!< length of fallback source text
     std::vector<std::string> fallback_func_names; //!< names of functions needing source fallback
 
+    // Pending base class info for two-pass class resolution
+    struct PendingBaseClass {
+        std::string base_path;
+        uint8_t access;
+        bool is_virtual;
+    };
+    std::vector<std::vector<PendingBaseClass>> pending_bases;
+
+    // Pending static member info for two-pass class resolution
+    struct PendingStaticMember {
+        std::string name;
+        std::string type_path;
+        uint8_t access;
+    };
+    std::vector<std::vector<PendingStaticMember>> pending_static_members;
+
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);
+    bool resolveClassBases(std::string& error);
+    bool resolveStaticMembers(std::string& error);
     bool deserializeHashDecls(std::string& error);
     bool deserializeEnums(std::string& error);
     bool deserializeTypedefs(std::string& error);

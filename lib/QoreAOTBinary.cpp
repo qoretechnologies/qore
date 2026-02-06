@@ -1406,6 +1406,14 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
     if (!deserializeClasses(error)) {
         return false;
     }
+    // Resolve class base classes after all classes are created (two-pass)
+    if (!resolveClassBases(error)) {
+        return false;
+    }
+    // Resolve static members after types are available
+    if (!resolveStaticMembers(error)) {
+        return false;
+    }
     if (!deserializeHashDecls(error)) {
         return false;
     }
@@ -1546,15 +1554,21 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
 
         // Read base classes (store paths for later resolution)
         uint32_t num_bases = QoreAOTBinaryReader::readU32(ptr);
+        std::vector<PendingBaseClass> bases;
+        bases.reserve(num_bases);
         for (uint32_t j = 0; j < num_bases; ++j) {
             const char* base_path = reader.readStringRef(ptr);
             uint8_t access = QoreAOTBinaryReader::readU8(ptr);
             uint8_t is_virtual = QoreAOTBinaryReader::readU8(ptr);
-            // Base class resolution deferred - not critical for AOT context building
-            (void)base_path;
-            (void)access;
-            (void)is_virtual;
+            if (base_path && *base_path) {
+                PendingBaseClass pbc;
+                pbc.base_path = base_path;
+                pbc.access = access;
+                pbc.is_virtual = (is_virtual != 0);
+                bases.push_back(std::move(pbc));
+            }
         }
+        pending_bases.push_back(std::move(bases));
 
         // Read instance members
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
@@ -1580,13 +1594,23 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 default_val.takeNode());
         }
 
-        // Read static members (skip - not critical for AOT context building)
+        // Read static members (store for later resolution)
         uint32_t num_static = QoreAOTBinaryReader::readU32(ptr);
+        std::vector<PendingStaticMember> static_members;
+        static_members.reserve(num_static);
         for (uint32_t j = 0; j < num_static; ++j) {
-            reader.readStringRef(ptr);  // name
-            reader.readStringRef(ptr);  // type path
-            QoreAOTBinaryReader::readU8(ptr);  // access
+            const char* sm_name = reader.readStringRef(ptr);
+            const char* sm_type_path = reader.readStringRef(ptr);
+            uint8_t sm_access = QoreAOTBinaryReader::readU8(ptr);
+            if (sm_name && *sm_name) {
+                PendingStaticMember psm;
+                psm.name = sm_name;
+                psm.type_path = sm_type_path ? sm_type_path : "";
+                psm.access = sm_access;
+                static_members.push_back(std::move(psm));
+            }
         }
+        pending_static_members.push_back(std::move(static_members));
 
         // Read class constants
         uint32_t num_consts = QoreAOTBinaryReader::readU32(ptr);
@@ -1608,6 +1632,74 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         }
     }
 
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
+    // Second pass: resolve base class references now that all classes exist
+    for (uint32_t i = 0; i < class_list.size() && i < pending_bases.size(); ++i) {
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+
+        for (auto& pbc : pending_bases[i]) {
+            // Look up base class by path in the program
+            ExceptionSink xsink;
+            const QoreClass* base = pgm->findClass(pbc.base_path.c_str(), &xsink);
+            if (xsink.isException()) {
+                xsink.clear();
+            }
+            if (base) {
+                // Add base class to this class using the public API
+                qc->addBaseClass(const_cast<QoreClass*>(base), pbc.is_virtual);
+                printd(5, "AOT deser: resolved base class '%s' for class '%s'\n",
+                    pbc.base_path.c_str(), qc->getName());
+            } else {
+                printd(2, "AOT deser: cannot resolve base class '%s' for class '%s'\n",
+                    pbc.base_path.c_str(), qc->getName());
+            }
+        }
+    }
+
+    // Clear pending data
+    pending_bases.clear();
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
+    // Second pass: create static members now that types are resolved
+    for (uint32_t i = 0; i < class_list.size() && i < pending_static_members.size(); ++i) {
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+
+        qore_class_private* priv = qore_class_private::get(*qc);
+        for (auto& psm : pending_static_members[i]) {
+            const QoreTypeInfo* ti = nullptr;
+            if (!psm.type_path.empty()) {
+                ti = type_resolver->resolve(psm.type_path.c_str(), error);
+                if (!error.empty()) {
+                    error.clear();  // non-fatal: use auto type
+                    ti = nullptr;
+                }
+            }
+
+            // Create the static variable info
+            QoreVarInfo* vi = new QoreVarInfo(&loc_builtin, ti, nullptr, QoreValue(),
+                static_cast<ClassAccess>(psm.access));
+
+            // Add to class's vars list
+            priv->vars.addNoCheck(strdup(psm.name.c_str()), vi);
+
+            printd(5, "AOT deser: added static member '%s' to class '%s'\n",
+                psm.name.c_str(), qc->getName());
+        }
+    }
+
+    // Clear pending data
+    pending_static_members.clear();
     return true;
 }
 

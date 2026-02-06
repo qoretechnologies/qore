@@ -70,6 +70,9 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source hashdecl inheritance", \testStripSourceHashDeclInheritance());
         addTestCase("AOT strip source enum", \testStripSourceEnum());
         addTestCase("AOT strip source module dependency", \testStripSourceModuleDependency());
+        # Class inheritance and static member tests
+        addTestCase("AOT strip source class inheritance", \testStripSourceClassInheritance());
+        addTestCase("AOT strip source static members", \testStripSourceStaticMembers());
         set_return_value(main());
     }
 
@@ -1891,5 +1894,145 @@ exit(0);
 
         assertEq("Person: Alice, age 30\nGender: Female\n", out,
             "strip-source module dependency with types works correctly");
+    }
+
+    testStripSourceClassInheritance() {
+        # Create a module with class inheritance
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripClassInhMod {
+    version = \"1.0\";
+    desc = \"Test class inheritance export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripClassInhMod {
+    public class BaseClass {
+        private {
+            int base_value;
+        }
+
+        constructor(int v) {
+            base_value = v;
+        }
+
+        int getBaseValue() {
+            return base_value;
+        }
+    }
+
+    public class DerivedClass inherits BaseClass {
+        private {
+            string name;
+        }
+
+        constructor(string n, int v) : BaseClass(v) {
+            name = n;
+        }
+
+        string getName() {
+            return name;
+        }
+
+        string describe() {
+            return sprintf(\"%s: %d\", name, getBaseValue());
+        }
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripClassInhMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with class inheritance compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses class inheritance
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripClassInhMod
+
+auto d = new StripClassInhMod::DerivedClass(\"Test\", 42);
+printf(\"Name: %s\\n\", d.getName());
+printf(\"Base value: %d\\n\", d.getBaseValue());
+printf(\"Description: %s\\n\", d.describe());
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("Name: Test\nBase value: 42\nDescription: Test: 42\n", out,
+            "class inheritance from strip-source module works correctly");
+    }
+
+    testStripSourceStaticMembers() {
+        # Create a module with static class members and methods
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripStaticMod {
+    version = \"1.0\";
+    desc = \"Test static member export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripStaticMod {
+    public class Helper {
+        public {
+            static string prefix = \"[Static]\";
+        }
+
+        static string format(string msg) {
+            return Helper::prefix + \" \" + msg;
+        }
+
+        static int double_val(int n) {
+            return n * 2;
+        }
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripStaticMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with static members compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses static methods
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripStaticMod
+
+printf(\"%s\\n\", StripStaticMod::Helper::format(\"Hello\"));
+printf(\"%d\\n\", StripStaticMod::Helper::double_val(21));
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("[Static] Hello\n42\n", out,
+            "static members from strip-source module work correctly");
     }
 }
