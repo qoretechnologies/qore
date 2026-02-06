@@ -48,6 +48,7 @@
 #include <strings.h>
 #include <unistd.h>
 #include <cerrno>
+#include <sys/stat.h>
 
 #include <string>
 #include <map>
@@ -157,6 +158,12 @@ typedef std::map<std::string, std::string> defmap_t;
 static defmap_t defmap;
 
 static int opt_errors = 0;
+
+//! Check if a path is a directory
+static bool is_directory(const char* path) {
+    struct stat st;
+    return (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
+}
 
 static const char usage[] = "usage: %s [option(s)]... [program file]\n";
 static const char suggest[] = "try '%s -h' for more information.\n";
@@ -1224,28 +1231,38 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             goto exit;
          }
 
-         // Read source text
+         // Check if input is a directory (split module)
+         bool is_split_module = program_file_name && is_directory(program_file_name);
+
+         // Auto-enable module mode for directories
+         if (is_split_module && !compile_module_mode) {
+            compile_module_mode = true;
+         }
+
+         // Read source text (skip for split modules)
          std::string source_text;
          std::string source_label;
-         if (cl_pgm) {
-            source_text = cl_pgm;
-            source_label = "<command-line>";
-         } else {
-            // Read the source file
-            FILE* f = fopen(program_file_name, "rb");
-            if (!f) {
-               fprintf(stderr, "error: cannot open '%s': %s\n", program_file_name, strerror(errno));
-               rc = 1;
-               goto exit;
+         if (!is_split_module) {
+            if (cl_pgm) {
+               source_text = cl_pgm;
+               source_label = "<command-line>";
+            } else {
+               // Read the source file
+               FILE* f = fopen(program_file_name, "rb");
+               if (!f) {
+                  fprintf(stderr, "error: cannot open '%s': %s\n", program_file_name, strerror(errno));
+                  rc = 1;
+                  goto exit;
+               }
+               fseek(f, 0, SEEK_END);
+               long fsize = ftell(f);
+               fseek(f, 0, SEEK_SET);
+               source_text.resize(fsize);
+               size_t nread = fread(&source_text[0], 1, fsize, f);
+               fclose(f);
+               source_text.resize(nread);
+               source_label = program_file_name;
             }
-            fseek(f, 0, SEEK_END);
-            long fsize = ftell(f);
-            fseek(f, 0, SEEK_SET);
-            source_text.resize(fsize);
-            size_t nread = fread(&source_text[0], 1, fsize, f);
-            fclose(f);
-            source_text.resize(nread);
-            source_label = program_file_name;
          }
 
          // Determine output path
@@ -1253,22 +1270,48 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          if (aot_output) {
             output_path = aot_output;
          } else if (program_file_name) {
-            output_path = program_file_name;
-            // Strip extension
-            size_t dot = output_path.rfind('.');
-            if (dot != std::string::npos && dot > 0) {
-               output_path = output_path.substr(0, dot);
-            }
-            // For module compilation, add .qmod extension (binary module format)
-            if (compile_module_mode) {
-               output_path += ".qmod";
+            if (is_split_module) {
+               // For split modules, derive output from directory basename
+               std::string dir_str(program_file_name);
+               // Remove trailing slashes
+               while (!dir_str.empty() && dir_str.back() == '/') {
+                  dir_str.pop_back();
+               }
+               // Extract basename
+               size_t last_slash = dir_str.rfind('/');
+               std::string basename = (last_slash != std::string::npos)
+                  ? dir_str.substr(last_slash + 1)
+                  : dir_str;
+               output_path = basename + ".qmod";
+            } else {
+               output_path = program_file_name;
+               // Strip extension
+               size_t dot = output_path.rfind('.');
+               if (dot != std::string::npos && dot > 0) {
+                  output_path = output_path.substr(0, dot);
+               }
+               // For module compilation, add .qmod extension (binary module format)
+               if (compile_module_mode) {
+                  output_path += ".qmod";
+               }
             }
          } else {
             output_path = compile_module_mode ? "module.qmod" : "a.out";
          }
 
          std::string error;
-         if (compile_module_mode) {
+         if (is_split_module) {
+            // Compile split module directory
+            if (!QoreAOT::compileSeparatedModule(program_file_name, output_path, parse_options, error,
+                     aot_opt_level, aot_target, aot_strip_source)) {
+               fprintf(stderr, "AOT split module compilation failed: %s\n", error.c_str());
+               rc = 1;
+            } else {
+               printf("compiled split module (O%d%s): %s\n", aot_opt_level,
+                  aot_strip_source ? ", source-stripped" : "",
+                  output_path.c_str());
+            }
+         } else if (compile_module_mode) {
             if (!QoreAOT::compileModule(source_text.c_str(), (int)source_text.size(),
                      source_label.c_str(), output_path, parse_options, error,
                      aot_opt_level, aot_target, aot_strip_source)) {

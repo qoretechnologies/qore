@@ -1075,21 +1075,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFAdd(lhs, rhs);
+            // Unbox if NaN-boxed (operands may come from LoadLocal which returns i64)
+            llvm::Value* l_float = nanboxed_values.count(inst->operands[0].id) ? unboxFloat(lhs) : lhs;
+            llvm::Value* r_float = nanboxed_values.count(inst->operands[1].id) ? unboxFloat(rhs) : rhs;
+            values[inst->result.id] = builder->CreateFAdd(l_float, r_float);
             return true;
         }
         case QoreIROpcode::SubFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFSub(lhs, rhs);
+            // Unbox if NaN-boxed (operands may come from LoadLocal which returns i64)
+            llvm::Value* l_float = nanboxed_values.count(inst->operands[0].id) ? unboxFloat(lhs) : lhs;
+            llvm::Value* r_float = nanboxed_values.count(inst->operands[1].id) ? unboxFloat(rhs) : rhs;
+            values[inst->result.id] = builder->CreateFSub(l_float, r_float);
             return true;
         }
         case QoreIROpcode::MulFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFMul(lhs, rhs);
+            // Unbox if NaN-boxed (operands may come from LoadLocal which returns i64)
+            llvm::Value* l_float = nanboxed_values.count(inst->operands[0].id) ? unboxFloat(lhs) : lhs;
+            llvm::Value* r_float = nanboxed_values.count(inst->operands[1].id) ? unboxFloat(rhs) : rhs;
+            values[inst->result.id] = builder->CreateFMul(l_float, r_float);
             return true;
         }
         case QoreIROpcode::DivFloat: {
@@ -1097,8 +1106,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
+            // Unbox if NaN-boxed (operands may come from LoadLocal which returns i64)
+            llvm::Value* l_float = nanboxed_values.count(inst->operands[0].id) ? unboxFloat(lhs) : lhs;
+            llvm::Value* r_float = nanboxed_values.count(inst->operands[1].id) ? unboxFloat(rhs) : rhs;
             llvm::Value* zero = llvm::ConstantFP::get(double_type, 0.0);
-            llvm::Value* is_zero = builder->CreateFCmpOEQ(rhs, zero);
+            llvm::Value* is_zero = builder->CreateFCmpOEQ(r_float, zero);
 
             llvm::BasicBlock* fdiv_zero_bb = llvm::BasicBlock::Create(ctx, "fdiv_zero", llvm_func);
             llvm::BasicBlock* fdiv_ok_bb = llvm::BasicBlock::Create(ctx, "fdiv_ok", llvm_func);
@@ -1109,12 +1121,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             builder->SetInsertPoint(fdiv_zero_bb);
             auto helper = module.getOrInsertFunction("qore_rt_div_float",
                     llvm::FunctionType::get(double_type, {double_type, double_type, ptr_type}, false));
-            llvm::Value* exc_result = builder->CreateCall(helper, {lhs, rhs, xsink_arg});
+            llvm::Value* exc_result = builder->CreateCall(helper, {l_float, r_float, xsink_arg});
             builder->CreateBr(fdiv_merge_bb);
 
             // Normal path: native division
             builder->SetInsertPoint(fdiv_ok_bb);
-            llvm::Value* div_result = builder->CreateFDiv(lhs, rhs);
+            llvm::Value* div_result = builder->CreateFDiv(l_float, r_float);
             builder->CreateBr(fdiv_merge_bb);
 
             // Merge results

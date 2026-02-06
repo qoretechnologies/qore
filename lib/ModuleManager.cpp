@@ -1962,6 +1962,10 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     try {
         assert(q_gettid());
 
+        // Run init unlocked to allow loading additional dependencies
+        // (e.g., for AOT modules that need to load dependencies during parsing)
+        ModuleLoadMapHelper mlmh(name);
+
         QoreStringNode* str;
         if (mod_info.init_info) {
             printd(5, "QoreModuleManager::loadBinaryModuleFromPath(%s) %s: calling module_init_info@%p\n", path,

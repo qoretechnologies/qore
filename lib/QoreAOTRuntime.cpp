@@ -1174,22 +1174,51 @@ static std::string aot_module_name;
 static const QoreAOTFunc* aot_module_funcs = nullptr;
 static int aot_module_num_funcs = 0;
 
-//! Extract dependency module names from source %requires directives
-/** Parses the source to find all %requires directives and extracts the module names.
+//! Extract dependency module names from source \%requires directives
+/** Parses the source to find all \%requires directives and extracts the module names.
     Skips "qore" since it's always available.
-    @param source the source text
-    @param source_len length of source
-    @return vector of dependency module names
+    NOTE: Properly skips \%requires inside block comments and line comments.
+    \param source the source text
+    \param source_len length of source
+    \return vector of dependency module names
 */
 static std::vector<std::string> extractDependencies(const char* source, int source_len) {
     std::vector<std::string> deps;
     const char* p = source;
     const char* end = source + source_len;
+    bool in_block_comment = false;
 
     while (p < end) {
+        // Check for block comment start/end
+        if (!in_block_comment && p + 1 < end && p[0] == '/' && p[1] == '*') {
+            in_block_comment = true;
+            p += 2;
+            continue;
+        }
+        if (in_block_comment && p + 1 < end && p[0] == '*' && p[1] == '/') {
+            in_block_comment = false;
+            p += 2;
+            continue;
+        }
+        if (in_block_comment) {
+            ++p;
+            continue;
+        }
+
         // Skip leading whitespace
         while (p < end && (*p == ' ' || *p == '\t')) {
             ++p;
+        }
+
+        // Skip line comments (# ...)
+        if (p < end && *p == '#') {
+            while (p < end && *p != '\n') {
+                ++p;
+            }
+            if (p < end) {
+                ++p;  // skip newline
+            }
+            continue;
         }
 
         // Check for %requires directive
@@ -1223,9 +1252,15 @@ static std::vector<std::string> extractDependencies(const char* source, int sour
 
         // Skip to end of line
         while (p < end && *p != '\n') {
+            // Also check for block comment start within the line
+            if (p + 1 < end && p[0] == '/' && p[1] == '*') {
+                in_block_comment = true;
+                p += 2;
+                break;
+            }
             ++p;
         }
-        if (p < end) {
+        if (p < end && *p == '\n') {
             ++p;  // skip newline
         }
     }
@@ -1239,8 +1274,12 @@ static std::vector<std::string> extractDependencies(const char* source, int sour
     Processing %requires would cause a deadlock because module loading holds the
     module manager lock, and parsing %requires tries to acquire the same lock.
 
-    We also need to strip %try-module ... %endtry blocks entirely, since the module
-    availability check doesn't make sense at runtime (modules are pre-loaded).
+    For %try-module blocks, we need special handling:
+    - Strip the %try-module and %endtry directives themselves
+    - Try to load the module at runtime
+    - If the module loads successfully, strip the fallback code inside the block
+    - If the module fails to load, KEEP the fallback code (typically %define directives)
+      so that conditional compilation works correctly
 */
 static std::string stripRequiresDirectives(const char* source, int source_len) {
     std::string result;
@@ -1248,12 +1287,14 @@ static std::string stripRequiresDirectives(const char* source, int source_len) {
 
     const char* p = source;
     const char* end = source + source_len;
-    int try_module_depth = 0;  // Track nested %try-module blocks
+
+    // Track try-module state: depth and whether current block's module loaded
+    struct TryModuleState {
+        bool module_loaded;
+    };
+    std::vector<TryModuleState> try_module_stack;
 
     while (p < end) {
-        // Find start of line
-        const char* line_start = p;
-
         // Skip leading whitespace
         while (p < end && (*p == ' ' || *p == '\t')) {
             ++p;
@@ -1271,19 +1312,42 @@ static std::string stripRequiresDirectives(const char* source, int source_len) {
             // Replace with a comment to preserve line numbers
             result += "# [AOT: %requires stripped]\n";
         } else if (p + 11 <= end && strncmp(p, "%try-module", 11) == 0) {
-            // Start of %try-module block - skip everything until matching %endtry
-            ++try_module_depth;
+            // Start of %try-module block - extract module name and try to load it
+            p += 11;
+            while (p < end && (*p == ' ' || *p == '\t')) {
+                ++p;
+            }
+            const char* mod_start = p;
+            while (p < end && *p != '\n' && *p != ' ' && *p != '\t') {
+                ++p;
+            }
+            std::string mod_name(mod_start, p - mod_start);
+
+            // Try to load the module (it may already be loaded)
+            bool loaded = false;
+            if (!mod_name.empty()) {
+                ExceptionSink xsink;
+                int rc = MM.runTimeLoadModule(&xsink, mod_name.c_str(), aot_module_pgm);
+                loaded = (rc >= 0 && !xsink);
+                xsink.clear();
+            }
+
+            try_module_stack.push_back({loaded});
+
+            // Skip to end of line
             while (p < end && *p != '\n') {
                 ++p;
             }
             if (p < end) {
                 ++p;
             }
-            result += "# [AOT: %try-module stripped]\n";
+            result += "# [AOT: %try-module ";
+            result += mod_name;
+            result += loaded ? " loaded]\n" : " not loaded - keeping fallback]\n";
         } else if (p + 7 <= end && strncmp(p, "%endtry", 7) == 0) {
             // End of %try-module block
-            if (try_module_depth > 0) {
-                --try_module_depth;
+            if (!try_module_stack.empty()) {
+                try_module_stack.pop_back();
             }
             while (p < end && *p != '\n') {
                 ++p;
@@ -1291,18 +1355,20 @@ static std::string stripRequiresDirectives(const char* source, int source_len) {
             if (p < end) {
                 ++p;
             }
-            result += "# [AOT: %endtry stripped]\n";
-        } else if (try_module_depth > 0) {
-            // Inside a %try-module block - strip this line too
+            result += "# [AOT: %endtry]\n";
+        } else if (!try_module_stack.empty() && try_module_stack.back().module_loaded) {
+            // Inside a %try-module block where the module loaded - strip this line
+            // (the fallback code is not needed)
             while (p < end && *p != '\n') {
                 ++p;
             }
             if (p < end) {
                 ++p;
             }
-            result += "# [AOT: try-module content stripped]\n";
+            result += "# [AOT: try-module fallback stripped]\n";
         } else {
-            // Copy the line as-is
+            // Either outside try-module, or inside a block where module didn't load
+            // Copy the line as-is (keeping %define and other fallback directives)
             while (p < end && *p != '\n') {
                 result += *p++;
             }
@@ -1334,30 +1400,17 @@ extern "C" QoreStringNode* qore_aot_module_init(
     // Set JIT execution mode so functions without pre-compiled code will JIT on demand
     aot_module_pgm->setExecMode(QEM_JIT);
 
-    // Extract dependencies from source and import their namespaces
-    // Dependencies were already loaded by the module manager (from qore_module_dependencies symbol)
-    // but their namespaces need to be imported into aot_module_pgm before we parse
+    // Extract dependencies from source and load/import their namespaces
+    // Note: The init function is now called with the module manager lock unlocked
+    // (via ModuleLoadMapHelper), so we can safely load dependencies here.
     std::vector<std::string> deps = extractDependencies(source, source_len);
-    fprintf(stderr, "AOT module '%s': found %d dependencies to import\n", mod_name, (int)deps.size());
     for (const std::string& dep : deps) {
-        fprintf(stderr, "AOT module '%s': importing dependency namespace '%s'\n", mod_name, dep.c_str());
-        int rc = QMM.importModuleNSUnlocked(dep.c_str(), aot_module_pgm, xsink);
-        fprintf(stderr, "AOT module '%s': import rc=%d\n", mod_name, rc);
-        if (rc < 0) {
-            QoreStringNode* err = new QoreStringNode("AOT module dependency import error: ");
-            QoreValue ex_err = xsink.getExceptionErr();
-            QoreValue ex_desc = xsink.getExceptionDesc();
-            if (ex_err.getType() == NT_STRING) {
-                err->concat(ex_err.get<const QoreStringNode>()->c_str());
-            }
-            if (ex_desc.getType() == NT_STRING) {
-                err->concat(": ");
-                err->concat(ex_desc.get<const QoreStringNode>()->c_str());
-            }
+        // Try to load the module (it may already be loaded, which is fine)
+        int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), aot_module_pgm);
+        if (rc < 0 || xsink) {
+            // Circular dependency or other issue - clear error and continue
+            // The types might be resolved later when the requiring script is parsed
             xsink.clear();
-            aot_module_pgm->waitForTerminationAndDeref(nullptr);
-            aot_module_pgm = nullptr;
-            return err;
         }
     }
 
@@ -1463,8 +1516,6 @@ extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* q
         // Skip namespaces from other modules (dependencies)
         qore_ns_private* ns_priv = qore_ns_private::get(*child_ns);
         const char* ns_module = ns_priv->getModuleName();
-        fprintf(stderr, "AOT module ns_init: namespace '%s' from_module='%s' aot_module='%s'\n",
-            ns_name, ns_module ? ns_module : "(null)", aot_module_name.c_str());
         if (ns_module && strcmp(ns_module, aot_module_name.c_str()) != 0) {
             printd(2, "AOT module ns_init: skipping namespace '%s' from module '%s' (exporting '%s')\n",
                 ns_name, ns_module, aot_module_name.c_str());

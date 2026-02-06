@@ -31,8 +31,12 @@
 
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/QoreDir.h"
 
 #include <qore/Qore.h>
+
+#include <sys/stat.h>
+#include <unordered_set>
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -74,6 +78,29 @@ extern void collectAllStatementLocals(const StatementBlock* block, std::vector<L
 #include <sstream>
 #include <string>
 #include <vector>
+
+//! Generate a unique variant key that includes parameter types to distinguish overloads
+/** Format: "name(type1,type2,...)" - uses type paths for parameter types
+    @param name the base function/method name
+    @param variant the function variant
+    @return unique key string
+*/
+std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant) {
+    std::string key(name);
+    key.append("(");
+    AbstractFunctionSignature* sig = variant->getSignature();
+    if (sig) {
+        const type_vec_t& types = sig->getTypeList();
+        for (size_t i = 0; i < types.size(); ++i) {
+            if (i > 0) {
+                key.append(",");
+            }
+            key.append(QoreTypeInfo::getPath(types[i]));
+        }
+    }
+    key.append(")");
+    return key;
+}
 
 QoreAOTContext::~QoreAOTContext() {
     // Deref all held expression values (we took a ref in buildAOTContext)
@@ -195,6 +222,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
             ++total_funcs;
             const char* fname = func->getName();
+            // Generate unique key including parameter types to distinguish overloads
+            std::string variant_key = getVariantKey(fname, variant);
             QoreIRFunction* ir_func = nullptr;
             std::string lower_error;
             int rc = tryLowerFunction(uvb, fname, pgm, ir_func, lower_error);
@@ -210,7 +239,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 std::string llvm_error;
                 if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
                     AOTCompiledFunc cf;
-                    cf.name = fname;
+                    cf.name = variant_key;  // Use variant key instead of plain name
                     cf.llvm_symbol = ir_func->name;
                     cf.num_locals = static_cast<int>(slots.local_slots.size());
                     cf.num_globals = static_cast<int>(slots.global_slots.size());
@@ -221,15 +250,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
                     printd(2, "AOT: compiled function '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
-                        fname, (int)slots.local_slots.size(), (int)slots.global_slots.size(),
+                        variant_key.c_str(), (int)slots.local_slots.size(), (int)slots.global_slots.size(),
                         (int)slots.expr_slots.size(), (int)slots.stmt_slots.size());
                 } else {
-                    printd(2, "AOT: LLVM lowering failed for '%s': %s\n", fname, llvm_error.c_str());
+                    printd(2, "AOT: LLVM lowering failed for '%s': %s\n", variant_key.c_str(), llvm_error.c_str());
                     ++failed_count;
                 }
                 delete ir_func;
             } else {
-                printd(2, "AOT: IR lowering failed for '%s': %s\n", fname, lower_error.c_str());
+                printd(2, "AOT: IR lowering failed for '%s': %s\n", variant_key.c_str(), lower_error.c_str());
                 ++failed_count;
             }
         }
@@ -263,6 +292,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
                 ++total_funcs;
                 std::string method_name = std::string(class_name) + "::" + meth->getName();
+                // Generate unique key including parameter types to distinguish overloads
+                std::string variant_key = getVariantKey(method_name.c_str(), variant);
                 QoreIRFunction* ir_func = nullptr;
                 std::string lower_error;
                 int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
@@ -278,7 +309,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     std::string llvm_error;
                     if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
                         AOTCompiledFunc cf;
-                        cf.name = method_name;
+                        cf.name = variant_key;  // Use variant key instead of plain name
                         cf.llvm_symbol = ir_func->name;
                         cf.num_locals = static_cast<int>(slots.local_slots.size());
                         cf.num_globals = static_cast<int>(slots.global_slots.size());
@@ -289,18 +320,18 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         compiled_funcs.push_back(std::move(cf));
                         ++compiled_count;
                         printd(2, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
-                            method_name.c_str(), (int)slots.local_slots.size(),
+                            variant_key.c_str(), (int)slots.local_slots.size(),
                             (int)slots.global_slots.size(), (int)slots.expr_slots.size(),
                             (int)slots.stmt_slots.size());
                     } else {
                         printd(2, "AOT: LLVM lowering failed for '%s': %s\n",
-                            method_name.c_str(), llvm_error.c_str());
+                            variant_key.c_str(), llvm_error.c_str());
                         ++failed_count;
                     }
                     delete ir_func;
                 } else {
                     printd(2, "AOT: IR lowering failed for '%s': %s\n",
-                        method_name.c_str(), lower_error.c_str());
+                        variant_key.c_str(), lower_error.c_str());
                     ++failed_count;
                 }
             }
@@ -995,9 +1026,39 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
         QoreAOTModuleInfo& info, std::string& error) {
     std::string src(source, source_len);
 
-    // Find "module NAME {" pattern
-    size_t mod_pos = src.find("module");
-    if (mod_pos == std::string::npos) {
+    // Find "module NAME {" pattern - must be at start of line (not in comments)
+    // Look for "module" preceded by nothing or whitespace only on its line
+    size_t mod_pos = 0;
+    bool found = false;
+    while ((mod_pos = src.find("module", mod_pos)) != std::string::npos) {
+        // Check if this "module" is at line start or preceded only by whitespace on its line
+        bool valid_start = (mod_pos == 0);
+        if (!valid_start) {
+            // Walk backwards to start of line
+            size_t line_start = mod_pos;
+            while (line_start > 0 && src[line_start - 1] != '\n') {
+                --line_start;
+            }
+            // Check if only whitespace between line start and "module"
+            valid_start = true;
+            for (size_t i = line_start; i < mod_pos; ++i) {
+                if (src[i] != ' ' && src[i] != '\t') {
+                    valid_start = false;
+                    break;
+                }
+            }
+        }
+        if (valid_start) {
+            // Check that "module" is followed by whitespace (not part of another word)
+            size_t after = mod_pos + 6;
+            if (after < src.size() && (src[after] == ' ' || src[after] == '\t')) {
+                found = true;
+                break;
+            }
+        }
+        ++mod_pos;
+    }
+    if (!found) {
         error = "no 'module' declaration found in source";
         return false;
     }
@@ -1084,6 +1145,131 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
         info.license = "MIT";
     }
 
+    // Extract non-reexport dependencies from %requires directives
+    // These are exported so the module manager can load them before calling init.
+    // IMPORTANT: We skip (reexport) dependencies to avoid circular dependency issues.
+    // Reexported modules often depend on types from this module, creating a cycle
+    // where the dependency can't load because this module's types don't exist yet.
+    // NOTE: We must skip %requires inside comments (block comments and line comments).
+    // Also check %try-module directives and warn if the module is not available.
+    {
+        const char* p = source;
+        const char* end = source + source_len;
+        bool in_block_comment = false;
+
+        while (p < end) {
+            // Check for block comment start/end
+            if (!in_block_comment && p + 1 < end && p[0] == '/' && p[1] == '*') {
+                in_block_comment = true;
+                p += 2;
+                continue;
+            }
+            if (in_block_comment && p + 1 < end && p[0] == '*' && p[1] == '/') {
+                in_block_comment = false;
+                p += 2;
+                continue;
+            }
+            if (in_block_comment) {
+                ++p;
+                continue;
+            }
+
+            // Skip whitespace at start of line
+            while (p < end && (*p == ' ' || *p == '\t')) {
+                ++p;
+            }
+
+            // Skip line comments (# ...)
+            if (p < end && *p == '#') {
+                while (p < end && *p != '\n') {
+                    ++p;
+                }
+                if (p < end) {
+                    ++p;  // skip newline
+                }
+                continue;
+            }
+
+            // Check for %try-module directive and warn if module not available
+            if (p + 11 <= end && strncmp(p, "%try-module", 11) == 0) {
+                p += 11;
+                while (p < end && (*p == ' ' || *p == '\t')) {
+                    ++p;
+                }
+                const char* mod_start = p;
+                while (p < end && *p != '\n' && *p != ' ' && *p != '\t') {
+                    ++p;
+                }
+                if (p > mod_start) {
+                    std::string mod_name(mod_start, p - mod_start);
+                    // Try to load the module to check if it's available
+                    ExceptionSink xsink;
+                    int rc = MM.runTimeLoadModule(&xsink, mod_name.c_str(), nullptr);
+                    if (rc < 0 || xsink) {
+                        fprintf(stderr, "AOT warning: optional module '%s' is not available during compilation\n",
+                            mod_name.c_str());
+                        fprintf(stderr, "             the compiled module will only work on systems where '%s' is also unavailable\n",
+                            mod_name.c_str());
+                    }
+                    xsink.clear();
+                }
+                // Skip to end of line
+                while (p < end && *p != '\n') {
+                    ++p;
+                }
+                if (p < end) {
+                    ++p;
+                }
+                continue;
+            }
+
+            // Check for %requires directive (must be at start of logical line)
+            if (p + 9 <= end && strncmp(p, "%requires", 9) == 0) {
+                p += 9;
+                // Skip whitespace
+                while (p < end && (*p == ' ' || *p == '\t')) {
+                    ++p;
+                }
+                // Check for (reexport) - skip reexport dependencies
+                bool is_reexport = false;
+                if (p + 10 <= end && strncmp(p, "(reexport)", 10) == 0) {
+                    is_reexport = true;
+                    p += 10;
+                    while (p < end && (*p == ' ' || *p == '\t')) {
+                        ++p;
+                    }
+                }
+                // Now read the module name (stop at whitespace, newline, or version operators)
+                const char* name_start = p;
+                while (p < end && *p != '\n' && *p != ' ' && *p != '\t' &&
+                       *p != '<' && *p != '>' && *p != '=') {
+                    ++p;
+                }
+                if (p > name_start && !is_reexport) {
+                    std::string dep_name(name_start, p - name_start);
+                    // Skip common system modules that are always available
+                    if (dep_name != "qore") {
+                        info.dependencies.push_back(dep_name);
+                    }
+                }
+            }
+
+            // Skip to end of line
+            while (p < end && *p != '\n') {
+                // Also check for block comment start within the line
+                if (p + 1 < end && p[0] == '/' && p[1] == '*') {
+                    in_block_comment = true;
+                    p += 2;
+                    break;
+                }
+                ++p;
+            }
+            if (p < end && *p == '\n') {
+                ++p;  // skip newline
+            }
+        }
+    }
+
     return true;
 }
 
@@ -1131,6 +1317,30 @@ static void generateModuleABI(llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::GlobalValue::ExternalLinkage,
         llvm::ConstantInt::get(i32_type, 0), "qore_module_license");
     license_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+    // Export module dependencies as null-terminated array of C strings
+    // The module manager uses this to load dependencies before calling init
+    if (!mod_info.dependencies.empty()) {
+        std::vector<llvm::GlobalVariable*> dep_string_gvs;
+        for (const auto& dep : mod_info.dependencies) {
+            auto* dep_str = llvm::ConstantDataArray::getString(ctx, dep, true);
+            auto* dep_gv = new llvm::GlobalVariable(module, dep_str->getType(), true,
+                llvm::GlobalValue::PrivateLinkage, dep_str,
+                "qore_aot_dep_" + dep);
+            dep_string_gvs.push_back(dep_gv);
+        }
+        // Create array of pointers to dependency strings, plus null terminator
+        std::vector<llvm::Constant*> dep_ptrs;
+        for (auto* gv : dep_string_gvs) {
+            dep_ptrs.push_back(llvm::ConstantExpr::getPointerCast(gv, ptr_type));
+        }
+        dep_ptrs.push_back(llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0)));
+        auto* dep_array = llvm::ConstantArray::get(
+            llvm::ArrayType::get(ptr_type, dep_ptrs.size()), dep_ptrs);
+        auto* deps_gv = new llvm::GlobalVariable(module, dep_array->getType(), true,
+            llvm::GlobalValue::ExternalLinkage, dep_array, "qore_module_dependencies");
+        deps_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+    }
 
     // Embed source as a private global constant
     llvm::Constant* source_data = llvm::ConstantDataArray::getString(ctx,
@@ -1200,13 +1410,14 @@ static void generateModuleABI(llvm::LLVMContext& ctx, llvm::Module& module,
     auto* aot_mod_del_type = llvm::FunctionType::get(void_type, {}, false);
     auto aot_mod_del_fn = module.getOrInsertFunction("qore_aot_module_delete", aot_mod_del_type);
 
-    // Generate qore_module_init() — exported
+    // Create internal implementation function for module init
+    llvm::Function* init_impl_fn;
     {
         auto* fn_type = llvm::FunctionType::get(ptr_type, {}, false);
-        auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, "qore_module_init", module);
-        fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+        init_impl_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
+            "__qore_aot_module_init_impl", module);
 
-        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", init_impl_fn);
         llvm::IRBuilder<> builder(entry_bb);
 
         llvm::Value* src_ptr = builder.CreateInBoundsGEP(
@@ -1242,16 +1453,17 @@ static void generateModuleABI(llvm::LLVMContext& ctx, llvm::Module& module,
         builder.CreateRet(result);
     }
 
-    // Generate qore_module_ns_init(root_ns, qore_ns) — exported
+    // Create internal implementation function for ns_init
+    llvm::Function* ns_init_impl_fn;
     {
         auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
-        auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, "qore_module_ns_init", module);
-        fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+        ns_init_impl_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
+            "__qore_aot_module_ns_init_impl", module);
 
-        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", ns_init_impl_fn);
         llvm::IRBuilder<> builder(entry_bb);
 
-        auto arg_it = fn->arg_begin();
+        auto arg_it = ns_init_impl_fn->arg_begin();
         llvm::Value* root_ns_val = &*arg_it++;
         llvm::Value* qore_ns_val = &*arg_it;
 
@@ -1259,17 +1471,43 @@ static void generateModuleABI(llvm::LLVMContext& ctx, llvm::Module& module,
         builder.CreateRetVoid();
     }
 
-    // Generate qore_module_delete() — exported
+    // Create internal implementation function for delete
+    llvm::Function* del_impl_fn;
     {
         auto* fn_type = llvm::FunctionType::get(void_type, {}, false);
-        auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, "qore_module_delete", module);
-        fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+        del_impl_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
+            "__qore_aot_module_delete_impl", module);
 
-        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", del_impl_fn);
         llvm::IRBuilder<> builder(entry_bb);
 
         builder.CreateCall(aot_mod_del_fn, {});
         builder.CreateRetVoid();
+    }
+
+    // Export global function pointer variables (as binary modules expect)
+    // qore_module_init: qore_module_init_t (function pointer)
+    {
+        auto* init_fn_type = llvm::FunctionType::get(ptr_type, {}, false);
+        auto* init_ptr_type = llvm::PointerType::get(init_fn_type, 0);
+        new llvm::GlobalVariable(module, init_ptr_type, true,
+            llvm::GlobalValue::ExternalLinkage, init_impl_fn, "qore_module_init");
+    }
+
+    // qore_module_ns_init: qore_module_ns_init_t (function pointer)
+    {
+        auto* ns_init_fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
+        auto* ns_init_ptr_type = llvm::PointerType::get(ns_init_fn_type, 0);
+        new llvm::GlobalVariable(module, ns_init_ptr_type, true,
+            llvm::GlobalValue::ExternalLinkage, ns_init_impl_fn, "qore_module_ns_init");
+    }
+
+    // qore_module_delete: qore_module_delete_t (function pointer)
+    {
+        auto* del_fn_type = llvm::FunctionType::get(void_type, {}, false);
+        auto* del_ptr_type = llvm::PointerType::get(del_fn_type, 0);
+        new llvm::GlobalVariable(module, del_ptr_type, true,
+            llvm::GlobalValue::ExternalLinkage, del_impl_fn, "qore_module_delete");
     }
 }
 
@@ -1389,13 +1627,14 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
     auto* aot_mod_del_type = llvm::FunctionType::get(void_type, {}, false);
     auto aot_mod_del_fn = module.getOrInsertFunction("qore_aot_module_delete", aot_mod_del_type);
 
-    // Generate qore_module_init() — exported
+    // Create internal implementation function for module init
+    llvm::Function* init_impl_fn;
     {
         auto* fn_type = llvm::FunctionType::get(ptr_type, {}, false);
-        auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, "qore_module_init", module);
-        fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+        init_impl_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
+            "__qore_aot_module_init_impl", module);
 
-        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", init_impl_fn);
         llvm::IRBuilder<> builder(entry_bb);
 
         llvm::Value* meta_ptr = builder.CreateInBoundsGEP(
@@ -1431,16 +1670,17 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         builder.CreateRet(result);
     }
 
-    // Generate qore_module_ns_init(root_ns, qore_ns) — exported
+    // Create internal implementation function for ns_init
+    llvm::Function* ns_init_impl_fn;
     {
         auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
-        auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, "qore_module_ns_init", module);
-        fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+        ns_init_impl_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
+            "__qore_aot_module_ns_init_impl", module);
 
-        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", ns_init_impl_fn);
         llvm::IRBuilder<> builder(entry_bb);
 
-        auto arg_it = fn->arg_begin();
+        auto arg_it = ns_init_impl_fn->arg_begin();
         llvm::Value* root_ns_val = &*arg_it++;
         llvm::Value* qore_ns_val = &*arg_it;
 
@@ -1448,17 +1688,43 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         builder.CreateRetVoid();
     }
 
-    // Generate qore_module_delete() — exported
+    // Create internal implementation function for delete
+    llvm::Function* del_impl_fn;
     {
         auto* fn_type = llvm::FunctionType::get(void_type, {}, false);
-        auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, "qore_module_delete", module);
-        fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+        del_impl_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
+            "__qore_aot_module_delete_impl", module);
 
-        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", del_impl_fn);
         llvm::IRBuilder<> builder(entry_bb);
 
         builder.CreateCall(aot_mod_del_fn, {});
         builder.CreateRetVoid();
+    }
+
+    // Export global function pointer variables (as binary modules expect)
+    // qore_module_init: qore_module_init_t (function pointer)
+    {
+        auto* init_fn_type = llvm::FunctionType::get(ptr_type, {}, false);
+        auto* init_ptr_type = llvm::PointerType::get(init_fn_type, 0);
+        new llvm::GlobalVariable(module, init_ptr_type, true,
+            llvm::GlobalValue::ExternalLinkage, init_impl_fn, "qore_module_init");
+    }
+
+    // qore_module_ns_init: qore_module_ns_init_t (function pointer)
+    {
+        auto* ns_init_fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
+        auto* ns_init_ptr_type = llvm::PointerType::get(ns_init_fn_type, 0);
+        new llvm::GlobalVariable(module, ns_init_ptr_type, true,
+            llvm::GlobalValue::ExternalLinkage, ns_init_impl_fn, "qore_module_ns_init");
+    }
+
+    // qore_module_delete: qore_module_delete_t (function pointer)
+    {
+        auto* del_fn_type = llvm::FunctionType::get(void_type, {}, false);
+        auto* del_ptr_type = llvm::PointerType::get(del_fn_type, 0);
+        new llvm::GlobalVariable(module, del_ptr_type, true,
+            llvm::GlobalValue::ExternalLinkage, del_impl_fn, "qore_module_delete");
     }
 }
 
@@ -1534,10 +1800,21 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     {
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink);
 
-        qpgm->parse(source_text, label, &xsink, &wsink, QP_WARN_DEFAULT);
+        // Use parsePending() + parseCommit() like interpreted module loading does.
+        // This allows forward references in the init closure to be resolved during commit
+        // after all module types/functions have been parsed.
+        qpgm->parsePending(source_text, label, &xsink, &wsink, QP_WARN_DEFAULT);
+        if (!xsink.isException()) {
+            qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        }
 
         mod_ctx.close();
     }
+
+    // Clean up phantom module dependencies created during compilation
+    // (the module being compiled is not actually loaded, so any dependencies
+    // created by trySetUserModuleDependency need to be removed)
+    QMM.removeUserModuleDependency(mod_info.name.c_str());
 
     if (wsink.isException()) {
         wsink.handleWarnings();
@@ -1563,8 +1840,35 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
 
     qore_program_private* pp = qore_program_private::get(**qpgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
-    compileNamespaceFunctions(root_ns, *qpgm, ctx, *module,
-        compiled_funcs, total_funcs, compiled_count, failed_count);
+
+    // Compile functions from namespaces that BELONG to this module (not from dependencies)
+    // Use the namespace's from_module field to identify ownership:
+    // - Empty from_module: namespace defined in current parsing context (this module)
+    // - from_module == mod_info.name: explicitly marked as belonging to this module
+    // - from_module == other: namespace came from a dependency (skip)
+    bool found_any = false;
+    for (auto ni = root_ns->nsl.nsmap.begin(); ni != root_ns->nsl.nsmap.end(); ++ni) {
+        if (!ni->second) {
+            continue;
+        }
+        qore_ns_private* ns_priv = qore_ns_private::get(*ni->second);
+        const char* ns_module = ns_priv->getModuleName();
+
+        // Skip namespaces from other modules (dependencies)
+        if (ns_module && strcmp(ns_module, mod_info.name.c_str()) != 0) {
+            printd(2, "AOT: skipping namespace '%s' from module '%s' (compiling '%s')\n",
+                ni->first.c_str(), ns_module, mod_info.name.c_str());
+            continue;
+        }
+
+        found_any = true;
+        compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module,
+            compiled_funcs, total_funcs, compiled_count, failed_count);
+    }
+    if (!found_any) {
+        error = "no module namespaces found after parsing (expected at least '" + mod_info.name + "')";
+        return false;
+    }
 
     printf("AOT module compilation: %d/%d functions pre-compiled (%d failed)\n",
         compiled_count, total_funcs, failed_count);
@@ -1641,6 +1945,295 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     if (!target_triple) {
         remove(obj_path.c_str());
     }
+
+    return true;
+}
+
+bool QoreAOT::compileSeparatedModule(const char* dir_path,
+                                     const std::string& output_path,
+                                     int64_t parse_options,
+                                     std::string& error,
+                                     int opt_level,
+                                     const char* target_triple,
+                                     bool strip_source) {
+    // Step 1: Extract module name from directory basename (handle trailing slash)
+    std::string dir_str(dir_path);
+    // Remove trailing slashes
+    while (!dir_str.empty() && dir_str.back() == '/') {
+        dir_str.pop_back();
+    }
+    if (dir_str.empty()) {
+        error = "empty directory path";
+        return false;
+    }
+
+    // Extract basename (module name)
+    std::string mod_name;
+    size_t last_slash = dir_str.rfind('/');
+    if (last_slash != std::string::npos) {
+        mod_name = dir_str.substr(last_slash + 1);
+    } else {
+        mod_name = dir_str;
+    }
+
+    if (mod_name.empty()) {
+        error = "cannot determine module name from directory path";
+        return false;
+    }
+
+    // Step 2: Construct path to main .qm file
+    std::string qm_path = dir_str + "/" + mod_name + ".qm";
+
+    // Step 3: Verify main .qm file exists and read it
+    std::string main_source = QoreDir::get_file_content(qm_path.c_str());
+    if (main_source.empty()) {
+        // Check if file exists at all
+        struct stat st;
+        if (stat(qm_path.c_str(), &st) != 0) {
+            error = "main module file not found: " + qm_path;
+            return false;
+        }
+        // File exists but is empty - that's an error
+        error = "main module file is empty: " + qm_path;
+        return false;
+    }
+
+    // Step 4: Parse module metadata from main .qm file
+    QoreAOTModuleInfo mod_info;
+    if (!parseModuleMetadata(main_source.c_str(), (int)main_source.size(), qm_path.c_str(), mod_info, error)) {
+        return false;
+    }
+
+    // Verify module name matches directory name
+    if (mod_info.name != mod_name) {
+        error = "module name '" + mod_info.name + "' in " + qm_path +
+                " does not match directory name '" + mod_name + "'";
+        return false;
+    }
+
+    printd(2, "AOT split module: name='%s' version='%s' desc='%s' dir='%s'\n",
+        mod_info.name.c_str(), mod_info.version.c_str(), mod_info.desc.c_str(), dir_str.c_str());
+
+    // Step 5: Create QoreProgram and set up module context
+    int64_t mod_po = parse_options | PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
+        | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR;
+
+    ExceptionSink xsink;
+    ExceptionSink wsink;
+    QoreProgramHelper qpgm(mod_po, xsink);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "failed to create QoreProgram for split module parsing";
+        return false;
+    }
+
+    // Step 6: Parse with QoreUserModuleDefContextHelper for proper module context
+    {
+        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink);
+
+        // Parse main .qm file with parsePending()
+        qpgm->parsePending(main_source.c_str(), qm_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "parse error in main module file: " + qm_path;
+            return false;
+        }
+
+        // Step 7: Glob .qc/.ql files and parse each
+        QoreString regexClassesFunc(".+\\.(qc|ql)$");
+        QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_str.c_str());
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "failed to open module directory: " + dir_str;
+            return false;
+        }
+
+        ReferenceHolder<QoreListNode> fileList(moduleDir.list(&xsink, S_IFREG, &regexClassesFunc), &xsink);
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "failed to list files in module directory: " + dir_str;
+            return false;
+        }
+
+        // Collect all source files for embedding - we need the complete namespace tree at runtime
+        // to properly register AOT functions on all classes and functions from .qc/.ql files.
+        std::string combined_source = main_source;
+
+        // Parse each .qc/.ql file for compilation and add to combined source
+        if (fileList && fileList->size() > 0) {
+            for (size_t i = 0; i < fileList->size(); ++i) {
+                const QoreStringNode* filename = fileList->retrieveEntry(i).get<const QoreStringNode>();
+                if (!filename) {
+                    continue;
+                }
+
+                std::string file_path = dir_str + "/" + filename->c_str();
+                std::string file_source = QoreDir::get_file_content(file_path.c_str());
+                if (file_source.empty()) {
+                    // Skip empty files but warn
+                    printd(2, "AOT: warning: skipping empty file: %s\n", file_path.c_str());
+                    continue;
+                }
+
+                qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
+                if (xsink.isException()) {
+                    mod_ctx.close();
+                    xsink.handleExceptions();
+                    error = "parse error in component file: " + file_path;
+                    return false;
+                }
+
+                // Add this file's source to combined source for embedding
+                if (!combined_source.empty() && combined_source.back() != '\n') {
+                    combined_source += '\n';
+                }
+                combined_source += file_source;
+            }
+        }
+
+        // Step 8: Commit parsing
+        qpgm->parseCommit(&xsink);
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "parse commit failed for split module: " + mod_name;
+            return false;
+        }
+
+        mod_ctx.close();
+
+        // Handle warnings
+        if (wsink.isException()) {
+            wsink.handleWarnings();
+        }
+
+        // Step 9: Initialize LLVM and compile functions
+        llvm::InitializeNativeTarget();
+        llvm::InitializeNativeTargetAsmPrinter();
+        llvm::InitializeNativeTargetAsmParser();
+
+        llvm::LLVMContext ctx;
+        auto module = std::make_unique<llvm::Module>("qore_aot_module_" + mod_info.name, ctx);
+
+        std::vector<AOTCompiledFunc> compiled_funcs;
+        int total_funcs = 0;
+        int compiled_count = 0;
+        int failed_count = 0;
+
+        qore_program_private* pp = qore_program_private::get(**qpgm);
+        qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+
+        // Compile functions from namespaces that BELONG to this module (not from dependencies)
+        // Use the namespace's from_module field to identify ownership
+        bool found_any = false;
+        for (auto ni = root_ns->nsl.nsmap.begin(); ni != root_ns->nsl.nsmap.end(); ++ni) {
+            if (!ni->second) {
+                continue;
+            }
+            qore_ns_private* ns_priv = qore_ns_private::get(*ni->second);
+            const char* ns_module = ns_priv->getModuleName();
+
+            // Skip namespaces from other modules (dependencies)
+            if (ns_module && strcmp(ns_module, mod_info.name.c_str()) != 0) {
+                printd(2, "AOT: skipping namespace '%s' from module '%s' (compiling '%s')\n",
+                    ni->first.c_str(), ns_module, mod_info.name.c_str());
+                continue;
+            }
+
+            found_any = true;
+            compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module,
+                compiled_funcs, total_funcs, compiled_count, failed_count);
+        }
+        if (!found_any) {
+            error = "no module namespaces found after parsing (expected at least '" + mod_name + "')";
+            return false;
+        }
+
+        printf("AOT split module compilation: %d/%d functions pre-compiled (%d failed)\n",
+            compiled_count, total_funcs, failed_count);
+
+        // Step 10: Generate module ABI
+        if (strip_source) {
+            QoreAOTBinaryWriter writer;
+            QoreAOTBinaryHeader hdr{};
+            hdr.magic = QORE_AOT_BINARY_MAGIC;
+            hdr.version = QORE_AOT_BINARY_VERSION;
+            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            hdr.parse_options = mod_po;
+            hdr.label_offset = writer.strings.add(qm_path.c_str());
+
+            if (!serializeNamespaceTree(writer, root_ns)) {
+                error = "failed to serialize split module namespace tree";
+                return false;
+            }
+
+            std::vector<AOTCompiledFuncWithSlots> func_slots;
+            for (auto& cf : compiled_funcs) {
+                AOTCompiledFuncWithSlots fws;
+                fws.name = cf.name;
+                fws.num_locals = cf.num_locals;
+                fws.num_globals = cf.num_globals;
+                fws.num_exprs = cf.num_exprs;
+                fws.slot_ids = cf.slot_ids;
+                func_slots.push_back(std::move(fws));
+            }
+            serializeSlotMaps(writer, func_slots);
+            serializeFallbackSources(writer, func_slots, combined_source.c_str(), (int)combined_source.size());
+
+            std::vector<uint8_t> metadata;
+            hdr.section_count = 0;
+            if (!writer.finalize(hdr, metadata)) {
+                error = "failed to finalize split module binary metadata";
+                return false;
+            }
+
+            printf("AOT: split module metadata blob: %d bytes (source-stripped)\n", (int)metadata.size());
+
+            generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(), mod_po, mod_info, compiled_funcs);
+        } else {
+            // Embed combined source (main .qm + all .qc/.ql files) for building namespace at runtime
+            generateModuleABI(ctx, *module, combined_source.c_str(), (int)combined_source.size(),
+                qm_path.c_str(), mod_po, mod_info, compiled_funcs);
+        }
+
+        // Verify the module
+        std::string verify_error;
+        llvm::raw_string_ostream verify_os(verify_error);
+        if (llvm::verifyModule(*module, &verify_os)) {
+            verify_os.flush();
+            error = "LLVM module verification failed: " + verify_error;
+            return false;
+        }
+
+        if (getenv("QORE_DUMP_LLVM_IR")) {
+            module->print(llvm::errs(), nullptr);
+        }
+
+        // Step 11: Emit PIC object file
+        std::string obj_path = output_path + ".o";
+        if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple)) {
+            return false;
+        }
+
+        // Step 12: Link as shared library
+        if (!linkSharedLib(obj_path, output_path, error, target_triple)) {
+            remove(obj_path.c_str());
+            return false;
+        }
+
+        // Clean up object file (keep for cross-compilation)
+        if (!target_triple) {
+            remove(obj_path.c_str());
+        }
+    }
+
+    // Clean up phantom module dependencies created during compilation
+    // (the module being compiled is not actually loaded, so any dependencies
+    // created by trySetUserModuleDependency need to be removed)
+    QMM.removeUserModuleDependency(mod_info.name.c_str());
 
     return true;
 }
@@ -1789,25 +2382,19 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
 }
 
 QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs, int num_stmts) {
-    QoreAOTContext* ctx = new QoreAOTContext();
-    ctx->num_locals = num_locals;
-    ctx->num_globals = num_globals;
-    ctx->num_exprs = num_exprs;
-    ctx->num_stmts = num_stmts;
-    ctx->allocate();
+    // Two-pass approach to avoid ref/deref issues on mismatch:
+    // Pass 1: Count slots without taking refs
+    // Pass 2: If counts match, take refs and fill context
 
-    // Copy all_body_locals from the fresh IR
-    ctx->all_body_locals = func.all_body_locals;
-
-    // Walk in the same deterministic order as buildAOTSlotMap to fill arrays
-    int local_idx = 0;
-    int global_idx = 0;
-    int expr_idx = 0;
-    int stmt_idx = 0;
-    std::unordered_map<const void*, int> seen_locals;
-    std::unordered_map<const void*, int> seen_globals;
-    std::unordered_map<uint64_t, int> seen_exprs;
-    std::unordered_map<const void*, int> seen_stmts;
+    // Pass 1: Count unique slots
+    int local_count = 0;
+    int global_count = 0;
+    int expr_count = 0;
+    int stmt_count = 0;
+    std::unordered_set<const void*> seen_locals;
+    std::unordered_set<const void*> seen_globals;
+    std::unordered_set<uint64_t> seen_exprs;
+    std::unordered_set<const void*> seen_stmts;
 
     for (auto& block : func.blocks) {
         for (auto& inst : block->instructions) {
@@ -1816,11 +2403,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::StoreLocal: {
                     auto* li = static_cast<QoreIRLocalInstruction*>(inst.get());
                     const void* key = reinterpret_cast<const void*>(li->local);
-                    if (seen_locals.find(key) == seen_locals.end()) {
-                        assert(local_idx < num_locals);
-                        ctx->locals[local_idx] = li->local;
-                        seen_locals[key] = local_idx;
-                        ++local_idx;
+                    if (seen_locals.insert(key).second) {
+                        ++local_count;
                     }
                     break;
                 }
@@ -1830,11 +2414,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::StoreThreadLocal: {
                     auto* vi = static_cast<QoreIRVarInstruction*>(inst.get());
                     const void* key = reinterpret_cast<const void*>(vi->var);
-                    if (seen_globals.find(key) == seen_globals.end()) {
-                        assert(global_idx < num_globals);
-                        ctx->globals[global_idx] = vi->var;
-                        seen_globals[key] = global_idx;
-                        ++global_idx;
+                    if (seen_globals.insert(key).second) {
+                        ++global_count;
                     }
                     break;
                 }
@@ -1842,11 +2423,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::StoreClosure: {
                     auto* li = static_cast<QoreIRLocalInstruction*>(inst.get());
                     const void* key = reinterpret_cast<const void*>(li->local);
-                    if (seen_locals.find(key) == seen_locals.end()) {
-                        assert(local_idx < num_locals);
-                        ctx->locals[local_idx] = li->local;
-                        seen_locals[key] = local_idx;
-                        ++local_idx;
+                    if (seen_locals.insert(key).second) {
+                        ++local_count;
                     }
                     break;
                 }
@@ -1854,13 +2432,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* ii = static_cast<QoreIRInvokeInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ii->expr, sizeof(bits));
-                    if (seen_exprs.find(bits) == seen_exprs.end()) {
-                        assert(expr_idx < num_exprs);
-                        // Take a ref so the expression survives IR function deletion
-                        ii->expr.ref();
-                        ctx->exprs[expr_idx] = bits;
-                        seen_exprs[bits] = expr_idx;
-                        ++expr_idx;
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
                     }
                     break;
                 }
@@ -1871,13 +2444,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
-                    if (seen_exprs.find(bits) == seen_exprs.end()) {
-                        assert(expr_idx < num_exprs);
-                        // Take a ref so the expression survives IR function deletion
-                        ei->expr.ref();
-                        ctx->exprs[expr_idx] = bits;
-                        seen_exprs[bits] = expr_idx;
-                        ++expr_idx;
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
                     }
                     break;
                 }
@@ -1902,13 +2470,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* lvi = static_cast<QoreIRLValueInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &lvi->lvalue, sizeof(bits));
-                    if (seen_exprs.find(bits) == seen_exprs.end()) {
-                        assert(expr_idx < num_exprs);
-                        // Take a ref so the lvalue survives IR function deletion
-                        lvi->lvalue.ref();
-                        ctx->exprs[expr_idx] = bits;
-                        seen_exprs[bits] = expr_idx;
-                        ++expr_idx;
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
                     }
                     break;
                 }
@@ -1971,13 +2534,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
-                    if (seen_exprs.find(bits) == seen_exprs.end()) {
-                        assert(expr_idx < num_exprs);
-                        // Take a ref so the expression survives IR function deletion
-                        ei->expr.ref();
-                        ctx->exprs[expr_idx] = bits;
-                        seen_exprs[bits] = expr_idx;
-                        ++expr_idx;
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
                     }
                     break;
                 }
@@ -1985,11 +2543,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
                     const void* key = reinterpret_cast<const void*>(code);
-                    if (seen_stmts.find(key) == seen_stmts.end()) {
-                        assert(stmt_idx < num_stmts);
-                        ctx->stmts[stmt_idx] = code;
-                        seen_stmts[key] = stmt_idx;
-                        ++stmt_idx;
+                    if (seen_stmts.insert(key).second) {
+                        ++stmt_count;
                     }
                     break;
                 }
@@ -1999,10 +2554,205 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
         }
     }
 
-    assert(local_idx == num_locals);
-    assert(global_idx == num_globals);
-    assert(expr_idx == num_exprs);
-    assert(stmt_idx == num_stmts);
+    // Check if counts match before taking any refs
+    if (local_count != num_locals || global_count != num_globals ||
+            expr_count != num_exprs || stmt_count != num_stmts) {
+        // Slot count mismatch between compile time and runtime - this can happen due to
+        // expression object sharing differences in the parser (e.g., ?? operator chains).
+        // Return nullptr to fall back to AST interpretation for this function.
+        printd(1, "buildAOTContext: slot mismatch for '%s' (expected l=%d g=%d e=%d s=%d, "
+            "actual l=%d g=%d e=%d s=%d) - falling back to AST\n",
+            func.name.c_str(), num_locals, num_globals, num_exprs, num_stmts,
+            local_count, global_count, expr_count, stmt_count);
+        return nullptr;
+    }
+
+    // Pass 2: Counts match, allocate context and fill with refs
+    QoreAOTContext* ctx = new QoreAOTContext();
+    ctx->num_locals = num_locals;
+    ctx->num_globals = num_globals;
+    ctx->num_exprs = num_exprs;
+    ctx->num_stmts = num_stmts;
+    ctx->allocate();
+
+    // Copy all_body_locals from the fresh IR
+    ctx->all_body_locals = func.all_body_locals;
+
+    // Walk again in the same deterministic order to fill arrays
+    int local_idx = 0;
+    int global_idx = 0;
+    int expr_idx = 0;
+    int stmt_idx = 0;
+    seen_locals.clear();
+    seen_globals.clear();
+    seen_exprs.clear();
+    seen_stmts.clear();
+
+    for (auto& block : func.blocks) {
+        for (auto& inst : block->instructions) {
+            switch (inst->opcode) {
+                case QoreIROpcode::LoadLocal:
+                case QoreIROpcode::StoreLocal: {
+                    auto* li = static_cast<QoreIRLocalInstruction*>(inst.get());
+                    const void* key = reinterpret_cast<const void*>(li->local);
+                    if (seen_locals.insert(key).second) {
+                        ctx->locals[local_idx++] = li->local;
+                    }
+                    break;
+                }
+                case QoreIROpcode::LoadGlobal:
+                case QoreIROpcode::StoreGlobal:
+                case QoreIROpcode::LoadThreadLocal:
+                case QoreIROpcode::StoreThreadLocal: {
+                    auto* vi = static_cast<QoreIRVarInstruction*>(inst.get());
+                    const void* key = reinterpret_cast<const void*>(vi->var);
+                    if (seen_globals.insert(key).second) {
+                        ctx->globals[global_idx++] = vi->var;
+                    }
+                    break;
+                }
+                case QoreIROpcode::LoadClosure:
+                case QoreIROpcode::StoreClosure: {
+                    auto* li = static_cast<QoreIRLocalInstruction*>(inst.get());
+                    const void* key = reinterpret_cast<const void*>(li->local);
+                    if (seen_locals.insert(key).second) {
+                        ctx->locals[local_idx++] = li->local;
+                    }
+                    break;
+                }
+                case QoreIROpcode::Invoke: {
+                    auto* ii = static_cast<QoreIRInvokeInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ii->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        // Take a ref so the expression survives IR function deletion
+                        ii->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::Call:
+                case QoreIROpcode::CallMethod:
+                case QoreIROpcode::CallStatic:
+                case QoreIROpcode::CallIndirect: {
+                    auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ei->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        // Take a ref so the expression survives IR function deletion
+                        ei->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::LoadLValue:
+                case QoreIROpcode::StoreLValue:
+                case QoreIROpcode::PreIncLValue:
+                case QoreIROpcode::PreDecLValue:
+                case QoreIROpcode::PostIncLValue:
+                case QoreIROpcode::PostDecLValue:
+                case QoreIROpcode::AddAssignLValue:
+                case QoreIROpcode::SubAssignLValue:
+                case QoreIROpcode::MulAssignLValue:
+                case QoreIROpcode::DivAssignLValue:
+                case QoreIROpcode::ModAssignLValue:
+                case QoreIROpcode::AndAssignLValue:
+                case QoreIROpcode::OrAssignLValue:
+                case QoreIROpcode::XorAssignLValue:
+                case QoreIROpcode::ShlAssignLValue:
+                case QoreIROpcode::ShrAssignLValue:
+                case QoreIROpcode::ShiftLValue:
+                case QoreIROpcode::UnshiftLValue: {
+                    auto* lvi = static_cast<QoreIRLValueInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &lvi->lvalue, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        // Take a ref so the lvalue survives IR function deletion
+                        lvi->lvalue.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                // Expression-based opcodes (DotEval*, Map*, Cast*, etc.)
+                case QoreIROpcode::PopAny:
+                case QoreIROpcode::PushAny:
+                case QoreIROpcode::ExtractAny:
+                case QoreIROpcode::ExtractList:
+                case QoreIROpcode::ExtractString:
+                case QoreIROpcode::ExtractBinary:
+                case QoreIROpcode::RemoveAny:
+                case QoreIROpcode::RemoveList:
+                case QoreIROpcode::RemoveHash:
+                case QoreIROpcode::RemoveObject:
+                case QoreIROpcode::RemoveString:
+                case QoreIROpcode::RemoveBinary:
+                case QoreIROpcode::KeysAny:
+                case QoreIROpcode::KeysList:
+                case QoreIROpcode::KeysHash:
+                case QoreIROpcode::RegexMatchAny:
+                case QoreIROpcode::RegexMatchBool:
+                case QoreIROpcode::RegexNMatchBool:
+                case QoreIROpcode::RegexExtractAny:
+                case QoreIROpcode::RegexExtractList:
+                case QoreIROpcode::RegexSubstAny:
+                case QoreIROpcode::RegexSubstString:
+                case QoreIROpcode::InstanceOfBool:
+                case QoreIROpcode::TrimAny:
+                case QoreIROpcode::TrimString:
+                case QoreIROpcode::ChompAny:
+                case QoreIROpcode::ChompString:
+                case QoreIROpcode::TransliterateAny:
+                case QoreIROpcode::TransliterateString:
+                case QoreIROpcode::BackgroundInt:
+                case QoreIROpcode::ListAssignAny:
+                case QoreIROpcode::ExistsAny:
+                case QoreIROpcode::ExistsBool:
+                case QoreIROpcode::ElementsAny:
+                case QoreIROpcode::ElementsInt:
+                case QoreIROpcode::DotEvalHash:
+                case QoreIROpcode::DotEvalAny:
+                case QoreIROpcode::DotEvalInt:
+                case QoreIROpcode::DotEvalFloat:
+                case QoreIROpcode::DotEvalString:
+                case QoreIROpcode::DotEvalDate:
+                case QoreIROpcode::DotEvalList:
+                case QoreIROpcode::DotEvalObject:
+                case QoreIROpcode::MapSelectList:
+                case QoreIROpcode::MapSelectAny:
+                case QoreIROpcode::HashMap:
+                case QoreIROpcode::HashMapSelect:
+                case QoreIROpcode::HashMapAny:
+                case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CastAny:
+                case QoreIROpcode::CastList:
+                case QoreIROpcode::CastHash:
+                case QoreIROpcode::CastObject:
+                case QoreIROpcode::CastEnum:
+                case QoreIROpcode::InvokeSimError: {
+                    auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ei->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        // Take a ref so the expression survives IR function deletion
+                        ei->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::OnBlockExit: {
+                    auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
+                    StatementBlock* code = obei->stmt->getCode();
+                    const void* key = reinterpret_cast<const void*>(code);
+                    if (seen_stmts.insert(key).second) {
+                        ctx->stmts[stmt_idx++] = code;
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
 
     return ctx;
 }

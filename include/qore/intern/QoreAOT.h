@@ -213,6 +213,7 @@ struct QoreAOTModuleInfo {
     std::string author;         //!< author
     std::string url;            //!< URL (optional)
     std::string license;        //!< license string (optional, default "MIT")
+    std::vector<std::string> dependencies;  //!< list of required modules (from %requires directives)
 };
 
 //! C ABI entry point called by AOT-compiled modules from their generated qore_module_init()
@@ -290,6 +291,28 @@ public:
                               int opt_level = 2,
                               const char* target_triple = nullptr,
                               bool strip_source = false);
+
+    //! Compile a split (separated) .qm user module directory to a native shared library
+    /** Supports modules where code is spread across multiple files:
+        - A main .qm file: {dir}/{basename}.qm
+        - Multiple .qc and .ql component files (auto-discovered)
+
+        @param dir_path path to the module directory
+        @param output_path path for the output shared library
+        @param parse_options parse options to embed
+        @param error error message on failure
+        @param opt_level LLVM optimization level 0-3 (default: 2)
+        @param target_triple target triple for cross-compilation (nullptr = native)
+        @param strip_source strip source code from binary (IP protection)
+        @return true on success, false on failure
+    */
+    static bool compileSeparatedModule(const char* dir_path,
+                                       const std::string& output_path,
+                                       int64_t parse_options,
+                                       std::string& error,
+                                       int opt_level = 2,
+                                       const char* target_triple = nullptr,
+                                       bool strip_source = false);
 };
 
 //! Build an AOTSlotMap by walking an IR function's instructions in deterministic order.

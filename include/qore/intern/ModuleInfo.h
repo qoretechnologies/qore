@@ -482,8 +482,15 @@ public:
             return;
 
         const char* old_name = get_module_context_name();
-        if (old_name)
-            setUserModuleDependency(mi->getName(), old_name);
+        if (old_name) {
+            // Only track dependency if the dependent module is also a user module.
+            // Binary modules (including AOT modules) are not cleaned up via delUser(),
+            // so tracking their dependencies would cause assertion failures.
+            QoreAbstractModule* dep_mi = findModuleUnlocked(old_name);
+            if (dep_mi && dep_mi->isUser()) {
+                setUserModuleDependency(mi->getName(), old_name);
+            }
+        }
         trySetUserModule(mi->getName());
     }
 

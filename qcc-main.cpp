@@ -40,8 +40,15 @@
 #include <string>
 #include <vector>
 #include <getopt.h>
+#include <sys/stat.h>
 
 static const char* QCC_VERSION = "1.0";
+
+//! Check if a path is a directory
+static bool is_directory(const char* path) {
+    struct stat st;
+    return (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
+}
 
 // Program options
 static const char* output_path = nullptr;
@@ -72,7 +79,8 @@ static void print_usage(const char* prog) {
     printf("Examples:\n");
     printf("  %s script.q                    # Compile to 'script' executable\n", prog);
     printf("  %s -o myapp script.q           # Compile to 'myapp' executable\n", prog);
-    printf("  %s -m MyModule.qm              # Compile to 'MyModule.qmod'\n", prog);
+    printf("  %s -m MyModule.qm              # Compile single-file module to 'MyModule.qmod'\n", prog);
+    printf("  %s -m qlib/DataProvider        # Compile split module directory\n", prog);
     printf("  %s -O3 -s script.q             # Max optimization, strip source\n", prog);
     printf("  %s -S -o myapp script.q        # Static link (no libqore.so dependency)\n", prog);
     printf("\n");
@@ -232,13 +240,23 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Auto-detect module mode from extension
+    // Check if input is a directory (split module)
+    bool is_split_module = is_directory(source_file);
+
+    // Auto-detect module mode from extension or directory
     if (!module_mode) {
-        size_t len = strlen(source_file);
-        if (len > 3 && strcmp(source_file + len - 3, ".qm") == 0) {
+        if (is_split_module) {
             module_mode = true;
             if (verbose) {
-                printf("Auto-detected module mode from .qm extension\n");
+                printf("Auto-detected split module mode from directory input\n");
+            }
+        } else {
+            size_t len = strlen(source_file);
+            if (len > 3 && strcmp(source_file + len - 3, ".qm") == 0) {
+                module_mode = true;
+                if (verbose) {
+                    printf("Auto-detected module mode from .qm extension\n");
+                }
             }
         }
     }
@@ -253,19 +271,40 @@ int main(int argc, char** argv) {
     if (output_path) {
         output = output_path;
     } else {
-        output = get_default_output(source_file, module_mode);
+        if (is_split_module) {
+            // For split modules, derive output from directory basename
+            std::string dir_str(source_file);
+            // Remove trailing slashes
+            while (!dir_str.empty() && dir_str.back() == '/') {
+                dir_str.pop_back();
+            }
+            // Extract basename
+            size_t last_slash = dir_str.rfind('/');
+            std::string basename = (last_slash != std::string::npos)
+                ? dir_str.substr(last_slash + 1)
+                : dir_str;
+            output = basename + ".qmod";
+        } else {
+            output = get_default_output(source_file, module_mode);
+        }
     }
 
-    // Read source file
+    // For split modules, skip reading source file (compileSeparatedModule handles it)
     std::string source_text;
-    if (!read_file(source_file, source_text)) {
-        return 1;
+    if (!is_split_module) {
+        if (!read_file(source_file, source_text)) {
+            return 1;
+        }
     }
 
     if (verbose) {
-        printf("Source: %s (%zu bytes)\n", source_file, source_text.size());
+        if (is_split_module) {
+            printf("Source: %s (split module directory)\n", source_file);
+        } else {
+            printf("Source: %s (%zu bytes)\n", source_file, source_text.size());
+        }
         printf("Output: %s\n", output.c_str());
-        printf("Mode: %s\n", module_mode ? "module" : "executable");
+        printf("Mode: %s\n", is_split_module ? "split module" : (module_mode ? "module" : "executable"));
         printf("Optimization: O%d\n", opt_level);
         if (strip_source) {
             printf("Source stripping: enabled\n");
@@ -284,8 +323,24 @@ int main(int argc, char** argv) {
     int rc = 0;
     std::string error;
 
-    if (module_mode) {
-        // Compile module
+    if (is_split_module) {
+        // Compile split module directory
+        if (!QoreAOT::compileSeparatedModule(
+                source_file,
+                output,
+                PO_DEFAULT,
+                error,
+                opt_level,
+                target_triple,
+                strip_source)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            rc = 1;
+        } else {
+            printf("%s: compiled split module (O%d%s)\n", output.c_str(), opt_level,
+                strip_source ? ", source-stripped" : "");
+        }
+    } else if (module_mode) {
+        // Compile single-file module
         if (!QoreAOT::compileModule(
                 source_text.c_str(), (int)source_text.size(),
                 source_file,

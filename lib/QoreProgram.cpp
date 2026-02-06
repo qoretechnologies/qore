@@ -1928,7 +1928,7 @@ static void ensureIrExecMode(qore_program_private* priv) {
     if ((priv->exec_mode == QEM_IR || priv->exec_mode == QEM_JIT)
         && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
         if (!priv->ir_fallback_warned) {
-            printe("IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
+            printd(5, "IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
             priv->ir_fallback_warned = true;
             priv->recordIRFallback("parse: requires %modern (PO_MODERN)");
         }
