@@ -359,14 +359,6 @@ static QoreStringNode* loadModuleError(const char* name, ExceptionSink& xsink) {
 }
 
 void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
-    // check the module's functional domain
-    if (functional_domains && (tpgm->getParseOptions64() & functional_domains)) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s' implements "
-            "functionality restricted in the Program object trying to import the module (" QLLX ")",
-            name.c_str(), tpgm->getParseOptions64() & functional_domains);
-        return;
-    }
-
     QoreModuleContextHelper qmc(name.c_str(), tpgm, xsink);
     // issue #3592: must add feature first
     tpgm->addFeature(name.c_str());
@@ -398,10 +390,6 @@ QoreHashNode* QoreBuiltinModule::getHash(bool with_filename) const {
     ph->setKeyValueIntern("user", false);
     ph->setKeyValueIntern("api_major", api_major);
     ph->setKeyValueIntern("api_minor", api_minor);
-
-    if (functional_domains) {
-        ph->setKeyValueIntern("functional_domains", functional_domains);
-    }
 
     if (info) {
         ph->setKeyValueIntern("info", info->hashRefSelf());

@@ -80,7 +80,6 @@ extern "C" DLLEXPORT void reflection_qore_module_desc(QoreModuleInfo& mod_info) 
     mod_info.del = reflection_module_delete;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
-    mod_info.functional_domains = QDOM_REFLECTION;
 }
 
 QoreNamespace ReflectionNS("Qore::Reflection");

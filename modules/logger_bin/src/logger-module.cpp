@@ -61,7 +61,6 @@ extern "C" DLLEXPORT void logger_bin_qore_module_desc(QoreModuleInfo& mod_info) 
     mod_info.del = logger_module_delete;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
-    mod_info.functional_domains = QDOM_EXTERNAL_INFO;
 }
 
 QoreNamespace LoggerNS("Qore::Logger");

@@ -97,7 +97,7 @@ typedef std::vector<std::string> strvec_t;
 
 //! Qore module info
 /** @since %Qore 0.9.5
-    @since %Qore 2.0: removed init_info field; init callback signature changed; added functional_domains
+    @since %Qore 2.0: removed init_info field; init callback signature changed
 */
 struct QoreModuleInfo {
     QoreString name;
@@ -126,11 +126,6 @@ struct QoreModuleInfo {
 
     //! extra information to appear in the module info hash
     QoreHashNode* info = nullptr;
-
-    //! QDOM_* flags for sandboxing; 0 = no restrictions
-    /** @since %Qore 2.0
-    */
-    int64 functional_domains = 0;
 };
 
 //! Module description function

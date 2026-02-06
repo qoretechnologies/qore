@@ -51,18 +51,11 @@
     - \c license_str — the license as a string (e.g. \c "MIT", \c "LGPL", \c "GPL")
     - \c dependencies — a list of other binary module names this module depends on (\c strvec_t)
     - \c info — an optional @ref QoreHashNode pointer with extra module metadata (default: \c nullptr)
-    - \c functional_domains — a bitmask of \c QDOM_* flags for sandboxing (default: \c 0 = no restrictions)
-
-    The \c functional_domains field allows the %Qore library to enforce sandboxing restrictions.  For example, a
-    module that accesses the network and databases should set:
-    @code{.cpp}
-    mod_info.functional_domains = QDOM_DATABASE | QDOM_NETWORK;
-    @endcode
 
     @note The @ref QoreModuleInfo struct uses default member initializers, so fields like \c license (defaults to
-    @ref QL_MIT), \c functional_domains (defaults to \c 0), and callback pointers (default to \c nullptr) only need
-    to be set if non-default values are required.  This extensible design means new fields can be added with sensible
-    defaults without breaking existing modules.
+    @ref QL_MIT) and callback pointers (default to \c nullptr) only need to be set if non-default values are
+    required.  This extensible design means new fields can be added with sensible defaults without breaking existing
+    modules.
 
     @subsection module_functions Module Callback Functions
 
@@ -130,8 +123,6 @@
         mod_info.del = mymodule_module_delete;
         mod_info.license = QL_MIT;
         mod_info.license_str = "MIT";
-        // set functional domains for sandboxing if the module accesses restricted resources
-        // mod_info.functional_domains = QDOM_NETWORK;
     }
 
     // Reference namespace — initialized once, copied for each QoreProgram

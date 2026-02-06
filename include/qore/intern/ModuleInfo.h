@@ -645,7 +645,6 @@ public:
               api_major(mod_info.api_major), api_minor(mod_info.api_minor),
               module_init(mod_info.init), module_ns_init(mod_info.ns_init),
               module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
-              functional_domains(mod_info.functional_domains),
               info(info), dlptr(dlptr) {
     }
 
@@ -663,10 +662,6 @@ public:
 
     DLLLOCAL unsigned getAPIMinor() const {
         return api_minor;
-    }
-
-    DLLLOCAL int64 getFunctionalDomains() const {
-        return functional_domains;
     }
 
     DLLLOCAL virtual bool isBuiltin() const override {
@@ -692,7 +687,6 @@ protected:
     qore_module_ns_init_t module_ns_init;
     qore_module_delete_t module_delete;
     qore_module_parse_cmd_t module_parse_cmd;
-    int64 functional_domains;
     QoreHashNode* info;
     const void* dlptr;
 
