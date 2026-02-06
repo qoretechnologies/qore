@@ -1873,6 +1873,11 @@ ws.setEventQueue();
                 logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %N", ex.err, ex);
                 return;
             }
+            # ignore HTTP2-ERROR when closing (HTTP/2 session already inactive)
+            if (ex.err == "HTTP2-ERROR") {
+                logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %N", ex.err, ex);
+                return;
+            }
             rethrow;
         }
     }

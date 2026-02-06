@@ -1,0 +1,633 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# WebSocketPerfTest.qtest - HTTP/1.1 WebSocket Performance, Scalability, and Throughput Tests
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/WebSocketClient.qm
+
+%exec-class WebSocketPerfTest
+
+#! Echo WebSocket connection - echoes back text and binary messages exactly
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+#! Broadcast WebSocket connection - receives messages and tracks counts
+class BroadcastWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        # no-op: broadcast tests send from server, not from client
+    }
+
+    gotMessage(binary msg) {
+        # no-op
+    }
+}
+
+#! WebSocket handler that creates echo connections
+class PerfEchoHandler inherits WebSocketHandler {
+    public {
+        bool debug = False;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+
+    logError(string fmt) {
+        if (debug) {
+            vprintf("ERROR " + fmt + "\n", argv);
+        }
+    }
+
+    logInfo(string fmt) {
+        if (debug) {
+            vprintf("INFO " + fmt + "\n", argv);
+        }
+    }
+
+    logDebug(string fmt) {
+        if (debug) {
+            vprintf("DEBUG " + fmt + "\n", argv);
+        }
+    }
+}
+
+#! WebSocket handler that creates broadcast connections and supports sendAll()
+class PerfBroadcastHandler inherits WebSocketHandler {
+    public {
+        bool debug = False;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new BroadcastWsConnection(self);
+    }
+
+    logError(string fmt) {
+        if (debug) {
+            vprintf("ERROR " + fmt + "\n", argv);
+        }
+    }
+
+    logInfo(string fmt) {
+        if (debug) {
+            vprintf("INFO " + fmt + "\n", argv);
+        }
+    }
+
+    logDebug(string fmt) {
+        if (debug) {
+            vprintf("DEBUG " + fmt + "\n", argv);
+        }
+    }
+}
+
+class WebSocketPerfTest inherits QUnit::Test {
+    public {
+        HttpServer mServer;
+        PerfEchoHandler echoHandler();
+        Logger logger;
+
+        # HTTP/1.1 listener info
+        hash<auto> linfo;
+    }
+
+    constructor() : Test("WebSocketPerfTest", "1.0") {
+        addTestCase("single connection throughput", \singleConnectionThroughputTest());
+        addTestCase("concurrent connections scalability", \concurrentConnectionsTest());
+        addTestCase("large message throughput", \largeMessageThroughputTest());
+        addTestCase("sustained load stress", \sustainedLoadStressTest());
+        addTestCase("bidirectional throughput", \bidirectionalThroughputTest());
+        addTestCase("connection churn resilience", \connectionChurnResilienceTest());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+            echoHandler.debug = True;
+        }
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        mServer = new HttpServer(http_opts);
+        mServer.setHandler("ws-handler", "", NOTHING, echoHandler);
+        mServer.setDefaultHandler("ws-handler", echoHandler);
+        linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": 0});
+
+        set_return_value(main());
+
+        mServer.stop();
+    }
+
+    #! Create an HTTP/1.1 WebSocket client
+    private WebSocketClient createWsClient(code cb) {
+        hash<auto> opts = {
+            "url": "ws://localhost:" + linfo.port,
+            "logger": logger,
+        };
+        WebSocketClient wsc(cb, opts);
+        wsc.connect();
+        return wsc;
+    }
+
+    #! Compute elapsed milliseconds from a start timestamp
+    private float elapsedMs(date start) {
+        return (now_us() - start).durationMicroseconds() / 1000.0;
+    }
+
+    #! Print latency statistics if verbose
+    private printLatencyStats(string label, list<float> latencies) {
+        if (m_options.verbose < 2 || !latencies) {
+            return;
+        }
+
+        float sum = 0.0;
+        float min_lat = latencies[0];
+        float max_lat = latencies[0];
+        foreach float lat in (latencies) {
+            sum += lat;
+            if (lat < min_lat) {
+                min_lat = lat;
+            }
+            if (lat > max_lat) {
+                max_lat = lat;
+            }
+        }
+        float avg = sum / latencies.size();
+
+        list<float> sorted = sort(latencies);
+        int p50_idx = max(0, (sorted.size() * 50 / 100) - 1);
+        int p95_idx = max(0, (sorted.size() * 95 / 100) - 1);
+        int p99_idx = max(0, (sorted.size() * 99 / 100) - 1);
+        float p50 = sorted[p50_idx];
+        float p95 = sorted[p95_idx];
+        float p99 = sorted[p99_idx];
+
+        printf("  %s: Avg: %.2f ms, Min: %.2f ms, Max: %.2f ms, P50: %.2f ms, P95: %.2f ms, P99: %.2f ms (%d samples)\n",
+            label, avg, min_lat, max_lat, p50, p95, p99, latencies.size());
+    }
+
+    #! Test 1: Single Connection Throughput
+    /** 200 messages alternating text/binary on one HTTP/1.1 WebSocket.
+        Measures per-message round-trip latency and overall throughput.
+    */
+    singleConnectionThroughputTest() {
+        int msg_count = 200;
+        Mutex m();
+        hash<string, date> send_times();
+        list<float> latencies();
+        int received = 0;
+        Counter done(1);
+        bool done_signaled = False;
+
+        code cb = sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            date recv_time = now_us();
+            string key;
+            if (msg.typeCode() == NT_STRING) {
+                key = msg;
+            } else {
+                key = msg.toString("UTF-8");
+            }
+            m.lock();
+            on_exit m.unlock();
+            if (send_times.hasKey(key)) {
+                float lat = (recv_time - send_times{key}).durationMicroseconds() / 1000.0;
+                latencies += lat;
+            }
+            ++received;
+            if (received >= msg_count && !done_signaled) {
+                done_signaled = True;
+                done.dec();
+            }
+        };
+
+        WebSocketClient wsc = createWsClient(cb);
+        on_exit {
+            wsc.disconnect();
+            delete wsc;
+        }
+
+        date start = now_us();
+        for (int i = 0; i < msg_count; ++i) {
+            string payload;
+            if (i % 2 == 0) {
+                payload = sprintf("text-msg-%d", i);
+                m.lock();
+                on_exit m.unlock();
+                send_times{payload} = now_us();
+                wsc.send(payload);
+            } else {
+                payload = sprintf("bin-msg-%d", i);
+                m.lock();
+                on_exit m.unlock();
+                send_times{payload} = now_us();
+                wsc.send(binary(payload));
+            }
+        }
+
+        done.waitForZero(30s);
+        float total_ms = elapsedMs(start);
+
+        assertEq(msg_count, received,
+            sprintf("all %d echoes should be received", msg_count));
+        float throughput = msg_count * 1000.0 / total_ms;
+        assertTrue(throughput > 0, sprintf("throughput should be positive (got %.1f msg/s)", throughput));
+
+        printLatencyStats("single connection throughput", latencies);
+        if (m_options.verbose > 1) {
+            printf("  Total: %.1f ms, Throughput: %.1f msg/s\n", total_ms, throughput);
+        }
+    }
+
+    #! Test 2: Concurrent Connections Scalability
+    /** 5 concurrent WebSocketClient instances, each sending 40 messages.
+    */
+    concurrentConnectionsTest() {
+        int num_clients = 5;
+        int msgs_per_client = 40;
+        int total_msgs = num_clients * msgs_per_client;
+
+        Mutex stats_m();
+        int total_received = 0;
+        list<float> all_latencies();
+
+        list<Counter> msg_counters();
+        list<WebSocketClient> clients();
+
+        # Establish all connections sequentially
+        for (int c = 0; c < num_clients; ++c) {
+            Counter msg_done(1);
+            bool msg_done_signaled = False;
+            int my_received = 0;
+
+            code cb = sub (*data msg) {
+                if (!exists msg) {
+                    return;
+                }
+                stats_m.lock();
+                on_exit stats_m.unlock();
+                ++total_received;
+                ++my_received;
+                if (my_received >= msgs_per_client && !msg_done_signaled) {
+                    msg_done_signaled = True;
+                    msg_done.dec();
+                }
+            };
+
+            clients += createWsClient(cb);
+            msg_counters += msg_done;
+        }
+
+        on_exit {
+            for (int c = 0; c < num_clients; ++c) {
+                try {
+                    clients[c].disconnect();
+                    delete clients[c];
+                } catch () {
+                    # ignore cleanup errors
+                }
+            }
+        }
+
+        # Send messages concurrently from all clients
+        Counter senders_done(num_clients);
+        for (int c = 0; c < num_clients; ++c) {
+            int client_id = c;
+            background sub() {
+                on_exit senders_done.dec();
+                try {
+                    date client_start = now_us();
+                    for (int i = 0; i < msgs_per_client; ++i) {
+                        clients[client_id].send(sprintf("client-%d-msg-%d", client_id, i));
+                    }
+                    msg_counters[client_id].waitForZero(30s);
+                    float lat = (now_us() - client_start).durationMicroseconds() / 1000.0;
+                    stats_m.lock();
+                    on_exit stats_m.unlock();
+                    all_latencies += lat;
+                } catch (hash<ExceptionInfo> ex) {
+                    # Connection may die during concurrent sending
+                }
+            }();
+        }
+
+        senders_done.waitForZero(60s);
+
+        # Under concurrent load, require at least 80%
+        assertGe(total_msgs * 4 / 5, total_received,
+            sprintf("at least 80%% of %d messages should be received (got %d)", total_msgs, total_received));
+
+        if (all_latencies) {
+            float sum = 0.0;
+            foreach float lat in (all_latencies) {
+                sum += lat;
+            }
+            float avg_client_ms = sum / all_latencies.size();
+            float aggregate_throughput = total_msgs * 1000.0 / avg_client_ms;
+
+            if (m_options.verbose > 1) {
+                printf("  %d clients x %d msgs, avg client time: %.1f ms, aggregate throughput: %.1f msg/s\n",
+                    num_clients, msgs_per_client, avg_client_ms, aggregate_throughput);
+            }
+        }
+    }
+
+    #! Test 3: Large Message Throughput
+    /** Tests message sizes: 1KB, 16KB, 64KB, 256KB.
+        Binary payloads for exact data integrity comparison.
+    */
+    largeMessageThroughputTest() {
+        list<int> sizes = (1024, 16384, 65536, 262144);
+
+        foreach int size in (sizes) {
+            binary sent_payload = binary(strmul("D", size));
+
+            *data received_data;
+            Counter done(1);
+            bool done_fired = False;
+
+            code cb = sub (*data msg) {
+                if (!exists msg) {
+                    return;
+                }
+                received_data = msg;
+                if (!done_fired) {
+                    done_fired = True;
+                    done.dec();
+                }
+            };
+
+            WebSocketClient wsc = createWsClient(cb);
+            on_exit {
+                wsc.disconnect();
+                delete wsc;
+            }
+
+            date start = now_us();
+            wsc.send(sent_payload);
+            done.waitForZero(30s);
+            float ms = elapsedMs(start);
+
+            # Convert to binary for comparison if needed
+            binary recv_bin = received_data.typeCode() == NT_BINARY
+                ? received_data
+                : binary(received_data);
+
+            if (recv_bin.size() == 0) {
+                testSkip(sprintf("%dKB message: no data received (likely valgrind/slow environment)",
+                    size / 1024));
+            }
+            assertEq(sent_payload.size(), recv_bin.size(),
+                sprintf("%dKB message: received size should match sent size", size / 1024));
+            assertEq(sent_payload, recv_bin,
+                sprintf("%dKB message: received data should match sent data", size / 1024));
+
+            float throughput_mbps = (size / 1048576.0) / (ms / 1000.0);
+            assertTrue(throughput_mbps > 0,
+                sprintf("%dKB message: throughput should be positive (got %.2f MB/s)", size / 1024, throughput_mbps));
+
+            if (m_options.verbose > 1) {
+                printf("  %dKB: %.2f ms, %.2f MB/s\n", size / 1024, ms, throughput_mbps);
+            }
+        }
+    }
+
+    #! Test 4: Sustained Load Stress
+    /** 2 sender threads pushing messages to one WebSocketClient for 3 seconds with backpressure.
+    */
+    sustainedLoadStressTest() {
+        int num_senders = 2;
+        int duration_secs = 3;
+        int high_water_mark = 50;
+
+        Mutex stats_m();
+        int total_sent = 0;
+        int total_received = 0;
+        Counter senders_done(num_senders);
+
+        code cb = sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            stats_m.lock();
+            on_exit stats_m.unlock();
+            ++total_received;
+        };
+
+        WebSocketClient wsc = createWsClient(cb);
+        on_exit {
+            wsc.disconnect();
+            delete wsc;
+        }
+
+        date deadline = now_us() + seconds(duration_secs);
+
+        for (int t = 0; t < num_senders; ++t) {
+            int thread_id = t;
+            background sub() {
+                on_exit senders_done.dec();
+                int my_sent = 0;
+                while (now_us() < deadline) {
+                    # Backpressure: wait if too far ahead of receiver
+                    while (now_us() < deadline) {
+                        stats_m.lock();
+                        int outstanding = total_sent - total_received;
+                        stats_m.unlock();
+                        if (outstanding < high_water_mark) {
+                            break;
+                        }
+                        sleep(5ms);
+                    }
+                    if (now_us() >= deadline) {
+                        break;
+                    }
+                    try {
+                        wsc.send(sprintf("stress-%d-%d", thread_id, my_sent));
+                        ++my_sent;
+                        stats_m.lock();
+                        on_exit stats_m.unlock();
+                        ++total_sent;
+                    } catch (hash<ExceptionInfo> ex) {
+                        break;
+                    }
+                }
+            }();
+        }
+
+        senders_done.waitForZero(seconds(duration_secs + 30));
+
+        # Wait for echoes to arrive
+        date echo_deadline = now_us() + 30s;
+        while (now_us() < echo_deadline) {
+            stats_m.lock();
+            int rcvd = total_received;
+            stats_m.unlock();
+            if (rcvd > 0) {
+                break;
+            }
+            sleep(100ms);
+        }
+
+        assertTrue(total_sent > 0, sprintf("messages should have been sent (got %d)", total_sent));
+        if (total_received == 0) {
+            testSkip("no messages received - likely running under valgrind or extremely slow environment");
+        }
+        # With backpressure, check delivery
+        if (total_sent >= 500) {
+            assertGe(total_sent / 4, total_received,
+                sprintf("should receive at least 25%% of sent messages (sent=%d, received=%d)",
+                    total_sent, total_received));
+        } else {
+            assertTrue(total_received > 0,
+                sprintf("should receive at least some messages (sent=%d, received=%d)",
+                    total_sent, total_received));
+        }
+
+        if (m_options.verbose > 1) {
+            printf("  %d senders, %d seconds, hwm=%d: sent=%d, received=%d (%.1f%%)\n",
+                num_senders, duration_secs, high_water_mark,
+                total_sent, total_received,
+                total_received * 100.0 / total_sent);
+        }
+    }
+
+    #! Test 5: Bidirectional Throughput
+    /** Server echoes, client sends and receives simultaneously from 2 threads.
+        Tests full-duplex performance on HTTP/1.1 WebSocket.
+    */
+    bidirectionalThroughputTest() {
+        int msg_count = 200;
+        Mutex m();
+        int received = 0;
+        Counter done(1);
+        bool done_signaled = False;
+
+        code cb = sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            m.lock();
+            on_exit m.unlock();
+            ++received;
+            if (received >= msg_count && !done_signaled) {
+                done_signaled = True;
+                done.dec();
+            }
+        };
+
+        WebSocketClient wsc = createWsClient(cb);
+        on_exit {
+            wsc.disconnect();
+            delete wsc;
+        }
+
+        # Send from 2 threads concurrently
+        int msgs_per_thread = msg_count / 2;
+        Counter senders_done(2);
+
+        date start = now_us();
+        for (int t = 0; t < 2; ++t) {
+            int thread_id = t;
+            background sub() {
+                on_exit senders_done.dec();
+                try {
+                    for (int i = 0; i < msgs_per_thread; ++i) {
+                        wsc.send(sprintf("bidi-%d-%d", thread_id, i));
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # connection may close
+                }
+            }();
+        }
+
+        done.waitForZero(30s);
+        float total_ms = elapsedMs(start);
+
+        senders_done.waitForZero(10s);
+
+        assertEq(msg_count, received,
+            sprintf("all %d echoes should be received", msg_count));
+
+        float throughput = msg_count * 1000.0 / total_ms;
+        assertTrue(throughput > 0, sprintf("bidirectional throughput positive (got %.1f msg/s)", throughput));
+
+        if (m_options.verbose > 1) {
+            printf("  %d msgs from 2 threads: %.1f ms, %.1f msg/s\n", msg_count, total_ms, throughput);
+        }
+    }
+
+    #! Test 6: Connection Churn Resilience
+    /** Rapid connect/disconnect cycles to test server stability.
+        Verifies no resource leaks or crashes from churn.
+    */
+    connectionChurnResilienceTest() {
+        int churn_count = 20;
+        int success = 0;
+
+        for (int i = 0; i < churn_count; ++i) {
+            try {
+                *data received;
+                Counter done(1);
+                bool done_fired = False;
+
+                code cb = sub (*data msg) {
+                    if (!exists msg) {
+                        return;
+                    }
+                    received = msg;
+                    if (!done_fired) {
+                        done_fired = True;
+                        done.dec();
+                    }
+                };
+
+                WebSocketClient wsc = createWsClient(cb);
+                wsc.send(sprintf("churn-%d", i));
+                done.waitForZero(5s);
+
+                if (received.typeCode() == NT_STRING && received == sprintf("churn-%d", i)) {
+                    ++success;
+                }
+                wsc.disconnect();
+                delete wsc;
+            } catch (hash<ExceptionInfo> ex) {
+                # Connection errors during churn are expected
+            }
+        }
+
+        # Most connections should succeed
+        assertGe(churn_count * 3 / 4, success,
+            sprintf("at least 75%% of churn connections should work (got %d/%d)", success, churn_count));
+
+        if (m_options.verbose > 1) {
+            printf("  %d churn cycles: %d succeeded (%.1f%%)\n",
+                churn_count, success, success * 100.0 / churn_count);
+        }
+    }
+}

@@ -3399,7 +3399,13 @@ struct qore_socket_private {
         int32_t h2_active_stream_id = getH2ActiveStreamId();
         if (h2_session && h2_active_stream_id > 0 && !bypass_h2) {
             // Send data on the active HTTP/2 stream (no END_STREAM for WebSocket)
-            if (h2_session->sendStreamData(h2_active_stream_id, buf, size, false, xsink) < 0) {
+            int h2rv = h2_session->sendStreamData(h2_active_stream_id, buf, size, false, xsink);
+            if (h2rv < 0) {
+                return -1;
+            }
+            if (h2rv > 0) {
+                xsink->raiseException("HTTP2-FLOW-CONTROL",
+                    "stream %d buffer full: data dropped", h2_active_stream_id);
                 return -1;
             }
             // Flush pending data with blocking I/O to ensure frames are sent

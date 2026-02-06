@@ -1026,6 +1026,10 @@ bool Http2Session::hasPendingBodyData(int32_t stream_id) const {
     return pending_body_data.find(stream_id) != pending_body_data.end();
 }
 
+bool Http2Session::hasSocketBufferedData() const {
+    return sock->buflen > 0 || (sock->ssl && sock->ssl->pending() > 0);
+}
+
 Http2StreamInfo* Http2Session::getStream(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
@@ -1661,9 +1665,10 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     if (it != pending_body_data.end()) {
         size_t pending = it->second.data.size() - it->second.offset;
         if (pending > MAX_STREAM_BUFFER) {
-            xsink->raiseException("HTTP2-FLOW-CONTROL", "stream %d buffer full: %zu bytes pending, "
-                "waiting for peer to consume data", stream_id, pending);
-            return -1;
+            // Return 1 (buffer full, non-fatal) — caller decides how to handle
+            printd(2, "sendStreamData() stream %d buffer full: %zu bytes pending, data dropped\n",
+                stream_id, pending);
+            return 1;
         }
     }
 
