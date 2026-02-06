@@ -2671,6 +2671,10 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         http_opts.url = url;
         hash<auto> headers;
         headers += opts.headers;
+        # add token-based auth if present (mirrors WebSocketClient constructor logic)
+        if (opts.token && !headers.Authorization) {
+            headers.Authorization = sprintf("%s %s", opts.token_type ?? "Bearer", opts.token);
+        }
         return new WebSocketPingPollOperation(url, http_opts, headers, logger ?? self.logger);
     }
 
