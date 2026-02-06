@@ -613,18 +613,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             return true;
         }
 
-        // Create basic blocks for the loop structure
-        QoreIRBasicBlock* header_block = createBlock("foreach.header");
-        QoreIRBasicBlock* body_block = createBlock("foreach.body");
-        QoreIRBasicBlock* exit_block = createBlock("foreach.exit");
-        if (!header_block || !body_block || !exit_block) {
-            error = "IR builder failed to create blocks for foreach";
-            return false;
-        }
-        // Mark header block as loop header for OSR detection
-        header_block->is_loop_header = true;
-
-        // Evaluate the list expression
+        // Evaluate the list expression BEFORE creating loop blocks, so that any
+        // blocks created during expression evaluation (e.g., invoke.cont blocks
+        // from guarded calls in try-catch) appear before the loop header in the
+        // block list. This ensures IteratorCreate's block is processed before
+        // IteratorNext's block during LLVM lowering.
         QoreValue list_expr = foreach_stmt->getList();
         QoreIRValue list_val;
         if (list_expr && !list_expr.isNothing()) {
@@ -640,6 +633,18 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Create the iterator
         auto* iter_inst = builder.createIteratorCreate(list_val, foreach_stmt->getIteratorFunc(), stmt->loc);
         QoreIRValue iter_val = iter_inst->result;
+
+        // Create basic blocks for the loop structure AFTER evaluating the list
+        // expression and creating the iterator
+        QoreIRBasicBlock* header_block = createBlock("foreach.header");
+        QoreIRBasicBlock* body_block = createBlock("foreach.body");
+        QoreIRBasicBlock* exit_block = createBlock("foreach.exit");
+        if (!header_block || !body_block || !exit_block) {
+            error = "IR builder failed to create blocks for foreach";
+            return false;
+        }
+        // Mark header block as loop header for OSR detection
+        header_block->is_loop_header = true;
 
         // Branch to header
         builder.createBranch(header_block, stmt->loc);
@@ -5633,16 +5638,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         return QoreIRValue();
     }
 
-    // Create basic blocks for the loop structure
-    QoreIRBasicBlock* entry_block = builder.getBlock();
-    QoreIRBasicBlock* header_block = createBlock("map.header");
-    QoreIRBasicBlock* body_block = createBlock("map.body");
-    QoreIRBasicBlock* exit_block = createBlock("map.exit");
-    if (!header_block || !body_block || !exit_block) {
-        error = "IR builder failed to create blocks for map";
-        return QoreIRValue();
-    }
-    header_block->is_loop_header = true;
+    // Evaluate the input list and create the iterator BEFORE creating loop blocks,
+    // so that any blocks created during expression evaluation (e.g., invoke.cont
+    // blocks from guarded calls in try-catch) appear before the loop header in the
+    // block list.
 
     // Create empty result list
     QoreIRValue result_list = builder.createEmptyList(map->loc)->result;
@@ -5659,6 +5658,23 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     // Initial index value (0)
     QoreIRValue init_index = builder.createConstInt(0, map->loc)->result;
+
+    // Capture entry block AFTER list evaluation and iterator creation, since
+    // expression evaluation may change the current block (e.g., invoke.cont blocks
+    // in try-catch). This block will branch to the header, so it must be the
+    // PHI predecessor.
+    QoreIRBasicBlock* entry_block = builder.getBlock();
+
+    // Create basic blocks for the loop structure AFTER evaluating the input
+    // expression and creating the iterator
+    QoreIRBasicBlock* header_block = createBlock("map.header");
+    QoreIRBasicBlock* body_block = createBlock("map.body");
+    QoreIRBasicBlock* exit_block = createBlock("map.exit");
+    if (!header_block || !body_block || !exit_block) {
+        error = "IR builder failed to create blocks for map";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
 
     // Branch to header
     builder.createBranch(header_block, map->loc);
@@ -5726,18 +5742,10 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         return QoreIRValue();
     }
 
-    // Create basic blocks for the loop structure
-    QoreIRBasicBlock* entry_block = builder.getBlock();
-    QoreIRBasicBlock* header_block = createBlock("select.header");
-    QoreIRBasicBlock* body_block = createBlock("select.body");
-    QoreIRBasicBlock* append_block = createBlock("select.append");
-    QoreIRBasicBlock* cont_block = createBlock("select.cont");
-    QoreIRBasicBlock* exit_block = createBlock("select.exit");
-    if (!header_block || !body_block || !append_block || !cont_block || !exit_block) {
-        error = "IR builder failed to create blocks for select";
-        return QoreIRValue();
-    }
-    header_block->is_loop_header = true;
+    // Evaluate the input list and create the iterator BEFORE creating loop blocks,
+    // so that any blocks created during expression evaluation (e.g., invoke.cont
+    // blocks from guarded calls in try-catch) appear before the loop header in the
+    // block list.
 
     // Create empty result list
     QoreIRValue result_list = builder.createEmptyList(select->loc)->result;
@@ -5754,6 +5762,25 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
     // Initial index value (0)
     QoreIRValue init_index = builder.createConstInt(0, select->loc)->result;
+
+    // Capture entry block AFTER list evaluation and iterator creation, since
+    // expression evaluation may change the current block (e.g., invoke.cont blocks
+    // in try-catch). This block will branch to the header, so it must be the
+    // PHI predecessor.
+    QoreIRBasicBlock* entry_block = builder.getBlock();
+
+    // Create basic blocks for the loop structure AFTER evaluating the input
+    // expression and creating the iterator
+    QoreIRBasicBlock* header_block = createBlock("select.header");
+    QoreIRBasicBlock* body_block = createBlock("select.body");
+    QoreIRBasicBlock* append_block = createBlock("select.append");
+    QoreIRBasicBlock* cont_block = createBlock("select.cont");
+    QoreIRBasicBlock* exit_block = createBlock("select.exit");
+    if (!header_block || !body_block || !append_block || !cont_block || !exit_block) {
+        error = "IR builder failed to create blocks for select";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
 
     // Branch to header
     builder.createBranch(header_block, select->loc);
@@ -5828,17 +5855,10 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         return QoreIRValue();
     }
 
-    // Create basic blocks for the loop structure
-    QoreIRBasicBlock* entry_block = builder.getBlock();
-    QoreIRBasicBlock* init_block = createBlock("foldl.init");
-    QoreIRBasicBlock* header_block = createBlock("foldl.header");
-    QoreIRBasicBlock* body_block = createBlock("foldl.body");
-    QoreIRBasicBlock* exit_block = createBlock("foldl.exit");
-    if (!init_block || !header_block || !body_block || !exit_block) {
-        error = "IR builder failed to create blocks for foldl";
-        return QoreIRValue();
-    }
-    header_block->is_loop_header = true;
+    // Evaluate the input list and create the iterator BEFORE creating loop blocks,
+    // so that any blocks created during expression evaluation (e.g., invoke.cont
+    // blocks from guarded calls in try-catch) appear before the loop header in the
+    // block list.
 
     // Evaluate the input list (right operand of foldl)
     QoreIRValue input_list = lowerExpression(foldl->getRight(), error);
@@ -5849,6 +5869,18 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     // Create iterator from input list
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, foldl->loc);
     QoreIRValue iter_val = iter_inst->result;
+
+    // Create basic blocks for the loop structure AFTER evaluating the input
+    // expression and creating the iterator
+    QoreIRBasicBlock* init_block = createBlock("foldl.init");
+    QoreIRBasicBlock* header_block = createBlock("foldl.header");
+    QoreIRBasicBlock* body_block = createBlock("foldl.body");
+    QoreIRBasicBlock* exit_block = createBlock("foldl.exit");
+    if (!init_block || !header_block || !body_block || !exit_block) {
+        error = "IR builder failed to create blocks for foldl";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
 
     // Branch to init block to get first element
     builder.createBranch(init_block, foldl->loc);

@@ -310,6 +310,14 @@ llvm::Value* QoreIRToLLVM::getVal(uint32_t id, std::string& error) {
     auto it = values.find(id);
     if (it == values.end()) {
         error = "missing LLVM value for IR value %" + std::to_string(id);
+        // Debug: show available values when lookup fails
+        if (getenv("QORE_LLVM_DEBUG")) {
+            fprintf(stderr, "LLVM-DEBUG: getVal(%%%u) failed; available values:", id);
+            for (auto& kv : values) {
+                fprintf(stderr, " %%%u", kv.first);
+            }
+            fprintf(stderr, "\n");
+        }
         return nullptr;
     }
     return it->second;
@@ -941,6 +949,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 fflush(stderr);
             }
             if (!lowerInstruction(inst, llvm_func, module, error)) {
+                if (getenv("QORE_LLVM_DEBUG")) {
+                    fprintf(stderr, "LLVM-FAIL: opcode=%d result=%%%u operands=[",
+                            static_cast<int>(inst->opcode), inst->result.id);
+                    for (size_t oi = 0; oi < inst->operands.size(); ++oi) {
+                        fprintf(stderr, "%s%%%u", oi ? "," : "", inst->operands[oi].id);
+                    }
+                    fprintf(stderr, "] in block=%s error=%s\n",
+                            builder->GetInsertBlock()->getName().str().c_str(),
+                            error.c_str());
+                    fflush(stderr);
+                }
                 return false;
             }
         }
@@ -970,6 +989,18 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // PHI fixup pass: add incoming values now that all blocks are lowered
     for (auto& [phi_node, phi_inst] : pending_phis) {
+        if (getenv("QORE_LLVM_DEBUG")) {
+            llvm::BasicBlock* phi_bb = phi_node->getParent();
+            fprintf(stderr, "PHI-FIXUP-START: PHI in block=%s predecessors=[",
+                    phi_bb->getName().str().c_str());
+            bool first = true;
+            for (auto it = llvm::pred_begin(phi_bb), et = llvm::pred_end(phi_bb); it != et; ++it) {
+                fprintf(stderr, "%s%s", first ? "" : ",", (*it)->getName().str().c_str());
+                first = false;
+            }
+            fprintf(stderr, "] incoming_count=%zu\n", phi_inst->incoming.size());
+            fflush(stderr);
+        }
         for (const auto& inc : phi_inst->incoming) {
             llvm::Value* val = getVal(inc.value.id, error);
             if (!val) {
@@ -993,7 +1024,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // so that boxing instructions are placed in the correct block, not in whatever
             // block the builder was left pointing at (which may already have a terminator)
             if (getenv("QORE_LLVM_DEBUG")) {
-                fprintf(stderr, "PHI-FIXUP: incoming from block=%s insert_before_term=%s\n",
+                llvm::BasicBlock* bm_bb = block_map[inc.block];
+                fprintf(stderr, "PHI-FIXUP: incoming IR=%s block_map=%s final_block_map=%s used=%s "
+                        "insert_before_term=%s\n",
+                        inc.block ? inc.block->name.c_str() : "NULL",
+                        bm_bb ? bm_bb->getName().str().c_str() : "NULL",
+                        final_block_map[inc.block]
+                            ? final_block_map[inc.block]->getName().str().c_str() : "NULL",
                         bb->getName().str().c_str(),
                         bb->getTerminator() ? bb->getTerminator()->getOpcodeName() : "NO_TERM");
                 fflush(stderr);
