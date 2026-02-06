@@ -174,14 +174,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // to a merge block that needs an implicit return
     QoreIRBasicBlock* current_block = builder.getBlock();
     if (current_block && (current_block->instructions.empty() ||
-            (current_block->instructions.back()->opcode != QoreIROpcode::Return &&
-             current_block->instructions.back()->opcode != QoreIROpcode::ReturnNothing &&
-             current_block->instructions.back()->opcode != QoreIROpcode::Br &&
-             current_block->instructions.back()->opcode != QoreIROpcode::BrIf &&
-             current_block->instructions.back()->opcode != QoreIROpcode::Throw &&
-             current_block->instructions.back()->opcode != QoreIROpcode::Rethrow &&
-             current_block->instructions.back()->opcode != QoreIROpcode::SwitchInt &&
-             current_block->instructions.back()->opcode != QoreIROpcode::SwitchString))) {
+            !isTerminator(current_block->instructions.back()->opcode))) {
         builder.createReturnNothing();
     }
     if (!QoreIRVerifier::verify(*ir_func, error)) {

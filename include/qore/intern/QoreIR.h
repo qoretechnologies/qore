@@ -1049,4 +1049,26 @@ private:
     uint32_t next_value_id = 1;
 };
 
+//! Check if an opcode is a block terminator (transfers control flow)
+inline bool isTerminator(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::Invoke:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::Br:
+        case QoreIROpcode::BrIf:
+        case QoreIROpcode::SwitchInt:
+        case QoreIROpcode::SwitchString:
+        case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::Return:
+        case QoreIROpcode::ReturnNothing:
+        case QoreIROpcode::Throw:
+        case QoreIROpcode::Rethrow:
+        case QoreIROpcode::InvokeSimError:
+        case QoreIROpcode::ThreadExit:
+            return true;
+        default:
+            return false;
+    }
+}
+
 #endif
