@@ -2021,7 +2021,8 @@ void QoreIRLowering::markLocalUnassignmentFromExpression(const QoreValue& exp) {
 
 bool QoreIRLowering::expressionCanThrow(const QoreValue& expr) const {
     if (!expr.hasNode()) {
-        return true;
+        // Simple values (int, float, bool, NOTHING, etc.) can never throw
+        return false;
     }
     auto* node = dynamic_cast<const ParseNode*>(expr.getInternalNode());
     if (!node) {
