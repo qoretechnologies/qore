@@ -103,8 +103,14 @@ private:
     // IR builder
     std::unique_ptr<llvm::IRBuilder<>> builder;
 
-    // Block mapping: QoreIR blocks → LLVM blocks
+    // Block mapping: QoreIR blocks → LLVM blocks (initial blocks)
     std::unordered_map<const QoreIRBasicBlock*, llvm::BasicBlock*> block_map;
+
+    // Final block mapping: QoreIR blocks → LLVM blocks after lowering
+    // When lowering creates intermediate blocks (e.g., cmp_merge), the builder
+    // ends up in a different block than the initial one. This map tracks where
+    // each IR block's instructions end up, for correct PHI predecessor resolution.
+    std::unordered_map<const QoreIRBasicBlock*, llvm::BasicBlock*> final_block_map;
 
     // Value mapping: QoreIR value IDs → LLVM values
     std::unordered_map<uint32_t, llvm::Value*> values;

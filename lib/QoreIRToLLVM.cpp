@@ -827,7 +827,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Create LLVM basic blocks for all IR blocks
     block_map.clear();
+    final_block_map.clear();
     block_map.reserve(func.blocks.size());
+    final_block_map.reserve(func.blocks.size());
     for (const auto& block : func.blocks) {
         block_map[block.get()] = llvm::BasicBlock::Create(ctx, block->name, llvm_func);
         if (getenv("QORE_LLVM_DEBUG")) {
@@ -910,6 +912,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
 
+        // Record the final block after lowering all instructions.
+        // When lowering creates intermediate blocks (e.g., for comparisons or guards),
+        // the builder ends up in a different block than the initial one.
+        // This is needed for correct PHI predecessor resolution.
+        final_block_map[block.get()] = builder->GetInsertBlock();
+
         // Verify the final insert block has a terminator.
         // Note: the insert block may have changed (e.g., guards create continuation blocks).
         // We check the original block; if it was terminated by Invoke or similar, that's fine.
@@ -934,7 +942,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (!val) {
                 return false;
             }
-            llvm::BasicBlock* bb = block_map[inc.block];
+            // Use final_block_map to get the actual LLVM predecessor block.
+            // When lowering creates intermediate blocks (e.g., cmp_merge for comparisons),
+            // the IR block maps to a different final LLVM block than the initial one.
+            llvm::BasicBlock* bb = final_block_map[inc.block];
+            if (!bb) {
+                // Fall back to block_map if final_block_map doesn't have an entry
+                // (shouldn't happen, but be defensive)
+                bb = block_map[inc.block];
+            }
             if (!bb) {
                 error = "PHI incoming block not found";
                 return false;
