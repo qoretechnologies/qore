@@ -1,0 +1,8 @@
+usr/bin/qpp
+usr/bin/qdx
+usr/bin/qjar
+usr/lib/*/libqore.so
+usr/lib/*/pkgconfig/qore.pc
+usr/lib/*/cmake/Qore/
+usr/include/qore/
+usr/share/qore/

@@ -4,7 +4,7 @@
 
     Qore logger module
 
-    Copyright (C) 2017 - 2024 Qore Technologies s.r.o.
+    Copyright (C) 2017 - 2026 Qore Technologies s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -44,23 +44,25 @@
 
 #include <string.h>
 
-QoreStringNode* logger_module_init();
-void logger_module_ns_init(QoreNamespace* rns, QoreNamespace* qns);
-void logger_module_delete();
+static void logger_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
+static void logger_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
+static void logger_module_delete();
 
-// qore module symbols
-DLLEXPORT char qore_module_name[] = "logger_bin";
-DLLEXPORT char qore_module_version[] = PACKAGE_VERSION;
-DLLEXPORT char qore_module_description[] = "Qore logger module";
-DLLEXPORT char qore_module_author[] = "David Nichols <david.nichols@qoretechnologies.com>";
-DLLEXPORT char qore_module_url[] = "http://qore.org";
-DLLEXPORT int qore_module_api_major = QORE_MODULE_API_MAJOR;
-DLLEXPORT int qore_module_api_minor = QORE_MODULE_API_MINOR;
-DLLEXPORT qore_module_init_t qore_module_init = logger_module_init;
-DLLEXPORT qore_module_ns_init_t qore_module_ns_init = logger_module_ns_init;
-DLLEXPORT qore_module_delete_t qore_module_delete = logger_module_delete;
-DLLEXPORT qore_license_t qore_module_license = QL_MIT;
-DLLEXPORT char qore_module_license_str[] = "MIT";
+extern "C" DLLEXPORT void logger_bin_qore_module_desc(QoreModuleInfo& mod_info) {
+    mod_info.name = "logger_bin";
+    mod_info.version = PACKAGE_VERSION;
+    mod_info.desc = "Qore logger module";
+    mod_info.author = "David Nichols <david.nichols@qoretechnologies.com>";
+    mod_info.url = "http://qore.org";
+    mod_info.api_major = QORE_MODULE_API_MAJOR;
+    mod_info.api_minor = QORE_MODULE_API_MINOR;
+    mod_info.init = logger_module_init;
+    mod_info.ns_init = logger_module_ns_init;
+    mod_info.del = logger_module_delete;
+    mod_info.license = QL_MIT;
+    mod_info.license_str = "MIT";
+    mod_info.functional_domains = QDOM_EXTERNAL_INFO;
+}
 
 QoreNamespace LoggerNS("Qore::Logger");
 
@@ -68,7 +70,7 @@ QoreNamespace LoggerNS("Qore::Logger");
 #define HOSTNAMEBUFSIZE 512
 #endif
 
-QoreStringNode* logger_module_init() {
+static void logger_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     QoreLoggerEvent::init();
 
     // set up Logger namespace
@@ -135,7 +137,8 @@ QoreStringNode* logger_module_init() {
 
     char buf[HOSTNAMEBUFSIZE + 1];
     if (gethostname(buf, HOSTNAMEBUFSIZE)) {
-        return new QoreStringNodeMaker("GETHOSTNAME-ERROR: gethostname() failed: %s", strerror(errno));
+        xsink.raiseException("GETHOSTNAME-ERROR", "gethostname() failed: %s", strerror(errno));
+        return;
     }
 
     cls = initLoggerLayoutPatternClass(LoggerNS);
@@ -165,16 +168,13 @@ QoreStringNode* logger_module_init() {
 
     LoggerNS.addSystemClass(initLoggerInterfaceClass(LoggerNS));
     LoggerNS.addSystemClass(initLoggerClass(LoggerNS));
-
-    return nullptr;
 }
 
-void logger_module_ns_init(QoreNamespace* rns, QoreNamespace* qns) {
+static void logger_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
     qns->addNamespace(LoggerNS.copy());
 }
 
-void logger_module_delete() {
+static void logger_module_delete() {
     LoggerNS.clear(nullptr);
     QoreLoggerLevel::del();
 }
-

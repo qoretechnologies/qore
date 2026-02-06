@@ -1035,6 +1035,16 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
         - @ref Qore::PO_BROKEN_LIST_RANGE "PO_BROKEN_LIST_RANGE"
     - Subtracting @ref NOTHING from any value will result in the same value; previously this would result in
       @ref NOTHING
+    - Binary Module API bumped from 1.5 to 2.0; all external binary modules must be recompiled
+      - Old-style exported globals (\c qore_module_name[], \c qore_module_version[], etc.) are no longer supported
+      - Modules must now implement \c extern \c "C" \c {name}_qore_module_desc(QoreModuleInfo&) to register
+        module metadata (hyphens in module names are converted to underscores for the C symbol name);
+        see @ref qore_modules for the updated developer guide
+      - @ref qore_module_init_t signature changed from \c QoreStringNode*() to
+        \c void(QoreModuleInitContext&, \c ExceptionSink&); errors are now reported via exceptions
+      - @ref qore_module_ns_init_t now takes an additional \c ExceptionSink& parameter
+      - @ref QoreModuleInfo gains a \c functional_domains field (\c QDOM_* flags) for sandboxing support
+      - The @ref QoreModuleInfo struct uses default member initializers, making it extensible without future API breaks
 
     @subsection qore_2_0_0_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/BulkSqlUtil/html/index.html#bulksqlutilintro">BulkSqlUtil</a> module

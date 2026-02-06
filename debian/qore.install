@@ -1,0 +1,6 @@
+usr/bin/qore
+usr/bin/qdbg
+usr/bin/qdbg-server
+usr/bin/qdbg-remote
+usr/bin/qdbg-vsc-adapter
+usr/share/man/man1/qore.1*

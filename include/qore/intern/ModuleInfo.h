@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -636,13 +636,17 @@ DLLLOCAL extern QoreModuleManager QMM;
 
 class QoreBuiltinModule : public QoreAbstractModule {
 public:
-    DLLLOCAL QoreBuiltinModule(const char* cwd, const char* fn, const char* n, const char* d,
-            const char* v, const char* a, const char* u, const QoreString& l, unsigned major, unsigned minor,
-            qore_module_init_t init, qore_module_ns_init_t ns_init, qore_module_delete_t del,
-            qore_module_parse_cmd_t pcmd, const void* p, QoreHashNode* info = nullptr, unsigned load_opt = QMLO_NONE)
-            : QoreAbstractModule(cwd, fn, n, d, v, a, u, l, load_opt), api_major(major), api_minor(minor),
-                module_init(init), module_ns_init(ns_init), module_delete(del), module_parse_cmd(pcmd), info(info),
-                dlptr(p) {
+    //! Construct from QoreModuleInfo (API 2.0)
+    DLLLOCAL QoreBuiltinModule(const char* cwd, const char* path, QoreModuleInfo& mod_info, const void* dlptr,
+            QoreHashNode* info = nullptr, unsigned load_opt = QMLO_NONE)
+            : QoreAbstractModule(cwd, path, mod_info.name.c_str(), mod_info.desc.c_str(),
+                mod_info.version.c_str(), mod_info.author.c_str(), mod_info.url.c_str(),
+                mod_info.license_str, load_opt),
+              api_major(mod_info.api_major), api_minor(mod_info.api_minor),
+              module_init(mod_info.init), module_ns_init(mod_info.ns_init),
+              module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
+              functional_domains(mod_info.functional_domains),
+              info(info), dlptr(dlptr) {
     }
 
     DLLLOCAL virtual ~QoreBuiltinModule() {
@@ -659,6 +663,10 @@ public:
 
     DLLLOCAL unsigned getAPIMinor() const {
         return api_minor;
+    }
+
+    DLLLOCAL int64 getFunctionalDomains() const {
+        return functional_domains;
     }
 
     DLLLOCAL virtual bool isBuiltin() const override {
@@ -684,6 +692,7 @@ protected:
     qore_module_ns_init_t module_ns_init;
     qore_module_delete_t module_delete;
     qore_module_parse_cmd_t module_parse_cmd;
+    int64 functional_domains;
     QoreHashNode* info;
     const void* dlptr;
 
