@@ -50,6 +50,12 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
         addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
         addTestCase("AOT module compile error", \testAOTModuleCompileError());
+        # Split module tests
+        addTestCase("AOT split module basic", \testAOTSplitModuleBasic());
+        addTestCase("AOT split module qm only", \testAOTSplitModuleQmOnly());
+        addTestCase("AOT split module missing qm", \testAOTSplitModuleMissingQm());
+        addTestCase("AOT split module auto detect", \testAOTSplitModuleAutoDetect());
+        addTestCase("AOT split module trailing slash", \testAOTSplitModuleTrailingSlash());
         # Source stripping tests (Phase 8)
         addTestCase("AOT strip source basic", \testStripSourceBasic());
         addTestCase("AOT strip source arithmetic", \testStripSourceArithmetic());
@@ -59,6 +65,11 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source backward compat", \testStripSourceBackwardCompat());
         addTestCase("AOT strip source compile output", \testStripSourceCompileOutput());
         addTestCase("AOT strip source no source in binary", \testStripSourceNoSourceInBinary());
+        # Strip source type export tests (Phase 9)
+        addTestCase("AOT strip source hashdecl", \testStripSourceHashDecl());
+        addTestCase("AOT strip source hashdecl inheritance", \testStripSourceHashDeclInheritance());
+        addTestCase("AOT strip source enum", \testStripSourceEnum());
+        addTestCase("AOT strip source module dependency", \testStripSourceModuleDependency());
         set_return_value(main());
     }
 
@@ -1030,6 +1041,340 @@ printf(\"not a module\\n\");
             "non-module file produces error: " + result.compile_out);
     }
 
+    #! Helper to create a split module directory structure
+    #! The directory name must match the module name for split module compilation
+    private hash<auto> createSplitModuleDir(string mod_name, string qm_code, *hash<string, string> component_files) {
+        # Create a unique parent dir, then create the module dir inside it with the correct name
+        string parent_dir = sprintf("/tmp/aot_split_test_%d_%d", getpid(), rand());
+        mkdir(parent_dir);
+        string mod_dir = parent_dir + "/" + mod_name;
+        mkdir(mod_dir);
+
+        # Create the main .qm file (must match directory name)
+        string qm_path = mod_dir + "/" + mod_name + ".qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(qm_code);
+            f.close();
+        }
+
+        # Create any component files (.qc, .ql)
+        if (component_files) {
+            HashIterator it(component_files);
+            while (it.next()) {
+                string comp_path = mod_dir + "/" + it.getKey();
+                File f();
+                f.open2(comp_path, O_WRONLY | O_CREAT | O_TRUNC);
+                f.write(it.getValue());
+                f.close();
+            }
+        }
+
+        return {
+            "parent_dir": parent_dir,  # For cleanup
+            "dir": mod_dir,            # Module directory
+            "qm_path": qm_path,
+        };
+    }
+
+    #! Compile a split module directory, return {compile_out, so_path, compiled}
+    private hash<auto> compileSplitModule(string dir_path, *string output_path, *list<string> extra_flags) {
+        string mod_name = basename(dir_path);
+        # Handle trailing slash
+        if (mod_name == "") {
+            mod_name = basename(dirname(dir_path));
+        }
+
+        string so_path;
+        if (output_path) {
+            so_path = output_path;
+        } else {
+            # Default: module_name.qmod in the directory
+            so_path = dir_path + "/" + mod_name + ".qmod";
+        }
+
+        string flags_str = "";
+        if (extra_flags) {
+            for (int i = 0; i < extra_flags.size(); ++i) {
+                flags_str += " " + extra_flags[i];
+            }
+        }
+
+        string output_flag = "";
+        if (output_path) {
+            output_flag = " --output " + output_path;
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile-module%s%s %s 2>&1",
+            libqore_dir, qore_bin, output_flag, flags_str, dir_path);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "compile_out": compile_out,
+            "so_path": so_path,
+            "compiled": is_file(so_path),
+        };
+    }
+
+    testAOTSplitModuleBasic() {
+        # Create a split module with .qm + .qc + .ql files
+        string mod_name = "AOTSplitTest";
+        string qm_code = "%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+module AOTSplitTest {
+    version = \"1.0\";
+    desc = \"AOT split module test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitTest {
+    public int sub main_func() {
+        return 42;
+    }
+}
+";
+
+        # Helper class in .qc file
+        string qc_code = "
+public namespace AOTSplitTest {
+    public class Helper {
+        private {
+            int value = 100;
+        }
+
+        int getValue() {
+            return value;
+        }
+
+        int addTo(int n) {
+            return value + n;
+        }
+    }
+}
+";
+
+        # Helper function in .ql file
+        string ql_code = "
+public namespace AOTSplitTest {
+    public int sub add_numbers(int a, int b) {
+        return a + b;
+    }
+
+    public string sub greet(string name) {
+        return \"Hello, \" + name + \"!\";
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code, {
+            "Helper.qc": qc_code,
+            "funcs.ql": ql_code,
+        });
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile the split module
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+
+        assertTrue(result.compiled, "split module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compiled split module \\(O2\\)"),
+            "compile output shows split module compilation: " + result.compile_out);
+
+        # Test script that uses all parts of the split module
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires AOTSplitTest
+
+printf(\"%d\\n\", AOTSplitTest::main_func());
+printf(\"%d\\n\", AOTSplitTest::add_numbers(10, 20));
+printf(\"%s\\n\", AOTSplitTest::greet(\"World\"));
+auto h = new AOTSplitTest::Helper();
+printf(\"%d\\n\", h.getValue());
+printf(\"%d\\n\", h.addTo(50));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled .qmod
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        # Run with the interpreted .qm (remove .qmod so loader picks up .qm)
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled split module output matches interpreted");
+        assertEq("42\n30\nHello, World!\n100\n150\n", aot_out, "split module functions produce correct results");
+    }
+
+    testAOTSplitModuleQmOnly() {
+        # Test a split module directory that contains only the main .qm file (no .qc/.ql)
+        string mod_name = "AOTSplitQmOnly";
+        string qm_code = "%modern
+%require-types
+%strict-args
+
+module AOTSplitQmOnly {
+    version = \"1.0\";
+    desc = \"Split module with only .qm\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitQmOnly {
+    public int sub get_value() {
+        return 99;
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code);
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile the split module (directory with only .qm)
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+
+        assertTrue(result.compiled, "qm-only split module compiled: " + result.compile_out);
+
+        # Test script
+        string test_code = "%modern
+%requires AOTSplitQmOnly
+printf(\"%d\\n\", AOTSplitQmOnly::get_value());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with compiled module
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        assertEq("99\n", aot_out, "qm-only split module works correctly");
+    }
+
+    testAOTSplitModuleMissingQm() {
+        # Test error case: directory without matching .qm file
+        string tmp_dir = sprintf("/tmp/aot_split_missing_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        # Create a .qc file but no .qm file
+        string qc_path = tmp_dir + "/Helper.qc";
+        {
+            File f();
+            f.open2(qc_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("public namespace Test { public int sub foo() { return 1; } }");
+            f.close();
+        }
+
+        # Try to compile - should fail
+        hash<auto> result = compileSplitModule(tmp_dir);
+
+        assertFalse(result.compiled, "missing .qm produces no output");
+        assertTrue(result.compile_out.regex("(not found|does not exist|cannot open|failed)"),
+            "error message for missing .qm: " + result.compile_out);
+    }
+
+    testAOTSplitModuleAutoDetect() {
+        # Test that directory input auto-detects as module mode
+        string mod_name = "AOTSplitAuto";
+        string qm_code = "%modern
+%require-types
+
+module AOTSplitAuto {
+    version = \"1.0\";
+    desc = \"Auto-detect test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitAuto {
+    public int sub auto_val() {
+        return 777;
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code);
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile without -m flag - should auto-detect directory as module
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+
+        assertTrue(result.compiled, "auto-detected module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compiled split module"),
+            "output shows split module compilation: " + result.compile_out);
+    }
+
+    testAOTSplitModuleTrailingSlash() {
+        # Test that directory path with trailing slash works
+        string mod_name = "AOTSplitSlash";
+        string qm_code = "%modern
+%require-types
+
+module AOTSplitSlash {
+    version = \"1.0\";
+    desc = \"Trailing slash test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitSlash {
+    public int sub slash_val() {
+        return 888;
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code);
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile with trailing slash
+        string dir_with_slash = mod_info.dir + "/";
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(dir_with_slash, qmod_path);
+
+        assertTrue(result.compiled, "trailing slash path compiled: " + result.compile_out);
+
+        # Test script
+        string test_code = "%modern
+%requires AOTSplitSlash
+printf(\"%d\\n\", AOTSplitSlash::slash_val());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        assertEq("888\n", aot_out, "trailing slash module works correctly");
+    }
+
     #! Compile with --strip-source flag and run
     private hash<auto> compileStripSourceAndRun(string code, *list<string> run_args) {
         hash<auto> paths = writeTempScript(code);
@@ -1244,5 +1589,307 @@ exit(0);
         # The stripped binary should NOT contain the source declaration
         assertFalse(strip_strings.regex("int sub add_unique_marker_12345"),
             "strip-source binary does not contain source function declaration");
+    }
+
+    # ---- Strip source type export tests (Phase 9) ----
+
+    #! Compile a module with --strip-source and return info
+    private hash<auto> compileStripSourceModule(string mod_code, string mod_name) {
+        string tmp_dir = sprintf("/tmp/aot_strip_mod_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+
+        string qm_path = tmp_dir + "/" + mod_name + ".qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/" + mod_name + ".qmod";
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "tmp_dir": tmp_dir,
+            "qm_path": qm_path,
+            "qmod_path": qmod_path,
+            "compile_out": compile_out,
+            "compiled": is_file(qmod_path),
+        };
+    }
+
+    testStripSourceHashDecl() {
+        # Create a module with a hashdecl
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripHashDeclMod {
+    version = \"1.0\";
+    desc = \"Test hashdecl export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripHashDeclMod {
+    public hashdecl TestInfo {
+        string name;
+        int value;
+    }
+
+    public hash<TestInfo> sub getInfo(string name, int value) {
+        return <TestInfo>{\"name\": name, \"value\": value};
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripHashDeclMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with hashdecl compiled: " + mod_info.compile_out);
+        assertTrue(mod_info.compile_out.regex("source-stripped"),
+            "compile output shows source-stripped: " + mod_info.compile_out);
+
+        # Create a test script that uses the hashdecl
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripHashDeclMod
+
+hash<StripHashDeclMod::TestInfo> info = StripHashDeclMod::getInfo(\"test\", 42);
+printf(\"name: %s, value: %d\\n\", info.name, info.value);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("name: test, value: 42\n", out, "hashdecl from strip-source module works correctly");
+    }
+
+    testStripSourceHashDeclInheritance() {
+        # Create a module with hashdecl inheritance
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripHashDeclInhMod {
+    version = \"1.0\";
+    desc = \"Test hashdecl inheritance export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripHashDeclInhMod {
+    public hashdecl BaseInfo {
+        string id;
+    }
+
+    public hashdecl ExtendedInfo inherits BaseInfo {
+        string name;
+        int value;
+    }
+
+    public hash<ExtendedInfo> sub getExtendedInfo(string id, string name, int value) {
+        return <ExtendedInfo>{\"id\": id, \"name\": name, \"value\": value};
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripHashDeclInhMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with hashdecl inheritance compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses the derived hashdecl
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripHashDeclInhMod
+
+hash<StripHashDeclInhMod::ExtendedInfo> info = StripHashDeclInhMod::getExtendedInfo(\"id123\", \"test\", 99);
+printf(\"id: %s, name: %s, value: %d\\n\", info.id, info.name, info.value);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("id: id123, name: test, value: 99\n", out,
+            "hashdecl inheritance from strip-source module works correctly");
+    }
+
+    testStripSourceEnum() {
+        # Create a module with an enum
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripEnumMod {
+    version = \"1.0\";
+    desc = \"Test enum export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripEnumMod {
+    public enum Status {
+        Pending = 0,
+        Active = 1,
+        Completed = 2,
+    }
+
+    public int sub getStatusValue(Status s) {
+        return int(s);
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripEnumMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with enum compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses the enum
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripEnumMod
+
+printf(\"Pending=%d\\n\", StripEnumMod::Status::Pending);
+printf(\"Active=%d\\n\", StripEnumMod::Status::Active);
+printf(\"Completed=%d\\n\", StripEnumMod::Status::Completed);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("Pending=0\nActive=1\nCompleted=2\n", out, "enum from strip-source module works correctly");
+    }
+
+    testStripSourceModuleDependency() {
+        # Create a base module with types
+        string base_mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripBaseTypes {
+    version = \"1.0\";
+    desc = \"Base types module\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripBaseTypes {
+    public hashdecl PersonInfo {
+        string name;
+        int age;
+    }
+
+    public enum Gender {
+        Unknown = 0,
+        Male = 1,
+        Female = 2,
+    }
+}
+";
+        hash<auto> base_info = compileStripSourceModule(base_mod_code, "StripBaseTypes");
+        on_exit {
+            backquote(sprintf("rm -rf %s", base_info.tmp_dir));
+        }
+        assertTrue(base_info.compiled, "base types module compiled: " + base_info.compile_out);
+
+        # Create a dependent module that uses the types from base
+        string dep_mod_code = "%new-style
+%require-types
+%strict-args
+
+%requires StripBaseTypes
+
+module StripDepMod {
+    version = \"1.0\";
+    desc = \"Dependent module\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripDepMod {
+    public hash<StripBaseTypes::PersonInfo> sub createPerson(string name, int age) {
+        return <StripBaseTypes::PersonInfo>{\"name\": name, \"age\": age};
+    }
+
+    public string sub genderName(StripBaseTypes::Gender g) {
+        switch (g) {
+            case StripBaseTypes::Gender::Male: return \"Male\";
+            case StripBaseTypes::Gender::Female: return \"Female\";
+            default: return \"Unknown\";
+        }
+    }
+}
+";
+        # Write dependent module to the same directory
+        string dep_qm_path = base_info.tmp_dir + "/StripDepMod.qm";
+        {
+            File f();
+            f.open2(dep_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(dep_mod_code);
+            f.close();
+        }
+        string dep_qmod_path = base_info.tmp_dir + "/StripDepMod.qmod";
+        string dep_compile_cmd = sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, base_info.tmp_dir, qore_bin, dep_qmod_path, dep_qm_path);
+        string dep_compile_out = backquote(dep_compile_cmd);
+
+        assertTrue(is_file(dep_qmod_path), "dependent module compiled: " + dep_compile_out);
+
+        # Create a test script that uses both modules
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripBaseTypes
+%requires StripDepMod
+
+hash<StripBaseTypes::PersonInfo> p = StripDepMod::createPerson(\"Alice\", 30);
+printf(\"Person: %s, age %d\\n\", p.name, p.age);
+printf(\"Gender: %s\\n\", StripDepMod::genderName(StripBaseTypes::Gender::Female));
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with both compiled strip-source .qmod files
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, base_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("Person: Alice, age 30\nGender: Female\n", out,
+            "strip-source module dependency with types works correctly");
     }
 }

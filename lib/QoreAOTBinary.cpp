@@ -38,6 +38,7 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/qore_enum_decl_private.h"
 
 #include <cassert>
 #include <cstring>
@@ -1624,6 +1625,14 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
 
+    // Two-pass approach: first create all hashdecls, then resolve parent pointers
+    struct HashdeclInfo {
+        TypedHashDecl* hd;
+        std::string parent_path;
+    };
+    std::vector<HashdeclInfo> hashdecl_list;
+    hashdecl_list.reserve(count);
+
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
         const char* nspath = reader.readStringRef(ptr);
@@ -1631,27 +1640,83 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         const char* parent_path = reader.readStringRef(ptr);
 
-        // Read members (skip data for now - hashdecl creation requires internal APIs)
+        // Read members first to collect info
+        struct MemberInfo {
+            std::string name;
+            std::string type_path;
+            QoreValue default_val;
+        };
+        std::vector<MemberInfo> members;
+
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
+        members.reserve(num_members);
         for (uint32_t j = 0; j < num_members; ++j) {
-            reader.readStringRef(ptr);  // member name
-            reader.readStringRef(ptr);  // member type path
+            MemberInfo mi;
+            mi.name = reader.readStringRef(ptr);
+            mi.type_path = reader.readStringRef(ptr);
             uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
             if (has_default) {
-                reader.readValue(ptr, end, error);
+                mi.default_val = reader.readValue(ptr, end, error);
                 if (!error.empty()) {
                     return false;
                 }
             }
+            members.push_back(std::move(mi));
         }
 
-        (void)name;
-        (void)nspath;
-        (void)ns_idx;
-        (void)flags;
-        (void)parent_path;
-        // Hashdecl creation deferred - types are resolvable via the type resolver's
-        // complex type path handling without having explicit hashdecl objects
+        // Validate namespace index
+        if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
+            printd(2, "AOT: skipping hashdecl '%s' - invalid namespace index %u\n", name, ns_idx);
+            continue;
+        }
+
+        // Create the TypedHashDecl
+        TypedHashDecl* hd = new TypedHashDecl(name, nspath);
+        typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
+
+        // Set visibility
+        if (flags & 0x0001) {
+            hdp->setPublic();
+        }
+
+        // Set namespace
+        hdp->setNamespace(ns_list[ns_idx]);
+
+        // Add members
+        for (auto& mi : members) {
+            const QoreTypeInfo* mti = type_resolver->resolve(mi.type_path.c_str(), error);
+            if (!error.empty()) {
+                error.clear();  // non-fatal: use auto type
+                mti = nullptr;
+            }
+            hdp->addMember(mi.name.c_str(), mti, mi.default_val);
+        }
+
+        // Add to namespace's hashDeclList
+        if (ns_list[ns_idx]->hashDeclList.add(hd) != 0) {
+            printd(2, "AOT: hashdecl '%s' already exists in namespace\n", name);
+            hdp->deref();
+            continue;
+        }
+
+        // Store for parent resolution pass
+        hashdecl_list.push_back({hd, parent_path ? parent_path : ""});
+    }
+
+    // Second pass: resolve parent hashdecl pointers
+    for (auto& hdi : hashdecl_list) {
+        if (!hdi.parent_path.empty()) {
+            // Look up parent by path in the program
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
+                qore_ns_private::get(*pp->RootNS));
+            const qore_ns_private* found_ns = nullptr;
+            const TypedHashDecl* parent = qore_root_ns_private::runtimeFindHashDecl(
+                *rpriv->rns, hdi.parent_path.c_str(), found_ns);
+            if (parent) {
+                typed_hash_decl_private::get(*hdi.hd)->setParentHashDecl(parent);
+            }
+        }
     }
 
     return true;
@@ -1672,21 +1737,70 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
 
     for (uint32_t i = 0; i < count; ++i) {
-        reader.readStringRef(ptr);  // name
-        reader.readStringRef(ptr);  // nspath
-        QoreAOTBinaryReader::readU32(ptr);  // ns_idx
-        QoreAOTBinaryReader::readU16(ptr);  // flags
-        reader.readStringRef(ptr);  // base type path
+        const char* name = reader.readStringRef(ptr);
+        const char* nspath = reader.readStringRef(ptr);
+        uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
+        uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
+        const char* base_type_path = reader.readStringRef(ptr);
+
+        // Read members first to collect info
+        struct EnumMemberInfo {
+            std::string name;
+            QoreValue val;
+        };
+        std::vector<EnumMemberInfo> members;
 
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
+        members.reserve(num_members);
         for (uint32_t j = 0; j < num_members; ++j) {
-            reader.readStringRef(ptr);  // member name
-            reader.readValue(ptr, end, error);  // member value
+            EnumMemberInfo emi;
+            emi.name = reader.readStringRef(ptr);
+            emi.val = reader.readValue(ptr, end, error);
             if (!error.empty()) {
                 return false;
             }
+            members.push_back(std::move(emi));
         }
-        // Enum creation deferred - not critical for AOT context building
+
+        // Validate namespace index
+        if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
+            printd(2, "AOT: skipping enum '%s' - invalid namespace index %u\n", name, ns_idx);
+            continue;
+        }
+
+        // Resolve base type
+        const QoreTypeInfo* base_ti = type_resolver->resolve(base_type_path, error);
+        if (!error.empty()) {
+            error.clear();  // non-fatal: default to int
+            base_ti = bigIntTypeInfo;
+        }
+        if (!base_ti) {
+            base_ti = bigIntTypeInfo;
+        }
+
+        // Create the QoreEnumDecl
+        QoreEnumDecl* ed = new QoreEnumDecl(name, nspath, base_ti);
+        qore_enum_decl_private* edp = qore_enum_decl_private::get(*ed);
+
+        // Set visibility
+        if (flags & 0x0001) {
+            edp->setPublic();
+        }
+
+        // Set namespace
+        edp->setNamespace(ns_list[ns_idx]);
+
+        // Add members
+        for (auto& emi : members) {
+            edp->addMember(emi.name.c_str(), emi.val);
+        }
+
+        // Add to namespace's enumList
+        if (ns_list[ns_idx]->enumList.add(ed) != 0) {
+            printd(2, "AOT: enum '%s' already exists in namespace\n", name);
+            edp->deref();
+            continue;
+        }
     }
 
     return true;
