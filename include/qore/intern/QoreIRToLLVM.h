@@ -197,6 +197,10 @@ private:
     llvm::Value* unboxFloat(llvm::Value* qv);
     llvm::Value* unboxBool(llvm::Value* qv);
 
+    // Ensure a value is a native double for float operations
+    // Handles NaN-boxed values (int or float), native i64, and native doubles
+    llvm::Value* ensureFloatType(llvm::Value* val, uint32_t value_id, llvm::Module& module);
+
     // Get a declared runtime helper function
     llvm::FunctionCallee getHelper(llvm::Module& module, const char* name, llvm::FunctionType* ft);
 

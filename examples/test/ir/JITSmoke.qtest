@@ -20,6 +20,8 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("JIT integer comparisons", \testJitIntComparisons());
         addTestCase("JIT float arithmetic", \testJitFloatArithmetic());
         addTestCase("JIT float comparisons", \testJitFloatComparisons());
+        addTestCase("JIT mixed int/float arithmetic", \testJitMixedIntFloatArithmetic());
+        addTestCase("JIT mixed int/float comparisons", \testJitMixedIntFloatComparisons());
         addTestCase("JIT boolean operations", \testJitBoolOps());
         addTestCase("JIT control flow", \testJitControlFlow());
         addTestCase("JIT bitwise operations", \testJitBitwiseOps());
@@ -165,6 +167,21 @@ printf(\"%.1f\\n\", fcompute(10.0, 3.0));
         assertEq("50.0", result, "float arithmetic");
     }
 
+    testJitMixedIntFloatArithmetic() {
+        string code = "%modern
+float f = 2.5;
+int i = 3;
+# mixed int/float arithmetic should promote to float
+float r1 = f + i;
+float r2 = f * i;
+float r3 = f - i;
+float r4 = i / f;
+printf(\"%.1f,%.1f,%.1f,%.1f\\n\", r1, r2, r3, r4);
+";
+        string result = trim(runScript(code));
+        assertEq("5.5,7.5,-0.5,1.2", result, "mixed int/float arithmetic");
+    }
+
     testJitFloatComparisons() {
         string code = "%modern
 float a = 1.5;
@@ -180,6 +197,27 @@ printf(\"%s\\n\", results.join(\",\"));
 ";
         string result = trim(runScript(code));
         assertEq("lt,le,gt,ge,eq,ne", result, "float comparisons");
+    }
+
+    testJitMixedIntFloatComparisons() {
+        string code = "%modern
+float f = 2.5;
+int i = 3;
+list<string> results = ();
+if (f < i) { results += \"f_lt_i\"; }
+if (f <= i) { results += \"f_le_i\"; }
+if (i > f) { results += \"i_gt_f\"; }
+if (i >= f) { results += \"i_ge_f\"; }
+if (f == 2.5) { results += \"f_eq_lit\"; }
+if (f != i) { results += \"f_ne_i\"; }
+# int compared to float literal
+if (i > 2.0) { results += \"i_gt_flit\"; }
+if (i < 4.0) { results += \"i_lt_flit\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("f_lt_i,f_le_i,i_gt_f,i_ge_f,f_eq_lit,f_ne_i,i_gt_flit,i_lt_flit", result,
+            "mixed int/float comparisons");
     }
 
     testJitBoolOps() {

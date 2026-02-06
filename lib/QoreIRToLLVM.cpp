@@ -364,6 +364,39 @@ llvm::Value* QoreIRToLLVM::unboxBool(llvm::Value* qv) {
     return builder->CreateICmpEQ(qv, llvm::ConstantInt::get(i64_type, VAL_TRUE));
 }
 
+// Ensure a value is a native double for float operations.
+// Handles: native double → pass through, NaN-boxed (int or float) → runtime conversion,
+// native i64 → SIToFP
+llvm::Value* QoreIRToLLVM::ensureFloatType(llvm::Value* val, uint32_t value_id, llvm::Module& module) {
+    if (val->getType() == double_type) {
+        // Already a native double
+        return val;
+    }
+    if (val->getType() == i64_type) {
+        if (nanboxed_values.count(value_id)) {
+            // NaN-boxed value (could be int OR float) - use runtime conversion
+            // that handles both NaN-boxed types correctly
+            auto to_float = module.getOrInsertFunction("qore_rt_to_float",
+                llvm::FunctionType::get(double_type, {i64_type}, false));
+            return builder->CreateCall(to_float, {val});
+        } else {
+            // Native integer - convert to float
+            return builder->CreateSIToFP(val, double_type);
+        }
+    }
+    // For other integer types (e.g. i1 from boolean), convert to float
+    if (val->getType()->isIntegerTy()) {
+        return builder->CreateSIToFP(val, double_type);
+    }
+    // Already a floating-point type but not double (e.g. float), widen
+    if (val->getType()->isFloatingPointTy()) {
+        return builder->CreateFPCast(val, double_type);
+    }
+    // Unreachable: all LLVM value types should be handled above
+    assert(false && "ensureFloatType: unexpected LLVM type");
+    return val;
+}
+
 void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     function_locals.clear();
     entry_locals.clear();
@@ -1133,13 +1166,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
 
         // === Typed float arithmetic (native double) ===
+        // Note: Operands may be NaN-boxed floats, native doubles, or NaN-boxed integers
+        // (when using mixed int/float types). Convert to native double as needed.
         case QoreIROpcode::AddFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            // Unbox if NaN-boxed (operands may come from LoadLocal which returns i64)
-            llvm::Value* l_float = nanboxed_values.count(inst->operands[0].id) ? unboxFloat(lhs) : lhs;
-            llvm::Value* r_float = nanboxed_values.count(inst->operands[1].id) ? unboxFloat(rhs) : rhs;
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
             values[inst->result.id] = builder->CreateFAdd(l_float, r_float);
             return true;
         }
@@ -1147,9 +1181,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            // Unbox if NaN-boxed (operands may come from LoadLocal which returns i64)
-            llvm::Value* l_float = nanboxed_values.count(inst->operands[0].id) ? unboxFloat(lhs) : lhs;
-            llvm::Value* r_float = nanboxed_values.count(inst->operands[1].id) ? unboxFloat(rhs) : rhs;
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
             values[inst->result.id] = builder->CreateFSub(l_float, r_float);
             return true;
         }
@@ -1157,9 +1190,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            // Unbox if NaN-boxed (operands may come from LoadLocal which returns i64)
-            llvm::Value* l_float = nanboxed_values.count(inst->operands[0].id) ? unboxFloat(lhs) : lhs;
-            llvm::Value* r_float = nanboxed_values.count(inst->operands[1].id) ? unboxFloat(rhs) : rhs;
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
             values[inst->result.id] = builder->CreateFMul(l_float, r_float);
             return true;
         }
@@ -1168,9 +1200,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            // Unbox if NaN-boxed (operands may come from LoadLocal which returns i64)
-            llvm::Value* l_float = nanboxed_values.count(inst->operands[0].id) ? unboxFloat(lhs) : lhs;
-            llvm::Value* r_float = nanboxed_values.count(inst->operands[1].id) ? unboxFloat(rhs) : rhs;
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
             llvm::Value* zero = llvm::ConstantFP::get(double_type, 0.0);
             llvm::Value* is_zero = builder->CreateFCmpOEQ(r_float, zero);
 
@@ -1398,46 +1429,60 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
 
         // === Typed float comparisons (native double → i1) ===
+        // Note: Operands may be NaN-boxed floats, native doubles, or native integers
+        // (when comparing float with int literal). Convert to native double as needed.
         case QoreIROpcode::EqFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFCmpOEQ(lhs, rhs);
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            values[inst->result.id] = builder->CreateFCmpOEQ(l_float, r_float);
             return true;
         }
         case QoreIROpcode::NeFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFCmpONE(lhs, rhs);
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            values[inst->result.id] = builder->CreateFCmpONE(l_float, r_float);
             return true;
         }
         case QoreIROpcode::LtFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFCmpOLT(lhs, rhs);
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            values[inst->result.id] = builder->CreateFCmpOLT(l_float, r_float);
             return true;
         }
         case QoreIROpcode::LeFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFCmpOLE(lhs, rhs);
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            values[inst->result.id] = builder->CreateFCmpOLE(l_float, r_float);
             return true;
         }
         case QoreIROpcode::GtFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFCmpOGT(lhs, rhs);
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            values[inst->result.id] = builder->CreateFCmpOGT(l_float, r_float);
             return true;
         }
         case QoreIROpcode::GeFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFCmpOGE(lhs, rhs);
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            values[inst->result.id] = builder->CreateFCmpOGE(l_float, r_float);
             return true;
         }
 
@@ -3508,21 +3553,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFAdd(lhs, rhs);
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            values[inst->result.id] = builder->CreateFAdd(l_float, r_float);
             return true;
         }
         case QoreIROpcode::SubAssignFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFSub(lhs, rhs);
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            values[inst->result.id] = builder->CreateFSub(l_float, r_float);
             return true;
         }
         case QoreIROpcode::MulAssignFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateFMul(lhs, rhs);
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            values[inst->result.id] = builder->CreateFMul(l_float, r_float);
             return true;
         }
 
@@ -3686,8 +3737,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            llvm::Value* l_float = unboxFloat(lhs);
-            llvm::Value* r_float = unboxFloat(rhs);
+            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
             llvm::Value* zero = llvm::ConstantFP::get(double_type, 0.0);
             llvm::Value* is_zero = builder->CreateFCmpOEQ(r_float, zero);
 
@@ -4373,8 +4424,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* scale = getVal(inst->operands[1].id, error);
             if (!list || !scale) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Value* scale_float = nanboxed_values.count(inst->operands[1].id)
-                ? unboxFloat(scale) : scale;
+            llvm::Value* scale_float = ensureFloatType(scale, inst->operands[1].id, module);
             auto helper = module.getOrInsertFunction("qore_rt_map_scale_float",
                     llvm::FunctionType::get(i64_type, {i64_type, double_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_float});
@@ -4403,8 +4453,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* offset = getVal(inst->operands[1].id, error);
             if (!list || !offset) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Value* offset_float = nanboxed_values.count(inst->operands[1].id)
-                ? unboxFloat(offset) : offset;
+            llvm::Value* offset_float = ensureFloatType(offset, inst->operands[1].id, module);
             auto helper = module.getOrInsertFunction("qore_rt_map_offset_float",
                     llvm::FunctionType::get(i64_type, {i64_type, double_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, offset_float});
@@ -4507,8 +4556,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* scale = getVal(inst->operands[1].id, error);
             if (!list || !scale) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Value* scale_float = nanboxed_values.count(inst->operands[1].id)
-                ? unboxFloat(scale) : scale;
+            llvm::Value* scale_float = ensureFloatType(scale, inst->operands[1].id, module);
             auto helper = module.getOrInsertFunction("qore_rt_fused_map_select_scale_positive_float",
                     llvm::FunctionType::get(i64_type, {i64_type, double_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_float});
@@ -4537,8 +4585,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* offset = getVal(inst->operands[1].id, error);
             if (!list || !offset) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Value* offset_float = nanboxed_values.count(inst->operands[1].id)
-                ? unboxFloat(offset) : offset;
+            llvm::Value* offset_float = ensureFloatType(offset, inst->operands[1].id, module);
             auto helper = module.getOrInsertFunction("qore_rt_fused_map_select_offset_positive_float",
                     llvm::FunctionType::get(i64_type, {i64_type, double_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, offset_float});
@@ -4592,8 +4639,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* scale = getVal(inst->operands[1].id, error);
             if (!list || !scale) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Value* scale_float = nanboxed_values.count(inst->operands[1].id)
-                ? unboxFloat(scale) : scale;
+            llvm::Value* scale_float = ensureFloatType(scale, inst->operands[1].id, module);
             auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_sum_scale_float",
                     llvm::FunctionType::get(double_type, {i64_type, double_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_float});
@@ -4644,8 +4690,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* scale = getVal(inst->operands[1].id, error);
             if (!list || !scale) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Value* scale_float = nanboxed_values.count(inst->operands[1].id)
-                ? unboxFloat(scale) : scale;
+            llvm::Value* scale_float = ensureFloatType(scale, inst->operands[1].id, module);
             auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_prod_scale_float",
                     llvm::FunctionType::get(double_type, {i64_type, double_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_float});
