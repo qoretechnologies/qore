@@ -137,6 +137,7 @@
 #include <qore/intern/ContextStatement.h>
 #include <qore/intern/SummarizeStatement.h>
 #include <qore/intern/QoreOperatorNode.h>
+#include <qore/intern/ObjectMethodReferenceNode.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/QoreClassIntern.h>
 
@@ -1919,7 +1920,17 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
     }
-    error = "unsupported expression node for IR lowering";
+    // Object method references (e.g., \methodName())
+    if (auto* mref = dynamic_cast<const AbstractParseObjectMethodReferenceNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, mref->loc, error);
+    }
+    // Non-value hash/list nodes (e.g., const hashes containing runtime objects)
+    if (dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, nullptr, error);
+    }
+    error = std::string("unsupported expression node for IR lowering: ") + node->getTypeName();
     return QoreIRValue();
 }
 
@@ -2069,6 +2080,14 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
         return builder.createConstInt(expr.getAsBigInt())->result;
     }
     if (expr.isFloat()) {
+        return builder.createConstFloat(expr.getAsFloat())->result;
+    }
+    // Handle QoreIntNode (heap-allocated integer outside 48-bit range)
+    if (expr.getType() == NT_INT && expr.hasNode()) {
+        return builder.createConstInt(expr.getAsBigInt())->result;
+    }
+    // Handle QoreFloatNode (heap-allocated float, e.g., negative NaN)
+    if (expr.getType() == NT_FLOAT && expr.hasNode()) {
         return builder.createConstFloat(expr.getAsFloat())->result;
     }
     if (expr.getType() == NT_LIST && expr.isValue()) {

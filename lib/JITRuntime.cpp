@@ -313,6 +313,15 @@ extern "C" int64_t qore_rt_guard_float(uint64_t val) {
     return v.isFloat() ? 1 : 0;
 }
 
+// --- Boxing helpers ---
+
+extern "C" uint64_t qore_rt_box_big_int(int64_t val) {
+    QoreValue v(val);
+    uint64_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    return bits;
+}
+
 // --- Local variable helpers ---
 
 extern "C" void qore_rt_instantiate_local(LocalVar* var) {

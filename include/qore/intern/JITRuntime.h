@@ -143,6 +143,12 @@ int64_t qore_rt_guard_int(uint64_t val);
 //! Check if a NaN-boxed QoreValue is a float; returns 1 if float, 0 otherwise
 int64_t qore_rt_guard_float(uint64_t val);
 
+// --- Boxing helpers ---
+
+//! Box a native int64_t into a NaN-boxed QoreValue.
+//! Handles values outside the 48-bit inline range by allocating a QoreBigIntNode.
+uint64_t qore_rt_box_big_int(int64_t val);
+
 // --- Local variable helpers ---
 // These keep the Qore thread-local variable stack in sync so that AST
 // callbacks (via qore_rt_invoke_expr) can resolve local variables.

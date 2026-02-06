@@ -167,6 +167,9 @@ private:
     // Pointer to current IR function being lowered (for reading type profiles)
     const QoreIRFunction* current_ir_func = nullptr;
 
+    // Pointer to current LLVM module (set during lowerFunction)
+    llvm::Module* current_module = nullptr;
+
     // Phase 5c: Debug info (DWARF)
     std::unique_ptr<llvm::DIBuilder> di_builder;
     llvm::DICompileUnit* di_cu = nullptr;
@@ -196,6 +199,10 @@ private:
     llvm::Value* unboxInt(llvm::Value* qv);
     llvm::Value* unboxFloat(llvm::Value* qv);
     llvm::Value* unboxBool(llvm::Value* qv);
+
+    // Ensure a value is a native int64_t for typed int operations.
+    // Handles: native i64 (pass through), NaN-boxed INT48 or big int (runtime conversion).
+    llvm::Value* ensureIntType(llvm::Value* val, uint32_t value_id);
 
     // Ensure a value is a native double for float operations
     // Handles NaN-boxed values (int or float), native i64, and native doubles
