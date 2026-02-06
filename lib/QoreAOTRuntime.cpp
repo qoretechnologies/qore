@@ -1418,9 +1418,8 @@ extern "C" QoreStringNode* qore_aot_module_init(
     // because the parser static_casts to it)
     // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
     // the "module Name" declaration, and calling it twice triggers an assertion.
+    QoreUserModuleDefContextHelper mod_ctx(mod_name, label, aot_module_pgm, xsink);
     {
-        QoreUserModuleDefContextHelper mod_ctx(mod_name, label, aot_module_pgm, xsink);
-
         // Strip %requires directives from embedded source to avoid deadlock.
         // The module manager holds a lock when calling this init function, and
         // parsing %requires would try to acquire the same lock.
@@ -1462,6 +1461,24 @@ extern "C" QoreStringNode* qore_aot_module_init(
         aot_module_pgm->waitForTerminationAndDeref(nullptr);
         aot_module_pgm = nullptr;
         return err;
+    }
+
+    // Run module init closure if present (registers factories, etc.)
+    if (mod_ctx.hasInit()) {
+        if (mod_ctx.init(*aot_module_pgm, xsink)) {
+            QoreStringNode* err = new QoreStringNode("AOT module init closure error");
+            if (xsink.isException()) {
+                QoreValue ex_desc = xsink.getExceptionDesc();
+                if (ex_desc.getType() == NT_STRING) {
+                    err->concat(": ");
+                    err->concat(ex_desc.get<const QoreStringNode>()->c_str());
+                }
+                xsink.clear();
+            }
+            aot_module_pgm->waitForTerminationAndDeref(nullptr);
+            aot_module_pgm = nullptr;
+            return err;
+        }
     }
 
     // Register pre-compiled AOT functions on the module's namespace tree
