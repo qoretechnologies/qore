@@ -49,7 +49,7 @@ public:
         }
     }
 
-    DLLLOCAL virtual bool matches(QoreValue lhs_value, ExceptionSink* xsink);
+    DLLLOCAL virtual bool matches(QoreValue lhs_value, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreRegex* getRegex() const {
         return re;
@@ -71,7 +71,7 @@ public:
     DLLLOCAL CaseNodeNegRegex(const QoreProgramLocation* loc, QoreRegex* m_re, StatementBlock* blk) : CaseNodeRegex(loc, m_re, blk) {
     }
 
-    DLLLOCAL virtual bool matches(QoreValue lhs_value, ExceptionSink* xsink);
+    DLLLOCAL virtual bool matches(QoreValue lhs_value, ExceptionSink* xsink) const;
 };
 
 #endif

@@ -2979,8 +2979,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             QoreValue res;
             if (!regex_inst->operands.empty() && regex_inst->regex_case) {
                 QoreValue switch_val = getIRValue(values, regex_inst->operands[0]);
-                // CaseNodeRegex::matches() is non-const, but we don't modify anything
-                bool match = const_cast<CaseNodeRegex*>(regex_inst->regex_case)->matches(switch_val, xsink);
+                bool match = regex_inst->regex_case->matches(switch_val, xsink);
                 res = QoreValue(match);
             } else {
                 res = QoreValue(false);

@@ -55,7 +55,7 @@ public:
 
     DLLLOCAL virtual ~CaseNode();
 
-    DLLLOCAL virtual bool matches(QoreValue lhs_value, ExceptionSink* xsink);
+    DLLLOCAL virtual bool matches(QoreValue lhs_value, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual bool isDefault() const {
         return def;
