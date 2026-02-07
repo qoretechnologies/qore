@@ -26,13 +26,11 @@
 %requires qore >= 2.0
 
 # do not use $ for vars, assume local var scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 %try-module yaml
 %define NoYaml

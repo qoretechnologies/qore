@@ -34,10 +34,8 @@
 %requires Mime
 
 # require type definitions everywhere
-%require-types
 # enable all warnings
-%enable-all-warnings
-%new-style
+%modern
 %no-debugging
 %allow-debugger
 

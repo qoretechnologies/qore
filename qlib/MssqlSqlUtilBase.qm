@@ -32,13 +32,11 @@
 %requires Util >= 1.0
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 module MssqlSqlUtilBase {
     version = "1.0";

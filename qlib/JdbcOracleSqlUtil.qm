@@ -35,13 +35,11 @@
 %requires(reexport) OracleSqlUtilBase
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 module JdbcOracleSqlUtil {
     version = "1.0";

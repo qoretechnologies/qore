@@ -27,9 +27,7 @@
 %requires DebugCmdLine
 %requires linenoise
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 %no-debugging
 
 module DebugLinenoiseCmdLine {

@@ -29,13 +29,11 @@
 %requires SqlUtil >= 1.9
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 module XdbcFirebirdSqlUtilBase {
     version = "0.1";

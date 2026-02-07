@@ -26,10 +26,8 @@
 %requires qore >= 1.10
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 %requires HttpServerUtil >= 1.0.12
 %requires WebSocketUtil >= 1.6
@@ -42,7 +40,7 @@
 %define NoAsyncApi
 %endtry
 
-%new-style
+%modern
 
 module WebSocketHandler {
     version = "2.3";

@@ -29,10 +29,7 @@
 %requires(reexport) DataProvider
 %requires(reexport) FileLocationHandler
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 module EdifactUtil {
     version = "1.0";

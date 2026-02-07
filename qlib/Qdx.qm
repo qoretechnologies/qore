@@ -24,9 +24,7 @@
 
 %requires qore >= 0.9.13
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 
 %requires Util
 
@@ -1210,7 +1208,6 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
                 }
                 */
             }
-
 
             if (isQore) {
                 line =~ s/__1_/[/g;

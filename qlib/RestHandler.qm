@@ -26,13 +26,11 @@
 %requires qore >= 1.0
 
 # use new-style
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 %requires Util
 %requires HttpServerUtil >= 1.0

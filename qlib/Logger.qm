@@ -25,9 +25,7 @@
 # minimum required Qore version
 %requires qore >= 1.0
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 %no-debugging
 
 %requires Util

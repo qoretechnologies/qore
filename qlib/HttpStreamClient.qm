@@ -26,13 +26,10 @@
 %requires qore >= 2.0
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # don't use "$" for vars, members, and methods, assume local variable scope
-%new-style
 
 %allow-weak-references
 

@@ -26,7 +26,7 @@
 %requires qore >= 0.8.13
 
 # assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
+%modern
 
 module Qorize {
     version = "0.1.2";
@@ -61,7 +61,6 @@ module Qorize {
       + initial version
 */
 
-
 /** @mainpage Qorize Module
 
     @tableofcontents
@@ -95,10 +94,8 @@ Currently it can handle only simple types:
 
 */
 
-
 #! public Qorize namespace contains all relevant stuff for this module
 public namespace Qorize {
-
 
 /** @defgroup QorizeFunctions Qorize Functions
  */
@@ -361,7 +358,6 @@ public string sub qorize(object val, string name = "var", bool newstyle = True, 
     return sprintf("%s = %s;", QorizeHelper::checkVariableName(name, val, newstyle), QorizeHelper::escape(val));
 }
 
-
 #! create code from the hash value - with one value per one line
 /**
     @param val an input value
@@ -486,7 +482,6 @@ public string sub qorize_named(auto val, string name = "var", bool newstyle = Tr
     return qorize(val, name, newstyle);
 }
 
-
 #! create code from the any value - fallback for NULL and NOTHINGS
 /**
     @param val an input value
@@ -547,7 +542,6 @@ public string sub qorize_val(auto val) {
     return sprintf("%s", QorizeHelper::escape(val));
 }
 #/@}
-
 
 # a helper class holding all logic
 class QorizeHelper {
@@ -637,7 +631,7 @@ class QorizeHelper {
     }
 
     static string escape(binary val) {
-        return sprintf("parseHexString(\"%s\")", makeHexString(val));
+        return sprintf("parseHexString(\"%s\")", val.toHex());
     }
 
     static string escape(object val) {
@@ -708,8 +702,6 @@ class QorizeHelper {
         if (it2 instanceof HashIterator) {
             HashIterator it = cast<HashIterator>(it2);
             while (it.next()) {
-                auto value = it.getValue();
-                string key = it.getKey();
                 processNamed(it.getValue(), prefixName+".\""+it.getKey()+"\"");
             }
         } else {

@@ -26,13 +26,11 @@
 %requires qore >= 0.9.4
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # requires the Mapper module
 %requires Mapper
@@ -2135,7 +2133,6 @@ InboundTableMapperIterator i(input, mapper);
 
         @par Example
         @code{.py}{.py}
-%new-style
 %requires TableMapper
 
 Datasource ds("oracle:omq/omq@xbox");

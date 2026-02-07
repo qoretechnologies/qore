@@ -28,9 +28,7 @@
 %requires Util
 %requires yaml
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 %no-debugging
 
 module DebugCmdLine {
