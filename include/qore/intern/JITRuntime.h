@@ -403,6 +403,9 @@ void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, E
 //! Invoke an expression via AOT context slot
 uint64_t qore_rt_invoke_expr_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Construct value for VarRefNewObjectNode via AOT context slot (construct-only, no assignment)
+uint64_t qore_rt_vrn_construct_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
 //! LValue load via AOT context slot
 uint64_t qore_rt_lvalue_load_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 

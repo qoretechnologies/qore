@@ -2856,12 +2856,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             } else if (inv->invoke_opcode == QoreIROpcode::VrnConstruct) {
                 // VarRefNewObjectNode construction invoke (non-object types)
+                // Use dedicated AOT helper to avoid double-assign (eval() assigns + StoreLocal assigns)
                 if (aot_mode) {
                     QoreValue expr_val = inv->expr;
                     uint64_t expr_bits;
                     std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                    auto helper = module.getOrInsertFunction("qore_rt_vrn_construct_aot",
                             llvm::FunctionType::get(i64_type,
                                 {ptr_type, i32_type, ptr_type}, false));
                     result = builder->CreateCall(helper, {aot_ctx_arg,
@@ -4117,12 +4118,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::VrnConstruct: {
             const auto* vrninst = static_cast<const QoreIRVrnConstructInstruction*>(inst);
             llvm::Value* result;
+            // Use dedicated AOT helper to avoid double-assign (eval() assigns + StoreLocal assigns)
             if (aot_mode) {
                 QoreValue expr_val = vrninst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                auto helper = module.getOrInsertFunction("qore_rt_vrn_construct_aot",
                         llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {aot_ctx_arg,
                         llvm::ConstantInt::get(i32_type, slot), xsink_arg});

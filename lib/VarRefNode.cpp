@@ -519,6 +519,9 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
 }
 
 QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
+    // NOTE: VRN_OBJECT is handled separately by the NewObject IR opcode, which calls
+    // qore_class_private::execConstructor() directly. This method only handles the
+    // non-object typed container construction cases.
     switch (vrn_type) {
         case VRN_HASHDECL:
             return typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(typeInfo))

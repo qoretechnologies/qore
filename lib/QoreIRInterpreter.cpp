@@ -1841,12 +1841,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             case QoreIROpcode::VrnConstruct: {
                 auto* vrn_inst = static_cast<QoreIRVrnConstructInstruction*>(inst);
-                ExceptionSink vrn_xsink;
-                uint64_t result_bits = qore_rt_vrn_construct(vrn_inst->vrn, &vrn_xsink);
-                if (vrn_xsink) {
-                    if (xsink) {
-                        xsink->assimilate(vrn_xsink);
-                    }
+                uint64_t result_bits = qore_rt_vrn_construct(vrn_inst->vrn, xsink);
+                if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, nullptr);
                     cleanupStoredValues(globals, nullptr);
