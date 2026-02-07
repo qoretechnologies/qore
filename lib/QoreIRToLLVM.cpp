@@ -1126,6 +1126,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     di_sp = nullptr;
     di_file_cache.clear();
 
+    // Reset per-function state
+    current_ir_func = nullptr;
+    current_module = nullptr;
+
     // Commit the function - don't clean it up on return
     func_cleanup.committed = true;
     return true;
