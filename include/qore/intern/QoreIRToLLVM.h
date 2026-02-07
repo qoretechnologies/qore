@@ -138,6 +138,21 @@ private:
     // compilation); skip qore_rt_instantiate_local / qore_rt_uninstantiate_local for these.
     const std::unordered_set<const void*>* pre_instantiated_locals = nullptr;
 
+    // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal in
+    // fully-lowered IR code.  For these locals, skip qore_rt_assign_local (runtime sync)
+    // and reloadLocalFromRuntime (reload after calls).
+    const std::unordered_set<const void*>* ir_only_locals_set = nullptr;
+
+    // Phase 4: True when ALL locals in the function are IR-only, meaning
+    // reloadAllLocalsFromRuntime() can be skipped entirely after calls.
+    bool all_locals_ir_only = false;
+
+    // Sets of IR-only locals that use native (unboxed) allocas for typed int/float.
+    // LoadLocal from these returns native i64/double (NOT nanboxed).
+    // StoreLocal to these stores native i64/double (skips boxing).
+    std::unordered_set<const void*> native_int_locals;
+    std::unordered_set<const void*> native_float_locals;
+
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
 

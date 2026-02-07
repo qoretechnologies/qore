@@ -191,6 +191,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     for (LocalVar* lv : ir_func->all_body_locals) {
         ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
     }
+    // Classify locals as IR-only vs AST-visible for optimization
+    ir_func->computeIROnlyLocals();
 
     return 0;
 }
@@ -231,6 +233,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
             if (rc == 0 && ir_func) {
                 // Build slot map for AOT pointer indirection
+                // (computeIROnlyLocals already called inside tryLowerFunction)
                 AOTSlotMap slots;
                 buildAOTSlotMap(*ir_func, slots);
 
@@ -313,6 +316,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
                 if (rc == 0 && ir_func) {
                     // Build slot map for AOT pointer indirection
+                    // (computeIROnlyLocals already called inside tryLowerFunction)
                     AOTSlotMap slots;
                     buildAOTSlotMap(*ir_func, slots);
 
@@ -908,6 +912,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
             }
             std::string verify_error;
             if (QoreIRVerifier::verify(*ir_func, verify_error)) {
+                // Classify locals as IR-only vs AST-visible for optimization
+                ir_func->computeIROnlyLocals();
+
                 // Build slot map for AOT pointer indirection
                 AOTSlotMap slots;
                 buildAOTSlotMap(*ir_func, slots);
@@ -2405,6 +2412,13 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getExprSlot(bits);
                     break;
                 }
+                case QoreIROpcode::CallDirect: {
+                    auto* di = static_cast<QoreIRCallDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &di->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
                 case QoreIROpcode::LoadLValue:
                 case QoreIROpcode::StoreLValue:
                 case QoreIROpcode::PreIncLValue:
@@ -2491,6 +2505,83 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getExprSlot(bits);
                     break;
                 }
+                case QoreIROpcode::LoadStaticVar: {
+                    auto* svi = static_cast<QoreIRStaticVarInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &svi->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::NewObject: {
+                    auto* noi = static_cast<QoreIRNewObjectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &noi->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::LoadConstant: {
+                    auto* lci = static_cast<QoreIRLoadConstantInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &lci->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::CreateClosure: {
+                    auto* cci = static_cast<QoreIRCreateClosureInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &cci->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::CreateCallRef: {
+                    auto* cri = static_cast<QoreIRCreateCallRefInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &cri->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::CreateMethodRef: {
+                    auto* mri = static_cast<QoreIRCreateMethodRefInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &mri->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::CreateParseRef: {
+                    auto* pri = static_cast<QoreIRCreateParseRefInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &pri->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::NewHashDecl: {
+                    auto* nhdi = static_cast<QoreIRNewHashDeclInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &nhdi->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::NewComplexHash: {
+                    auto* nchi = static_cast<QoreIRNewComplexHashInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &nchi->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::NewComplexList: {
+                    auto* ncli = static_cast<QoreIRNewComplexListInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ncli->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::VrnConstruct: {
+                    auto* vrni = static_cast<QoreIRVrnConstructInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &vrni->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
                 case QoreIROpcode::OnBlockExit: {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
@@ -2567,6 +2658,15 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CallDirect: {
+                    auto* di = static_cast<QoreIRCallDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &di->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         ++expr_count;
                     }
@@ -2863,6 +2963,17 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     if (seen_exprs.insert(bits).second) {
                         // Take a ref so the expression survives IR function deletion
                         ei->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CallDirect: {
+                    auto* di = static_cast<QoreIRCallDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &di->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        // Take a ref so the expression survives IR function deletion
+                        di->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
                     }
                     break;

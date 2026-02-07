@@ -501,6 +501,16 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
     return inst;
 }
 
+QoreIRCallDirectInstruction* QoreIRBuilder::createCallDirect(const QoreFunction* qf,
+        const AbstractQoreFunctionVariant* variant, QoreProgram* pgm, const QoreValue& expr,
+        const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRCallDirectInstruction>(qf, variant, pgm, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = args;
+    return inst;
+}
+
 QoreIRCallMethodDirectInstruction* QoreIRBuilder::createCallMethodDirect(const QoreMethod* method,
         const QoreClass* qc, const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRCallMethodDirectInstruction>(method, qc);

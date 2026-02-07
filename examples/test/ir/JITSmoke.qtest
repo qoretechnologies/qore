@@ -136,6 +136,8 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("NOTHING input to iterators", \testNothingInputIterators());
         addTestCase("VarRefNewObjectNode split", \testVarRefNewObjectSplit());
         addTestCase("VarRefNewObjectNode typed containers", \testVrnTypedContainers());
+        addTestCase("direct function call", \testCallDirect());
+        addTestCase("function call in loop (stack safety)", \testCallInLoopStackSafety());
         set_return_value(main());
     }
 
@@ -3796,6 +3798,107 @@ try {
             string result = trim(runScript(code, mode));
             assertEq("HASHDECL-INIT-ERROR", result,
                     sprintf("VRN hashdecl error propagation %s", mode));
+        }
+    }
+
+    testCallDirect() {
+        # Test CallDirect opcode: resolved function calls skip AST round-trip
+        string code = "%modern
+int sub add_nums(int a, int b) { return a + b; }
+int sub mul_nums(int a, int b) { return a * b; }
+int sum = 0;
+for (int i = 0; i < 100; ++i) {
+    sum = add_nums(sum, mul_nums(i, 3));
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("14850", result,
+                    sprintf("call.direct basic %s", mode));
+        }
+
+        # Test CallDirect with try/catch (invoke path)
+        code = "%modern
+int sub safe_div(int a, int b) { return a / b; }
+int result;
+try {
+    result = safe_div(10, 2);
+} catch (hash<ExceptionInfo> ex) {
+    result = -1;
+}
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5", result,
+                    sprintf("call.direct in try/catch %s", mode));
+        }
+
+        # Test CallDirect with exception
+        code = "%modern
+int sub will_throw() { throw \"TEST-ERROR\", \"expected\"; }
+string result;
+try {
+    will_throw();
+    result = \"FAIL\";
+} catch (hash<ExceptionInfo> ex) {
+    result = ex.err;
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("TEST-ERROR", result,
+                    sprintf("call.direct exception propagation %s", mode));
+        }
+    }
+
+    testCallInLoopStackSafety() {
+        # Test that function calls in loops don't overflow the stack
+        # (tests alloca hoisting to entry block)
+        string code = "%modern
+int sub add_one(int x) { return x + 1; }
+int sum = 0;
+for (int i = 0; i < 1000000; ++i) {
+    sum = add_one(sum);
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1000000", result,
+                    sprintf("call in loop stack safety %s", mode));
+        }
+
+        # Test closure calls in loops (CallIndirect)
+        code = "%modern
+code adder = int sub(int x) { return x + 1; };
+int sum = 0;
+for (int i = 0; i < 1000000; ++i) {
+    sum = adder(sum);
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1000000", result,
+                    sprintf("closure call in loop stack safety %s", mode));
+        }
+
+        # Test list construction in loops (MakeList alloca)
+        code = "%modern
+int sum = 0;
+for (int i = 0; i < 1000000; ++i) {
+    list<auto> l = (i, i + 1, i + 2);
+    sum += l[0];
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("499999500000", result,
+                    sprintf("list construction in loop stack safety %s", mode));
         }
     }
 }

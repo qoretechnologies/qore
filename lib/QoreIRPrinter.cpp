@@ -313,6 +313,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::HashSetKeyValue: return "hash.set.key.value";
         case QoreIROpcode::IteratorCreateReverse: return "iterator.create.reverse";
         case QoreIROpcode::Call: return "call";
+        case QoreIROpcode::CallDirect: return "call.direct";
         case QoreIROpcode::CallIndirect: return "call.indirect";
         case QoreIROpcode::CallMethod: return "call.method";
         case QoreIROpcode::CallMethodDirect: return "call.method.direct";

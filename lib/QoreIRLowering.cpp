@@ -5124,6 +5124,27 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
+
+    // If the function is resolved at parse time, use CallDirect to skip the AST round-trip
+    const QoreFunction* func = call->getFunction();
+    if (func) {
+        if (!exception_stack.empty()) {
+            // In try/catch: use Invoke with invoke_opcode = CallDirect
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, operands, normal_block, handler, call->loc);
+            inst->invoke_opcode = QoreIROpcode::CallDirect;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        return builder.createCallDirect(func, call->getVariant(),
+                call->getProgram(), expr, operands, call->loc)->result;
+    }
+
     return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);
 }
 

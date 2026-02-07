@@ -366,6 +366,7 @@ enum class QoreIROpcode : uint16_t {
     IteratorCreateReverse, // Create reverse iterator from list/iterable (for foldr)
 
     Call,
+    CallDirect,         // Direct function call - resolved at parse time (no AST round-trip)
     CallIndirect,
     CallMethod,
     CallMethodDirect,   // Direct method call - no dispatch needed (final class/method)
@@ -523,6 +524,7 @@ inline bool isBinaryInvokeOpcode(QoreIROpcode op) {
 inline bool isCallInvokeOpcode(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallMethodDirect:
@@ -1036,6 +1038,29 @@ public:
     QoreValue expr;
 };
 
+//! Direct function call instruction - bypasses AST round-trip for resolved function calls
+//! Stores function/variant/program pointers resolved at parse time
+class QoreIRCallDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRCallDirectInstruction(const QoreFunction* n_func, const AbstractQoreFunctionVariant* n_variant,
+            QoreProgram* n_pgm, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CallDirect),
+              func(n_func), variant(n_variant), pgm(n_pgm), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCallDirectInstruction() override {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const QoreFunction* func = nullptr;     //!< The resolved function pointer
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (may be null)
+    QoreProgram* pgm = nullptr;             //!< The program context
+    QoreValue expr;                         //!< Original AST expression (for AOT)
+    //!< operands[0..n-1] are the function arguments
+};
+
 //! Direct method call instruction - bypasses virtual dispatch for final classes/methods
 //! The method pointer is resolved at compile time and stored directly in the instruction
 class QoreIRCallMethodDirectInstruction : public QoreIRInstruction {
@@ -1261,6 +1286,22 @@ public:
     // IR or JIT execution, so that AST Invoke callbacks can find them on the
     // thread-local variable stack.
     std::vector<LocalVar*> all_body_locals;
+
+    // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal
+    // in fully-lowered IR code — never referenced by Invoke expression subtrees,
+    // delegate-to-AST statements, or closure captures.  For these locals, the LLVM
+    // lowering can skip qore_rt_assign_local (runtime sync) and reloadLocalFromRuntime
+    // (reload after calls), since no AST callback will ever look them up.
+    std::unordered_set<const void*> ir_only_locals;
+
+    // Total number of unique locals referenced by LoadLocal/StoreLocal/UninstantiateLocal.
+    // Used with ir_only_locals.size() to determine if ALL locals are IR-only
+    // (enabling reloadAllLocalsFromRuntime to be skipped entirely).
+    size_t total_local_count = 0;
+
+    //! Analyze all instructions to classify locals as IR-only vs AST-visible.
+    //! Must be called after IR lowering completes but before LLVM lowering/execution.
+    void computeIROnlyLocals();
 
     //! Type profiles for guards — indexed by guard_id
     //! Populated during IR interpretation; read during JIT compilation for specialization

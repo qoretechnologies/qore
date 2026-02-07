@@ -92,6 +92,11 @@ public:
     DLLLOCAL virtual ReferenceNode* evalToRef(ExceptionSink* xsink) const;
     DLLLOCAL virtual ReferenceNode* evalToRef(RuntimeConfig& rc, ExceptionSink* xsink) const;
 
+    //! Returns the lvalue expression (for IR local variable analysis)
+    DLLLOCAL const QoreValue& getLVExp() const {
+        return lvexp;
+    }
+
 protected:
     //! lvalue expression for reference
     QoreValue lvexp{};

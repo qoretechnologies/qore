@@ -838,6 +838,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         qore_program_private::get(*pgm)->recordIRFallback(std::string("verification: ") + error);
                         return;
                     }
+                    // Classify locals as IR-only vs AST-visible for optimization
+                    func->computeIROnlyLocals();
                     cached_toplevel_ir = func;
                 });
                 ir_func = cached_toplevel_ir;

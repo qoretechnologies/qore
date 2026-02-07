@@ -1531,6 +1531,38 @@ extern "C" uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, i
     return toBits(result);
 }
 
+// --- Direct function call (resolved at parse time, skips AST round-trip) ---
+
+extern "C" uint64_t qore_rt_call_function_direct(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(func);
+
+    // Build QoreListNode from the NaN-boxed args array
+    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+    for (int i = 0; i < nargs; ++i) {
+        QoreValue val = fromBits(args[i]);
+        if (val.hasNode()) {
+            val.refSelf();
+        }
+        arg_list->push(val, xsink);
+    }
+
+    // Get runtime config
+    RuntimeConfig& rc = rc_get_current_ref();
+
+    // Determine the program context
+    QoreProgram* call_pgm = pgm ? pgm : rc.getProgram();
+    if (!call_pgm) {
+        call_pgm = getProgram();
+    }
+
+    // Call the function directly — skips dynamic_cast chain and AST node copy
+    QoreValue result = func->evalFunctionTmpArgs(variant, *arg_list, call_pgm, rc, xsink);
+
+    return toBits(result);
+}
+
 // --- Direct method call for devirtualized calls (final classes) ---
 
 extern "C" uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_t* args, int nargs,

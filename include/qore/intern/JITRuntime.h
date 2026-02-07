@@ -439,6 +439,11 @@ uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, E
 uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
     ExceptionSink* xsink);
 
+//! Direct function call — resolved at parse time, bypasses dynamic_cast chain and AST node copy.
+//! Calls QoreFunction::evalFunctionTmpArgs() directly.
+uint64_t qore_rt_call_function_direct(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+    QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink);
+
 //! Regex op with pre-evaluated operand: evaluates regex match/extract using the given operand
 //! instead of re-evaluating the AST subject expression.
 //! opcode identifies the regex operation (RegexMatchAny, RegexMatchBool, RegexNMatchBool,

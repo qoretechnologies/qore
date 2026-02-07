@@ -34,6 +34,15 @@
 #include <unordered_set>
 
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/LocalVar.h>
+#include <qore/intern/QoreTypeInfo.h>
+#include <qore/intern/VarRefNode.h>
+#include <qore/intern/QoreOperatorNode.h>
+#include <qore/intern/CallReferenceCallNode.h>
+#include <qore/intern/QoreDotEvalOperatorNode.h>
+#include <qore/intern/SelfVarrefNode.h>
+#include <qore/intern/ObjectMethodReferenceNode.h>
+#include <qore/intern/ParseReferenceNode.h>
 
 // isTerminator() is now defined in QoreIR.h
 
@@ -286,6 +295,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::PushAny:
         case QoreIROpcode::SpliceLValue:
         case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallMethodDirect:
@@ -580,6 +590,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::StringConcat:
             return -1;
         case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallMethodDirect:
@@ -940,4 +951,380 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
         }
     }
     return true;
+}
+
+// --- IR-only local classification ---
+
+//! Returns true if the opcode is a delegate-to-AST statement that executes through
+//! StatementBlock::exec() and could access any local on the thread-local variable stack.
+static bool isDelegateToASTStatement(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::Foreach:       // Reference foreach delegates to AST
+        case QoreIROpcode::OnBlockExit:   // Registers AST code for later execution
+        case QoreIROpcode::Debug:         // Debug statement delegates to AST
+        case QoreIROpcode::Assert:        // Assert statement delegates to AST
+        case QoreIROpcode::Context:       // Context statement delegates to AST
+        case QoreIROpcode::Summarize:     // Summarize statement delegates to AST
+        case QoreIROpcode::MapSelectAny:  // Delegate-to-AST functional operator
+        case QoreIROpcode::HashMapAny:    // Delegate-to-AST functional operator
+        case QoreIROpcode::HashMapSelectAny: // Delegate-to-AST functional operator
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Returns true if the opcode is a lvalue operation that modifies variables through
+//! the runtime stack (not through StoreLocal).
+static bool isLValueOp(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::LoadLValue:
+        case QoreIROpcode::StoreLValue:
+        case QoreIROpcode::PreIncLValue:
+        case QoreIROpcode::PreDecLValue:
+        case QoreIROpcode::PostIncLValue:
+        case QoreIROpcode::PostDecLValue:
+        case QoreIROpcode::AddAssignLValue:
+        case QoreIROpcode::SubAssignLValue:
+        case QoreIROpcode::MulAssignLValue:
+        case QoreIROpcode::DivAssignLValue:
+        case QoreIROpcode::ModAssignLValue:
+        case QoreIROpcode::AndAssignLValue:
+        case QoreIROpcode::OrAssignLValue:
+        case QoreIROpcode::XorAssignLValue:
+        case QoreIROpcode::ShlAssignLValue:
+        case QoreIROpcode::ShrAssignLValue:
+        case QoreIROpcode::ShiftLValue:
+        case QoreIROpcode::UnshiftLValue:
+        case QoreIROpcode::SpliceLValue:
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Recursively walk an AST expression tree and collect all local variable keys
+//! (LocalVar* as void*) referenced by VarRefNode leaves.
+//!
+//! IMPORTANT: This walker is conservative — for any unrecognized node type,
+//! it sets `unknown_node_found` to true, which causes the caller to treat
+//! ALL locals as AST-visible.  This ensures correctness even if new AST node
+//! types are added to Qore.
+static void collectLocalsFromExpr(const QoreValue& expr,
+        std::unordered_set<const void*>& ast_locals, bool& unknown_node_found) {
+    if (!expr.hasNode()) {
+        return;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return;
+    }
+
+    qore_type_t ntype = expr.getType();
+
+    // VarRefNode — leaf node, check if it's a local variable
+    if (ntype == NT_VARREF) {
+        auto* var_ref = reinterpret_cast<const VarRefNode*>(node);
+        qore_var_t type = var_ref->getType();
+        if ((type == VT_LOCAL || type == VT_LOCAL_TS) && var_ref->ref.id) {
+            ast_locals.insert(reinterpret_cast<const void*>(var_ref->ref.id));
+        }
+        // VarRefNewObjectNode inherits from both VarRefNode and FunctionCallBase;
+        // its constructor args may reference locals that are evaluated through AST
+        if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+            if (const QoreParseListNode* pargs = vrn->getParseArgs()) {
+                for (size_t i = 0; i < pargs->size(); ++i) {
+                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found);
+                }
+            }
+            if (const QoreListNode* eargs = vrn->getArgs()) {
+                ConstListIterator li(eargs);
+                while (li.next()) {
+                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+                }
+            }
+        }
+        return;
+    }
+
+    // Self variable reference — leaf node (not a local, no children)
+    if (ntype == NT_SELF_VARREF) {
+        return;
+    }
+
+    // Constants and literals — leaf nodes
+    if (ntype == NT_STRING || ntype == NT_INT || ntype == NT_FLOAT || ntype == NT_BOOLEAN
+            || ntype == NT_NOTHING || ntype == NT_NULL || ntype == NT_NUMBER
+            || ntype == NT_DATE || ntype == NT_BINARY || ntype == NT_HASH
+            || ntype == NT_LIST || ntype == NT_BACKQUOTE) {
+        return;
+    }
+
+    // Binary operators: recurse left and right
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // Binary int-specific operators (inherit separately from QoreBinaryOperatorNode<>)
+    if (auto* binop = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
+        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // Unary/single expression operators: recurse expression
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // LValue single expression operators
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // Dot eval operator (method call on object): left.method()
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        collectLocalsFromExpr(dot->getExpression(), ast_locals, unknown_node_found);
+        // Method call node has args that might reference locals
+        if (const MethodCallNode* m = dot->getMethodCall()) {
+            if (const QoreParseListNode* args = m->getParseArgs()) {
+                for (size_t i = 0; i < args->size(); ++i) {
+                    collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found);
+                }
+            }
+        }
+        return;
+    }
+
+    // Function calls (FunctionCallNode, SelfFunctionCallNode, StaticMethodCallNode,
+    // MethodCallNode — all inherit from FunctionCallBase)
+    if (auto* call = dynamic_cast<const FunctionCallBase*>(node)) {
+        if (const QoreParseListNode* args = call->getParseArgs()) {
+            for (size_t i = 0; i < args->size(); ++i) {
+                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found);
+            }
+        }
+        if (const QoreListNode* args = call->getArgs()) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+            }
+        }
+        return;
+    }
+
+    // Call reference calls: adder(32)
+    if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        collectLocalsFromExpr(crc->getExp(), ast_locals, unknown_node_found);
+        if (const QoreParseListNode* args = crc->getParseArgs()) {
+            for (size_t i = 0; i < args->size(); ++i) {
+                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found);
+            }
+        }
+        if (const QoreListNode* args = crc->getArgs()) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+            }
+        }
+        return;
+    }
+
+    // Object method reference: \obj.method() — recurse into the object expression
+    if (ntype == NT_OBJMETHREF) {
+        if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
+            collectLocalsFromExpr(omr->getExp(), ast_locals, unknown_node_found);
+        }
+        // ParseSelfMethodReferenceNode, ParseScopedSelfMethodReferenceNode,
+        // StaticMethodReferenceNode have no local variable references (self-based)
+        return;
+    }
+
+    // Parse reference: \var — recurse into the lvalue expression
+    if (ntype == NT_PARSEREFERENCE) {
+        auto* pref = reinterpret_cast<const ParseReferenceNode*>(node);
+        collectLocalsFromExpr(pref->getLVExp(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // Parse list: recurse all elements
+    if (ntype == NT_PARSE_LIST) {
+        auto* plist = expr.get<const QoreParseListNode>();
+        for (size_t i = 0; i < plist->size(); ++i) {
+            collectLocalsFromExpr(plist->get(i), ast_locals, unknown_node_found);
+        }
+        return;
+    }
+
+    // Unknown node type — conservatively mark for fallback
+    unknown_node_found = true;
+}
+
+//! Extracts the AST expression from an instruction that stores one.
+//! Returns nullptr if the instruction type doesn't have an expr field.
+static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        // QoreIRExprInstruction (Call, CallIndirect, CallMethod, CallStatic, and other expr-based ops)
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallStatic:
+            return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
+
+        // CallDirect has its own instruction class with an expr field
+        case QoreIROpcode::CallDirect:
+            return &static_cast<const QoreIRCallDirectInstruction*>(inst)->expr;
+
+        // Invoke has its own instruction class
+        case QoreIROpcode::Invoke:
+            return &static_cast<const QoreIRInvokeInstruction*>(inst)->expr;
+
+        // Native access opcodes with expr fields
+        case QoreIROpcode::LoadStaticVar:
+            return &static_cast<const QoreIRStaticVarInstruction*>(inst)->expr;
+        case QoreIROpcode::NewObject:
+            return &static_cast<const QoreIRNewObjectInstruction*>(inst)->expr;
+        case QoreIROpcode::LoadConstant:
+            return &static_cast<const QoreIRLoadConstantInstruction*>(inst)->expr;
+
+        // Closure/reference creation opcodes with expr fields
+        case QoreIROpcode::CreateClosure:
+            return &static_cast<const QoreIRCreateClosureInstruction*>(inst)->expr;
+        case QoreIROpcode::CreateCallRef:
+            return &static_cast<const QoreIRCreateCallRefInstruction*>(inst)->expr;
+        case QoreIROpcode::CreateMethodRef:
+            return &static_cast<const QoreIRCreateMethodRefInstruction*>(inst)->expr;
+        case QoreIROpcode::CreateParseRef:
+            return &static_cast<const QoreIRCreateParseRefInstruction*>(inst)->expr;
+
+        // Container construction opcodes with expr fields
+        case QoreIROpcode::NewHashDecl:
+            return &static_cast<const QoreIRNewHashDeclInstruction*>(inst)->expr;
+        case QoreIROpcode::NewComplexHash:
+            return &static_cast<const QoreIRNewComplexHashInstruction*>(inst)->expr;
+        case QoreIROpcode::NewComplexList:
+            return &static_cast<const QoreIRNewComplexListInstruction*>(inst)->expr;
+
+        // VarRefNewObjectNode construction
+        case QoreIROpcode::VrnConstruct:
+            return &static_cast<const QoreIRVrnConstructInstruction*>(inst)->expr;
+
+        default:
+            return nullptr;
+    }
+}
+
+//! Returns true if the opcode is a call/invoke that could trigger AST evaluation
+//! and potentially access locals through the thread-local variable stack.
+static bool isCallOrInvoke(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::Invoke:
+            return true;
+        default:
+            return false;
+    }
+}
+
+void QoreIRFunction::computeIROnlyLocals() {
+    ir_only_locals.clear();
+
+    // Collect all locals referenced by LoadLocal/StoreLocal/UninstantiateLocal
+    std::unordered_set<const void*> all_locals;
+
+    // Collect all locals referenced by AST expression trees in Call/Invoke/Lvalue
+    // instructions.  These locals are accessed through the runtime stack (not through
+    // LoadLocal/StoreLocal) and MUST remain AST-visible.
+    std::unordered_set<const void*> ast_referenced_locals;
+
+    // Track whether the function has any delegate-to-AST statements
+    bool has_delegate_to_ast = false;
+
+    // If the AST walker encounters an unknown node type, we conservatively
+    // mark ALL locals as AST-visible.
+    bool unknown_node_found = false;
+
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            // Collect locals from LoadLocal/StoreLocal/UninstantiateLocal
+            if (inst->opcode == QoreIROpcode::LoadLocal ||
+                    inst->opcode == QoreIROpcode::StoreLocal ||
+                    inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                auto* linst = static_cast<const QoreIRLocalInstruction*>(inst.get());
+                if (linst->local) {
+                    all_locals.insert(reinterpret_cast<const void*>(linst->local));
+                }
+            }
+
+            // Lvalue operations: walk the lvalue AST expression for local references
+            if (isLValueOp(inst->opcode)) {
+                auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
+                collectLocalsFromExpr(lvinst->lvalue, ast_referenced_locals,
+                        unknown_node_found);
+            }
+
+            // Walk the expr AST tree for any instruction type that stores one
+            if (const QoreValue* expr = getInstructionExpr(inst.get())) {
+                collectLocalsFromExpr(*expr, ast_referenced_locals,
+                        unknown_node_found);
+            }
+
+            if (isDelegateToASTStatement(inst->opcode)) {
+                has_delegate_to_ast = true;
+            }
+            // ScopeExit executes on_block_exit handlers (AST code)
+            if (inst->opcode == QoreIROpcode::ScopeExit) {
+                has_delegate_to_ast = true;
+            }
+        }
+    }
+
+    // Store total local count for Phase 4 optimization (selective reload skip)
+    total_local_count = all_locals.size();
+
+    // If the function has delegate-to-AST statements, ALL locals are AST-visible
+    // because the AST execution could access any local through the thread-local stack.
+    if (has_delegate_to_ast) {
+        return;  // ir_only_locals stays empty — all locals are AST-visible
+    }
+
+    // If the AST walker hit an unknown node type, conservatively treat all locals
+    // as AST-visible.  This ensures correctness even for unhandled AST structures.
+    if (unknown_node_found) {
+        return;
+    }
+
+    // A local is IR-only if:
+    // 1. It appears in LoadLocal/StoreLocal/UninstantiateLocal (the IR access path)
+    // 2. It is NOT referenced by any AST expression tree (Call/Invoke/Lvalue exprs)
+    // 3. It is NOT a reference type (which can alias other variables)
+    for (const void* key : all_locals) {
+        // Local appears in AST expression trees — must stay AST-visible
+        if (ast_referenced_locals.count(key)) {
+            continue;
+        }
+        const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
+        // Closure-captured locals use the closure variable stack (not the regular
+        // local variable stack).  qore_rt_assign_local routes through the closure
+        // stack when closure_use is true, so we must NOT skip it.
+        if (lv->closureUse()) {
+            continue;
+        }
+        // Reference-type locals can alias other variables — must stay AST-visible
+        if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
+            continue;
+        }
+        ir_only_locals.insert(key);
+    }
+
 }

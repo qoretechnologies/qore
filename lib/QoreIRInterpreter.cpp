@@ -275,6 +275,7 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
 QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, ExceptionSink* xsink) {
     switch (op) {
         case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic:
@@ -878,6 +879,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         }
         // Call-type opcodes: use pre-evaluated operands to avoid double-evaluation
         case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic: {
@@ -897,7 +899,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 }
                 bool used_operands = false;
                 QoreValue res;
-                if (op == QoreIROpcode::Call) {
+                if (op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect) {
                     if (auto* call = dynamic_cast<const FunctionCallNode*>(
                             inv->expr.getInternalNode())) {
                         QoreValue call_expr(new FunctionCallNode(*call, arg_list));
@@ -3073,22 +3075,34 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ++ip;
                 break;
             }
+            case QoreIROpcode::CallDirect:
             case QoreIROpcode::Call:
             case QoreIROpcode::CallIndirect:
             case QoreIROpcode::CallMethod:
             case QoreIROpcode::CallStatic: {
-                auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                // CallDirect uses QoreIRCallDirectInstruction (with extra func/variant
+                // fields for LLVM lowering), but in the interpreter it behaves identically
+                // to Call. Extract expr from the appropriate instruction type.
+                QoreValue call_expr;
+                QoreIROpcode effective_opcode;
+                if (inst->opcode == QoreIROpcode::CallDirect) {
+                    call_expr = static_cast<QoreIRCallDirectInstruction*>(inst)->expr;
+                    effective_opcode = QoreIROpcode::Call;
+                } else {
+                    call_expr = static_cast<QoreIRExprInstruction*>(inst)->expr;
+                    effective_opcode = inst->opcode;
+                }
                 QoreValue res;
                 bool used_operands = false;
-                if (!expr_inst->operands.empty()) {
+                if (!inst->operands.empty()) {
                     const ParseNode* parse_node = nullptr;
-                    if (expr_inst->expr.hasNode()) {
-                        parse_node = dynamic_cast<const ParseNode*>(expr_inst->expr.getInternalNode());
+                    if (call_expr.hasNode()) {
+                        parse_node = dynamic_cast<const ParseNode*>(call_expr.getInternalNode());
                     }
                     const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
                     // For CallIndirect, operand[0] is the callee — skip it when building args
-                    size_t arg_start = (inst->opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
-                    QoreListNode* arg_list = buildArgList(values, expr_inst->operands, arg_start, xsink);
+                    size_t arg_start = (effective_opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
+                    QoreListNode* arg_list = buildArgList(values, inst->operands, arg_start, xsink);
                     if (xsink && *xsink) {
                         if (arg_list) {
                             arg_list->deref(xsink);
@@ -3100,37 +3114,37 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         cleanupStoredValues(closures, nullptr);
                         return false;
                     }
-                    if (inst->opcode == QoreIROpcode::Call) {
-                        if (auto* call = dynamic_cast<const FunctionCallNode*>(expr_inst->expr.getInternalNode())) {
-                            QoreValue call_expr(new FunctionCallNode(*call, arg_list));
-                            ValueHolder call_holder(call_expr, nullptr);
-                            res = QoreIRInterpreter::evalExpr(inst->opcode, call_expr, xsink);
+                    if (effective_opcode == QoreIROpcode::Call) {
+                        if (auto* call = dynamic_cast<const FunctionCallNode*>(call_expr.getInternalNode())) {
+                            QoreValue ce(new FunctionCallNode(*call, arg_list));
+                            ValueHolder call_holder(ce, nullptr);
+                            res = QoreIRInterpreter::evalExpr(effective_opcode, ce, xsink);
                             used_operands = true;
                         }
-                    } else if (inst->opcode == QoreIROpcode::CallMethod) {
-                        if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(expr_inst->expr.getInternalNode())) {
-                            QoreValue call_expr(new SelfFunctionCallNode(*call, arg_list));
-                            ValueHolder call_holder(call_expr, nullptr);
-                            res = QoreIRInterpreter::evalExpr(inst->opcode, call_expr, xsink);
+                    } else if (effective_opcode == QoreIROpcode::CallMethod) {
+                        if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(call_expr.getInternalNode())) {
+                            QoreValue ce(new SelfFunctionCallNode(*call, arg_list));
+                            ValueHolder call_holder(ce, nullptr);
+                            res = QoreIRInterpreter::evalExpr(effective_opcode, ce, xsink);
                             used_operands = true;
                         }
-                    } else if (inst->opcode == QoreIROpcode::CallStatic) {
-                        if (auto* call = dynamic_cast<const StaticMethodCallNode*>(expr_inst->expr.getInternalNode())) {
-                            QoreValue call_expr(new StaticMethodCallNode(*call, arg_list));
-                            ValueHolder call_holder(call_expr, nullptr);
-                            res = QoreIRInterpreter::evalExpr(inst->opcode, call_expr, xsink);
+                    } else if (effective_opcode == QoreIROpcode::CallStatic) {
+                        if (auto* call = dynamic_cast<const StaticMethodCallNode*>(call_expr.getInternalNode())) {
+                            QoreValue ce(new StaticMethodCallNode(*call, arg_list));
+                            ValueHolder call_holder(ce, nullptr);
+                            res = QoreIRInterpreter::evalExpr(effective_opcode, ce, xsink);
                             used_operands = true;
                         }
                     } else {
                         if (auto* call = dynamic_cast<const CallReferenceCallNode*>(
-                            expr_inst->expr.getInternalNode())) {
+                            call_expr.getInternalNode())) {
                             QoreValue exp = call->getExp();
                             if (exp.hasNode()) {
                                 exp = exp.refSelf();
                             }
-                            QoreValue call_expr(new CallReferenceCallNode(loc, exp, arg_list));
-                            ValueHolder call_holder(call_expr, nullptr);
-                            res = QoreIRInterpreter::evalExpr(inst->opcode, call_expr, xsink);
+                            QoreValue ce(new CallReferenceCallNode(loc, exp, arg_list));
+                            ValueHolder call_holder(ce, nullptr);
+                            res = QoreIRInterpreter::evalExpr(effective_opcode, ce, xsink);
                             used_operands = true;
                         }
                     }
@@ -3142,7 +3156,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     // For VarRefNewObjectNode, instantiate the local variable before AST evaluation
                     // so that thread_find_lvar can find it during lvalue assignment
                     if (auto* var_new_obj = dynamic_cast<const VarRefNewObjectNode*>(
-                            expr_inst->expr.getInternalNode())) {
+                            call_expr.getInternalNode())) {
                         qore_var_t vtype = var_new_obj->getType();
                         // Check all local variable types (including closure-use variants)
                         if ((vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS)
@@ -3150,10 +3164,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             ensureLocalInstantiated(var_new_obj->ref.id, instantiated_locals, pre_instantiated);
                             // Track the result slot for this local's initialization
                             // so we can clean it up when UninstantiateLocal is processed
-                            local_init_slots[var_new_obj->ref.id] = expr_inst->result.id;
+                            local_init_slots[var_new_obj->ref.id] = inst->result.id;
                         }
                     }
-                    res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                    res = QoreIRInterpreter::evalExpr(effective_opcode, call_expr, xsink);
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -3167,9 +3181,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 cleanupStoredValues(globals, nullptr);
                 cleanupStoredValues(threadlocals, nullptr);
                 cleanupStoredValues(closures, nullptr);
-                setValueSlot(values, expr_inst->result.id, res, xsink);
+                setValueSlot(values, inst->result.id, res, xsink);
                 if (res.hasNode()) {
-                    cleanup.push_back(expr_inst->result.id);
+                    cleanup.push_back(inst->result.id);
                 }
                 ++ip;
                 break;

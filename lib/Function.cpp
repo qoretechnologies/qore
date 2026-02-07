@@ -2301,6 +2301,8 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         }
         return;
     }
+    // Classify locals as IR-only vs AST-visible for optimization
+    func->computeIROnlyLocals();
     // Initialize type profiling for guards
     func->initGuardProfiles();
     cached_ir = func;
@@ -2627,10 +2629,24 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             qore_exec_mode_t mode = pgm->getExecMode();
             printd(3, "evalIntern '%s': mode=%d pgm=%p statements=%p has_aot=%d\n",
                 name, (int)mode, (void*)pgm, (void*)statements, (int)has_aot);
-            if (has_aot || mode == QEM_TIERED) {
-                // Only attempt tiered promotion for %modern code (or direct AOT dispatch)
+            // AOT dispatch for strip-source functions (no AST body): must always
+            // go through evalTiered since there's no AST fallback.
+            if (has_aot && !statements) {
+                return evalTiered(name, argv, self, xsink);
+            }
+            // AOT dispatch with AST body: only in tiered mode where the AOT
+            // context was built for this compilation environment.
+            if (has_aot && mode == QEM_TIERED) {
+                return evalTiered(name, argv, self, xsink);
+            }
+            // Tiered promotion for JIT/IR/tiered modes with %modern code.
+            // Skip if function already has an AOT fn registered — the AOT path
+            // in evalTiered would dispatch to the AOT-compiled code, which may
+            // have stale expression slots when called outside tiered mode.
+            if (statements && !has_aot
+                    && (mode == QEM_TIERED || mode == QEM_JIT || mode == QEM_IR)) {
                 int64 po = pgm->getParseOptions64();
-                if (has_aot || (po & PO_MODERN) == PO_MODERN) {
+                if ((po & PO_MODERN) == PO_MODERN) {
                     return evalTiered(name, argv, self, xsink);
                 }
             }
