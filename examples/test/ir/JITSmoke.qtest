@@ -108,6 +108,16 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("native foldl with function call", \testNativeFoldlWithFunctionCall());
         addTestCase("on_block_exit handlers", \testOnBlockExitHandlers());
         addTestCase("invoke method direct", \testInvokeMethodDirect());
+        addTestCase("big int loop correctness", \testBigIntLoopCorrectness());
+        addTestCase("invoke result in loop", \testInvokeResultInLoop());
+        addTestCase("big int boxing inline", \testBigIntBoxingInline());
+        addTestCase("lvalue compound assign NOTHING", \testLValueCompoundAssignNothing());
+        addTestCase("lvalue compound assign int fast path", \testLValueCompoundAssignInt());
+        addTestCase("lvalue compound assign float fast path", \testLValueCompoundAssignFloat());
+        addTestCase("lvalue compound assign string slow path", \testLValueCompoundAssignString());
+        addTestCase("lvalue compound assign loop", \testLValueCompoundAssignLoop());
+        addTestCase("lvalue compound assign bitwise", \testLValueCompoundAssignBitwise());
+        addTestCase("lvalue compound assign div/mod slow path", \testLValueCompoundAssignDivMod());
         set_return_value(main());
     }
 
@@ -2636,6 +2646,197 @@ printf(\"%y\\n\", n.run());
         foreach string mode in ("ast", "ir", "jit") {
             string out = trim(runScript(nested_test, mode));
             assertEq("[10, -1, 6]", out, sprintf("invoke.method.direct nested try/catch %s", mode));
+        }
+    }
+
+    testBigIntLoopCorrectness() {
+        # Test big int (>48-bit) values in a loop — exercises boxValue cleanup
+        # in loops. Before the fix, the cleanup alloca was overwritten each
+        # iteration without decref'ing the previous QoreBigIntNode.
+        string code = "%modern
+int big = 9223372036854775800;
+for (int i = 0; i < 100; i++) {
+    big += 1;
+    big -= 1;
+}
+printf(\"%d\\n\", big);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("9223372036854775800", result,
+                    sprintf("big int loop correctness %s", mode));
+        }
+    }
+
+    testInvokeResultInLoop() {
+        # Test Invoke results in a loop — exercises trackResultForCleanup in
+        # loops. Before the fix, the cleanup alloca was overwritten each
+        # iteration without decref'ing the previous result.
+        string code = "%modern
+list<string> results = ();
+for (int i = 0; i < 50; i++) {
+    string s = sprintf(\"%d\", i);
+    if (i == 0 || i == 49) {
+        results += s;
+    }
+}
+printf(\"%y\\n\", results);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("[\"0\", \"49\"]", result,
+                    sprintf("invoke result in loop %s", mode));
+        }
+    }
+
+    testBigIntBoxingInline() {
+        # Test that boxIntInline handles both INT48 and big int paths correctly
+        string code = "%modern
+# INT48 range boundary values
+int a = 140737488355327;    # INT48_MAX = (1 << 47) - 1
+int b = -140737488355328;   # INT48_MIN = -(1 << 47)
+# Big int values outside INT48 range
+int c = 140737488355328;    # INT48_MAX + 1
+int d = -140737488355329;   # INT48_MIN - 1
+# Arithmetic that crosses the INT48 boundary
+int e = a + 1;              # INT48_MAX + 1 -> big int
+int f = b - 1;              # INT48_MIN - 1 -> big int
+printf(\"%d,%d,%d,%d,%d,%d\\n\", a, b, c, d, e, f);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("140737488355327,-140737488355328,140737488355328,"
+                    "-140737488355329,140737488355328,-140737488355329", result,
+                    sprintf("big int boxing inline %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignNothing() {
+        # Test NOTHING += value fast path (AddAssignLValue)
+        # NOTHING += int stores directly, NOTHING += hash/list performs type conversion
+        string code = "%modern
+auto a;     # NOTHING
+a += 42;    # NOTHING -> 42 via lvalue_store
+auto b;     # NOTHING
+b += {\"x\": 1};  # NOTHING -> hash<auto>
+auto c;     # NOTHING
+c += (1, 2, 3);  # NOTHING -> list<auto>
+printf(\"%d,%s,%s\\n\", a, b{\"x\"}, c[1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42,1,2", result,
+                    sprintf("lvalue compound assign NOTHING %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignInt() {
+        # Test INT48+INT48 fast path for lvalue compound assignments
+        string code = "%modern
+auto a = 10;
+a += 5;         # int fast path
+auto b = 20;
+b -= 3;         # int fast path
+auto c = 4;
+c *= 3;         # int fast path
+printf(\"%d,%d,%d\\n\", a, b, c);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15,17,12", result,
+                    sprintf("lvalue compound assign int fast path %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignFloat() {
+        # Test float+float fast path for lvalue compound assignments
+        string code = "%modern
+auto a = 10.0;
+a += 2.5;       # float fast path
+auto b = 20.0;
+b -= 3.5;       # float fast path
+auto c = 4.0;
+c *= 2.5;       # float fast path
+printf(\"%.1f,%.1f,%.1f\\n\", a, b, c);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("12.5,16.5,10.0", result,
+                    sprintf("lvalue compound assign float fast path %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignString() {
+        # Test string concat via slow path (non-int/float)
+        string code = "%modern
+auto a = \"hello\";
+a += \" world\";  # slow path: string concat
+auto b = \"foo\";
+b += \"bar\";
+printf(\"%s,%s\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello world,foobar", result,
+                    sprintf("lvalue compound assign string slow path %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignLoop() {
+        # Test compound assign in a tight loop (stress test for refcounting/cleanup)
+        string code = "%modern
+auto sum = 0;
+for (int i = 1; i <= 100; i++) {
+    sum += i;
+}
+auto prod = 1;
+for (int j = 1; j <= 10; j++) {
+    prod *= j;
+}
+printf(\"%d,%d\\n\", sum, prod);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5050,3628800", result,
+                    sprintf("lvalue compound assign loop %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignBitwise() {
+        # Test bitwise compound assign on lvalues (int-only fast path)
+        string code = "%modern
+auto a = 0xFF;
+a &= 0x0F;      # AND fast path
+auto b = 0x0F;
+b |= 0xF0;      # OR fast path
+auto c = 0xFF;
+c ^= 0xAA;      # XOR fast path
+auto d = 1;
+d <<= 8;         # SHL fast path
+auto e = 256;
+e >>= 4;         # SHR fast path
+printf(\"%d,%d,%d,%d,%d\\n\", a, b, c, d, e);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15,255,85,256,16", result,
+                    sprintf("lvalue compound assign bitwise %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignDivMod() {
+        # Test div/mod lvalue ops (always slow path, no inline fast path)
+        string code = "%modern
+auto a = 100;
+a /= 5;
+auto b = 17;
+b %= 5;
+printf(\"%d,%d\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("20,2", result,
+                    sprintf("lvalue compound assign div/mod slow path %s", mode));
         }
     }
 }

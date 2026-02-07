@@ -204,6 +204,15 @@ private:
     // Handles: native i64 (pass through), NaN-boxed INT48 or big int (runtime conversion).
     llvm::Value* ensureIntType(llvm::Value* val, uint32_t value_id);
 
+    // Inline fast-path version of ensureIntType for typed int ops (NOT in PHI fixup context).
+    // Uses LLVM branches to check INT48 tag and sign-extend inline, falling back to runtime
+    // only for QoreBigIntNode values.  ~2x faster than ensureIntType for common INT48 values.
+    llvm::Value* ensureIntTypeInline(llvm::Value* val, uint32_t value_id);
+
+    // Inline fast-path version of boxInt for StoreLocal (NOT in PHI fixup/boxValue context).
+    // Uses LLVM branches for INT48 range check, falling back to runtime for big ints.
+    llvm::Value* boxIntInline(llvm::Value* int_val);
+
     // Ensure a value is a native double for float operations
     // Handles NaN-boxed values (int or float), native i64, and native doubles
     llvm::Value* ensureFloatType(llvm::Value* val, uint32_t value_id, llvm::Module& module);
@@ -292,6 +301,19 @@ private:
             llvm::Instruction::BinaryOps float_op, const char* slow_helper,
             llvm::Value* lhs, llvm::Value* rhs,
             llvm::Function* llvm_func, llvm::Module& module, bool handle_nothing);
+
+    // Emit inline LLVM fast-path for lvalue compound assignments (AddAssignLValue, etc.).
+    // Loads the current lvalue value, checks NOTHING (for AddAssignLValue only), then
+    // checks INT48+INT48 and float+float for native arithmetic, falling back to
+    // qore_rt_lvalue_binary for complex types.  The loaded value is decref'd after use.
+    // int_op/float_op may be omitted (pass -1) for ops like div/mod that should skip the
+    // fast path.  handle_nothing should be true only for AddAssignLValue.
+    llvm::Value* emitLValueCompoundAssignFastPath(
+            const QoreIRInstruction* inst,
+            llvm::Value* val_boxed, llvm::Value* lv_bits_or_slot,
+            int int_op, int float_op,
+            bool handle_nothing,
+            llvm::Function* llvm_func, llvm::Module& module);
 
     // Emit inline LLVM fast-path for .any bitwise compound assignments (AndAssignAny/etc).
     // Type-checks operands for int+int, falls back to qore_rt_binary_op for non-int types.
