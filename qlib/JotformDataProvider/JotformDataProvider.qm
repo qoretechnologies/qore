@@ -35,7 +35,9 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) JotformRestClient
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module JotformDataProvider {
     version = "1.0";

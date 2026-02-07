@@ -35,7 +35,9 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) ShipStationRestClient
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module ShipStationDataProvider {
     version = "1.0";

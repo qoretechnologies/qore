@@ -141,7 +141,11 @@ public class MailgunAddMailingListMemberDataProvider inherits MailgunDataProvide
             body.name = req.name;
         }
         if (req.vars) {
+%ifdef NoJson
+            throw "JSON-ERROR", "the json module is required for this operation";
+%else
             body.vars = make_json(req.vars);
+%endif
         }
         if (exists req.subscribed) {
             body.subscribed = req.subscribed ? "yes" : "no";

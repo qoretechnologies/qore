@@ -138,7 +138,11 @@ public class JotformFormsDataProvider inherits JotformDataProviderBase {
 
         # Build query parameters from search options
         if (search_options.filter) {
+%ifdef NoJson
+            throw "JSON-ERROR", "the json module is required for filter support";
+%else
             params.filter = make_json(search_options.filter);
+%endif
         }
         if (search_options.orderby) {
             params.orderby = search_options.orderby;

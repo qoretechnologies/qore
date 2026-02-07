@@ -35,7 +35,9 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) ZohoInvoiceRestClient
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module ZohoInvoiceDataProvider {
     version = "1.0";

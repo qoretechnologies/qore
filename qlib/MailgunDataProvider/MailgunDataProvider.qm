@@ -35,7 +35,9 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) MailgunRestClient
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module MailgunDataProvider {
     version = "1.0";
