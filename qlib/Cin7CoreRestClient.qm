@@ -26,16 +26,13 @@
 %requires qore >= 2.0
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # don't use "$" for vars, members, and methods, assume local variable scope
-%new-style
+%modern
 
 # do not ignore argument errors
-%strict-args
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
@@ -76,11 +73,6 @@ module Cin7CoreRestClient {
     @par Example:
     @code{.py}
 #!/usr/bin/env qore
-
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
 
 %requires Cin7CoreRestClient
 
@@ -210,7 +202,7 @@ Cin7CoreRestClient cin7core({
 }
 
 #! Class for Cin7Core REST connections; returns @ref Cin7CoreRestClient objects
-/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
     - \c account_id: (required) the Cin7Core Account ID
     - \c apikey: (required) the Cin7Core Application/API Key

@@ -110,5 +110,6 @@ Current usages to migrate:
 - [ ] Docs module list (`doxygen/lang/120_modules.dox.tmpl`) updated when applicable
 - [ ] entry in `doxygen/lang/900_release_notes.dox.tmpl` for new modules or updates
 - [ ] Tests added/updated for the module
+- [ ] External module dependencies use `%try-module` (not `%requires`) — only in-repo modules use hard `%requires`
 - [ ] all scripts have the execute bit set
 - [ ] all tests and scripts use `%modern`

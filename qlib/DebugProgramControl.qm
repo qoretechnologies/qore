@@ -26,9 +26,7 @@
 %requires qore >= 2.0
 %requires(reexport) DebugUtil
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 %no-debugging
 %allow-debugger
 # child program won't inherit parent program options (including %allow-debugger)

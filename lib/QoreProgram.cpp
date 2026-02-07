@@ -753,9 +753,16 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         exec_class_rv = QoreValue();
 
         // clear sandbox manager if set
-        if (sandbox_manager) {
-            sandbox_manager->deref(xsink);
-            sandbox_manager = nullptr;
+        {
+            QoreSandboxManager* sm;
+            {
+                AutoLocker al(sm_lock);
+                sm = sandbox_manager;
+                sandbox_manager = nullptr;
+            }
+            if (sm) {
+                sm->deref(xsink);
+            }
         }
 
         // delete code
@@ -2528,14 +2535,18 @@ bool QoreProgram::checkAllowDebugging(ExceptionSink* xsink) {
 }
 
 void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
-    if (priv->sandbox_manager) {
-        priv->sandbox_manager->deref(nullptr);
+    QoreSandboxManager* old;
+    {
+        AutoLocker al(priv->sm_lock);
+        old = priv->sandbox_manager;
+        priv->sandbox_manager = sm;
+        if (sm) {
+            sm->ref();
+        }
     }
-    priv->sandbox_manager = sm;
-}
-
-QoreSandboxManager* QoreProgram::getSandboxManager() const {
-    return priv->sandbox_manager;
+    if (old) {
+        old->deref(nullptr);
+    }
 }
 
 const AbstractQoreFunctionVariant* QoreProgram::runtimeFindCall(const char* name, const QoreListNode* params, ExceptionSink* xsink) const {

@@ -32,13 +32,11 @@
 %requires(reexport) DataProvider >= 1.0
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 module SqlUtil {
     version = "2.3.0";
@@ -2940,7 +2938,6 @@ public namespace SqlUtil {
 
     <b>Example</b>
     @code{.py}
-%new-style
 %requires SqlUtil
 
 DatasourcePool ds("oracle:pvanek_omq/omq@xbox(al32utf8)");
@@ -3332,7 +3329,6 @@ sql: select 1 as as_int,1.2 as as_float,3.2 as as_numeric,to_timestamp('20150421
         }
         return make_cop(COP_TRUNC_DATE, column, mask);
     }
-
 
     #! Analytic/window function: relative rank of the current row
     /** @par Example:

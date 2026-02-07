@@ -192,7 +192,7 @@ public const DP_ATTACH_FILES = (1 << 15);
 #! Allows for reading of message history (channel type: T, V, S)
 public const DP_READ_MESSAGE_HISTORY = (1 << 16);
 
-#! Allows for using the @everyone tag to notify all users in a channel, and the @here tag to notify all online users in a channel (channel type: T, V, S)
+#! Allows for using the \@everyone tag to notify all users in a channel, and the \@here tag to notify all online users in a channel (channel type: T, V, S)
 public const DP_MENTION_EVERYONE = (1 << 17);
 
 #! Allows the usage of custom emojis from other servers (channel type: T, V, S)
@@ -419,7 +419,7 @@ DiscordRestClient rest(opts);
 }
 
 #! Class for Discord REST connections; returns @ref DiscordRestClient objects
-/** This class implements all options of \c RestClient::RestClientConnection "RestClientConnection";  in addition,
+/** This class implements all options of \c RestClient::RestConnection "RestClientConnection";  in addition,
     this class provides the following default values for the following options:
     - \c oauth2_auth_args: <tt>access_type: offline</tt>
     - \c oauth2_auth_url: \c https://accounts.Discord.com/o/oauth2/v2/auth

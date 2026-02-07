@@ -35,7 +35,7 @@ public namespace DataProvider {
     - \c method (string): the HTTP method for the webhook (e.g., "POST")
     - \c callback (code): a callback taking the webhook payload to generate events
     - \c auth (*int): optional authentication requirement
-    - \c perms (*list<string>): optional list of permissions
+    - \c perms (*list&lt;string&gt;): optional list of permissions
 
     Returns a hash with:
     - \c url (string): the public URL for the webhook
@@ -80,7 +80,7 @@ public class DataProviderWebhook {
         - \c method (string): the HTTP method for the webhook (e.g., "POST")
         - \c callback (code): a callback taking the webhook payload to generate events
         - \c auth (*int): optional authentication requirement (0 = none, 1 = required)
-        - \c perms (*list<string>): optional list of permissions when auth is required
+        - \c perms (*list&lt;string&gt;): optional list of permissions when auth is required
 
         @return a hash with:
         - \c url (string): the public URL for the webhook

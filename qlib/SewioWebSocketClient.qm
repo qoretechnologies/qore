@@ -26,16 +26,14 @@
 %requires qore >= 2.0
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 %requires(reexport) WebSocketClient >= 1.0
 %requires Util >= 1.0
 %requires(reexport) ConnectionProvider >= 1.4
 
-%new-style
+%modern
 
 %try-module json >= 1.5
 %define NoJson
@@ -74,9 +72,6 @@ module SewioWebSocketClient {
     <b>Example</b>
     @code{.py}
 #!/usr/bin/env qore
-
-%new-style
-%enable-all-warnings
 
 %requires SewioWebSocketClient
 

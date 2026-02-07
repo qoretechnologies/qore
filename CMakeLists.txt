@@ -1281,6 +1281,8 @@ if (DOXYGEN_FOUND)
     set(QORE_LANG_DOC_PREDEFINED "" CACHE INTERNAL "Preprocessor definitions for lang docs (initial pass)")
     set(QORE_LANG_DOC_SECTIONS "" CACHE INTERNAL "Enabled sections for lang docs (initial pass)")
     configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial @ONLY)
+    # Suppress doc error warnings in initial pass (no module TAGFILES available yet)
+    file(APPEND ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial "\n# Suppress warnings for initial pass (no module TAGFILES available)\nWARN_IF_DOC_ERROR = NO\n")
     add_custom_target(docs-lang
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/lang/html
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial

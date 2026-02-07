@@ -354,7 +354,7 @@ public class OpenAiResponseSseStream {
 }
 
 #! Class for OpenAi REST connections; returns @ref OpenAiRestClient objects
-/** This class implements all options of \c RestClient::RestClientConnection "RestClientConnection"
+/** This class implements all options of \c RestClient::RestConnection "RestClientConnection"
 
     @see @ref OpenAiRestClient::OpenAiRestClient::constructor() for more information on the above options
 */

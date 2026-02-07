@@ -85,8 +85,8 @@ static bool qore_stream_should_retry(mongoc_stream_t* stream);
 /** @return true if interrupted, false otherwise
 */
 static bool check_interrupt() {
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm && sm->isInterruptRequested()) {
+    QoreSandboxManagerHelper smh;
+    if (smh && smh->isInterruptRequested()) {
         errno = EINTR;
         return true;
     }
@@ -129,8 +129,8 @@ static ssize_t qore_stream_writev(mongoc_stream_t* stream, mongoc_iovec_t* iov, 
     }
 
     // For short timeouts or no sandbox manager, use direct call
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (!sm || timeout_msec <= QORE_IO_POLL_INTERVAL_MS) {
+    QoreSandboxManagerHelper smh;
+    if (!smh || timeout_msec <= QORE_IO_POLL_INTERVAL_MS) {
         return mongoc_stream_writev(s->base, iov, iovcnt, timeout_msec);
     }
 
@@ -175,8 +175,8 @@ static ssize_t qore_stream_readv(mongoc_stream_t* stream, mongoc_iovec_t* iov, s
     }
 
     // For short timeouts or no sandbox manager, use direct call
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (!sm || timeout_msec <= QORE_IO_POLL_INTERVAL_MS) {
+    QoreSandboxManagerHelper smh;
+    if (!smh || timeout_msec <= QORE_IO_POLL_INTERVAL_MS) {
         return mongoc_stream_readv(s->base, iov, iovcnt, min_bytes, timeout_msec);
     }
 
@@ -232,8 +232,8 @@ static ssize_t qore_stream_poll(mongoc_stream_poll_t* streams, size_t nstreams, 
     }
 
     // For short timeouts or no sandbox manager, use direct call
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (!sm || timeout <= QORE_IO_POLL_INTERVAL_MS) {
+    QoreSandboxManagerHelper smh;
+    if (!smh || timeout <= QORE_IO_POLL_INTERVAL_MS) {
         return mongoc_stream_poll(streams, nstreams, timeout);
     }
 
@@ -297,8 +297,8 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     bson_error_t* error) {
 
     // Check for interrupt before starting connection
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm && sm->isInterruptRequested()) {
+    QoreSandboxManagerHelper smh;
+    if (smh && smh->isInterruptRequested()) {
         bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
             "MongoDB connection interrupted");
         return nullptr;
@@ -329,7 +329,7 @@ mongoc_stream_t* qore_mongo_stream_initiator(
 
     for (rp = result; rp != nullptr; rp = rp->ai_next) {
         // Check for interrupt before each connection attempt
-        if (sm && sm->isInterruptRequested()) {
+        if (smh && smh->isInterruptRequested()) {
             freeaddrinfo(result);
             bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                 "MongoDB connection interrupted");
@@ -337,9 +337,9 @@ mongoc_stream_t* qore_mongo_stream_initiator(
         }
 
         // Check network access if sandbox manager is present
-        if (sm) {
+        if (smh) {
             ExceptionSink xsink;
-            if (!sm->checkNetworkAccess(rp->ai_addr, rp->ai_addrlen, IPPROTO_TCP, &xsink)) {
+            if (!smh->checkNetworkAccess(rp->ai_addr, rp->ai_addrlen, IPPROTO_TCP, &xsink)) {
                 // Network access denied by sandbox
                 if (xsink) {
                     freeaddrinfo(result);
@@ -389,7 +389,7 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     // Check if SSL/TLS is required
     if (mongoc_uri_get_tls(uri)) {
         // Check for interrupt before TLS setup
-        if (sm && sm->isInterruptRequested()) {
+        if (smh && smh->isInterruptRequested()) {
             mongoc_stream_destroy(base);
             bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                 "MongoDB TLS setup interrupted");
@@ -406,7 +406,7 @@ mongoc_stream_t* qore_mongo_stream_initiator(
         }
 
         // Check for interrupt before TLS handshake
-        if (sm && sm->isInterruptRequested()) {
+        if (smh && smh->isInterruptRequested()) {
             mongoc_stream_destroy(tls_stream);
             bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                 "MongoDB TLS handshake interrupted");

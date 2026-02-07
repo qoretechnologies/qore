@@ -1996,7 +1996,8 @@ pgm.setSandboxManager(sm);
     @since Qore 2.1
  */
 nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sm) {
-   // pass the existing argument ref on to the Program
+   // setSandboxManager() takes its own strong reference; use ReferenceHolder for the arg ref
+   ReferenceHolder<QoreSandboxManager> holder(sm, xsink);
    p->setSandboxManager(sm);
 }
 
@@ -2014,11 +2015,11 @@ if (sm) {
     @since Qore 2.1
  */
 *SandboxManager Program::getSandboxManager() [flags=CONSTANT] {
-   QoreSandboxManager* sm = p->getSandboxManager();
+   QoreSandboxManager* sm = qore_program_private::get(*p)->getSandboxManagerRef();
    if (!sm) {
        return QoreValue();
    }
-   sm->ref();  // ref for the returned object
+   // getSandboxManagerRef() already acquired a ref for us; pass it to the new object
    return new QoreObject(QC_SANDBOXMANAGER, 0, sm);
 }
 

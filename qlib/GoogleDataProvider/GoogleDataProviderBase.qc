@@ -118,8 +118,10 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Prepares a request with a request type created from the Discovery API
-    /** @param req The incoming request data
+    /** @param request_type the request type from the Discovery API
+        @param req0 The incoming request data
         @param implicit_path_args any implicit path args
+        @param backfill_request_body if @ref True, fills missing request body values
 
         @return a hash with the following keys:
         - \c body: a hash of body params

@@ -177,6 +177,8 @@ extern std::string* takeHashdeclDocComment();
 
 // Defined in ast_scanner.lpp - takes ownership of claimed namespace doc comment
 extern std::string* takeNamespaceDocComment();
+// Defined in ast_scanner.lpp - takes ownership of claimed enum doc comment
+extern std::string* takeEnumDocComment();
 // Defined in ast_scanner.lpp - takes ownership of claimed sub doc comment
 extern std::string* takeSubDocComment();
 
@@ -211,6 +213,15 @@ extern std::string* takeSubDocComment();
 #define ATTACH_NAMESPACE_DOC_COMMENT(decl) \
     do { \
         std::string* doc = takeNamespaceDocComment(); \
+        if (doc && decl) { \
+            (decl)->setDocComment(doc); \
+        } \
+    } while (0)
+
+// Helper macro to attach enum doc comment (claimed when scanner saw 'enum' keyword)
+#define ATTACH_ENUM_DOC_COMMENT(decl) \
+    do { \
+        std::string* doc = takeEnumDocComment(); \
         if (doc && decl) { \
             (decl)->setDocComment(doc); \
         } \
@@ -1378,6 +1389,7 @@ enum_def:
 
             $$ = new ASTEnumDeclaration(mods, std::move(name), nullptr, $5);
             $$->loc.set(@1, @6);
+            ATTACH_ENUM_DOC_COMMENT($$);
             delete $5;
         }
         | nsc_modifiers TOK_ENUM IDENTIFIER ':' uncqtypedef '{' enum_members '}' {
@@ -1392,6 +1404,7 @@ enum_def:
 
             $$ = new ASTEnumDeclaration(mods, std::move(name), baseType, $7);
             $$->loc.set(@1, @8);
+            ATTACH_ENUM_DOC_COMMENT($$);
             delete $7;
         }
         | nsc_modifiers TOK_ENUM SCOPED_REF '{' enum_members '}' {
@@ -1402,6 +1415,7 @@ enum_def:
 
             $$ = new ASTEnumDeclaration(mods, std::move(name), nullptr, $5);
             $$->loc.set(@1, @6);
+            ATTACH_ENUM_DOC_COMMENT($$);
             delete $5;
         }
         | nsc_modifiers TOK_ENUM SCOPED_REF ':' uncqtypedef '{' enum_members '}' {
@@ -1416,6 +1430,7 @@ enum_def:
 
             $$ = new ASTEnumDeclaration(mods, std::move(name), baseType, $7);
             $$->loc.set(@1, @8);
+            ATTACH_ENUM_DOC_COMMENT($$);
             delete $7;
         }
         ;
@@ -1463,6 +1478,7 @@ enum_member:
             free($1);
             $$ = new ASTEnumMemberDeclaration(std::move(name), nullptr);
             $$->loc = @1;
+            ATTACH_DOC_COMMENT($$);
         }
         | IDENTIFIER '=' exp {
             ASTName name($1, ASTNameKind::ANK_Identifier);
@@ -1470,6 +1486,7 @@ enum_member:
             free($1);
             $$ = new ASTEnumMemberDeclaration(std::move(name), $3);
             $$->loc.set(@1, @3);
+            ATTACH_DOC_COMMENT($$);
         }
         | parse_option {
             delete $1;

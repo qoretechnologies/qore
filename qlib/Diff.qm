@@ -24,9 +24,7 @@
 
 # minimum Qore version
 %requires qore >= 0.9.5
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 %requires Util
 
 module Diff {

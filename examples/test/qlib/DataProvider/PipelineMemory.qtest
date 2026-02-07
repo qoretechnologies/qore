@@ -260,6 +260,8 @@ public class PipelineMemoryTest inherits QUnit::Test {
         addTestCase("accumulating metrics collector", \metricsAccumulatingTest());
         addTestCase("repeated pipelines with metrics", \metricsRepeatedPipelinesTest());
         addTestCase("slow metrics callback", \metricsSlowCallbackTest());
+%else
+        addTestCase("skip - no process module", sub () { testSkip("no process module present"); });
 %endif
 
         set_return_value(main());

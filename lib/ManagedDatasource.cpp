@@ -107,21 +107,21 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
         return 0;
 
     // Check for sandbox interrupt support
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    QoreSandboxManagerHelper smh;
     const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
     int64 remaining_timeout = tl_timeout_ms;
 
     while (tid != -1) {
         // Check for interrupt
-        if (sm && xsink && sm->checkIOInterrupt(xsink, "datasource lock acquisition")) {
+        if (smh && xsink && smh->checkIOInterrupt(xsink, "datasource lock acquisition")) {
             return -2;  // -2 indicates interrupt
         }
 
         ++waiting;
-        if (tl_timeout_ms > 0 || (tl_timeout_ms < 0 && sm)) {
+        if (tl_timeout_ms > 0 || (tl_timeout_ms < 0 && smh)) {
             // Positive timeout or infinite timeout with sandbox manager: use polling
             int effective_timeout;
-            if (sm) {
+            if (smh) {
                 // With sandbox manager, poll at intervals for interrupt checking
                 effective_timeout = (tl_timeout_ms < 0 || remaining_timeout > poll_interval)
                     ? poll_interval : remaining_timeout;
@@ -136,13 +136,13 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
                 continue;
 
             // Timeout occurred
-            if (sm && tl_timeout_ms > 0) {
+            if (smh && tl_timeout_ms > 0) {
                 remaining_timeout -= effective_timeout;
                 if (remaining_timeout <= 0) {
                     printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
                     return -1;
                 }
-            } else if (sm && tl_timeout_ms < 0) {
+            } else if (smh && tl_timeout_ms < 0) {
                 // Infinite timeout with sandbox manager - continue polling
                 continue;
             } else {

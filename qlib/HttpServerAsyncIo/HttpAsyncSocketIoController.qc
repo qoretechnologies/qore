@@ -422,6 +422,8 @@ public class HttpAsyncSocketIoController {
         @param cx connection context
         @param target the target for callbacks
         @param ttl keep-alive timeout
+        @param controller_idx optional controller index
+        @param reuse_op optional keep-alive poll operation to reuse
     */
     addIdleConnection(Socket sock, object listener, hash<auto> cx, HttpAsyncTarget target,
             timeout ttl = DefaultIdleTimeout, *int controller_idx,

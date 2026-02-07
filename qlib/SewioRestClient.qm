@@ -197,7 +197,7 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
 }
 
 #! class for <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio REST connections; returns @ref SewioRestClient::SewioRestClient objects
-/** In addition to all options supported by \c RestClient::RestClientConnection "RestClientConnection", this
+/** In addition to all options supported by \c RestClient::RestConnection "RestClientConnection", this
     connection class supports the following options:
     - \c "apikey": (required) the <a href="http://www.sewio.net">Sewio.net</a>'s RTLS Studio api key
 

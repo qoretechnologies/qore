@@ -841,6 +841,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
     /**
+        @param schema_source the source of the schema (e.g. file path or URL)
         @param oh deserialized hash from the source schema description describing the root document object
         @param opts options as per \c OpenApi3Options as follows:
         - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
@@ -865,6 +866,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
     /** @param logger the logger to use
+        @param schema_source the source of the schema (e.g. file path or URL)
         @param oh deserialized hash from the source schema description describing the root document object
         @param opts options as per \c OpenApi3Options as follows:
         - \c compact_serialization (default @ref True "True"): (type *bool) optimize the size of serialized data
@@ -2016,7 +2018,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
     }
 
     #! Check if the headers contain a content-type header and if so, modify the request hash
-    /** @param resp request hash
+    /** @param req request hash
         @param body request body data (if any)
         @param headers HTTP headers to include in the request
 
@@ -2335,8 +2337,8 @@ public class PathComponent inherits Qore::Serializable {
         return w.pio;
     }
 
-    #! returns a hash of URI paths as keys with values as lists of supported HTTP methods
-    /** @return a hash of URI paths as keys with values as lists of supported HTTP methods
+    #! populates a hash of URI paths as keys with values as lists of supported HTTP methods
+    /** @param h reference to the hash to populate with URI paths as keys and lists of supported HTTP methods as values
     */
     getPathOperationHash(reference<hash<string, list<string>>> h) {
         if (pio)
@@ -3443,7 +3445,8 @@ public class ParameterObject inherits ParameterBase {
 
     #! Constructor
     /**
-        @param oh deserialized hash from the source schema description decscribing a single parameter
+        @param oh deserialized hash from the source schema description describing a single parameter
+        @param openapi3 the REST schema for resolving references
 
         @throws INVALID-FIELD-TYPE field has invalid type
         @throws INVALID-FIELD-VALUE field has invalid value
@@ -3728,6 +3731,7 @@ public class ResponseObject inherits ObjectBase, RestSchemaValidator::AbstractRe
 public class HeaderObject inherits ParameterBase {
     #! Constructor
     /**
+        @param name the header name
         @param oh deserialized hash from the source schema description describing a single HTTP header
         @param openapi3 the REST schema for resolving references
 
@@ -4608,6 +4612,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @param name the name of the object
         @param oh deserialized hash from the source schema description describing an object in the schema
         @param openapi3 the REST schema for resolving references
+        @param require_items if @ref True, require \c items for array types
 
         @throws INVALID-FIELD-FORMAT field has invalid format
         @throws INVALID-FIELD-TYPE field has invalid type
@@ -5205,7 +5210,7 @@ public hashdecl ReturnInfo {
     *list<hash<FieldInfo>> fields;
 }
 
-#! Parsed @SCHEMA block information
+#! Parsed \@SCHEMA block information
 public hashdecl SchemaBlockInfo {
     #! Summary line
     *string summary;
@@ -5237,7 +5242,7 @@ public hashdecl RestMethodInfo {
     hash<SchemaBlockInfo> schema;
 }
 
-#! Tokenizes and parses @SCHEMA comment blocks from Qore source files
+#! Tokenizes and parses \@SCHEMA comment blocks from Qore source files
 public class OpenApi3SchemaTokenizer {
     public {
         const TokenSchema = "@SCHEMA";
@@ -5251,14 +5256,14 @@ public class OpenApi3SchemaTokenizer {
         const TokenSince = "@since";
         const TokenSee = "@see";
 
-        #! Pattern to match @REST method declarations
+        #! Pattern to match \@REST method declarations
         const RestMethodPattern = "@REST\\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)";
         #! Pattern to match action= declarations
         const ActionPattern = "action=([a-zA-Z_][a-zA-Z0-9_]*)";
     }
 
-    #! Parse a @SCHEMA block from comment text
-    /** @param text the text between @SCHEMA and @ENDSCHEMA
+    #! Parse a \@SCHEMA block from comment text
+    /** @param text the text between \@SCHEMA and \@ENDSCHEMA
         @return parsed schema block information
     */
     static hash<SchemaBlockInfo> parseSchemaBlock(string text) {
@@ -5439,7 +5444,7 @@ public class OpenApi3SchemaTokenizer {
         };
     }
 
-    #! Parse all @SCHEMA blocks from a source file
+    #! Parse all \@SCHEMA blocks from a source file
     /** @param filepath path to the Qore source file
         @return list of REST method info with parsed schemas
     */
@@ -5448,7 +5453,7 @@ public class OpenApi3SchemaTokenizer {
         return parseSourceContent(content);
     }
 
-    #! Extract all @SCHEMA blocks from source content
+    #! Extract all \@SCHEMA blocks from source content
     static list<hash<RestMethodInfo>> parseSourceContent(string content) {
         list<hash<RestMethodInfo>> rv = ();
 
@@ -5666,7 +5671,7 @@ public class OpenApi3SchemaGenerator {
         - title (string): API title
         - version (string): API version
         - description (*string): API description
-        - servers (*list<hash>): Server definitions
+        - servers (*list&lt;hash&gt;): Server definitions
     */
     constructor(hash<auto> info) {
         api_info = info;

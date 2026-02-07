@@ -36,13 +36,11 @@
 %requires MssqlSqlUtilBase
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 module FreetdsSqlUtil {
     version = "1.6";
@@ -83,7 +81,7 @@ module FreetdsSqlUtil {
       expression support
       (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
-    @subsection freetdssqlutilv141 FreetdsSqlUtil v1.4.2
+    @subsection freetdssqlutilv142 FreetdsSqlUtil v1.4.2
     - fixed a bug where \c offset and \c limit were not properly supported with MS SQL Server DBs
       (<a href="https://github.com/qoretechnologies/qore/issues/4408">issue 4408</a>)
     - fixed a bug where date/time values in other time zones were not bound correctly

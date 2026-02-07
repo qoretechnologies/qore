@@ -836,6 +836,7 @@ public:
         @param path request path
         @param headers request headers
         @param body request body (optional)
+        @param body_len request body length
         @param xsink exception sink
         @return stream ID on success, -1 on error
     */

@@ -360,7 +360,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     }
 
     #! sends a message to all connected clients
-    /** @param d the data to send
+    /** @param msg the data to send
 
         Messages are automatically encoded with \c ServerSentEventUtil::ws_encode_message() before sending
     */

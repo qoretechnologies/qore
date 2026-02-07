@@ -23,6 +23,7 @@
 
 # make sure we have the required qore version
 %requires qore >= 2.0
+%modern
 
 module FilePoller {
     version = "2.0";

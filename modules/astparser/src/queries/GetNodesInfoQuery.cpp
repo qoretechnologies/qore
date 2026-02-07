@@ -165,6 +165,31 @@ QoreHashNode* GetNodesInfoQuery::getDeclaration(ASTTree* tree, ASTDeclaration* d
             nodeInfo->setKeyValue("typeName", getName(tree, d->typeName, xsink), xsink);
             break;
         }
+        case ASTDeclarationKind::ADK_Enum: {
+            ASTEnumDeclaration* d = static_cast<ASTEnumDeclaration*>(decl);
+            nodeInfo->setKeyValue("modifiers", getModifiers(d->modifiers), xsink);
+            nodeInfo->setKeyValue("name", getName(tree, d->name, xsink), xsink);
+            if (d->baseType) {
+                nodeInfo->setKeyValue("baseType", getExpression(tree, d->baseType, xsink), xsink);
+            }
+            ReferenceHolder<QoreListNode> declarations(new QoreListNode, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            for (size_t i = 0, count = d->members.size(); i < count; i++) {
+                declarations->push(getDeclaration(tree, d->members[i], xsink), xsink);
+            }
+            nodeInfo->setKeyValue("declarations", declarations.release(), xsink);
+            break;
+        }
+        case ASTDeclarationKind::ADK_EnumMember: {
+            ASTEnumMemberDeclaration* d = static_cast<ASTEnumMemberDeclaration*>(decl);
+            nodeInfo->setKeyValue("name", getName(tree, d->name, xsink), xsink);
+            if (d->value) {
+                nodeInfo->setKeyValue("value", getExpression(tree, d->value, xsink), xsink);
+            }
+            break;
+        }
         case ASTDeclarationKind::ADK_Module: {
             ASTModuleDeclaration* d = static_cast<ASTModuleDeclaration*>(decl);
             nodeInfo->setKeyValue("name", getName(tree, d->name, xsink), xsink);

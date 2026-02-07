@@ -35,7 +35,7 @@
 %define NO_SYSCONF
 %endtry
 
-%new-style
+%modern
 %allow-weak-references
 %enable-debug
 
@@ -99,8 +99,6 @@ module HttpServer {
 
 %requires HttpServer
 %requires Mime
-
-%new-style
 
 class MyHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -773,7 +771,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     constructor(hash<HttpServerOptionInfo> opts) {
         init(opts);
     }
-
 
     #! Creates the server with default options and an empty logger
     constructor() {
@@ -2300,7 +2297,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
 
             if (rv.reply_sent) {
-                bool is_http2 = cx."header-info".http2 ?? False;
                 if (!is_http2 && rv."code" >= 200) {
                     cx."response-sent" = True;
                 }
@@ -4216,6 +4212,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         - The connection is closed
         - An error occurs
 
+        @param request_helper the request helper for parsing HTTP requests
         @param s the socket for the connection
         @param cx the connection context
         @param phi the persistent handler info

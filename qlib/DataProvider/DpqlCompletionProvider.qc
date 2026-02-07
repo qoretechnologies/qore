@@ -915,7 +915,7 @@ public class DpqlCompletionProvider {
     }
 
     #! Unescapes DPQL escape sequences in a quoted string
-    /** Handles \\, \", \', \n, \r, \t
+    /** Handles \\\\, \\", \\', \\n, \\r, \\t
         @param s the escaped string content (without surrounding quotes)
         @return the unescaped string
     */

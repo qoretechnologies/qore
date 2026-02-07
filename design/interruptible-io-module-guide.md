@@ -15,26 +15,57 @@ This document describes the API and implementation considerations for making bin
 
 The following API is available in `<qore/QoreSandboxManager.h>`:
 
-### Core Functions
+### QoreSandboxManagerHelper (RAII)
+
+The primary API for accessing the sandbox manager. This RAII class acquires a strong reference
+under a lock, preventing use-after-free when the sandbox manager is cleared during program cleanup.
+The reference is automatically released when the helper goes out of scope.
 
 ```cpp
 #include <qore/QoreSandboxManager.h>
 
-// Get the sandbox manager for the current program context (may be nullptr)
-DLLEXPORT QoreSandboxManager* runtime_get_sandbox_manager();
+// Acquire sandbox manager for the current program (default constructor)
+QoreSandboxManagerHelper smh;
+if (smh) {
+    // sandbox manager is active and safely held
+    smh->checkIOInterrupt(xsink, "reading file");
+}
 
-// Check if an interrupt has been requested and optionally raise an exception
-// Returns true if interrupted (and exception was raised if xsink provided)
-DLLEXPORT bool qore_check_io_interrupt(ExceptionSink* xsink = nullptr);
+// Acquire sandbox manager for a specific program
+QoreSandboxManagerHelper smh(some_program_ptr);
+if (smh) {
+    smh->isInterruptRequested();
+}
 ```
 
+**Important**: Never store raw `QoreSandboxManager*` pointers. The sandbox manager can be cleared
+at any time during program cleanup. Always use `QoreSandboxManagerHelper` to ensure safe access.
+
+### Convenience Function
+
+```cpp
+// Check if an interrupt has been requested and raise an exception if so
+// Returns true if interrupted (and exception was raised)
+DLLEXPORT bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation = "I/O operation");
+```
+
+This is safe to call without a helper — it uses `QoreSandboxManagerHelper` internally.
+
 ### QoreSandboxManager Methods
+
+Once you have a valid reference via `QoreSandboxManagerHelper`, you can call these methods:
 
 ```cpp
 class QoreSandboxManager {
 public:
     // Check if an interrupt has been requested
     bool isInterruptRequested() const;
+
+    // Check for interrupt and raise exception if so
+    bool checkIOInterrupt(ExceptionSink* xsink, const char* operation);
+
+    // Check for network access restrictions
+    int checkNetworkAccess(ExceptionSink* xsink, const char* target);
 
     // Request an interrupt (called by controlling code)
     void requestInterrupt();
@@ -74,15 +105,15 @@ For operations that may block for extended periods, use polling with timeouts:
 
 ```cpp
 ssize_t myLongRead(void* buf, size_t len, int timeout_ms, ExceptionSink* xsink) {
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    QoreSandboxManagerHelper smh;
 
     // Fast path: no sandbox manager attached
-    if (!sm) {
+    if (!smh) {
         return do_blocking_read(buf, len, timeout_ms);
     }
 
     // Check before starting
-    if (sm->isInterruptRequested()) {
+    if (smh->isInterruptRequested()) {
         xsink->raiseException("PROGRAM-INTERRUPTED", "I/O operation interrupted");
         return -1;
     }
@@ -91,7 +122,7 @@ ssize_t myLongRead(void* buf, size_t len, int timeout_ms, ExceptionSink* xsink) 
     int remaining = timeout_ms;
     while (remaining > 0 || timeout_ms < 0) {  // timeout_ms < 0 means infinite
         // Check for interrupt
-        if (sm->isInterruptRequested()) {
+        if (smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "I/O operation interrupted");
             return -1;
         }
@@ -128,24 +159,23 @@ If the underlying library provides a cancellation mechanism, use it:
 ```cpp
 class MyDatabaseConnection {
     db_handle_t* handle;
+    QoreSandboxManagerHelper smh;  // RAII member, acquires ref at construction
 
 public:
     int executeQuery(const char* sql, ExceptionSink* xsink) {
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
-
         // Check before starting
         if (qore_check_io_interrupt(xsink)) {
             return -1;
         }
 
         // Start async query if sandbox is active
-        if (sm) {
+        if (smh) {
             // Start query asynchronously
             db_query_async(handle, sql);
 
             // Poll for completion with interrupt checking
             while (!db_query_complete(handle)) {
-                if (sm->isInterruptRequested()) {
+                if (smh->isInterruptRequested()) {
                     // Cancel the query using library API
                     db_cancel_query(handle);
                     xsink->raiseException("PROGRAM-INTERRUPTED", "query interrupted");
@@ -178,12 +208,12 @@ static ssize_t interruptible_read(library_stream_t* stream, void* buf,
                                    size_t len, int timeout_ms) {
     interruptible_stream_t* s = (interruptible_stream_t*)stream;
 
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (!sm) {
+    QoreSandboxManagerHelper smh;
+    if (!smh) {
         return library_stream_read(s->base, buf, len, timeout_ms);
     }
 
-    if (sm->isInterruptRequested()) {
+    if (smh->isInterruptRequested()) {
         errno = EINTR;
         return -1;
     }
@@ -191,7 +221,7 @@ static ssize_t interruptible_read(library_stream_t* stream, void* buf,
     // Polling read with interrupt checking
     int remaining = timeout_ms;
     while (remaining > 0 || timeout_ms < 0) {
-        if (sm->isInterruptRequested()) {
+        if (smh->isInterruptRequested()) {
             errno = EINTR;
             return -1;
         }
@@ -253,17 +283,7 @@ static ssize_t interruptible_read(library_stream_t* stream, void* buf,
 
 ## Exception Handling
 
-When an interrupt is detected, raise a consistent exception:
-
-```cpp
-if (sm->isInterruptRequested()) {
-    xsink->raiseException("PROGRAM-INTERRUPTED",
-        "operation interrupted by sandbox manager");
-    return -1;
-}
-```
-
-The `qore_check_io_interrupt()` helper does this automatically:
+Use `qore_check_io_interrupt()` for simple pre-operation checks:
 
 ```cpp
 if (qore_check_io_interrupt(xsink)) {
@@ -271,9 +291,20 @@ if (qore_check_io_interrupt(xsink)) {
 }
 ```
 
+When using `QoreSandboxManagerHelper` directly for polling loops:
+
+```cpp
+QoreSandboxManagerHelper smh;
+if (smh && smh->isInterruptRequested()) {
+    xsink->raiseException("PROGRAM-INTERRUPTED",
+        "operation interrupted by sandbox manager");
+    return -1;
+}
+```
+
 ## Performance Considerations
 
-1. **Zero Overhead When Disabled**: Always check `runtime_get_sandbox_manager()` first. If it returns `nullptr`, use the fast synchronous path.
+1. **Zero Overhead When Disabled**: `QoreSandboxManagerHelper` is lightweight — if no sandbox manager is attached to the current program, the constructor returns immediately with a null pointer. Use `operator bool()` to check and take the fast path.
 
 2. **Polling Interval**: Use `QORE_IO_POLL_INTERVAL_MS` (500ms) for consistency. This balances responsiveness with overhead.
 
@@ -281,10 +312,11 @@ if (qore_check_io_interrupt(xsink)) {
 
 ```cpp
 // For character-by-character reads
+QoreSandboxManagerHelper smh;
 int chars_read = 0;
 while ((c = read_char()) != EOF) {
-    if (++chars_read % 100 == 0) {  // Check every 100 chars
-        if (qore_check_io_interrupt(xsink)) {
+    if (smh && ++chars_read % 100 == 0) {  // Check every 100 chars
+        if (smh->checkIOInterrupt(xsink, "reading stream")) {
             return -1;
         }
     }
@@ -292,7 +324,16 @@ while ((c = read_char()) != EOF) {
 }
 ```
 
-4. **Connection vs Operation**: Consider whether to check at connection time, operation time, or both. Generally:
+4. **Class Members**: For objects that persist across multiple operations (e.g. database connections), store `QoreSandboxManagerHelper` as a class member. It acquires the reference once at construction and holds it for the object's lifetime:
+
+```cpp
+class MyConnection {
+    QoreSandboxManagerHelper smh;  // default-constructed, acquires ref from current program
+    // ...
+};
+```
+
+5. **Connection vs Operation**: Consider whether to check at connection time, operation time, or both. Generally:
    - Check at connection time (catches pre-requested interrupts)
    - Check during long operations (catches runtime interrupts)
 
@@ -346,7 +387,8 @@ do_io_operation();  # Should work normally
 ## Checklist for Module Updates
 
 - [ ] Include `<qore/QoreSandboxManager.h>`
-- [ ] Check `runtime_get_sandbox_manager()` at operation start
+- [ ] Use `QoreSandboxManagerHelper` for safe, ref-counted sandbox manager access
+- [ ] Use `qore_check_io_interrupt()` for simple pre-operation interrupt checks
 - [ ] Implement polling for long operations using `QORE_IO_POLL_INTERVAL_MS`
 - [ ] Use library cancellation API if available
 - [ ] Raise `PROGRAM-INTERRUPTED` exception on interrupt
@@ -361,3 +403,4 @@ See `modules/mongodb/src/QoreMongoStream.cpp` for a complete example of wrapping
 ## Version History
 
 - **Qore 2.0**: Initial implementation of interruptible I/O infrastructure
+- **Qore 2.1**: Added `QoreSandboxManagerHelper` RAII class for safe access; removed raw `QoreSandboxManager*` from public API to prevent use-after-free

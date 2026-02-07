@@ -26,13 +26,11 @@
 %requires qore >= 2.0
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # do not require "$" signs for vars, assume local variable scope
-%new-style
+%modern
 
 %requires(reexport) WebSocketUtil >= 1.0
 %requires Util >= 1.0
@@ -153,9 +151,6 @@ module WebSocketClient {
     <b>Example</b>
     @code{.py}
 #!/usr/bin/env qore
-
-%new-style
-%enable-all-warnings
 
 %requires WebSocketClient
 
@@ -2754,8 +2749,6 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 }
 
 #! Event- and message-based data provider for WebSocket client-side events
-/**
-*/
 public class WebSocketClientDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info

@@ -24,9 +24,7 @@
 
 %requires qore >= 0.9.13
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 
 %requires Util
 
@@ -1211,7 +1209,6 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
                 */
             }
 
-
             if (isQore) {
                 line =~ s/__1_/[/g;
                 line =~ s/__2_/]/g;
@@ -1423,7 +1420,7 @@ if (exists(diagnostics)) {
 
     #! Processes Qore AST to generate doxygen-compatible output
     /** This class uses astparser AST nodes to transform Qore code
-        into explicit Doxygen command blocks (\c @namespace, \c @class, \c @fn, etc.)
+        into explicit Doxygen command blocks (\c \@namespace, \c \@class, \c \@fn, etc.)
         so that Doxygen can document Qore sources without relying on C++ parsing heuristics.
 
         @par Example:
@@ -1818,6 +1815,11 @@ string doxygen_output = proc.process();
 
         #! Processes an enum declaration
         private processEnum(hash<auto> en) {
+            # Skip enums with no name (should not happen with fixed astparser)
+            if (!en.name || !en.name.name) {
+                return;
+            }
+
             *string doc = getDocForNode(en);
             if (exists doc) {
                 writeDocComment(doc);
@@ -1827,7 +1829,7 @@ string doxygen_output = proc.process();
             indent++;
             if (en.declarations) {
                 foreach auto member in (en.declarations) {
-                    if (member.kind == ADK_EnumMember) {
+                    if (member.kind == ADK_EnumMember && member.name && member.name.name) {
                         *string mdoc = getDocForNode(member);
                         if (exists mdoc) {
                             writeDocComment(mdoc);
@@ -2047,6 +2049,11 @@ string doxygen_output = proc.process();
                 result = (lines[line],) + result;
                 if (isBlockCommentStart(lines[line])) {
                     return result;
+                }
+                # Stop at non-doc block comment start (/* without **) to prevent
+                # scanning past non-doc comments like /* FIXME ... */
+                if (lines[line] =~ /\/\*/) {
+                    return ();
                 }
                 line--;
             }

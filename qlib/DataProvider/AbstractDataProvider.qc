@@ -595,7 +595,7 @@ public hashdecl DataProviderExpressionInfo {
     int type;
 
     #! The expression subtype
-    /** @ee @ref dataprovider_expression_subtype_codes
+    /** @see @ref dataprovider_expression_subtype_codes
     */
     int subtype = DES_Generic;
 

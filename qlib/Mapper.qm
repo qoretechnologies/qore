@@ -26,13 +26,11 @@
 %requires qore >= 1.19.2
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # do not use "$" for vars
-%new-style
+%modern
 
 # common definitions
 %requires(reexport) MapperUtil
@@ -642,7 +640,7 @@ public class Mapper inherits DataProvider::AbstractDataProcessor {
         #! an optional output data logging callback; must accept a hash giving the output data hash
         *code<nothing(hash<auto>)> output_log;
 
-        #! an optional callback for retrieving a nested mapper; sig: <tt>sub (string name, *hash<auto> opts) {}</tt>
+        #! an optional callback for retrieving a nested mapper; sig: <tt>sub (string name, *hash&lt;auto&gt; opts) {}</tt>
         *code<Mapper(string, *hash<auto>)> submapper_get;
 
         #! an optional callback for substituting templated values
@@ -2409,6 +2407,7 @@ Mapper mapv(DataMap);
         are in that order
 
         @param rec the record to translate
+        @param do_log_output if @ref True, output logging is performed
 
         @return a hash of field values in the target format based on the input data and processed according to the
         logic in the map hash

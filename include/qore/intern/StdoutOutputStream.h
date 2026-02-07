@@ -66,14 +66,14 @@ public:
          return;
 
       // Check for sandbox interrupt support
-      QoreSandboxManager* sm = runtime_get_sandbox_manager();
+      QoreSandboxManagerHelper smh;
 
       const char* current = reinterpret_cast<const char*>(ptr);
       int64 remaining = count;
 
       while (remaining > 0) {
          // Check for interrupt
-         if (sm && sm->checkIOInterrupt(xsink, "stdout write")) {
+         if (smh && smh->checkIOInterrupt(xsink, "stdout write")) {
             return;
          }
 
@@ -100,7 +100,7 @@ public:
                   }
                   if (pret == 0) {
                      // Timeout - check for interrupt and retry
-                     if (sm && sm->checkIOInterrupt(xsink, "stdout write")) {
+                     if (smh && smh->checkIOInterrupt(xsink, "stdout write")) {
                         return;
                      }
                      break;
@@ -108,7 +108,7 @@ public:
                   // pret < 0: error
                   if (errno == EINTR) {
                      // Interrupted by signal - check for sandbox interrupt then retry poll
-                     if (sm && sm->checkIOInterrupt(xsink, "stdout write")) {
+                     if (smh && smh->checkIOInterrupt(xsink, "stdout write")) {
                         return;
                      }
                      continue;

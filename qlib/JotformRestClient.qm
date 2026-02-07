@@ -26,16 +26,13 @@
 %requires qore >= 2.0
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # don't use "$" for vars, members, and methods, assume local variable scope
-%new-style
+%modern
 
 # do not ignore argument errors
-%strict-args
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
@@ -75,11 +72,6 @@ module JotformRestClient {
     @par Example:
     @code{.py}
 #!/usr/bin/env qore
-
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
 
 %requires JotformRestClient
 
@@ -188,7 +180,7 @@ JotformRestClient jotform({"apikey": "your-api-key"});
 }
 
 #! Class for JotForm REST connections; returns @ref JotformRestClient objects
-/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
     - \c apikey: the JotForm API key
     - \c api_domain: the API domain to use (default: api.jotform.com)

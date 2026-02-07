@@ -193,15 +193,15 @@ auto Queue::get(timeout timeout_ms = 0) {
     }
 
     // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
+    QoreSandboxManagerHelper smh;
+    if (smh) {
         const int poll_ms = 500;  // 500ms polling interval
         int64 remaining = timeout_ms;
         // timeout_ms <= 0 means wait indefinitely for data
         bool infinite = (timeout_ms <= 0);
 
         while (true) {
-            if (sm->isInterruptRequested()) {
+            if (smh->isInterruptRequested()) {
                 xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting on queue");
                 return QoreValue();
             }
@@ -269,14 +269,14 @@ auto Queue::pop(timeout timeout_ms = 0) {
     }
 
     // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
+    QoreSandboxManagerHelper smh;
+    if (smh) {
         const int poll_ms = 500;  // 500ms polling interval
         int64 remaining = timeout_ms;
         bool infinite = (timeout_ms <= 0);
 
         while (true) {
-            if (sm->isInterruptRequested()) {
+            if (smh->isInterruptRequested()) {
                 xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting on queue");
                 return QoreValue();
             }

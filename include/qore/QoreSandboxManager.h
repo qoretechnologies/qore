@@ -666,13 +666,56 @@ private:
     QoreSandboxManager& operator=(const QoreSandboxManager&) = delete;
 };
 
-//! Returns the sandbox manager for the current running program, if any
-/** @return Pointer to the current sandbox manager, or nullptr if none
+//! RAII helper that acquires a ref'd sandbox manager for the current running program
+/** Acquires a strong reference under lock to prevent use-after-free
+    when the sandbox manager is cleared during program cleanup.
 
-    @note This is used internally by QoreFile, QoreSocket, etc. to check
-    security restrictions.
+    @par Example:
+    @code{.cpp}
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        smh->checkIOInterrupt(xsink, "reading file");
+    }
+    @endcode
+
+    @since Qore 2.1
 */
-DLLEXPORT QoreSandboxManager* runtime_get_sandbox_manager();
+class DLLEXPORT QoreSandboxManagerHelper {
+public:
+    //! Acquires a ref'd sandbox manager for the current program
+    QoreSandboxManagerHelper();
+
+    //! Acquires a ref'd sandbox manager for the given program
+    /** @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
+    */
+    QoreSandboxManagerHelper(QoreProgram* pgm);
+
+    //! Releases the reference if held
+    ~QoreSandboxManagerHelper();
+
+    //! Returns true if a valid reference is held
+    operator bool() const {
+        return ptr != nullptr;
+    }
+
+    //! Provides access to the sandbox manager
+    QoreSandboxManager* operator->() const {
+        return ptr;
+    }
+
+    //! Returns the raw pointer
+    QoreSandboxManager* get() const {
+        return ptr;
+    }
+
+private:
+    QoreSandboxManager* ptr;
+
+    // non-copyable
+    QoreSandboxManagerHelper(const QoreSandboxManagerHelper&) = delete;
+    QoreSandboxManagerHelper& operator=(const QoreSandboxManagerHelper&) = delete;
+};
+
 
 //! Checks if the current program has been interrupted and raises exception if so
 /** This is a convenience function for I/O operations that need to check

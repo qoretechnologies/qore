@@ -41,6 +41,10 @@
 %requires ../../../../qlib/WebSocketHandler.qm
 %requires ../../../../qlib/WebSocketClient.qm
 
+%try-module json
+%define NoJson
+%endtry
+
 %exec-class HttpServerAsyncHttp2MultiplexedTest
 
 #! Simple handler for regular HTTP/2 GET requests
@@ -914,6 +918,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     #! Corner case: POST with request body in multiplexed mode
     testPostWithBody() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
         RestClient rc = getRestClient();
         on_exit delete rc;
 

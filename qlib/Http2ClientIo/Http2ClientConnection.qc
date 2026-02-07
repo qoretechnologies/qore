@@ -255,7 +255,7 @@ public class Http2ClientConnection {
         @param headers request headers
         @param body request body (optional)
         @param callback callback to invoke when response is ready: sub(hash<auto> response, *hash<auto> error)
-        @param context optional context to pass to callback
+        @param ctx optional context to pass to callback
 
         @return the stream ID assigned to this request
 

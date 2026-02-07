@@ -27,9 +27,7 @@
 
 %requires(reexport) Logger
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 %no-debugging
 
 module DebugUtil {

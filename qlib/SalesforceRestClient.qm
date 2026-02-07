@@ -1200,7 +1200,7 @@ sfrest.logout();
 }
 
 #! class for Salesforce.com REST connections; returns @ref SalesforceRestClient::SalesforceRestClient objects
-/** In addition to all options supported by \c RestClient::RestClientConnection "RestClientConnection", this
+/** In addition to all options supported by \c RestClient::RestConnection "RestClientConnection", this
     connection class supports the following options:
     - \c api: the Salesforce.com API to use; use \c "auto" (the default) to use the latest API version
     - \c oauth2_client_id: (required) the Salesforce.com "consumer key" for the Connected App

@@ -31,7 +31,7 @@ public class UpdateOptionsInterface inherits Qore::Serializable {
     private {
         #! Closure or call reference to be called when connection options should be automatically updated
         /** The closure or call reference must have the following signature:
-            <tt><update_options(hash<auto> options) /tt>
+            <tt>update_options(hash&lt;auto&gt; options)</tt>
         */
         transient *code update_options;
 
@@ -47,7 +47,7 @@ public class UpdateOptionsInterface inherits Qore::Serializable {
 
     #! Can be called to set or clear a closure or call reference to be called when options are automatically updated
     /** The closure or call reference must have the following signature:
-        <tt><update_options(hash<auto> options)</tt>
+        <tt>update_options(hash&lt;auto&gt; options)</tt>
     */
     setUpdateOptionsCode(*code update_options) {
         self.update_options = update_options;

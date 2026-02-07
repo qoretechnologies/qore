@@ -25,12 +25,6 @@
 # minimum Qore version
 %requires qore >= 1.10
 
-# require type definitions everywhere
-%require-types
-
-# enable all warnings
-%enable-all-warnings
-
 %requires HttpServerUtil >= 1.0.12
 %requires WebSocketUtil >= 1.6
 %requires Util
@@ -42,7 +36,7 @@
 %define NoAsyncApi
 %endtry
 
-%new-style
+%modern
 
 module WebSocketHandler {
     version = "2.3";
@@ -73,6 +67,13 @@ module WebSocketHandler {
     @section websockethandler_relnotes WebSocketHandler Release History
 
     @subsection websockethandler_v2_3 Version 2.3
+    - fixed @ref WebSocketHandler::WebSocketHandler::sendAll() "WebSocketHandler::sendAll()" to apply
+      per-connection extension transforms (e.g., permessage-deflate) instead of pre-encoding a single frame
+      for all connections
+    - fixed server-side extension negotiation to properly propagate negotiated extensions from
+      @ref WebSocketHandler::WebSocketHandler::handleRequest() "handleRequest()" to
+      @ref WebSocketHandler::WebSocketHandler "startImpl()" so that per-connection extension transforms
+      (e.g., permessage-deflate compression/decompression) are actually applied
     - added WebSocket extension support (RFC 6455 Section 9) with permessage-deflate (RFC 7692)
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
     - added @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" constructor option \c "extensions" to enable
@@ -310,6 +311,23 @@ public class WebSocketConnection {
         queue.push(msg);
     }
 
+    #! Returns True if this connection requires per-connection encoding
+    /** Connections with active extensions or an AsyncAPI validator cannot share a pre-encoded frame
+        and must encode individually via @ref send().
+
+        @return True if per-connection encoding is needed, False if a shared pre-encoded frame can be used
+
+        @since WebSocketHandler 2.3
+    */
+    bool needsPerConnectionEncoding() {
+%ifndef NoAsyncApi
+        if (asyncapi_validator && asyncapi_channel) {
+            return True;
+        }
+%endif
+        return exists active_extensions;
+    }
+
     #! Pushes an unencoded message on the connection's message queue
     /** The message will be encoded with @ref WebSocketUtil::ws_encode_message() before sending
 
@@ -350,6 +368,8 @@ public class WebSocketConnection {
         @since WebSocketHandler 2.3
     */
     private binary sendWithExtensions(data msg, *int op, bool fin = True) {
+        # Determine the opcode before extension transforms may change the message type
+        int actual_op = op ?? (msg.typeCode() == NT_STRING ? WSOP_Text : WSOP_Binary);
         int rsv_bits = 0;
 
         # Apply outgoing transforms from active extensions
@@ -357,7 +377,7 @@ public class WebSocketConnection {
         # as specified in RFC 6455 Section 9.2 and RFC 7692 Section 8
         if (active_extensions) {
             hash<auto> ctx = {
-                "op": op ?? (msg.typeCode() == NT_STRING ? WSOP_Text : WSOP_Binary),
+                "op": actual_op,
                 "fin": fin,
             };
             foreach AbstractWebSocketExtension ext in (active_extensions) {
@@ -367,7 +387,7 @@ public class WebSocketConnection {
             }
         }
 
-        return ws_encode_message(msg, op, NOTHING, fin, rsv_bits);
+        return ws_encode_message(msg, actual_op, NOTHING, fin, rsv_bits);
     }
 
     #! This method is called when messages from the client are received
@@ -693,6 +713,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         /** @since WebSocketHandler 2.3
         */
         *list<string> supported_extensions;
+
+        #! Pending negotiated extensions keyed by connection ID, to be consumed by startImpl()
+        /** @since WebSocketHandler 2.3
+        */
+        hash<string, hash<auto>> pending_extensions;
     }
 
     private:internal {
@@ -907,10 +932,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             if (ext_result.response_header) {
                 rhdr."sec-websocket-extensions" = ext_result.response_header;
             }
-            # Store negotiated extensions in hdr for startImpl to access
+            # Store negotiated extensions on the handler for startImpl to access
             if (ext_result.extensions) {
-                hdr."_ws_negotiated_extensions" = ext_result.extensions;
-                hdr."_ws_extension_rsv_mask" = ext_result.rsv_mask;
+                string cid = cx.id.toString();
+                pending_extensions{cid} = {
+                    "extensions": ext_result.extensions,
+                    "rsv_mask": ext_result.rsv_mask,
+                };
             }
 
             # RFC 8441: Return 200 OK for HTTP/2 WebSocket CONNECT
@@ -941,10 +969,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         if (ext_result.response_header) {
             rhdr."Sec-WebSocket-Extensions" = ext_result.response_header;
         }
-        # Store negotiated extensions in hdr for startImpl to access
+        # Store negotiated extensions on the handler for startImpl to access
         if (ext_result.extensions) {
-            hdr."_ws_negotiated_extensions" = ext_result.extensions;
-            hdr."_ws_extension_rsv_mask" = ext_result.rsv_mask;
+            string cid = cx.id.toString();
+            pending_extensions{cid} = {
+                "extensions": ext_result.extensions,
+                "rsv_mask": ext_result.rsv_mask,
+            };
         }
 
         return {
@@ -1009,11 +1040,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             wsc.setHttp2StreamContext(new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, True));
         }
 
-        # Set negotiated extensions on the connection
-        if (hdr."_ws_negotiated_extensions") {
-            wsc.setExtensions(hdr."_ws_negotiated_extensions", hdr."_ws_extension_rsv_mask" ?? 0);
+        # Set negotiated extensions on the connection (stored by handleRequest)
+        *hash<auto> ext_data = remove pending_extensions{cid};
+        if (ext_data) {
+            wsc.setExtensions(ext_data.extensions, ext_data.rsv_mask ?? 0);
             logDebug("WebSocketHandler::startImpl() cid: %y extensions: %y", cx.id,
-                (map $1.getName(), hdr."_ws_negotiated_extensions"));
+                (map $1.getName(), ext_data.extensions));
         }
 
         try {
@@ -1039,6 +1071,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             rwl.writeLock();
             on_exit rwl.writeUnlock();
             remove ch{cid};
+            # Safety net: clean up any pending extension data for this connection
+            remove pending_extensions{cid};
         }
 
         # issue #2887 timestamp of last traffic
@@ -1403,16 +1437,26 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     #! sends a message to all connected clients
     /** @param d the data to send
 
-        Messages are automatically encoded with @ref WebSocketUtil::ws_encode_message() before sending.
+        Connections without active extensions or an AsyncAPI validator share a single pre-encoded frame
+        for efficiency.  Connections that need per-connection transforms (e.g., permessage-deflate) are
+        encoded individually via @ref WebSocketHandler::WebSocketConnection::send()
+        "WebSocketConnection::send()".
+
+        @since WebSocketHandler 2.3 per-connection extension transforms are now properly applied
     */
     sendAll(data d) {
-        binary msg = ws_encode_message(d);
-
         rwl.readLock();
         on_exit rwl.readUnlock();
 
+        # pre-encode once for connections that need no per-connection transforms
+        *binary encoded;
+
         # push the data on all connection queues
-        map $1.sendEncoded(msg), ch.iterator();
+        map (
+            $1.needsPerConnectionEncoding()
+                ? $1.send(d)
+                : $1.sendEncoded(encoded ?? (encoded = ws_encode_message(d)))
+        ), ch.iterator();
 
         #if (ch) logDebug("sending data to connections: %y", ch.keys());
     }

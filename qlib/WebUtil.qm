@@ -26,13 +26,11 @@
 %requires qore >= 2.2
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # do not use "$" signs, assume local vars
-%new-style
+%modern
 
 module WebUtil {
     version = "1.7";

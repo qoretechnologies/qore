@@ -134,8 +134,6 @@ public class ServerSentEventConnection {
     }
 
     #! Flush all output data
-    /**
-    */
     flush() {
         if (gettid() != tid) {
             while (!stop_flag && !queue.empty()) {

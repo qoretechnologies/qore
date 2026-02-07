@@ -29,9 +29,7 @@
 %requires Util
 %requires json
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 %no-debugging
 %allow-weak-references
 

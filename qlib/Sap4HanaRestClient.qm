@@ -216,7 +216,7 @@ Sap4HanaRestClient rest({"url": "https://sandbox.api.sap.com/s4hanacloud/sap/opu
 }
 
 #! class for <a href="https://sap.com">SAP S/4Hana</a> REST connections; returns @ref Sap4HanaRestClient::Sap4HanaRestClient objects
-/** In addition to all options supported by \c RestClient::RestClientConnection "RestClientConnection", this
+/** In addition to all options supported by \c RestClient::RestConnection "RestClientConnection", this
     connection class supports the following options:
     - \c "apikey": (required if \c "client_id" and \c "client_secret" are not supplied) the
         <a href="https://sap.com">SAP S/4Hana</a> api key

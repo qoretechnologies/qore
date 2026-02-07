@@ -410,7 +410,7 @@ public class ConnectionSchemeCache {
         @param throw_exception if @ref True then an exception is thrown if the scheme cannot be resolved, otherwise
         @ref NOTHING is returned
         @param scheme_loader a closure taking a string scheme argument and returning
-        <tt>*hash<ConnectionSchemeInfo></tt>
+        <tt>*hash&lt;ConnectionSchemeInfo&gt;</tt>
 
         @return info for the given connection scheme or @ref NOTHING is returned if the scheme cannot be
         resolved and the \a throw_exception argument is @ref False

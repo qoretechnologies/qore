@@ -26,13 +26,11 @@
 %requires qore >= 2.0
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
+%modern
 
 %requires Util
 
@@ -68,6 +66,9 @@ module WebSocketUtil {
     @section websocketutil_relnotes WebSocketUtil Module Release History
 
     @subsection wsu_v16 v1.6
+    - fixed @ref WebSocketUtil::PerMessageDeflateExtension::transformIncoming()
+      "PerMessageDeflateExtension::transformIncoming()" to return string (not binary) for text frames after
+      decompression, preserving the correct message type for \c gotMessage() dispatch
     - added pluggable WebSocket extension framework
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - added \c WsExtensionParamInfo hashdecl for extension parameters
@@ -1271,8 +1272,12 @@ hash<WsMsgInfo> h = ws_read_message(sock);
                 return msg;
             }
 
-            # Decompress the message
-            return decompressData(msg);
+            # Decompress the message; convert back to string for text frames
+            binary decompressed = decompressData(msg);
+            if (ctx.op == WSOP_Text) {
+                return decompressed.toString("UTF-8");
+            }
+            return decompressed;
         }
 
         #! Validates RSV bits for incoming frames

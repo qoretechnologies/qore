@@ -1709,6 +1709,7 @@ public class Attachment inherits Part {
         @param hdr optional headers for the MIME part for the attachment
         @param cid optional Content-ID for inline attachments (without angle brackets); use this for images
         embedded in HTML emails that are referenced as \c "cid:content-id"
+        @param is_inline if @ref True, the attachment is treated as inline
 
         @throw UNKNOWN-ENCODING the message encoding value passed is unknown/unimplemented
         @throw INVALID-ENCODING the encoding given cannot be used with data given

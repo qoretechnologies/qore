@@ -251,7 +251,7 @@ ZeyosRestClient zeyos(
 }
 
 #! class for <a href="http://www.zeyos.com">Zeyos.com</a> REST connections; returns @ref ZeyosRestClient::ZeyosRestClient objects
-/** In addition to all options supported by \c RestClient::RestClientConnection "RestClientConnection", this
+/** In addition to all options supported by \c RestClient::RestConnection "RestClientConnection", this
     connection class supports the following options:
     - \c "appsecret" (mandatory): the <a href="http://www.zeyos.com">zeyos.com</a> appsecret
     - \c "identifier" (optional): the <a href="http://www.zeyos.com">zeyos.com</a> identifier
