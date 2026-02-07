@@ -317,6 +317,23 @@ public class WebSocketConnection {
         queue.push(msg);
     }
 
+    #! Returns True if this connection requires per-connection encoding
+    /** Connections with active extensions or an AsyncAPI validator cannot share a pre-encoded frame
+        and must encode individually via @ref send().
+
+        @return True if per-connection encoding is needed, False if a shared pre-encoded frame can be used
+
+        @since WebSocketHandler 2.3
+    */
+    bool needsPerConnectionEncoding() {
+%ifndef NoAsyncApi
+        if (asyncapi_validator && asyncapi_channel) {
+            return True;
+        }
+%endif
+        return exists active_extensions;
+    }
+
     #! Pushes an unencoded message on the connection's message queue
     /** The message will be encoded with @ref WebSocketUtil::ws_encode_message() before sending
 
@@ -1426,10 +1443,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     #! sends a message to all connected clients
     /** @param d the data to send
 
-        Messages are encoded via each connection's
-        @ref WebSocketHandler::WebSocketConnection::send() "WebSocketConnection::send()" method, which
-        applies per-connection extension transforms (e.g., permessage-deflate) and AsyncAPI validation
-        before encoding with @ref WebSocketUtil::ws_encode_message().
+        Connections without active extensions or an AsyncAPI validator share a single pre-encoded frame
+        for efficiency.  Connections that need per-connection transforms (e.g., permessage-deflate) are
+        encoded individually via @ref WebSocketHandler::WebSocketConnection::send()
+        "WebSocketConnection::send()".
 
         @since WebSocketHandler 2.3 per-connection extension transforms are now properly applied
     */
@@ -1437,8 +1454,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         rwl.readLock();
         on_exit rwl.readUnlock();
 
+        # pre-encode once for connections that need no per-connection transforms
+        *binary encoded;
+
         # push the data on all connection queues
-        map $1.send(d), ch.iterator();
+        map (
+            $1.needsPerConnectionEncoding()
+                ? $1.send(d)
+                : $1.sendEncoded(encoded ?? (encoded = ws_encode_message(d)))
+        ), ch.iterator();
 
         #if (ch) logDebug("sending data to connections: %y", ch.keys());
     }
