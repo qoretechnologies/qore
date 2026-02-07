@@ -76,11 +76,11 @@ AutoReadLock arl(rwlock);
 AutoReadLock::constructor(RWLock[RWLock] rwl) {
     ReferenceHolder<RWLock> holder(rwl, xsink);
     // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
+    QoreSandboxManagerHelper smh;
+    if (smh) {
         const int poll_ms = 500;  // 500ms polling interval
         while (true) {
-            if (sm->isInterruptRequested()) {
+            if (smh->isInterruptRequested()) {
                 xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for read lock");
                 return;
             }

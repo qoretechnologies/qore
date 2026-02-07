@@ -374,7 +374,7 @@ struct qore_qf_private {
         assert(m.trylock());
 
         // Check for sandbox interrupt support
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        QoreSandboxManagerHelper smh;
 
         const char* ptr = static_cast<const char*>(buf);
         size_t remaining = len;
@@ -382,7 +382,7 @@ struct qore_qf_private {
 
         while (remaining > 0) {
             // Check for interrupt
-            if (sm && xsink && sm->checkIOInterrupt(xsink, "file write")) {
+            if (smh && xsink && smh->checkIOInterrupt(xsink, "file write")) {
                 return -1;
             }
 
@@ -466,19 +466,19 @@ struct qore_qf_private {
         char* bbuf = 0;
 
         // Check for sandbox interrupt support
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        QoreSandboxManagerHelper smh;
         const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
 
         while (true) {
             // Check for interrupt
-            if (sm && sm->checkIOInterrupt(xsink, "file read")) {
+            if (smh && smh->checkIOInterrupt(xsink, "file read")) {
                 br = 0;
                 break;
             }
 
             // wait for data with polling for interruptibility
             int effective_timeout = timeout_ms;
-            if (sm && (timeout_ms < 0 || timeout_ms > poll_interval)) {
+            if (smh && (timeout_ms < 0 || timeout_ms > poll_interval)) {
                 effective_timeout = poll_interval;
             }
 
@@ -488,7 +488,7 @@ struct qore_qf_private {
                     break;
                 }
                 // If we used a smaller timeout for polling, continue if not timed out yet
-                if (sm && timeout_ms != effective_timeout) {
+                if (smh && timeout_ms != effective_timeout) {
                     if (timeout_ms > 0) {
                         timeout_ms -= effective_timeout;
                         if (timeout_ms <= 0) {
@@ -572,7 +572,7 @@ struct qore_qf_private {
         bool tty = (bool)isatty(fd);
 
         // Check for sandbox interrupt support
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        QoreSandboxManagerHelper smh;
 
         int ch, rc = -1;
         int char_count = 0;
@@ -580,9 +580,9 @@ struct qore_qf_private {
 
         while ((ch = readChar()) >= 0) {
             // Check for interrupt periodically
-            if (sm && xsink && ++char_count >= check_interval) {
+            if (smh && xsink && ++char_count >= check_interval) {
                 char_count = 0;
-                if (sm->checkIOInterrupt(xsink, "file readLine")) {
+                if (smh->checkIOInterrupt(xsink, "file readLine")) {
                     return -1;
                 }
             }
@@ -630,7 +630,7 @@ struct qore_qf_private {
             return -2;
 
         // Check for sandbox interrupt support
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        QoreSandboxManagerHelper smh;
 
         int ch, rc = -1;
         int char_count = 0;
@@ -638,9 +638,9 @@ struct qore_qf_private {
 
         while ((ch = readChar()) >= 0) {
             // Check for interrupt periodically
-            if (sm && xsink && ++char_count >= check_interval) {
+            if (smh && xsink && ++char_count >= check_interval) {
                 char_count = 0;
-                if (sm->checkIOInterrupt(xsink, "file readUntil")) {
+                if (smh->checkIOInterrupt(xsink, "file readUntil")) {
                     return -1;
                 }
             }
@@ -839,7 +839,7 @@ struct qore_qf_private {
             return -2;
 
         // Check for sandbox interrupt support
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        QoreSandboxManagerHelper smh;
 
         // offset in bytes
         unsigned pos = 0;
@@ -850,9 +850,9 @@ struct qore_qf_private {
 
         while ((ch = readChar()) >= 0) {
             // Check for interrupt periodically
-            if (sm && xsink && ++char_count >= check_interval) {
+            if (smh && xsink && ++char_count >= check_interval) {
                 char_count = 0;
-                if (sm->checkIOInterrupt(xsink, "file readUntil")) {
+                if (smh->checkIOInterrupt(xsink, "file readUntil")) {
                     return -1;
                 }
             }

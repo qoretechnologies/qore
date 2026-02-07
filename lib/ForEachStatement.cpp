@@ -66,8 +66,8 @@ int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
 
     while (true) {
         // Check for sandbox interrupt
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
-        if (sm && sm->isInterruptRequested()) {
+        QoreSandboxManagerHelper smh;
+        if (smh && smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
             break;
         }
@@ -127,8 +127,8 @@ int ForEachStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excep
 
     while (true) {
         // Check for sandbox interrupt
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
-        if (sm && sm->isInterruptRequested()) {
+        QoreSandboxManagerHelper smh;
+        if (smh && smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
             break;
         }
@@ -204,8 +204,8 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
 
     while (true) {
         // Check for sandbox interrupt
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
-        if (sm && sm->isInterruptRequested()) {
+        QoreSandboxManagerHelper smh;
+        if (smh && smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
             break;
         }
@@ -317,8 +317,8 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
 
     while (true) {
         // Check for sandbox interrupt
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
-        if (sm && sm->isInterruptRequested()) {
+        QoreSandboxManagerHelper smh;
+        if (smh && smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
             break;
         }

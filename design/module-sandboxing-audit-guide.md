@@ -51,7 +51,7 @@ Qore's sandboxing system consists of four subsystems, all managed through `QoreS
 1. A `QoreSandboxManager` is created and configured with policies
 2. It's attached to a `QoreProgram` via `setSandboxManager()`
 3. Code executing in that program context is subject to all configured restrictions
-4. Modules access the sandbox manager via `runtime_get_sandbox_manager()`
+4. Modules access the sandbox manager via `QoreSandboxManagerHelper`
 
 ### Module Loading in Sandboxed Environments
 
@@ -64,7 +64,7 @@ Modules that have not been audited and verified for sandbox compliance should no
 
 ### Key Principle: Sandbox Manager May Be Absent
 
-When `runtime_get_sandbox_manager()` returns `nullptr`, no sandboxing is active. Modules must:
+When `QoreSandboxManagerHelper` evaluates to false, no sandboxing is active. Modules must:
 - Check for this and use fast paths when no sandbox is present
 - Never fail or behave incorrectly when sandboxing is disabled
 
@@ -127,11 +127,11 @@ Search for these patterns that require filesystem security checks:
 #include <qore/QoreSandboxManager.h>
 
 int myFileOperation(const char* path, ExceptionSink* xsink) {
-    // Get sandbox manager (may be nullptr if no sandbox active)
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    // Acquire sandbox manager (RAII, ref-counted, safe during program cleanup)
+    QoreSandboxManagerHelper smh;
 
-    if (sm) {
-        QoreFilesystemSecurityManager* fs = sm->getFilesystemSecurityManager();
+    if (smh) {
+        QoreFilesystemSecurityManager* fs = smh->getFilesystemSecurityManager();
         if (fs) {
             // Check access before operation
             // Mode should match what operation actually does
@@ -206,10 +206,10 @@ Search for these patterns that require network security checks:
 #include <qore/QoreSandboxManager.h>
 
 int myConnectOperation(const char* hostname, int port, ExceptionSink* xsink) {
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    QoreSandboxManagerHelper smh;
 
-    if (sm) {
-        QoreNetworkSecurityManager* net = sm->getNetworkSecurityManager();
+    if (smh) {
+        QoreNetworkSecurityManager* net = smh->getNetworkSecurityManager();
         if (net) {
             // Pre-DNS check (catches obvious violations early)
             if (!net->checkHostname(hostname, port, QSEC_NET_TCP, xsink)) {
@@ -222,8 +222,8 @@ int myConnectOperation(const char* hostname, int port, ExceptionSink* xsink) {
     struct addrinfo* result = resolve_hostname(hostname, port);
 
     // Post-DNS check (prevents DNS rebinding attacks)
-    if (sm) {
-        QoreNetworkSecurityManager* net = sm->getNetworkSecurityManager();
+    if (smh) {
+        QoreNetworkSecurityManager* net = smh->getNetworkSecurityManager();
         if (net) {
             if (!net->checkConnect(result->ai_addr, result->ai_addrlen,
                                    QSEC_NET_TCP, xsink)) {
@@ -304,13 +304,13 @@ Resource limits are enforced by the Qore runtime, but modules can contribute to 
 ```cpp
 // For tight loops that may run long, periodically check for timeout
 void processLargeDataset(ExceptionSink* xsink) {
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    QoreSandboxManagerHelper smh;
 
     int iteration = 0;
     for (auto& item : large_dataset) {
         // Check every N iterations to avoid overhead
-        if (sm && (++iteration % 1000) == 0) {
-            if (sm->isInterruptRequested()) {
+        if (smh && (++iteration % 1000) == 0) {
+            if (smh->isInterruptRequested()) {
                 xsink->raiseException("PROGRAM-INTERRUPTED",
                     "operation interrupted");
                 return;
@@ -393,15 +393,15 @@ int quickOperation(ExceptionSink* xsink) {
 ```cpp
 ssize_t blockingRead(int fd, void* buf, size_t len, int timeout_ms,
                      ExceptionSink* xsink) {
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    QoreSandboxManagerHelper smh;
 
     // Fast path: no sandbox
-    if (!sm) {
+    if (!smh) {
         return blocking_read_with_timeout(fd, buf, len, timeout_ms);
     }
 
     // Check before starting
-    if (sm->isInterruptRequested()) {
+    if (smh->isInterruptRequested()) {
         xsink->raiseException("PROGRAM-INTERRUPTED", "I/O interrupted");
         return -1;
     }
@@ -409,7 +409,7 @@ ssize_t blockingRead(int fd, void* buf, size_t len, int timeout_ms,
     // Poll with short timeouts
     int remaining = timeout_ms;
     while (remaining > 0 || timeout_ms < 0) {
-        if (sm->isInterruptRequested()) {
+        if (smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "I/O interrupted");
             return -1;
         }
@@ -448,19 +448,19 @@ class DatabaseQuery {
 
 public:
     int execute(const char* sql, ExceptionSink* xsink) {
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
+        QoreSandboxManagerHelper smh;
 
-        if (!sm) {
+        if (!smh) {
             return db_query_sync(handle, sql);  // Fast path
         }
 
-        if (sm->isInterruptRequested()) {
+        if (smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "query interrupted");
             return -1;
         }
 
         // Register cancel callback
-        sm->registerCancelCallback(this, [](void* ctx) {
+        smh->registerCancelCallback(this, [](void* ctx) {
             auto* self = static_cast<DatabaseQuery*>(ctx);
             db_cancel_query(self->handle);
         });
@@ -469,10 +469,10 @@ public:
         int result = db_query_sync(handle, sql);
 
         // Unregister callback
-        sm->unregisterCancelCallback(this);
+        smh->unregisterCancelCallback(this);
 
         // Check if we were interrupted
-        if (sm->isInterruptRequested()) {
+        if (smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "query interrupted");
             return -1;
         }
@@ -500,7 +500,7 @@ public:
 
 1. **Identify entry points**: All public functions/methods in the module
 2. **Trace to system calls**: Follow code paths to I/O and blocking operations
-3. **Check for sandbox awareness**: Verify `runtime_get_sandbox_manager()` is called
+3. **Check for sandbox awareness**: Verify `QoreSandboxManagerHelper` is used
 4. **Verify correct checks**: Ensure appropriate security manager method is called
 5. **Check error handling**: Verify exceptions are propagated correctly
 
@@ -517,7 +517,7 @@ grep -rn "connect(\|bind(\|socket(\|accept(\|getaddrinfo\|gethostbyname" src/
 grep -rn "read(\|write(\|recv\|send\|select\|poll\|epoll\|sleep\|usleep\|wait\|lock" src/
 
 # Find existing sandbox checks (should appear near above patterns)
-grep -rn "runtime_get_sandbox_manager\|QoreSandboxManager\|checkAccess\|checkConnect" src/
+grep -rn "QoreSandboxManagerHelper\|QoreSandboxManager\|checkAccess\|checkConnect\|qore_check_io_interrupt" src/
 
 # Find exception sinks (entry points)
 grep -rn "ExceptionSink" src/*.h
@@ -671,8 +671,11 @@ These are lower risk but should still be addressed for defense in depth:
 // Main sandbox header
 #include <qore/QoreSandboxManager.h>
 
-// Key functions
-QoreSandboxManager* runtime_get_sandbox_manager();
+// RAII helper for safe, ref-counted access to the sandbox manager
+QoreSandboxManagerHelper smh;          // current program
+QoreSandboxManagerHelper smh(pgm);     // specific program
+
+// Convenience function for interrupt checking
 bool qore_check_io_interrupt(ExceptionSink* xsink = nullptr);
 
 // Constants

@@ -319,14 +319,14 @@ int QoreFile::lockBlocking(struct flock& fl, ExceptionSink* xsink) {
     }
 
     // Check for sandbox interrupt support
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
+    QoreSandboxManagerHelper smh;
+    if (smh) {
         // Use polling with interrupt checks
         const int poll_ms = QORE_IO_POLL_INTERVAL_MS;
 
         while (true) {
             // Check for interrupt
-            if (sm->checkIOInterrupt(xsink, "file lock")) {
+            if (smh->checkIOInterrupt(xsink, "file lock")) {
                 return -1;
             }
 
@@ -597,8 +597,8 @@ int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, c
     }
 
     // Check sandbox security restrictions
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
+    QoreSandboxManagerHelper smh;
+    if (smh) {
         // Determine access mode based on flags
         int access_mode = 0;
         if ((flags & O_ACCMODE) == O_RDONLY) {
@@ -612,7 +612,7 @@ int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, c
             access_mode |= QSEC_CREATE;
         }
 
-        if (!sm->checkFilesystemAccess(fn, access_mode, xsink)) {
+        if (!smh->checkFilesystemAccess(fn, access_mode, xsink)) {
             return -1;
         }
     }

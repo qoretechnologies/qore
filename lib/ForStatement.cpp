@@ -62,8 +62,8 @@ int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     // execute "for" body
     while (!*xsink) {
         // Check for sandbox interrupt
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
-        if (sm && sm->isInterruptRequested()) {
+        QoreSandboxManagerHelper smh;
+        if (smh && smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
             break;
         }
@@ -120,8 +120,8 @@ int ForStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exception
     // execute "for" body
     while (!*xsink) {
         // Check for sandbox interrupt
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
-        if (sm && sm->isInterruptRequested()) {
+        QoreSandboxManagerHelper smh;
+        if (smh && smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
             break;
         }

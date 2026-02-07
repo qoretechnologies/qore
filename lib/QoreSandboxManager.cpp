@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
 #include <qore/TypedHashDecl.h>
+#include "qore/intern/qore_program_private.h"
 
 #include <climits>
 #include <cstdlib>
@@ -945,18 +946,53 @@ QoreSandboxManager* QoreSandboxManager::createWebSafe() {
 }
 
 //------------------------------------------------------------------------------
+// qore_program_private::getSandboxManagerRef() - defined here to avoid
+// incomplete type issues (QoreSandboxManager is forward-declared in the header)
+//------------------------------------------------------------------------------
+
+QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
+    AutoLocker al(sm_lock);
+    if (sandbox_manager && sandbox_manager->optRef()) {
+        return sandbox_manager;
+    }
+    return nullptr;
+}
+
+//------------------------------------------------------------------------------
 // Runtime sandbox manager access
 //------------------------------------------------------------------------------
 
-QoreSandboxManager* runtime_get_sandbox_manager() {
-    QoreProgram* pgm = getProgram();
-    return pgm ? pgm->getSandboxManager() : nullptr;
-}
-
 bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
-        return sm->checkIOInterrupt(xsink, operation);
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        return smh->checkIOInterrupt(xsink, operation);
     }
     return false;
+}
+
+//------------------------------------------------------------------------------
+// QoreSandboxManagerHelper implementation
+//------------------------------------------------------------------------------
+
+QoreSandboxManagerHelper::QoreSandboxManagerHelper() {
+    QoreProgram* pgm = getProgram();
+    if (pgm) {
+        ptr = qore_program_private::get(*pgm)->getSandboxManagerRef();
+    } else {
+        ptr = nullptr;
+    }
+}
+
+QoreSandboxManagerHelper::QoreSandboxManagerHelper(QoreProgram* pgm) {
+    if (pgm) {
+        ptr = qore_program_private::get(*pgm)->getSandboxManagerRef();
+    } else {
+        ptr = nullptr;
+    }
+}
+
+QoreSandboxManagerHelper::~QoreSandboxManagerHelper() {
+    if (ptr) {
+        ptr->deref(nullptr);
+    }
 }

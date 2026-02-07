@@ -299,7 +299,8 @@ int rc = system("ls -l");
     - @ref backquote_operator "the backquote operator"
  */
 int system(string command) [dom=EXTERNAL_PROCESS] {
-    const bool use_pgroup = runtime_get_sandbox_manager() != nullptr;
+    QoreSandboxManagerHelper smh;
+    const bool use_pgroup = (bool)smh;
 #ifdef __linux__
     auto pidfd_open = [](pid_t target_pid) -> int {
 #ifdef SYS_pidfd_open
@@ -643,13 +644,13 @@ int sleep(softint seconds) [dom=PROCESS] {
       return 0;
 
    // Check for sandbox interrupt support - break into 100ms chunks
-   QoreSandboxManager* sm = runtime_get_sandbox_manager();
-   if (sm) {
+   QoreSandboxManagerHelper smh;
+   if (smh) {
       int64 remaining_usecs = seconds * 1000000ll;
       const int64 chunk_usecs = 100000ll; // 100ms chunks
 
       while (remaining_usecs > 0) {
-         if (sm->isInterruptRequested()) {
+         if (smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted during sleep");
             return -1;
          }
@@ -695,13 +696,13 @@ int usleep(softint usecs) [dom=PROCESS] {
       return 0;
 
    // Check for sandbox interrupt support - break into 100ms chunks
-   QoreSandboxManager* sm = runtime_get_sandbox_manager();
-   if (sm) {
+   QoreSandboxManagerHelper smh;
+   if (smh) {
       int64 remaining_usecs = usecs;
       const int64 chunk_usecs = 100000ll; // 100ms chunks
 
       while (remaining_usecs > 0) {
-         if (sm->isInterruptRequested()) {
+         if (smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted during usleep");
             return -1;
          }
@@ -742,13 +743,13 @@ int usleep(date d) [dom=PROCESS] {
       return 0;
 
    // Check for sandbox interrupt support - break into 100ms chunks
-   QoreSandboxManager* sm = runtime_get_sandbox_manager();
-   if (sm) {
+   QoreSandboxManagerHelper smh;
+   if (smh) {
       int64 remaining_usecs = usecs;
       const int64 chunk_usecs = 100000ll; // 100ms chunks
 
       while (remaining_usecs > 0) {
-         if (sm->isInterruptRequested()) {
+         if (smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted during usleep");
             return -1;
          }

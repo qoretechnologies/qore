@@ -1371,9 +1371,9 @@ struct qore_socket_private {
         }
 
         // Check sandbox network security restrictions for UNIX sockets
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
-        if (sm) {
-            if (!sm->checkNetworkAccess((const struct sockaddr*)&addr, sizeof(struct sockaddr_un),
+        QoreSandboxManagerHelper smh;
+        if (smh) {
+            if (!smh->checkNetworkAccess((const struct sockaddr*)&addr, sizeof(struct sockaddr_un),
                     QSEC_NET_UNIX, xsink)) {
                 close_and_reset();
                 return -1;
@@ -1878,11 +1878,11 @@ struct qore_socket_private {
 
         for (struct addrinfo* p = aip; p; p = p->ai_next) {
             // Check sandbox network security restrictions
-            QoreSandboxManager* sm = runtime_get_sandbox_manager();
-            if (sm) {
+            QoreSandboxManagerHelper smh;
+            if (smh) {
                 int proto = (p->ai_socktype == SOCK_STREAM) ? QSEC_NET_TCP :
                             (p->ai_socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
-                if (!sm->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
+                if (!smh->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
                     return -1;
                 }
             }
@@ -2061,12 +2061,12 @@ struct qore_socket_private {
     // the only place where xsink is optional
     DLLLOCAL int bindIntern(struct sockaddr* ai_addr, size_t ai_addrlen, int prt, bool reuseaddr, ExceptionSink* xsink = 0) {
         // Check sandbox network security restrictions for bind
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
-        if (sm && xsink) {
+        QoreSandboxManagerHelper smh;
+        if (smh && xsink) {
             int proto = (stype == SOCK_STREAM) ? QSEC_NET_TCP :
                         (stype == SOCK_DGRAM) ? QSEC_NET_UDP :
                         (ai_addr->sa_family == AF_UNIX) ? QSEC_NET_UNIX : QSEC_NET_ALL;
-            if (!sm->network().checkBind(ai_addr, ai_addrlen, proto, xsink)) {
+            if (!smh->network().checkBind(ai_addr, ai_addrlen, proto, xsink)) {
                 close();
                 return -1;
             }

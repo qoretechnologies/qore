@@ -91,7 +91,8 @@ QoreValue BackquoteNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const
 
 QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
     rc = 0;
-    const bool use_pgroup = runtime_get_sandbox_manager() != nullptr;
+    QoreSandboxManagerHelper smh;
+    const bool use_pgroup = (bool)smh;
 #if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING) && defined(HAVE_POLL)
     {
         int pipefd[2];

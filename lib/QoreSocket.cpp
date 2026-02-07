@@ -1138,11 +1138,11 @@ int SocketConnectInetPollState::nextIntern(ExceptionSink* xsink) {
     assert(p);
 
     // Check sandbox network security restrictions
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
+    QoreSandboxManagerHelper smh;
+    if (smh) {
         int proto = (p->ai_socktype == SOCK_STREAM) ? QSEC_NET_TCP :
                     (p->ai_socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
-        if (!sm->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
+        if (!smh->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
             return -1;
         }
     }
@@ -1175,9 +1175,9 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
 
     // Check sandbox network security restrictions for UNIX sockets
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
-        if (!sm->checkNetworkAccess((const struct sockaddr*)&addr, sizeof(struct sockaddr_un),
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        if (!smh->checkNetworkAccess((const struct sockaddr*)&addr, sizeof(struct sockaddr_un),
                 QSEC_NET_UNIX, xsink)) {
             return;
         }
