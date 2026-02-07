@@ -898,15 +898,11 @@ static void do_version_animation(const char* arg) {
     clock_gettime(CLOCK_MONOTONIC, &anim_start);
 
     for (int frame = 0; frame < ANIM_FRAMES; ++frame) {
-        // Triangle wave: cos_theta changes linearly 1->0->-1->0->1
-        // so projected width changes at a constant rate (no dwell at face-on)
+        // Time-warped cosine: theta advances faster at face-on (less dwell)
+        // and slower at edge-on. Perfectly smooth — no kinks or bouncing.
         double t = (double)frame / ANIM_FRAMES;
-        double cos_theta;
-        if (t <= 0.5) {
-            cos_theta = 1.0 - 4.0 * t;
-        } else {
-            cos_theta = -3.0 + 4.0 * t;
-        }
+        double theta = 2.0 * M_PI * t + 0.35 * sin(4.0 * M_PI * t);
+        double cos_theta = cos(theta);
         double abs_cos = fabs(cos_theta);
 
         // Move cursor up to top of art area (except for first frame)
