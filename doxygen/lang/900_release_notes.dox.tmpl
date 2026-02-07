@@ -703,6 +703,19 @@ qore --compile-module MyModule.qm --strip-source
       - polling-based event triggers for payments, invoices, credit notes, tracking, stock levels, and contact updates
       - action catalog integration with 35 actions and 8 triggers
       - connection support with \c cin7core:// URL scheme
+    - @ref unleashedrestclientintro "UnleashedRestClient" module
+      - new module providing a REST client for Unleashed Software API
+      - supports HMAC-SHA256 signature-based authentication
+      - provides UnleashedRestConnection for connection management with \c unleashed:// URL scheme
+    - @ref unleashedataproviderintro "UnleashedDataProvider" module
+      - new module providing a data provider API for Unleashed inventory management and purchasing
+      - customer management (create, read, update, search)
+      - product catalog management (create, read, update, obsolete, search)
+      - sales order management (create, read, update, delete, complete, search)
+      - credit note management (create, read, update, delete, complete, line item management, search)
+      - polling-based event triggers for new customers and new sales orders
+      - action catalog integration with 27 actions and 2 triggers
+      - connection support with \c unleashed:// URL scheme
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
@@ -1158,6 +1171,15 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
         - @ref Qore::PO_BROKEN_LIST_RANGE "PO_BROKEN_LIST_RANGE"
     - Subtracting @ref NOTHING from any value will result in the same value; previously this would result in
       @ref NOTHING
+    - Binary Module API bumped from 1.5 to 2.0; all external binary modules must be recompiled
+      - Old-style exported globals (\c qore_module_name[], \c qore_module_version[], etc.) are no longer supported
+      - Modules must now implement \c extern \c "C" \c {name}_qore_module_desc(QoreModuleInfo&) to register
+        module metadata (hyphens in module names are converted to underscores for the C symbol name);
+        see @ref qore_modules for the updated developer guide
+      - @ref qore_module_init_t signature changed from \c QoreStringNode*() to
+        \c void(QoreModuleInitContext&, \c ExceptionSink&); errors are now reported via exceptions
+      - @ref qore_module_ns_init_t now takes an additional \c ExceptionSink& parameter
+      - The @ref QoreModuleInfo struct uses default member initializers, making it extensible without future API breaks
 
     @subsection qore_2_0_0_bug_fixes Bug Fixes in Qore
     - <a href="../../modules/BulkSqlUtil/html/index.html#bulksqlutilintro">BulkSqlUtil</a> module

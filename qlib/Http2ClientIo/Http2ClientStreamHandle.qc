@@ -224,7 +224,7 @@ public class Http2ClientStreamHandle {
                 } else {
                     # In sync mode, release lock and drive poll directly
                     delete al;
-                    conn.drivePoll(min(remaining, 100ms));
+                    conn.drivePoll(remaining);
                     al = new AutoLock(lock);
                 }
             }

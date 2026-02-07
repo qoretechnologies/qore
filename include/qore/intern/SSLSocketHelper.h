@@ -153,6 +153,17 @@ public:
     */
     DLLLOCAL bool isHttp2() const;
 
+    //! Returns the number of bytes already decrypted and buffered in the SSL layer
+    /** This is a lightweight check (no I/O) that reads an internal counter.
+        Must be called while the caller holds appropriate locking to prevent
+        concurrent SSL operations (SSL objects are not thread-safe).
+
+        @return number of readable bytes buffered in the SSL object, 0 if none
+
+        @since Qore 2.1
+    */
+    DLLLOCAL int pending() const;
+
 private:
     qore_socket_private& qs;
     SSL_METHOD_CONST SSL_METHOD* meth = nullptr;

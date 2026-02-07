@@ -247,7 +247,7 @@ public:
         @param len Length of data
         @param end_stream If true, sends END_STREAM flag (closes the stream for sending)
         @param xsink Exception sink for error reporting
-        @return 0 on success, -1 on error
+        @return 0 on success, -1 on error (exception set), 1 = buffer full (non-fatal, data not appended)
     */
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
@@ -315,6 +315,14 @@ public:
 
     //! Returns true if there is pending request/response body data for stream_id
     DLLLOCAL bool hasPendingBodyData(int32_t stream_id) const;
+
+    //! Returns true if there is already-buffered data in the socket read buffer or SSL layer
+    /** This is a lightweight check (no I/O, no SSL operations) that checks internal counters.
+        Used by isHttp2DataAvailable() to detect buffered data without holding the socket lock.
+        @return true if there is buffered data available for reading
+        @since Qore 2.1
+    */
+    DLLLOCAL bool hasSocketBufferedData() const;
 
     //! Get a stream by ID
     DLLLOCAL Http2StreamInfo* getStream(int32_t stream_id);

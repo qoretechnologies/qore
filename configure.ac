@@ -1037,6 +1037,21 @@ fi
 AC_SUBST([LZ4_CPPFLAGS])
 AC_SUBST([LZ4_LIBS])
 
+# Check for nghttp2 library - required since Qore 2.3
+AC_MSG_CHECKING([for nghttp2 library and header files])
+if pkg-config --exists libnghttp2 2>/dev/null; then
+    NGHTTP2_CPPFLAGS="`pkg-config --cflags libnghttp2`"
+    NGHTTP2_LIBS="`pkg-config --libs libnghttp2`"
+    have_nghttp2=yes
+    QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $NGHTTP2_LIBS"
+    QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $NGHTTP2_CPPFLAGS"
+    AC_MSG_RESULT([yes (pkg-config)])
+else
+    AC_MSG_ERROR([nghttp2 is required for HTTP/2 support. Please install libnghttp2-dev (Debian/Ubuntu) or libnghttp2-devel (Fedora/RHEL)])
+fi
+AC_SUBST([NGHTTP2_CPPFLAGS])
+AC_SUBST([NGHTTP2_LIBS])
+
 set_openssl_cppflags() {
     if test "$1" != "/usr/include"; then
         OPENSSL_CPPFLAGS=-I$1
@@ -2244,10 +2259,11 @@ show_library_feature profiling $enable_profile
 show_library_feature debug $enable_debug
 echo "*** OPTIONAL BUILTIN MODULES ***"
 show_library_feature "mongodb module" $have_mongodb
-echo "*** REQUIRED COMPRESSION SUPPORT (since Qore 2.3) ***"
+echo "*** REQUIRED LIBRARIES (since Qore 2.3) ***"
 show_library_feature "brotli compression" $have_brotli
 show_library_feature "zstd compression" $have_zstd
 show_library_feature "lz4 compression" $have_lz4
+show_library_feature "nghttp2 (HTTP/2)" $have_nghttp2
 
 echo
 echo "*** MODULES DELIVERED SEPARATELY - SEE 'README-MODULES' FOR MORE INFO ***"

@@ -1873,6 +1873,11 @@ ws.setEventQueue();
                 logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %N", ex.err, ex);
                 return;
             }
+            # ignore HTTP2-ERROR when closing (HTTP/2 session already inactive)
+            if (ex.err == "HTTP2-ERROR") {
+                logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %N", ex.err, ex);
+                return;
+            }
             rethrow;
         }
     }
@@ -2666,6 +2671,10 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         http_opts.url = url;
         hash<auto> headers;
         headers += opts.headers;
+        # add token-based auth if present (mirrors WebSocketClient constructor logic)
+        if (opts.token && !headers.Authorization) {
+            headers.Authorization = sprintf("%s %s", opts.token_type ?? "Bearer", opts.token);
+        }
         return new WebSocketPingPollOperation(url, http_opts, headers, logger ?? self.logger);
     }
 

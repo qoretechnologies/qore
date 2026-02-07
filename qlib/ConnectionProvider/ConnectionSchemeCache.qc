@@ -218,6 +218,8 @@ public class ConnectionSchemeCache {
             "zeyosrest": "ZeyosRestClient",
             "zeyosrests": "ZeyosRestClient",
 
+            "unleashed": "UnleashedRestClient",
+
             "zohobooks": "ZohoBooksRestClient",
             "zohoinvoice": "ZohoInvoiceRestClient",
         };

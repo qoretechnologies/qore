@@ -1,0 +1,956 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  UnleashedDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/UnleashedRestClient.qm
+%requires ../../../../qlib/UnleashedDataProvider
+
+%exec-class UnleashedDataProviderTest
+
+public class UnleashedDataProviderTest inherits QUnit::Test {
+    private {
+        #! Unleashed REST client for integration tests
+        *UnleashedRestClient::UnleashedRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "api_id": "i,api-id=s",
+            "apikey": "k,apikey=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test customer GUID created during tests (for cleanup)
+        *string testCustomerGuid;
+
+        #! Test product GUID created during tests (for cleanup)
+        *string testProductGuid;
+
+        #! Test sales order GUID created during tests (for cleanup)
+        *string testSalesOrderGuid;
+    }
+
+    constructor() : Test("UnleashedDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require UNLEASHED_API_ID and UNLEASHED_API_KEY)
+        addTestCase("integration tests", \integrationTests());
+
+        # Polling trigger tests
+        addTestCase("polling trigger tests", \pollingTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Unleashed client for integration tests
+    private setupConnection() {
+        *string api_id = m_options.api_id ?? ENV.UNLEASHED_API_ID;
+        *string apikey = m_options.apikey ?? ENV.UNLEASHED_API_KEY;
+        if (!api_id || !apikey) {
+            if (m_options.verbose) {
+                printf("No API credentials provided (use -i and -k options or UNLEASHED_API_ID "
+                    "and UNLEASHED_API_KEY env vars)\n");
+            }
+            return;
+        }
+        hash<auto> opts = {
+            "api_id": api_id,
+            "apikey": apikey,
+        };
+        client = new UnleashedRestClient::UnleashedRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        # Test creating provider with fake credentials
+        UnleashedDataProvider::UnleashedDataProvider prov({
+            "api_id": "fake-api-id-for-testing",
+            "apikey": "fake-key-for-testing",
+        });
+        assertEq("unleashed", prov.getName());
+        assertEq("Unleashed data provider for inventory management, sales orders, and customer management", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("unleashed");
+        assertEq("unleashed", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("api_id"));
+        assertTrue(factoryOpts.hasKey("apikey"));
+        assertTrue(factoryOpts.hasKey("unleashedrestclient"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        UnleashedDataProvider::UnleashedDataProvider prov({
+            "api_id": "x",
+            "apikey": "x",
+        });
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertEq("UnleashedDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("api_id"));
+        assertTrue(info.constructor_options.hasKey("apikey"));
+        assertTrue(info.constructor_options.hasKey("unleashedrestclient"));
+
+        # Check supported reference data types
+        *hash<string, bool> refData = prov.getSupportedReferenceData();
+        assertTrue(refData.hasKey("customers"), "Should support customers ref_data");
+        assertTrue(refData.hasKey("products"), "Should support products ref_data");
+        assertTrue(refData.hasKey("salesorders"), "Should support salesorders ref_data");
+        assertTrue(refData.hasKey("warehouses"), "Should support warehouses ref_data");
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        UnleashedDataProvider::UnleashedDataProvider prov({
+            "api_id": "x",
+            "apikey": "x",
+        });
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Collection providers (DPAT_FIND)
+        assertTrue(children.contains("customers"));
+        assertTrue(children.contains("products"));
+        assertTrue(children.contains("sales-orders"));
+        assertTrue(children.contains("credit-notes"));
+
+        # Customer action providers
+        assertTrue(children.contains("create-customer"));
+        assertTrue(children.contains("get-customer"));
+        assertTrue(children.contains("update-customer"));
+
+        # Product action providers
+        assertTrue(children.contains("create-product"));
+        assertTrue(children.contains("get-product"));
+        assertTrue(children.contains("update-product"));
+        assertTrue(children.contains("obsolete-product"));
+
+        # Sales order action providers
+        assertTrue(children.contains("create-sales-order"));
+        assertTrue(children.contains("get-sales-order"));
+        assertTrue(children.contains("update-sales-order"));
+        assertTrue(children.contains("delete-sales-order"));
+        assertTrue(children.contains("complete-sales-order"));
+
+        # Credit note action providers
+        assertTrue(children.contains("create-credit-note"));
+        assertTrue(children.contains("get-credit-note"));
+        assertTrue(children.contains("update-credit-note"));
+        assertTrue(children.contains("delete-credit-note"));
+        assertTrue(children.contains("complete-credit-note"));
+        assertTrue(children.contains("create-credit-note-line"));
+        assertTrue(children.contains("update-credit-note-line"));
+        assertTrue(children.contains("delete-credit-note-line"));
+
+        # Utility action
+        assertTrue(children.contains("make-api-call"));
+
+        # Events provider
+        assertTrue(children.contains("events"));
+
+        # Check customers child provider
+        AbstractDataProvider customers = prov.getChildProvider("customers");
+        assertEq("customers", customers.getName());
+        hash<DataProviderInfo> customersInfo = customers.getInfo();
+        assertTrue(customersInfo.supports_read);
+        assertTrue(customersInfo.supports_native_search);
+        assertTrue(customersInfo.has_record);
+
+        # Check create-customer child provider
+        AbstractDataProvider createCustomer = prov.getChildProvider("create-customer");
+        assertEq("create-customer", createCustomer.getName());
+        hash<DataProviderInfo> createCustomerInfo = createCustomer.getInfo();
+        assertTrue(createCustomerInfo.supports_request);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check events child providers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("new-customer"));
+        assertTrue(eventChildren.contains("new-sales-order"));
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test customer data type
+        UnleashedDataProvider::UnleashedCustomerDataType customerType();
+        hash<string, AbstractDataField> customerFields = customerType.getFields();
+        assertTrue(customerFields.hasKey("Guid"));
+        assertTrue(customerFields.hasKey("CustomerCode"));
+        assertTrue(customerFields.hasKey("CustomerName"));
+        assertTrue(customerFields.hasKey("Currency"));
+        assertTrue(customerFields.hasKey("Addresses"));
+
+        # Test create customer request data type
+        UnleashedDataProvider::UnleashedCreateCustomerRequestDataType createCustomerType();
+        hash<string, AbstractDataField> createCustomerFields = createCustomerType.getFields();
+        assertTrue(createCustomerFields.hasKey("CustomerCode"), "Should have CustomerCode field");
+        assertTrue(createCustomerFields.hasKey("CustomerName"), "Should have CustomerName field");
+        assertTrue(createCustomerFields.hasKey("Currency"), "Should have Currency field");
+        assertTrue(createCustomerFields.hasKey("Addresses"), "Should have Addresses field");
+
+        # Verify Currency field is a proper complex type (HashDataType)
+        AbstractDataField currencyField = createCustomerFields.Currency;
+        AbstractDataProviderType currencyType = currencyField.getType();
+        assertEq("UnleashedCustomerCurrencyDataType", currencyType.getName(),
+            "Currency should use UnleashedCustomerCurrencyDataType");
+        hash<string, AbstractDataField> currencyFields = currencyType.getFields();
+        assertTrue(currencyFields.hasKey("CurrencyCode"), "Currency should have CurrencyCode field");
+
+        # Verify Addresses field is a proper list of complex types (SoftListDataType)
+        AbstractDataField addressesField = createCustomerFields.Addresses;
+        AbstractDataProviderType addressesType = addressesField.getType();
+        assertRegex("list", addressesType.getBaseTypeName(), "Addresses should be a list type");
+        AbstractDataProviderType addressElementType = addressesType.getElementType();
+        assertEq("UnleashedCustomerAddressDataType", addressElementType.getName(),
+            "Addresses should contain UnleashedCustomerAddressDataType elements");
+        hash<string, AbstractDataField> addressFields = addressElementType.getFields();
+        assertTrue(addressFields.hasKey("AddressType"), "Address should have AddressType field");
+        assertTrue(addressFields.hasKey("AddressName"), "Address should have AddressName field");
+        assertTrue(addressFields.hasKey("StreetAddress"), "Address should have StreetAddress field");
+        assertTrue(addressFields.hasKey("City"), "Address should have City field");
+        assertTrue(addressFields.hasKey("PostalCode"), "Address should have PostalCode field");
+        assertTrue(addressFields.hasKey("Country"), "Address should have Country field");
+
+        # Test product data type
+        UnleashedDataProvider::UnleashedProductDataType productType();
+        hash<string, AbstractDataField> productFields = productType.getFields();
+        assertTrue(productFields.hasKey("Guid"));
+        assertTrue(productFields.hasKey("ProductCode"));
+        assertTrue(productFields.hasKey("ProductDescription"));
+        assertTrue(productFields.hasKey("DefaultSellPrice"));
+
+        # Test sales order data type
+        UnleashedDataProvider::UnleashedSalesOrderDataType salesOrderType();
+        hash<string, AbstractDataField> salesOrderFields = salesOrderType.getFields();
+        assertTrue(salesOrderFields.hasKey("Guid"));
+        assertTrue(salesOrderFields.hasKey("OrderNumber"));
+        assertTrue(salesOrderFields.hasKey("OrderStatus"));
+        assertTrue(salesOrderFields.hasKey("Customer"));
+        assertTrue(salesOrderFields.hasKey("SalesOrderLines"));
+
+        # Test credit note data type
+        UnleashedDataProvider::UnleashedCreditNoteDataType creditNoteType();
+        hash<string, AbstractDataField> creditNoteFields = creditNoteType.getFields();
+        assertTrue(creditNoteFields.hasKey("Guid"));
+        assertTrue(creditNoteFields.hasKey("CreditNumber"));
+        assertTrue(creditNoteFields.hasKey("Customer"));
+
+        # Test ref_data attributes on get-* action options
+        *hash<DataProviderActionInfo> getCustomerAction = DataProviderActionCatalog::getAppAction(
+            UnleashedDataProvider::AppName, "get-customer");
+        assertTrue(exists getCustomerAction, "get-customer action should exist");
+        assertTrue(getCustomerAction.options.hasKey("guid"), "get-customer should have guid option");
+        assertEq("customers", getCustomerAction.options.guid.ref_data,
+            "guid should have ref_data = 'customers'");
+
+        *hash<DataProviderActionInfo> getProductAction = DataProviderActionCatalog::getAppAction(
+            UnleashedDataProvider::AppName, "get-product");
+        assertTrue(exists getProductAction, "get-product action should exist");
+        assertTrue(getProductAction.options.hasKey("guid"), "get-product should have guid option");
+        assertEq("products", getProductAction.options.guid.ref_data,
+            "guid should have ref_data = 'products'");
+
+        # Test date formatting for Unleashed API (YYYY-MM-DD)
+        date testDate = 2024-06-15T14:30:45;
+        string formattedDate = UnleashedDataProvider::UnleashedDataProviderBase::formatDate(testDate);
+        assertEq("2024-06-15", formattedDate,
+            "Date should be formatted as YYYY-MM-DD");
+
+        # Test with a date at midnight
+        date midnightDate = 2024-01-01T00:00:00;
+        string formattedMidnight = UnleashedDataProvider::UnleashedDataProviderBase::formatDate(midnightDate);
+        assertEq("2024-01-01", formattedMidnight,
+            "Midnight date should be formatted correctly");
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        UnleashedDataProvider::UnleashedDataProvider prov({
+            "api_id": "invalid-api-id",
+            "apikey": "invalid-key",
+        });
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid child in events provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            events.getChildProviderEx("invalid-event-type");
+        });
+    }
+
+    #! Corner case tests - edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+        # Test REST client URL
+        UnleashedRestClient::UnleashedRestClient client1({
+            "api_id": "x",
+            "apikey": "x",
+        });
+        assertTrue(client1.getURL() =~ /api\.unleashedsoftware\.com/);
+        assertFalse(client1.getURL() =~ /\/v2$/);
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("unleashed");
+        assertEq("Unleashed REST Connection", scheme.display_name);
+        assertTrue(scheme.options.hasKey("api_id"));
+        assertTrue(scheme.options."api_id".sensitive);
+        assertTrue(scheme.options.hasKey("apikey"));
+        assertTrue(scheme.options."apikey".sensitive);
+
+        # Verify connection can create data provider
+        UnleashedRestClient::UnleashedRestConnection conn("test", "test connection",
+            "unleashed://api.unleashedsoftware.com", {},
+            {"api_id": "x", "apikey": "x"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("UnleashedSoftware", conn.getAppName());
+        assertEq("unleashed", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Get all actions for the Unleashed app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            UnleashedDataProvider::AppName);
+        assertTrue(actions.size() > 0);
+
+        # Verify action names
+        list<string> actionNames = map $1.action, actions;
+
+        # Customer actions
+        assertTrue(actionNames.contains("create-customer"));
+        assertTrue(actionNames.contains("get-customer"));
+        assertTrue(actionNames.contains("update-customer"));
+        assertTrue(actionNames.contains("search-customers"));
+
+        # Product actions
+        assertTrue(actionNames.contains("create-product"));
+        assertTrue(actionNames.contains("get-product"));
+        assertTrue(actionNames.contains("update-product"));
+        assertTrue(actionNames.contains("obsolete-product"));
+        assertTrue(actionNames.contains("search-products"));
+
+        # Sales order actions
+        assertTrue(actionNames.contains("create-sales-order"));
+        assertTrue(actionNames.contains("get-sales-order"));
+        assertTrue(actionNames.contains("update-sales-order"));
+        assertTrue(actionNames.contains("delete-sales-order"));
+        assertTrue(actionNames.contains("complete-sales-order"));
+        assertTrue(actionNames.contains("search-sales-orders"));
+
+        # Credit note actions
+        assertTrue(actionNames.contains("create-credit-note"));
+        assertTrue(actionNames.contains("get-credit-note"));
+        assertTrue(actionNames.contains("update-credit-note"));
+        assertTrue(actionNames.contains("delete-credit-note"));
+        assertTrue(actionNames.contains("complete-credit-note"));
+        assertTrue(actionNames.contains("create-credit-note-line"));
+        assertTrue(actionNames.contains("update-credit-note-line"));
+        assertTrue(actionNames.contains("delete-credit-note-line"));
+        assertTrue(actionNames.contains("search-credit-notes"));
+
+        # Utility actions
+        assertTrue(actionNames.contains("make-api-call"));
+
+        # Trigger actions
+        assertTrue(actionNames.contains("new-customer"));
+        assertTrue(actionNames.contains("new-sales-order"));
+
+        # Verify trigger actions have correct action_code
+        *hash<DataProviderActionInfo> newCustomerAction = DataProviderActionCatalog::getAppAction(
+            UnleashedDataProvider::AppName, "new-customer");
+        assertTrue(exists newCustomerAction, "new-customer action should exist");
+        assertEq(DPAT_EVENT, newCustomerAction.action_code);
+    }
+
+    #! Integration tests - require UNLEASHED_API_ID and UNLEASHED_API_KEY
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Unleashed credentials provided (use -i/-k options or "
+                "UNLEASHED_API_ID/UNLEASHED_API_KEY env vars)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test customers provider
+        testCustomersProvider();
+
+        # Test products provider
+        testProductsProvider();
+
+        # Test sales orders provider
+        testSalesOrdersProvider();
+
+        # Test credit notes provider
+        testCreditNotesProvider();
+
+        # Test customer data integrity (create, fetch, verify)
+        testCustomerDataIntegrity();
+
+        # Test make-api-call action
+        testMakeApiCall();
+    }
+
+    #! Test API connectivity
+    private testApiConnectivity() {
+        # Test that we can connect to the API
+        hash<auto> response = client.get("Customers?pageSize=1");
+        assertTrue(response.body.typeCode() == NT_HASH);
+        if (m_options.verbose) {
+            printf("Connected to Unleashed API successfully\n");
+        }
+    }
+
+    #! Test customers provider
+    private testCustomersProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Customers Provider ---\n");
+        }
+
+        UnleashedDataProvider::UnleashedDataProvider prov(client);
+
+        # Get customers provider
+        AbstractDataProvider customersProvider = prov.getChildProvider("customers");
+        hash<DataProviderInfo> info = customersProvider.getInfo();
+
+        assertTrue(info.supports_read, "Customers should support read");
+        assertTrue(info.supports_native_search, "Customers should support native search");
+        assertTrue(info.has_record, "Customers should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("customerCode"), "Should have customerCode search option");
+        assertTrue(info.search_options.hasKey("customerName"), "Should have customerName search option");
+        assertTrue(info.search_options.hasKey("modifiedSince"), "Should have modifiedSince search option");
+        assertTrue(info.search_options.hasKey("pageSize"), "Should have pageSize search option");
+
+        # Fetch some customers (limited)
+        hash<auto> searchOpts = {"pageSize": 5};
+        list<hash<auto>> customers = map $1, customersProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d customers (limited to 5)\n", customers.size());
+        }
+
+        if (customers.size() > 0) {
+            # Verify customer record structure
+            hash<auto> customer = customers[0];
+            assertTrue(customer.hasKey("Guid"), "Customer should have Guid");
+            assertTrue(customer.hasKey("CustomerCode"), "Customer should have CustomerCode");
+            if (m_options.verbose) {
+                printf("  Sample customer: Guid=%y, Code=%y, Name=%y\n",
+                    customer.Guid, customer.CustomerCode ?? "N/A", customer.CustomerName ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Customers Provider tests completed ---\n");
+        }
+    }
+
+    #! Test products provider
+    private testProductsProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Products Provider ---\n");
+        }
+
+        UnleashedDataProvider::UnleashedDataProvider prov(client);
+
+        # Get products provider
+        AbstractDataProvider productsProvider = prov.getChildProvider("products");
+        hash<DataProviderInfo> info = productsProvider.getInfo();
+
+        assertTrue(info.supports_read, "Products should support read");
+        assertTrue(info.supports_native_search, "Products should support native search");
+        assertTrue(info.has_record, "Products should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("productCode"), "Should have productCode search option");
+        assertTrue(info.search_options.hasKey("productDescription"), "Should have productDescription search option");
+        assertTrue(info.search_options.hasKey("modifiedSince"), "Should have modifiedSince search option");
+
+        # Fetch some products (limited)
+        hash<auto> searchOpts = {"pageSize": 5};
+        list<hash<auto>> products = map $1, productsProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d products (limited to 5)\n", products.size());
+        }
+
+        if (products.size() > 0) {
+            # Verify product record structure
+            hash<auto> product = products[0];
+            assertTrue(product.hasKey("Guid"), "Product should have Guid");
+            if (m_options.verbose) {
+                printf("  Sample product: Guid=%y, Code=%y, Description=%y\n",
+                    product.Guid, product.ProductCode ?? "N/A", product.ProductDescription ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Products Provider tests completed ---\n");
+        }
+    }
+
+    #! Test sales orders provider
+    private testSalesOrdersProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Sales Orders Provider ---\n");
+        }
+
+        UnleashedDataProvider::UnleashedDataProvider prov(client);
+
+        # Get sales orders provider
+        AbstractDataProvider salesOrdersProvider = prov.getChildProvider("sales-orders");
+        hash<DataProviderInfo> info = salesOrdersProvider.getInfo();
+
+        assertTrue(info.supports_read, "Sales orders should support read");
+        assertTrue(info.supports_native_search, "Sales orders should support native search");
+        assertTrue(info.has_record, "Sales orders should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("orderNumber"), "Should have orderNumber search option");
+        assertTrue(info.search_options.hasKey("orderStatus"), "Should have orderStatus search option");
+        assertTrue(info.search_options.hasKey("modifiedSince"), "Should have modifiedSince search option");
+
+        # Fetch some sales orders (limited)
+        hash<auto> searchOpts = {"pageSize": 5};
+        list<hash<auto>> salesOrders = map $1, salesOrdersProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d sales orders (limited to 5)\n", salesOrders.size());
+        }
+
+        if (salesOrders.size() > 0) {
+            # Verify sales order record structure
+            hash<auto> salesOrder = salesOrders[0];
+            assertTrue(salesOrder.hasKey("Guid"), "Sales order should have Guid");
+            if (m_options.verbose) {
+                printf("  Sample sales order: Guid=%y, OrderNumber=%y, Status=%y\n",
+                    salesOrder.Guid, salesOrder.OrderNumber ?? "N/A",
+                    salesOrder.OrderStatus ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Sales Orders Provider tests completed ---\n");
+        }
+    }
+
+    #! Test credit notes provider
+    private testCreditNotesProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Credit Notes Provider ---\n");
+        }
+
+        UnleashedDataProvider::UnleashedDataProvider prov(client);
+
+        # Get credit notes provider
+        AbstractDataProvider creditNotesProvider = prov.getChildProvider("credit-notes");
+        hash<DataProviderInfo> info = creditNotesProvider.getInfo();
+
+        assertTrue(info.supports_read, "Credit notes should support read");
+        assertTrue(info.supports_native_search, "Credit notes should support native search");
+        assertTrue(info.has_record, "Credit notes should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("creditNumber"), "Should have creditNumber search option");
+        assertTrue(info.search_options.hasKey("creditStatus"), "Should have creditStatus search option");
+        assertTrue(info.search_options.hasKey("modifiedSince"), "Should have modifiedSince search option");
+
+        # Fetch some credit notes (limited)
+        hash<auto> searchOpts = {"pageSize": 5};
+        list<hash<auto>> creditNotes = map $1, creditNotesProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d credit notes (limited to 5)\n", creditNotes.size());
+        }
+
+        if (creditNotes.size() > 0) {
+            # Verify credit note record structure
+            hash<auto> creditNote = creditNotes[0];
+            assertTrue(creditNote.hasKey("Guid"), "Credit note should have Guid");
+            if (m_options.verbose) {
+                printf("  Sample credit note: Guid=%y, CreditNumber=%y\n",
+                    creditNote.Guid, creditNote.CreditNumber ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Credit Notes Provider tests completed ---\n");
+        }
+    }
+
+    #! Test customer data integrity - verifies data actually persists
+    /** CRITICAL: This test verifies that customer data is correctly saved and retrievable.
+        This catches issues like:
+        - Wrong Content-Type
+        - Silent API acceptance without data persistence
+        - Incorrect field handling
+        - Incorrect HMAC signature
+
+        The test creates a customer with known values, retrieves it, and verifies the values match.
+    */
+    private testCustomerDataIntegrity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Customer Data Integrity ---\n");
+        }
+
+        UnleashedDataProvider::UnleashedDataProvider prov(client);
+
+        # Test 1: Create customer
+        if (m_options.verbose) {
+            printf("\nTest 1: Create customer...\n");
+        }
+
+        AbstractDataProvider createCustomerProvider = prov.getChildProvider("create-customer");
+        string testCode = "TEST-" + now_us().toString();
+        string testName = "Test Customer " + now_us().toString();
+        hash<auto> createRequest = {
+            "CustomerCode": testCode,
+            "CustomerName": testName,
+            "Currency": {
+                "CurrencyCode": "CZK",
+            },
+            "Addresses": (
+                {
+                    "AddressType": "Shipping",
+                    "AddressName": "Main Office",
+                    "StreetAddress": "123 Test Street",
+                    "City": "Prague",
+                    "PostalCode": "110 00",
+                    "Country": "Czech Republic",
+                },
+            ),
+        };
+
+        try {
+            auto createResult = createCustomerProvider.doRequest(createRequest);
+            if (m_options.verbose) {
+                printf("  Create result: Guid=%y\n", createResult.Guid);
+            }
+            assertTrue(exists createResult.Guid, "Customer should be created with a Guid");
+            testCustomerGuid = createResult.Guid;
+
+            # Verify the data was actually saved by fetching it back
+            AbstractDataProvider getCustomerProvider = prov.getChildProvider("get-customer");
+            hash<auto> getRequest = {
+                "guid": testCustomerGuid,
+            };
+
+            auto fetchedCustomer = getCustomerProvider.doRequest(getRequest);
+            if (m_options.verbose) {
+                printf("  Fetched customer: Guid=%y, Code=%y, Name=%y\n",
+                    fetchedCustomer.Guid, fetchedCustomer.CustomerCode, fetchedCustomer.CustomerName);
+            }
+
+            assertEq(testCustomerGuid, fetchedCustomer.Guid, "Customer Guid should match");
+            assertEq(testCode, fetchedCustomer.CustomerCode, "Customer Code should match");
+            assertEq(testName, fetchedCustomer.CustomerName, "Customer Name should match");
+
+            # Verify Currency was persisted
+            assertTrue(exists fetchedCustomer.Currency, "Customer should have Currency");
+            assertEq("CZK", fetchedCustomer.Currency.CurrencyCode, "Currency code should match");
+
+            # Verify Addresses were persisted
+            # Note: XML parsing returns {Address: {...}} for single address or {Address: [{...}]} for multiple
+            if (m_options.verbose) {
+                printf("  Addresses in response: %N\n", fetchedCustomer.Addresses);
+            }
+            if (exists fetchedCustomer.Addresses.Address) {
+                auto addressData = fetchedCustomer.Addresses.Address;
+                # Handle both single address (hash) and multiple addresses (list)
+                hash<auto> address = addressData.typeCode() == NT_HASH ? addressData : addressData[0];
+                assertEq("Shipping", address.AddressType, "Address type should match");
+                assertEq("Main Office", address.AddressName, "Address name should match");
+                assertEq("123 Test Street", address.StreetAddress, "Street address should match");
+                assertEq("Prague", address.City, "City should match");
+                assertEq("110 00", address.PostalCode, "Postal code should match");
+                assertEq("Czech Republic", address.Country, "Country should match");
+            } else {
+                if (m_options.verbose) {
+                    printf("  WARNING: Addresses were not persisted by the API\n");
+                }
+            }
+
+            if (m_options.verbose) {
+                printf("  Data integrity verified: customer saved and retrieved correctly\n");
+                printf("  Currency: %y\n", fetchedCustomer.Currency);
+                printf("  Addresses: %y\n", fetchedCustomer.Addresses);
+            }
+
+            # Test 2: Update customer
+            if (m_options.verbose) {
+                printf("\nTest 2: Update customer...\n");
+            }
+
+            AbstractDataProvider updateCustomerProvider = prov.getChildProvider("update-customer");
+            string updatedName = "Updated Test Customer " + now_us().toString();
+            hash<auto> updateRequest = {
+                "guid": testCustomerGuid,
+                "CustomerName": updatedName,
+                "CustomerCode": testCode,
+            };
+
+            auto updateResult = updateCustomerProvider.doRequest(updateRequest);
+            if (m_options.verbose) {
+                printf("  Update result: Guid=%y, Name=%y\n", updateResult.Guid, updateResult.CustomerName);
+            }
+
+            # Verify the update
+            auto updatedCustomer = getCustomerProvider.doRequest(getRequest);
+            assertEq(updatedName, updatedCustomer.CustomerName, "Customer Name should be updated");
+
+            if (m_options.verbose) {
+                printf("  Update verified: customer updated correctly\n");
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  Customer test failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Customer Data Integrity tests completed ---\n");
+        }
+    }
+
+    #! Test make-api-call action
+    private testMakeApiCall() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Make API Call Action ---\n");
+        }
+
+        UnleashedDataProvider::UnleashedDataProvider prov(client);
+
+        AbstractDataProvider makeApiCallProvider = prov.getChildProvider("make-api-call");
+
+        # Test GET request to customers endpoint
+        auto result = makeApiCallProvider.doRequest({
+            "method": "GET",
+            "path": "/Customers",
+            "query_params": {"pageSize": 1},
+        });
+
+        assertTrue(result.hasKey("body"), "make-api-call should return body");
+        assertTrue(result.body.typeCode() == NT_HASH,
+            "make-api-call response body should be hash");
+        if (m_options.verbose) {
+            printf("  GET /Customers returned hash with %d key(s)\n",
+                elements keys result.body);
+        }
+
+        # Test with /Products endpoint
+        auto productsResult = makeApiCallProvider.doRequest({
+            "method": "GET",
+            "path": "/Products",
+            "query_params": {"pageSize": 1},
+        });
+
+        assertTrue(productsResult.hasKey("body"), "make-api-call /Products should return body");
+        if (m_options.verbose) {
+            printf("  GET /Products returned successfully\n");
+        }
+
+        if (m_options.verbose) {
+            printf("--- Make API Call tests completed ---\n");
+        }
+    }
+
+    #! Polling trigger tests
+    pollingTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Unleashed credentials provided");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Polling Trigger Providers ---\n");
+        }
+
+        # ============================================
+        # Test New Customer Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting UnleashedNewCustomerEventDataProvider...\n");
+        }
+
+        UnleashedDataProvider::UnleashedNewCustomerEventDataProvider customerProv(client);
+        assertEq("new-customer", customerProv.getName());
+
+        # Verify provider metadata
+        assertTrue(customerProv.getInfo().supports_observable);
+
+        # Test event types
+        hash<string, hash<DataProviderMessageInfo>> customerEventTypes = customerProv.getEventTypes();
+        assertTrue(customerEventTypes.hasKey("new-customer"));
+        assertTrue(customerEventTypes{"new-customer"}.desc.val());
+        # Verify event type uses custom data type
+        assertEq("UnleashedCustomerDataType", customerEventTypes{"new-customer"}.type.getName(),
+            "new-customer event should use UnleashedCustomerDataType");
+
+        # Test example event data - should return resource-specific data
+        auto customerExampleData = customerProv.getExampleEventData("new-customer");
+        assertTrue(exists customerExampleData, "getExampleEventData should return data for new-customer");
+        assertTrue(customerExampleData.typeCode() == NT_HASH, "Example data should be a hash");
+        # Verify resource-specific fields exist (either from API or fake data)
+        assertTrue(customerExampleData.hasKey("Guid") || customerExampleData.hasKey("CustomerCode"),
+            "Customer example data should have Guid or CustomerCode");
+        if (m_options.verbose) {
+            printf("  Example data keys: %y\n", keys customerExampleData);
+        }
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys customerEventTypes);
+        }
+
+        # ============================================
+        # Test New Sales Order Watch Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting UnleashedNewSalesOrderEventDataProvider...\n");
+        }
+
+        UnleashedDataProvider::UnleashedNewSalesOrderEventDataProvider salesOrderProv(client);
+        assertEq("new-sales-order", salesOrderProv.getName());
+        assertTrue(salesOrderProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> salesOrderEventTypes = salesOrderProv.getEventTypes();
+        assertTrue(salesOrderEventTypes.hasKey("new-sales-order"));
+        # Verify event type uses custom data type
+        assertEq("UnleashedSalesOrderDataType", salesOrderEventTypes{"new-sales-order"}.type.getName(),
+            "new-sales-order event should use UnleashedSalesOrderDataType");
+
+        # Test example event data - should return resource-specific data
+        auto salesOrderExampleData = salesOrderProv.getExampleEventData("new-sales-order");
+        assertTrue(exists salesOrderExampleData, "getExampleEventData should return data for new-sales-order");
+        assertTrue(salesOrderExampleData.typeCode() == NT_HASH, "Example data should be a hash");
+        # Verify resource-specific fields exist (either from API or fake data)
+        assertTrue(salesOrderExampleData.hasKey("Guid") || salesOrderExampleData.hasKey("OrderNumber"),
+            "Sales order example data should have Guid or OrderNumber");
+        if (m_options.verbose) {
+            printf("  Example data keys: %y\n", keys salesOrderExampleData);
+        }
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys salesOrderEventTypes);
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Polling Trigger tests completed ---\n");
+        }
+    }
+}
+
+#! Test observer for polling events
+class TestObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data) {
+        events += {"event_id": event_id, "data": data};
+    }
+}

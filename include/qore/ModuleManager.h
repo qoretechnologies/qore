@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -42,8 +42,8 @@
     provides definitions required to load qore modules
  */
 
-#define QORE_MODULE_API_MAJOR 1  //!< the major number of the Qore module API implemented
-#define QORE_MODULE_API_MINOR 5  //!< the minor number of the Qore module API implemented
+#define QORE_MODULE_API_MAJOR 2  //!< the major number of the Qore module API implemented
+#define QORE_MODULE_API_MINOR 0  //!< the minor number of the Qore module API implemented
 
 #define QORE_MODULE_COMPAT_API_MAJOR QORE_MODULE_API_MAJOR  //!< the major number of the earliest recommended Qore module API
 #define QORE_MODULE_COMPAT_API_MINOR QORE_MODULE_API_MINOR  //!< the minor number of the earliest recommended Qore module API
@@ -66,20 +66,23 @@ class QoreListNode;
 class ExceptionSink;
 class QoreProgram;
 
-//! Module info for the init_info method
-struct qore_module_init_info {
+//! Context passed to the module init callback
+/** @since %Qore 2.0
+*/
+struct QoreModuleInitContext {
     //! path to the module itself
     std::string path;
 };
 
 //! signature of the module constructor/initialization function
-typedef QoreStringNode* (*qore_module_init_t)();
-
-//! signature of the module constructor/initialization function with info
-typedef QoreStringNode* (*qore_module_init_info_t)(qore_module_init_info& info);
+/** @since %Qore 2.0: changed from returning QoreStringNode* to void with ExceptionSink
+*/
+typedef void (*qore_module_init_t)(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 
 //! signature of the module namespace change/delta function
-typedef void (*qore_module_ns_init_t)(QoreNamespace* root_ns, QoreNamespace* qore_ns);
+/** @since %Qore 2.0: added ExceptionSink parameter
+*/
+typedef void (*qore_module_ns_init_t)(QoreNamespace* root_ns, QoreNamespace* qore_ns, ExceptionSink& xsink);
 
 //! signature of the module destructor function
 typedef void (*qore_module_delete_t)();
@@ -94,6 +97,7 @@ typedef std::vector<std::string> strvec_t;
 
 //! Qore module info
 /** @since %Qore 0.9.5
+    @since %Qore 2.0: removed init_info field; init callback signature changed
 */
 struct QoreModuleInfo {
     QoreString name;
@@ -103,13 +107,18 @@ struct QoreModuleInfo {
     QoreString url;
     int api_major = -1;
     int api_minor = -1;
-    //! either init or init_info can be set
+    //! module initialization function
     qore_module_init_t init = nullptr;
+    //! namespace initialization function
     qore_module_ns_init_t ns_init = nullptr;
+    //! module deletion/cleanup function
     qore_module_delete_t del = nullptr;
+    //! parse command function (optional)
     qore_module_parse_cmd_t parse_cmd = nullptr;
 
-    qore_license_t license;
+    //! module license type
+    qore_license_t license = QL_MIT;
+    //! module license string
     QoreString license_str;
 
     //! list of binary modules that this binary module depends on
@@ -117,9 +126,6 @@ struct QoreModuleInfo {
 
     //! extra information to appear in the module info hash
     QoreHashNode* info = nullptr;
-
-    //! either init or init_info can be set
-    qore_module_init_info_t init_info = nullptr;
 };
 
 //! Module description function

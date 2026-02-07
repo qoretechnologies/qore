@@ -462,15 +462,45 @@ public class Http2ClientConnection {
     }
 
     #! Drives the connection poll operation once
-    /** @param poll_timeout_ms timeout for this poll iteration
+    /** Only one thread drives the poll at a time. If another thread is already
+        driving, this thread waits on ready_cond until the driver broadcasts
+        (after each poll iteration or when a callback is dispatched), then returns
+        so the caller can check whether its response has arrived.
+
+        @param poll_timeout_ms timeout for this poll iteration
 
         @return True if there is more work to do, False if poll is complete
     */
     bool drivePoll(timeout poll_timeout_ms = 1s) {
+        {
+            AutoLock al(lock);
+            if (driving) {
+                # Another thread is driving; wait for it to complete an iteration
+                ready_cond.wait(lock, poll_timeout_ms);
+                # Check state while lock is held (isClosed() would double-lock)
+                return state != Http2ClientConnectionState::Closed
+                    && !poll_op.hasError();
+            }
+            driving = True;
+        }
+
+        on_exit {
+            AutoLock al(lock);
+            driving = False;
+            ready_cond.broadcast();
+        }
+
         *hash<SocketPollInfo> poll_info = poll_op.continuePoll();
         if (!poll_info) {
             handlePollResult();
             return !isClosed() && !poll_op.hasError();
+        }
+
+        # If a stream callback was dispatched during continuePoll(), return
+        # immediately so the caller can check results without blocking
+        if (poll_op.checkAndClearCallbackDispatched()) {
+            handlePollResult();
+            return True;
         }
 
         Socket::poll((poll_info,), int(poll_timeout_ms));

@@ -63,30 +63,31 @@
 #include "QC_Enum.h"
 #include "QC_EnumMember.h"
 
-QoreStringNode* reflection_module_init();
-void reflection_module_ns_init(QoreNamespace *rns, QoreNamespace *qns);
-void reflection_module_delete();
+static void reflection_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
+static void reflection_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
+static void reflection_module_delete();
 
-// qore module symbols
-DLLEXPORT char qore_module_name[] = "reflection";
-DLLEXPORT char qore_module_version[] = PACKAGE_VERSION;
-DLLEXPORT char qore_module_description[] = "Qore reflection module";
-DLLEXPORT char qore_module_author[] = "David Nichols <david.nichols@qoretechnologies.com>";
-DLLEXPORT char qore_module_url[] = "http://qore.org";
-DLLEXPORT int qore_module_api_major = QORE_MODULE_API_MAJOR;
-DLLEXPORT int qore_module_api_minor = QORE_MODULE_API_MINOR;
-DLLEXPORT qore_module_init_t qore_module_init = reflection_module_init;
-DLLEXPORT qore_module_ns_init_t qore_module_ns_init = reflection_module_ns_init;
-DLLEXPORT qore_module_delete_t qore_module_delete = reflection_module_delete;
-DLLEXPORT qore_license_t qore_module_license = QL_MIT;
-DLLEXPORT char qore_module_license_str[] = "MIT";
+extern "C" DLLEXPORT void reflection_qore_module_desc(QoreModuleInfo& mod_info) {
+    mod_info.name = "reflection";
+    mod_info.version = PACKAGE_VERSION;
+    mod_info.desc = "Qore reflection module";
+    mod_info.author = "David Nichols <david.nichols@qoretechnologies.com>";
+    mod_info.url = "http://qore.org";
+    mod_info.api_major = QORE_MODULE_API_MAJOR;
+    mod_info.api_minor = QORE_MODULE_API_MINOR;
+    mod_info.init = reflection_module_init;
+    mod_info.ns_init = reflection_module_ns_init;
+    mod_info.del = reflection_module_delete;
+    mod_info.license = QL_MIT;
+    mod_info.license_str = "MIT";
+}
 
 QoreNamespace ReflectionNS("Qore::Reflection");
 
 const TypedHashDecl* hashdeclClassAccessInfo,
     * hashdeclMethodAccessInfo;
 
-QoreStringNode* reflection_module_init() {
+static void reflection_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // pre-initialize reflection classes
     preinitAbstractVariantClass();
     preinitFunctionVariantClass();
@@ -164,14 +165,11 @@ QoreStringNode* reflection_module_init() {
     ReflectionNS.addSystemClass(initTypedHashMemberClass(ReflectionNS));
     ReflectionNS.addSystemClass(initEnumClass(ReflectionNS));
     ReflectionNS.addSystemClass(initEnumMemberClass(ReflectionNS));
-
-    return nullptr;
 }
 
-void reflection_module_ns_init(QoreNamespace* rns, QoreNamespace* qns) {
+static void reflection_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
     qns->addNamespace(ReflectionNS.copy());
 }
 
-void reflection_module_delete() {
+static void reflection_module_delete() {
 }
-
