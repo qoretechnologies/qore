@@ -645,7 +645,8 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
         return -1;
     }
 
-    AutoLocker al2(mutex); // grab global module lock
+    // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
+    OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
     loadModuleIntern(xsink, wsink, name, pgm, reexport, MOD_OP_NONE, 0, 0, mpgm, load_opt, warning_mask,
         mod_desc_func);
     return xsink ? -1 : 0;
@@ -1334,7 +1335,8 @@ int QoreModuleManager::importModuleNSUnlocked(const char* name, QoreProgram* pgm
 
 void QoreModuleManager::registerUserModuleFromSource(const char* name, const char* src, QoreProgram* pgm,
         ExceptionSink& xsink) {
-    AutoLocker al(mutex); // make sure checking and loading are atomic
+    // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
+    OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
     loadModuleIntern(xsink, xsink, name, pgm, false, MOD_OP_NONE, 0, src);
 }
 
@@ -1994,7 +1996,8 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
     // issue #4254: must run module commands unlocked
     QoreAbstractModule* mi;
     {
-        AutoLocker al(mutex); // make sure checking and loading are atomic
+        // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
+        OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
         mi = loadModuleIntern(xsink, xsink, mname, pgm);
 
         if (xsink) {
@@ -2020,7 +2023,8 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     // issue #4254: must run module commands unlocked
     QoreAbstractModule* mi;
     {
-        AutoLocker al(mutex); // make sure checking and loading are atomic
+        // only lock if not in a nested module load context (depth > 0 means already inside ModuleLoadMapHelper)
+        OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
         mi = loadModuleIntern(*xsink, *xsink, mname, pgm);
         if (!mi && !*xsink) {
             xsink->raiseException("RUNTIME-COMMAND-ERROR", new QoreStringNodeMaker("cannot load builtin feature '%s' "
