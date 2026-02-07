@@ -40,7 +40,9 @@ set_signal_handler(SIGUSR1, sub (int sig) {
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/Http2ClientIo
 %requires ../../../../qlib/AsyncSocketIo
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 %exec-class Http2ClientIoTest
 
@@ -103,6 +105,7 @@ class ErrorHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+%ifndef NoJson
 #! Handler that returns JSON
 class JsonHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -117,6 +120,7 @@ class JsonHandler inherits AbstractHttpRequestHandler {
         return makeResponse(200, make_json(response), {"Content-Type": "application/json"});
     }
 }
+%endif
 
 class Http2ClientIoTest inherits QUnit::Test {
     private {
@@ -236,7 +240,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
         mServer.setHandler("slow", "/slow", NOTHING, new SlowHandler());
         mServer.setHandler("error", "/error", NOTHING, new ErrorHandler());
+%ifndef NoJson
         mServer.setHandler("json", "/json", NOTHING, new JsonHandler());
+%endif
 
         # Add HTTPS listener for HTTP/2
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
@@ -699,7 +705,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         for (int i = 0; i < 5; i++) {
             Http2ClientIo::Http2ClientStreamHandle stream = streams[i];
-            string path = sprintf("/json?idx=%d", i);
+            string path = sprintf("/simple?idx=%d", i);
             background sub () {
                 on_exit counter.dec();
                 try {
@@ -775,7 +781,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         *hash<auto> callback_response;
         *hash<auto> callback_error;
 
-        stream.submitAsync("GET", "/json", NOTHING, NOTHING,
+        stream.submitAsync("GET", "/simple", NOTHING, NOTHING,
             sub (hash<auto> resp, *hash<auto> err) {
                 callback_response = resp;
                 callback_error = err;
@@ -857,7 +863,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         for (int i = 0; i < 5; i++) {
             Http2ClientIo::Http2ClientStreamHandle stream = streams[i];
-            string path = sprintf("/json?idx=%d", i);
+            string path = sprintf("/simple?idx=%d", i);
             background sub () {
                 on_exit counter.dec();
                 try {
@@ -917,7 +923,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         *hash<auto> callback_error;
 
         # Keep stream handle alive until callback completes - it's needed for the wrapped callback
-        Http2ClientIo::Http2ClientStreamHandle stream = manager.submitRequestAsync(mSslUrl, "GET", "/json", NOTHING, NOTHING,
+        Http2ClientIo::Http2ClientStreamHandle stream = manager.submitRequestAsync(mSslUrl, "GET", "/simple", NOTHING, NOTHING,
             sub (hash<auto> resp, *hash<auto> err) {
                 callback_response = resp;
                 callback_error = err;

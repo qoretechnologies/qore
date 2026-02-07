@@ -35,7 +35,9 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) ShippoRestClient
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module ShippoDataProvider {
     version = "1.0";

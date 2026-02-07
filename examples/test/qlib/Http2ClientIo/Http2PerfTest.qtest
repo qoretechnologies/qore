@@ -14,7 +14,9 @@
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/Http2ClientIo
 %requires ../../../../qlib/AsyncSocketIo
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 %exec-class Http2PerfTest
 

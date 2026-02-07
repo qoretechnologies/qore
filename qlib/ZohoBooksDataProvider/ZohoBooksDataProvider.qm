@@ -35,7 +35,9 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) ZohoBooksRestClient
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module ZohoBooksDataProvider {
     version = "1.0";

@@ -35,7 +35,9 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) UnleashedRestClient
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module UnleashedDataProvider {
     version = "1.0";
