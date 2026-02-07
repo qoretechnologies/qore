@@ -24,31 +24,34 @@ const CELL_PX_H = Math.round(CELL_PX * CHAR_ASPECT);  // 20
 const ASCII_CHARS = ' .:-=+*#%@';
 const BRIGHTNESS_THRESHOLD = 0.04; // Below this, treat as empty space
 
-// --- Parse Q art from C++ source ---
+// --- Q art bitmap (defines the 3D coin shape) ---
+const Q_ART = [
+    "                  .,l~-?-~l,.                ",
+    "             ',l~-]]]]]]]]]-<l,.             ",
+    "         ',!~?]]]]?????????]]]]?~!,'         ",
+    "     ':!+?]]]]???????]]]???????]]]]?~!,'     ",
+    "    !?]]]]??????]]]]]_~-]]]]???????]]]]?!    ",
+    "   ']]????]]]]]]]_>;^  .^I>_]]]]]]]????]]'   ",
+    "   '???]]]]]]?>;`           ^;<??]]]]]???'   ",
+    "   '?]?]]]]?]?.               .?]?]]]]?]?'   ",
+    "   '?]?]]]]?]?`               `?]?]]]]?]?'   ",
+    "   '?]?]]]]?]?'               '?]?]]]]?]?'   ",
+    "   '?]?]]]]?]?^               ^?]?]]]]?]?'   ",
+    "   '???]]]]]]]-~!,'      .`,l~-?]]]]]]???'   ",
+    "   .?]]????]]]]]]]?~!,'  ;~]]]]]??????]]?.   ",
+    '    ">_]]]]]??????]]]]?+i:^`,l~?]]]]]]_>^    ',
+    '      .^;>_]]]]]??????]]]]?+!:^"I<>I^.      ',
+    "           `;i_?]]]]??????]]]]]_i:`          ",
+    "               `:i+?]]]]???????]]]]?~:       ",
+    "                   ',!~-]]]]]]]]?+i;^.       ",
+    "                       ',!+-?_>;`            ",
+];
+
 function parseArt() {
-    const src = readFileSync(join(PROJECT_ROOT, 'command-line.cpp'), 'utf-8');
-    const match = src.match(/static const char\* version_art\[\] = \{([\s\S]*?)\};/);
-    if (!match) {
-        throw new Error('Could not find version_art[] in command-line.cpp');
+    if (Q_ART.length !== ART_LINES) {
+        throw new Error(`Expected ${ART_LINES} art lines, got ${Q_ART.length}`);
     }
-
-    const lines = [];
-    const re = /"((?:[^"\\]|\\.)*)"/g;
-    let m;
-    while ((m = re.exec(match[1])) !== null) {
-        let s = m[1]
-            .replace(/\\n/g, '\n')
-            .replace(/\\t/g, '\t')
-            .replace(/\\"/g, '"')
-            .replace(/\\\?/g, '?')
-            .replace(/\\\\/g, '\\');
-        lines.push(s);
-    }
-
-    if (lines.length !== ART_LINES) {
-        throw new Error(`Expected ${ART_LINES} art lines, got ${lines.length}`);
-    }
-    return lines;
+    return Q_ART;
 }
 
 // --- Character density (0-10) matching C++ char_density ---
@@ -129,7 +132,7 @@ function buildCoinGeometry(art) {
 
     // Dome curvature: tilt face normals based on distance from center
     // This creates a visible lighting gradient across the face
-    const domeStrength = 0.35;
+    const domeStrength = 0.25;
     const maxRadius = Math.max(ART_WIDTH / 2, halfH);
 
     function domeNormal(cx, cy, zSign) {
@@ -294,9 +297,9 @@ function main() {
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
 
-    // Front light: nearly head-on so the face-on Q is bright and uniform
-    const frontLight = new THREE.DirectionalLight(0xffffff, 1.3);
-    frontLight.position.set(2, 2, 50);
+    // Front light: dead-on for maximum brightness when face-on
+    const frontLight = new THREE.DirectionalLight(0xffffff, 1.8);
+    frontLight.position.set(0, 0, 50);
     scene.add(frontLight);
 
     // Side accent light: from the right, creates visible directionality during rotation
@@ -310,11 +313,11 @@ function main() {
     scene.add(fillLight);
 
     // Hemisphere light: sky/ground gradient for natural top-to-bottom variation
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.25);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.15);
     scene.add(hemiLight);
 
     // Ambient: enough to keep edges visible
-    const ambient = new THREE.AmbientLight(0xffffff, 0.1);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.15);
     scene.add(ambient);
 
     // Camera: orthographic, fits the art area exactly

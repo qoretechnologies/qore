@@ -590,29 +590,8 @@ static std::vector<std::string> wrap_line(const std::string& line, int max_width
     return result;
 }
 
-static const char* version_art[] = {
-    "                  .,l~-?-~l,.                 ",
-    "             ',l~-]]]]]]]]]-<l,.             ",
-    "         ',!~?]]]]?????????]]]]?~!,'         ",
-    "     ':!+?]]]]???????]]]???????]]]]?~!,'     ",
-    "    !?]]]]??????]]]]]_~-]]]]???????]]]]?!    ",
-    "   ']]????]]]]]]]_>;^  .^I>_]]]]]]]????]]'   ",
-    "   '???]]]]]]?>;`           ^;<??]]]]]?\?\?'   ",
-    "   '?]?]]]]?]?.               .?]?]]]]?]?'   ",
-    "   '?]?]]]]?]?`               `?]?]]]]?]?'   ",
-    "   '?]?]]]]?]?'               '?]?]]]]?]?'   ",
-    "   '?]?]]]]?]?^               ^?]?]]]]?]?'   ",
-    "   '???]]]]]]]-~!,'      .`,l~-?]]]]]]?\?\?'   ",
-    "   .?]]????]]]]]]]?~!,'  ;~]]]]]??????]]?.   ",
-    "    \">_]]]]]??????]]]]?+i:^`,l~?]]]]]]_>^    ",
-    "      .^;>_]]]]]??????]]]]?+!:^`\"I<>I^.      ",
-    "           `;i_?]]]]??????]]]]]_i:`          ",
-    "               `:i+?]]]]???????]]]]?~:       ",
-    "                   ',!~-]]]]]]]]?+i;^.       ",
-    "                       ',!+-?_>;`            ",
-};
-static const int ART_LINES = 19;
-static const int ART_WIDTH = 45;
+static const int ART_LINES = ANIM_FRAME_HEIGHT;
+static const int ART_WIDTH = ANIM_FRAME_WIDTH;
 static const int ART_GAP = 2;
 
 // Build version info lines, word-wrapped to fit the terminal
@@ -701,11 +680,9 @@ static void render_static_version(const char* qc, const char* reset, bool use_co
                                   int total_lines) {
     for (int line = 0; line < total_lines; ++line) {
         if (line < ART_LINES) {
-            const char* a = version_art[line];
-            int len = (int)strlen(a);
             bool in_color = false;
             for (int c = 0; c < ART_WIDTH; ++c) {
-                char ch = c < len ? a[c] : ' ';
+                char ch = anim_frames[0][line][c];
                 if (ch != ' ') {
                     if (!in_color && use_color) {
                         fputs(qc, stdout);
