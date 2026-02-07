@@ -246,6 +246,9 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::LoadClosure:
         case QoreIROpcode::LoadGlobal:
         case QoreIROpcode::LoadThreadLocal:
+        case QoreIROpcode::LoadSelfMember:
+        case QoreIROpcode::LoadStaticVar:
+        case QoreIROpcode::NewObject:
         case QoreIROpcode::LoadImplicitArg:
         case QoreIROpcode::LoadImplicitArgv:
         case QoreIROpcode::LoadImplicitElement:
@@ -532,6 +535,9 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::LoadImplicitElement:// No operands - load current $#
             return 0;
         case QoreIROpcode::LoadImplicitArg:    // Uses QoreIRImplicitArgInstruction with offset field, no operands
+        case QoreIROpcode::LoadSelfMember:     // Uses QoreIRSelfMemberInstruction with member_name field, no operands
+        case QoreIROpcode::LoadStaticVar:      // Uses QoreIRStaticVarInstruction with vi/var_name fields, no operands
+        case QoreIROpcode::NewObject:          // Uses QoreIRNewObjectInstruction with qc/variant/args fields, no operands
             return 0;
         case QoreIROpcode::PushImplicitArg:    // 1 operand: value to push as $1
         case QoreIROpcode::SetImplicitArgv:    // 1 operand: list to set as $argv

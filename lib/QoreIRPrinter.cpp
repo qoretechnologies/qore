@@ -297,6 +297,9 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::PopImplicitArg: return "pop.implicit.arg";
         case QoreIROpcode::PushImplicitElement: return "push.implicit.element";
         case QoreIROpcode::PopImplicitElement: return "pop.implicit.element";
+        case QoreIROpcode::LoadSelfMember: return "load.self.member";
+        case QoreIROpcode::LoadStaticVar: return "load.static.var";
+        case QoreIROpcode::NewObject: return "new.object";
         case QoreIROpcode::Call: return "call";
         case QoreIROpcode::CallIndirect: return "call.indirect";
         case QoreIROpcode::CallMethod: return "call.method";
@@ -316,6 +319,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::Incref: return "incref";
         case QoreIROpcode::Decref: return "decref";
         case QoreIROpcode::DecrefNoThrow: return "decref.nothrow";
+        case QoreIROpcode::ScopeEnter: return "scope.enter";
+        case QoreIROpcode::ScopeExit: return "scope.exit";
     }
     return "unknown";
 }
@@ -391,6 +396,21 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* lv_inst = dynamic_cast<const QoreIRLValueInstruction*>(inst.get());
                 if (lv_inst && lv_inst->lvalue.hasNode()) {
                     out << " <lvalue>";
+                }
+            } else if (inst->opcode == QoreIROpcode::LoadSelfMember) {
+                auto* sm_inst = dynamic_cast<const QoreIRSelfMemberInstruction*>(inst.get());
+                if (sm_inst) {
+                    out << " @" << sm_inst->member_name;
+                }
+            } else if (inst->opcode == QoreIROpcode::LoadStaticVar) {
+                auto* sv_inst = dynamic_cast<const QoreIRStaticVarInstruction*>(inst.get());
+                if (sv_inst) {
+                    out << " $" << sv_inst->var_name;
+                }
+            } else if (inst->opcode == QoreIROpcode::NewObject) {
+                auto* no_inst = dynamic_cast<const QoreIRNewObjectInstruction*>(inst.get());
+                if (no_inst && no_inst->qc) {
+                    out << " @" << no_inst->qc->getName();
                 }
             } else if (inst->opcode == QoreIROpcode::CallMethodDirect) {
                 // Print the devirtualized method name

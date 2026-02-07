@@ -2662,6 +2662,24 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     }
                     break;
                 }
+                case QoreIROpcode::LoadStaticVar: {
+                    auto* svi = static_cast<QoreIRStaticVarInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &svi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewObject: {
+                    auto* noi = static_cast<QoreIRNewObjectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &noi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
                 case QoreIROpcode::OnBlockExit: {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
@@ -2858,6 +2876,28 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     if (seen_exprs.insert(bits).second) {
                         // Take a ref so the expression survives IR function deletion
                         ei->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::LoadStaticVar: {
+                    auto* svi = static_cast<QoreIRStaticVarInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &svi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        // Take a ref so the expression survives IR function deletion
+                        svi->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewObject: {
+                    auto* noi = static_cast<QoreIRNewObjectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &noi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        // Take a ref so the expression survives IR function deletion
+                        noi->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
                     }
                     break;

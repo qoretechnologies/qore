@@ -79,6 +79,16 @@ public:
     QoreIRVarInstruction* createLoadThreadLocal(Var* var, const QoreProgramLocation* loc = nullptr);
     QoreIRVarInstruction* createStoreThreadLocal(Var* var, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
+    // Self member access
+    QoreIRSelfMemberInstruction* createLoadSelfMember(const char* member_name,
+        const QoreProgramLocation* loc = nullptr);
+    // Static class variable access
+    QoreIRStaticVarInstruction* createLoadStaticVar(QoreVarInfo* vi, const char* var_name,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    // Object instantiation
+    QoreIRNewObjectInstruction* createNewObject(const QoreClass* qc,
+        const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
     // Implicit argument opcodes
     QoreIRInstruction* createLoadImplicitArg(int offset, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createLoadImplicitArgv(const QoreProgramLocation* loc = nullptr);

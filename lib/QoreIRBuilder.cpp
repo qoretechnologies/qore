@@ -271,6 +271,31 @@ QoreIRVarInstruction* QoreIRBuilder::createStoreThreadLocal(Var* var, QoreIRValu
     return inst;
 }
 
+QoreIRSelfMemberInstruction* QoreIRBuilder::createLoadSelfMember(const char* member_name,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRSelfMemberInstruction>(member_name);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRStaticVarInstruction* QoreIRBuilder::createLoadStaticVar(QoreVarInfo* vi, const char* var_name,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRStaticVarInstruction>(vi, var_name, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRNewObjectInstruction* QoreIRBuilder::createNewObject(const QoreClass* qc,
+        const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRNewObjectInstruction>(qc, variant, args, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createLoadImplicitArg(int offset, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRImplicitArgInstruction>(offset);
     inst->loc = loc;

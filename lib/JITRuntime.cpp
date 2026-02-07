@@ -458,6 +458,38 @@ extern "C" void qore_rt_store_thread_local(Var* var, uint64_t value, ExceptionSi
     qore_rt_store_global(var, value, xsink);
 }
 
+// --- Self member access helper ---
+
+extern "C" uint64_t qore_rt_load_self_member(const char* member_name, ExceptionSink* xsink) {
+    QoreObject* obj = runtime_get_stack_object();
+    assert(obj);
+    // issue 3523: evaluate in case the value is a reference
+    ValueHolder val(obj->getReferencedMemberNoMethod(member_name, xsink), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return toBits(val->needsEval() ? val->eval(xsink) : val.release());
+}
+
+// --- Static class variable access helper ---
+
+extern "C" uint64_t qore_rt_load_static_var(QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink) {
+    // issue 3523: evaluate in case the value is a reference
+    ValueHolder val(vi->getReferencedValue(var_name, xsink), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return toBits(val->needsEval() ? val->eval(xsink) : val.release());
+}
+
+// --- Object instantiation helper ---
+
+extern "C" uint64_t qore_rt_new_object(const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        const QoreListNode* args, ExceptionSink* xsink) {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return toBits(qore_class_private::execConstructor(*qc, rc, variant, args, xsink));
+}
+
 // --- Implicit argument helpers ---
 
 extern "C" uint64_t qore_rt_load_implicit_arg(int offset, ExceptionSink* xsink) {

@@ -54,6 +54,8 @@ class CaseNodeRegex;
 class QoreTypeInfo;
 class QoreMethod;
 class QoreClass;
+class QoreVarInfo;
+class AbstractQoreFunctionVariant;
 
 enum class QoreIROpcode : uint16_t {
     ConstInt,
@@ -327,6 +329,15 @@ enum class QoreIROpcode : uint16_t {
     PopImplicitArg,     // Restore previous $1 context (operand = old context)
     PushImplicitElement,// Push index as $#, result = old element for restoration
     PopImplicitElement, // Restore previous $# context (operand = old element)
+
+    // Self member access
+    LoadSelfMember,     // Load self.member_name - accesses current object's member
+
+    // Static class variable access
+    LoadStaticVar,      // Load static class variable - accesses QoreVarInfo directly
+
+    // Object instantiation
+    NewObject,          // Create new object - calls QoreClass::execConstructor directly
 
     Call,
     CallIndirect,
@@ -767,6 +778,56 @@ public:
     }
 
     int offset = 0;  // 0 for $1, 1 for $2, etc.
+};
+
+//! Self member access instruction - loads self.member_name
+class QoreIRSelfMemberInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRSelfMemberInstruction(const char* n_member_name)
+            : QoreIRInstruction(QoreIROpcode::LoadSelfMember), member_name(n_member_name) {
+    }
+
+    std::string member_name;
+};
+
+//! Static class variable access instruction - loads a static class variable
+class QoreIRStaticVarInstruction : public QoreIRInstruction {
+public:
+    QoreIRStaticVarInstruction(QoreVarInfo* n_vi, const char* n_var_name, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::LoadStaticVar), vi(n_vi), var_name(n_var_name),
+              expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRStaticVarInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    QoreVarInfo* vi;
+    std::string var_name;
+    QoreValue expr;     //!< Original StaticClassVarRefNode AST expression (for AOT)
+};
+
+//! Object instantiation instruction - calls constructor directly
+class QoreIRNewObjectInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewObjectInstruction(const QoreClass* n_qc, const AbstractQoreFunctionVariant* n_variant,
+            const QoreListNode* n_args, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::NewObject), qc(n_qc), variant(n_variant), args(n_args),
+              expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRNewObjectInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const QoreClass* qc;
+    const AbstractQoreFunctionVariant* variant;
+    const QoreListNode* args;       //!< Pre-evaluated constructor arguments
+    QoreValue expr;                 //!< Original AST expression (for AOT)
 };
 
 class QoreIRLValueInstruction : public QoreIRInstruction {

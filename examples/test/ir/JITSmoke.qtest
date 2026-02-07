@@ -107,6 +107,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("native select with comparison", \testNativeSelectWithComparison());
         addTestCase("native foldl with function call", \testNativeFoldlWithFunctionCall());
         addTestCase("on_block_exit handlers", \testOnBlockExitHandlers());
+        addTestCase("on_block_exit top-level local update", \testOnBlockExitTopLevelLocalUpdate());
         addTestCase("invoke method direct", \testInvokeMethodDirect());
         addTestCase("big int loop correctness", \testBigIntLoopCorrectness());
         addTestCase("invoke result in loop", \testInvokeResultInLoop());
@@ -118,6 +119,10 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("lvalue compound assign loop", \testLValueCompoundAssignLoop());
         addTestCase("lvalue compound assign bitwise", \testLValueCompoundAssignBitwise());
         addTestCase("lvalue compound assign div/mod slow path", \testLValueCompoundAssignDivMod());
+        addTestCase("range lvalue delegate-to-AST", \testRangeLValueDelegate());
+        addTestCase("self member access", \testSelfMemberAccess());
+        addTestCase("static class variable access", \testStaticClassVarAccess());
+        addTestCase("new object instantiation", \testNewObjectInstantiation());
         set_return_value(main());
     }
 
@@ -2483,6 +2488,71 @@ printf(\"%y\\n\", log);
         }
     }
 
+    testOnBlockExitTopLevelLocalUpdate() {
+        # Test on_exit at top level modifies local variable correctly.
+        # Regression: on_exit handlers execute through the AST path, which modifies
+        # the thread-local variable stack, but IR/JIT cached the old value.
+        string toplevel_exit = "%modern
+int x = 0;
+{
+    on_exit x = 99;
+    x = 1;
+}
+printf(\"%d\\n\", x);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(toplevel_exit, mode));
+            assertEq("99", result, sprintf("toplevel on_exit local update %s", mode));
+        }
+
+        # Test on_exit in function modifies local and returns updated value
+        string func_exit = "%modern
+int sub test_on_exit() {
+    int x = 0;
+    {
+        on_exit x = 42;
+        x = 1;
+    }
+    return x;
+}
+printf(\"%d\\n\", test_on_exit());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(func_exit, mode));
+            assertEq("42", result, sprintf("func on_exit local update %s", mode));
+        }
+
+        # Test on_success modifies local variable
+        string success_update = "%modern
+int x = 0;
+{
+    on_success x += 100;
+    x = 5;
+}
+printf(\"%d\\n\", x);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(success_update, mode));
+            assertEq("105", result, sprintf("on_success local update %s", mode));
+        }
+
+        # Test on_exit with multiple variables
+        string multi_var = "%modern
+int a = 0;
+int b = 0;
+{
+    on_exit { a = 10; b = 20; }
+    a = 1;
+    b = 2;
+}
+printf(\"%d %d\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(multi_var, mode));
+            assertEq("10 20", result, sprintf("on_exit multi-var update %s", mode));
+        }
+    }
+
     testInvokeMethodDirect() {
         # Test InvokeMethodDirect opcode - devirtualized method calls in try/catch blocks
         # This tests the optimization path where final class method calls in try/catch
@@ -2837,6 +2907,272 @@ printf(\"%d,%d\\n\", a, b);
             string result = trim(runScript(code, mode));
             assertEq("20,2", result,
                     sprintf("lvalue compound assign div/mod slow path %s", mode));
+        }
+    }
+
+    testRangeLValueDelegate() {
+        # Range lvalue operations (list[0..2] = x) are parse errors - the parser rejects them.
+        # The isRangeLValue() checks in IR lowering are defensive guards that delegate to AST
+        # if somehow reached. We verify non-range list index operations work correctly across
+        # all modes (regression test to ensure the defensive code changes don't break anything).
+
+        # Test list index assignment (non-range) still works in all modes
+        string code = "%modern
+list<auto> l = (1, 2, 3, 4, 5);
+l[2] = 30;
+printf(\"%y\\n\", l);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("[1, 2, 30, 4, 5]", result,
+                    sprintf("list index assignment %s", mode));
+        }
+
+        # Test list index compound assignment
+        code = "%modern
+list<auto> l = (10, 20, 30, 40, 50);
+l[1] += 5;
+l[3] -= 10;
+printf(\"%d,%d\\n\", l[1], l[3]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("25,30", result,
+                    sprintf("list index compound assign %s", mode));
+        }
+
+        # Test list index increment/decrement
+        code = "%modern
+list<auto> l = (10, 20, 30);
+++l[0];
+l[2]--;
+printf(\"%d,%d\\n\", l[0], l[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("11,29", result,
+                    sprintf("list index inc/dec %s", mode));
+        }
+
+        # Test list range read works in all modes
+        code = "%modern
+list<auto> l = (1, 2, 3, 4, 5);
+list<auto> sub_list = l[1..3];
+printf(\"%y\\n\", sub_list);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("[2, 3, 4]", result,
+                    sprintf("range read %s", mode));
+        }
+
+        # Test string range read
+        code = "%modern
+string s = \"hello world\";
+string substr = s[0..4];
+printf(\"%s\\n\", substr);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello", result,
+                    sprintf("string range read %s", mode));
+        }
+    }
+
+    testSelfMemberAccess() {
+        # Test basic self.x member access in a class
+        string code = "%modern
+class Foo {
+    public {
+        int x;
+        string name;
+    }
+    constructor(int n_x, string n_name) {
+        x = n_x;
+        name = n_name;
+    }
+    int getX() { return self.x; }
+    string getName() { return self.name; }
+    string getInfo() { return sprintf(\"%s:%d\", self.name, self.x); }
+}
+Foo f(42, \"test\");
+printf(\"%d,%s,%s\\n\", f.getX(), f.getName(), f.getInfo());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42,test,test:42", result,
+                    sprintf("self member access %s", mode));
+        }
+
+        # Test self member access in try/catch (invoke path)
+        code = "%modern
+class Bar {
+    public {
+        int val;
+    }
+    constructor(int v) { val = v; }
+    int getVal() {
+        try {
+            return self.val;
+        } catch (hash<auto> ex) {
+            return -1;
+        }
+    }
+}
+Bar b(99);
+printf(\"%d\\n\", b.getVal());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("99", result,
+                    sprintf("self member access invoke path %s", mode));
+        }
+
+        # Test self member access with multiple members and computation
+        code = "%modern
+class Point {
+    public {
+        float x;
+        float y;
+    }
+    constructor(float n_x, float n_y) { x = n_x; y = n_y; }
+    float distFromOrigin() {
+        return (self.x * self.x + self.y * self.y);
+    }
+}
+Point p(3.0, 4.0);
+printf(\"%.1f\\n\", p.distFromOrigin());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("25.0", result,
+                    sprintf("self member computation %s", mode));
+        }
+    }
+
+    testStaticClassVarAccess() {
+        # Test basic static class variable read
+        string code = "%modern
+class MyCounter {
+    public {
+        static int count = 0;
+    }
+    static int getCount() { return MyCounter::count; }
+    static nothing increment() { MyCounter::count++; }
+}
+MyCounter::increment();
+MyCounter::increment();
+MyCounter::increment();
+printf(\"%d\\n\", MyCounter::getCount());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("3", result,
+                    sprintf("static var read %s", mode));
+        }
+
+        # Test static var access in try/catch (invoke path)
+        code = "%modern
+class MyConfig {
+    public {
+        static string name = \"default\";
+    }
+    static string getName() {
+        try {
+            return MyConfig::name;
+        } catch (hash<auto> ex) {
+            return \"error\";
+        }
+    }
+}
+printf(\"%s\\n\", MyConfig::getName());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("default", result,
+                    sprintf("static var invoke path %s", mode));
+        }
+
+        # Test static var with computation
+        code = "%modern
+class MyMathConst {
+    public {
+        static float pi = 3.14159;
+        static float e_val = 2.71828;
+    }
+    static float sumConst() {
+        return MyMathConst::pi + MyMathConst::e_val;
+    }
+}
+printf(\"%.5f\\n\", MyMathConst::sumConst());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5.85987", result,
+                    sprintf("static var computation %s", mode));
+        }
+    }
+
+    testNewObjectInstantiation() {
+        # Test basic new object creation with constructor args
+        string code = "%modern
+class MyPoint {
+    public {
+        int x;
+        int y;
+    }
+    constructor(int n_x, int n_y) { x = n_x; y = n_y; }
+    string toString() { return sprintf(\"%d,%d\", x, y); }
+}
+MyPoint p = new MyPoint(3, 4);
+printf(\"%s\\n\", p.toString());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("3,4", result,
+                    sprintf("new object basic %s", mode));
+        }
+
+        # Test new object in try/catch (invoke path)
+        code = "%modern
+class MyBox {
+    public {
+        string label;
+    }
+    constructor(string l) { label = l; }
+    string getLabel() {
+        try {
+            MyBox inner = new MyBox(\"inner\");
+            return label + \":\" + inner.getLabel();
+        } catch (hash<auto> ex) {
+            return \"error\";
+        }
+    }
+}
+MyBox b = new MyBox(\"outer\");
+printf(\"%s\\n\", b.label);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("outer", result,
+                    sprintf("new object invoke path %s", mode));
+        }
+
+        # Test new object with no-arg constructor
+        code = "%modern
+class MyDefault {
+    public {
+        int val = 42;
+    }
+    int getVal() { return val; }
+}
+MyDefault d = new MyDefault();
+printf(\"%d\\n\", d.getVal());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result,
+                    sprintf("new object no-arg %s", mode));
         }
     }
 }

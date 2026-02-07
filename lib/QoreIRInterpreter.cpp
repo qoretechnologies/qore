@@ -404,6 +404,14 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
                 return -1;
             }
             return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
+        case QoreIROpcode::Foreach:
+            if (!stmt) {
+                if (xsink) {
+                    xsink->raiseException("IR-INTERPRETER-ERROR", "foreach statement requires a statement");
+                }
+                return -1;
+            }
+            return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
         default:
             break;
     }
@@ -1561,6 +1569,85 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ++ip;
                 break;
             }
+            case QoreIROpcode::LoadSelfMember: {
+                auto* sm_inst = static_cast<QoreIRSelfMemberInstruction*>(inst);
+                QoreObject* obj = runtime_get_stack_object();
+                assert(obj);
+                // issue 3523: evaluate in case the value is a reference
+                ValueHolder val(obj->getReferencedMemberNoMethod(sm_inst->member_name.c_str(), xsink), xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue out = val->needsEval() ? val->eval(xsink) : val.release();
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                setValueSlot(values, sm_inst->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(sm_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::LoadStaticVar: {
+                auto* sv_inst = static_cast<QoreIRStaticVarInstruction*>(inst);
+                // issue 3523: evaluate in case the value is a reference
+                ValueHolder val(sv_inst->vi->getReferencedValue(sv_inst->var_name.c_str(), xsink),
+                        xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue out = val->needsEval() ? val->eval(xsink) : val.release();
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                setValueSlot(values, sv_inst->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(sv_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::NewObject: {
+                auto* no_inst = static_cast<QoreIRNewObjectInstruction*>(inst);
+                RuntimeConfig& rc = rc_get_current_ref();
+                QoreValue out = qore_class_private::execConstructor(*no_inst->qc, rc,
+                        no_inst->variant, no_inst->args, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                setValueSlot(values, no_inst->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(no_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::StoreLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 if (local_inst->operands.empty()) {
@@ -2162,6 +2249,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         }
                         // Remove executed handlers
                         on_block_exit_handlers.resize(scope_start);
+                        // On-block-exit handlers execute through the AST path and can
+                        // modify any local variable on the thread-local stack.  Clear the
+                        // locals cache so subsequent LoadLocal re-reads from the runtime.
+                        locals.clear();
                     }
                 }
                 ++ip;
