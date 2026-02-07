@@ -2752,6 +2752,15 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     }
                     break;
                 }
+                case QoreIROpcode::VrnConstruct: {
+                    auto* vrni = static_cast<QoreIRVrnConstructInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &vrni->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
                 case QoreIROpcode::OnBlockExit: {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
@@ -3049,6 +3058,16 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     memcpy(&bits, &ncli->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         ncli->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::VrnConstruct: {
+                    auto* vrni = static_cast<QoreIRVrnConstructInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &vrni->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        vrni->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
                     }
                     break;

@@ -422,6 +422,9 @@ public:
         return rv;
     }
 
+    //! Construct the value without assigning to the variable (for JIT split)
+    DLLLOCAL QoreValue constructValue(ExceptionSink* xsink) const;
+
 protected:
     enum vrn_type_e : unsigned char {
         VRN_NONE = 0,

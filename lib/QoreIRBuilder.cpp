@@ -361,6 +361,14 @@ QoreIRNewComplexListInstruction* QoreIRBuilder::createNewComplexList(const NewCo
     return inst;
 }
 
+QoreIRVrnConstructInstruction* QoreIRBuilder::createVrnConstruct(const VarRefNewObjectNode* vrn,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRVrnConstructInstruction>(vrn, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createHashSetKeyValue(QoreIRValue hash, QoreIRValue key,
         QoreIRValue value, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::HashSetKeyValue);

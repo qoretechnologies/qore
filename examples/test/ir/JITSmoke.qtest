@@ -135,6 +135,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("reference write-through", \testReferenceWriteThrough());
         addTestCase("NOTHING input to iterators", \testNothingInputIterators());
         addTestCase("VarRefNewObjectNode split", \testVarRefNewObjectSplit());
+        addTestCase("VarRefNewObjectNode typed containers", \testVrnTypedContainers());
         set_return_value(main());
     }
 
@@ -3720,6 +3721,81 @@ printf(\"%d\\n\", c.getCount());
             string result = trim(runScript(code, mode));
             assertEq("8", result,
                     sprintf("VarRefNewObject chain %s", mode));
+        }
+    }
+
+    testVrnTypedContainers() {
+        # VarRefNewObjectNode hashdecl construction (VRN_HASHDECL)
+        string code = "%modern
+hashdecl MyVrnPoint {
+    int x;
+    int y;
+}
+hash<MyVrnPoint> p({\"x\": 5, \"y\": 7});
+printf(\"%d\\n\", p.x + p.y);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("12", result,
+                    sprintf("VRN hashdecl construction %s", mode));
+        }
+
+        # VarRefNewObjectNode hashdecl in try/catch (invoke path)
+        code = "%modern
+hashdecl MyVrnData {
+    string name;
+    int value;
+}
+try {
+    hash<MyVrnData> d({\"name\": \"test\", \"value\": 42});
+    printf(\"%s:%d\\n\", d.name, d.value);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"ERROR\\n\");
+}
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("test:42", result,
+                    sprintf("VRN hashdecl invoke %s", mode));
+        }
+
+        # VarRefNewObjectNode complex hash construction (VRN_COMPLEXHASH)
+        code = "%modern
+hash<string, int> h({\"a\": 10, \"b\": 20});
+printf(\"%d\\n\", h.a + h.b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30", result,
+                    sprintf("VRN complex hash construction %s", mode));
+        }
+
+        # VarRefNewObjectNode complex list construction (VRN_COMPLEXLIST)
+        code = "%modern
+list<int> l(1, 2, 3, 4);
+printf(\"%d\\n\", (foldl $1 + $2, l));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10", result,
+                    sprintf("VRN complex list construction %s", mode));
+        }
+
+        # Negative test: exception during hashdecl construction (unknown key at runtime)
+        code = "%modern
+hashdecl VrnStrict { int x; int y; }
+try {
+    auto val = {\"x\": 1, \"z\": 99};
+    hash<VrnStrict> h(val);
+    printf(\"FAIL\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("HASHDECL-INIT-ERROR", result,
+                    sprintf("VRN hashdecl error propagation %s", mode));
         }
     }
 }

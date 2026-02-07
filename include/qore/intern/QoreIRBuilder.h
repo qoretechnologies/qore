@@ -111,6 +111,9 @@ public:
         const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
     QoreIRNewComplexListInstruction* createNewComplexList(const NewComplexListNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    // VarRefNewObjectNode construction (non-object types)
+    QoreIRVrnConstructInstruction* createVrnConstruct(const VarRefNewObjectNode* vrn,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
     // Hash building (for hash map loops)
     QoreIRInstruction* createHashSetKeyValue(QoreIRValue hash, QoreIRValue key, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);

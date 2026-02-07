@@ -62,6 +62,7 @@
 #include <qore/intern/qore_list_private.h>
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/ParseReferenceNode.h>
+#include <qore/intern/VarRefNode.h>
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
@@ -581,6 +582,12 @@ extern "C" uint64_t qore_rt_new_complex_list(const NewComplexListNode* node, Exc
         result = result.refSelf();
     }
     return toBits(result);
+}
+
+// --- VarRefNewObjectNode construction helper (non-object types) ---
+
+extern "C" uint64_t qore_rt_vrn_construct(const VarRefNewObjectNode* vrn, ExceptionSink* xsink) {
+    return toBits(vrn->constructValue(xsink));
 }
 
 // --- Hash building helper ---

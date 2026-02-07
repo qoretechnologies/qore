@@ -1839,6 +1839,29 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ++ip;
                 break;
             }
+            case QoreIROpcode::VrnConstruct: {
+                auto* vrn_inst = static_cast<QoreIRVrnConstructInstruction*>(inst);
+                ExceptionSink vrn_xsink;
+                uint64_t result_bits = qore_rt_vrn_construct(vrn_inst->vrn, &vrn_xsink);
+                if (vrn_xsink) {
+                    if (xsink) {
+                        xsink->assimilate(vrn_xsink);
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue out = fromBits(result_bits);
+                setValueSlot(values, vrn_inst->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(vrn_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::HashSetKeyValue: {
                 QoreValue hash_val = getIRValue(values, inst->operands[0]);
                 QoreValue key_val = getIRValue(values, inst->operands[1]);

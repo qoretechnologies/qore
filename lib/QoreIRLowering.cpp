@@ -2310,9 +2310,27 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
             }
             return obj_val;
         }
-        // Non-VRN_OBJECT types (hashdecl, complex hash/list): delegate to AST
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, var->loc, error);
+        // Non-VRN_OBJECT types (hashdecl, complex hash/list): construct + store
+        QoreIRValue construct_val;
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, var->loc);
+            inst->invoke_opcode = QoreIROpcode::VrnConstruct;
+            builder.setBlock(normal_block);
+            construct_val = inst->result;
+        } else {
+            construct_val = builder.createVrnConstruct(vrn, expr, var->loc)->result;
+        }
+        // Store the constructed value to the variable
+        if (!storeVarRef(var, construct_val, error, "VarRefNewObjectNode", &expr, var->loc)) {
+            return QoreIRValue();
+        }
+        return construct_val;
     }
     return loadVarRef(var, error, "variable reference", expr);
 }

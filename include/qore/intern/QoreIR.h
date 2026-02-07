@@ -62,6 +62,7 @@ class ParseReferenceNode;
 class NewHashDeclNode;
 class NewComplexHashNode;
 class NewComplexListNode;
+class VarRefNewObjectNode;
 
 enum class QoreIROpcode : uint16_t {
     ConstInt,
@@ -356,6 +357,7 @@ enum class QoreIROpcode : uint16_t {
     NewHashDecl,        // Create new hashdecl instance
     NewComplexHash,     // Create new typed hash
     NewComplexList,     // Create new typed list
+    VrnConstruct,       // Construct value for VarRefNewObjectNode (non-object types)
 
     // Hash building
     HashSetKeyValue,    // Set key-value pair in hash (for hash map loops)
@@ -987,6 +989,23 @@ public:
     }
 
     const NewComplexListNode* node;  //!< AST node (for eval)
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! VarRefNewObjectNode construction instruction - constructs value for typed variable declarations
+class QoreIRVrnConstructInstruction : public QoreIRInstruction {
+public:
+    QoreIRVrnConstructInstruction(const VarRefNewObjectNode* n_vrn, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::VrnConstruct), vrn(n_vrn), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRVrnConstructInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const VarRefNewObjectNode* vrn;  //!< The VarRefNewObjectNode (for construction)
     QoreValue expr;  //!< Original AST expression (for AOT)
 };
 

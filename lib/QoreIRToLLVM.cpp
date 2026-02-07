@@ -2854,6 +2854,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 // Typed container construction doesn't modify locals — no reload needed
 
+            } else if (inv->invoke_opcode == QoreIROpcode::VrnConstruct) {
+                // VarRefNewObjectNode construction invoke (non-object types)
+                if (aot_mode) {
+                    QoreValue expr_val = inv->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                } else {
+                    auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
+                            inv->expr.getInternalNode());
+                    assert(vrn);
+                    llvm::Value* vrn_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(vrn));
+                    llvm::Value* vrn_as_ptr = builder->CreateIntToPtr(vrn_ptr, ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_vrn_construct",
+                            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {vrn_as_ptr, xsink_arg});
+                }
+                // VrnConstruct doesn't modify locals — no reload needed
+
             } else {
                 // Fallback: evaluate the full AST expression via qore_rt_invoke_expr
                 if (aot_mode) {
@@ -4082,6 +4107,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction("qore_rt_new_complex_list",
                         llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::VrnConstruct: {
+            const auto* vrninst = static_cast<const QoreIRVrnConstructInstruction*>(inst);
+            llvm::Value* result;
+            if (aot_mode) {
+                QoreValue expr_val = vrninst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+            } else {
+                llvm::Value* vrn_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(vrninst->vrn));
+                llvm::Value* vrn_as_ptr = builder->CreateIntToPtr(vrn_ptr, ptr_type);
+                auto helper = module.getOrInsertFunction("qore_rt_vrn_construct",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {vrn_as_ptr, xsink_arg});
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);

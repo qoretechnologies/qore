@@ -518,6 +518,24 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     return err;
 }
 
+QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
+    switch (vrn_type) {
+        case VRN_HASHDECL:
+            return typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(typeInfo))
+                ->newHash(parse_args, runtime_check, xsink);
+
+        case VRN_COMPLEXHASH:
+            return qore_hash_private::newComplexHash(typeInfo, parse_args, xsink);
+
+        case VRN_COMPLEXLIST:
+            return qore_list_private::newComplexList(typeInfo, new_args, xsink);
+
+        default:
+            assert(false);
+            return QoreValue();
+    }
+}
+
 QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);

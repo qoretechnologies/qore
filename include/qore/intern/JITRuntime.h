@@ -323,6 +323,11 @@ uint64_t qore_rt_new_complex_hash(const NewComplexHashNode* node, ExceptionSink*
 //! Create a new typed list; returns NaN-boxed QoreValue
 uint64_t qore_rt_new_complex_list(const NewComplexListNode* node, ExceptionSink* xsink);
 
+class VarRefNewObjectNode;
+
+//! Construct value for VarRefNewObjectNode (non-object types: hashdecl/complex hash/list)
+uint64_t qore_rt_vrn_construct(const VarRefNewObjectNode* vrn, ExceptionSink* xsink);
+
 // --- Hash building helper ---
 
 //! Set a key-value pair in a hash (for hash map loops)
