@@ -297,6 +297,8 @@ static std::string* pendingClassDocComment = nullptr;
 static std::string* pendingHashdeclDocComment = nullptr;
 // Claimed doc comment for namespace declarations - stored separately so namespace body members don't steal it
 static std::string* pendingNamespaceDocComment = nullptr;
+// Claimed doc comment for enum declarations - stored separately so enum body members don't steal it
+static std::string* pendingEnumDocComment = nullptr;
 // Claimed doc comment for sub declarations - stored separately so body comments don't steal it
 static std::string* pendingSubDocComment = nullptr;
 
@@ -674,6 +676,15 @@ static void claimNamespaceDocComment() {
     inDocCommentBlock = false;
 }
 
+// Claims the pending doc comment for an enum declaration
+// This should be called when the scanner sees the 'enum' keyword, before the enum body is parsed
+static void claimEnumDocComment() {
+    delete pendingEnumDocComment;
+    pendingEnumDocComment = pendingDocComment;
+    pendingDocComment = nullptr;
+    inDocCommentBlock = false;
+}
+
 // Claims the pending doc comment for a sub declaration
 // This should be called when the scanner sees the 'sub' keyword, before the body is parsed
 static void claimSubDocComment() {
@@ -735,6 +746,14 @@ std::string* takeHashdeclDocComment() {
 std::string* takeNamespaceDocComment() {
     std::string* result = pendingNamespaceDocComment;
     pendingNamespaceDocComment = nullptr;
+    return result;
+}
+
+// Takes ownership of the claimed enum doc comment (returns it and clears the static variable)
+// NOTE: This function is called from ast_parser.ypp, so it cannot be static
+std::string* takeEnumDocComment() {
+    std::string* result = pendingEnumDocComment;
+    pendingEnumDocComment = nullptr;
     return result;
 }
 
@@ -1492,6 +1511,7 @@ enum                                    {
                                                 yylval->string = strdup("enum");
                                                 return IDENTIFIER;
                                             }
+                                            claimEnumDocComment();
                                             return TOK_ENUM;
                                         }
 class\(                                 { yylval->string = strdup("class"); return KW_IDENTIFIER_OPENPAREN; }

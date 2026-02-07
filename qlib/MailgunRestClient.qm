@@ -193,7 +193,7 @@ MailgunRestClient mailgun({"apikey": "your-api-key", "api_domain": "mg.example.c
 }
 
 #! Class for Mailgun REST connections; returns @ref MailgunRestClient objects
-/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
     - \c apikey: the Mailgun API key
     - \c api_region: the API region to use (US or EU)

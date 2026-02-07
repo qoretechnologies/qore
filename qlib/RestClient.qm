@@ -1871,9 +1871,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
 
     #! Prepares and processes message parameters for sending without sending the message
     /** @param method the HTTP method to use
-        @path a reference to the URI path
-        @path body a reference to any message body
-        @path hdr a reference to any headers to send
+        @param path a reference to the URI path
+        @param body a reference to any message body
+        @param hdr a reference to any headers to send
 
         @since %RestClient 1.10.2
     */
@@ -1938,7 +1938,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     }
 
     #! Called when OAuth2 login information has been received
-    /** @bool refresh used to distinguish an initial login or new information from a token refresh
+    /** @param h the OAuth2 login response hash
+        @param refresh used to distinguish an initial login or new information from a token refresh
 
         @since %RestClient 2.0
     */

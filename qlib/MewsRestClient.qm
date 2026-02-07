@@ -163,6 +163,7 @@ MewsRestClient rest(opts);
         serialization
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request
         headers and other information about the HTTP request
+        @param hdr optional headers to include in the request
 
         @return A hash of headers received from the HTTP server with all key names converted to lower-case; if any
         message body is included in the response, it will be deserialized to %Qore data and assigned to the value of
@@ -222,7 +223,7 @@ MewsRestClient rest(opts);
 }
 
 #! Class for Mews REST connections; returns @ref MewsRestClient objects
-/** This class implements a subset of \c RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements a subset of \c RestClient::RestConnection "RestClientConnection"; in addition,
     this class requires values for the following options:
     - \c client_token
     - \c access_token

@@ -188,7 +188,7 @@ JotformRestClient jotform({"apikey": "your-api-key"});
 }
 
 #! Class for JotForm REST connections; returns @ref JotformRestClient objects
-/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
     - \c apikey: the JotForm API key
     - \c api_domain: the API domain to use (default: api.jotform.com)

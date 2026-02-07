@@ -101,6 +101,12 @@ const ADK_Typedef = ADK_Typedef;
 
 //! Module declaration kind.
 const ADK_Module = ADK_Module;
+
+//! Enum declaration kind.
+const ADK_Enum = ADK_Enum;
+
+//! Enum member declaration kind.
+const ADK_EnumMember = ADK_EnumMember;
 ///@}
 
 /** @defgroup astparser_expression_kind_constants AST Expression Kind Constants

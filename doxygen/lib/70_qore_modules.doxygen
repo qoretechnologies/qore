@@ -59,7 +59,7 @@
 
     @subsection module_functions Module Callback Functions
 
-    @par Module Initialization — @ref qore_module_init_t
+    @par Module Initialization — \c qore_module_init_t
 
     @code{.cpp}
     typedef void (*qore_module_init_t)(QoreModuleInitContext& ctx, ExceptionSink& xsink);
@@ -69,7 +69,7 @@
     The @ref QoreModuleInitContext struct provides the \c path to the module file.  Report errors by raising
     exceptions on \c xsink; if any exception is raised, the module load will fail.
 
-    @par Namespace Initialization — @ref qore_module_ns_init_t
+    @par Namespace Initialization — \c qore_module_ns_init_t
 
     @code{.cpp}
     typedef void (*qore_module_ns_init_t)(QoreNamespace* root_ns, QoreNamespace* qore_ns, ExceptionSink& xsink);
@@ -80,7 +80,7 @@
     program.  Typically this copies the module's reference namespace into the Qore namespace tree.  Report errors on
     \c xsink.
 
-    @par Module Cleanup — @ref qore_module_delete_t
+    @par Module Cleanup — \c qore_module_delete_t
 
     @code{.cpp}
     typedef void (*qore_module_delete_t)();
@@ -89,7 +89,7 @@
     Called when the module is unloaded (typically when the %Qore library shuts down).  Free any resources allocated
     during initialization.
 
-    @par Parse Command Handler — @ref qore_module_parse_cmd_t (optional)
+    @par Parse Command Handler — \c qore_module_parse_cmd_t (optional)
 
     @code{.cpp}
     typedef void (*qore_module_parse_cmd_t)(const QoreString& cmd, ExceptionSink* xsink);

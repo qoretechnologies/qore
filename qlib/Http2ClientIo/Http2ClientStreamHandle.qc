@@ -244,7 +244,7 @@ public class Http2ClientStreamHandle {
         @param headers request headers (optional)
         @param body request body (optional)
         @param callback callback invoked when response is ready:
-               sub (hash<auto> response, *hash<auto> error)
+               sub (hash\<auto> response, *hash\<auto> error)
 
         @return the stream ID assigned to this request
 

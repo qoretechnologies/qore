@@ -483,7 +483,7 @@ public class DataProviderActionCatalog {
         #! Top-level master application cache keyed by application name
         static hash<string, hash<DataProviderAppInfo>> appcache;
 
-        #! Master action cache, the key <app>/<action>
+        #! Master action cache, the key is \c app/action
         static hash<string, hash<DataProviderActionInfo>> top_actionmap;
 
         #! Action cache, the key is the application key, the second key is the action string

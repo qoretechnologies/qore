@@ -182,8 +182,9 @@ ShipStationRestClient shipstation({"api_key": "your-api-key", "api_secret": "you
     /** @param m the HTTP method to use
         @param path the URI path to use
         @param body the request body to send (if any)
-        @param hdr any headers to use with the request
         @param info an optional reference to a hash that will be used as an output variable giving the response info
+        @param decode_errors if @ref True, decode error responses
+        @param hdr any headers to use with the request
 
         @return the response from the server
 
@@ -288,7 +289,7 @@ ShipStationRestClient shipstation({"api_key": "your-api-key", "api_secret": "you
 }
 
 #! Class for ShipStation REST connections; returns @ref ShipStationRestClient objects
-/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
     - \c api_key: the ShipStation API key (used as username for Basic Auth)
     - \c api_secret: the ShipStation API secret (used as password for Basic Auth)

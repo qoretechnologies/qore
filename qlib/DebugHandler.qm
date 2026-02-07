@@ -62,7 +62,7 @@ module DebugHandler {
     @see
     - @ref DebugProgramControl::DebugProgramControl "DebugProgramControl"
 
-    @subsection debughandler_v0_1 DebugHandler Version 0.2
+    @subsection debughandler_v0_2 DebugHandler Version 0.2
     - updated to new WebSocket APIs
 
     @subsection debughandler_v0_1 DebugHandler Version 0.1
@@ -150,6 +150,11 @@ public namespace DebugHandler {
             # default socket send timeout
             #const DefaultSocketSendTimeout = 30s;
         }
+        #! creates the object
+        /** @param dpc the debug program controller object
+            @param auth the authentication object to use to authenticate connections
+            @param opts options passed to the @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" constructor
+        */
         constructor(WebSocketDebugProgramControl dpc, *HttpServer::AbstractAuthenticator auth, *hash<auto> opts)
                 : WebSocketHandler::WebSocketHandler(auth, opts) {
             debugProgram = dpc;
@@ -269,7 +274,8 @@ public namespace DebugHandler {
 
         #! creates the object
         /**
-            @param serverName is used identifier fr \c welcome message
+            @param serverName is used as identifier for \c welcome message
+            @param logger an optional logger interface for logging
         */
         constructor(string serverName, *Logger::LoggerInterface logger) : DebugProgramControl(serverName, logger) {
         }

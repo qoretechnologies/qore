@@ -2027,7 +2027,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
 
         #! Oracle select options
         /** This constant extends @ref SqlUtil::AbstractTable::SelectOptions with the following options as returned by
-            @ref OracleSqlUtilBase::OracleTable::getSelectOptions():
+            @ref OracleSqlUtilBase::OracleTable::getSelectOptions() :
             - \c partition: the partition name to use in a query (see @ref ora_partitioning_select)
         */
         const OracleSelectOptions = AbstractTable::SelectOptions + {

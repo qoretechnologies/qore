@@ -328,7 +328,7 @@ ZohoInvoiceRestClient zoho({
 }
 
 #! Class for Zoho Invoice REST connections; returns @ref ZohoInvoiceRestClient objects
-/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
     - \c organization_id: the Zoho Invoice organization ID
     - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")

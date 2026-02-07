@@ -1848,14 +1848,14 @@ public class AsyncApiSchemaTokenizer {
     }
 
     #! Resolve doxygen \@ref tags in description text
-    /** Converts \c @ref tags to their display text for use in AsyncAPI schema descriptions.
+    /** Converts <tt>\@ref</tt> tags to their display text for use in AsyncAPI schema descriptions.
 
         Handles two forms:
-        - \c "@ref Namespace::Name \"Display Text\"" becomes \c "Display Text"
-        - \c "@ref Namespace::Name" (no display text) becomes \c "Name"
+        - <tt>\@ref Namespace::Name "Display Text"</tt> becomes \c "Display Text"
+        - <tt>\@ref Namespace::Name</tt> (no display text) becomes \c "Name"
 
         @param text the description text to process
-        @return the text with \@ref tags resolved to display text
+        @return the text with <tt>\@ref</tt> tags resolved to display text
     */
     private static string processDoxygenRefs(string text) {
         # Handle @ref with display text: @ref Namespace::Name "Display Text" -> Display Text
@@ -1865,20 +1865,20 @@ public class AsyncApiSchemaTokenizer {
         return text;
     }
 
-    #! Parse the @info section of an event block
+    #! Parse the \@info section of an event block
     /** Handles nested field definitions with proper indentation tracking.
 
         Nested fields under arrays become the array's items schema.
         Nested fields under objects become the object's properties.
 
         Example:
-        @code
+        @verbatim
         @info
         - messages (list): shutdown messages
           - title (string): message title
           - content (string): message content
         - count (int): message count
-        @endcode
+        @endverbatim
 
         Results in:
         - messages: array with items having properties: title, content
@@ -2009,7 +2009,7 @@ public class AsyncApiSchemaTokenizer {
         };
     }
 
-    #! Parse @example JSON blocks (payload examples)
+    #! Parse \@example JSON blocks (payload examples)
     private static list<auto> parseJsonExamples(string block) {
         list<auto> examples = ();
         list<string> lines = block.split("\n");
@@ -2125,7 +2125,7 @@ public class AsyncApiSchemaTokenizer {
         return channel;
     }
 
-    #! Parse all @subscribe or @publish message blocks from a channel block
+    #! Parse all \@subscribe or \@publish message blocks from a channel block
     /** @param block the channel block text
         @param msg_type "subscribe" or "publish"
         @return list of message schema hashes, each with "name" and "schema" keys

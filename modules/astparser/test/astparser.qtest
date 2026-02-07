@@ -340,6 +340,7 @@ public hashdecl DateInfo {
         addTestCase("Module single attribute", \testModuleSingleAttribute());
         addTestCase("Module special chars in values", \testModuleSpecialCharsInValues());
         addTestCase("Module init/del attributes", \testModuleInitDelAttributes());
+        addTestCase("Enum serialization", \testEnumSerialization());
 %endif
         set_return_value(main());
     }
@@ -1863,6 +1864,59 @@ class Used {}
         # init/del values should be closure expressions, not literal strings
         assertNeq(AEK_Literal, modNode.attributes[1].value.kind, "init is not a literal");
         assertNeq(AEK_Literal, modNode.attributes[2].value.kind, "del is not a literal");
+    }
+
+    testEnumSerialization() {
+        string code = "%modern\nnamespace Test {\n    /** Doc for MyEnum */\n    public enum MyEnum {\n        /** First value */\n        First = 1,\n        /** Second value */\n        Second = 2,\n        Third,\n    }\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertTrue(exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list<auto> nodes = tree.getNodesInfo();
+        # find the namespace node
+        *hash<auto> nsNode;
+        foreach auto node in (nodes) {
+            if (node.kind == ADK_Namespace) {
+                nsNode = node;
+                break;
+            }
+        }
+        assertTrue(exists(nsNode), "namespace found");
+        assertEq("Test", nsNode.name.name, "namespace name");
+
+        # find the enum in the namespace declarations
+        *hash<auto> enumNode;
+        foreach auto decl in (nsNode.declarations) {
+            if (decl.kind == ADK_Enum) {
+                enumNode = decl;
+                break;
+            }
+        }
+        assertTrue(exists(enumNode), "enum found in declarations");
+        assertEq("MyEnum", enumNode.name.name, "enum name");
+        assertTrue(exists(enumNode.declarations), "enum has member declarations");
+        assertEq(3, enumNode.declarations.size(), "enum has 3 members");
+
+        # check enum member names
+        assertEq(ADK_EnumMember, enumNode.declarations[0].kind, "first member kind");
+        assertEq("First", enumNode.declarations[0].name.name, "first member name");
+        assertTrue(exists(enumNode.declarations[0].value), "first member has value");
+
+        assertEq(ADK_EnumMember, enumNode.declarations[1].kind, "second member kind");
+        assertEq("Second", enumNode.declarations[1].name.name, "second member name");
+        assertTrue(exists(enumNode.declarations[1].value), "second member has value");
+
+        assertEq(ADK_EnumMember, enumNode.declarations[2].kind, "third member kind");
+        assertEq("Third", enumNode.declarations[2].name.name, "third member name");
+
+        # check doc comments
+        assertTrue(exists(enumNode.docComment), "enum has doc comment");
+        assertTrue(enumNode.docComment =~ /Doc for MyEnum/, "enum doc comment content");
+        assertTrue(exists(enumNode.declarations[0].docComment), "first member has doc comment");
+        assertTrue(enumNode.declarations[0].docComment =~ /First value/, "first member doc content");
+        assertTrue(exists(enumNode.declarations[1].docComment), "second member has doc comment");
+        assertTrue(enumNode.declarations[1].docComment =~ /Second value/, "second member doc content");
     }
 
 %endif

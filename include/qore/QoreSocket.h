@@ -1902,6 +1902,7 @@ public:
         @param headers response headers
         @param body response body data (optional)
         @param body_len response body length
+        @param xsink exception sink for Qore-language exceptions
         @return 0 on success, -1 on error (exception raised)
 
         @since %Qore 2.3

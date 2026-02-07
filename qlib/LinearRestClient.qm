@@ -252,7 +252,7 @@ LinearRestClient linear({"token": "lin_api_xxxxx"});
 }
 
 #! Class for Linear REST connections; returns @ref LinearRestClient objects
-/** This class implements all options of \c RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements all options of \c RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following default values for the following options:
     - \c oauth2_auth_url: \c https://linear.app/oauth/authorize
     - \c oauth2_grant_type: \c authorization_code

@@ -840,6 +840,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
     /**
+        @param schema_source the source of the schema (e.g. file path or URL)
         @param oh deserialized hash from the source schema description describing the root document object
         @param opts options as per \c SwaggerOptions
 
@@ -857,6 +858,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
     /** @param logger the logger to use
+        @param schema_source the source of the schema (e.g. file path or URL)
         @param oh deserialized hash from the source schema description describing the root document object
         @param opts options as per \c SwaggerOptions
 
@@ -1975,7 +1977,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     }
 
     #! Check if the headers contain a content-type header and if so, modify the request hash
-    /** @param resp request hash
+    /** @param req request hash
         @param body request body data (if any)
         @param headers HTTP headers to include in the request
 
@@ -2286,8 +2288,8 @@ public class PathComponent inherits Qore::Serializable {
         return w.pio;
     }
 
-    #! returns a hash of URI paths as keys with values as lists of supported HTTP methods
-    /** @return a hash of URI paths as keys with values as lists of supported HTTP methods
+    #! populates a hash of URI paths as keys with values as lists of supported HTTP methods
+    /** @param h reference to the hash to populate with URI paths as keys and lists of supported HTTP methods as values
     */
     getPathOperationHash(reference<hash<string, list<string>>> h) {
         if (pio)
@@ -2774,7 +2776,7 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
 
     #! processes a REST API client-side request to the operation
     /** @param serialize if request arguments should be processed for serialization (client-side) or not (server-side)
-        @param pio the PathItemObject corresponding to the URI path
+        @param abstract_pio the PathItemObject corresponding to the URI path
         @param h a reference to the URI query info hash
         @param body a reference to the deserialized HTTP message body data
         @param headers a reference to a hash of HTTP headers
@@ -3236,7 +3238,8 @@ public class AbstractSwaggerParameterObject inherits ObjectBase, RestSchemaValid
 
     #! Constructor.
     /**
-        @param oh deserialized hash from the source schema description decscribing a single parameter
+        @param oh deserialized hash from the source schema description describing a single parameter
+        @param opt_flags option flags for parameter parsing
 
         @throws INVALID-FIELD-TYPE field has invalid type
         @throws INVALID-FIELD-VALUE field has invalid value
@@ -4342,6 +4345,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @param name the name of the object
         @param oh deserialized hash from the source schema description describing an object in the schema
         @param swagger the REST schema for resolving references
+        @param require_items if @ref True, require \c items for array types
 
         @throws INVALID-FIELD-FORMAT field has invalid format
         @throws INVALID-FIELD-TYPE field has invalid type
@@ -4401,6 +4405,7 @@ public class ParameterItemsSchemaObject inherits SchemaObject {
         @param name the name of the object
         @param oh deserialized hash from the source schema description describing an object in the schema
         @param swagger the REST schema for resolving references
+        @param inLoc the location of the parameter (e.g. \c "query", \c "formData")
 
         @throws INVALID-FIELD-FORMAT field has invalid format
         @throws INVALID-FIELD-TYPE field has invalid type
@@ -4427,6 +4432,7 @@ public class ParameterItemsSchemaObject inherits SchemaObject {
         @param name the name of the object
         @param oh deserialized hash from the source schema description describing an object in the schema
         @param swagger the REST schema for resolving references
+        @param inLoc the location of the parameter (e.g. \c "query", \c "formData")
 
         @throws INVALID-FIELD-FORMAT field has invalid format
         @throws INVALID-FIELD-TYPE field has invalid type

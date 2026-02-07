@@ -270,7 +270,6 @@ public class Http2PollOperation inherits AbstractPollOperation {
     #! Pushes a resource to the client using HTTP/2 Server Push (PUSH_PROMISE)
     /** @param path the path of the resource to push
         @param headers response headers for the pushed resource
-        @param body the body of the pushed resource
 
         @return the promised stream ID on success, -1 if push failed or not supported
 
@@ -330,7 +329,7 @@ if (css_stream > 0) {
     #! Returns a callback for pushing resources (for use in handler context)
     /** @return a closure that can be called to push resources
 
-        The callback takes (string path, *hash<auto> headers) and returns the promised stream ID.
+        The callback takes (string path, *hash&lt;auto&gt; headers) and returns the promised stream ID.
         Use startSendPushedResponse() to send the actual content on the returned stream ID.
 
         @par Example:

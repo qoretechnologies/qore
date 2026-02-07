@@ -278,7 +278,7 @@ ServiceNowRestClient rest({
 }
 
 #! Class for ServiceNow REST connections; returns @ref ServiceNowRestClient objects
-/** In addition to all options supported by \c RestClient::RestClientConnection "RestClientConnection", this
+/** In addition to all options supported by \c RestClient::RestConnection "RestClientConnection", this
     connection class supports the following options:
     - \c "api": the API version for ServiceNow
     - \c "oauth2_client_id": (optional) the ServiceNow OAuth2 client ID (mapped to the \c oauth2_client_id option)

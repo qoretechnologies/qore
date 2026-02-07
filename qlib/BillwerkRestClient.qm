@@ -248,7 +248,7 @@ BillwerkRestClient billwerk(
 }
 
 #! class for <a href="http://www.billwerk.com">Billwerk.com</a> REST connections; returns @ref BillwerkRestClient::BillwerkRestClient objects
-/** In addition to all options supported by \c RestClient::RestClientConnection "RestClientConnection", this
+/** In addition to all options supported by \c RestClient::RestConnection "RestClientConnection", this
     connection class supports the following options:
     - \c "client_id" (optional): the <a href="http://www.billwerk.com">billwerk.com</a> client_id
     - \c "client_secret" (mandatory): the <a href="http://www.billwerk.com">billwerk.com</a> client_secret

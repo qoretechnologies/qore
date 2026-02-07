@@ -2754,8 +2754,6 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 }
 
 #! Event- and message-based data provider for WebSocket client-side events
-/**
-*/
 public class WebSocketClientDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info

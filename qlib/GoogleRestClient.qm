@@ -220,7 +220,7 @@ GoogleRestClient rest(opts);
 }
 
 #! Class for Google REST connections; returns @ref GoogleRestClient objects
-/** This class implements all options of \c RestClient::RestClientConnection "RestClientConnection";  in addition,
+/** This class implements all options of \c RestClient::RestConnection "RestClientConnection";  in addition,
     this class provides the following default values for the following options:
     - \c oauth2_auth_args: <tt>access_type: offline</tt>
     - \c oauth2_auth_url: \c https://accounts.google.com/o/oauth2/v2/auth

@@ -1255,15 +1255,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         }
     }
 
-    #! Updates EventLoop registration for a socket
-    /** @param key the operation cache key
-        @param socket the socket to register (or NOTHING to unregister)
-        @param events the poll events (SOCK_POLLIN and/or SOCK_POLLOUT)
-
-        Uses reference counting to handle multiple operations sharing the same socket
-        (e.g., multiple concurrent accept operations on the same listener socket)
-    */
     #! Computes the event mask union for all operations on the given socket hash
+    /** @param sock_hash the unique hash of the socket to compute the event union for
+
+        @return the union of all event masks for operations on the given socket
+    */
     private int computeEventUnion(string sock_hash) {
         int result = 0;
         foreach string k in (keys key_events) {
@@ -1291,6 +1287,14 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         }
     }
 
+    #! Updates EventLoop registration for a socket
+    /** @param key the operation cache key
+        @param socket the socket to register (or NOTHING to unregister)
+        @param events the poll events (SOCK_POLLIN and/or SOCK_POLLOUT)
+
+        Uses reference counting to handle multiple operations sharing the same socket
+        (e.g., multiple concurrent accept operations on the same listener socket)
+    */
     private updateEventLoopRegistration(string key, *Socket socket, *int events) {
         *Socket prev_sock = registered_sockets{key};
         string prev_sock_hash = prev_sock ? prev_sock.uniqueHash() : "";

@@ -253,7 +253,7 @@ NetSuiteRestClient rest(opts);
 }
 
 #! Class for NetSuite REST connections; returns @ref NetSuiteRestClient objects
-/** This class implements all options of \c RestClient::RestClientConnection "RestClientConnection";  in addition,
+/** This class implements all options of \c RestClient::RestConnection "RestClientConnection";  in addition,
     this class provides the following default values for the following options:
     - \c oauth2_auth_url: \c auto
     - \c oauth2_grant_type: \c authorization_code
@@ -439,7 +439,7 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
     }
 
     #! Called by the constructor to set the real URL
-    /** @path the new URL
+    /** @param url the new URL
 
         sets the real HTTP URL for HTTP-based connections
     */

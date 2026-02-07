@@ -351,22 +351,22 @@ public hashdecl HttpResponseInfo {
     int code;
 
     #! the message body to return in the response
-    /** Can be a string or binary for regular responses, or an @ref InputStream for
-        streaming/chunked responses. When set to an @ref InputStream, the response is automatically sent using
+    /** Can be a string or binary for regular responses, or an @ref Qore::InputStream for
+        streaming/chunked responses. When set to an @ref Qore::InputStream, the response is automatically sent using
         chunked transfer encoding.
 
         @note if both \a body and \a chunked_body are set, then \a body takes precedence and \a chunked_body is
         ignored
 
-        @see chunked_body for an alternative that only accepts @ref InputStream and makes the chunked intent
+        @see chunked_body for an alternative that only accepts @ref Qore::InputStream and makes the chunked intent
         explicit
         @see send_callback for per-chunk callback-based chunked responses (e.g. DataStream)
     */
     *union<string, binary, InputStream> body;
 
-    #! an @ref InputStream for chunked transfer-encoded responses
-    /** Equivalent to setting \a body to an @ref InputStream, but makes the chunked intent explicit.
-        Use this field when you want to stream response data from an @ref InputStream using chunked transfer
+    #! an @ref Qore::InputStream for chunked transfer-encoded responses
+    /** Equivalent to setting \a body to an @ref Qore::InputStream, but makes the chunked intent explicit.
+        Use this field when you want to stream response data from an @ref Qore::InputStream using chunked transfer
         encoding.
 
         @note if both \a body and \a chunked_body are set, then \a body takes precedence and \a chunked_body is

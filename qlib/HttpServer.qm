@@ -4216,6 +4216,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         - The connection is closed
         - An error occurs
 
+        @param request_helper the request helper for parsing HTTP requests
         @param s the socket for the connection
         @param cx the connection context
         @param phi the persistent handler info

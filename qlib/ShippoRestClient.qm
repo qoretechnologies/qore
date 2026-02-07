@@ -207,7 +207,7 @@ ShippoRestClient shippo({"apikey": "shippo_live_xxxxx"});
 }
 
 #! Class for Shippo REST connections; returns @ref ShippoRestClient objects
-/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection"; in addition,
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
     this class provides the following options:
     - \c apikey: the Shippo API token (creates Authorization header with "ShippoToken" prefix)
 

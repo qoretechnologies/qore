@@ -60,6 +60,7 @@ public class MewsTableBulkRecordInterface inherits DataProvider::AbstractDataPro
         @param prov data provider that will provide the data to be iterated
         @param req request data
         @param key response key containing the data to be iterated
+        @param record_type the record type for the data
         @param where_cond the search criteria; will be processed by processFieldValues()
         @param search_options search options; assumed to have already been processed for validity before this call
     */
