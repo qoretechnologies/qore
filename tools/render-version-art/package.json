@@ -1,0 +1,14 @@
+{
+    "name": "render-version-art",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Pre-renders spinning Q coin animation frames for qore --version-animation",
+    "scripts": {
+        "render": "node render.mjs"
+    },
+    "dependencies": {
+        "gl": "^8.0.2",
+        "three": "^0.162.0"
+    }
+}

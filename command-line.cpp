@@ -53,7 +53,7 @@
 #include <poll.h>
 #include <sys/ioctl.h>
 
-#include <cmath>
+#include "version_animation_frames.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -659,29 +659,8 @@ static std::vector<std::string> wrap_line(const std::string& line, int max_width
     return result;
 }
 
-static const char* version_art[] = {
-    "                  .,l~-?-~l,.                 ",
-    "             ',l~-]]]]]]]]]-<l,.             ",
-    "         ',!~?]]]]?????????]]]]?~!,'         ",
-    "     ':!+?]]]]???????]]]???????]]]]?~!,'     ",
-    "    !?]]]]??????]]]]]_~-]]]]???????]]]]?!    ",
-    "   ']]????]]]]]]]_>;^  .^I>_]]]]]]]????]]'   ",
-    "   '???]]]]]]?>;`           ^;<??]]]]]?\?\?'   ",
-    "   '?]?]]]]?]?.               .?]?]]]]?]?'   ",
-    "   '?]?]]]]?]?`               `?]?]]]]?]?'   ",
-    "   '?]?]]]]?]?'               '?]?]]]]?]?'   ",
-    "   '?]?]]]]?]?^               ^?]?]]]]?]?'   ",
-    "   '???]]]]]]]-~!,'      .`,l~-?]]]]]]?\?\?'   ",
-    "   .?]]????]]]]]]]?~!,'  ;~]]]]]??????]]?.   ",
-    "    \">_]]]]]??????]]]]?+i:^`,l~?]]]]]]_>^    ",
-    "      .^;>_]]]]]??????]]]]?+!:^`\"I<>I^.      ",
-    "           `;i_?]]]]??????]]]]]_i:`          ",
-    "               `:i+?]]]]???????]]]]?~:       ",
-    "                   ',!~-]]]]]]]]?+i;^.       ",
-    "                       ',!+-?_>;`            ",
-};
-static const int ART_LINES = 19;
-static const int ART_WIDTH = 45;
+static const int ART_LINES = ANIM_FRAME_HEIGHT;
+static const int ART_WIDTH = ANIM_FRAME_WIDTH;
 static const int ART_GAP = 2;
 
 // Build version info lines, word-wrapped to fit the terminal
@@ -770,11 +749,9 @@ static void render_static_version(const char* qc, const char* reset, bool use_co
                                   int total_lines) {
     for (int line = 0; line < total_lines; ++line) {
         if (line < ART_LINES) {
-            const char* a = version_art[line];
-            int len = (int)strlen(a);
             bool in_color = false;
             for (int c = 0; c < ART_WIDTH; ++c) {
-                char ch = c < len ? a[c] : ' ';
+                char ch = anim_frames[0][line][c];
                 if (ch != ' ') {
                     if (!in_color && use_color) {
                         fputs(qc, stdout);
@@ -915,39 +892,11 @@ static void do_version_animation(const char* arg) {
         total_lines = info_start + (int)info.size();
     }
 
-    // Character density for dimming art characters during rotation.
-    // Returns 0 (invisible) to 10 (densest).
-    auto char_density = [](char c) -> int {
-        switch (c) {
-            case '.': case ',': case '\'': case '`': case '^': return 1;
-            case ':': case ';': return 2;
-            case '-': case '~': case '!': return 3;
-            case '=': case '+': return 4;
-            case '*': case 'i': case 'l': return 5;
-            case '<': case '>': case 'I': return 6;
-            case '?': case '"': return 7;
-            case ']': case '[': case '_': return 8;
-            case '#': return 9;
-            case '%': case '@': return 10;
-            default: return 4;
-        }
-    };
-
-    // Reverse mapping: density index -> representative character
-    static const char density_char[] = " .:-=*<?]#@";
-    static const int MAX_DENSITY = 10;
-
-    double center_x = ART_WIDTH / 2.0;
-
     // Animation: one full 360-degree rotation over 3 seconds
-    static const int ANIM_FRAMES = 180;
-    static const long ANIM_DURATION_NS = 3000000000L; // 3 seconds in nanoseconds
+    // Frames are pre-rendered by tools/render-version-art/render.mjs
+    static const long ANIM_DURATION_NS = 6000000000L; // 6 seconds in nanoseconds
 
-    // Pre-compute art string lengths
-    int art_len[ART_LINES];
-    for (int y = 0; y < ART_LINES; ++y) {
-        art_len[y] = (int)strlen(version_art[y]);
-    }
+    // --- Playback ---
 
     // Hide cursor
     fputs("\033[?25l", stdout);
@@ -966,64 +915,23 @@ static void do_version_animation(const char* arg) {
     struct timespec anim_start;
     clock_gettime(CLOCK_MONOTONIC, &anim_start);
 
-    for (int frame = 0; frame < ANIM_FRAMES; ++frame) {
-        // Triangle wave: cos_theta changes linearly 1->0->-1->0->1
-        // so projected width changes at a constant rate (no dwell at face-on)
-        double t = (double)frame / ANIM_FRAMES;
-        double cos_theta;
-        if (t <= 0.5) {
-            cos_theta = 1.0 - 4.0 * t;
-        } else {
-            cos_theta = -3.0 + 4.0 * t;
-        }
-        double abs_cos = fabs(cos_theta);
-
+    for (int frame = 0; frame < ANIM_FRAME_COUNT; ++frame) {
         // Move cursor up to top of art area (except for first frame)
         if (frame > 0) {
             printf("\033[%dA", total_lines);
         }
 
         for (int line = 0; line < total_lines; ++line) {
-            // Render art area (exactly ART_WIDTH characters)
             if (line < ART_LINES) {
                 bool in_color = false;
                 for (int x = 0; x < ART_WIDTH; ++x) {
-                    // Inverse-project screen x to object x through Y-axis rotation
-                    // Forward: screen_x = center + (obj_x - center) * cos(theta)
-                    // Inverse: obj_x = center + (screen_x - center) / cos(theta)
-                    char render_char = ' ';
-                    bool filled = false;
-
-                    if (abs_cos > 0.05) {
-                        // Negative cos_theta (back face) naturally mirrors via division
-                        int obj_x = (int)(center_x + (x - center_x) / cos_theta + 0.5);
-
-                        if (obj_x >= 0 && obj_x < art_len[line]) {
-                            char art_char = version_art[line][obj_x];
-                            if (art_char != ' ') {
-                                // Dim the character based on viewing angle
-                                if (abs_cos > 0.95) {
-                                    // Near face-on: use original art character
-                                    render_char = art_char;
-                                } else {
-                                    int density = char_density(art_char);
-                                    int dimmed = (int)(density * abs_cos + 0.5);
-                                    if (dimmed > MAX_DENSITY) {
-                                        dimmed = MAX_DENSITY;
-                                    }
-                                    render_char = density_char[dimmed];
-                                }
-                                filled = (render_char != ' ');
-                            }
-                        }
-                    }
-
-                    if (filled) {
+                    char ch = anim_frames[frame][line][x];
+                    if (ch != ' ') {
                         if (!in_color && use_color) {
                             fputs(qc, stdout);
                             in_color = true;
                         }
-                        putchar(render_char);
+                        putchar(ch);
                     } else {
                         if (in_color) {
                             fputs(reset, stdout);
@@ -1065,7 +973,7 @@ static void do_version_animation(const char* arg) {
         }
 
         // Sleep until the wall-clock time for the next frame
-        long next_frame_ns = ANIM_DURATION_NS * (frame + 1) / ANIM_FRAMES;
+        long next_frame_ns = ANIM_DURATION_NS * (frame + 1) / ANIM_FRAME_COUNT;
         struct timespec target;
         target.tv_sec = anim_start.tv_sec + next_frame_ns / 1000000000L;
         target.tv_nsec = anim_start.tv_nsec + next_frame_ns % 1000000000L;
@@ -1093,9 +1001,35 @@ static void do_version_animation(const char* arg) {
         tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios);
     }
 
-    // Final frame: render the static colored ASCII art
+    // Final frame: render the face-on pre-rendered frame (frame 0)
     printf("\033[%dA", total_lines);
-    render_static_version(qc, reset, use_color, info, info_start, total_lines);
+    for (int line = 0; line < total_lines; ++line) {
+        if (line < ART_LINES) {
+            bool in_color = false;
+            for (int x = 0; x < ART_WIDTH; ++x) {
+                char ch = anim_frames[0][line][x];
+                if (ch != ' ') {
+                    if (!in_color && use_color) {
+                        fputs(qc, stdout);
+                        in_color = true;
+                    }
+                    putchar(ch);
+                } else {
+                    if (in_color) {
+                        fputs(reset, stdout);
+                        in_color = false;
+                    }
+                    putchar(' ');
+                }
+            }
+            if (in_color) {
+                fputs(reset, stdout);
+            }
+        } else {
+            printf("%-*s", ART_WIDTH, "");
+        }
+        putchar('\n');
+    }
 
     // Show cursor
     fputs("\033[?25h", stdout);
