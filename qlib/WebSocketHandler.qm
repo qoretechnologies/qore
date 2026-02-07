@@ -25,10 +25,6 @@
 # minimum Qore version
 %requires qore >= 1.10
 
-# require type definitions everywhere
-
-# enable all warnings
-
 %requires HttpServerUtil >= 1.0.12
 %requires WebSocketUtil >= 1.6
 %requires Util
