@@ -281,6 +281,59 @@ int64_t qore_rt_guard_type(uint64_t val, const QoreTypeInfo* type_info);
 //! Create a DateTimeNode from epoch microseconds and relative flag; returns NaN-boxed
 uint64_t qore_rt_make_date(int64_t date_microseconds, int64_t is_relative);
 
+// --- Constant loading helper ---
+
+class RuntimeConstantRefNode;
+
+//! Load a runtime constant value; returns NaN-boxed QoreValue
+uint64_t qore_rt_load_constant(const RuntimeConstantRefNode* node, ExceptionSink* xsink);
+
+// --- Closure creation helper ---
+
+class QoreClosureParseNode;
+
+//! Create a closure/lambda; returns NaN-boxed QoreValue
+uint64_t qore_rt_create_closure(const QoreClosureParseNode* cn, ExceptionSink* xsink);
+
+// --- Reference creation helpers ---
+
+class ParseReferenceNode;
+
+//! Create a call reference (function/static method); returns NaN-boxed QoreValue
+uint64_t qore_rt_create_call_ref(uint64_t expr_bits, ExceptionSink* xsink);
+
+//! Create a method reference; returns NaN-boxed QoreValue
+uint64_t qore_rt_create_method_ref(uint64_t expr_bits, ExceptionSink* xsink);
+
+//! Create a parse reference (\var); returns NaN-boxed QoreValue
+uint64_t qore_rt_create_parse_ref(const ParseReferenceNode* node, ExceptionSink* xsink);
+
+// --- Typed container construction helpers ---
+
+class NewHashDeclNode;
+class NewComplexHashNode;
+class NewComplexListNode;
+
+//! Create a new hashdecl instance; returns NaN-boxed QoreValue
+uint64_t qore_rt_new_hash_decl(const NewHashDeclNode* node, ExceptionSink* xsink);
+
+//! Create a new typed hash; returns NaN-boxed QoreValue
+uint64_t qore_rt_new_complex_hash(const NewComplexHashNode* node, ExceptionSink* xsink);
+
+//! Create a new typed list; returns NaN-boxed QoreValue
+uint64_t qore_rt_new_complex_list(const NewComplexListNode* node, ExceptionSink* xsink);
+
+// --- Hash building helper ---
+
+//! Set a key-value pair in a hash (for hash map loops)
+void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_t key_bits, uint64_t value_bits,
+    ExceptionSink* xsink);
+
+// --- Reverse iterator creation helper ---
+
+//! Create a reverse iterator from a list/iterable (for foldr); returns opaque iterator pointer
+void* qore_rt_iterator_create_reverse(uint64_t iterable_bits, ExceptionSink* xsink);
+
 // --- Specialized access helpers (Phase 5b optimizations) ---
 
 //! Look up a key in a hash value; returns NaN-boxed result (with ref).

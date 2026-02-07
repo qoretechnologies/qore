@@ -2680,6 +2680,78 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     }
                     break;
                 }
+                case QoreIROpcode::LoadConstant: {
+                    auto* lci = static_cast<QoreIRLoadConstantInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &lci->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CreateClosure: {
+                    auto* cci = static_cast<QoreIRCreateClosureInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &cci->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CreateCallRef: {
+                    auto* cri = static_cast<QoreIRCreateCallRefInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &cri->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CreateMethodRef: {
+                    auto* mri = static_cast<QoreIRCreateMethodRefInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &mri->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CreateParseRef: {
+                    auto* pri = static_cast<QoreIRCreateParseRefInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &pri->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewHashDecl: {
+                    auto* nhdi = static_cast<QoreIRNewHashDeclInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &nhdi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewComplexHash: {
+                    auto* nchi = static_cast<QoreIRNewComplexHashInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &nchi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewComplexList: {
+                    auto* ncli = static_cast<QoreIRNewComplexListInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ncli->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
                 case QoreIROpcode::OnBlockExit: {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
@@ -2896,8 +2968,87 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     uint64_t bits;
                     memcpy(&bits, &noi->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
-                        // Take a ref so the expression survives IR function deletion
                         noi->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::LoadConstant: {
+                    auto* lci = static_cast<QoreIRLoadConstantInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &lci->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        lci->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CreateClosure: {
+                    auto* cci = static_cast<QoreIRCreateClosureInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &cci->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        cci->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CreateCallRef: {
+                    auto* cri = static_cast<QoreIRCreateCallRefInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &cri->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        cri->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CreateMethodRef: {
+                    auto* mri = static_cast<QoreIRCreateMethodRefInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &mri->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        mri->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CreateParseRef: {
+                    auto* pri = static_cast<QoreIRCreateParseRefInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &pri->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        pri->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewHashDecl: {
+                    auto* nhdi = static_cast<QoreIRNewHashDeclInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &nhdi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        nhdi->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewComplexHash: {
+                    auto* nchi = static_cast<QoreIRNewComplexHashInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &nchi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        nchi->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::NewComplexList: {
+                    auto* ncli = static_cast<QoreIRNewComplexListInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ncli->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ncli->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
                     }
                     break;

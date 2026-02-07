@@ -54,6 +54,14 @@
 #include <qore/intern/FunctionalOperatorInterface.h>
 #include <qore/intern/QoreClassIntern.h>
 #include <qore/intern/CaseNodeRegex.h>
+#include <qore/intern/ConstantList.h>
+#include <qore/intern/QoreClosureParseNode.h>
+#include <qore/intern/QoreClosureNode.h>
+#include <qore/intern/NewComplexTypeNode.h>
+#include <qore/intern/typed_hash_decl_private.h>
+#include <qore/intern/qore_list_private.h>
+#include <qore/intern/QoreHashNodeIntern.h>
+#include <qore/intern/ParseReferenceNode.h>
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
@@ -490,6 +498,123 @@ extern "C" uint64_t qore_rt_new_object(const QoreClass* qc, const AbstractQoreFu
     return toBits(qore_class_private::execConstructor(*qc, rc, variant, args, xsink));
 }
 
+// --- Constant loading helper ---
+
+extern "C" uint64_t qore_rt_load_constant(const RuntimeConstantRefNode* node, ExceptionSink* xsink) {
+    bool needs_deref = true;
+    QoreValue result = const_cast<RuntimeConstantRefNode*>(node)->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
+// --- Closure creation helper ---
+
+extern "C" uint64_t qore_rt_create_closure(const QoreClosureParseNode* cn, ExceptionSink* xsink) {
+    bool needs_deref = true;
+    QoreValue result = const_cast<QoreClosureParseNode*>(cn)->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
+// --- Call reference creation helper ---
+
+extern "C" uint64_t qore_rt_create_call_ref(uint64_t expr_bits, ExceptionSink* xsink) {
+    QoreValue expr = fromBits(expr_bits);
+    if (!expr.hasNode()) {
+        return toBits(QoreValue());
+    }
+    bool needs_deref = true;
+    QoreValue ref_expr = expr.refSelf();
+    QoreValue result = ref_expr.getInternalNode()->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    ref_expr.discard(xsink);
+    return toBits(result);
+}
+
+// --- Method reference creation helper (delegates to call ref - identical behavior) ---
+
+extern "C" uint64_t qore_rt_create_method_ref(uint64_t expr_bits, ExceptionSink* xsink) {
+    return qore_rt_create_call_ref(expr_bits, xsink);
+}
+
+// --- Parse reference creation helper ---
+
+extern "C" uint64_t qore_rt_create_parse_ref(const ParseReferenceNode* node, ExceptionSink* xsink) {
+    bool needs_deref = true;
+    QoreValue result = const_cast<ParseReferenceNode*>(node)->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
+// --- Typed container construction helpers ---
+
+extern "C" uint64_t qore_rt_new_hash_decl(const NewHashDeclNode* node, ExceptionSink* xsink) {
+    bool needs_deref = true;
+    QoreValue result = const_cast<NewHashDeclNode*>(node)->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_new_complex_hash(const NewComplexHashNode* node, ExceptionSink* xsink) {
+    bool needs_deref = true;
+    QoreValue result = const_cast<NewComplexHashNode*>(node)->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
+extern "C" uint64_t qore_rt_new_complex_list(const NewComplexListNode* node, ExceptionSink* xsink) {
+    bool needs_deref = true;
+    QoreValue result = const_cast<NewComplexListNode*>(node)->eval(needs_deref, xsink);
+    if (!needs_deref && result.hasNode()) {
+        result = result.refSelf();
+    }
+    return toBits(result);
+}
+
+// --- Hash building helper ---
+
+extern "C" void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue hash_val = fromBits(hash_bits);
+    QoreValue key_val = fromBits(key_bits);
+    QoreValue value_val = fromBits(value_bits);
+    QoreStringValueHelper key_str(key_val);
+    QoreHashNode* hash = hash_val.get<QoreHashNode>();
+    if (value_val.hasNode()) {
+        value_val.refSelf();
+    }
+    hash->setKeyValue(key_str->c_str(), value_val, xsink);
+    // Do NOT discard key_val — the caller (JIT/IR) manages the key's lifetime.
+    // Discarding here causes a double-free since the key is also cleaned up by
+    // the JIT function's exit cleanup or the IR value map cleanup mechanism.
+}
+
+// --- Reverse iterator creation helper ---
+
+extern "C" void* qore_rt_iterator_create_reverse(uint64_t iterable_bits, ExceptionSink* xsink) {
+    QoreValue iterable = fromBits(iterable_bits);
+    FunctionalOperator::FunctionalValueType value_type;
+    FunctionalOperatorInterface* iter = FunctionalOperatorInterface::getFunctionalIterator(
+        value_type, iterable, false, "foldr operator", xsink);
+    if (*xsink || value_type == FunctionalOperator::nothing) {
+        delete iter;
+        return nullptr;
+    }
+    return iter;
+}
+
 // --- Implicit argument helpers ---
 
 extern "C" uint64_t qore_rt_load_implicit_arg(int offset, ExceptionSink* xsink) {
@@ -766,7 +891,7 @@ extern "C" double qore_rt_list_get_float(uint64_t list_val, int64_t index) {
 extern "C" uint64_t qore_rt_map_scale_int(uint64_t list_val, int64_t scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -780,7 +905,7 @@ extern "C" uint64_t qore_rt_map_scale_int(uint64_t list_val, int64_t scale) {
 extern "C" uint64_t qore_rt_map_scale_float(uint64_t list_val, double scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -794,7 +919,7 @@ extern "C" uint64_t qore_rt_map_scale_float(uint64_t list_val, double scale) {
 extern "C" uint64_t qore_rt_map_offset_int(uint64_t list_val, int64_t offset) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -808,7 +933,7 @@ extern "C" uint64_t qore_rt_map_offset_int(uint64_t list_val, int64_t offset) {
 extern "C" uint64_t qore_rt_map_offset_float(uint64_t list_val, double offset) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -822,7 +947,7 @@ extern "C" uint64_t qore_rt_map_offset_float(uint64_t list_val, double offset) {
 extern "C" uint64_t qore_rt_map_square_int(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -837,7 +962,7 @@ extern "C" uint64_t qore_rt_map_square_int(uint64_t list_val) {
 extern "C" uint64_t qore_rt_map_square_float(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -853,7 +978,7 @@ extern "C" uint64_t qore_rt_map_square_float(uint64_t list_val) {
 extern "C" uint64_t qore_rt_select_positive_int(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -870,7 +995,7 @@ extern "C" uint64_t qore_rt_select_positive_int(uint64_t list_val) {
 extern "C" uint64_t qore_rt_select_positive_float(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -887,7 +1012,7 @@ extern "C" uint64_t qore_rt_select_positive_float(uint64_t list_val) {
 extern "C" uint64_t qore_rt_select_nonzero_int(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -904,7 +1029,7 @@ extern "C" uint64_t qore_rt_select_nonzero_int(uint64_t list_val) {
 extern "C" uint64_t qore_rt_select_nonzero_float(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -922,7 +1047,7 @@ extern "C" uint64_t qore_rt_select_nonzero_float(uint64_t list_val) {
 extern "C" uint64_t qore_rt_fused_map_select_scale_positive_int(uint64_t list_val, int64_t scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -939,7 +1064,7 @@ extern "C" uint64_t qore_rt_fused_map_select_scale_positive_int(uint64_t list_va
 extern "C" uint64_t qore_rt_fused_map_select_scale_positive_float(uint64_t list_val, double scale) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -956,7 +1081,7 @@ extern "C" uint64_t qore_rt_fused_map_select_scale_positive_float(uint64_t list_
 extern "C" uint64_t qore_rt_fused_map_select_offset_positive_int(uint64_t list_val, int64_t offset) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -973,7 +1098,7 @@ extern "C" uint64_t qore_rt_fused_map_select_offset_positive_int(uint64_t list_v
 extern "C" uint64_t qore_rt_fused_map_select_offset_positive_float(uint64_t list_val, double offset) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -990,7 +1115,7 @@ extern "C" uint64_t qore_rt_fused_map_select_offset_positive_float(uint64_t list
 extern "C" uint64_t qore_rt_fused_map_select_square_positive_int(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(bigIntTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
@@ -1007,7 +1132,7 @@ extern "C" uint64_t qore_rt_fused_map_select_square_positive_int(uint64_t list_v
 extern "C" uint64_t qore_rt_fused_map_select_square_positive_float(uint64_t list_val) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return toBits(QoreValue(new QoreListNode(floatTypeInfo)));
+        return toBits(QoreValue());
     }
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();

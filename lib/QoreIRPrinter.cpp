@@ -35,6 +35,7 @@
 
 #include <qore/intern/QoreIR.h>
 #include <qore/intern/LocalVar.h>
+#include <qore/intern/NewComplexTypeNode.h>
 #include <qore/intern/Variable.h>
 #include <qore/QoreClass.h>
 
@@ -300,6 +301,16 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::LoadSelfMember: return "load.self.member";
         case QoreIROpcode::LoadStaticVar: return "load.static.var";
         case QoreIROpcode::NewObject: return "new.object";
+        case QoreIROpcode::LoadConstant: return "load.constant";
+        case QoreIROpcode::CreateClosure: return "create.closure";
+        case QoreIROpcode::CreateCallRef: return "create.call.ref";
+        case QoreIROpcode::CreateMethodRef: return "create.method.ref";
+        case QoreIROpcode::CreateParseRef: return "create.parse.ref";
+        case QoreIROpcode::NewHashDecl: return "new.hash.decl";
+        case QoreIROpcode::NewComplexHash: return "new.complex.hash";
+        case QoreIROpcode::NewComplexList: return "new.complex.list";
+        case QoreIROpcode::HashSetKeyValue: return "hash.set.key.value";
+        case QoreIROpcode::IteratorCreateReverse: return "iterator.create.reverse";
         case QoreIROpcode::Call: return "call";
         case QoreIROpcode::CallIndirect: return "call.indirect";
         case QoreIROpcode::CallMethod: return "call.method";
@@ -412,6 +423,25 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 if (no_inst && no_inst->qc) {
                     out << " @" << no_inst->qc->getName();
                 }
+            } else if (inst->opcode == QoreIROpcode::LoadConstant) {
+                out << " <constant>";
+            } else if (inst->opcode == QoreIROpcode::CreateClosure) {
+                out << " <closure>";
+            } else if (inst->opcode == QoreIROpcode::CreateCallRef) {
+                out << " <call-ref>";
+            } else if (inst->opcode == QoreIROpcode::CreateMethodRef) {
+                out << " <method-ref>";
+            } else if (inst->opcode == QoreIROpcode::CreateParseRef) {
+                out << " <parse-ref>";
+            } else if (inst->opcode == QoreIROpcode::NewHashDecl) {
+                auto* nhd_inst = dynamic_cast<const QoreIRNewHashDeclInstruction*>(inst.get());
+                if (nhd_inst && nhd_inst->node && nhd_inst->node->hd) {
+                    out << " @" << nhd_inst->node->hd->getName();
+                }
+            } else if (inst->opcode == QoreIROpcode::NewComplexHash) {
+                out << " <complex-hash>";
+            } else if (inst->opcode == QoreIROpcode::NewComplexList) {
+                out << " <complex-list>";
             } else if (inst->opcode == QoreIROpcode::CallMethodDirect) {
                 // Print the devirtualized method name
                 auto* direct_inst = dynamic_cast<const QoreIRCallMethodDirectInstruction*>(inst.get());

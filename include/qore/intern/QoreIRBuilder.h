@@ -89,6 +89,34 @@ public:
     QoreIRNewObjectInstruction* createNewObject(const QoreClass* qc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
         const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    // Constant loading
+    QoreIRLoadConstantInstruction* createLoadConstant(const RuntimeConstantRefNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    // Closure creation
+    QoreIRCreateClosureInstruction* createCreateClosure(const QoreClosureParseNode* closure_node,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    // Call reference creation
+    QoreIRCreateCallRefInstruction* createCreateCallRef(const QoreValue& expr,
+        const QoreProgramLocation* loc = nullptr);
+    // Method reference creation
+    QoreIRCreateMethodRefInstruction* createCreateMethodRef(const QoreValue& expr,
+        const QoreProgramLocation* loc = nullptr);
+    // Parse reference creation
+    QoreIRCreateParseRefInstruction* createCreateParseRef(const ParseReferenceNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    // Typed container construction
+    QoreIRNewHashDeclInstruction* createNewHashDecl(const NewHashDeclNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    QoreIRNewComplexHashInstruction* createNewComplexHash(const NewComplexHashNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    QoreIRNewComplexListInstruction* createNewComplexList(const NewComplexListNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+    // Hash building (for hash map loops)
+    QoreIRInstruction* createHashSetKeyValue(QoreIRValue hash, QoreIRValue key, QoreIRValue value,
+        const QoreProgramLocation* loc = nullptr);
+    // Reverse iterator creation (for foldr)
+    QoreIRInstruction* createIteratorCreateReverse(QoreIRValue iterable,
+        const QoreProgramLocation* loc = nullptr);
     // Implicit argument opcodes
     QoreIRInstruction* createLoadImplicitArg(int offset, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createLoadImplicitArgv(const QoreProgramLocation* loc = nullptr);

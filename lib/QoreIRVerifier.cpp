@@ -249,6 +249,15 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::LoadSelfMember:
         case QoreIROpcode::LoadStaticVar:
         case QoreIROpcode::NewObject:
+        case QoreIROpcode::LoadConstant:
+        case QoreIROpcode::CreateClosure:
+        case QoreIROpcode::CreateCallRef:
+        case QoreIROpcode::CreateMethodRef:
+        case QoreIROpcode::CreateParseRef:
+        case QoreIROpcode::NewHashDecl:
+        case QoreIROpcode::NewComplexHash:
+        case QoreIROpcode::NewComplexList:
+        case QoreIROpcode::IteratorCreateReverse:
         case QoreIROpcode::LoadImplicitArg:
         case QoreIROpcode::LoadImplicitArgv:
         case QoreIROpcode::LoadImplicitElement:
@@ -538,7 +547,19 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::LoadSelfMember:     // Uses QoreIRSelfMemberInstruction with member_name field, no operands
         case QoreIROpcode::LoadStaticVar:      // Uses QoreIRStaticVarInstruction with vi/var_name fields, no operands
         case QoreIROpcode::NewObject:          // Uses QoreIRNewObjectInstruction with qc/variant/args fields, no operands
+        case QoreIROpcode::LoadConstant:       // Uses QoreIRLoadConstantInstruction, no operands
+        case QoreIROpcode::CreateClosure:      // Uses QoreIRCreateClosureInstruction, no operands
+        case QoreIROpcode::CreateCallRef:      // Uses QoreIRCreateCallRefInstruction, no operands
+        case QoreIROpcode::CreateMethodRef:    // Uses QoreIRCreateMethodRefInstruction, no operands
+        case QoreIROpcode::CreateParseRef:     // Uses QoreIRCreateParseRefInstruction, no operands
+        case QoreIROpcode::NewHashDecl:        // Uses QoreIRNewHashDeclInstruction, no operands
+        case QoreIROpcode::NewComplexHash:     // Uses QoreIRNewComplexHashInstruction, no operands
+        case QoreIROpcode::NewComplexList:     // Uses QoreIRNewComplexListInstruction, no operands
             return 0;
+        case QoreIROpcode::IteratorCreateReverse: // 1 operand: iterable
+            return 1;
+        case QoreIROpcode::HashSetKeyValue:    // 3 operands: hash, key, value
+            return 3;
         case QoreIROpcode::PushImplicitArg:    // 1 operand: value to push as $1
         case QoreIROpcode::SetImplicitArgv:    // 1 operand: list to set as $argv
         case QoreIROpcode::PopImplicitArg:     // 1 operand: old context to restore

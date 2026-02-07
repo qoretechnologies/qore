@@ -296,6 +296,90 @@ QoreIRNewObjectInstruction* QoreIRBuilder::createNewObject(const QoreClass* qc,
     return inst;
 }
 
+QoreIRLoadConstantInstruction* QoreIRBuilder::createLoadConstant(const RuntimeConstantRefNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRLoadConstantInstruction>(node, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRCreateClosureInstruction* QoreIRBuilder::createCreateClosure(
+        const QoreClosureParseNode* closure_node,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRCreateClosureInstruction>(closure_node, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRCreateCallRefInstruction* QoreIRBuilder::createCreateCallRef(const QoreValue& expr,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRCreateCallRefInstruction>(expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRCreateMethodRefInstruction* QoreIRBuilder::createCreateMethodRef(const QoreValue& expr,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRCreateMethodRefInstruction>(expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRCreateParseRefInstruction* QoreIRBuilder::createCreateParseRef(const ParseReferenceNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRCreateParseRefInstruction>(node, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRNewHashDeclInstruction* QoreIRBuilder::createNewHashDecl(const NewHashDeclNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRNewHashDeclInstruction>(node, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRNewComplexHashInstruction* QoreIRBuilder::createNewComplexHash(const NewComplexHashNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRNewComplexHashInstruction>(node, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRNewComplexListInstruction* QoreIRBuilder::createNewComplexList(const NewComplexListNode* node,
+        const QoreValue& expr, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRNewComplexListInstruction>(node, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createHashSetKeyValue(QoreIRValue hash, QoreIRValue key,
+        QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::HashSetKeyValue);
+    inst->loc = loc;
+    inst->operands.push_back(hash);
+    inst->operands.push_back(key);
+    inst->operands.push_back(value);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createIteratorCreateReverse(QoreIRValue iterable,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::IteratorCreateReverse);
+    inst->loc = loc;
+    inst->operands.push_back(iterable);
+    inst->result = func->createValue();
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createLoadImplicitArg(int offset, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRImplicitArgInstruction>(offset);
     inst->loc = loc;

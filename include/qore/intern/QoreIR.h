@@ -56,6 +56,12 @@ class QoreMethod;
 class QoreClass;
 class QoreVarInfo;
 class AbstractQoreFunctionVariant;
+class QoreClosureParseNode;
+class RuntimeConstantRefNode;
+class ParseReferenceNode;
+class NewHashDeclNode;
+class NewComplexHashNode;
+class NewComplexListNode;
 
 enum class QoreIROpcode : uint16_t {
     ConstInt,
@@ -338,6 +344,24 @@ enum class QoreIROpcode : uint16_t {
 
     // Object instantiation
     NewObject,          // Create new object - calls QoreClass::execConstructor directly
+
+    // Constant and closure creation
+    LoadConstant,       // Load runtime constant - accesses ConstantEntry::saved_val
+    CreateClosure,      // Create closure/lambda - instantiates QoreClosureNode or QoreObjectClosureNode
+    CreateCallRef,      // Create call reference - function/static method references
+    CreateMethodRef,    // Create method reference - object method references
+    CreateParseRef,     // Create parse reference - \var lvalue references
+
+    // Typed container construction
+    NewHashDecl,        // Create new hashdecl instance
+    NewComplexHash,     // Create new typed hash
+    NewComplexList,     // Create new typed list
+
+    // Hash building
+    HashSetKeyValue,    // Set key-value pair in hash (for hash map loops)
+
+    // Reverse iteration
+    IteratorCreateReverse, // Create reverse iterator from list/iterable (for foldr)
 
     Call,
     CallIndirect,
@@ -828,6 +852,142 @@ public:
     const AbstractQoreFunctionVariant* variant;
     const QoreListNode* args;       //!< Pre-evaluated constructor arguments
     QoreValue expr;                 //!< Original AST expression (for AOT)
+};
+
+//! Runtime constant load instruction - loads ConstantEntry::saved_val
+class QoreIRLoadConstantInstruction : public QoreIRInstruction {
+public:
+    QoreIRLoadConstantInstruction(const RuntimeConstantRefNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::LoadConstant), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRLoadConstantInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const RuntimeConstantRefNode* node;  //!< The constant ref node (for JIT access to ConstantEntry)
+    QoreValue expr;                      //!< Original AST expression (for AOT)
+};
+
+//! Closure creation instruction - creates QoreClosureNode or QoreObjectClosureNode
+class QoreIRCreateClosureInstruction : public QoreIRInstruction {
+public:
+    QoreIRCreateClosureInstruction(const QoreClosureParseNode* n_closure_node,
+            const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CreateClosure), closure_node(n_closure_node),
+              expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCreateClosureInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const QoreClosureParseNode* closure_node;
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Call reference creation instruction - creates function/static method call references
+class QoreIRCreateCallRefInstruction : public QoreIRInstruction {
+public:
+    QoreIRCreateCallRefInstruction(const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CreateCallRef), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCreateCallRefInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    QoreValue expr;  //!< Original AST expression (for AOT and JIT eval)
+};
+
+//! Method reference creation instruction - creates object method call references
+class QoreIRCreateMethodRefInstruction : public QoreIRInstruction {
+public:
+    QoreIRCreateMethodRefInstruction(const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CreateMethodRef), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCreateMethodRefInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    QoreValue expr;  //!< Original AST expression (for AOT and JIT eval)
+};
+
+//! Parse reference creation instruction - creates \var lvalue references
+class QoreIRCreateParseRefInstruction : public QoreIRInstruction {
+public:
+    QoreIRCreateParseRefInstruction(const ParseReferenceNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CreateParseRef), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCreateParseRefInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const ParseReferenceNode* node;
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Hashdecl construction instruction
+class QoreIRNewHashDeclInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewHashDeclInstruction(const NewHashDeclNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::NewHashDecl), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRNewHashDeclInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const NewHashDeclNode* node;  //!< AST node (for eval)
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Complex hash construction instruction
+class QoreIRNewComplexHashInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewComplexHashInstruction(const NewComplexHashNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::NewComplexHash), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRNewComplexHashInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const NewComplexHashNode* node;  //!< AST node (for eval)
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Complex list construction instruction
+class QoreIRNewComplexListInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewComplexListInstruction(const NewComplexListNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::NewComplexList), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRNewComplexListInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const NewComplexListNode* node;  //!< AST node (for eval)
+    QoreValue expr;  //!< Original AST expression (for AOT)
 };
 
 class QoreIRLValueInstruction : public QoreIRInstruction {

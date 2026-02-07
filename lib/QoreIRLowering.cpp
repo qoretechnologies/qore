@@ -1834,18 +1834,51 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     // The interpreter's evalExpr() default case calls evalExprNode() for any opcode,
     // so we use QoreIROpcode::Call as a generic expression evaluation opcode.
     if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, closure->loc, error);
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, closure->loc);
+            inst->invoke_opcode = QoreIROpcode::CreateClosure;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        return builder.createCreateClosure(closure, expr, closure->loc)->result;
     }
     if (auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, parse_ref->loc, error);
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, parse_ref->loc);
+            inst->invoke_opcode = QoreIROpcode::CreateParseRef;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        return builder.createCreateParseRef(parse_ref, expr, parse_ref->loc)->result;
     }
     if (dynamic_cast<const AbstractCallReferenceNode*>(node)) {
-        std::vector<QoreIRValue> operands;
         auto* parse_node = dynamic_cast<const ParseNode*>(node);
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands,
-            parse_node ? parse_node->loc : nullptr, error);
+        const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, loc);
+            inst->invoke_opcode = QoreIROpcode::CreateCallRef;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        return builder.createCreateCallRef(expr, loc)->result;
     }
     // Context references are a legacy feature - delegate to AST evaluation
     if (auto* ctx_ref = dynamic_cast<const ContextrefNode*>(node)) {
@@ -1897,20 +1930,64 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, find_node->loc, error);
     }
     if (auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, rt_const->loc, error);
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, rt_const->loc);
+            inst->invoke_opcode = QoreIROpcode::LoadConstant;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        return builder.createLoadConstant(rt_const, expr, rt_const->loc)->result;
     }
     if (auto* new_hd = dynamic_cast<const NewHashDeclNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, new_hd->loc, error);
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, new_hd->loc);
+            inst->invoke_opcode = QoreIROpcode::NewHashDecl;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        return builder.createNewHashDecl(new_hd, expr, new_hd->loc)->result;
     }
     if (auto* new_ch = dynamic_cast<const NewComplexHashNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, new_ch->loc, error);
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, new_ch->loc);
+            inst->invoke_opcode = QoreIROpcode::NewComplexHash;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        return builder.createNewComplexHash(new_ch, expr, new_ch->loc)->result;
     }
     if (auto* new_cl = dynamic_cast<const NewComplexListNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, new_cl->loc, error);
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, new_cl->loc);
+            inst->invoke_opcode = QoreIROpcode::NewComplexList;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        return builder.createNewComplexList(new_cl, expr, new_cl->loc)->result;
     }
     // ParseNewComplexTypeNode and ParseNoEvalNode are parse-time-only nodes whose evalImpl()
     // asserts false — they cannot be delegated to AST evaluation
@@ -1968,8 +2045,19 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     }
     // Object method references (e.g., \methodName())
     if (auto* mref = dynamic_cast<const AbstractParseObjectMethodReferenceNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, mref->loc, error);
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, mref->loc);
+            inst->invoke_opcode = QoreIROpcode::CreateMethodRef;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        return builder.createCreateMethodRef(expr, mref->loc)->result;
     }
     // Non-value hash/list nodes (e.g., const hashes containing runtime objects)
     if (dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node)) {
@@ -2194,9 +2282,35 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
         return QoreIRValue();
     }
     // Handle VarRefNewObjectNode (e.g., "Foo f("hello")") — a variable declaration
-    // with implicit constructor call. eval() on this node both constructs the object
-    // and assigns it to the variable.
-    if (dynamic_cast<const VarRefNewObjectNode*>(node)) {
+    // with implicit constructor call. Split into construction + assignment.
+    if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+        // Check if this is a class constructor (VRN_OBJECT)
+        const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
+        if (qc) {
+            // VRN_OBJECT: construct object using NewObject opcode, then store to variable
+            QoreIRValue obj_val;
+            if (!exception_stack.empty()) {
+                QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                if (!normal_block) {
+                    error = "IR builder failed to create invoke continuation block";
+                    return QoreIRValue();
+                }
+                QoreIRBasicBlock* handler = exception_stack.back();
+                auto* inst = builder.createInvoke(expr, {}, normal_block, handler, var->loc);
+                inst->invoke_opcode = QoreIROpcode::NewObject;
+                builder.setBlock(normal_block);
+                obj_val = inst->result;
+            } else {
+                obj_val = builder.createNewObject(qc, vrn->getVariant(),
+                    vrn->getArgs(), expr, var->loc)->result;
+            }
+            // Store the constructed object to the variable
+            if (!storeVarRef(var, obj_val, error, "VarRefNewObjectNode", &expr, var->loc)) {
+                return QoreIRValue();
+            }
+            return obj_val;
+        }
+        // Non-VRN_OBJECT types (hashdecl, complex hash/list): delegate to AST
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, var->loc, error);
     }
@@ -5486,10 +5600,8 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
 
-    // Delegate entire operation to AST evaluation
-    // AST handles implicit argument context ($1, $2, $#) correctly
-    std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::FoldrAny, expr, operands, foldr->loc, error);
+    // Native IR lowering with reverse iteration
+    return lowerFoldrNative(foldr, expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) {
@@ -5695,10 +5807,8 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
         return QoreIRValue();
     }
 
-    // Delegate entire operation to AST evaluation
-    // AST handles implicit argument context ($1, $#) correctly
-    std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::MapSelectAny, expr, operands, map_select->loc, error);
+    // Native IR lowering with implicit argument context
+    return lowerMapSelectNative(map_select, expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& error) {
@@ -5708,10 +5818,8 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
 
-    // Delegate entire operation to AST evaluation
-    // AST handles implicit argument context ($1, $#) correctly
-    std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::HashMapAny, expr, operands, map->loc, error);
+    // Native IR lowering with hash building
+    return lowerHashMapNative(map, expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::string& error) {
@@ -5721,10 +5829,8 @@ QoreIRValue QoreIRLowering::lowerHashMapSelect(const QoreValue& expr, std::strin
         return QoreIRValue();
     }
 
-    // Delegate entire operation to AST evaluation
-    // AST handles implicit argument context ($1, $#) correctly
-    std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::HashMapSelectAny, expr, operands, map_select->loc, error);
+    // Native IR lowering with hash building + filtering
+    return lowerHashMapSelectNative(map_select, expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const QoreValue& expr,
@@ -5738,9 +5844,6 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     // blocks from guarded calls in try-catch) appear before the loop header in the
     // block list.
 
-    // Create empty result list
-    QoreIRValue result_list = builder.createEmptyList(map->loc)->result;
-
     // Evaluate the input list (right operand of map)
     QoreIRValue input_list = lowerExpression(map->getRight(), error);
     if (!input_list.isValid()) {
@@ -5751,27 +5854,29 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, map->loc);
     QoreIRValue iter_val = iter_inst->result;
 
-    // Initial index value (0)
-    QoreIRValue init_index = builder.createConstInt(0, map->loc)->result;
-
-    // Capture entry block AFTER list evaluation and iterator creation, since
-    // expression evaluation may change the current block (e.g., invoke.cont blocks
-    // in try-catch). This block will branch to the header, so it must be the
-    // PHI predecessor.
-    QoreIRBasicBlock* entry_block = builder.getBlock();
-
     // Create basic blocks for the loop structure AFTER evaluating the input
     // expression and creating the iterator
+    QoreIRBasicBlock* preheader_block = createBlock("map.preheader");
     QoreIRBasicBlock* header_block = createBlock("map.header");
     QoreIRBasicBlock* body_block = createBlock("map.body");
     QoreIRBasicBlock* exit_block = createBlock("map.exit");
-    if (!header_block || !body_block || !exit_block) {
+    QoreIRBasicBlock* nothing_block = createBlock("map.nothing");
+    if (!preheader_block || !header_block || !body_block || !exit_block || !nothing_block) {
         error = "IR builder failed to create blocks for map";
         return QoreIRValue();
     }
     header_block->is_loop_header = true;
 
-    // Branch to header
+    // Check if iterator is null (input was NOTHING) — return NOTHING in that case
+    QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
+    QoreIRValue iter_as_int = iter_val;
+    QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_as_int, zero, map->loc)->result;
+    builder.createBranchIf(is_null, nothing_block, preheader_block, map->loc);
+
+    // Preheader: create empty result list and proceed to loop
+    builder.setBlock(preheader_block);
+    QoreIRValue result_list = builder.createEmptyList(map->loc)->result;
+    QoreIRValue init_index = builder.createConstInt(0, map->loc)->result;
     builder.createBranch(header_block, map->loc);
 
     // Header block: create phi for index and check for next value
@@ -5820,15 +5925,25 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     builder.createBranch(header_block, map->loc);
 
     // Complete the phi node with incoming values
-    index_phi->incoming.push_back({init_index, entry_block});
+    index_phi->incoming.push_back({init_index, preheader_block});
     index_phi->incoming.push_back({next_index, body_exit_block});
     index_phi->operands.push_back(init_index);
     index_phi->operands.push_back(next_index);
 
-    // Exit block: return result list
+    // Nothing block: input was NOTHING → return NOTHING
+    builder.setBlock(nothing_block);
+    QoreIRValue nothing_val = builder.createConstNothing(map->loc)->result;
+    builder.createBranch(exit_block, map->loc);
+
+    // Exit block: PHI between result_list (from loop) and NOTHING (from null check)
     builder.setBlock(exit_block);
 
-    return result_list;
+    std::vector<QoreIRPhiIncoming> result_incoming;
+    result_incoming.push_back({result_list, header_block});   // Normal loop exit
+    result_incoming.push_back({nothing_val, nothing_block});  // NOTHING input
+    auto* result_phi = builder.createPhi(result_incoming, map->loc);
+
+    return result_phi->result;
 }
 
 QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* select, const QoreValue& expr,
@@ -5836,14 +5951,6 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     if (!ensureBuilderContext(error)) {
         return QoreIRValue();
     }
-
-    // Evaluate the input list and create the iterator BEFORE creating loop blocks,
-    // so that any blocks created during expression evaluation (e.g., invoke.cont
-    // blocks from guarded calls in try-catch) appear before the loop header in the
-    // block list.
-
-    // Create empty result list
-    QoreIRValue result_list = builder.createEmptyList(select->loc)->result;
 
     // Evaluate the input list (left operand of select)
     QoreIRValue input_list = lowerExpression(select->getLeft(), error);
@@ -5855,35 +5962,35 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, select->loc);
     QoreIRValue iter_val = iter_inst->result;
 
-    // Initial index value (0)
-    QoreIRValue init_index = builder.createConstInt(0, select->loc)->result;
-
-    // Capture entry block AFTER list evaluation and iterator creation, since
-    // expression evaluation may change the current block (e.g., invoke.cont blocks
-    // in try-catch). This block will branch to the header, so it must be the
-    // PHI predecessor.
-    QoreIRBasicBlock* entry_block = builder.getBlock();
-
-    // Create basic blocks for the loop structure AFTER evaluating the input
-    // expression and creating the iterator
+    // Create basic blocks AFTER evaluating the input expression
+    QoreIRBasicBlock* preheader_block = createBlock("select.preheader");
     QoreIRBasicBlock* header_block = createBlock("select.header");
     QoreIRBasicBlock* body_block = createBlock("select.body");
     QoreIRBasicBlock* append_block = createBlock("select.append");
     QoreIRBasicBlock* cont_block = createBlock("select.cont");
     QoreIRBasicBlock* exit_block = createBlock("select.exit");
-    if (!header_block || !body_block || !append_block || !cont_block || !exit_block) {
+    QoreIRBasicBlock* nothing_block = createBlock("select.nothing");
+    if (!preheader_block || !header_block || !body_block || !append_block
+            || !cont_block || !exit_block || !nothing_block) {
         error = "IR builder failed to create blocks for select";
         return QoreIRValue();
     }
     header_block->is_loop_header = true;
 
-    // Branch to header
+    // Check if iterator is null (input was NOTHING) → return NOTHING
+    QoreIRValue zero = builder.createConstInt(0, select->loc)->result;
+    QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, select->loc)->result;
+    builder.createBranchIf(is_null, nothing_block, preheader_block, select->loc);
+
+    // Preheader: create empty result list and proceed to loop
+    builder.setBlock(preheader_block);
+    QoreIRValue result_list = builder.createEmptyList(select->loc)->result;
+    QoreIRValue init_index = builder.createConstInt(0, select->loc)->result;
     builder.createBranch(header_block, select->loc);
 
     // Header block: create phi for index and check for next value
     builder.setBlock(header_block);
 
-    // Create phi for index
     auto* index_phi = builder.createPhi({}, select->loc);
     QoreIRValue index_val = index_phi->result;
 
@@ -5894,7 +6001,6 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     // Body block: set up context, evaluate predicate
     builder.setBlock(body_block);
 
-    // Push implicit contexts
     QoreIRValue old_element = builder.createPushImplicitElement(index_val, select->loc)->result;
     QoreIRValue old_argv = builder.createPushImplicitArg(element_val, select->loc)->result;
 
@@ -5923,25 +6029,33 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     // Continue block: increment index and loop back
     builder.setBlock(cont_block);
 
-    // Increment index
     QoreIRValue one = builder.createConstInt(1, select->loc)->result;
     QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, select->loc)->result;
 
     QoreIRBasicBlock* cont_exit_block = builder.getBlock();
 
-    // Branch back to header
     builder.createBranch(header_block, select->loc);
 
     // Complete the phi node
-    index_phi->incoming.push_back({init_index, entry_block});
+    index_phi->incoming.push_back({init_index, preheader_block});
     index_phi->incoming.push_back({next_index, cont_exit_block});
     index_phi->operands.push_back(init_index);
     index_phi->operands.push_back(next_index);
 
-    // Exit block
+    // Nothing block: input was NOTHING → return NOTHING
+    builder.setBlock(nothing_block);
+    QoreIRValue nothing_val = builder.createConstNothing(select->loc)->result;
+    builder.createBranch(exit_block, select->loc);
+
+    // Exit block: PHI between result_list and NOTHING
     builder.setBlock(exit_block);
 
-    return result_list;
+    std::vector<QoreIRPhiIncoming> result_incoming;
+    result_incoming.push_back({result_list, header_block});
+    result_incoming.push_back({nothing_val, nothing_block});
+    auto* result_phi = builder.createPhi(result_incoming, select->loc);
+
+    return result_phi->result;
 }
 
 QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl, const QoreValue& expr,
@@ -6049,6 +6163,461 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     result_incoming.push_back({accum_val, header_block});  // Normal case after iterations
 
     auto* result_phi = builder.createPhi(result_incoming, foldl->loc);
+
+    return result_phi->result;
+}
+
+QoreIRValue QoreIRLowering::lowerFoldrNative(const QoreFoldrOperatorNode* foldr, const QoreValue& expr,
+        std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    // foldr is identical to foldl except with reverse iteration
+
+    // Evaluate the input list (right operand of foldr)
+    QoreIRValue input_list = lowerExpression(foldr->getRight(), error);
+    if (!input_list.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Create reverse iterator from input list
+    auto* iter_inst = builder.createIteratorCreateReverse(input_list, foldr->loc);
+    QoreIRValue iter_val = iter_inst->result;
+
+    // Create basic blocks for the loop structure AFTER evaluating the input
+    // expression and creating the iterator
+    QoreIRBasicBlock* init_block = createBlock("foldr.init");
+    QoreIRBasicBlock* header_block = createBlock("foldr.header");
+    QoreIRBasicBlock* body_block = createBlock("foldr.body");
+    QoreIRBasicBlock* exit_block = createBlock("foldr.exit");
+    if (!init_block || !header_block || !body_block || !exit_block) {
+        error = "IR builder failed to create blocks for foldr";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
+
+    // Branch to init block to get first element
+    builder.createBranch(init_block, foldr->loc);
+
+    // Init block: get first element as initial accumulator
+    builder.setBlock(init_block);
+    auto* first_inst = builder.createIteratorNext(iter_val, exit_block, header_block, foldr->loc);
+    QoreIRValue first_val = first_inst->result;
+
+    // Header block: check for next element
+    builder.setBlock(header_block);
+
+    // Create phi for accumulator
+    auto* accum_phi = builder.createPhi({}, foldr->loc);
+    QoreIRValue accum_val = accum_phi->result;
+
+    // Get next element from iterator
+    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, foldr->loc);
+    QoreIRValue element_val = next_inst->result;
+
+    // Body block: set up context with both $1 (accumulator) and $2 (element)
+    builder.setBlock(body_block);
+
+    // Create a 2-element list for argv: [accumulator, element]
+    QoreIRValue argv_list = builder.createEmptyList(foldr->loc)->result;
+    builder.createListAppend(argv_list, accum_val, foldr->loc);
+    builder.createListAppend(argv_list, element_val, foldr->loc);
+
+    // Set the list directly as implicit args using SetImplicitArgv
+    QoreIRValue old_argv = builder.createSetImplicitArgv(argv_list, foldr->loc)->result;
+
+    // Lower the fold expression
+    QoreIRValue fold_result = lowerExpression(foldr->getLeft(), error);
+
+    // Restore context
+    builder.createPopImplicitArg(old_argv, foldr->loc);
+
+    if (!fold_result.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Record body exit block
+    QoreIRBasicBlock* body_exit_block = builder.getBlock();
+
+    // Branch back to header with new accumulator
+    builder.createBranch(header_block, foldr->loc);
+
+    // Complete the accumulator phi node
+    accum_phi->incoming.push_back({first_val, init_block});
+    accum_phi->incoming.push_back({fold_result, body_exit_block});
+    accum_phi->operands.push_back(first_val);
+    accum_phi->operands.push_back(fold_result);
+
+    // Exit block: return accumulator (via phi from different sources)
+    builder.setBlock(exit_block);
+
+    // For empty list case, return NOTHING
+    QoreIRValue nothing_val = builder.createConstNothing(foldr->loc)->result;
+
+    std::vector<QoreIRPhiIncoming> result_incoming;
+    result_incoming.push_back({nothing_val, init_block});  // Empty list case
+    result_incoming.push_back({accum_val, header_block});  // Normal case after iterations
+
+    auto* result_phi = builder.createPhi(result_incoming, foldr->loc);
+
+    return result_phi->result;
+}
+
+QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr,
+        std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    // e[0] = map expression, e[1] = iterator/input, e[2] = select predicate
+
+    // Evaluate the input list (operand 1)
+    QoreIRValue input_list = lowerExpression(ms->get(1), error);
+    if (!input_list.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Create iterator from input list
+    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, ms->loc);
+    QoreIRValue iter_val = iter_inst->result;
+
+    // Create loop blocks AFTER expression evaluation
+    QoreIRBasicBlock* preheader_block = createBlock("mapselect.preheader");
+    QoreIRBasicBlock* header_block = createBlock("mapselect.header");
+    QoreIRBasicBlock* body_block = createBlock("mapselect.body");
+    QoreIRBasicBlock* append_block = createBlock("mapselect.append");
+    QoreIRBasicBlock* cont_block = createBlock("mapselect.cont");
+    QoreIRBasicBlock* exit_block = createBlock("mapselect.exit");
+    QoreIRBasicBlock* nothing_block = createBlock("mapselect.nothing");
+    if (!preheader_block || !header_block || !body_block || !append_block
+            || !cont_block || !exit_block || !nothing_block) {
+        error = "IR builder failed to create blocks for map+select";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
+
+    // Check if iterator is null (input was NOTHING) → return NOTHING
+    QoreIRValue zero = builder.createConstInt(0, ms->loc)->result;
+    QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, ms->loc)->result;
+    builder.createBranchIf(is_null, nothing_block, preheader_block, ms->loc);
+
+    // Preheader: create empty result list and proceed to loop
+    builder.setBlock(preheader_block);
+    QoreIRValue result_list = builder.createEmptyList(ms->loc)->result;
+    QoreIRValue init_index = builder.createConstInt(0, ms->loc)->result;
+    builder.createBranch(header_block, ms->loc);
+
+    // Header block: create phi for index and check for next value
+    builder.setBlock(header_block);
+
+    auto* index_phi = builder.createPhi({}, ms->loc);
+    QoreIRValue index_val = index_phi->result;
+
+    // Get next element from iterator
+    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, ms->loc);
+    QoreIRValue element_val = next_inst->result;
+
+    // Body block: push implicit args, evaluate select predicate
+    builder.setBlock(body_block);
+
+    QoreIRValue old_element = builder.createPushImplicitElement(index_val, ms->loc)->result;
+    QoreIRValue old_argv = builder.createPushImplicitArg(element_val, ms->loc)->result;
+
+    // Lower the select predicate (operand 2)
+    QoreIRValue predicate_result = lowerExpression(ms->get(2), error);
+    if (!predicate_result.isValid()) {
+        builder.createPopImplicitArg(old_argv, ms->loc);
+        builder.createPopImplicitElement(old_element, ms->loc);
+        return QoreIRValue();
+    }
+
+    QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result, ms->loc)->result;
+    builder.createBranchIf(predicate_bool, append_block, cont_block, ms->loc);
+
+    // Append block: evaluate map expression and append to result
+    builder.setBlock(append_block);
+
+    QoreIRValue map_result = lowerExpression(ms->get(0), error);
+    if (!map_result.isValid()) {
+        return QoreIRValue();
+    }
+
+    builder.createListAppend(result_list, map_result, ms->loc);
+    builder.createBranch(cont_block, ms->loc);
+
+    // Continue block: pop implicit args, increment index, loop back
+    builder.setBlock(cont_block);
+
+    builder.createPopImplicitArg(old_argv, ms->loc);
+    builder.createPopImplicitElement(old_element, ms->loc);
+
+    QoreIRValue one = builder.createConstInt(1, ms->loc)->result;
+    QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, ms->loc)->result;
+
+    QoreIRBasicBlock* cont_exit_block = builder.getBlock();
+
+    builder.createBranch(header_block, ms->loc);
+
+    // Complete the phi node
+    index_phi->incoming.push_back({init_index, preheader_block});
+    index_phi->incoming.push_back({next_index, cont_exit_block});
+    index_phi->operands.push_back(init_index);
+    index_phi->operands.push_back(next_index);
+
+    // Nothing block: input was NOTHING → return NOTHING
+    builder.setBlock(nothing_block);
+    QoreIRValue nothing_val = builder.createConstNothing(ms->loc)->result;
+    builder.createBranch(exit_block, ms->loc);
+
+    // Exit block: PHI between result_list and NOTHING
+    builder.setBlock(exit_block);
+
+    std::vector<QoreIRPhiIncoming> result_incoming;
+    result_incoming.push_back({result_list, header_block});
+    result_incoming.push_back({nothing_val, nothing_block});
+    auto* result_phi = builder.createPhi(result_incoming, ms->loc);
+
+    return result_phi->result;
+}
+
+QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm, const QoreValue& expr,
+        std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    // e[0] = key expression, e[1] = value expression, e[2] = iterator/input
+
+    // Evaluate the input (operand 2)
+    QoreIRValue input_list = lowerExpression(hm->get(2), error);
+    if (!input_list.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Create iterator from input
+    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, hm->loc);
+    QoreIRValue iter_val = iter_inst->result;
+
+    // Create loop blocks AFTER expression evaluation
+    QoreIRBasicBlock* preheader_block = createBlock("hashmap.preheader");
+    QoreIRBasicBlock* header_block = createBlock("hashmap.header");
+    QoreIRBasicBlock* body_block = createBlock("hashmap.body");
+    QoreIRBasicBlock* exit_block = createBlock("hashmap.exit");
+    QoreIRBasicBlock* nothing_block = createBlock("hashmap.nothing");
+    if (!preheader_block || !header_block || !body_block || !exit_block || !nothing_block) {
+        error = "IR builder failed to create blocks for hash map";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
+
+    // Check if iterator is null (input was NOTHING) — return NOTHING in that case
+    QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
+    QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, hm->loc)->result;
+    builder.createBranchIf(is_null, nothing_block, preheader_block, hm->loc);
+
+    // Preheader: create empty result hash and proceed to loop
+    builder.setBlock(preheader_block);
+    QoreIRValue result_hash = builder.createMakeHash({}, hm->loc)->result;
+    QoreIRValue init_index = builder.createConstInt(0, hm->loc)->result;
+    builder.createBranch(header_block, hm->loc);
+
+    // Header block
+    builder.setBlock(header_block);
+
+    auto* index_phi = builder.createPhi({}, hm->loc);
+    QoreIRValue index_val = index_phi->result;
+
+    // Get next element from iterator
+    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, hm->loc);
+    QoreIRValue element_val = next_inst->result;
+
+    // Body block: push implicit args, evaluate key and value expressions
+    builder.setBlock(body_block);
+
+    QoreIRValue old_element = builder.createPushImplicitElement(index_val, hm->loc)->result;
+    QoreIRValue old_argv = builder.createPushImplicitArg(element_val, hm->loc)->result;
+
+    // Lower the key expression (operand 0)
+    QoreIRValue key_result = lowerExpression(hm->get(0), error);
+    if (!key_result.isValid()) {
+        builder.createPopImplicitArg(old_argv, hm->loc);
+        builder.createPopImplicitElement(old_element, hm->loc);
+        return QoreIRValue();
+    }
+
+    // Lower the value expression (operand 1)
+    QoreIRValue value_result = lowerExpression(hm->get(1), error);
+    if (!value_result.isValid()) {
+        builder.createPopImplicitArg(old_argv, hm->loc);
+        builder.createPopImplicitElement(old_element, hm->loc);
+        return QoreIRValue();
+    }
+
+    // Set key-value in hash
+    builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc);
+
+    // Pop implicit args
+    builder.createPopImplicitArg(old_argv, hm->loc);
+    builder.createPopImplicitElement(old_element, hm->loc);
+
+    // Increment index
+    QoreIRValue one = builder.createConstInt(1, hm->loc)->result;
+    QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, hm->loc)->result;
+
+    QoreIRBasicBlock* body_exit_block = builder.getBlock();
+
+    // Branch back to header
+    builder.createBranch(header_block, hm->loc);
+
+    // Complete the phi node
+    index_phi->incoming.push_back({init_index, preheader_block});
+    index_phi->incoming.push_back({next_index, body_exit_block});
+    index_phi->operands.push_back(init_index);
+    index_phi->operands.push_back(next_index);
+
+    // Nothing block: input was NOTHING → return NOTHING
+    builder.setBlock(nothing_block);
+    QoreIRValue nothing_val = builder.createConstNothing(hm->loc)->result;
+    builder.createBranch(exit_block, hm->loc);
+
+    // Exit block: PHI between result_hash (from loop) and NOTHING (from null check)
+    builder.setBlock(exit_block);
+
+    std::vector<QoreIRPhiIncoming> result_incoming;
+    result_incoming.push_back({result_hash, header_block});    // Normal loop exit
+    result_incoming.push_back({nothing_val, nothing_block});   // NOTHING input
+    auto* result_phi = builder.createPhi(result_incoming, hm->loc);
+
+    return result_phi->result;
+}
+
+QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOperatorNode* hms,
+        const QoreValue& expr, std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    // e[0] = key expression, e[1] = value expression, e[2] = iterator/input, e[3] = select predicate
+
+    // Evaluate the input (operand 2)
+    QoreIRValue input_list = lowerExpression(hms->get(2), error);
+    if (!input_list.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Create iterator from input
+    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, hms->loc);
+    QoreIRValue iter_val = iter_inst->result;
+
+    // Create loop blocks AFTER expression evaluation
+    QoreIRBasicBlock* preheader_block = createBlock("hashmapselect.preheader");
+    QoreIRBasicBlock* header_block = createBlock("hashmapselect.header");
+    QoreIRBasicBlock* body_block = createBlock("hashmapselect.body");
+    QoreIRBasicBlock* insert_block = createBlock("hashmapselect.insert");
+    QoreIRBasicBlock* cont_block = createBlock("hashmapselect.cont");
+    QoreIRBasicBlock* exit_block = createBlock("hashmapselect.exit");
+    QoreIRBasicBlock* nothing_block = createBlock("hashmapselect.nothing");
+    if (!preheader_block || !header_block || !body_block || !insert_block || !cont_block || !exit_block
+            || !nothing_block) {
+        error = "IR builder failed to create blocks for hash map+select";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
+
+    // Check if iterator is null (input was NOTHING) — return NOTHING in that case
+    QoreIRValue zero = builder.createConstInt(0, hms->loc)->result;
+    QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, hms->loc)->result;
+    builder.createBranchIf(is_null, nothing_block, preheader_block, hms->loc);
+
+    // Preheader: create empty result hash and proceed to loop
+    builder.setBlock(preheader_block);
+    QoreIRValue result_hash = builder.createMakeHash({}, hms->loc)->result;
+    QoreIRValue init_index = builder.createConstInt(0, hms->loc)->result;
+    builder.createBranch(header_block, hms->loc);
+
+    // Header block
+    builder.setBlock(header_block);
+
+    auto* index_phi = builder.createPhi({}, hms->loc);
+    QoreIRValue index_val = index_phi->result;
+
+    // Get next element from iterator
+    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, hms->loc);
+    QoreIRValue element_val = next_inst->result;
+
+    // Body block: push implicit args, evaluate select predicate
+    builder.setBlock(body_block);
+
+    QoreIRValue old_element = builder.createPushImplicitElement(index_val, hms->loc)->result;
+    QoreIRValue old_argv = builder.createPushImplicitArg(element_val, hms->loc)->result;
+
+    // Lower the select predicate (operand 3)
+    QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
+    if (!predicate_result.isValid()) {
+        builder.createPopImplicitArg(old_argv, hms->loc);
+        builder.createPopImplicitElement(old_element, hms->loc);
+        return QoreIRValue();
+    }
+
+    // Convert predicate to bool
+    QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result, hms->loc)->result;
+
+    // Branch based on predicate
+    builder.createBranchIf(predicate_bool, insert_block, cont_block, hms->loc);
+
+    // Insert block: evaluate key and value, insert into hash
+    builder.setBlock(insert_block);
+
+    // Lower the key expression (operand 0)
+    QoreIRValue key_result = lowerExpression(hms->get(0), error);
+    if (!key_result.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Lower the value expression (operand 1)
+    QoreIRValue value_result = lowerExpression(hms->get(1), error);
+    if (!value_result.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Set key-value in hash
+    builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc);
+    builder.createBranch(cont_block, hms->loc);
+
+    // Continue block: pop implicit args, increment index, loop back
+    builder.setBlock(cont_block);
+
+    builder.createPopImplicitArg(old_argv, hms->loc);
+    builder.createPopImplicitElement(old_element, hms->loc);
+
+    // Increment index
+    QoreIRValue one = builder.createConstInt(1, hms->loc)->result;
+    QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, hms->loc)->result;
+
+    QoreIRBasicBlock* cont_exit_block = builder.getBlock();
+
+    // Branch back to header
+    builder.createBranch(header_block, hms->loc);
+
+    // Complete the phi node
+    index_phi->incoming.push_back({init_index, preheader_block});
+    index_phi->incoming.push_back({next_index, cont_exit_block});
+    index_phi->operands.push_back(init_index);
+    index_phi->operands.push_back(next_index);
+
+    // Nothing block: input was NOTHING → return NOTHING
+    builder.setBlock(nothing_block);
+    QoreIRValue nothing_val = builder.createConstNothing(hms->loc)->result;
+    builder.createBranch(exit_block, hms->loc);
+
+    // Exit block: PHI between result_hash (from loop) and NOTHING (from null check)
+    builder.setBlock(exit_block);
+
+    std::vector<QoreIRPhiIncoming> result_incoming;
+    result_incoming.push_back({result_hash, header_block});    // Normal loop exit
+    result_incoming.push_back({nothing_val, nothing_block});   // NOTHING input
+    auto* result_phi = builder.createPhi(result_incoming, hms->loc);
 
     return result_phi->result;
 }
