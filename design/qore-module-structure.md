@@ -103,8 +103,12 @@ Current usages to migrate:
 
 - [ ] Correct layout chosen (directory vs single-file)
 - [ ] `.qm` location matches layout
+- [ ] all parse directives in the main .qm file for separated modules
+- [ ] `%modern` used / redundant parse directives (`%new-style`, `%require-types`, `%strict-args`, `%enable-all-warnings`) removed
 - [ ] `CMakeLists.txt` module registration updated
 - [ ] `Makefile.am` module lists updated
 - [ ] Docs module list (`doxygen/lang/120_modules.dox.tmpl`) updated when applicable
 - [ ] entry in `doxygen/lang/900_release_notes.dox.tmpl` for new modules or updates
 - [ ] Tests added/updated for the module
+- [ ] all scripts have the execute bit set
+- [ ] all tests and scripts use `%modern`
