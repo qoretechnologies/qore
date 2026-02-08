@@ -34,14 +34,6 @@
 
 QoreString QoreDotEvalOperatorNode::name("dot eval expression");
 
-static const AbstractQoreNode* check_call_ref(const AbstractQoreNode *op, const char *name) {
-    // FIXME: this is an ugly hack!
-    const QoreHashNode *h = reinterpret_cast<const QoreHashNode *>(op);
-    // see if the hash member is a call reference
-    const QoreValue ref = h->getKeyValue(name);
-    return (ref.getType() == NT_FUNCREF || ref.getType() == NT_RUNTIME_CLOSURE) ? ref.getInternalNode() : nullptr;
-}
-
 QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder op(left, xsink);
     if (*xsink) {

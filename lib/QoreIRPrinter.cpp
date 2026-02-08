@@ -319,6 +319,9 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::CallMethodDirect: return "call.method.direct";
         case QoreIROpcode::InvokeMethodDirect: return "invoke.method.direct";
         case QoreIROpcode::CallStatic: return "call.static";
+        case QoreIROpcode::CallStaticDirect: return "call.static.direct";
+        case QoreIROpcode::DotEvalMethodDirect: return "dot.eval.method.direct";
+        case QoreIROpcode::InvokeDotEvalMethodDirect: return "invoke.dot.eval.method.direct";
         case QoreIROpcode::Invoke: return "invoke";
         case QoreIROpcode::GuardInt: return "guard.int";
         case QoreIROpcode::GuardFloat: return "guard.float";
@@ -457,6 +460,34 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* invoke_inst = dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst.get());
                 if (invoke_inst && invoke_inst->method && invoke_inst->qc) {
                     out << " @" << invoke_inst->qc->getName() << "::" << invoke_inst->method->getName();
+                    if (invoke_inst->normal_target) {
+                        out << " normal:" << invoke_inst->normal_target->name;
+                    }
+                    if (invoke_inst->exception_target) {
+                        out << " exception:" << invoke_inst->exception_target->name;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::CallStaticDirect) {
+                auto* direct_inst = dynamic_cast<const QoreIRCallStaticDirectInstruction*>(inst.get());
+                if (direct_inst && direct_inst->method) {
+                    out << " @" << direct_inst->method->getClass()->getName()
+                        << "::" << direct_inst->method->getName();
+                }
+            } else if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
+                auto* direct_inst = dynamic_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst.get());
+                if (direct_inst && direct_inst->method && direct_inst->qc) {
+                    out << " @" << direct_inst->qc->getName() << "::" << direct_inst->method->getName();
+                    if (direct_inst->pseudo) {
+                        out << " [pseudo]";
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get());
+                if (invoke_inst && invoke_inst->method && invoke_inst->qc) {
+                    out << " @" << invoke_inst->qc->getName() << "::" << invoke_inst->method->getName();
+                    if (invoke_inst->pseudo) {
+                        out << " [pseudo]";
+                    }
                     if (invoke_inst->normal_target) {
                         out << " normal:" << invoke_inst->normal_target->name;
                     }

@@ -314,6 +314,9 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::InvokeMethodDirect:
         case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
         case QoreIROpcode::Invoke:
         case QoreIROpcode::CatchException:
         case QoreIROpcode::IteratorCreate:
@@ -609,6 +612,9 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::InvokeMethodDirect:
         case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
         case QoreIROpcode::Invoke:
             return -1;
         case QoreIROpcode::Phi:
@@ -667,6 +673,20 @@ static std::unordered_set<const QoreIRBasicBlock*> collectBranchTargets(const Qo
             } else if (auto* thr = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
                 if (thr->exception_target) {
                     targets.insert(thr->exception_target);
+                }
+            } else if (auto* inv_md = dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst.get())) {
+                if (inv_md->normal_target) {
+                    targets.insert(inv_md->normal_target);
+                }
+                if (inv_md->exception_target) {
+                    targets.insert(inv_md->exception_target);
+                }
+            } else if (auto* inv_de = dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get())) {
+                if (inv_de->normal_target) {
+                    targets.insert(inv_de->normal_target);
+                }
+                if (inv_de->exception_target) {
+                    targets.insert(inv_de->exception_target);
                 }
             }
             // Also check base class exception_target for other opcodes
@@ -745,6 +765,16 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || !invoke_inst->exception_target
                     || block_set.find(invoke_inst->exception_target) == block_set.end()) {
                     error = "invoke.method.direct missing valid targets";
+                    return false;
+                }
+            }
+            if (inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get());
+                if (!invoke_inst || !invoke_inst->normal_target
+                    || block_set.find(invoke_inst->normal_target) == block_set.end()
+                    || !invoke_inst->exception_target
+                    || block_set.find(invoke_inst->exception_target) == block_set.end()) {
+                    error = "invoke.dot_eval_method.direct missing valid targets";
                     return false;
                 }
             }
@@ -1316,6 +1346,16 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::Invoke:
             return &static_cast<const QoreIRInvokeInstruction*>(inst)->expr;
 
+        // Direct static method call with expr field
+        case QoreIROpcode::CallStaticDirect:
+            return &static_cast<const QoreIRCallStaticDirectInstruction*>(inst)->expr;
+
+        // Direct dot-eval method call with expr field
+        case QoreIROpcode::DotEvalMethodDirect:
+            return &static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+            return &static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)->expr;
+
         // Native access opcodes with expr fields
         case QoreIROpcode::LoadStaticVar:
             return &static_cast<const QoreIRStaticVarInstruction*>(inst)->expr;
@@ -1400,6 +1440,9 @@ static bool isCallOrInvoke(QoreIROpcode op) {
         case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::InvokeMethodDirect:
         case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
         case QoreIROpcode::Invoke:
             return true;
         default:

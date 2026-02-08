@@ -533,6 +533,39 @@ QoreIRInvokeMethodDirectInstruction* QoreIRBuilder::createInvokeMethodDirect(con
     return inst;
 }
 
+QoreIRCallStaticDirectInstruction* QoreIRBuilder::createCallStaticDirect(const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
+        const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRCallStaticDirectInstruction>(method, variant, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = args;
+    return inst;
+}
+
+QoreIRDotEvalMethodDirectInstruction* QoreIRBuilder::createDotEvalMethodDirect(const QoreMethod* method,
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
+        bool pseudo, const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRDotEvalMethodDirectInstruction>(method, qc, variant, expr, pseudo);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = operands;
+    return inst;
+}
+
+QoreIRInvokeDotEvalMethodDirectInstruction* QoreIRBuilder::createInvokeDotEvalMethodDirect(
+        const QoreMethod* method, const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        const QoreValue& expr, bool pseudo, const std::vector<QoreIRValue>& operands,
+        QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInvokeDotEvalMethodDirectInstruction>(
+            method, qc, variant, expr, pseudo, normal_target, exception_target);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = operands;
+    return inst;
+}
+
 QoreIRInvokeInstruction* QoreIRBuilder::createInvoke(const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInvokeInstruction>(expr, normal_target, exception_target);

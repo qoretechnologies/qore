@@ -151,6 +151,16 @@ public:
         const AbstractQoreFunctionVariant* variant, const std::vector<QoreIRValue>& args,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRCallStaticDirectInstruction* createCallStaticDirect(const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
+        const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc = nullptr);
+    QoreIRDotEvalMethodDirectInstruction* createDotEvalMethodDirect(const QoreMethod* method,
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
+        bool pseudo, const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
+    QoreIRInvokeDotEvalMethodDirectInstruction* createInvokeDotEvalMethodDirect(const QoreMethod* method,
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
+        bool pseudo, const std::vector<QoreIRValue>& operands, QoreIRBasicBlock* normal_target,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc = nullptr);
     QoreIRInvokeInstruction* createInvoke(const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);

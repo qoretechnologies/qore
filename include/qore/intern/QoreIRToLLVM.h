@@ -357,6 +357,13 @@ private:
             const QoreIRLValueInstruction* lvinst,
             llvm::Module& module, llvm::Function* llvm_func);
 
+    // Build an entry-block alloca'd array of NaN-boxed args from operands[arg_start..].
+    // Sets args_array and nargs.  Returns false on error.
+    // If nargs == 0, args_array is set to a null pointer.
+    bool buildArgsArray(const QoreIRInstruction* inst, int arg_start,
+            llvm::Function* llvm_func, llvm::Value*& args_array, int& nargs,
+            std::string& error);
+
     // Reload all local variable allocas from the Qore runtime stack.
     // Called after Invoke instructions (which can modify any local via AST evaluation).
     void reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func);

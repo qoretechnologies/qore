@@ -1441,6 +1441,7 @@ extern "C" int32_t qore_rt_switch_string_lookup(uint64_t switch_val_bits, const 
 // --- DotEval with pre-evaluated base helper ---
 
 #include "qore/intern/QoreDotEvalOperatorNode.h"
+#include "qore/intern/QorePseudoMethods.h"
 
 extern "C" uint64_t qore_rt_dot_eval_with_base(uint64_t expr_bits, uint64_t base_bits, ExceptionSink* xsink) {
     QoreValue expr = fromBits(expr_bits);
@@ -2251,4 +2252,180 @@ extern "C" int64_t qore_rt_iterator_next(void* iter_ptr, uint64_t* out_value, Ex
     // Store current value and continue
     *out_value = toBits(val.takeReferencedValue());
     return 0;
+}
+
+// --- Direct dot-eval method call (pre-evaluated base + args) ---
+
+static QoreListNode* buildArgListFromNanBoxed(uint64_t* args, int nargs, ExceptionSink* xsink) {
+    if (nargs <= 0) {
+        return nullptr;
+    }
+    QoreListNode* arg_list = new QoreListNode(autoTypeInfo);
+    for (int i = 0; i < nargs; ++i) {
+        QoreValue val = fromBits(args[i]);
+        if (val.hasNode()) {
+            val.refSelf();
+        }
+        arg_list->push(val, xsink);
+    }
+    return arg_list;
+}
+
+// Dispatch a method call on a QoreObject with pre-evaluated args.
+// Same logic as AbstractMethodCallNode::exec(): if the runtime class matches
+// the parse-time class, use the resolved method pointer directly; otherwise
+// fall back to name-based lookup.
+static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* method,
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        QoreListNode* arg_list, ExceptionSink* xsink) {
+    if (o->getClass() == qc || o->getClass() == method->getClass()) {
+        if (!o->isValid()) {
+            xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has "
+                "already been deleted", qc->getName(), method->getName());
+            return toBits(QoreValue());
+        }
+        RuntimeConfig& rc = rc_get_current_ref();
+        return toBits(variant
+            ? qore_method_private::evalNormalVariant(*method, xsink, rc, o,
+                reinterpret_cast<const QoreExternalMethodVariant*>(variant), arg_list)
+            : qore_method_private::eval(*method, xsink, rc, o, arg_list));
+    }
+    // Class mismatch — name-based lookup
+    RuntimeConfig& rc = rc_get_current_ref();
+    return toBits(qore_class_private::get(*o->getClass())->evalMethod(o, method->getName(),
+        arg_list, nullptr, rc, xsink));
+}
+
+extern "C" uint64_t qore_rt_dot_eval_method_direct(uint64_t base_bits, const QoreMethod* method,
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(method);
+    assert(qc);
+
+    QoreValue base = fromBits(base_bits);
+
+    switch (base.getType()) {
+        case NT_WEAKREF: {
+            QoreObject* o = base.get<WeakReferenceNode>()->get();
+            if (!o) {
+                xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on a deleted weak reference",
+                    qc->getName(), method->getName());
+                return toBits(QoreValue());
+            }
+            ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+            return dispatch_method_on_object(o, method, qc, variant, *arg_list, xsink);
+        }
+
+        case NT_OBJECT: {
+            QoreObject* o = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(base.getInternalNode()));
+            ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+            return dispatch_method_on_object(o, method, qc, variant, *arg_list, xsink);
+        }
+
+        case NT_HASH: {
+            const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), method->getName());
+            if (ref) {
+                ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+                return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(*arg_list, xsink));
+            }
+            break;
+        }
+
+        case NT_WEAKREF_HASH: {
+            const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), method->getName());
+            if (ref) {
+                ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+                return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(*arg_list, xsink));
+            }
+            break;
+        }
+
+        default:
+            break;
+    }
+
+    // Non-object: dispatch to pseudo-method path
+    return qore_rt_dot_eval_pseudo_method_direct(base_bits, method, qc, variant, args, nargs, xsink);
+}
+
+extern "C" uint64_t qore_rt_dot_eval_pseudo_method_direct(uint64_t base_bits, const QoreMethod* method,
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(method);
+    assert(qc);
+
+    QoreValue base = fromBits(base_bits);
+    ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+    RuntimeConfig& rc = rc_get_current_ref();
+
+    // If base is nothing and class is not <nothing>, use <nothing> pseudo class
+    if (base.isNothing() && qc != QC_PSEUDONOTHING) {
+        return toBits(qore_class_private::evalPseudoMethod(QC_PSEUDONOTHING, base, method->getName(),
+            *arg_list, rc, xsink));
+    }
+    return toBits(qore_class_private::evalPseudoMethod(qc, method, variant, base, *arg_list, rc, xsink));
+}
+
+extern "C" uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t base_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    QoreValue expr;
+    std::memcpy(&expr, &ctx->exprs[slot], sizeof(expr));
+    // Resolve method/qc/variant from the DotEvalOperator's MethodCallNode
+    auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
+    if (!dot_eval) {
+        xsink->raiseException("AOT-ERROR", "invalid expression for dot-eval method direct AOT call");
+        return toBits(QoreValue());
+    }
+    auto* m = dot_eval->getMethodCall();
+    return m->isPseudo()
+        ? qore_rt_dot_eval_pseudo_method_direct(base_bits, m->getMethod(), m->getClass(), m->getVariant(),
+            args, nargs, xsink)
+        : qore_rt_dot_eval_method_direct(base_bits, m->getMethod(), m->getClass(), m->getVariant(),
+            args, nargs, xsink);
+}
+
+extern "C" uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t base_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    QoreValue expr;
+    std::memcpy(&expr, &ctx->exprs[slot], sizeof(expr));
+    auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
+    if (!dot_eval) {
+        xsink->raiseException("AOT-ERROR", "invalid expression for pseudo method direct AOT call");
+        return toBits(QoreValue());
+    }
+    auto* m = dot_eval->getMethodCall();
+    return qore_rt_dot_eval_pseudo_method_direct(base_bits, m->getMethod(), m->getClass(), m->getVariant(),
+        args, nargs, xsink);
+}
+
+// --- Direct static method call (pre-evaluated args) ---
+
+extern "C" uint64_t qore_rt_call_static_method_direct(const QoreMethod* method, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    if (!method) {
+        xsink->raiseException("JIT-ERROR", "null method pointer in static method direct call");
+        return toBits(QoreValue());
+    }
+
+    // Build QoreListNode from the NaN-boxed args array
+    ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Static methods have no self object
+    return toBits(qore_method_private::eval(*method, xsink, rc, nullptr, *arg_list));
+}
+
+extern "C" uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    QoreValue expr;
+    std::memcpy(&expr, &ctx->exprs[slot], sizeof(expr));
+    auto* call = dynamic_cast<const StaticMethodCallNode*>(expr.getInternalNode());
+    if (!call) {
+        xsink->raiseException("AOT-ERROR", "invalid expression for static method direct AOT call");
+        return toBits(QoreValue());
+    }
+    return qore_rt_call_static_method_direct(call->getMethod(), args, nargs, xsink);
 }

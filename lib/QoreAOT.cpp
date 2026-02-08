@@ -2583,6 +2583,27 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getExprSlot(bits);
                     break;
                 }
+                case QoreIROpcode::CallStaticDirect: {
+                    auto* csdi = static_cast<QoreIRCallStaticDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &csdi->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::DotEvalMethodDirect: {
+                    auto* dmd = static_cast<QoreIRDotEvalMethodDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &dmd->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
+                case QoreIROpcode::InvokeDotEvalMethodDirect: {
+                    auto* idmd = static_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &idmd->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
                 case QoreIROpcode::OnBlockExit: {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
@@ -2857,6 +2878,33 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* vrni = static_cast<QoreIRVrnConstructInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &vrni->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CallStaticDirect: {
+                    auto* csdi = static_cast<QoreIRCallStaticDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &csdi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::DotEvalMethodDirect: {
+                    auto* dmd = static_cast<QoreIRDotEvalMethodDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &dmd->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::InvokeDotEvalMethodDirect: {
+                    auto* idmd = static_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &idmd->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         ++expr_count;
                     }
@@ -3195,6 +3243,36 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     memcpy(&bits, &vrni->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         vrni->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CallStaticDirect: {
+                    auto* csdi = static_cast<QoreIRCallStaticDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &csdi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        csdi->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::DotEvalMethodDirect: {
+                    auto* dmd = static_cast<QoreIRDotEvalMethodDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &dmd->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        dmd->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::InvokeDotEvalMethodDirect: {
+                    auto* idmd = static_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &idmd->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        idmd->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
                     }
                     break;

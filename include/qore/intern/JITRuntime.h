@@ -498,6 +498,35 @@ uint64_t qore_rt_regex_op_with_operand(int32_t opcode, uint64_t expr_bits, uint6
 uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* ctx, int32_t opcode, int32_t slot,
     uint64_t operand_bits, ExceptionSink* xsink);
 
+//! Direct dot-eval method call with pre-evaluated base and arguments.
+//! Handles object dispatch, class mismatch fallback, weak refs, and non-object pseudo dispatch.
+//! base_bits is NaN-boxed base expression, args/nargs are pre-evaluated method arguments.
+//! method/qc/variant are parse-time resolved pointers.
+uint64_t qore_rt_dot_eval_method_direct(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
+    const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Direct dot-eval pseudo-method call with pre-evaluated base and arguments.
+//! Dispatches to qore_class_private::evalPseudoMethod() with QoreListNode built from args.
+uint64_t qore_rt_dot_eval_pseudo_method_direct(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
+    const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! AOT variant of qore_rt_dot_eval_method_direct: resolves method/qc/variant from context slot.
+uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! AOT variant of qore_rt_dot_eval_pseudo_method_direct: resolves from context slot.
+uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Direct static method call with pre-evaluated arguments — builds QoreListNode
+//! and calls qore_method_private::eval() with nullptr for self.
+uint64_t qore_rt_call_static_method_direct(const QoreMethod* method, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+
+//! AOT variant of qore_rt_call_static_method_direct: resolves method from context slot.
+uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args,
+    int nargs, ExceptionSink* xsink);
+
 } // extern "C"
 
 #endif

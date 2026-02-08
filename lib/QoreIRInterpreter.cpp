@@ -888,7 +888,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::CallDirect:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
-        case QoreIROpcode::CallStatic: {
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect: {
             if (!inv->operands.empty()) {
                 const ParseNode* parse_node = nullptr;
                 if (inv->expr.hasNode()) {
@@ -921,12 +922,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         res = QoreIRInterpreter::evalExpr(op, call_expr, xsink);
                         used_operands = true;
                     }
-                } else if (op == QoreIROpcode::CallStatic) {
+                } else if (op == QoreIROpcode::CallStatic || op == QoreIROpcode::CallStaticDirect) {
                     if (auto* call = dynamic_cast<const StaticMethodCallNode*>(
                             inv->expr.getInternalNode())) {
                         QoreValue call_expr(new StaticMethodCallNode(*call, arg_list));
                         ValueHolder call_holder(call_expr, nullptr);
-                        res = QoreIRInterpreter::evalExpr(op, call_expr, xsink);
+                        res = QoreIRInterpreter::evalExpr(QoreIROpcode::CallStatic, call_expr, xsink);
                         used_operands = true;
                     }
                 } else {
@@ -3085,15 +3086,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::Call:
             case QoreIROpcode::CallIndirect:
             case QoreIROpcode::CallMethod:
-            case QoreIROpcode::CallStatic: {
-                // CallDirect uses QoreIRCallDirectInstruction (with extra func/variant
-                // fields for LLVM lowering), but in the interpreter it behaves identically
-                // to Call. Extract expr from the appropriate instruction type.
+            case QoreIROpcode::CallStatic:
+            case QoreIROpcode::CallStaticDirect: {
+                // CallDirect/CallStaticDirect use their own instruction classes (with extra
+                // fields for LLVM lowering), but in the interpreter they behave identically
+                // to Call/CallStatic. Extract expr from the appropriate instruction type.
                 QoreValue call_expr;
                 QoreIROpcode effective_opcode;
                 if (inst->opcode == QoreIROpcode::CallDirect) {
                     call_expr = static_cast<QoreIRCallDirectInstruction*>(inst)->expr;
                     effective_opcode = QoreIROpcode::Call;
+                } else if (inst->opcode == QoreIROpcode::CallStaticDirect) {
+                    call_expr = static_cast<QoreIRCallStaticDirectInstruction*>(inst)->expr;
+                    effective_opcode = QoreIROpcode::CallStatic;
                 } else {
                     call_expr = static_cast<QoreIRExprInstruction*>(inst)->expr;
                     effective_opcode = inst->opcode;
@@ -3303,6 +3308,99 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // On success, branch to normal target
                 prev_block = block;
                 block = invoke_inst->normal_target;
+                ip = 0;
+                break;
+            }
+            case QoreIROpcode::DotEvalMethodDirect: {
+                // Direct dot-eval method call with pre-evaluated base + args
+                auto* direct_inst = static_cast<QoreIRDotEvalMethodDirectInstruction*>(inst);
+
+                // operands[0] is the base expression, operands[1..n-1] are arguments
+                QoreValue base = getIRValue(values, direct_inst->operands[0]);
+
+                // Build NaN-boxed args array from operands[1..n-1]
+                int nargs = static_cast<int>(direct_inst->operands.size()) - 1;
+                std::vector<uint64_t> nanboxed_args(nargs > 0 ? nargs : 0);
+                for (int i = 0; i < nargs; ++i) {
+                    nanboxed_args[i] = toBits(getIRValue(values, direct_inst->operands[i + 1]));
+                }
+
+                QoreValue res;
+                if (direct_inst->pseudo) {
+                    res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                        toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                        nanboxed_args.data(), nargs, xsink));
+                } else {
+                    res = fromBits(qore_rt_dot_eval_method_direct(
+                        toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                        nanboxed_args.data(), nargs, xsink));
+                }
+
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                setValueSlot(values, direct_inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(direct_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::InvokeDotEvalMethodDirect: {
+                // Direct dot-eval method call with exception routing
+                auto* de_invoke_inst = static_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(inst);
+
+                // operands[0] is the base expression, operands[1..n-1] are arguments
+                QoreValue base = getIRValue(values, de_invoke_inst->operands[0]);
+
+                // Build NaN-boxed args array from operands[1..n-1]
+                int nargs = static_cast<int>(de_invoke_inst->operands.size()) - 1;
+                std::vector<uint64_t> nanboxed_args(nargs > 0 ? nargs : 0);
+                for (int i = 0; i < nargs; ++i) {
+                    nanboxed_args[i] = toBits(getIRValue(values, de_invoke_inst->operands[i + 1]));
+                }
+
+                QoreValue res;
+                if (de_invoke_inst->pseudo) {
+                    res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                        toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                        nanboxed_args.data(), nargs, xsink));
+                } else {
+                    res = fromBits(qore_rt_dot_eval_method_direct(
+                        toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                        nanboxed_args.data(), nargs, xsink));
+                }
+
+                // Invalidate all variable caches after method call
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+
+                if (xsink && *xsink) {
+                    // On exception, branch to exception target
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    prev_block = block;
+                    block = de_invoke_inst->exception_target;
+                    ip = 0;
+                    break;
+                }
+                setValueSlot(values, de_invoke_inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(de_invoke_inst->result.id);
+                }
+                // On success, branch to normal target
+                prev_block = block;
+                block = de_invoke_inst->normal_target;
                 ip = 0;
                 break;
             }

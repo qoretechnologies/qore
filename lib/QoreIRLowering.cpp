@@ -5107,11 +5107,48 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     if (!op) {
         return QoreIRValue();
     }
-    QoreIRValue operand = lowerExpression(op->getExpression(), error);
-    if (!operand.isValid()) {
+    QoreIRValue base_val = lowerExpression(op->getExpression(), error);
+    if (!base_val.isValid()) {
         return QoreIRValue();
     }
-    std::vector<QoreIRValue> operands{operand};
+
+    // Check if the method is resolved at parse time — if so, pre-evaluate args
+    // and use DotEvalMethodDirect to avoid AST round-trip at runtime.
+    // Exclude copy() calls (getRawName() == nullptr means it's a copy call).
+    MethodCallNode* m = op->getMethodCall();
+    if (m->getClass() && m->getMethod() && m->getRawName()) {
+        // Lower arguments
+        std::vector<QoreIRValue> lowered_args;
+        if (lowerCallArgs(m->getParseArgs(), m->getArgs(), lowered_args, error)) {
+            // Build operands = [base, arg0, arg1, ...]
+            std::vector<QoreIRValue> operands;
+            operands.push_back(base_val);
+            operands.insert(operands.end(), lowered_args.begin(), lowered_args.end());
+
+            QoreIRValue result;
+            bool should_invoke = !exception_stack.empty();
+            if (should_invoke) {
+                QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                if (!normal_block) {
+                    error = "IR builder failed to create invoke continuation block";
+                    return QoreIRValue();
+                }
+                QoreIRBasicBlock* handler = exception_stack.back();
+                auto* inst = builder.createInvokeDotEvalMethodDirect(m->getMethod(), m->getClass(),
+                    m->getVariant(), expr, m->isPseudo(), operands, normal_block, handler, op->loc);
+                builder.setBlock(normal_block);
+                result = inst->result;
+            } else {
+                auto* inst = builder.createDotEvalMethodDirect(m->getMethod(), m->getClass(),
+                    m->getVariant(), expr, m->isPseudo(), operands, op->loc);
+                result = inst->result;
+            }
+            return result;
+        }
+        // lowerCallArgs failed — fall through to generic path
+    }
+
+    std::vector<QoreIRValue> operands{base_val};
     QoreIROpcode opcode = QoreIROpcode::DotEvalAny;
     QoreParseAnalysis analysis;
     if (getAnalysis(expr, analysis)
@@ -5373,11 +5410,36 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
     if (!call) {
         return QoreIRValue();
     }
-    std::vector<QoreIRValue> operands;
-    if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
+    std::vector<QoreIRValue> lowered_args;
+    if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), lowered_args, error)) {
         return QoreIRValue();
     }
-    return lowerExprOpOrInvoke(QoreIROpcode::CallStatic, expr, operands, call->loc, error);
+
+    // Static methods are always resolved at parse time — use CallStaticDirect
+    // to pre-evaluate args and bypass AST round-trip at runtime.
+    if (call->getMethod()) {
+        QoreIRValue result;
+        bool should_invoke = !exception_stack.empty();
+        if (should_invoke) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, lowered_args, normal_block, handler, call->loc);
+            inst->invoke_opcode = QoreIROpcode::CallStaticDirect;
+            builder.setBlock(normal_block);
+            result = inst->result;
+        } else {
+            auto* inst = builder.createCallStaticDirect(call->getMethod(), call->getVariant(), expr,
+                lowered_args, call->loc);
+            result = inst->result;
+        }
+        return result;
+    }
+
+    return lowerExprOpOrInvoke(QoreIROpcode::CallStatic, expr, lowered_args, call->loc, error);
 }
 
 // Pattern analysis for optimized foldl operations

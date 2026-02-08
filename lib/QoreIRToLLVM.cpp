@@ -975,6 +975,31 @@ llvm::AllocaInst* QoreIRToLLVM::emitPreDecrefAndClearTracker(uint32_t result_id,
     return ca;
 }
 
+bool QoreIRToLLVM::buildArgsArray(const QoreIRInstruction* inst, int arg_start,
+        llvm::Function* llvm_func, llvm::Value*& args_array, int& nargs,
+        std::string& error) {
+    nargs = static_cast<int>(inst->operands.size()) - arg_start;
+    if (nargs > 0) {
+        // Hoist alloca to entry block to avoid stack overflow in loops
+        llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                llvm_func->getEntryBlock().begin());
+        args_array = ab.CreateAlloca(i64_type,
+                llvm::ConstantInt::get(i32_type, nargs));
+        for (int i = 0; i < nargs; ++i) {
+            auto* arg_val = getVal(inst->operands[arg_start + i].id, error);
+            if (!arg_val) { return false; }
+            llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[arg_start + i].id);
+            llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
+                    llvm::ConstantInt::get(i32_type, i));
+            builder->CreateStore(arg_boxed, gep);
+        }
+    } else {
+        args_array = builder->CreateIntToPtr(
+                llvm::ConstantInt::get(i64_type, 0), ptr_type);
+    }
+    return true;
+}
+
 void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func) {
     // Phase 4: Skip entirely if all locals are IR-only — no AST callback can
     // modify any local, so the LLVM alloca cache is always current.
@@ -1710,19 +1735,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::StringConcat: {
             // Multi-string concatenation - a + b + c + d in single pass
-            int nargs = static_cast<int>(inst->operands.size());
-            // Hoist alloca to entry block to avoid stack overflow in loops
-            llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
-                    llvm_func->getEntryBlock().begin());
-            llvm::Value* args_array = ab.CreateAlloca(i64_type,
-                    llvm::ConstantInt::get(i32_type, nargs));
-            for (int i = 0; i < nargs; ++i) {
-                auto* val = getVal(inst->operands[i].id, error);
-                if (!val) { return false; }
-                llvm::Value* boxed = boxValue(val, inst->operands[i].id);
-                llvm::Value* ptr = builder->CreateGEP(i64_type, args_array,
-                        llvm::ConstantInt::get(i32_type, i));
-                builder->CreateStore(boxed, ptr);
+            llvm::Value* args_array;
+            int nargs;
+            if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
+                return false;
             }
             auto helper = module.getOrInsertFunction("qore_rt_string_concat_multi",
                     llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
@@ -3030,6 +3046,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 {i64_type, ptr_type, i32_type, ptr_type}, false));
                     result = builder->CreateCall(helper, {ref_boxed, args_array,
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else if (inv->invoke_opcode == QoreIROpcode::CallStaticDirect && !aot_mode) {
+                    // CallStaticDirect invoke: call static method directly with embedded pointer
+                    const auto* static_call = dynamic_cast<const StaticMethodCallNode*>(
+                            inv->expr.getInternalNode());
+                    assert(static_call);
+                    llvm::Value* method_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(static_call->getMethod())), ptr_type);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_call_static_method_direct",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {method_ptr, args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallStaticDirect) {
+                    // AOT CallStaticDirect: resolve method from expression slot
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_call_static_method_direct_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 } else if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
                     auto helper = module.getOrInsertFunction("qore_rt_call_with_args_aot",
@@ -3645,27 +3685,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* direct_inst = static_cast<const QoreIRCallMethodDirectInstruction*>(inst);
 
             // Build args array from operands
-            int nargs = static_cast<int>(inst->operands.size());
-
             llvm::Value* args_array;
-            if (nargs > 0) {
-                // Hoist alloca to entry block to avoid stack overflow in loops
-                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
-                        llvm_func->getEntryBlock().begin());
-                args_array = ab.CreateAlloca(i64_type,
-                        llvm::ConstantInt::get(i32_type, nargs));
-                for (int i = 0; i < nargs; ++i) {
-                    auto* arg_val = getVal(inst->operands[i].id, error);
-                    if (!arg_val) { return false; }
-                    llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[i].id);
-                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
-                            llvm::ConstantInt::get(i32_type, i));
-                    builder->CreateStore(arg_boxed, gep);
-                }
-            } else {
-                // For zero args, pass a null pointer using i64 constant cast to pointer
-                args_array = builder->CreateIntToPtr(
-                        llvm::ConstantInt::get(i64_type, 0), ptr_type);
+            int nargs;
+            if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
+                return false;
             }
 
             // Pass method pointer directly to runtime helper as a pointer constant
@@ -3715,27 +3738,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* invoke_inst = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
 
             // Build args array from operands
-            int nargs = static_cast<int>(inst->operands.size());
-
             llvm::Value* args_array;
-            if (nargs > 0) {
-                // Hoist alloca to entry block to avoid stack overflow in loops
-                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
-                        llvm_func->getEntryBlock().begin());
-                args_array = ab.CreateAlloca(i64_type,
-                        llvm::ConstantInt::get(i32_type, nargs));
-                for (int i = 0; i < nargs; ++i) {
-                    auto* arg_val = getVal(inst->operands[i].id, error);
-                    if (!arg_val) { return false; }
-                    llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[i].id);
-                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
-                            llvm::ConstantInt::get(i32_type, i));
-                    builder->CreateStore(arg_boxed, gep);
-                }
-            } else {
-                // For zero args, pass a null pointer using i64 constant cast to pointer
-                args_array = builder->CreateIntToPtr(
-                        llvm::ConstantInt::get(i64_type, 0), ptr_type);
+            int nargs;
+            if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
+                return false;
             }
 
             // Pass method pointer directly to runtime helper as a pointer constant
@@ -3794,6 +3800,191 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             if (except_it == block_map.end()) {
                 error = "invoke.method.direct exception target block not found";
+                return false;
+            }
+            builder->CreateCondBr(has_exception, except_it->second, normal_it->second);
+            return true;
+        }
+
+        // === CallStaticDirect (resolved static method call, skips AST round-trip) ===
+        case QoreIROpcode::CallStaticDirect: {
+            const auto* direct_inst = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
+
+            // Build args array from operands
+            llvm::Value* args_array;
+            int nargs;
+            if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
+                return false;
+            }
+
+            llvm::Value* call_result;
+            if (aot_mode) {
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), args_array,
+                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            } else {
+                llvm::Value* method_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(direct_inst->method)), ptr_type);
+                auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {method_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            }
+
+            // Calls can modify local variables through side effects
+            reloadAllLocalsFromRuntime(module, llvm_func);
+
+            values[inst->result.id] = call_result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            return true;
+        }
+
+        // === DotEvalMethodDirect (resolved dot-eval method call) ===
+        case QoreIROpcode::DotEvalMethodDirect: {
+            const auto* direct_inst = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+
+            // operands[0] = base, operands[1..n-1] = args
+            auto* base_val = getVal(inst->operands[0].id, error);
+            if (!base_val) { return false; }
+            llvm::Value* base_boxed = boxValue(base_val, inst->operands[0].id);
+
+            llvm::Value* args_array;
+            int nargs;
+            if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
+                return false;
+            }
+
+            llvm::Value* call_result;
+            if (aot_mode) {
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                const char* helper_name = direct_inst->pseudo
+                        ? "qore_rt_dot_eval_pseudo_method_direct_aot"
+                        : "qore_rt_dot_eval_method_direct_aot";
+                auto helper = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), base_boxed, args_array,
+                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            } else {
+                llvm::Value* method_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(direct_inst->method)), ptr_type);
+                llvm::Value* qc_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(direct_inst->qc)), ptr_type);
+                llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+                const char* helper_name = direct_inst->pseudo
+                        ? "qore_rt_dot_eval_pseudo_method_direct"
+                        : "qore_rt_dot_eval_method_direct";
+                auto helper = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                            false));
+                call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
+                        variant_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
+                        xsink_arg});
+            }
+
+            // DotEval method calls can modify local variables through side effects
+            reloadAllLocalsFromRuntime(module, llvm_func);
+
+            values[inst->result.id] = call_result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            return true;
+        }
+
+        // === InvokeDotEvalMethodDirect (resolved dot-eval with exception routing) ===
+        case QoreIROpcode::InvokeDotEvalMethodDirect: {
+            const auto* invoke_inst =
+                    static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst);
+
+            // operands[0] = base, operands[1..n-1] = args
+            auto* base_val = getVal(inst->operands[0].id, error);
+            if (!base_val) { return false; }
+            llvm::Value* base_boxed = boxValue(base_val, inst->operands[0].id);
+
+            llvm::Value* args_array;
+            int nargs;
+            if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
+                return false;
+            }
+
+            llvm::Value* call_result;
+            if (aot_mode) {
+                QoreValue expr_val = invoke_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                const char* helper_name = invoke_inst->pseudo
+                        ? "qore_rt_dot_eval_pseudo_method_direct_aot"
+                        : "qore_rt_dot_eval_method_direct_aot";
+                auto helper = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), base_boxed, args_array,
+                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            } else {
+                llvm::Value* method_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(invoke_inst->method)), ptr_type);
+                llvm::Value* qc_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(invoke_inst->qc)), ptr_type);
+                llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(invoke_inst->variant)), ptr_type);
+                const char* helper_name = invoke_inst->pseudo
+                        ? "qore_rt_dot_eval_pseudo_method_direct"
+                        : "qore_rt_dot_eval_method_direct";
+                auto helper = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                            false));
+                call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
+                        variant_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
+                        xsink_arg});
+            }
+
+            // DotEval method calls can modify local variables through side effects
+            reloadAllLocalsFromRuntime(module, llvm_func);
+
+            values[inst->result.id] = call_result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(call_result, inst->result.id, llvm_func);
+
+            // Check for exception and branch accordingly
+            auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
+                    llvm::FunctionType::get(i64_type, {ptr_type}, false));
+            llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
+            llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
+                    llvm::ConstantInt::get(i64_type, 0));
+
+            auto normal_it = block_map.find(invoke_inst->normal_target);
+            auto except_it = block_map.find(invoke_inst->exception_target);
+            if (normal_it == block_map.end()) {
+                error = "invoke.dot.eval.method.direct normal target block not found";
+                return false;
+            }
+            if (except_it == block_map.end()) {
+                error = "invoke.dot.eval.method.direct exception target block not found";
                 return false;
             }
             builder->CreateCondBr(has_exception, except_it->second, normal_it->second);

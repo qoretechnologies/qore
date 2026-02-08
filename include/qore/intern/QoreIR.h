@@ -373,6 +373,9 @@ enum class QoreIROpcode : uint16_t {
     CallMethodDirect,   // Direct method call - no dispatch needed (final class/method)
     InvokeMethodDirect, // Direct method call with exception handling (final class in try/catch)
     CallStatic,
+    CallStaticDirect,       // Direct static method call - pre-evaluated args (no AST round-trip)
+    DotEvalMethodDirect,    // Direct dot-eval method call - pre-evaluated base+args
+    InvokeDotEvalMethodDirect, // Direct dot-eval method call with exception handling (try/catch)
     Invoke,
 
     GuardInt,
@@ -530,6 +533,7 @@ inline bool isCallInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
             return true;
         default:
             return false;
@@ -1099,6 +1103,81 @@ public:
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
     QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
+};
+
+//! Direct static method call instruction - pre-evaluates arguments to bypass AST round-trip.
+//! Uses the Invoke + invoke_opcode pattern for try/catch (like CallDirect).
+class QoreIRCallStaticDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRCallStaticDirectInstruction(const QoreMethod* n_method,
+            const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CallStaticDirect),
+              method(n_method), variant(n_variant), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCallStaticDirectInstruction() override {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const QoreMethod* method = nullptr;     //!< The resolved static method pointer
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
+    QoreValue expr;                         //!< Original AST expression (for AOT)
+    //!< operands[0..n-1] are the pre-evaluated method arguments
+};
+
+//! Direct dot-eval method call instruction - pre-evaluates base object and arguments
+//! for obj.method(args) calls where the method is resolved at parse time.
+class QoreIRDotEvalMethodDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRDotEvalMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
+            const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr, bool n_pseudo)
+            : QoreIRInstruction(QoreIROpcode::DotEvalMethodDirect),
+              method(n_method), qc(n_qc), variant(n_variant), expr(n_expr), pseudo(n_pseudo) {
+        expr.ref();
+    }
+
+    ~QoreIRDotEvalMethodDirectInstruction() override {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const QoreMethod* method = nullptr;     //!< The resolved method pointer
+    const QoreClass* qc = nullptr;          //!< The class containing the method
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
+    QoreValue expr;                         //!< Original AST expression (for AOT)
+    bool pseudo = false;                    //!< True if this is a pseudo-method call
+    //!< operands[0] is the base expression, operands[1..n-1] are arguments
+};
+
+//! Direct dot-eval method call with exception handling - for try/catch blocks.
+//! Pre-evaluates base object and arguments like DotEvalMethodDirect but routes
+//! exceptions to the exception target block.
+class QoreIRInvokeDotEvalMethodDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRInvokeDotEvalMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
+            const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr, bool n_pseudo,
+            QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
+            : QoreIRInstruction(QoreIROpcode::InvokeDotEvalMethodDirect),
+              method(n_method), qc(n_qc), variant(n_variant), expr(n_expr), pseudo(n_pseudo),
+              normal_target(n_normal), exception_target(n_exception) {
+        expr.ref();
+    }
+
+    ~QoreIRInvokeDotEvalMethodDirectInstruction() override {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const QoreMethod* method = nullptr;         //!< The resolved method pointer
+    const QoreClass* qc = nullptr;              //!< The class containing the method
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
+    QoreValue expr;                             //!< Original AST expression (for AOT)
+    bool pseudo = false;                        //!< True if this is a pseudo-method call
+    QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
+    QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
+    //!< operands[0] is the base expression, operands[1..n-1] are arguments
 };
 
 class QoreIRForeachInstruction : public QoreIRInstruction {
