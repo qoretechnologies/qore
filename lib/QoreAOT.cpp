@@ -390,13 +390,13 @@ static llvm::OptimizationLevel getOptimizationLevel(int opt_level) {
         case 1: return llvm::OptimizationLevel::O1;
         case 2: return llvm::OptimizationLevel::O2;
         case 3: return llvm::OptimizationLevel::O3;
-        default: return llvm::OptimizationLevel::O2;
+        default: return llvm::OptimizationLevel::O3;
     }
 }
 
 //! Emit an LLVM module to a native object file
 static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error,
-        int opt_level = 2, const char* target_triple = nullptr) {
+        int opt_level = 3, const char* target_triple = nullptr) {
     std::string triple;
     if (target_triple) {
         triple = target_triple;

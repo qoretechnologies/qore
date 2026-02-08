@@ -112,6 +112,9 @@ public:
     static void setIRThreshold(uint64_t t);
     static void setJITThreshold(uint64_t t);
 
+    //! JIT optimization level (0-3, default 2, overridable via QORE_JIT_OPT_LEVEL)
+    static int getJITOptLevel();
+
 private:
     QoreJIT() = default;
     QoreJIT(const QoreJIT&) = delete;
@@ -132,6 +135,9 @@ private:
     //! Tiered compilation thresholds
     static uint64_t ir_threshold;
     static uint64_t jit_threshold;
+
+    //! JIT optimization level (-1 = not yet initialized)
+    static int jit_opt_level;
 };
 
 #endif

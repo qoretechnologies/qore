@@ -52,7 +52,7 @@ static bool is_directory(const char* path) {
 
 // Program options
 static const char* output_path = nullptr;
-static int opt_level = 2;
+static int opt_level = 3;
 static const char* target_triple = nullptr;
 static bool static_link = false;
 static bool strip_source = false;
@@ -67,7 +67,7 @@ static void print_usage(const char* prog) {
     printf("Usage: %s [options] <source-file>\n\n", prog);
     printf("Options:\n");
     printf("  -o, --output=FILE      Output file path (default: input name without extension)\n");
-    printf("  -O, --opt-level=N      Optimization level 0-3 (default: 2)\n");
+    printf("  -O, --opt-level=N      Optimization level 0-3 (default: 3)\n");
     printf("  -m, --module           Compile as module (.qm -> .qmod)\n");
     printf("  -s, --strip-source     Strip source code from binary (IP protection)\n");
     printf("  -S, --static           Link statically against libqore\n");

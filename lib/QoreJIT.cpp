@@ -37,6 +37,9 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupport.h>
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/MC/TargetRegistry.h>
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/JITRuntime.h"
 
@@ -49,6 +52,64 @@
 // Tiered compilation threshold defaults
 uint64_t QoreJIT::ir_threshold = 100;
 uint64_t QoreJIT::jit_threshold = 1000;
+
+// JIT optimization level: default O2, overridable via QORE_JIT_OPT_LEVEL env var
+int QoreJIT::jit_opt_level = -1;  // -1 = not yet initialized
+
+int QoreJIT::getJITOptLevel() {
+    if (jit_opt_level < 0) {
+        const char* env = getenv("QORE_JIT_OPT_LEVEL");
+        if (env) {
+            int level = atoi(env);
+            jit_opt_level = (level >= 0 && level <= 3) ? level : 2;
+        } else {
+            jit_opt_level = 2;
+        }
+    }
+    return jit_opt_level;
+}
+
+//! Run LLVM optimization passes on a module before JIT compilation
+static void optimizeModule(llvm::Module& module, int opt_level) {
+    if (opt_level <= 0) {
+        return;
+    }
+
+    llvm::OptimizationLevel llvm_opt;
+    switch (opt_level) {
+        case 1: llvm_opt = llvm::OptimizationLevel::O1; break;
+        case 3: llvm_opt = llvm::OptimizationLevel::O3; break;
+        default: llvm_opt = llvm::OptimizationLevel::O2; break;
+    }
+
+    // Create a target machine for the native target (needed by PassBuilder for target-specific opts)
+    std::string triple = llvm::sys::getDefaultTargetTriple();
+    std::string target_error;
+    auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
+    if (!target) {
+        return;  // Fall back to unoptimized if target lookup fails
+    }
+    auto* tm = target->createTargetMachine(triple, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_);
+    if (!tm) {
+        return;
+    }
+
+    llvm::LoopAnalysisManager LAM;
+    llvm::FunctionAnalysisManager FAM;
+    llvm::CGSCCAnalysisManager CGAM;
+    llvm::ModuleAnalysisManager MAM;
+    llvm::PassBuilder PB(tm);
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+    auto MPM = PB.buildPerModuleDefaultPipeline(llvm_opt);
+    MPM.run(module, MAM);
+
+    delete tm;
+}
 
 QoreJIT& QoreJIT::instance() {
     static QoreJIT jit;
@@ -294,7 +355,10 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
         return false;
     }
 
-    // Dump LLVM IR if requested
+    // Run LLVM optimization passes
+    optimizeModule(*module, getJITOptLevel());
+
+    // Dump LLVM IR if requested (after optimization)
     if (getenv("QORE_DUMP_LLVM_IR")) {
         llvm::raw_fd_ostream llvm_dump(2, false);
         llvm_dump << "=== LLVM IR for " << func.name << " ===\n";
@@ -491,7 +555,10 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
         }
     }
 
-    // Dump LLVM IR if requested
+    // Run LLVM optimization passes
+    optimizeModule(*module, getJITOptLevel());
+
+    // Dump LLVM IR if requested (after optimization)
     if (getenv("QORE_DUMP_LLVM_IR")) {
         llvm::raw_fd_ostream llvm_dump(2, false);
         llvm_dump << "=== LLVM IR (batch) for " << root_func.name << " ===\n";
