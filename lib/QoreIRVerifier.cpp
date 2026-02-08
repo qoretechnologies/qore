@@ -1104,9 +1104,17 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         collectLocalsFromExpr(dot->getExpression(), ast_locals, unknown_node_found);
         // Method call node has args that might reference locals
         if (const MethodCallNode* m = dot->getMethodCall()) {
-            if (const QoreParseListNode* args = m->getParseArgs()) {
-                for (size_t i = 0; i < args->size(); ++i) {
-                    collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found);
+            if (const QoreParseListNode* pargs = m->getParseArgs()) {
+                for (size_t i = 0; i < pargs->size(); ++i) {
+                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found);
+                }
+            }
+            // Also check resolved args — after parse resolution, locals may only
+            // be in the resolved args list
+            if (const QoreListNode* rargs = m->getArgs()) {
+                ConstListIterator li(rargs);
+                while (li.next()) {
+                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
                 }
             }
         }
@@ -1337,6 +1345,44 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         // VarRefNewObjectNode construction
         case QoreIROpcode::VrnConstruct:
             return &static_cast<const QoreIRVrnConstructInstruction*>(inst)->expr;
+
+        // DotEval opcodes delegate method calls to AST — the expr contains the
+        // full QoreDotEvalOperatorNode including argument expressions that may
+        // reference locals.
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        // Regex ops delegate to AST
+        case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList:
+        // Lvalue compound assignment and list assignment delegate to AST
+        case QoreIROpcode::AddAssignLValue:
+        case QoreIROpcode::SubAssignLValue:
+        case QoreIROpcode::ListAssignAny:
+        // Elements/size ops delegate to AST
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
+        // Map/select/cast ops delegate to AST
+        case QoreIROpcode::MapSelectList:
+        case QoreIROpcode::MapSelectAny:
+        case QoreIROpcode::HashMap:
+        case QoreIROpcode::HashMapSelect:
+        case QoreIROpcode::HashMapAny:
+        case QoreIROpcode::HashMapSelectAny:
+        case QoreIROpcode::CastAny:
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum:
+        case QoreIROpcode::InvokeSimError:
+            return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
 
         default:
             return nullptr;
