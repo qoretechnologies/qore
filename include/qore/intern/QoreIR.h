@@ -76,7 +76,15 @@ enum class QoreIROpcode : uint16_t {
     MakeList,
     MakeHash,
     CreateEmptyList,    // Create empty list for functional operator results
+    CreateSizedList,    // Create list with pre-allocated capacity (for typed map loops)
     ListAppend,         // Append value to list (for map/select loops)
+    ListSize,           // Get list element count (returns native i64)
+    ListGetInt,         // Get int element from list by index (returns native i64)
+    ListGetFloat,       // Get float element from list by index (returns native double)
+    ListGetValue,       // Get any element from list by index (returns nanboxed QoreValue)
+    ListSetInt,         // Set int element in list by index (for pre-sized typed map output)
+    ListSetFloat,       // Set float element in list by index
+    ListSetValue,       // Set any element in list by index
 
     AddInt,
     AddFloat,
@@ -376,9 +384,11 @@ enum class QoreIROpcode : uint16_t {
     CallStaticDirect,       // Direct static method call - pre-evaluated args (no AST round-trip)
     DotEvalMethodDirect,    // Direct dot-eval method call - pre-evaluated base+args
     InvokeDotEvalMethodDirect, // Direct dot-eval method call with exception handling (try/catch)
+    CallClosureDirect,      // Direct closure/callref call - operands[0]=callref, rest=args
     Invoke,
 
     GuardInt,
+    GetObjectClass,         // Get runtime class pointer from object value (for devirtualization)
     GuardFloat,
     GuardType,
     GuardNotNothing,
@@ -534,6 +544,7 @@ inline bool isCallInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::CallStatic:
         case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallClosureDirect:
             return true;
         default:
             return false;

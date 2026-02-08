@@ -51,7 +51,15 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::MakeList: return "make.list";
         case QoreIROpcode::MakeHash: return "make.hash";
         case QoreIROpcode::CreateEmptyList: return "create.empty.list";
+        case QoreIROpcode::CreateSizedList: return "create.sized.list";
         case QoreIROpcode::ListAppend: return "list.append";
+        case QoreIROpcode::ListSize: return "list.size";
+        case QoreIROpcode::ListGetInt: return "list.get.int";
+        case QoreIROpcode::ListGetFloat: return "list.get.float";
+        case QoreIROpcode::ListGetValue: return "list.get.value";
+        case QoreIROpcode::ListSetInt: return "list.set.int";
+        case QoreIROpcode::ListSetFloat: return "list.set.float";
+        case QoreIROpcode::ListSetValue: return "list.set.value";
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";
         case QoreIROpcode::AddAny: return "add.any";
@@ -322,8 +330,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::CallStaticDirect: return "call.static.direct";
         case QoreIROpcode::DotEvalMethodDirect: return "dot.eval.method.direct";
         case QoreIROpcode::InvokeDotEvalMethodDirect: return "invoke.dot.eval.method.direct";
+        case QoreIROpcode::CallClosureDirect: return "call.closure.direct";
         case QoreIROpcode::Invoke: return "invoke";
         case QoreIROpcode::GuardInt: return "guard.int";
+        case QoreIROpcode::GetObjectClass: return "get.object.class";
         case QoreIROpcode::GuardFloat: return "guard.float";
         case QoreIROpcode::GuardType: return "guard.type";
         case QoreIROpcode::GuardNotNothing: return "guard.not-nothing";

@@ -99,6 +99,15 @@ public:
         fast_entry_args = args;
     }
 
+    //! Set shared debug info for multi-function module compilation (AOT/batch).
+    //! When set, the lowerer uses the shared DIBuilder/DICompileUnit instead of
+    //! creating and finalizing its own per-function.  The caller is responsible
+    //! for creating the DIBuilder+CU before lowering and finalizing after.
+    void setSharedDebugInfo(llvm::DIBuilder* builder, llvm::DICompileUnit* cu) {
+        shared_di_builder = builder;
+        shared_di_cu = cu;
+    }
+
 private:
     llvm::LLVMContext& ctx;
 
@@ -230,7 +239,13 @@ private:
     llvm::Module* current_module = nullptr;
 
     // Phase 5c: Debug info (DWARF)
+    // Owned DIBuilder for single-function-per-module case
     std::unique_ptr<llvm::DIBuilder> di_builder;
+    // Shared DIBuilder/CU for multi-function-per-module case (AOT/batch)
+    llvm::DIBuilder* shared_di_builder = nullptr;
+    llvm::DICompileUnit* shared_di_cu = nullptr;
+    // Active DIBuilder pointer (points to either owned or shared)
+    llvm::DIBuilder* active_di_builder = nullptr;
     llvm::DICompileUnit* di_cu = nullptr;
     llvm::DISubprogram* di_sp = nullptr;
     std::unordered_map<const char*, llvm::DIFile*> di_file_cache;

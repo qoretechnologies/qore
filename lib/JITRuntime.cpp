@@ -894,6 +894,104 @@ extern "C" double qore_rt_list_get_float(uint64_t list_val, int64_t index) {
     return 0.0;
 }
 
+extern "C" uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() == NT_LIST) {
+        const QoreListNode* l = v.get<const QoreListNode>();
+        if (index >= 0 && static_cast<size_t>(index) < l->size()) {
+            return toBits(l->getReferencedEntry(static_cast<size_t>(index)));
+        }
+    }
+    return toBits(QoreValue());
+}
+
+extern "C" uint64_t qore_rt_create_sized_list(int64_t capacity, ExceptionSink* xsink) {
+    QoreListNode* list = new QoreListNode(autoTypeInfo);
+    if (capacity > 0) {
+        qore_list_private::get(*list)->reserve(static_cast<size_t>(capacity));
+    }
+    return toBits(QoreValue(list));
+}
+
+extern "C" void qore_rt_list_set_int(uint64_t list_bits, int64_t index, int64_t value) {
+    QoreValue v = fromBits(list_bits);
+    if (v.getType() == NT_LIST) {
+        QoreListNode* l = v.get<QoreListNode>();
+        qore_list_private* priv = qore_list_private::get(*l);
+        priv->getEntryReference(static_cast<size_t>(index)) = QoreValue(value);
+        if (static_cast<size_t>(index) >= priv->length) {
+            priv->length = static_cast<size_t>(index) + 1;
+        }
+    }
+}
+
+extern "C" void qore_rt_list_set_float(uint64_t list_bits, int64_t index, double value) {
+    QoreValue v = fromBits(list_bits);
+    if (v.getType() == NT_LIST) {
+        QoreListNode* l = v.get<QoreListNode>();
+        qore_list_private* priv = qore_list_private::get(*l);
+        priv->getEntryReference(static_cast<size_t>(index)) = QoreValue(value);
+        if (static_cast<size_t>(index) >= priv->length) {
+            priv->length = static_cast<size_t>(index) + 1;
+        }
+    }
+}
+
+extern "C" void qore_rt_list_set_value(uint64_t list_bits, int64_t index, uint64_t value_bits) {
+    QoreValue v = fromBits(list_bits);
+    if (v.getType() == NT_LIST) {
+        QoreListNode* l = v.get<QoreListNode>();
+        QoreValue val = fromBits(value_bits);
+        qore_list_private* priv = qore_list_private::get(*l);
+        priv->getEntryReference(static_cast<size_t>(index)) = val;
+        if (static_cast<size_t>(index) >= priv->length) {
+            priv->length = static_cast<size_t>(index) + 1;
+        }
+        if (needs_scan(val)) {
+            priv->incScanCount(1);
+        }
+    }
+}
+
+extern "C" uint64_t qore_rt_get_object_class(uint64_t obj_bits) {
+    QoreValue v = fromBits(obj_bits);
+    if (v.getType() == NT_OBJECT) {
+        const QoreObject* obj = v.get<const QoreObject>();
+        return reinterpret_cast<uint64_t>(obj->getClass());
+    }
+    return 0;
+}
+
+extern "C" uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    QoreValue ref_val = fromBits(ref_bits);
+    if (!ref_val.hasNode()) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        return toBits(QoreValue());
+    }
+
+    ResolvedCallReferenceNode* callref = dynamic_cast<ResolvedCallReferenceNode*>(
+        const_cast<AbstractQoreNode*>(ref_val.getInternalNode()));
+    if (!callref) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+        return toBits(QoreValue());
+    }
+
+    // Build QoreListNode from NaN-boxed args
+    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+    for (int i = 0; i < nargs; ++i) {
+        QoreValue val = fromBits(args[i]);
+        if (val.hasNode()) {
+            val.refSelf();
+        }
+        arg_list->push(val, xsink);
+    }
+
+    // Call directly — no AST node copy, no dynamic_cast chain
+    QoreValue result = callref->execValue(arg_list.release(), xsink);
+    return toBits(result);
+}
+
 // Optimized map operations - native loops that return lists
 extern "C" uint64_t qore_rt_map_scale_int(uint64_t list_val, int64_t scale) {
     QoreValue v = fromBits(list_val);
@@ -1572,8 +1670,9 @@ extern "C" uint64_t qore_rt_call_fast(const QoreFunction* func,
     assert(variant);
 
     const UserVariantBase* uvb = variant->getUserVariantBase();
-    // Builtin variants don't have a UserVariantBase; fall back to the slow path
     if (!uvb) {
+        // Builtin variant — fall back to slow path for proper type coercion
+        // (builtins can have soft types like softstring that require CodeEvaluationHelper)
         return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
     }
 
@@ -1804,8 +1903,9 @@ extern "C" uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     assert(variant);
 
     const UserVariantBase* uvb = variant->getUserVariantBase();
-    // Builtin variants don't have a UserVariantBase; fall back to the slow path
     if (!uvb) {
+        // Builtin method — fall back to slow path for proper type coercion
+        // (builtins can have soft types like softstring that require CodeEvaluationHelper)
         return qore_rt_call_method_direct(method, args, nargs, xsink);
     }
 
@@ -2275,6 +2375,115 @@ static QoreListNode* buildArgListFromNanBoxed(uint64_t* args, int nargs, Excepti
 // Same logic as AbstractMethodCallNode::exec(): if the runtime class matches
 // the parse-time class, use the resolved method pointer directly; otherwise
 // fall back to name-based lookup.
+// Try fast dispatch for a user method with cached JIT function on a matching object
+// Returns true if the fast path was taken, false if caller should use the slow path
+static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        uint64_t* args, int nargs, ExceptionSink* xsink, uint64_t& result) {
+    if (!variant) {
+        return false;
+    }
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb) {
+        // Builtin method — fall back to slow path for proper soft type coercion
+        return false;
+    }
+    if (!uvb->hasCachedFunction()) {
+        return false;
+    }
+    if (o->getClass() != qc && o->getClass() != method->getClass()) {
+        return false;
+    }
+    if (!o->isValid()) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has "
+            "already been deleted", qc->getName(), method->getName());
+        result = toBits(QoreValue());
+        return true;
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+
+    // Set up program thread context
+    ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
+    if (*xsink) {
+        result = toBits(QoreValue());
+        return true;
+    }
+
+    // Push self object onto the method call stack
+    ObjectSubstitutionHelper osh(o, qore_class_private::get(*method->getClass()));
+
+    // Instantiate parameter locals directly from NaN-boxed args
+    for (unsigned i = 0; i < num_params; ++i) {
+        if (i < (unsigned)nargs) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            sig->lv[i]->instantiate(val);
+        } else {
+            sig->lv[i]->instantiate(QoreValue());
+        }
+    }
+
+    // Build argv for excess arguments (varargs)
+    ReferenceHolder<QoreListNode> argv(xsink);
+    if (nargs > (int)num_params) {
+        argv = new QoreListNode(autoTypeInfo);
+        for (int i = num_params; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            argv->push(val, xsink);
+        }
+    }
+
+    // Instantiate argv variable
+    if (sig->argvid) {
+        sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
+    }
+
+    QoreValue val{};
+    {
+        ArgvContextHelper argv_helper(argv.release(), xsink);
+
+        // Get body locals — skip instantiation if all are IR-only
+        const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+        bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
+        if (!skip_body_locals) {
+            int64 po = uvb->pgm->getParseOptions64();
+            for (LocalVar* lv : body_locals) {
+                lv->instantiate(po);
+            }
+        }
+
+        uint64_t result_bits = uvb->execCachedFunction(xsink);
+        QoreValue fn_result;
+        std::memcpy(&fn_result, &result_bits, sizeof(fn_result));
+        val = fn_result;
+
+        if (!skip_body_locals) {
+            for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+                body_locals[i]->uninstantiate(xsink);
+            }
+        }
+    }
+
+    if (sig->argvid) {
+        sig->argvid->uninstantiate(xsink);
+    }
+
+    // Uninstantiate parameter locals in reverse order
+    for (int i = (int)num_params - 1; i >= 0; --i) {
+        sig->lv[i]->uninstantiate(xsink);
+    }
+
+    result = toBits(val);
+    return true;
+}
+
 static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         QoreListNode* arg_list, ExceptionSink* xsink) {
@@ -2312,12 +2521,22 @@ extern "C" uint64_t qore_rt_dot_eval_method_direct(uint64_t base_bits, const Qor
                     qc->getName(), method->getName());
                 return toBits(QoreValue());
             }
+            // Try fast path for JIT-compiled user methods (avoids building QoreListNode)
+            uint64_t result;
+            if (try_dispatch_method_fast(o, method, qc, variant, args, nargs, xsink, result)) {
+                return result;
+            }
             ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
             return dispatch_method_on_object(o, method, qc, variant, *arg_list, xsink);
         }
 
         case NT_OBJECT: {
             QoreObject* o = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(base.getInternalNode()));
+            // Try fast path for JIT-compiled user methods (avoids building QoreListNode)
+            uint64_t result;
+            if (try_dispatch_method_fast(o, method, qc, variant, args, nargs, xsink, result)) {
+                return result;
+            }
             ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
             return dispatch_method_on_object(o, method, qc, variant, *arg_list, xsink);
         }
@@ -2402,8 +2621,8 @@ extern "C" uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTContext* ct
 
 // --- Direct static method call (pre-evaluated args) ---
 
-extern "C" uint64_t qore_rt_call_static_method_direct(const QoreMethod* method, uint64_t* args, int nargs,
-        ExceptionSink* xsink) {
+extern "C" uint64_t qore_rt_call_static_method_direct(const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink) {
     if (!method) {
         xsink->raiseException("JIT-ERROR", "null method pointer in static method direct call");
         return toBits(QoreValue());
@@ -2413,7 +2632,7 @@ extern "C" uint64_t qore_rt_call_static_method_direct(const QoreMethod* method, 
     ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
 
     RuntimeConfig& rc = rc_get_current_ref();
-    // Static methods have no self object
+    // Use eval() for all variants — handles soft type coercion via CodeEvaluationHelper
     return toBits(qore_method_private::eval(*method, xsink, rc, nullptr, *arg_list));
 }
 
@@ -2427,5 +2646,5 @@ extern "C" uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, i
         xsink->raiseException("AOT-ERROR", "invalid expression for static method direct AOT call");
         return toBits(QoreValue());
     }
-    return qore_rt_call_static_method_direct(call->getMethod(), args, nargs, xsink);
+    return qore_rt_call_static_method_direct(call->getMethod(), call->getVariant(), args, nargs, xsink);
 }

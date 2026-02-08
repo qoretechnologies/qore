@@ -488,6 +488,19 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
     llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
             root_func.name, *module);
 
+    // Create shared debug info for all functions in this batch module
+    llvm::DIBuilder di_builder(*module);
+    auto* di_file = di_builder.createFile("<jit-batch>", ".");
+    auto* di_cu = di_builder.createCompileUnit(
+        llvm::dwarf::DW_LANG_lo_user, di_file, "Qore JIT Batch", false, "", 0);
+    if (!module->getModuleFlag("Dwarf Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
+    }
+    if (!module->getModuleFlag("Debug Info Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                llvm::DEBUG_METADATA_VERSION);
+    }
+
     // Lower bodies for callees that aren't already compiled
     for (const auto& callee : callees) {
         if (!already_compiled.count(callee.ir_func->name)) {
@@ -498,6 +511,7 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
             }
             // Callees also get the batch map so they can call each other directly
             lowering.setBatchCallees(&batch_callee_map);
+            lowering.setSharedDebugInfo(&di_builder, di_cu);
             if (!lowering.lowerFunction(*callee.ir_func, *module, error)) {
                 // If a callee fails to lower, fall back to compiling root alone
                 printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
@@ -529,6 +543,7 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
                 fast_lowering.setDeoptCounter(callee.deopt_counter);
             }
             fast_lowering.setBatchCallees(&batch_callee_map);
+            fast_lowering.setSharedDebugInfo(&di_builder, di_cu);
             fast_lowering.setFastEntryMode(fast_name, &param_map);
             if (!fast_lowering.lowerFunction(*callee.ir_func, *module, error)) {
                 // Fast entry failure is non-fatal: fall back to standard entry
@@ -551,10 +566,14 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
             lowering.setDeoptCounter(root_deopt_counter);
         }
         lowering.setBatchCallees(&batch_callee_map);
+        lowering.setSharedDebugInfo(&di_builder, di_cu);
         if (!lowering.lowerFunction(root_func, *module, error)) {
             return false;
         }
     }
+
+    // Finalize shared debug info after all functions are lowered
+    di_builder.finalize();
 
     // Run LLVM optimization passes
     optimizeModule(*module, getJITOptLevel());

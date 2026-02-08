@@ -57,8 +57,23 @@ public:
     QoreIRInstruction* createMakeHash(const std::vector<QoreIRValue>& values,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createEmptyList(const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createSizedList(QoreIRValue capacity, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListAppend(QoreIRValue list, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListSize(QoreIRValue list, const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListGetInt(QoreIRValue list, QoreIRValue index,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListGetFloat(QoreIRValue list, QoreIRValue index,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListGetValue(QoreIRValue list, QoreIRValue index,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListSetInt(QoreIRValue list, QoreIRValue index, QoreIRValue value,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListSetFloat(QoreIRValue list, QoreIRValue index, QoreIRValue value,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListSetValue(QoreIRValue list, QoreIRValue index, QoreIRValue value,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createGetObjectClass(QoreIRValue obj, const QoreProgramLocation* loc = nullptr);
 
     QoreIRInstruction* createBinaryOp(QoreIROpcode op, QoreIRValue lhs, QoreIRValue rhs,
         const QoreProgramLocation* loc = nullptr);

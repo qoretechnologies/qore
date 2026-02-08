@@ -228,17 +228,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                         }
                         loc = call->loc;
                         invoked = true;
-                    } else if (auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
-                        QoreIRValue callee = lowerExpression(call->getExp(), error);
-                        if (!callee.isValid()) {
-                            return false;
-                        }
-                        operands.push_back(callee);
-                        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
-                            return false;
-                        }
-                        loc = call->loc;
-                        invoked = true;
+                    // CallReferenceCallNode is NOT handled here — it falls through to
+                    // lowerExpression() -> lowerCallReference() which uses CallClosureDirect
+                    // for fast closure/callref invocation in both normal and invoke paths.
                     } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
                         if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
                             return false;
@@ -5357,7 +5349,10 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
-    return lowerExprOpOrInvoke(QoreIROpcode::CallIndirect, expr, operands, call->loc, error);
+    // Use CallClosureDirect for fast closure/callref invocation
+    // This calls qore_rt_call_closure_fast() which directly calls callref->execValue()
+    // instead of going through AST node copy and dynamic_cast chain
+    return lowerExprOpOrInvoke(QoreIROpcode::CallClosureDirect, expr, operands, call->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
@@ -6098,6 +6093,22 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         return QoreIRValue();
     }
 
+    // Check if the input list has a known element type for direct-index optimization
+    const QoreTypeInfo* list_type = map->getRight().getTypeInfo();
+    const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+    bool use_direct_index = false;
+    bool elem_is_int = false;
+    bool elem_is_float = false;
+    if (elem_type) {
+        if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
+            use_direct_index = true;
+            elem_is_int = true;
+        } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+            use_direct_index = true;
+            elem_is_float = true;
+        }
+    }
+
     // Evaluate the input list and create the iterator BEFORE creating loop blocks,
     // so that any blocks created during expression evaluation (e.g., invoke.cont
     // blocks from guarded calls in try-catch) appear before the loop header in the
@@ -6108,6 +6119,108 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     if (!input_list.isValid()) {
         return QoreIRValue();
     }
+
+    if (use_direct_index) {
+        // Direct-index loop: avoid iterator overhead for typed lists
+        // Get list size
+        QoreIRValue list_size = builder.createListSize(input_list, map->loc)->result;
+
+        // Create blocks AFTER evaluating the input expression
+        QoreIRBasicBlock* empty_check_block = createBlock("map.empty.check");
+        QoreIRBasicBlock* preheader_block = createBlock("map.preheader");
+        QoreIRBasicBlock* header_block = createBlock("map.header");
+        QoreIRBasicBlock* body_block = createBlock("map.body");
+        QoreIRBasicBlock* exit_block = createBlock("map.exit");
+        if (!empty_check_block || !preheader_block || !header_block || !body_block || !exit_block) {
+            error = "IR builder failed to create blocks for map";
+            return QoreIRValue();
+        }
+        header_block->is_loop_header = true;
+
+        builder.createBranch(empty_check_block, map->loc);
+
+        // Empty check: if size == 0, return NOTHING
+        builder.setBlock(empty_check_block);
+        QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
+        QoreIRValue is_empty = builder.createBinaryOp(QoreIROpcode::EqInt, list_size, zero, map->loc)->result;
+        builder.createBranchIf(is_empty, exit_block, preheader_block, map->loc);
+
+        // Preheader: create pre-sized result list
+        builder.setBlock(preheader_block);
+        QoreIRValue result_list = builder.createSizedList(list_size, map->loc)->result;
+        builder.createBranch(header_block, map->loc);
+
+        // Header block: check if index < size
+        builder.setBlock(header_block);
+
+        auto* index_phi = builder.createPhi({}, map->loc);
+        QoreIRValue index_val = index_phi->result;
+
+        QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
+            map->loc)->result;
+        builder.createBranchIf(at_end, exit_block, body_block, map->loc);
+
+        // Body block: load element, evaluate expression, store result
+        builder.setBlock(body_block);
+
+        // Load element at current index
+        QoreIRValue element_val;
+        if (elem_is_int) {
+            element_val = builder.createListGetInt(input_list, index_val, map->loc)->result;
+        } else {
+            element_val = builder.createListGetFloat(input_list, index_val, map->loc)->result;
+        }
+
+        // Push implicit element ($#)
+        QoreIRValue old_element = builder.createPushImplicitElement(index_val, map->loc)->result;
+
+        // Push implicit argument ($1 = current element)
+        QoreIRValue old_argv = builder.createPushImplicitArg(element_val, map->loc)->result;
+
+        // Lower the map expression
+        QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
+
+        // Restore in reverse order
+        builder.createPopImplicitArg(old_argv, map->loc);
+        builder.createPopImplicitElement(old_element, map->loc);
+
+        if (!expr_result.isValid()) {
+            return QoreIRValue();
+        }
+
+        // Store result directly at index position in pre-sized list
+        builder.createListSetValue(result_list, index_val, expr_result, map->loc);
+
+        // Increment index
+        QoreIRValue one = builder.createConstInt(1, map->loc)->result;
+        QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, map->loc)->result;
+
+        // Record body exit block
+        QoreIRBasicBlock* body_exit_block = builder.getBlock();
+
+        // Branch back to header
+        builder.createBranch(header_block, map->loc);
+
+        // Complete PHI nodes
+        index_phi->incoming.push_back({zero, preheader_block});
+        index_phi->incoming.push_back({next_index, body_exit_block});
+        index_phi->operands.push_back(zero);
+        index_phi->operands.push_back(next_index);
+
+        // Exit block: PHI between empty list (empty) and result_list
+        builder.setBlock(exit_block);
+
+        QoreIRValue empty_list = builder.createEmptyList(map->loc)->result;
+
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({empty_list, empty_check_block});    // Empty list
+        result_incoming.push_back({result_list, header_block});        // Normal loop exit
+        auto* result_phi = builder.createPhi(result_incoming, map->loc);
+
+        return result_phi->result;
+    }
+
+    // Fallback: iterator-based loop for untyped lists
 
     // Create iterator from input list
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, map->loc);
@@ -6323,6 +6436,22 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         return QoreIRValue();
     }
 
+    // Check if the input list has a known element type for direct-index optimization
+    const QoreTypeInfo* list_type = foldl->getRight().getTypeInfo();
+    const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+    bool use_direct_index = false;
+    bool elem_is_int = false;
+    bool elem_is_float = false;
+    if (elem_type) {
+        if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
+            use_direct_index = true;
+            elem_is_int = true;
+        } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+            use_direct_index = true;
+            elem_is_float = true;
+        }
+    }
+
     // Evaluate the input list and create the iterator BEFORE creating loop blocks,
     // so that any blocks created during expression evaluation (e.g., invoke.cont
     // blocks from guarded calls in try-catch) appear before the loop header in the
@@ -6333,6 +6462,126 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     if (!input_list.isValid()) {
         return QoreIRValue();
     }
+
+    if (use_direct_index) {
+        // Direct-index loop: avoid iterator overhead for typed lists
+        // Get list size
+        QoreIRValue list_size = builder.createListSize(input_list, foldl->loc)->result;
+
+        // Create blocks AFTER evaluating the input expression
+        QoreIRBasicBlock* empty_check_block = createBlock("foldl.empty.check");
+        QoreIRBasicBlock* init_block = createBlock("foldl.init");
+        QoreIRBasicBlock* header_block = createBlock("foldl.header");
+        QoreIRBasicBlock* body_block = createBlock("foldl.body");
+        QoreIRBasicBlock* exit_block = createBlock("foldl.exit");
+        if (!empty_check_block || !init_block || !header_block || !body_block || !exit_block) {
+            error = "IR builder failed to create blocks for foldl";
+            return QoreIRValue();
+        }
+        header_block->is_loop_header = true;
+
+        builder.createBranch(empty_check_block, foldl->loc);
+
+        // Empty check: if size == 0, return NOTHING
+        builder.setBlock(empty_check_block);
+        QoreIRValue zero = builder.createConstInt(0, foldl->loc)->result;
+        QoreIRValue is_empty = builder.createBinaryOp(QoreIROpcode::EqInt, list_size, zero, foldl->loc)->result;
+        builder.createBranchIf(is_empty, exit_block, init_block, foldl->loc);
+
+        // Init block: load first element as accumulator, start index at 1
+        builder.setBlock(init_block);
+        QoreIRValue first_val;
+        if (elem_is_int) {
+            first_val = builder.createListGetInt(input_list, zero, foldl->loc)->result;
+        } else {
+            first_val = builder.createListGetFloat(input_list, zero, foldl->loc)->result;
+        }
+        QoreIRValue one = builder.createConstInt(1, foldl->loc)->result;
+        builder.createBranch(header_block, foldl->loc);
+
+        // Header block: check if index < size
+        builder.setBlock(header_block);
+
+        // PHI for index
+        auto* index_phi = builder.createPhi({}, foldl->loc);
+        QoreIRValue index_val = index_phi->result;
+
+        // PHI for accumulator
+        auto* accum_phi = builder.createPhi({}, foldl->loc);
+        QoreIRValue accum_val = accum_phi->result;
+
+        // Check: index < size
+        QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
+            foldl->loc)->result;
+        builder.createBranchIf(at_end, exit_block, body_block, foldl->loc);
+
+        // Body block: load element, evaluate fold expression
+        builder.setBlock(body_block);
+
+        // Load element at current index
+        QoreIRValue element_val;
+        if (elem_is_int) {
+            element_val = builder.createListGetInt(input_list, index_val, foldl->loc)->result;
+        } else {
+            element_val = builder.createListGetFloat(input_list, index_val, foldl->loc)->result;
+        }
+
+        // Create a 2-element list for argv: [accumulator, element]
+        // $1 = accumulator (index 0), $2 = element (index 1)
+        QoreIRValue argv_list = builder.createEmptyList(foldl->loc)->result;
+        builder.createListAppend(argv_list, accum_val, foldl->loc);
+        builder.createListAppend(argv_list, element_val, foldl->loc);
+
+        // Set the list directly as implicit args using SetImplicitArgv
+        QoreIRValue old_argv = builder.createSetImplicitArgv(argv_list, foldl->loc)->result;
+
+        // Lower the fold expression - now $1 and $2 are available
+        QoreIRValue fold_result = lowerExpression(foldl->getLeft(), error);
+
+        // Restore context
+        builder.createPopImplicitArg(old_argv, foldl->loc);
+
+        if (!fold_result.isValid()) {
+            return QoreIRValue();
+        }
+
+        // Increment index
+        QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, foldl->loc)->result;
+
+        // Record body exit block (expression lowering may create new blocks)
+        QoreIRBasicBlock* body_exit_block = builder.getBlock();
+
+        // Branch back to header
+        builder.createBranch(header_block, foldl->loc);
+
+        // Complete PHI nodes
+        index_phi->incoming.push_back({one, init_block});
+        index_phi->incoming.push_back({next_index, body_exit_block});
+        index_phi->operands.push_back(one);
+        index_phi->operands.push_back(next_index);
+
+        accum_phi->incoming.push_back({first_val, init_block});
+        accum_phi->incoming.push_back({fold_result, body_exit_block});
+        accum_phi->operands.push_back(first_val);
+        accum_phi->operands.push_back(fold_result);
+
+        // Exit block: PHI between identity value (empty) and accumulator
+        builder.setBlock(exit_block);
+
+        QoreIRValue identity_val = elem_is_int
+            ? builder.createConstInt(0, foldl->loc)->result
+            : builder.createConstFloat(0.0, foldl->loc)->result;
+
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({identity_val, empty_check_block});  // Empty list case
+        result_incoming.push_back({accum_val, header_block});          // Normal case after iterations
+
+        auto* result_phi = builder.createPhi(result_incoming, foldl->loc);
+
+        return result_phi->result;
+    }
+
+    // Fallback: iterator-based loop for untyped lists
 
     // Create iterator from input list
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, foldl->loc);

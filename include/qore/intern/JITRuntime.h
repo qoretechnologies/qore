@@ -365,6 +365,31 @@ int64_t qore_rt_list_get_int(uint64_t list_val, int64_t index);
 //! Get float element at index; returns 0.0 if not a list or index out of bounds.
 double qore_rt_list_get_float(uint64_t list_val, int64_t index);
 
+//! Get any element at index; returns NaN-boxed QoreValue (with +1 ref).
+//! Returns NOTHING if not a list or index out of bounds.
+uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink* xsink);
+
+//! Create a list with pre-allocated capacity; returns NaN-boxed QoreListNode*.
+uint64_t qore_rt_create_sized_list(int64_t capacity, ExceptionSink* xsink);
+
+//! Set int element in list at index (for pre-sized typed map output). No bounds check.
+void qore_rt_list_set_int(uint64_t list_bits, int64_t index, int64_t value);
+
+//! Set float element in list at index (for pre-sized typed map output). No bounds check.
+void qore_rt_list_set_float(uint64_t list_bits, int64_t index, double value);
+
+//! Set any element in list at index (for pre-sized typed map output). No bounds check.
+//! Takes ownership of the reference (no additional ref needed).
+void qore_rt_list_set_value(uint64_t list_bits, int64_t index, uint64_t value_bits);
+
+//! Get runtime class pointer from an object value; returns 0 if not an object.
+uint64_t qore_rt_get_object_class(uint64_t obj_bits);
+
+//! Fast closure/callref call — takes the pre-evaluated call reference value and
+//! pre-evaluated args (both NaN-boxed). Calls execValue() directly on the call reference.
+//! Bypasses AST node copy and dynamic_cast chain.
+uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+
 // --- AOT context-based helpers (Phase 7b) ---
 // These variants take QoreAOTContext* and a slot index instead of raw pointers.
 // At runtime, they resolve ctx->array[idx] and delegate to the existing helpers.
@@ -518,10 +543,10 @@ uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot, u
 uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     uint64_t* args, int nargs, ExceptionSink* xsink);
 
-//! Direct static method call with pre-evaluated arguments — builds QoreListNode
-//! and calls qore_method_private::eval() with nullptr for self.
-uint64_t qore_rt_call_static_method_direct(const QoreMethod* method, uint64_t* args, int nargs,
-    ExceptionSink* xsink);
+//! Direct static method call with pre-evaluated arguments — builds QoreListNode.
+//! Calls qore_method_private::eval() with nullptr for self.
+uint64_t qore_rt_call_static_method_direct(const QoreMethod* method,
+    const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
 
 //! AOT variant of qore_rt_call_static_method_direct: resolves method from context slot.
 uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args,

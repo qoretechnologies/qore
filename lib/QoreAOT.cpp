@@ -206,6 +206,7 @@ static void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMa
 //! Walk a namespace and compile all user functions to LLVM IR using AOT mode
 static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
+        llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledFunc>& compiled_funcs,
         int& total_funcs, int& compiled_count, int& failed_count) {
     // Walk functions
@@ -233,6 +234,17 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             int rc = tryLowerFunction(uvb, fname, pgm, ir_func, lower_error);
 
             if (rc == 0 && ir_func) {
+                // Skip if another variant with the same LLVM function name was already compiled.
+                // Overloaded variants share the same function name but only the first can be
+                // lowered into a single LLVM function; re-lowering would corrupt debug info.
+                llvm::Function* existing = module.getFunction(ir_func->name);
+                if (existing && !existing->empty()) {
+                    printd(2, "AOT: skipping duplicate variant '%s' (function '%s' already compiled)\n",
+                        variant_key.c_str(), ir_func->name.c_str());
+                    delete ir_func;
+                    continue;
+                }
+
                 // Build slot map for AOT pointer indirection
                 // (computeIROnlyLocals already called inside tryLowerFunction)
                 AOTSlotMap slots;
@@ -241,6 +253,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 // Lower to LLVM with AOT mode
                 QoreIRToLLVM lowerer(ctx);
                 lowerer.setAOTMode(&slots);
+                lowerer.setSharedDebugInfo(&di_builder, di_cu);
                 std::string llvm_error;
                 // Debug: dump IR before LLVM lowering if requested
                 if (getenv("QORE_AOT_DUMP_IR")) {
@@ -316,6 +329,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
 
                 if (rc == 0 && ir_func) {
+                    // Skip if another variant with the same LLVM function name was already compiled
+                    llvm::Function* existing = module.getFunction(ir_func->name);
+                    if (existing && !existing->empty()) {
+                        printd(2, "AOT: skipping duplicate variant '%s' (function '%s' already compiled)\n",
+                            variant_key.c_str(), ir_func->name.c_str());
+                        delete ir_func;
+                        continue;
+                    }
+
                     // Build slot map for AOT pointer indirection
                     // (computeIROnlyLocals already called inside tryLowerFunction)
                     AOTSlotMap slots;
@@ -324,6 +346,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     // Lower to LLVM with AOT mode
                     QoreIRToLLVM lowerer(ctx);
                     lowerer.setAOTMode(&slots);
+                    lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     std::string llvm_error;
                     if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
                         AOTCompiledFunc cf;
@@ -378,6 +401,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             compileNamespaceFunctions(qore_ns_private::get(*child_ns), pgm, ctx, module,
+                di_builder, di_cu,
                 compiled_funcs, total_funcs, compiled_count, failed_count);
         }
     }
@@ -874,9 +898,22 @@ bool QoreAOT::compile(QoreProgram* pgm,
     int compiled_count = 0;
     int failed_count = 0;
 
+    // Create shared debug info for all functions in this module
+    llvm::DIBuilder di_builder(*module);
+    auto* di_file = di_builder.createFile("<aot>", ".");
+    auto* di_cu = di_builder.createCompileUnit(
+        llvm::dwarf::DW_LANG_lo_user, di_file, "Qore AOT", false, "", 0);
+    if (!module->getModuleFlag("Dwarf Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
+    }
+    if (!module->getModuleFlag("Debug Info Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                llvm::DEBUG_METADATA_VERSION);
+    }
+
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
-    compileNamespaceFunctions(root_ns, pgm, ctx, *module,
+    compileNamespaceFunctions(root_ns, pgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, total_funcs, compiled_count, failed_count);
 
     // Step 2: Try to compile top-level code with AOT mode
@@ -922,6 +959,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
                 QoreIRToLLVM llvm_lowerer(ctx);
                 llvm_lowerer.setAOTMode(&slots);
+                llvm_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                 std::string llvm_error;
                 if (llvm_lowerer.lowerFunction(*ir_func, *module, llvm_error)) {
                     AOTCompiledFunc cf;
@@ -1009,6 +1047,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
         generateMainAndTable(ctx, *module, source_text, source_len, label,
             parse_options, compiled_funcs);
     }
+
+    // Finalize shared debug info after all functions are lowered
+    di_builder.finalize();
 
     // Verify the complete module
     std::string verify_error;
@@ -1956,6 +1997,19 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     int compiled_count = 0;
     int failed_count = 0;
 
+    // Create shared debug info for all functions in this module
+    llvm::DIBuilder di_builder(*module);
+    auto* di_file = di_builder.createFile("<aot>", ".");
+    auto* di_cu = di_builder.createCompileUnit(
+        llvm::dwarf::DW_LANG_lo_user, di_file, "Qore AOT", false, "", 0);
+    if (!module->getModuleFlag("Dwarf Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
+    }
+    if (!module->getModuleFlag("Debug Info Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                llvm::DEBUG_METADATA_VERSION);
+    }
+
     qore_program_private* pp = qore_program_private::get(**qpgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
@@ -1980,7 +2034,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         }
 
         found_any = true;
-        compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module,
+        compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module, di_builder, di_cu,
             compiled_funcs, total_funcs, compiled_count, failed_count);
     }
     if (!found_any) {
@@ -2039,6 +2093,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         generateModuleABI(ctx, *module, source_text, source_len, label,
             mod_po, mod_info, compiled_funcs);
     }
+
+    // Finalize shared debug info after all functions are lowered
+    di_builder.finalize();
 
     // Verify the module
     std::string verify_error;
@@ -2247,6 +2304,19 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         int compiled_count = 0;
         int failed_count = 0;
 
+        // Create shared debug info for all functions in this module
+        llvm::DIBuilder di_builder(*module);
+        auto* di_file = di_builder.createFile("<aot>", ".");
+        auto* di_cu = di_builder.createCompileUnit(
+            llvm::dwarf::DW_LANG_lo_user, di_file, "Qore AOT", false, "", 0);
+        if (!module->getModuleFlag("Dwarf Version")) {
+            module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
+        }
+        if (!module->getModuleFlag("Debug Info Version")) {
+            module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                    llvm::DEBUG_METADATA_VERSION);
+        }
+
         qore_program_private* pp = qore_program_private::get(**qpgm);
         qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
@@ -2268,7 +2338,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             }
 
             found_any = true;
-            compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module,
+            compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module, di_builder, di_cu,
                 compiled_funcs, total_funcs, compiled_count, failed_count);
         }
         if (!found_any) {
@@ -2329,6 +2399,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             generateModuleABI(ctx, *module, combined_source.c_str(), (int)combined_source.size(),
                 qm_path.c_str(), mod_po, mod_info, compiled_funcs);
         }
+
+        // Finalize shared debug info after all functions are lowered
+        di_builder.finalize();
 
         // Verify the module
         std::string verify_error;
@@ -2499,7 +2572,8 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::CastHash:
                 case QoreIROpcode::CastObject:
                 case QoreIROpcode::CastEnum:
-                case QoreIROpcode::InvokeSimError: {
+                case QoreIROpcode::InvokeSimError:
+                case QoreIROpcode::CallClosureDirect: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
@@ -2775,7 +2849,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::CastHash:
                 case QoreIROpcode::CastObject:
                 case QoreIROpcode::CastEnum:
-                case QoreIROpcode::InvokeSimError: {
+                case QoreIROpcode::InvokeSimError:
+                case QoreIROpcode::CallClosureDirect: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
@@ -3125,7 +3200,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::CastHash:
                 case QoreIROpcode::CastObject:
                 case QoreIROpcode::CastEnum:
-                case QoreIROpcode::InvokeSimError: {
+                case QoreIROpcode::InvokeSimError:
+                case QoreIROpcode::CallClosureDirect: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));

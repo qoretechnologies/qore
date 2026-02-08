@@ -258,6 +258,27 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // list_get_float: (i64, i64) -> double
     module.getOrInsertFunction("qore_rt_list_get_float",
             llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+    // list_get_value: (i64, i64, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_list_get_value",
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+    // create_sized_list: (i64, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_create_sized_list",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+    // list_set_int: (i64, i64, i64) -> void
+    module.getOrInsertFunction("qore_rt_list_set_int",
+            llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
+    // list_set_float: (i64, i64, double) -> void
+    module.getOrInsertFunction("qore_rt_list_set_float",
+            llvm::FunctionType::get(void_type, {i64_type, i64_type, double_type}, false));
+    // list_set_value: (i64, i64, i64) -> void
+    module.getOrInsertFunction("qore_rt_list_set_value",
+            llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
+    // get_object_class: (i64) -> i64
+    module.getOrInsertFunction("qore_rt_get_object_class",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+    // call_closure_fast: (i64, ptr, i32, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_call_closure_fast",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false));
 
     // AOT context-based helpers (Phase 7b)
     // load_local_aot: (ptr, i32, ptr) -> i64
@@ -1063,7 +1084,7 @@ llvm::DIFile* QoreIRToLLVM::getDIFile(const char* file_path) {
         if (it != di_file_cache.end()) {
             return it->second;
         }
-        llvm::DIFile* f = di_builder->createFile("<jit>", ".");
+        llvm::DIFile* f = active_di_builder->createFile("<jit>", ".");
         di_file_cache[nullptr] = f;
         return f;
     }
@@ -1084,7 +1105,7 @@ llvm::DIFile* QoreIRToLLVM::getDIFile(const char* file_path) {
         filename = path.substr(slash_pos + 1);
     }
 
-    llvm::DIFile* f = di_builder->createFile(filename, dir);
+    llvm::DIFile* f = active_di_builder->createFile(filename, dir);
     di_file_cache[file_path] = f;
     return f;
 }
@@ -1158,13 +1179,23 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // RAII cleanup: remove incomplete function from module on failure
     struct FunctionCleanup {
         llvm::Function* func;
+        llvm::DISubprogram** di_sp_ptr;
         bool committed = false;
         ~FunctionCleanup() {
             if (!committed && func) {
+                // Detach subprogram before erasing to avoid orphan metadata
+                // that confuses module-level debug info verification
+                if (func->getSubprogram()) {
+                    func->setSubprogram(nullptr);
+                }
                 func->eraseFromParent();
+                // Clear the subprogram pointer so the reset path doesn't reference it
+                if (di_sp_ptr) {
+                    *di_sp_ptr = nullptr;
+                }
             }
         }
-    } func_cleanup{llvm_func};
+    } func_cleanup{llvm_func, &di_sp};
 
     // Name parameters and find xsink_arg
     if (aot_mode) {
@@ -1225,8 +1256,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     // Phase 5c: Set up DWARF debug info
-    di_builder = std::make_unique<llvm::DIBuilder>(module);
     di_file_cache.clear();
+
+    if (shared_di_builder) {
+        // Multi-function module: use shared DIBuilder and compile unit
+        active_di_builder = shared_di_builder;
+        di_cu = shared_di_cu;
+    } else {
+        // Single-function module: create owned DIBuilder and compile unit
+        di_builder = std::make_unique<llvm::DIBuilder>(module);
+        active_di_builder = di_builder.get();
+    }
 
     // Find the first valid source file from the function's instructions
     const char* func_file = nullptr;
@@ -1248,22 +1288,24 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     llvm::DIFile* di_file = getDIFile(func_file);
 
-    // Create compile unit with a custom language ID for Qore
-    di_cu = di_builder->createCompileUnit(
-        llvm::dwarf::DW_LANG_lo_user,  // custom Qore language
-        di_file,
-        "Qore JIT",                    // producer
-        false,                          // isOptimized
-        "",                             // flags
-        0                               // runtime version
-    );
+    if (!shared_di_builder) {
+        // Single-function module: create compile unit
+        di_cu = active_di_builder->createCompileUnit(
+            llvm::dwarf::DW_LANG_lo_user,  // custom Qore language
+            di_file,
+            "Qore JIT",                    // producer
+            false,                          // isOptimized
+            "",                             // flags
+            0                               // runtime version
+        );
+    }
 
     // Create subroutine type (opaque — JIT ABI is uint64_t(ExceptionSink*))
-    llvm::DISubroutineType* di_func_type = di_builder->createSubroutineType(
-        di_builder->getOrCreateTypeArray({}));
+    llvm::DISubroutineType* di_func_type = active_di_builder->createSubroutineType(
+        active_di_builder->getOrCreateTypeArray({}));
 
     // Create subprogram for this function
-    di_sp = di_builder->createFunction(
+    di_sp = active_di_builder->createFunction(
         di_file,                        // scope
         func.name,                      // name
         func.name,                      // linkage name
@@ -1466,7 +1508,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     pending_phis.clear();
 
     // Phase 5c: Finalize debug info before verification
-    if (di_builder) {
+    if (shared_di_builder) {
+        // Shared mode: don't finalize or destroy — caller handles that
+    } else if (di_builder) {
+        // Owned mode: finalize now before verification
         di_builder->finalize();
     }
 
@@ -1479,15 +1524,32 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     // Verify the generated LLVM IR
-    std::string verify_error;
-    llvm::raw_string_ostream verify_os(verify_error);
-    if (llvm::verifyFunction(*llvm_func, &verify_os)) {
-        error = "LLVM verification failed: " + verify_error;
-        return false;
+    // In shared debug info mode, skip per-function verification because the DIBuilder
+    // hasn't been finalized yet (unfinalised metadata causes spurious "!dbg attachment
+    // points at wrong subprogram" errors).  Module-level verification runs after all
+    // functions are lowered and the shared DIBuilder is finalized by the caller.
+    // Verify the generated LLVM IR
+    {
+        std::string verify_error;
+        llvm::raw_string_ostream verify_os(verify_error);
+        if (llvm::verifyFunction(*llvm_func, &verify_os)) {
+            verify_os.flush();
+            if (shared_di_builder &&
+                    verify_error.find("!dbg attachment points at wrong subprogram") != std::string::npos) {
+                // In shared debug info mode, the DIBuilder hasn't been finalized yet.
+                // Ignore spurious dbg errors — module-level verification runs after finalization.
+            } else {
+                error = "LLVM verification failed: " + verify_error;
+                return false;
+            }
+        }
     }
 
     // Phase 5c: Reset debug info state for next function
-    di_builder.reset();
+    if (!shared_di_builder) {
+        di_builder.reset();
+    }
+    active_di_builder = nullptr;
     di_cu = nullptr;
     di_sp = nullptr;
     di_file_cache.clear();
@@ -2029,6 +2091,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto key = reinterpret_cast<const void*>(linst->local);
             bool is_native_int = native_int_locals.count(key) > 0;
             bool is_native_float = native_float_locals.count(key) > 0;
+
+            // Closure-bound locals must always be read from the runtime stack
+            // because closures can modify the value between IR instructions.
+            // The alloca cache becomes stale after any call that may invoke a closure.
+            if (linst->local && linst->local->closureUse()) {
+                llvm::Value* result;
+                if (aot_mode) {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    result = builder->CreateCall(load_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                } else {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                    result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+                }
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                return true;
+            }
+
             auto it = local_allocas.find(key);
             if (it == local_allocas.end()) {
                 // Create alloca in entry block for this local
@@ -3054,11 +3141,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* method_ptr = builder->CreateIntToPtr(
                             llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(static_call->getMethod())), ptr_type);
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(static_call->getVariant())), ptr_type);
                     auto helper = module.getOrInsertFunction(
                             "qore_rt_call_static_method_direct",
                             llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {method_ptr, args_array,
+                                {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {method_ptr, variant_ptr, args_array,
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallStaticDirect) {
                     // AOT CallStaticDirect: resolve method from expression slot
@@ -3070,6 +3160,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     result = builder->CreateCall(helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot), args_array,
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else if (inv->invoke_opcode == QoreIROpcode::CallClosureDirect) {
+                    // CallClosureDirect invoke: call closure/callref directly
+                    // operands[0] = closure value, operands[1..] = args
+                    auto* ref = getVal(inv->operands[0].id, error);
+                    if (!ref) { return false; }
+                    llvm::Value* ref_boxed = boxValue(ref, inv->operands[0].id);
+
+                    // Build args array from operands[1..]
+                    llvm::Value* closure_args_array;
+                    int closure_nargs;
+                    if (!buildArgsArray(inst, 1, llvm_func, closure_args_array, closure_nargs, error)) {
+                        return false;
+                    }
+
+                    auto helper = module.getOrInsertFunction("qore_rt_call_closure_fast",
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {ref_boxed, closure_args_array,
+                            llvm::ConstantInt::get(i32_type, closure_nargs), xsink_arg});
                 } else if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
                     auto helper = module.getOrInsertFunction("qore_rt_call_with_args_aot",
@@ -3833,10 +3942,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* method_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(direct_inst->method)), ptr_type);
+                llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
                 auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct",
                         llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
-                call_result = builder->CreateCall(helper, {method_ptr, args_array,
+                            {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {method_ptr, variant_ptr, args_array,
                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             }
 
@@ -4555,6 +4667,151 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_list_append",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
             builder->CreateCall(helper, {list_boxed, value_boxed, xsink_arg});
+            return true;
+        }
+        case QoreIROpcode::CreateSizedList: {
+            auto* cap = getVal(inst->operands[0].id, error);
+            if (!cap) { return false; }
+            llvm::Value* cap_int = ensureIntTypeInline(cap, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_create_sized_list",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {cap_int, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::ListSize: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed});
+            values[inst->result.id] = result;
+            // Result is native i64, not nanboxed
+            return true;
+        }
+        case QoreIROpcode::ListGetInt: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* idx = getVal(inst->operands[1].id, error);
+            if (!idx) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_get_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, idx_int});
+            values[inst->result.id] = result;
+            // Result is native i64, not nanboxed
+            return true;
+        }
+        case QoreIROpcode::ListGetFloat: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* idx = getVal(inst->operands[1].id, error);
+            if (!idx) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_get_float",
+                    llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, idx_int});
+            values[inst->result.id] = result;
+            // Result is native double, not nanboxed
+            return true;
+        }
+        case QoreIROpcode::ListGetValue: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* idx = getVal(inst->operands[1].id, error);
+            if (!idx) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_get_value",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, idx_int, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::ListSetInt: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* idx = getVal(inst->operands[1].id, error);
+            if (!idx) { return false; }
+            auto* val = getVal(inst->operands[2].id, error);
+            if (!val) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
+            llvm::Value* val_int = ensureIntTypeInline(val, inst->operands[2].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_set_int",
+                    llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
+            builder->CreateCall(helper, {list_boxed, idx_int, val_int});
+            return true;
+        }
+        case QoreIROpcode::ListSetFloat: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* idx = getVal(inst->operands[1].id, error);
+            if (!idx) { return false; }
+            auto* val = getVal(inst->operands[2].id, error);
+            if (!val) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
+            llvm::Value* val_float = ensureFloatType(val, inst->operands[2].id, module);
+            auto helper = module.getOrInsertFunction("qore_rt_list_set_float",
+                    llvm::FunctionType::get(void_type, {i64_type, i64_type, double_type}, false));
+            builder->CreateCall(helper, {list_boxed, idx_int, val_float});
+            return true;
+        }
+        case QoreIROpcode::ListSetValue: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* idx = getVal(inst->operands[1].id, error);
+            if (!idx) { return false; }
+            auto* val = getVal(inst->operands[2].id, error);
+            if (!val) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
+            llvm::Value* val_boxed = boxValue(val, inst->operands[2].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_set_value",
+                    llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
+            builder->CreateCall(helper, {list_boxed, idx_int, val_boxed});
+            return true;
+        }
+        case QoreIROpcode::GetObjectClass: {
+            auto* obj = getVal(inst->operands[0].id, error);
+            if (!obj) { return false; }
+            llvm::Value* obj_boxed = boxValue(obj, inst->operands[0].id);
+            auto helper = module.getOrInsertFunction("qore_rt_get_object_class",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {obj_boxed});
+            values[inst->result.id] = result;
+            // Result is raw class pointer as i64, not nanboxed
+            return true;
+        }
+        case QoreIROpcode::CallClosureDirect: {
+            // operands[0] = closure/callref value, operands[1..n] = args
+            auto* ref = getVal(inst->operands[0].id, error);
+            if (!ref) { return false; }
+            llvm::Value* ref_boxed = boxValue(ref, inst->operands[0].id);
+
+            // Build args array from operands[1..]
+            llvm::Value* args_array;
+            int nargs;
+            if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
+                return false;
+            }
+
+            auto helper = module.getOrInsertFunction("qore_rt_call_closure_fast",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false));
+            llvm::Value* nargs_val = llvm::ConstantInt::get(i32_type, nargs);
+            llvm::Value* result = builder->CreateCall(helper, {ref_boxed, args_array, nargs_val, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::StoreGlobal:

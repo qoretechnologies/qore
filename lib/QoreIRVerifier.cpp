@@ -213,6 +213,13 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::MakeList:
         case QoreIROpcode::MakeHash:
         case QoreIROpcode::CreateEmptyList:
+        case QoreIROpcode::CreateSizedList:
+        case QoreIROpcode::ListSize:
+        case QoreIROpcode::ListGetInt:
+        case QoreIROpcode::ListGetFloat:
+        case QoreIROpcode::ListGetValue:
+        case QoreIROpcode::GetObjectClass:
+        case QoreIROpcode::CallClosureDirect:
         case QoreIROpcode::CastAny:
         case QoreIROpcode::CastList:
         case QoreIROpcode::CastHash:
@@ -351,6 +358,9 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::PushAny:
             return 0;
         case QoreIROpcode::ListAppend:    // 2 operands: list and value to append
+        case QoreIROpcode::ListGetInt:    // 2 operands: list and index
+        case QoreIROpcode::ListGetFloat:  // 2 operands: list and index
+        case QoreIROpcode::ListGetValue:  // 2 operands: list and index
         case QoreIROpcode::AddInt:
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::AddAny:
@@ -543,6 +553,9 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::GuardFloat:
         case QoreIROpcode::GuardType:
         case QoreIROpcode::GuardNotNothing:
+        case QoreIROpcode::ListSize:          // 1 operand: list
+        case QoreIROpcode::CreateSizedList:   // 1 operand: capacity
+        case QoreIROpcode::GetObjectClass:    // 1 operand: object value
             return 1;
         case QoreIROpcode::LoadArg:
         case QoreIROpcode::LoadClosure:
@@ -587,6 +600,9 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::IteratorCreateReverse: // 1 operand: iterable
             return 1;
         case QoreIROpcode::HashSetKeyValue:    // 3 operands: hash, key, value
+        case QoreIROpcode::ListSetInt:         // 3 operands: list, index, value
+        case QoreIROpcode::ListSetFloat:       // 3 operands: list, index, value
+        case QoreIROpcode::ListSetValue:       // 3 operands: list, index, value
             return 3;
         case QoreIROpcode::PushImplicitArg:    // 1 operand: value to push as $1
         case QoreIROpcode::SetImplicitArgv:    // 1 operand: list to set as $argv
@@ -615,6 +631,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::CallStaticDirect:
         case QoreIROpcode::DotEvalMethodDirect:
         case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::CallClosureDirect:
         case QoreIROpcode::Invoke:
             return -1;
         case QoreIROpcode::Phi:
@@ -1331,11 +1348,12 @@ static void collectLocalsFromStatementBlock(const StatementBlock* block,
 //! Returns nullptr if the instruction type doesn't have an expr field.
 static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
     switch (inst->opcode) {
-        // QoreIRExprInstruction (Call, CallIndirect, CallMethod, CallStatic, and other expr-based ops)
+        // QoreIRExprInstruction (Call, CallIndirect, CallMethod, CallStatic, CallClosureDirect, and other expr-based ops)
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallClosureDirect:
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
 
         // CallDirect has its own instruction class with an expr field

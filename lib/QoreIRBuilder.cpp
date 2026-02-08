@@ -154,12 +154,96 @@ QoreIRInstruction* QoreIRBuilder::createEmptyList(const QoreProgramLocation* loc
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createSizedList(QoreIRValue capacity, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CreateSizedList);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(capacity);
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createListAppend(QoreIRValue list, QoreIRValue value,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListAppend);
     inst->loc = loc;
     inst->operands.push_back(list);
     inst->operands.push_back(value);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListSize(QoreIRValue list, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSize);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(list);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListGetInt(QoreIRValue list, QoreIRValue index,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListGetInt);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(list);
+    inst->operands.push_back(index);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListGetFloat(QoreIRValue list, QoreIRValue index,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListGetFloat);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(list);
+    inst->operands.push_back(index);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListGetValue(QoreIRValue list, QoreIRValue index,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListGetValue);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(list);
+    inst->operands.push_back(index);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListSetInt(QoreIRValue list, QoreIRValue index, QoreIRValue value,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSetInt);
+    inst->loc = loc;
+    inst->operands.push_back(list);
+    inst->operands.push_back(index);
+    inst->operands.push_back(value);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListSetFloat(QoreIRValue list, QoreIRValue index, QoreIRValue value,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSetFloat);
+    inst->loc = loc;
+    inst->operands.push_back(list);
+    inst->operands.push_back(index);
+    inst->operands.push_back(value);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListSetValue(QoreIRValue list, QoreIRValue index, QoreIRValue value,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSetValue);
+    inst->loc = loc;
+    inst->operands.push_back(list);
+    inst->operands.push_back(index);
+    inst->operands.push_back(value);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createGetObjectClass(QoreIRValue obj, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::GetObjectClass);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(obj);
     return inst;
 }
 
