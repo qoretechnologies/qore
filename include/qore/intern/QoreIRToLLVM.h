@@ -51,6 +51,7 @@ class QoreIRInstruction;
 class QoreIRPhiInstruction;
 class AbstractQoreFunctionVariant;
 struct AOTSlotMap;
+struct BatchCalleeInfo;
 
 class QoreIRToLLVM {
 public:
@@ -82,9 +83,20 @@ public:
     //! Set batch callees for multi-function module compilation.
     //! When set, CallDirect instructions targeting variants in this map will emit
     //! direct LLVM calls to the in-module function instead of going through
-    //! qore_rt_call_fast().  Maps variant pointer → LLVM function name.
-    void setBatchCallees(const std::unordered_map<const AbstractQoreFunctionVariant*, std::string>* callees) {
+    //! qore_rt_call_fast().  Maps variant pointer → BatchCalleeInfo.
+    void setBatchCallees(const std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>* callees) {
         batch_callees = callees;
+    }
+
+    //! Set fast entry mode for Approach B: parameters are passed as LLVM function
+    //! arguments instead of being loaded from the thread-local variable stack.
+    //! @param name the LLVM function name for the fast entry (e.g., "fname_fast")
+    //! @param args maps LocalVar* (as void*) → LLVM Value* for each parameter
+    void setFastEntryMode(const std::string& name,
+            const std::unordered_map<const void*, llvm::Value*>* args) {
+        fast_entry_name = name;
+        fast_entry_args = args;
     }
 
 private:
@@ -109,10 +121,17 @@ private:
     // Deopt counter: pointer to variant's deopt_count atomic for guard failure tracking
     void* deopt_counter_ptr = nullptr;
 
-    // Batch callees: variant → LLVM function name for multi-function module compilation.
+    // Batch callees: variant → BatchCalleeInfo for multi-function module compilation.
     // When a CallDirect targets a variant in this map, emit a direct LLVM call instead
-    // of going through qore_rt_call_fast().
-    const std::unordered_map<const AbstractQoreFunctionVariant*, std::string>* batch_callees = nullptr;
+    // of going through qore_rt_call_fast().  For Approach B eligible callees, emit
+    // direct LLVM calls to the fast entry function.
+    const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* batch_callees = nullptr;
+
+    // Approach B fast entry: LLVM function name override and parameter mapping.
+    // When fast_entry_name is non-empty, lowerFunction uses it instead of func.name
+    // and initializes params from fast_entry_args instead of qore_rt_load_local().
+    std::string fast_entry_name;
+    const std::unordered_map<const void*, llvm::Value*>* fast_entry_args = nullptr;
 
     // IR builder
     std::unique_ptr<llvm::IRBuilder<>> builder;
@@ -182,6 +201,12 @@ private:
     // Entry-block load values for pre-instantiated locals (tiered compilation).
     // qore_rt_load_local creates +1 ref at entry; these must be decref'd at function exit.
     std::vector<llvm::Value*> preinstantiated_entry_loads;
+
+    // Allocas for fast entry param locals (Approach B).
+    // At exit, the current alloca value is loaded and decref'd.  Combined with
+    // decref-before-store in StoreLocal for IR-only locals, this correctly handles
+    // both the initial param value and any reassignments.
+    std::vector<llvm::AllocaInst*> fast_entry_param_allocas;
 
     // Allocas for Invoke/ConstString results that need cleanup at function exit.
     // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they

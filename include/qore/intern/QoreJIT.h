@@ -55,6 +55,15 @@ class UserVariantBase;
 //! JIT-compiled function signature: takes ExceptionSink*, returns NaN-boxed QoreValue as uint64_t
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 
+//! Info about a batch callee for LLVM lowering (Approach B: direct LLVM arg passing).
+//! Used by QoreIRToLLVM to decide how to emit CallDirect instructions.
+struct BatchCalleeInfo {
+    std::string name;                    //!< Standard entry function name
+    bool approach_b_eligible = false;    //!< True if fast entry exists
+    std::string fast_name;               //!< Fast entry function name (if eligible)
+    unsigned num_params = 0;             //!< Number of parameters
+};
+
 class QoreJIT {
 public:
     enum class DeoptPolicy {
@@ -80,6 +89,8 @@ public:
         const QoreIRFunction* ir_func;
         void* deopt_counter;
         const AbstractQoreFunctionVariant* variant;
+        bool approach_b_eligible = false;    //!< True if callee can use direct LLVM arg passing
+        unsigned num_params = 0;             //!< Number of parameters (for fast entry signature)
     };
     bool compileFunctionBatch(const QoreIRFunction& root_func, std::string& error,
             void* root_deopt_counter,

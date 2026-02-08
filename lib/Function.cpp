@@ -2336,9 +2336,95 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         name, func->num_guards);
 }
 
+// Check if a callee is eligible for Approach B (direct LLVM arg passing).
+// Requirements: all params and body locals are IR-only, no varargs,
+// no reference-type params, no closure-captured params, same QoreProgram.
+static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction* callee_ir,
+        QoreProgram* root_pgm) {
+    bool debug = getenv("QORE_BATCH_DEBUG") != nullptr;
+
+    // Must be same program (no ProgramThreadCountContextHelper needed)
+    if (uvb->pgm != root_pgm) {
+        if (debug) {
+            fprintf(stderr, "  APPROACH_B: '%s' ineligible: different program\n",
+                callee_ir->name.c_str());
+        }
+        return false;
+    }
+
+    // All body locals must be IR-only (or no body locals at all).
+    // areAllBodyLocalsIROnly() returns false when all_body_locals is empty,
+    // but for Approach B, no body locals is trivially fine.
+    if (!callee_ir->all_body_locals.empty() && !callee_ir->areAllBodyLocalsIROnly()) {
+        if (debug) {
+            fprintf(stderr, "  APPROACH_B: '%s' ineligible: body locals not all IR-only"
+                " (body_locals=%d, ir_only=%d)\n",
+                callee_ir->name.c_str(), (int)callee_ir->all_body_locals.size(),
+                (int)callee_ir->ir_only_locals.size());
+        }
+        return false;
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+
+    // If the callee uses argvid in its IR (it's in ir_only_locals), it would get
+    // NOTHING in the fast entry which is wrong.  Check that argvid is not referenced.
+    if (sig->argvid) {
+        const void* argv_key = reinterpret_cast<const void*>(sig->argvid);
+        if (callee_ir->ir_only_locals.count(argv_key)) {
+            if (debug) {
+                fprintf(stderr, "  APPROACH_B: '%s' ineligible: argvid referenced in IR\n",
+                    callee_ir->name.c_str());
+            }
+            return false;
+        }
+    }
+
+    // Check all params
+    unsigned num_params = sig->numParams();
+    for (unsigned i = 0; i < num_params; ++i) {
+        const LocalVar* lv = sig->lv[i];
+        const void* key = reinterpret_cast<const void*>(lv);
+
+        // Param must be IR-only
+        if (!callee_ir->ir_only_locals.count(key)) {
+            if (debug) {
+                fprintf(stderr, "  APPROACH_B: '%s' ineligible: param '%s' not IR-only\n",
+                    callee_ir->name.c_str(), lv->getName());
+            }
+            return false;
+        }
+
+        // No closure-captured params
+        if (lv->closureUse()) {
+            if (debug) {
+                fprintf(stderr, "  APPROACH_B: '%s' ineligible: param '%s' closure-captured\n",
+                    callee_ir->name.c_str(), lv->getName());
+            }
+            return false;
+        }
+
+        // No reference-type params
+        if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
+            if (debug) {
+                fprintf(stderr, "  APPROACH_B: '%s' ineligible: param '%s' is reference type\n",
+                    callee_ir->name.c_str(), lv->getName());
+            }
+            return false;
+        }
+    }
+
+    if (debug) {
+        fprintf(stderr, "  APPROACH_B: '%s' eligible (%d params)\n",
+            callee_ir->name.c_str(), num_params);
+    }
+    return true;
+}
+
 // Collect direct callees from an IR function's CallDirect instructions.
 // Returns a vector of BatchCallee entries for callees that have cached IR.
-static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFunction& func) {
+static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFunction& func,
+        QoreProgram* root_pgm) {
     std::vector<QoreJIT::BatchCallee> callees;
     std::unordered_set<const AbstractQoreFunctionVariant*> seen;
 
@@ -2404,10 +2490,16 @@ static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFuncti
             // can emit direct LLVM calls to the callee's in-module function,
             // bypassing the qore_rt_call_fast() runtime dispatch overhead.
 
+            // Check Approach B eligibility (direct LLVM arg passing)
+            bool approach_b = isApproachBEligible(uvb, callee_ir, root_pgm);
+            unsigned num_params = uvb->getUserSignature()->numParams();
+
             callees.push_back(QoreJIT::BatchCallee{
                 callee_ir,
                 uvb->getDeoptCounterPtr(),
-                variant
+                variant,
+                approach_b,
+                num_params
             });
         }
     }
@@ -2422,7 +2514,7 @@ void UserVariantBase::attemptJITCompilation() const {
     void* deopt_ptr = getDeoptCounterPtr();
 
     // Collect direct callees that have cached IR for batch compilation
-    auto callees = collectDirectCallees(*cached_ir);
+    auto callees = collectDirectCallees(*cached_ir, pgm);
 
     bool success;
     if (!callees.empty()) {
@@ -2431,7 +2523,8 @@ void UserVariantBase::attemptJITCompilation() const {
             fprintf(stderr, "BATCH: '%s' compiling with %d callees:",
                 cached_ir->name.c_str(), (int)callees.size());
             for (const auto& c : callees) {
-                fprintf(stderr, " %s", c.ir_func->name.c_str());
+                fprintf(stderr, " %s%s", c.ir_func->name.c_str(),
+                    c.approach_b_eligible ? "(B)" : "");
             }
             fprintf(stderr, "\n");
             fflush(stderr);

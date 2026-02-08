@@ -43,6 +43,7 @@
 #include <cstring>
 
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/Function.h"
 #include "qore/intern/QoreIRInterpreter.h"
 
 // Tiered compilation threshold defaults
@@ -363,11 +364,19 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
     auto module = std::make_unique<llvm::Module>("qore_jit_batch_" + root_func.name, *ctx);
     module->setDataLayout(jit->getDataLayout());
 
-    // Build the batch callee map: variant → LLVM function name
+    // Build the batch callee map: variant → BatchCalleeInfo
     // This tells the lowerer which CallDirect targets are in-module
-    std::unordered_map<const AbstractQoreFunctionVariant*, std::string> batch_callee_map;
+    // and whether they support direct LLVM arg passing (Approach B)
+    std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo> batch_callee_map;
     for (const auto& callee : callees) {
-        batch_callee_map[callee.variant] = callee.ir_func->name;
+        BatchCalleeInfo info;
+        info.name = callee.ir_func->name;
+        info.approach_b_eligible = callee.approach_b_eligible;
+        info.num_params = callee.num_params;
+        if (info.approach_b_eligible) {
+            info.fast_name = callee.ir_func->name + "_fast";
+        }
+        batch_callee_map[callee.variant] = std::move(info);
     }
 
     // Determine which callees need their bodies compiled vs just forward-declared.
@@ -386,11 +395,28 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
     // Forward-declare all callee functions in the module so they can be referenced
     // before their bodies are lowered.  All JIT functions share the same signature:
     // uint64_t fname(ExceptionSink* xsink)
-    auto* fn_type = llvm::FunctionType::get(
-        llvm::Type::getInt64Ty(*ctx), {llvm::PointerType::get(*ctx, 0)}, false);
+    auto* i64_ty = llvm::Type::getInt64Ty(*ctx);
+    auto* ptr_ty = llvm::PointerType::get(*ctx, 0);
+    auto* fn_type = llvm::FunctionType::get(i64_ty, {ptr_ty}, false);
     for (const auto& callee : callees) {
         llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
                 callee.ir_func->name, *module);
+    }
+
+    // Forward-declare fast entry functions for Approach B eligible callees:
+    // uint64_t callee_fast(i64 arg0, i64 arg1, ..., ptr xsink)
+    for (const auto& callee : callees) {
+        if (!callee.approach_b_eligible) {
+            continue;
+        }
+        std::vector<llvm::Type*> fast_params(callee.num_params, i64_ty);
+        fast_params.push_back(ptr_ty);  // xsink
+        auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
+        std::string fast_name = callee.ir_func->name + "_fast";
+        llvm::Function* fast_fn = llvm::Function::Create(fast_fn_type,
+                llvm::Function::ExternalLinkage, fast_name, *module);
+        // Mark as InlineHint for LLVM's inliner
+        fast_fn->addFnAttr(llvm::Attribute::InlineHint);
     }
 
     // Also forward-declare the root function
@@ -399,21 +425,57 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
 
     // Lower bodies for callees that aren't already compiled
     for (const auto& callee : callees) {
-        if (already_compiled.count(callee.ir_func->name)) {
-            continue;  // Already compiled — forward declaration is enough
+        if (!already_compiled.count(callee.ir_func->name)) {
+            // Lower standard entry (only if not already compiled)
+            QoreIRToLLVM lowering(*ctx);
+            if (callee.deopt_counter) {
+                lowering.setDeoptCounter(callee.deopt_counter);
+            }
+            // Callees also get the batch map so they can call each other directly
+            lowering.setBatchCallees(&batch_callee_map);
+            if (!lowering.lowerFunction(*callee.ir_func, *module, error)) {
+                // If a callee fails to lower, fall back to compiling root alone
+                printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
+                    callee.ir_func->name.c_str(), error.c_str());
+                error.clear();
+                return compileFunction(root_func, error, root_deopt_counter);
+            }
         }
-        QoreIRToLLVM lowering(*ctx);
-        if (callee.deopt_counter) {
-            lowering.setDeoptCounter(callee.deopt_counter);
-        }
-        // Callees also get the batch map so they can call each other directly
-        lowering.setBatchCallees(&batch_callee_map);
-        if (!lowering.lowerFunction(*callee.ir_func, *module, error)) {
-            // If a callee fails to lower, fall back to compiling root alone
-            printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
-                callee.ir_func->name.c_str(), error.c_str());
-            error.clear();
-            return compileFunction(root_func, error, root_deopt_counter);
+
+        // Lower fast entry for Approach B eligible callees (even if standard entry
+        // is already compiled — the fast entry is new and needs its body)
+        if (callee.approach_b_eligible) {
+            std::string fast_name = callee.ir_func->name + "_fast";
+            llvm::Function* fast_fn = module->getFunction(fast_name);
+            assert(fast_fn && "fast entry function must be forward-declared");
+
+            // Build param mapping: LocalVar* → LLVM function arg value
+            const UserVariantBase* uvb = callee.variant->getUserVariantBase();
+            const UserSignature* sig = uvb->getUserSignature();
+            std::unordered_map<const void*, llvm::Value*> param_map;
+            for (unsigned i = 0; i < callee.num_params; ++i) {
+                const void* key = reinterpret_cast<const void*>(sig->lv[i]);
+                param_map[key] = fast_fn->getArg(i);
+                fast_fn->getArg(i)->setName(std::string("arg") + std::to_string(i));
+            }
+
+            QoreIRToLLVM fast_lowering(*ctx);
+            if (callee.deopt_counter) {
+                fast_lowering.setDeoptCounter(callee.deopt_counter);
+            }
+            fast_lowering.setBatchCallees(&batch_callee_map);
+            fast_lowering.setFastEntryMode(fast_name, &param_map);
+            if (!fast_lowering.lowerFunction(*callee.ir_func, *module, error)) {
+                // Fast entry failure is non-fatal: fall back to standard entry
+                printd(2, "QoreJIT::compileFunctionBatch() fast entry '%s' lowering failed: %s\n",
+                    fast_name.c_str(), error.c_str());
+                error.clear();
+                // Remove the fast entry from the batch map so callers don't try to use it
+                auto map_it = batch_callee_map.find(callee.variant);
+                if (map_it != batch_callee_map.end()) {
+                    map_it->second.approach_b_eligible = false;
+                }
+            }
         }
     }
 

@@ -608,6 +608,53 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
         bool is_native_float = native_float_locals.count(key) > 0;
         llvm::Type* alloca_type = is_native_float ? double_type : i64_type;
         llvm::AllocaInst* alloca = alloca_builder.CreateAlloca(alloca_type, nullptr, "local");
+
+        // Approach B fast entry: initialize param allocas from LLVM function arguments
+        if (fast_entry_args) {
+            auto fa_it = fast_entry_args->find(key);
+            if (fa_it != fast_entry_args->end()) {
+                llvm::Value* arg_val = fa_it->second;
+                // Increment refcount: the callee borrows from the caller but needs its own ref
+                // for cleanup safety (Return does incref, cleanup does decref).
+                auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
+                        llvm::FunctionType::get(void_type, {i64_type}, false));
+                alloca_builder.CreateCall(incref_fn, {arg_val});
+
+                if (is_native_int) {
+                    auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    llvm::Value* native_val = alloca_builder.CreateCall(to_int, {arg_val});
+                    alloca_builder.CreateStore(native_val, alloca);
+                    // Native int: incref'd value cleaned up via preinstantiated_entry_loads
+                    preinstantiated_entry_loads.push_back(arg_val);
+                } else if (is_native_float) {
+                    auto to_float = module.getOrInsertFunction("qore_rt_to_float",
+                            llvm::FunctionType::get(double_type, {i64_type}, false));
+                    llvm::Value* native_val = alloca_builder.CreateCall(to_float, {arg_val});
+                    alloca_builder.CreateStore(native_val, alloca);
+                    // Native float: incref'd value cleaned up via preinstantiated_entry_loads
+                    preinstantiated_entry_loads.push_back(arg_val);
+                } else {
+                    alloca_builder.CreateStore(arg_val, alloca);
+                    // NaN-boxed: track alloca for load+decref at exit.  Combined with
+                    // decref-before-store in StoreLocal, handles param reassignment.
+                    fast_entry_param_allocas.push_back(alloca);
+                }
+                local_allocas[key] = alloca;
+                continue;
+            }
+            // Not a fast entry param → initialize to default (body local)
+            if (is_native_int) {
+                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, 0), alloca);
+            } else if (is_native_float) {
+                alloca_builder.CreateStore(llvm::ConstantFP::get(double_type, 0.0), alloca);
+            } else {
+                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+            }
+            local_allocas[key] = alloca;
+            continue;
+        }
+
         if (pre_instantiated_locals && pre_instantiated_locals->count(key)
                 && !ir_only_body_locals.count(key)) {
             // Pre-instantiated and NOT IR-only: initialize from runtime stack
@@ -711,13 +758,22 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
 }
 
 void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
-    if (preinstantiated_entry_loads.empty()) {
-        return;
-    }
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+
+    // Standard pre-instantiated entry loads: decref the originally loaded value
     for (llvm::Value* entry_val : preinstantiated_entry_loads) {
         builder->CreateCall(helper, {entry_val, xsink_arg});
+    }
+
+    // Fast entry param allocas: load current value and decref.
+    // This correctly handles both:
+    //   - Non-reassigned params: decrefs the original incref'd value
+    //   - Reassigned params: decrefs the final value (intermediate values were
+    //     decreff'd by decref-before-store in StoreLocal for IR-only locals)
+    for (llvm::AllocaInst* alloca : fast_entry_param_allocas) {
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
+        builder->CreateCall(helper, {val, xsink_arg});
     }
 }
 
@@ -1050,19 +1106,27 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     initTypes();
     declareRuntimeHelpers(module);
 
-    // Function signature depends on AOT mode:
-    //   JIT mode: uint64_t fname(ExceptionSink* xsink)
-    //   AOT mode: uint64_t fname(QoreAOTContext* ctx, ExceptionSink* xsink)
-    llvm::FunctionType* fn_type;
-    if (aot_mode) {
-        fn_type = llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false);
-    } else {
-        fn_type = llvm::FunctionType::get(i64_type, {ptr_type}, false);
-    }
-    llvm::Function* llvm_func = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
-            func.name, module);
+    // Determine function name: use fast_entry_name if set (Approach B)
+    const std::string& fn_name = fast_entry_name.empty() ? func.name : fast_entry_name;
+    bool is_fast_entry = !fast_entry_name.empty();
+
+    // Check if the function already exists in the module (forward-declared)
+    llvm::Function* llvm_func = module.getFunction(fn_name);
+
     if (!llvm_func) {
-        error = "failed to create LLVM function '" + func.name + "'";
+        // Function not forward-declared — create it now
+        llvm::FunctionType* fn_type;
+        if (aot_mode) {
+            fn_type = llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false);
+        } else {
+            fn_type = llvm::FunctionType::get(i64_type, {ptr_type}, false);
+        }
+        llvm_func = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
+                fn_name, module);
+    }
+
+    if (!llvm_func) {
+        error = "failed to create LLVM function '" + fn_name + "'";
         return false;
     }
 
@@ -1077,11 +1141,16 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     } func_cleanup{llvm_func};
 
-    // Name parameters
+    // Name parameters and find xsink_arg
     if (aot_mode) {
         aot_ctx_arg = llvm_func->getArg(0);
         aot_ctx_arg->setName("ctx");
         xsink_arg = llvm_func->getArg(1);
+        xsink_arg->setName("xsink");
+    } else if (is_fast_entry) {
+        // Fast entry: params are i64 args, xsink is the last arg
+        unsigned num_args = llvm_func->arg_size();
+        xsink_arg = llvm_func->getArg(num_args - 1);
         xsink_arg->setName("xsink");
     } else {
         xsink_arg = llvm_func->getArg(0);
@@ -2163,6 +2232,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(decref_fn, {old_val, xsink_arg});
                 invoke_result_allocas.push_back(cleanup);
             }
+            // Fast entry mode: decref old alloca value before overwrite to prevent leaks
+            // when the local is reassigned (e.g., param overwrite, loop body re-execution).
+            // In fast entry mode, the alloca is the sole owner of the value (no runtime stack
+            // copy), so it's safe to decref on overwrite.  In standard entry mode, the runtime
+            // stack also holds a reference, so decref here would cause a double-free — the
+            // runtime stack cleanup handles it instead via qore_rt_assign_local().
+            if (fast_entry_args && ir_only_locals_set && ir_only_locals_set->count(key)) {
+                llvm::Value* old_val = builder->CreateLoad(i64_type, it->second);
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                builder->CreateCall(decref_fn, {old_val, xsink_arg});
+            }
             builder->CreateStore(boxed, it->second);
             if (inst->result.isValid()) {
                 values[inst->result.id] = boxed;
@@ -2838,11 +2919,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm_func->getEntryBlock().begin());
                 llvm::Value* args_array = ab.CreateAlloca(i64_type,
                         llvm::ConstantInt::get(i32_type, nargs));
+                std::vector<llvm::Value*> boxed_args;
                 for (int i = 0; i < nargs; ++i) {
                     auto* arg_val = getVal(inv->operands[arg_start + i].id, error);
                     if (!arg_val) { return false; }
                     llvm::Value* arg_boxed = boxValue(arg_val,
                             inv->operands[arg_start + i].id);
+                    boxed_args.push_back(arg_boxed);
                     llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
                             llvm::ConstantInt::get(i32_type, i));
                     builder->CreateStore(arg_boxed, gep);
@@ -2863,19 +2946,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // Check if callee is in the batch module
                     if (batch_callees && call->getVariant()
                             && batch_callees->count(call->getVariant())) {
-                        const auto& callee_name = batch_callees->at(call->getVariant());
-                        llvm::Function* callee_fn = module.getFunction(callee_name);
-                        assert(callee_fn && "batch callee must be forward-declared in module");
+                        const auto& callee_info = batch_callees->at(call->getVariant());
+                        if (callee_info.approach_b_eligible) {
+                            // Approach B: direct LLVM call to fast entry function
+                            llvm::Function* fast_fn = module.getFunction(
+                                    callee_info.fast_name);
+                            assert(fast_fn && "Approach B fast entry must be in module");
 
-                        llvm::Value* variant_ptr = builder->CreateIntToPtr(
-                                llvm::ConstantInt::get(i64_type,
-                                    reinterpret_cast<uint64_t>(call->getVariant())), ptr_type);
+                            std::vector<llvm::Value*> call_args;
+                            for (unsigned i = 0; i < callee_info.num_params; ++i) {
+                                if (i < boxed_args.size()) {
+                                    call_args.push_back(boxed_args[i]);
+                                } else {
+                                    call_args.push_back(llvm::ConstantInt::get(
+                                            i64_type, VAL_NOTHING));
+                                }
+                            }
+                            call_args.push_back(xsink_arg);
+                            result = builder->CreateCall(fast_fn, call_args);
+                        } else {
+                            llvm::Function* callee_fn = module.getFunction(callee_info.name);
+                            assert(callee_fn
+                                    && "batch callee must be forward-declared in module");
 
-                        auto helper = module.getOrInsertFunction("qore_rt_call_fast_with_target",
-                                llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                        result = builder->CreateCall(helper, {callee_fn, variant_ptr,
-                                args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                            llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                                    llvm::ConstantInt::get(i64_type,
+                                        reinterpret_cast<uint64_t>(call->getVariant())),
+                                    ptr_type);
+
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_call_fast_with_target",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                        false));
+                            result = builder->CreateCall(helper, {callee_fn, variant_ptr,
+                                    args_array, llvm::ConstantInt::get(i32_type, nargs),
+                                    xsink_arg});
+                        }
                     } else {
                         llvm::Value* func_ptr = builder->CreateIntToPtr(
                                 llvm::ConstantInt::get(i64_type,
@@ -3407,25 +3514,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::CallDirect: {
             const auto* direct_inst = static_cast<const QoreIRCallDirectInstruction*>(inst);
 
-            // Build args array from operands
+            // Check if this is an Approach B call (direct LLVM arg passing — no args_array needed)
             int nargs = static_cast<int>(inst->operands.size());
+            bool is_approach_b = !aot_mode && batch_callees && direct_inst->variant
+                    && batch_callees->count(direct_inst->variant)
+                    && batch_callees->at(direct_inst->variant).approach_b_eligible;
 
-            llvm::Value* args_array;
+            // Box args and optionally build args_array (skipped for Approach B)
+            llvm::Value* args_array = nullptr;
+            std::vector<llvm::Value*> boxed_args;
             if (nargs > 0) {
-                // Hoist alloca to entry block to avoid stack overflow in loops
-                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
-                        llvm_func->getEntryBlock().begin());
-                args_array = ab.CreateAlloca(i64_type,
-                        llvm::ConstantInt::get(i32_type, nargs));
                 for (int i = 0; i < nargs; ++i) {
                     auto* arg_val = getVal(inst->operands[i].id, error);
                     if (!arg_val) { return false; }
-                    llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[i].id);
-                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
-                            llvm::ConstantInt::get(i32_type, i));
-                    builder->CreateStore(arg_boxed, gep);
+                    boxed_args.push_back(boxValue(arg_val, inst->operands[i].id));
                 }
-            } else {
+                if (!is_approach_b) {
+                    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                            llvm_func->getEntryBlock().begin());
+                    args_array = ab.CreateAlloca(i64_type,
+                            llvm::ConstantInt::get(i32_type, nargs));
+                    for (int i = 0; i < nargs; ++i) {
+                        llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
+                                llvm::ConstantInt::get(i32_type, i));
+                        builder->CreateStore(boxed_args[i], gep);
+                    }
+                }
+            }
+            if (!args_array) {
                 args_array = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type, 0), ptr_type);
             }
@@ -3445,23 +3561,44 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             } else if (batch_callees && direct_inst->variant
                     && batch_callees->count(direct_inst->variant)) {
-                // Batch compilation: callee is in the same LLVM module.
-                // Call qore_rt_call_fast_with_target() with the in-module function pointer
-                // so the callee's native code is called directly without going through
-                // execCachedFunction() / hasCachedFunction() indirection.
-                const auto& callee_name = batch_callees->at(direct_inst->variant);
-                llvm::Function* callee_fn = module.getFunction(callee_name);
-                assert(callee_fn && "batch callee must be forward-declared in module");
+                const auto& callee_info = batch_callees->at(direct_inst->variant);
+                if (callee_info.approach_b_eligible) {
+                    // Approach B: direct LLVM call to fast entry function.
+                    // Args are passed directly as i64 values (NaN-boxed), bypassing
+                    // the runtime helper entirely so LLVM can optimize across the call.
+                    llvm::Function* fast_fn = module.getFunction(callee_info.fast_name);
+                    assert(fast_fn && "Approach B fast entry must be in module");
 
-                llvm::Value* variant_ptr = builder->CreateIntToPtr(
-                        llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+                    std::vector<llvm::Value*> call_args;
+                    for (unsigned i = 0; i < callee_info.num_params; ++i) {
+                        if (i < boxed_args.size()) {
+                            call_args.push_back(boxed_args[i]);
+                        } else {
+                            // Pad with VAL_NOTHING for missing args
+                            call_args.push_back(
+                                    llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                        }
+                    }
+                    call_args.push_back(xsink_arg);
+                    call_result = builder->CreateCall(fast_fn, call_args);
+                } else {
+                    // Batch compilation: callee is in the same LLVM module.
+                    // Call qore_rt_call_fast_with_target() with the in-module function pointer
+                    // so the callee's native code is called directly without going through
+                    // execCachedFunction() / hasCachedFunction() indirection.
+                    llvm::Function* callee_fn = module.getFunction(callee_info.name);
+                    assert(callee_fn && "batch callee must be forward-declared in module");
 
-                auto helper = module.getOrInsertFunction("qore_rt_call_fast_with_target",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                call_result = builder->CreateCall(helper, {callee_fn, variant_ptr,
-                        args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+
+                    auto helper = module.getOrInsertFunction("qore_rt_call_fast_with_target",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {callee_fn, variant_ptr,
+                            args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
             } else {
                 // JIT: call function directly with embedded pointers
                 llvm::Value* func_ptr = builder->CreateIntToPtr(

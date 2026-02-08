@@ -450,13 +450,19 @@ static void removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
     }
 }
 
-// Sets a value slot. In loops, previous values may be overwritten without
-// cleanup, which could cause memory leaks. A proper fix would track and
-// clean up old values, but that needs careful implementation to avoid
-// double-frees.
+// Sets a value slot, discarding any previous value to prevent leaks in loops.
+// Each slot holds a +1 reference (from new, refSelf, or call result), so
+// discarding on overwrite is safe — SSA guarantees the old value is from a
+// prior iteration and no longer needed by the current computation.
 static void setValueSlot(std::unordered_map<uint32_t, QoreValue>& values,
-        uint32_t id, QoreValue new_val, ExceptionSink* /* xsink */) {
-    values[id] = new_val;
+        uint32_t id, QoreValue new_val, ExceptionSink* xsink) {
+    auto it = values.find(id);
+    if (it != values.end()) {
+        it->second.discard(xsink);
+        it->second = new_val;
+    } else {
+        values[id] = new_val;
+    }
 }
 
 static void cleanupValues(std::unordered_map<uint32_t, QoreValue>& values, std::vector<uint32_t>& cleanup,
