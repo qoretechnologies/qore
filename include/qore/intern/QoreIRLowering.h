@@ -33,6 +33,7 @@
 #define _QORE_INTERN_QOREIRLOWERING_H
 
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <qore/intern/QoreIRBuilder.h>
@@ -229,6 +230,8 @@ private:
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
+    //! Values known to never be NOTHING (produced by typed opcodes)
+    std::unordered_set<uint32_t> never_nothing_values;
     uint32_t block_counter = 0;
     uint32_t scope_counter = 0;  //!< Counter for generating unique scope IDs within a function
     QoreIRBasicBlock* guard_exception_target_override = nullptr;

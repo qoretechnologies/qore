@@ -2564,6 +2564,21 @@ static bool opcodeNeverReturnsNothing(QoreIROpcode op) {
         case QoreIROpcode::XorInt:
         case QoreIROpcode::ShlInt:
         case QoreIROpcode::ShrInt:
+        // Typed compound assignment always produces int/float values
+        case QoreIROpcode::AddAssignInt:
+        case QoreIROpcode::AddAssignFloat:
+        case QoreIROpcode::SubAssignInt:
+        case QoreIROpcode::SubAssignFloat:
+        case QoreIROpcode::MulAssignInt:
+        case QoreIROpcode::MulAssignFloat:
+        case QoreIROpcode::DivAssignInt:
+        case QoreIROpcode::DivAssignFloat:
+        case QoreIROpcode::ModAssignInt:
+        case QoreIROpcode::AndAssignInt:
+        case QoreIROpcode::OrAssignInt:
+        case QoreIROpcode::XorAssignInt:
+        case QoreIROpcode::ShlAssignInt:
+        case QoreIROpcode::ShrAssignInt:
         // Typed unary always produces values
         case QoreIROpcode::UnaryMinusInt:
         case QoreIROpcode::UnaryMinusFloat:
@@ -2591,6 +2606,11 @@ static bool opcodeNeverReturnsNothing(QoreIROpcode op) {
         case QoreIROpcode::CmpInt:
         case QoreIROpcode::CmpFloat:
         case QoreIROpcode::CmpAny:
+        case QoreIROpcode::LtString:
+        case QoreIROpcode::LeString:
+        case QoreIROpcode::GtString:
+        case QoreIROpcode::GeString:
+        case QoreIROpcode::CmpString:
         // Boolean operations always produce bool
         case QoreIROpcode::ToBool:
         case QoreIROpcode::Not:
@@ -2615,6 +2635,9 @@ static bool opcodeNeverReturnsNothing(QoreIROpcode op) {
         case QoreIROpcode::TrimString:
         case QoreIROpcode::ChompString:
         case QoreIROpcode::TransliterateString:
+        // Constants always produce values
+        case QoreIROpcode::ConstInt:
+        case QoreIROpcode::ConstFloat:
             return true;
         default:
             return false;
@@ -2668,6 +2691,10 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
 void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue* expr,
         const QoreProgramLocation* loc, const QoreTypeInfo* target_type, bool allow_maybe_nothing) {
     if (!value.isValid() || !needsNotNothingGuard(expr, target_type, allow_maybe_nothing)) {
+        return;
+    }
+    // Skip guard if the value is known to never be NOTHING (tracks across block boundaries)
+    if (never_nothing_values.count(value.id)) {
         return;
     }
     // Check the last instruction in the current block
@@ -5152,7 +5179,9 @@ QoreIRValue QoreIRLowering::lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue
     } else {
         result = builder.createExprOp(op, expr, operands, loc)->result;
     }
-    if (!opcodeNeverReturnsNothing(op)) {
+    if (opcodeNeverReturnsNothing(op)) {
+        never_nothing_values.insert(result.id);
+    } else {
         maybeInsertNotNothingGuard(result, &expr, loc, nullptr);
     }
     return result;
@@ -5176,7 +5205,9 @@ QoreIRValue QoreIRLowering::lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreVal
     } else {
         result = builder.createBinaryOp(op, left, right, loc)->result;
     }
-    if (!opcodeNeverReturnsNothing(op)) {
+    if (opcodeNeverReturnsNothing(op)) {
+        never_nothing_values.insert(result.id);
+    } else {
         maybeInsertNotNothingGuard(result, &expr, loc, nullptr);
     }
     return result;
@@ -5200,7 +5231,9 @@ QoreIRValue QoreIRLowering::lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValu
     } else {
         result = builder.createUnaryOp(op, value, loc)->result;
     }
-    if (!opcodeNeverReturnsNothing(op)) {
+    if (opcodeNeverReturnsNothing(op)) {
+        never_nothing_values.insert(result.id);
+    } else {
         maybeInsertNotNothingGuard(result, &expr, loc, nullptr);
     }
     return result;
