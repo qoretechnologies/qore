@@ -1937,6 +1937,11 @@ extern "C" uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     // Push self object onto the method call stack
     ObjectSubstitutionHelper osh(self, qore_class_private::get(*method->getClass()));
 
+    // Instantiate self on the thread-local variable stack (compiled code loads self via LoadLocal)
+    if (sig->selfid) {
+        sig->selfid->instantiateSelf(self);
+    }
+
     // Instantiate parameter locals directly from NaN-boxed args
     for (unsigned i = 0; i < num_params; ++i) {
         if (i < (unsigned)nargs) {
@@ -2003,6 +2008,11 @@ extern "C" uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     // Uninstantiate parameter locals in reverse order
     for (int i = (int)num_params - 1; i >= 0; --i) {
         sig->lv[i]->uninstantiate(xsink);
+    }
+
+    // Uninstantiate self
+    if (sig->selfid) {
+        sig->selfid->uninstantiateSelf();
     }
 
     return toBits(val);
@@ -2414,6 +2424,11 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // Push self object onto the method call stack
     ObjectSubstitutionHelper osh(o, qore_class_private::get(*method->getClass()));
 
+    // Instantiate self on the thread-local variable stack (compiled code loads self via LoadLocal)
+    if (sig->selfid) {
+        sig->selfid->instantiateSelf(o);
+    }
+
     // Instantiate parameter locals directly from NaN-boxed args
     for (unsigned i = 0; i < num_params; ++i) {
         if (i < (unsigned)nargs) {
@@ -2478,6 +2493,11 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // Uninstantiate parameter locals in reverse order
     for (int i = (int)num_params - 1; i >= 0; --i) {
         sig->lv[i]->uninstantiate(xsink);
+    }
+
+    // Uninstantiate self
+    if (sig->selfid) {
+        sig->selfid->uninstantiateSelf();
     }
 
     result = toBits(val);
