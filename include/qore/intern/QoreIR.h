@@ -32,6 +32,7 @@
 #ifndef _QORE_INTERN_QOREIR_H
 #define _QORE_INTERN_QOREIR_H
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -1302,6 +1303,17 @@ public:
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
+
+    //! Returns true if all body locals are IR-only (managed by LLVM allocas,
+    //! never accessed via thread-local stack).  When true, callers can skip
+    //! instantiating/uninstantiating body locals on the thread-local stack.
+    bool areAllBodyLocalsIROnly() const {
+        return !all_body_locals.empty() && !ir_only_locals.empty()
+            && std::all_of(all_body_locals.begin(), all_body_locals.end(),
+                [this](const LocalVar* lv) {
+                    return ir_only_locals.count(reinterpret_cast<const void*>(lv));
+                });
+    }
 
     //! Type profiles for guards — indexed by guard_id
     //! Populated during IR interpretation; read during JIT compilation for specialization

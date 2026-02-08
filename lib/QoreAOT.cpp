@@ -2902,16 +2902,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     ctx->all_body_locals = func.all_body_locals;
 
     // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
-    if (!func.all_body_locals.empty() && !func.ir_only_locals.empty()) {
-        bool all_ir = true;
-        for (LocalVar* lv : func.all_body_locals) {
-            if (!func.ir_only_locals.count(reinterpret_cast<const void*>(lv))) {
-                all_ir = false;
-                break;
-            }
-        }
-        ctx->all_body_locals_ir_only = all_ir;
-    }
+    ctx->all_body_locals_ir_only = func.areAllBodyLocalsIROnly();
 
     // Walk again in the same deterministic order to fill arrays
     int local_idx = 0;

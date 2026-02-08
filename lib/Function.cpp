@@ -2326,16 +2326,7 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     // Classify locals as IR-only vs AST-visible for optimization
     func->computeIROnlyLocals();
     // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
-    if (!func->all_body_locals.empty() && !func->ir_only_locals.empty()) {
-        bool all_ir = true;
-        for (LocalVar* lv : func->all_body_locals) {
-            if (!func->ir_only_locals.count(reinterpret_cast<const void*>(lv))) {
-                all_ir = false;
-                break;
-            }
-        }
-        all_body_locals_ir_only = all_ir;
-    }
+    all_body_locals_ir_only = func->areAllBodyLocalsIROnly();
     // Initialize type profiling for guards
     func->initGuardProfiles();
     cached_ir = func;
