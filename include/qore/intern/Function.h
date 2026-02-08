@@ -673,6 +673,7 @@ protected:
             ExceptionSink* xsink) const;
     //! Attempt to lower to IR; called via std::call_once
     DLLLOCAL void attemptIRLowering(const char* name) const;
+
     //! Attempt JIT compilation; called via std::call_once
     DLLLOCAL void attemptJITCompilation() const;
     //! Attempt JIT recompilation with updated type profiles after deopt
@@ -749,6 +750,24 @@ public:
 
     //! Returns true if all body locals are IR-only (can skip instantiation in fast call path)
     DLLLOCAL bool areAllBodyLocalsIROnly() const;
+
+    //! Returns the cached IR function (if at IR tier or higher), or nullptr
+    DLLLOCAL const QoreIRFunction* getCachedIR() const {
+        return cached_ir;
+    }
+
+    //! Returns a pointer to the deopt counter for JIT guard failure tracking
+    DLLLOCAL void* getDeoptCounterPtr() const {
+        return const_cast<void*>(static_cast<const void*>(&deopt_count));
+    }
+
+    //! Force IR lowering (thread-safe via call_once).  Used by batch compilation
+    //! to ensure callees have IR before the root function is JIT-compiled.
+    DLLLOCAL void forceIRLowering(const char* name) const {
+        std::call_once(ir_lower_once, [this, name]() {
+            attemptIRLowering(name);
+        });
+    }
 
     //! Returns true if this variant is statically eligible for the fast call path
     //! (no default args, not synchronized). Runtime readiness (has cached function)

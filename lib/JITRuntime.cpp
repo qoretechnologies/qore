@@ -1667,6 +1667,99 @@ extern "C" uint64_t qore_rt_call_fast(const QoreFunction* func,
     return toBits(val);
 }
 
+// --- Fast function call with explicit target (multi-function module compilation) ---
+
+extern "C" uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn)(ExceptionSink*),
+        const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(variant);
+    assert(target_fn);
+
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb) {
+        // Should not happen for batch-compiled callees, but handle gracefully
+        xsink->raiseException("JIT-ERROR", "non-user variant in fast call with target");
+        return toBits(QoreValue());
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+
+    // Set up program thread context
+    ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+
+    // Instantiate parameter locals directly from NaN-boxed args
+    for (unsigned i = 0; i < num_params; ++i) {
+        if (i < (unsigned)nargs) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            sig->lv[i]->instantiate(val);
+        } else {
+            sig->lv[i]->instantiate(QoreValue());
+        }
+    }
+
+    // Build argv for excess arguments (varargs)
+    ReferenceHolder<QoreListNode> argv(xsink);
+    if (nargs > (int)num_params) {
+        argv = new QoreListNode(autoTypeInfo);
+        for (int i = num_params; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            argv->push(val, xsink);
+        }
+    }
+
+    // Instantiate argv variable (if the function has an argv parameter)
+    if (sig->argvid) {
+        sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
+    }
+
+    QoreValue val{};
+    {
+        ArgvContextHelper argv_helper(argv.release(), xsink);
+
+        // Get body locals — skip instantiation if all are IR-only
+        const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+        bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
+        if (!skip_body_locals) {
+            int64 po = uvb->pgm->getParseOptions64();
+            for (LocalVar* lv : body_locals) {
+                lv->instantiate(po);
+            }
+        }
+
+        // Call the provided target function directly instead of execCachedFunction
+        uint64_t result_bits = target_fn(xsink);
+        QoreValue result;
+        std::memcpy(&result, &result_bits, sizeof(result));
+        val = result;
+
+        if (!skip_body_locals) {
+            for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+                body_locals[i]->uninstantiate(xsink);
+            }
+        }
+    }
+
+    if (sig->argvid) {
+        sig->argvid->uninstantiate(xsink);
+    }
+
+    // Uninstantiate parameter locals in reverse order
+    for (int i = (int)num_params - 1; i >= 0; --i) {
+        sig->lv[i]->uninstantiate(xsink);
+    }
+
+    return toBits(val);
+}
+
 // --- Direct method call for devirtualized calls (final classes) ---
 
 extern "C" uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_t* args, int nargs,
@@ -1699,6 +1792,151 @@ extern "C" uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_
     // Call the method directly through qore_method_private
     QoreValue result = qore_method_private::eval(*method, xsink, rc, self, *arg_list);
 
+    return toBits(result);
+}
+
+// --- Fast method call (bypasses QoreListNode + dispatch chain for devirtualized calls) ---
+
+extern "C" uint64_t qore_rt_call_method_fast(const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(method);
+    assert(variant);
+
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    // Builtin variants don't have a UserVariantBase; fall back to the slow path
+    if (!uvb) {
+        return qore_rt_call_method_direct(method, args, nargs, xsink);
+    }
+
+    // If the callee is not JIT-compiled yet, fall back to the slow path.
+    // This can happen in tiered compilation when the callee hasn't been promoted yet.
+    if (!uvb->hasCachedFunction()) {
+        return qore_rt_call_method_direct(method, args, nargs, xsink);
+    }
+
+    // Get the current self object from the runtime stack
+    QoreObject* self = runtime_get_stack_object();
+    if (!self) {
+        xsink->raiseException("JIT-ERROR", "no self object in fast method call");
+        return toBits(QoreValue());
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+
+    // Set up program thread context
+    ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    // NOTE: ThreadFrameBoundaryHelper intentionally skipped here for performance.
+    // Frame boundaries are only used by debugger introspection (get_local_vars/set_local_var_value),
+    // not by runtime variable lookup (ThreadLocalVariableData::find() skips frame_boundary entries).
+
+    // Push self object onto the method call stack
+    ObjectSubstitutionHelper osh(self, qore_class_private::get(*method->getClass()));
+
+    // Instantiate parameter locals directly from NaN-boxed args
+    for (unsigned i = 0; i < num_params; ++i) {
+        if (i < (unsigned)nargs) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            sig->lv[i]->instantiate(val);
+        } else {
+            sig->lv[i]->instantiate(QoreValue());
+        }
+    }
+
+    // Build argv for excess arguments (varargs)
+    ReferenceHolder<QoreListNode> argv(xsink);
+    if (nargs > (int)num_params) {
+        argv = new QoreListNode(autoTypeInfo);
+        for (int i = num_params; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            argv->push(val, xsink);
+        }
+    }
+
+    // Instantiate argv variable (if the function has an argv parameter)
+    if (sig->argvid) {
+        sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
+    }
+
+    QoreValue val{};
+    {
+        ArgvContextHelper argv_helper(argv.release(), xsink);
+
+        // Get body locals — skip instantiation if all are IR-only (managed by LLVM allocas,
+        // never accessed via thread-local stack)
+        const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+        bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
+        if (!skip_body_locals) {
+            int64 po = uvb->pgm->getParseOptions64();
+            for (LocalVar* lv : body_locals) {
+                lv->instantiate(po);
+            }
+        }
+
+        uint64_t result_bits = uvb->execCachedFunction(xsink);
+        QoreValue result;
+        std::memcpy(&result, &result_bits, sizeof(result));
+        val = result;
+
+        if (!skip_body_locals) {
+            // Uninstantiate body locals in reverse order
+            for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+                body_locals[i]->uninstantiate(xsink);
+            }
+        }
+    }
+
+    if (sig->argvid) {
+        sig->argvid->uninstantiate(xsink);
+    }
+
+    // Uninstantiate parameter locals in reverse order
+    for (int i = (int)num_params - 1; i >= 0; --i) {
+        sig->lv[i]->uninstantiate(xsink);
+    }
+
+    return toBits(val);
+}
+
+// --- Fast call reference/closure call ---
+
+extern "C" uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    QoreValue ref_val = fromBits(ref_bits);
+    if (!ref_val.hasNode()) {
+        xsink->raiseException("JIT-ERROR", "call reference value is not a node");
+        return toBits(QoreValue());
+    }
+
+    // The call reference is a ResolvedCallReferenceNode (closure, function ref, method ref, etc.)
+    auto* ref_node = dynamic_cast<ResolvedCallReferenceNode*>(ref_val.getInternalNode());
+    if (!ref_node) {
+        xsink->raiseException("JIT-ERROR", "call reference is not a ResolvedCallReferenceNode");
+        return toBits(QoreValue());
+    }
+
+    // Build QoreListNode from the NaN-boxed args array
+    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+    for (int i = 0; i < nargs; ++i) {
+        QoreValue val = fromBits(args[i]);
+        if (val.hasNode()) {
+            val.refSelf();
+        }
+        arg_list->push(val, xsink);
+    }
+
+    // Call execValue() directly — avoids the dynamic_cast chain and AST node copy
+    // that qore_rt_call_with_args() performs
+    QoreValue result = ref_node->execValue(*arg_list, xsink);
     return toBits(result);
 }
 

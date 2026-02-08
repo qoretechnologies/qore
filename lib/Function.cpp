@@ -51,6 +51,7 @@
 #include "qore/intern/SwitchStatement.h"
 #include "qore/intern/DebugStatement.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/FunctionCallNode.h"
 
 #include <cassert>
 #include <cctype>
@@ -2335,18 +2336,121 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         name, func->num_guards);
 }
 
+// Collect direct callees from an IR function's CallDirect instructions.
+// Returns a vector of BatchCallee entries for callees that have cached IR.
+static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFunction& func) {
+    std::vector<QoreJIT::BatchCallee> callees;
+    std::unordered_set<const AbstractQoreFunctionVariant*> seen;
+
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            const AbstractQoreFunctionVariant* variant = nullptr;
+            const char* callee_name = nullptr;
+
+            if (inst->opcode == QoreIROpcode::CallDirect) {
+                const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
+                variant = direct->variant;
+                if (direct->func) {
+                    callee_name = direct->func->getName();
+                }
+            } else if (inst->opcode == QoreIROpcode::Invoke) {
+                const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                    const auto* call = dynamic_cast<const FunctionCallNode*>(
+                            inv->expr.getInternalNode());
+                    if (call) {
+                        variant = call->getVariant();
+                        if (call->getFunction()) {
+                            callee_name = call->getFunction()->getName();
+                        }
+                    }
+                }
+            }
+
+            if (!variant || seen.count(variant)) {
+                continue;
+            }
+            seen.insert(variant);
+
+            // Check if the variant is a user function eligible for fast calls
+            const UserVariantBase* uvb = variant->getUserVariantBase();
+            if (!uvb || !uvb->isStaticallyFastCallEligible()) {
+                continue;
+            }
+
+            // If the callee doesn't have cached IR yet, attempt IR lowering now.
+            // This enables batch compilation even when the callee hasn't been called yet
+            // (common in --exec-mode=jit where the caller is compiled on first call).
+            const QoreIRFunction* callee_ir = uvb->getCachedIR();
+            if (!callee_ir && callee_name) {
+                // Force IR lowering for the callee — must go through forceIRLowering
+                // which handles the call_once flag properly
+                uvb->forceIRLowering(callee_name);
+                callee_ir = uvb->getCachedIR();
+                if (!callee_ir) {
+                    continue;
+                }
+            }
+            if (!callee_ir) {
+                continue;
+            }
+
+            // Skip self-recursion (the root function is already being compiled)
+            if (callee_ir->name == func.name) {
+                continue;
+            }
+
+            // Include callees even if already JIT-compiled — the batch module
+            // can emit direct LLVM calls to the callee's in-module function,
+            // bypassing the qore_rt_call_fast() runtime dispatch overhead.
+
+            callees.push_back(QoreJIT::BatchCallee{
+                callee_ir,
+                uvb->getDeoptCounterPtr(),
+                variant
+            });
+        }
+    }
+
+    return callees;
+}
+
 void UserVariantBase::attemptJITCompilation() const {
     assert(cached_ir);
 
     std::string error;
-    // Pass deopt_count address so JIT-compiled code can track guard failures
-    if (!QoreJIT::instance().compileFunction(*cached_ir, error,
-            const_cast<void*>(static_cast<const void*>(&deopt_count)))) {
+    void* deopt_ptr = getDeoptCounterPtr();
+
+    // Collect direct callees that have cached IR for batch compilation
+    auto callees = collectDirectCallees(*cached_ir);
+
+    bool success;
+    if (!callees.empty()) {
+        // Batch compile: root function + callees in a shared LLVM module
+        if (getenv("QORE_BATCH_DEBUG")) {
+            fprintf(stderr, "BATCH: '%s' compiling with %d callees:",
+                cached_ir->name.c_str(), (int)callees.size());
+            for (const auto& c : callees) {
+                fprintf(stderr, " %s", c.ir_func->name.c_str());
+            }
+            fprintf(stderr, "\n");
+            fflush(stderr);
+        }
+        printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch compiling with %d callees\n",
+            cached_ir->name.c_str(), (int)callees.size());
+        success = QoreJIT::instance().compileFunctionBatch(*cached_ir, error, deopt_ptr, callees);
+    } else {
+        // No eligible callees: single-function compilation
+        success = QoreJIT::instance().compileFunction(*cached_ir, error, deopt_ptr);
+    }
+
+    if (!success) {
         jit_compile_failed = true;
         printd(2, "UserVariantBase::attemptJITCompilation() '%s' failed: %s\n",
             cached_ir->name.c_str(), error.c_str());
         return;
     }
+
     JitFunctionPtr fn = QoreJIT::instance().lookupFunction(cached_ir->name);
     if (!fn) {
         jit_compile_failed = true;
@@ -2356,6 +2460,21 @@ void UserVariantBase::attemptJITCompilation() const {
     cached_jit_fn = fn;
     current_tier.store(TIER_JIT, std::memory_order_release);
     printd(3, "UserVariantBase::attemptJITCompilation() '%s' promoted to JIT tier\n", cached_ir->name.c_str());
+
+    // Register compiled function pointers for callees that were batch-compiled.
+    // This promotes them to JIT tier immediately, bypassing their own tiered
+    // compilation warmup.
+    for (const auto& callee : callees) {
+        JitFunctionPtr callee_fn = QoreJIT::instance().lookupFunction(callee.ir_func->name);
+        if (callee_fn) {
+            const UserVariantBase* callee_uvb = callee.variant->getUserVariantBase();
+            if (callee_uvb) {
+                const_cast<UserVariantBase*>(callee_uvb)->registerPrecompiledFunction(callee_fn);
+                printd(3, "UserVariantBase::attemptJITCompilation() batch-promoted callee '%s' to JIT tier\n",
+                    callee.ir_func->name.c_str());
+            }
+        }
+    }
 }
 
 void UserVariantBase::attemptJITRecompilation() const {

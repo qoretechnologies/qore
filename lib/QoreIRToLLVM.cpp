@@ -2860,31 +2860,49 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const QoreFunction* func = call->getFunction();
                     assert(func);
 
-                    llvm::Value* func_ptr = builder->CreateIntToPtr(
-                            llvm::ConstantInt::get(i64_type,
-                                reinterpret_cast<uint64_t>(func)), ptr_type);
-                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
-                            llvm::ConstantInt::get(i64_type,
-                                reinterpret_cast<uint64_t>(call->getVariant())), ptr_type);
-                    llvm::Value* pgm_ptr = builder->CreateIntToPtr(
-                            llvm::ConstantInt::get(i64_type,
-                                reinterpret_cast<uint64_t>(call->getProgram())), ptr_type);
+                    // Check if callee is in the batch module
+                    if (batch_callees && call->getVariant()
+                            && batch_callees->count(call->getVariant())) {
+                        const auto& callee_name = batch_callees->at(call->getVariant());
+                        llvm::Function* callee_fn = module.getFunction(callee_name);
+                        assert(callee_fn && "batch callee must be forward-declared in module");
 
-                    // Use fast call if eligible
-                    const char* call_name = "qore_rt_call_function_direct";
-                    if (call->getVariant()) {
-                        const UserVariantBase* uvb = call->getVariant()->getUserVariantBase();
-                        if (uvb && uvb->isStaticallyFastCallEligible()) {
-                            call_name = "qore_rt_call_fast";
+                        llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(call->getVariant())), ptr_type);
+
+                        auto helper = module.getOrInsertFunction("qore_rt_call_fast_with_target",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {callee_fn, variant_ptr,
+                                args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    } else {
+                        llvm::Value* func_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(func)), ptr_type);
+                        llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(call->getVariant())), ptr_type);
+                        llvm::Value* pgm_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(call->getProgram())), ptr_type);
+
+                        // Use fast call if eligible
+                        const char* call_name = "qore_rt_call_function_direct";
+                        if (call->getVariant()) {
+                            const UserVariantBase* uvb = call->getVariant()->getUserVariantBase();
+                            if (uvb && uvb->isStaticallyFastCallEligible()) {
+                                call_name = "qore_rt_call_fast";
+                            }
                         }
-                    }
 
-                    auto helper = module.getOrInsertFunction(call_name,
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                                false));
-                    result = builder->CreateCall(helper, {func_ptr, variant_ptr, pgm_ptr,
-                            args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                        auto helper = module.getOrInsertFunction(call_name,
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                    false));
+                        result = builder->CreateCall(helper, {func_ptr, variant_ptr, pgm_ptr,
+                                args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallDirect) {
                     // AOT CallDirect: use fast direct call to resolve and dispatch
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
@@ -2893,6 +2911,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
                     result = builder->CreateCall(helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot), args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else if (inv->invoke_opcode == QoreIROpcode::CallIndirect && !aot_mode) {
+                    // CallIndirect invoke: use fast path — pass pre-evaluated call reference
+                    // directly to qore_rt_call_ref_fast() instead of AST expression
+                    auto* ref_val = getVal(inv->operands[0].id, error);
+                    if (!ref_val) { return false; }
+                    llvm::Value* ref_boxed = boxValue(ref_val, inv->operands[0].id);
+                    auto helper = module.getOrInsertFunction("qore_rt_call_ref_fast",
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {ref_boxed, args_array,
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 } else if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
@@ -3302,7 +3331,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* call_result;
 
             if (!inst->operands.empty()) {
-                // Use pre-evaluated operands with qore_rt_call_with_args
                 int arg_start = (inst->opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
                 int nargs = static_cast<int>(inst->operands.size()) - arg_start;
 
@@ -3321,7 +3349,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateStore(arg_boxed, gep);
                 }
 
-                if (aot_mode) {
+                if (inst->opcode == QoreIROpcode::CallIndirect && !aot_mode) {
+                    // CallIndirect: use fast path — pass pre-evaluated call reference
+                    // directly to qore_rt_call_ref_fast() instead of AST expression
+                    auto* ref_val = getVal(inst->operands[0].id, error);
+                    if (!ref_val) { return false; }
+                    llvm::Value* ref_boxed = boxValue(ref_val, inst->operands[0].id);
+                    auto helper = module.getOrInsertFunction("qore_rt_call_ref_fast",
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {ref_boxed, args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
                     auto helper = module.getOrInsertFunction("qore_rt_call_with_args_aot",
                             llvm::FunctionType::get(i64_type,
@@ -3404,6 +3443,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_result = builder->CreateCall(helper, {aot_ctx_arg,
                         llvm::ConstantInt::get(i32_type, slot), args_array,
                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            } else if (batch_callees && direct_inst->variant
+                    && batch_callees->count(direct_inst->variant)) {
+                // Batch compilation: callee is in the same LLVM module.
+                // Call qore_rt_call_fast_with_target() with the in-module function pointer
+                // so the callee's native code is called directly without going through
+                // execCachedFunction() / hasCachedFunction() indirection.
+                const auto& callee_name = batch_callees->at(direct_inst->variant);
+                llvm::Function* callee_fn = module.getFunction(callee_name);
+                assert(callee_fn && "batch callee must be forward-declared in module");
+
+                llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+
+                auto helper = module.getOrInsertFunction("qore_rt_call_fast_with_target",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {callee_fn, variant_ptr,
+                        args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             } else {
                 // JIT: call function directly with embedded pointers
                 llvm::Value* func_ptr = builder->CreateIntToPtr(
@@ -3478,11 +3536,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(direct_inst->method)),
                     ptr_type);
 
-            auto helper = module.getOrInsertFunction("qore_rt_call_method_direct",
-                    llvm::FunctionType::get(i64_type,
-                        {ptr_type, ptr_type, i32_type, ptr_type}, false));
-            llvm::Value* call_result = builder->CreateCall(helper, {method_ptr, args_array,
-                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            // Use fast call path if variant is eligible (no default args, not synchronized)
+            llvm::Value* call_result;
+            if (direct_inst->variant) {
+                const UserVariantBase* uvb = direct_inst->variant->getUserVariantBase();
+                if (uvb && uvb->isStaticallyFastCallEligible()) {
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_call_method_fast",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {method_ptr, variant_ptr, args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else {
+                    auto helper = module.getOrInsertFunction("qore_rt_call_method_direct",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {method_ptr, args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_call_method_direct",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {method_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            }
 
             // Calls can modify local variables through side effects
             reloadAllLocalsFromRuntime(module, llvm_func);
@@ -3526,11 +3606,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(invoke_inst->method)),
                     ptr_type);
 
-            auto helper = module.getOrInsertFunction("qore_rt_call_method_direct",
-                    llvm::FunctionType::get(i64_type,
-                        {ptr_type, ptr_type, i32_type, ptr_type}, false));
-            llvm::Value* call_result = builder->CreateCall(helper, {method_ptr, args_array,
-                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            // Use fast call path if variant is eligible (no default args, not synchronized)
+            llvm::Value* call_result;
+            if (invoke_inst->variant) {
+                const UserVariantBase* uvb = invoke_inst->variant->getUserVariantBase();
+                if (uvb && uvb->isStaticallyFastCallEligible()) {
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(invoke_inst->variant)), ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_call_method_fast",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {method_ptr, variant_ptr, args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else {
+                    auto helper = module.getOrInsertFunction("qore_rt_call_method_direct",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {method_ptr, args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_call_method_direct",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {method_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+            }
 
             // Calls can modify local variables through side effects
             reloadAllLocalsFromRuntime(module, llvm_func);

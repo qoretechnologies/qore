@@ -223,6 +223,9 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_lvalue_binary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_binary_aot));
     addSymbol("qore_rt_push_on_block_exit_aot", reinterpret_cast<void*>(&qore_rt_push_on_block_exit_aot));
 
+    // Fast call with explicit target (multi-function module compilation)
+    addSymbol("qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target));
+
     // Call with pre-evaluated args helpers
     addSymbol("qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args));
     addSymbol("qore_rt_call_with_args_aot", reinterpret_cast<void*>(&qore_rt_call_with_args_aot));
@@ -319,6 +322,158 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
         compiled_functions[func.name] = fn_ptr;
+    }
+
+    return true;
+}
+
+bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string& error,
+        void* root_deopt_counter,
+        const std::vector<BatchCallee>& callees) {
+    // Thread-safe initialization using std::call_once
+    std::call_once(init_flag, [this]() {
+        init_success = initialize(init_error);
+    });
+    if (!init_success) {
+        error = init_error;
+        return false;
+    }
+
+    // Check if already compiled (fast path without compile lock)
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        if (compiled_functions.find(root_func.name) != compiled_functions.end()) {
+            return true;
+        }
+    }
+
+    // Serialize the entire compilation pipeline
+    std::lock_guard<std::mutex> compile_lock(compile_mutex);
+
+    // Re-check cache under compile lock
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        if (compiled_functions.find(root_func.name) != compiled_functions.end()) {
+            return true;
+        }
+    }
+
+    // Create a shared LLVM context and module for the batch
+    auto ctx = std::make_unique<llvm::LLVMContext>();
+    auto module = std::make_unique<llvm::Module>("qore_jit_batch_" + root_func.name, *ctx);
+    module->setDataLayout(jit->getDataLayout());
+
+    // Build the batch callee map: variant → LLVM function name
+    // This tells the lowerer which CallDirect targets are in-module
+    std::unordered_map<const AbstractQoreFunctionVariant*, std::string> batch_callee_map;
+    for (const auto& callee : callees) {
+        batch_callee_map[callee.variant] = callee.ir_func->name;
+    }
+
+    // Determine which callees need their bodies compiled vs just forward-declared.
+    // Callees already JIT-compiled just need a declaration (LLVM will resolve the
+    // existing symbol); callees not yet compiled need full lowering.
+    std::unordered_set<std::string> already_compiled;
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        for (const auto& callee : callees) {
+            if (compiled_functions.find(callee.ir_func->name) != compiled_functions.end()) {
+                already_compiled.insert(callee.ir_func->name);
+            }
+        }
+    }
+
+    // Forward-declare all callee functions in the module so they can be referenced
+    // before their bodies are lowered.  All JIT functions share the same signature:
+    // uint64_t fname(ExceptionSink* xsink)
+    auto* fn_type = llvm::FunctionType::get(
+        llvm::Type::getInt64Ty(*ctx), {llvm::PointerType::get(*ctx, 0)}, false);
+    for (const auto& callee : callees) {
+        llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
+                callee.ir_func->name, *module);
+    }
+
+    // Also forward-declare the root function
+    llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
+            root_func.name, *module);
+
+    // Lower bodies for callees that aren't already compiled
+    for (const auto& callee : callees) {
+        if (already_compiled.count(callee.ir_func->name)) {
+            continue;  // Already compiled — forward declaration is enough
+        }
+        QoreIRToLLVM lowering(*ctx);
+        if (callee.deopt_counter) {
+            lowering.setDeoptCounter(callee.deopt_counter);
+        }
+        // Callees also get the batch map so they can call each other directly
+        lowering.setBatchCallees(&batch_callee_map);
+        if (!lowering.lowerFunction(*callee.ir_func, *module, error)) {
+            // If a callee fails to lower, fall back to compiling root alone
+            printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
+                callee.ir_func->name.c_str(), error.c_str());
+            error.clear();
+            return compileFunction(root_func, error, root_deopt_counter);
+        }
+    }
+
+    // Lower the root function last (can call all callees)
+    {
+        QoreIRToLLVM lowering(*ctx);
+        if (root_deopt_counter) {
+            lowering.setDeoptCounter(root_deopt_counter);
+        }
+        lowering.setBatchCallees(&batch_callee_map);
+        if (!lowering.lowerFunction(root_func, *module, error)) {
+            return false;
+        }
+    }
+
+    // Dump LLVM IR if requested
+    if (getenv("QORE_DUMP_LLVM_IR")) {
+        llvm::raw_fd_ostream llvm_dump(2, false);
+        llvm_dump << "=== LLVM IR (batch) for " << root_func.name << " ===\n";
+        module->print(llvm_dump, nullptr);
+        llvm_dump << "=== END LLVM IR ===\n";
+    }
+
+    // Add the module to the JIT
+    auto tsm = llvm::orc::ThreadSafeModule(std::move(module), std::move(ctx));
+    auto err = jit->addIRModule(std::move(tsm));
+    if (err) {
+        error = "failed to add batch module to JIT: " + llvm::toString(std::move(err));
+        return false;
+    }
+
+    // Look up the root function (triggers materialization/code generation)
+    auto sym = jit->lookup(root_func.name);
+    if (!sym) {
+        error = "failed to look up compiled function '" + root_func.name + "': "
+            + llvm::toString(sym.takeError());
+        return false;
+    }
+    auto root_fn_ptr = sym->toPtr<uint64_t(ExceptionSink*)>();
+
+    // Cache the root function
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        compiled_functions[root_func.name] = root_fn_ptr;
+    }
+
+    // Look up and cache all callee functions
+    for (const auto& callee : callees) {
+        auto callee_sym = jit->lookup(callee.ir_func->name);
+        if (!callee_sym) {
+            // Non-fatal: callees that fail lookup will fall back to runtime dispatch
+            printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lookup failed\n",
+                callee.ir_func->name.c_str());
+            continue;
+        }
+        auto callee_fn_ptr = callee_sym->toPtr<uint64_t(ExceptionSink*)>();
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex);
+            compiled_functions[callee.ir_func->name] = callee_fn_ptr;
+        }
     }
 
     return true;

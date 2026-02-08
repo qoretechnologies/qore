@@ -139,9 +139,12 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("direct function call", \testCallDirect());
         addTestCase("function call in loop (stack safety)", \testCallInLoopStackSafety());
         addTestCase("fast function call", \testFastCall());
+        addTestCase("fast method call", \testFastMethodCall());
+        addTestCase("fast closure/callref call", \testFastClosureCall());
         addTestCase("IR-only body locals skip instantiation", \testIROnlyBodyLocals());
         addTestCase("assert with IR-only locals", \testAssertIROnly());
         addTestCase("on_block_exit with IR-only locals", \testOnBlockExitWithIROnlyLocals());
+        addTestCase("multi-function batch compilation", \testBatchCompilation());
         set_return_value(main());
     }
 
@@ -3995,6 +3998,222 @@ printf(\"%s\\n\", result);
         }
     }
 
+    testFastMethodCall() {
+        # Test fast method call: basic final class method call in a loop
+        string code = "%new-style
+%strict-args
+%require-types
+
+final class FmCalc {
+    public {
+        int m_base;
+    }
+    constructor(int base) { m_base = base; }
+    int add(int x) { return m_base + x; }
+}
+FmCalc c(100);
+int sum = 0;
+for (int i = 0; i < 1000; ++i) {
+    sum += c.add(i);
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("599500", result,
+                    sprintf("fast method call basic %s", mode));
+        }
+
+        # Test fast method call with multiple methods
+        code = "%new-style
+%strict-args
+%require-types
+
+final class FmMath {
+    int multiply(int a, int b) { return a * b; }
+    int add(int a, int b) { return a + b; }
+    int compute(int x) { return self.add(self.multiply(x, x), x); }
+}
+FmMath m();
+string result = \"\";
+for (int i = 1; i <= 5; ++i) {
+    if (result.length() > 0) { result += \",\"; }
+    result += string(m.compute(i));
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2,6,12,20,30", result,
+                    sprintf("fast method call multiple %s", mode));
+        }
+
+        # Test fast method call in try/catch (InvokeMethodDirect path)
+        code = "%new-style
+%strict-args
+%require-types
+
+final class FmValidator {
+    int validate(int x) {
+        if (x < 0) { throw \"INVALID\", \"negative\"; }
+        return x * 2;
+    }
+}
+FmValidator v();
+string result = \"\";
+for (int i = -2; i <= 3; ++i) {
+    try {
+        result += string(v.validate(i));
+    } catch (hash<ExceptionInfo> ex) {
+        result += \"E\";
+    }
+    result += \",\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("E,E,0,2,4,6,", result,
+                    sprintf("fast method call try/catch %s", mode));
+        }
+
+        # Test fast method call with string args (node types need refSelf)
+        code = "%new-style
+%strict-args
+%require-types
+
+final class FmGreeter {
+    string greet(string name) { return \"Hello, \" + name + \"!\"; }
+}
+FmGreeter g();
+string result = \"\";
+for (int i = 0; i < 50; ++i) {
+    result = g.greet(\"world\");
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("Hello, world!", result,
+                    sprintf("fast method call string args %s", mode));
+        }
+
+        # Test fast method call with recursive self-calls
+        code = "%new-style
+%strict-args
+%require-types
+
+final class FmFib {
+    int fib(int n) {
+        if (n <= 1) { return n; }
+        return self.fib(n - 1) + self.fib(n - 2);
+    }
+}
+FmFib f();
+printf(\"%d\\n\", f.fib(15));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("610", result,
+                    sprintf("fast method call recursive %s", mode));
+        }
+    }
+
+    testFastClosureCall() {
+        # Test fast closure call: basic closure in a loop
+        string code = "%new-style
+%strict-args
+%require-types
+
+code adder = int sub(int a, int b) { return a + b; };
+int sum = 0;
+for (int i = 0; i < 1000; ++i) {
+    sum = adder(sum, i);
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("499500", result,
+                    sprintf("fast closure call basic %s", mode));
+        }
+
+        # Test closure capturing outer variable
+        code = "%new-style
+%strict-args
+%require-types
+
+int base = 100;
+code add_base = int sub(int x) { return x + base; };
+int result = add_base(42);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("142", result,
+                    sprintf("fast closure capture %s", mode));
+        }
+
+        # Test function call reference
+        code = "%new-style
+%strict-args
+%require-types
+
+int sub multiply(int a, int b) { return a * b; }
+code mul_ref = \\multiply();
+int result = mul_ref(7, 8);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("56", result,
+                    sprintf("fast callref call %s", mode));
+        }
+
+        # Test closure in try/catch
+        code = "%new-style
+%strict-args
+%require-types
+
+code checker = int sub(int x) {
+    if (x < 0) { throw \"NEG\", \"negative\"; }
+    return x * 3;
+};
+string result = \"\";
+for (int i = -2; i <= 2; ++i) {
+    try {
+        result += string(checker(i));
+    } catch (hash<ExceptionInfo> ex) {
+        result += \"E\";
+    }
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("EE036", result,
+                    sprintf("fast closure try/catch %s", mode));
+        }
+
+        # Test closure call in tight loop (stack safety)
+        code = "%new-style
+%strict-args
+%require-types
+
+code inc = int sub(int x) { return x + 1; };
+int val = 0;
+for (int i = 0; i < 100000; ++i) {
+    val = inc(val);
+}
+printf(\"%d\\n\", val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("100000", result,
+                    sprintf("fast closure loop %s", mode));
+        }
+    }
+
     testIROnlyBodyLocals() {
         # Test function with IR-only body locals (int) — verifies that the fast call
         # path correctly skips body local instantiation when all body locals are IR-only
@@ -4242,6 +4461,102 @@ printf(\"%d\\n\", test_loop_on_exit());
             string result = trim(runScript(code, mode));
             assertEq("303", result,
                     sprintf("on_exit in loop %s", mode));
+        }
+    }
+
+    testBatchCompilation() {
+        # Test 1: Basic multi-function batch compilation — caller calls callee
+        string code = "%modern
+int sub add_nums(int a, int b) { return a + b; }
+int sub compute(int n) {
+    int sum = 0;
+    for (int i = 0; i < n; ++i) {
+        sum = add_nums(sum, i);
+    }
+    return sum;
+}
+printf(\"%d\\n\", compute(100));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("4950", result,
+                    sprintf("batch basic %s", mode));
+        }
+
+        # Test 2: Multiple callees in the same caller
+        code = "%modern
+int sub square(int x) { return x * x; }
+int sub cube(int x) { return x * x * x; }
+int sub add(int a, int b) { return a + b; }
+int sub compute_all(int n) {
+    return add(square(n), cube(n));
+}
+printf(\"%d\\n\", compute_all(5));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("150", result,
+                    sprintf("batch multiple callees %s", mode));
+        }
+
+        # Test 3: Callee with exception (try/catch invoke path)
+        code = "%modern
+int sub safe_div(int a, int b) {
+    if (b == 0) { throw \"DIV-ZERO\", \"division by zero\"; }
+    return a / b;
+}
+string sub test_div() {
+    string result = \"\";
+    for (int i = -2; i <= 2; ++i) {
+        try {
+            result += string(safe_div(10, i));
+        } catch (hash<ExceptionInfo> ex) {
+            result += \"E\";
+        }
+        result += \" \";
+    }
+    return trim(result);
+}
+printf(\"%s\\n\", test_div());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("-5 -10 E 10 5", result,
+                    sprintf("batch exception callee %s", mode));
+        }
+
+        # Test 4: Chain of calls (A calls B calls C)
+        code = "%modern
+int sub inc(int x) { return x + 1; }
+int sub double_inc(int x) { return inc(inc(x)); }
+int sub quad_inc(int x) { return double_inc(double_inc(x)); }
+printf(\"%d\\n\", quad_inc(10));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("14", result,
+                    sprintf("batch call chain %s", mode));
+        }
+
+        # Test 5: Batch with recursive function
+        code = "%modern
+int sub factorial(int n) {
+    if (n <= 1) { return 1; }
+    return n * factorial(n - 1);
+}
+int sub compute_factorials() {
+    int sum = 0;
+    for (int i = 1; i <= 10; ++i) {
+        sum += factorial(i);
+    }
+    return sum;
+}
+printf(\"%d\\n\", compute_factorials());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("4037913", result,
+                    sprintf("batch recursive %s", mode));
         }
     }
 }

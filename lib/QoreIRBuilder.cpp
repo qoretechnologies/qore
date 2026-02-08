@@ -512,8 +512,9 @@ QoreIRCallDirectInstruction* QoreIRBuilder::createCallDirect(const QoreFunction*
 }
 
 QoreIRCallMethodDirectInstruction* QoreIRBuilder::createCallMethodDirect(const QoreMethod* method,
-        const QoreClass* qc, const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRCallMethodDirectInstruction>(method, qc);
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRCallMethodDirectInstruction>(method, qc, variant);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
@@ -521,10 +522,11 @@ QoreIRCallMethodDirectInstruction* QoreIRBuilder::createCallMethodDirect(const Q
 }
 
 QoreIRInvokeMethodDirectInstruction* QoreIRBuilder::createInvokeMethodDirect(const QoreMethod* method,
-        const QoreClass* qc, const std::vector<QoreIRValue>& args, QoreIRBasicBlock* normal_target,
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        const std::vector<QoreIRValue>& args, QoreIRBasicBlock* normal_target,
         QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInvokeMethodDirectInstruction>(
-            method, qc, normal_target, exception_target);
+            method, qc, variant, normal_target, exception_target);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;

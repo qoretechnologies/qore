@@ -47,6 +47,8 @@
 class ExceptionSink;
 class LocalVar;
 class QoreIRFunction;
+class AbstractQoreFunctionVariant;
+class UserVariantBase;
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 
@@ -69,6 +71,19 @@ public:
     //! Returns true on success; on failure, sets error message.
     bool compileFunction(const QoreIRFunction& func, std::string& error,
             void* deopt_counter = nullptr);
+
+    //! Batch-compile a root function and its direct callees into a shared LLVM module.
+    //! This enables LLVM cross-function inlining and optimization.
+    //! The callee_map maps variant → (IR function, deopt counter) for each callee.
+    //! Returns true on success; on failure, sets error message.
+    struct BatchCallee {
+        const QoreIRFunction* ir_func;
+        void* deopt_counter;
+        const AbstractQoreFunctionVariant* variant;
+    };
+    bool compileFunctionBatch(const QoreIRFunction& root_func, std::string& error,
+            void* root_deopt_counter,
+            const std::vector<BatchCallee>& callees);
 
     //! Look up a previously compiled function by name.
     //! Returns nullptr if not found.

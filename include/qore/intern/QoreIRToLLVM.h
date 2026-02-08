@@ -49,6 +49,7 @@ class QoreIRFunction;
 class QoreIRBasicBlock;
 class QoreIRInstruction;
 class QoreIRPhiInstruction;
+class AbstractQoreFunctionVariant;
 struct AOTSlotMap;
 
 class QoreIRToLLVM {
@@ -78,6 +79,14 @@ public:
         deopt_counter_ptr = counter;
     }
 
+    //! Set batch callees for multi-function module compilation.
+    //! When set, CallDirect instructions targeting variants in this map will emit
+    //! direct LLVM calls to the in-module function instead of going through
+    //! qore_rt_call_fast().  Maps variant pointer → LLVM function name.
+    void setBatchCallees(const std::unordered_map<const AbstractQoreFunctionVariant*, std::string>* callees) {
+        batch_callees = callees;
+    }
+
 private:
     llvm::LLVMContext& ctx;
 
@@ -99,6 +108,11 @@ private:
 
     // Deopt counter: pointer to variant's deopt_count atomic for guard failure tracking
     void* deopt_counter_ptr = nullptr;
+
+    // Batch callees: variant → LLVM function name for multi-function module compilation.
+    // When a CallDirect targets a variant in this map, emit a direct LLVM call instead
+    // of going through qore_rt_call_fast().
+    const std::unordered_map<const AbstractQoreFunctionVariant*, std::string>* batch_callees = nullptr;
 
     // IR builder
     std::unique_ptr<llvm::IRBuilder<>> builder;

@@ -5235,6 +5235,7 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     const QoreClass* qc = call->getClass();
     if (method && qc && qc->isFinal()) {
         // Safe devirtualization - the class is final, so no subclass can override
+        const AbstractQoreFunctionVariant* variant = call->getVariant();
         QoreIRValue result;
         bool should_invoke = !exception_stack.empty();  // method calls can always throw
         if (should_invoke) {
@@ -5246,12 +5247,12 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
                 return QoreIRValue();
             }
             QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvokeMethodDirect(method, qc, operands,
+            auto* inst = builder.createInvokeMethodDirect(method, qc, variant, operands,
                     normal_block, handler, call->loc);
             builder.setBlock(normal_block);
             result = inst->result;
         } else {
-            result = builder.createCallMethodDirect(method, qc, operands, call->loc)->result;
+            result = builder.createCallMethodDirect(method, qc, variant, operands, call->loc)->result;
         }
         return result;
     }

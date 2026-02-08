@@ -1066,14 +1066,17 @@ public:
 //! The method pointer is resolved at compile time and stored directly in the instruction
 class QoreIRCallMethodDirectInstruction : public QoreIRInstruction {
 public:
-    QoreIRCallMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc)
+    QoreIRCallMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
+            const AbstractQoreFunctionVariant* n_variant = nullptr)
             : QoreIRInstruction(QoreIROpcode::CallMethodDirect),
               method(n_method),
-              qc(n_qc) {
+              qc(n_qc),
+              variant(n_variant) {
     }
 
     const QoreMethod* method = nullptr;     //!< The resolved method pointer
     const QoreClass* qc = nullptr;          //!< The class containing the method
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (for fast call path)
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
 };
 
@@ -1083,14 +1086,16 @@ public:
 class QoreIRInvokeMethodDirectInstruction : public QoreIRInstruction {
 public:
     QoreIRInvokeMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
+            const AbstractQoreFunctionVariant* n_variant,
             QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
             : QoreIRInstruction(QoreIROpcode::InvokeMethodDirect),
-              method(n_method), qc(n_qc),
+              method(n_method), qc(n_qc), variant(n_variant),
               normal_target(n_normal), exception_target(n_exception) {
     }
 
     const QoreMethod* method = nullptr;         //!< The resolved method pointer
     const QoreClass* qc = nullptr;              //!< The class containing the method
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (for fast call path)
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
     QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)

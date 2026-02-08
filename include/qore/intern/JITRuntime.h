@@ -459,6 +459,31 @@ uint64_t qore_rt_call_function_direct(const QoreFunction* func, const AbstractQo
 uint64_t qore_rt_call_fast(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
     QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Direct method call for devirtualized calls (final classes) — builds QoreListNode
+//! and calls qore_method_private::eval().
+uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+
+//! Fast method call — bypasses QoreListNode construction for devirtualized method calls.
+//! Directly instantiates parameters from NaN-boxed args and calls the cached JIT/AOT function.
+//! Same signature as qore_rt_call_method_direct plus variant pointer.
+//! Falls back to qore_rt_call_method_direct() if the callee is not JIT-compiled.
+uint64_t qore_rt_call_method_fast(const QoreMethod* method, const AbstractQoreFunctionVariant* variant,
+    uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Fast call reference/closure call — takes the pre-evaluated call reference value and
+//! pre-evaluated args (both NaN-boxed). Calls ResolvedCallReferenceNode::execValue() directly,
+//! bypassing the dynamic_cast chain and AST node copy in qore_rt_call_with_args().
+uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Fast function call with explicit target function pointer — used for multi-function LLVM
+//! module compilation where the callee's native code address is known at compile time.
+//! Same parameter setup as qore_rt_call_fast(), but calls the provided function pointer
+//! directly instead of going through execCachedFunction(). Falls back to
+//! qore_rt_call_function_direct() if the variant is not a user variant.
+uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn)(ExceptionSink*),
+    const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
+
 //! Regex op with pre-evaluated operand: evaluates regex match/extract using the given operand
 //! instead of re-evaluating the AST subject expression.
 //! opcode identifies the regex operation (RegexMatchAny, RegexMatchBool, RegexNMatchBool,
