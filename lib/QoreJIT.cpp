@@ -40,6 +40,7 @@
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/MC/TargetRegistry.h>
+#include <llvm/TargetParser/Host.h>
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/JITRuntime.h"
 

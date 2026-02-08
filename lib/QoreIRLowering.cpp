@@ -3411,13 +3411,30 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
     if (!op) {
         return QoreIRValue();
     }
-    if (dynamic_cast<const QoreIntPreIncrementOperatorNode*>(node)) {
-        // int-specific node uses the same lowering path
-    }
     QoreValue lvexp = op->getExp();
     if (!lvexp.hasNode()) {
         error = "unsupported lvalue for pre-increment IR lowering";
         return QoreIRValue();
+    }
+    // Typed int pre-increment on simple VarRef: lower to LoadLocal + AddAssignInt + StoreLocal
+    if (dynamic_cast<const QoreIntPreIncrementOperatorNode*>(node)) {
+        auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
+        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)) {
+            QoreIRValue loaded = loadVarRef(var, error, "pre-increment-int", lvexp);
+            if (!loaded.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
+            QoreIRValue result = lowerBinaryOpOrInvoke(
+                QoreIROpcode::AddAssignInt, expr, loaded, one, op->loc, error);
+            if (!result.isValid()) {
+                return QoreIRValue();
+            }
+            if (!storeVarRef(var, result, error, "pre-increment-int")) {
+                return QoreIRValue();
+            }
+            return result;
+        }
     }
     // Range lvalue (e.g., ++list[0..2]) - delegate entire expression to AST
     if (isRangeLValue(lvexp)) {
@@ -3462,6 +3479,26 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
         error = "unsupported lvalue for post-increment IR lowering";
         return QoreIRValue();
     }
+    // Typed int post-increment on simple VarRef: lower to LoadLocal + AddAssignInt + StoreLocal
+    if (dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
+        auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
+        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)) {
+            QoreIRValue old_value = loadVarRef(var, error, "post-increment-int", lvexp);
+            if (!old_value.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue one = builder.createConstInt(1, base_op->loc)->result;
+            QoreIRValue new_value = lowerBinaryOpOrInvoke(
+                QoreIROpcode::AddAssignInt, expr, old_value, one, base_op->loc, error);
+            if (!new_value.isValid()) {
+                return QoreIRValue();
+            }
+            if (!storeVarRef(var, new_value, error, "post-increment-int")) {
+                return QoreIRValue();
+            }
+            return old_value;  // post-increment returns old value
+        }
+    }
     // Range lvalue (e.g., list[0..2]++) - delegate entire expression to AST
     if (isRangeLValue(lvexp)) {
         std::vector<QoreIRValue> operands;
@@ -3494,13 +3531,30 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
     if (!op) {
         return QoreIRValue();
     }
-    if (dynamic_cast<const QoreIntPreDecrementOperatorNode*>(node)) {
-        // int-specific node uses the same lowering path
-    }
     QoreValue lvexp = op->getExp();
     if (!lvexp.hasNode()) {
         error = "unsupported lvalue for pre-decrement IR lowering";
         return QoreIRValue();
+    }
+    // Typed int pre-decrement on simple VarRef: lower to LoadLocal + SubAssignInt + StoreLocal
+    if (dynamic_cast<const QoreIntPreDecrementOperatorNode*>(node)) {
+        auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
+        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)) {
+            QoreIRValue loaded = loadVarRef(var, error, "pre-decrement-int", lvexp);
+            if (!loaded.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
+            QoreIRValue result = lowerBinaryOpOrInvoke(
+                QoreIROpcode::SubAssignInt, expr, loaded, one, op->loc, error);
+            if (!result.isValid()) {
+                return QoreIRValue();
+            }
+            if (!storeVarRef(var, result, error, "pre-decrement-int")) {
+                return QoreIRValue();
+            }
+            return result;
+        }
     }
     // Range lvalue (e.g., --list[0..2]) - delegate entire expression to AST
     if (isRangeLValue(lvexp)) {
@@ -3544,6 +3598,26 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
     if (!lvexp.hasNode()) {
         error = "unsupported lvalue for post-decrement IR lowering";
         return QoreIRValue();
+    }
+    // Typed int post-decrement on simple VarRef: lower to LoadLocal + SubAssignInt + StoreLocal
+    if (dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
+        auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
+        if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)) {
+            QoreIRValue old_value = loadVarRef(var, error, "post-decrement-int", lvexp);
+            if (!old_value.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue one = builder.createConstInt(1, base_op->loc)->result;
+            QoreIRValue new_value = lowerBinaryOpOrInvoke(
+                QoreIROpcode::SubAssignInt, expr, old_value, one, base_op->loc, error);
+            if (!new_value.isValid()) {
+                return QoreIRValue();
+            }
+            if (!storeVarRef(var, new_value, error, "post-decrement-int")) {
+                return QoreIRValue();
+            }
+            return old_value;  // post-decrement returns old value
+        }
     }
     // Range lvalue (e.g., list[0..2]--) - delegate entire expression to AST
     if (isRangeLValue(lvexp)) {
