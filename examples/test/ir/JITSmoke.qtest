@@ -138,6 +138,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("VarRefNewObjectNode typed containers", \testVrnTypedContainers());
         addTestCase("direct function call", \testCallDirect());
         addTestCase("function call in loop (stack safety)", \testCallInLoopStackSafety());
+        addTestCase("fast function call", \testFastCall());
         set_return_value(main());
     }
 
@@ -3899,6 +3900,95 @@ printf(\"%d\\n\", sum);
             string result = trim(runScript(code, mode));
             assertEq("499999500000", result,
                     sprintf("list construction in loop stack safety %s", mode));
+        }
+    }
+
+    testFastCall() {
+        # Test fast call path: simple function with no defaults, not synchronized
+        string code = "%modern
+int sub add_nums(int a, int b) { return a + b; }
+int sum = 0;
+for (int i = 0; i < 2000; ++i) {
+    sum = add_nums(sum, i);
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1999000", result,
+                    sprintf("fast call basic %s", mode));
+        }
+
+        # Test fast call with varargs
+        code = "%modern
+string sub join_args(string sep) {
+    string result = \"\";
+    for (int i = 0; i < elements argv; ++i) {
+        if (i > 0) { result += sep; }
+        result += string(argv[i]);
+    }
+    return result;
+}
+string r = join_args(\"-\", 1, 2, 3);
+printf(\"%s\\n\", r);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1-2-3", result,
+                    sprintf("fast call varargs %s", mode));
+        }
+
+        # Test fast call with exception in callee
+        code = "%modern
+int sub will_throw(int x) {
+    if (x > 5) { throw \"BIG\", \"too big\"; }
+    return x;
+}
+string result = \"\";
+for (int i = 0; i < 10; ++i) {
+    try {
+        result += string(will_throw(i));
+    } catch (hash<ExceptionInfo> ex) {
+        result += \"X\";
+    }
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("012345XXXX", result,
+                    sprintf("fast call exception %s", mode));
+        }
+
+        # Test fast call with recursive function
+        code = "%modern
+int sub fib(int n) {
+    if (n <= 1) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+printf(\"%d\\n\", fib(15));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("610", result,
+                    sprintf("fast call recursive %s", mode));
+        }
+
+        # Test fast call with string args (node types need refSelf)
+        code = "%modern
+string sub greet(string name, string greeting) {
+    return greeting + \", \" + name + \"!\";
+}
+string result = \"\";
+for (int i = 0; i < 100; ++i) {
+    result = greet(\"world\", \"hello\");
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello, world!", result,
+                    sprintf("fast call string args %s", mode));
         }
     }
 }

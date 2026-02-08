@@ -843,6 +843,81 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
     builder->CreateStore(reloaded, tracker_it->second);
 }
 
+void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    auto tracker_it = local_reload_trackers.find(key);
+    if (tracker_it == local_reload_trackers.end()) {
+        // Tracker doesn't exist yet at compile time — proactively create it so
+        // the generated decref code runs on EVERY loop iteration at runtime.
+        // Without this, the tracker gets created by reloadLocalFromRuntime()
+        // (called AFTER this function) with +1 ref that's never cleared,
+        // causing refcount inflation → copy-on-write → O(n²) for container ops.
+        //
+        // Apply the same eligibility checks as reloadLocalFromRuntime():
+        auto alloca_it = local_allocas.find(key);
+        if (alloca_it == local_allocas.end()) {
+            return;
+        }
+        if (ir_only_locals_set && ir_only_locals_set->count(key)) {
+            return;
+        }
+        bool is_entry_local = entry_locals_set.count(key) > 0;
+        bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
+        if (!is_entry_local && !is_pre_instantiated) {
+            return;
+        }
+
+        // Create entry-block alloca initialized to VAL_NOTHING
+        llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+        llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+        llvm::AllocaInst* tracker = alloca_builder.CreateAlloca(i64_type,
+                nullptr, "reload_tracker");
+        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker);
+        local_reload_trackers[key] = tracker;
+        invoke_result_allocas.push_back(tracker);
+        tracker_it = local_reload_trackers.find(key);
+    }
+
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    llvm::Value* old_val = builder->CreateLoad(i64_type, tracker_it->second);
+    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker_it->second);
+    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+}
+
+llvm::AllocaInst* QoreIRToLLVM::emitPreDecrefAndClearTracker(uint32_t result_id,
+        const QoreIRLValueInstruction* lvinst,
+        llvm::Module& module, llvm::Function* llvm_func) {
+    // Ensure cleanup alloca exists for this result
+    llvm::AllocaInst* ca;
+    auto it = invoke_alloca_map.find(result_id);
+    if (it != invoke_alloca_map.end()) {
+        ca = static_cast<llvm::AllocaInst*>(it->second);
+    } else {
+        llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                llvm_func->getEntryBlock().begin());
+        ca = ab.CreateAlloca(i64_type, nullptr, "lv_cleanup");
+        ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
+        invoke_result_allocas.push_back(ca);
+        invoke_alloca_map[result_id] = ca;
+    }
+
+    // Decref old value (first-iteration decref of NOTHING is a no-op)
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    llvm::Value* old_val = builder->CreateLoad(i64_type, ca);
+    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
+    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+
+    // Clear the reload tracker for the lvalue target local
+    const void* local_key = findLvalueRootLocalKey(lvinst->lvalue);
+    if (local_key) {
+        clearLocalReloadTracker(local_key, module, llvm_func);
+    }
+
+    return ca;
+}
+
 void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func) {
     // Phase 4: Skip entirely if all locals are IR-only — no AST callback can
     // modify any local, so the LLVM alloca cache is always current.
@@ -2771,12 +2846,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(call->getProgram())), ptr_type);
 
-                    auto helper = module.getOrInsertFunction("qore_rt_call_function_direct",
+                    // Use fast call if eligible
+                    const char* call_name = "qore_rt_call_function_direct";
+                    if (call->getVariant()) {
+                        const UserVariantBase* uvb = call->getVariant()->getUserVariantBase();
+                        if (uvb && uvb->isStaticallyFastCallEligible()) {
+                            call_name = "qore_rt_call_fast";
+                        }
+                    }
+
+                    auto helper = module.getOrInsertFunction(call_name,
                             llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
                                 false));
                     result = builder->CreateCall(helper, {func_ptr, variant_ptr, pgm_ptr,
                             args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                    // AOT CallDirect: use fast direct call to resolve and dispatch
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_call_direct_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 } else if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
                     auto helper = module.getOrInsertFunction("qore_rt_call_with_args_aot",
@@ -3276,12 +3369,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             if (aot_mode) {
-                // AOT: fall back to qore_rt_call_with_args_aot (function pointers not valid)
+                // AOT: use fast direct call helper to resolve function from expression slot
                 QoreValue expr_val = direct_inst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_call_with_args_aot",
+                auto helper = module.getOrInsertFunction("qore_rt_call_direct_aot",
                         llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper, {aot_ctx_arg,
@@ -3299,7 +3392,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(direct_inst->pgm)), ptr_type);
 
-                auto helper = module.getOrInsertFunction("qore_rt_call_function_direct",
+                // Use fast call path if variant is eligible (no default args, not
+                // synchronized). qore_rt_call_fast has the same signature as
+                // qore_rt_call_function_direct and falls back internally if the
+                // callee is not yet JIT-compiled.
+                const char* call_name = "qore_rt_call_function_direct";
+                if (direct_inst->variant) {
+                    const UserVariantBase* uvb = direct_inst->variant->getUserVariantBase();
+                    if (uvb && uvb->isStaticallyFastCallEligible()) {
+                        call_name = "qore_rt_call_fast";
+                    }
+                }
+
+                auto helper = module.getOrInsertFunction(call_name,
                         llvm::FunctionType::get(i64_type,
                             {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
                             false));
@@ -4481,6 +4586,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             uint64_t lv_bits;
             std::memcpy(&lv_bits, &lv, sizeof(lv_bits));
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            // Clear the reload tracker for the lvalue target local (same pattern
+            // as compound assign — prevents refcount inflation in loops).
+            {
+                const void* local_key = findLvalueRootLocalKey(lvinst->lvalue);
+                if (local_key) {
+                    clearLocalReloadTracker(local_key, module, llvm_func);
+                }
+            }
             llvm::Value* result;
             if (aot_mode) {
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(lv_bits);
@@ -4516,6 +4629,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             QoreValue lv = lvinst->lvalue;
             uint64_t lv_bits;
             std::memcpy(&lv_bits, &lv, sizeof(lv_bits));
+            emitPreDecrefAndClearTracker(inst->result.id, lvinst, module, llvm_func);
             llvm::Value* opcode_val = llvm::ConstantInt::get(i32_type,
                     static_cast<int>(inst->opcode));
             llvm::Value* result;
@@ -4601,12 +4715,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     break;
             }
 
+            // Pre-decref old result and clear reload tracker before the lvalue
+            // operation.  The old +1 ref on the list/hash would make the container
+            // appear shared (refcount > 1), triggering copy-on-write and turning
+            // O(1) appends into O(n) copies.
+            llvm::AllocaInst* ca = emitPreDecrefAndClearTracker(
+                    inst->result.id, lvinst, module, llvm_func);
+
             llvm::Value* result = emitLValueCompoundAssignFastPath(
                     inst, val_boxed, lv_bits_or_slot, iop, fop, nothing,
                     llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            // Store result in alloca for cleanup (decref handled by pre-decref above
+            // on next iteration, and by invoke_result_allocas at function exit)
+            builder->CreateStore(result, ca);
             {
                 const void* local_key = findLvalueRootLocalKey(lvinst->lvalue);
                 if (local_key) {
@@ -4627,6 +4750,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             uint64_t lv_bits;
             std::memcpy(&lv_bits, &lv, sizeof(lv_bits));
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            emitPreDecrefAndClearTracker(inst->result.id, lvinst, module, llvm_func);
             llvm::Value* opcode_val = llvm::ConstantInt::get(i32_type,
                     static_cast<int>(inst->opcode));
             llvm::Value* result;
@@ -6975,7 +7099,15 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
 // Emit inline LLVM fast-path for lvalue compound assignments (AddAssignLValue, etc.).
 // Loads the current lvalue value, checks NOTHING (for AddAssignLValue only), then
 // checks INT48+INT48 and float+float for native arithmetic, falling back to
-// qore_rt_lvalue_binary for complex types.  The loaded value is decref'd after use.
+// qore_rt_lvalue_binary for complex types.
+//
+// CRITICAL: The loaded value must be decref'd BEFORE the slow path call to
+// qore_rt_lvalue_binary.  The load adds +1 refcount; if the lvalue holds a
+// container (list, hash, object) with refcount 1, the load makes it 2.  The slow
+// path accesses the lvalue independently and sees refcount > 1, triggering
+// copy-on-write — turning O(1) in-place appends into O(n) copies per iteration.
+// Each fast path (int, float) decrefs after using the loaded value; the slow path
+// decrefs before calling qore_rt_lvalue_binary.
 //
 // Exception safety: qore_rt_lvalue_load returns NOTHING on error (see evalLValueLoad),
 // so emitExceptionCheck after lvalue_load cannot leak a ref-counted value.
@@ -7038,7 +7170,13 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
         ? llvm::BasicBlock::Create(ctx, "lca_fast_float", llvm_func) : nullptr;
     llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "lca_slow", llvm_func);
     llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "lca_merge", llvm_func);
-    llvm::BasicBlock* decref_bb = llvm::BasicBlock::Create(ctx, "lca_decref", llvm_func);
+
+    // Decref helper for the loaded value (each path decrefs at the right point)
+    auto emitDecrefCurrent = [&]() {
+        auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        builder->CreateCall(decref_fn, {current, xsink_arg});
+    };
 
     // Determine first block after NOTHING check
     llvm::BasicBlock* after_nothing_bb = has_int_path ? check_int_bb
@@ -7059,6 +7197,7 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
     if (handle_nothing) {
         builder->SetInsertPoint(nothing_bb);
         nothing_result = emitLValueStore(val_boxed);
+        // current is NOTHING here — no decref needed (scalar, no refcount)
         builder->CreateBr(merge_bb);
         nothing_end = builder->GetInsertBlock();
     }
@@ -7077,7 +7216,7 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
         llvm::BasicBlock* after_int_bb = has_float_path ? check_float_bb : slow_bb;
         builder->CreateCondBr(both_int, fast_int_bb, after_int_bb);
 
-        // Fast int path: native op + lvalue_store
+        // Fast int path: native op + lvalue_store + decref loaded value
         builder->SetInsertPoint(fast_int_bb);
         llvm::Value* l_int = unboxInt(current);
         llvm::Value* r_int = unboxInt(val_boxed);
@@ -7085,6 +7224,7 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
                 static_cast<llvm::Instruction::BinaryOps>(int_op), l_int, r_int);
         llvm::Value* result_boxed = boxIntInline(native_result);
         int_result = emitLValueStore(result_boxed);
+        // current is INT48 here — no decref needed (scalar, no refcount)
         builder->CreateBr(merge_bb);
         fast_int_end = builder->GetInsertBlock();
     }
@@ -7104,7 +7244,7 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
         llvm::Value* both_float = builder->CreateAnd(lhs_is_float, rhs_is_float);
         builder->CreateCondBr(both_float, fast_float_bb, slow_bb);
 
-        // Fast float path: native op + lvalue_store
+        // Fast float path: native op + lvalue_store + decref loaded value
         builder->SetInsertPoint(fast_float_bb);
         llvm::Value* l_float = unboxFloat(current);
         llvm::Value* r_float = unboxFloat(val_boxed);
@@ -7112,12 +7252,16 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
                 static_cast<llvm::Instruction::BinaryOps>(float_op), l_float, r_float);
         llvm::Value* flt_boxed = boxFloat(flt_result);
         float_result = emitLValueStore(flt_boxed);
+        // current is a NaN-boxed float here — no decref needed (scalar, no refcount)
         builder->CreateBr(merge_bb);
         fast_float_end = builder->GetInsertBlock();
     }
 
-    // Step 5: Slow path — fall back to qore_rt_lvalue_binary
+    // Step 5: Slow path — decref loaded value FIRST, then fall back to qore_rt_lvalue_binary.
+    // The decref restores the lvalue's original refcount so that in-place modification
+    // (e.g. list append, hash merge) works without triggering copy-on-write.
     builder->SetInsertPoint(slow_bb);
+    emitDecrefCurrent();
     llvm::Value* slow_result;
     if (aot_mode) {
         auto binary_fn = module.getOrInsertFunction("qore_rt_lvalue_binary_aot",
@@ -7152,13 +7296,6 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
         phi->addIncoming(float_result, fast_float_end);
     }
     phi->addIncoming(slow_result, slow_end);
-    builder->CreateBr(decref_bb);
-
-    // Step 7: Decref the loaded current value (it has +1 ref from lvalue_load)
-    builder->SetInsertPoint(decref_bb);
-    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    builder->CreateCall(decref_fn, {current, xsink_arg});
 
     return phi;
 }

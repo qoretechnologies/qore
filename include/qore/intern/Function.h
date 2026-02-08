@@ -727,6 +727,40 @@ public:
         cached_aot_ctx = ctx;
         current_tier.store(TIER_JIT, std::memory_order_release);
     }
+
+    //! Returns true if the variant has a cached JIT or AOT function ready for fast dispatch
+    DLLLOCAL bool hasCachedFunction() const {
+        return current_tier.load(std::memory_order_acquire) == TIER_JIT
+            && (cached_jit_fn || cached_aot_fn);
+    }
+
+    //! Execute the cached JIT/AOT function directly (caller must set up locals)
+    DLLLOCAL uint64_t execCachedFunction(ExceptionSink* xsink) const {
+        if (cached_aot_ctx && cached_aot_fn) {
+            return cached_aot_fn(cached_aot_ctx, xsink);
+        }
+        return cached_jit_fn(xsink);
+    }
+
+    //! Returns the body locals vector for fast call setup
+    DLLLOCAL const std::vector<LocalVar*>& getBodyLocals() const;
+
+    //! Returns true if this variant is statically eligible for the fast call path
+    //! (no default args, not synchronized). Runtime readiness (has cached function)
+    //! is checked separately by qore_rt_call_fast() which falls back if not ready.
+    DLLLOCAL bool isStaticallyFastCallEligible() const {
+        if (isSynchronized()) {
+            return false;
+        }
+        // Check for default args
+        const arg_vec_t& defaults = signature.getDefaultArgList();
+        for (size_t i = 0; i < defaults.size(); ++i) {
+            if (defaults[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 // the following defines the pure virtual functions that are common to all user variants

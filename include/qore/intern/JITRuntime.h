@@ -35,6 +35,7 @@
 #include <cstdint>
 
 class ExceptionSink;
+class UserVariantBase;
 
 // C ABI helpers called by JIT-generated code.
 // All functions use extern "C" linkage so LLVM can resolve them by name.
@@ -439,9 +440,23 @@ uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, E
 uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
     ExceptionSink* xsink);
 
+//! AOT fast direct call: resolve FunctionCallNode from context slot, extract function/variant/pgm,
+//! then call qore_rt_call_fast() for fast function dispatch.
+uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+
 //! Direct function call — resolved at parse time, bypasses dynamic_cast chain and AST node copy.
 //! Calls QoreFunction::evalFunctionTmpArgs() directly.
 uint64_t qore_rt_call_function_direct(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+    QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Fast function call — bypasses QoreListNode construction, CodeEvaluationHelper,
+//! and the entire dispatch chain. Directly instantiates parameters from NaN-boxed args,
+//! instantiates body locals, and calls the cached JIT/AOT function.
+//! Same signature as qore_rt_call_function_direct so the same LLVM call site can
+//! be used. Falls back to qore_rt_call_function_direct() if the callee is not JIT-compiled.
+//! Returns NaN-boxed result; sets xsink on exception.
+uint64_t qore_rt_call_fast(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
     QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink);
 
 //! Regex op with pre-evaluated operand: evaluates regex match/extract using the given operand

@@ -298,6 +298,21 @@ private:
     // runtime stack without updating the LLVM alloca cache.
     void reloadLocalFromRuntime(const void* key, llvm::Module& module, llvm::Function* llvm_func);
 
+    // Clear the reload tracker for a specific local, releasing the +1 reference
+    // held from a previous reloadLocalFromRuntime() call.  Called before lvalue
+    // compound operations (+=, -=, etc.) so that the container's refcount drops to 1,
+    // enabling copy-on-write to skip the copy (in-place modification).
+    void clearLocalReloadTracker(const void* key, llvm::Module& module, llvm::Function* llvm_func);
+
+    // Pre-decref old result and clear reload tracker before lvalue compound
+    // operations.  Ensures the cleanup alloca exists (creating in the entry
+    // block if necessary), decrefs the previous value stored in it, and clears
+    // the reload tracker for the lvalue target local.  Returns the alloca so
+    // callers can store the new result into it after the operation.
+    llvm::AllocaInst* emitPreDecrefAndClearTracker(uint32_t result_id,
+            const QoreIRLValueInstruction* lvinst,
+            llvm::Module& module, llvm::Function* llvm_func);
+
     // Reload all local variable allocas from the Qore runtime stack.
     // Called after Invoke instructions (which can modify any local via AST evaluation).
     void reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func);

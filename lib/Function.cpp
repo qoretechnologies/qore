@@ -2097,6 +2097,14 @@ int64 UserVariantBase::getParseOptions(int64 po) const {
     return statements ? statements->pwo.parse_options : po;
 }
 
+const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
+    if (cached_aot_ctx) {
+        return cached_aot_ctx->all_body_locals;
+    }
+    assert(cached_ir);
+    return cached_ir->all_body_locals;
+}
+
 void UserVariantBase::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
     signature.parseInitPushLocalVars(classTypeInfo);
 }
@@ -2629,14 +2637,12 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             qore_exec_mode_t mode = pgm->getExecMode();
             printd(3, "evalIntern '%s': mode=%d pgm=%p statements=%p has_aot=%d\n",
                 name, (int)mode, (void*)pgm, (void*)statements, (int)has_aot);
-            // AOT dispatch for strip-source functions (no AST body): must always
-            // go through evalTiered since there's no AST fallback.
-            if (has_aot && !statements) {
-                return evalTiered(name, argv, self, xsink);
-            }
-            // AOT dispatch with AST body: only in tiered mode where the AOT
-            // context was built for this compilation environment.
-            if (has_aot && mode == QEM_TIERED) {
+            // AOT dispatch: always use evalTiered when a cached AOT function is
+            // available (tier==TIER_JIT && cached_aot_fn). This covers both
+            // strip-source (no AST body) and normal AOT with AST body.
+            // The AOT context is valid because registerPrecompiledAOTFunction()
+            // set it up during program initialization.
+            if (has_aot) {
                 return evalTiered(name, argv, self, xsink);
             }
             // Tiered promotion for JIT/IR/tiered modes with %modern code.

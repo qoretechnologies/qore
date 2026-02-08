@@ -40,14 +40,23 @@
 #include <unordered_map>
 #include <vector>
 
+class AbstractQoreFunctionVariant;
 class ExceptionSink;
 class LocalVar;
+class QoreFunction;
 class QoreIRFunction;
 class QoreNamespace;
 class QoreProgram;
 class QoreStringNode;
 class StatementBlock;
 class Var;
+
+//! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
+struct QoreAOTCallTarget {
+    const QoreFunction* func = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreProgram* pgm = nullptr;
+};
 
 //! AOT context: runtime-resolved pointer tables for AOT-compiled functions.
 /** At compile time, each process-specific pointer (LocalVar*, Var*, QoreValue expr)
@@ -68,6 +77,11 @@ struct QoreAOTContext {
     //! All body locals from the fresh IR (needed by evalTiered for instantiation)
     std::vector<LocalVar*> all_body_locals;
 
+    //! Pre-resolved CallDirect targets indexed by expr slot.
+    //! Populated during buildAOTContext() to avoid per-call dynamic_cast in qore_rt_call_direct_aot()
+    //! Size == num_exprs; entries with func==nullptr are not CallDirect slots.
+    QoreAOTCallTarget* call_targets = nullptr;
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();
@@ -82,6 +96,8 @@ struct QoreAOTContext {
         }
         if (num_exprs > 0) {
             exprs = static_cast<uint64_t*>(calloc(num_exprs, sizeof(uint64_t)));
+            call_targets = static_cast<QoreAOTCallTarget*>(
+                calloc(num_exprs, sizeof(QoreAOTCallTarget)));
         }
         if (num_stmts > 0) {
             stmts = static_cast<StatementBlock**>(calloc(num_stmts, sizeof(StatementBlock*)));

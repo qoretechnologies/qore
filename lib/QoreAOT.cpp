@@ -113,6 +113,7 @@ QoreAOTContext::~QoreAOTContext() {
     free(locals);
     free(globals);
     free(exprs);
+    free(call_targets);
 }
 
 //! Descriptor for a function that was successfully compiled to LLVM IR
@@ -2974,7 +2975,19 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     if (seen_exprs.insert(bits).second) {
                         // Take a ref so the expression survives IR function deletion
                         di->expr.ref();
+                        int32_t slot = expr_idx;
                         ctx->exprs[expr_idx++] = bits;
+
+                        // Pre-resolve call target to avoid per-call dynamic_cast
+                        QoreValue expr_val;
+                        std::memcpy(&expr_val, &bits, sizeof(expr_val));
+                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                            expr_val.getInternalNode());
+                        if (call && call->getFunction() && call->getVariant()) {
+                            ctx->call_targets[slot].func = call->getFunction();
+                            ctx->call_targets[slot].variant = call->getVariant();
+                            ctx->call_targets[slot].pgm = call->getProgram();
+                        }
                     }
                     break;
                 }

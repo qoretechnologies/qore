@@ -1563,6 +1563,106 @@ extern "C" uint64_t qore_rt_call_function_direct(const QoreFunction* func,
     return toBits(result);
 }
 
+// --- Fast function call (bypasses QoreListNode + CodeEvaluationHelper dispatch chain) ---
+
+extern "C" uint64_t qore_rt_call_fast(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(variant);
+
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    // Builtin variants don't have a UserVariantBase; fall back to the slow path
+    if (!uvb) {
+        return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
+    }
+
+    // If the callee is not JIT-compiled yet, fall back to the slow path.
+    // This can happen in tiered compilation when the callee hasn't been promoted yet.
+    if (!uvb->hasCachedFunction()) {
+        return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+
+    // Set up program thread context
+    ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    // NOTE: ThreadFrameBoundaryHelper intentionally skipped here for performance.
+    // Frame boundaries are only used by debugger introspection (get_local_vars/set_local_var_value),
+    // not by runtime variable lookup (ThreadLocalVariableData::find() skips frame_boundary entries).
+
+    // Instantiate parameter locals directly from NaN-boxed args
+    for (unsigned i = 0; i < num_params; ++i) {
+        if (i < (unsigned)nargs) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            sig->lv[i]->instantiate(val);
+        } else {
+            sig->lv[i]->instantiate(QoreValue());
+        }
+    }
+
+    // Build argv for excess arguments (varargs)
+    ReferenceHolder<QoreListNode> argv(xsink);
+    if (nargs > (int)num_params) {
+        argv = new QoreListNode(autoTypeInfo);
+        for (int i = num_params; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            argv->push(val, xsink);
+        }
+    }
+
+    // Instantiate argv variable (if the function has an argv parameter)
+    if (sig->argvid) {
+        sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
+    }
+
+    QoreValue val{};
+    {
+        ArgvContextHelper argv_helper(argv.release(), xsink);
+
+        // Note: synchronized functions are excluded at compile time (isStaticallyFastCallEligible check)
+
+        // Get body locals
+        const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+
+        // Instantiate body locals
+        int64 po = uvb->pgm->getParseOptions64();
+        for (LocalVar* lv : body_locals) {
+            lv->instantiate(po);
+        }
+
+        uint64_t result_bits = uvb->execCachedFunction(xsink);
+        QoreValue result;
+        std::memcpy(&result, &result_bits, sizeof(result));
+        val = result;
+
+        // Uninstantiate body locals in reverse order
+        for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+            body_locals[i]->uninstantiate(xsink);
+        }
+    }
+
+    if (sig->argvid) {
+        sig->argvid->uninstantiate(xsink);
+    }
+
+    // Uninstantiate parameter locals in reverse order
+    for (int i = (int)num_params - 1; i >= 0; --i) {
+        sig->lv[i]->uninstantiate(xsink);
+    }
+
+    return toBits(val);
+}
+
 // --- Direct method call for devirtualized calls (final classes) ---
 
 extern "C" uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_t* args, int nargs,
@@ -1761,6 +1861,20 @@ extern "C" uint64_t qore_rt_lvalue_binary_aot(int op, QoreAOTContext* ctx, int32
 extern "C" uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    return qore_rt_call_with_args(ctx->exprs[slot], args, nargs, xsink);
+}
+
+extern "C" uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+
+    // Use pre-resolved call target (populated during buildAOTContext) to avoid per-call dynamic_cast
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    if (target.func) {
+        return qore_rt_call_fast(target.func, target.variant, target.pgm, args, nargs, xsink);
+    }
+
+    // Fallback for slots without pre-resolved targets (shouldn't happen for CallDirect)
     return qore_rt_call_with_args(ctx->exprs[slot], args, nargs, xsink);
 }
 

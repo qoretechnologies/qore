@@ -2782,13 +2782,19 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     bool force_int = dynamic_cast<const QoreIntPlusEqualsOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Object += hash requires in-place member merge. Treat object-typed variables like
-    // complex lvalues and use AddAssignLValue (which uses QorePlusEqualsOperatorNode
-    // with proper lvalue semantics). This is because object + hash = hash (not object),
-    // so the load-compute-store decomposition doesn't work for objects.
-    if (left_var && left_var->getTypeInfo()
-            && QoreTypeInfo::getUniqueReturnClass(left_var->getTypeInfo())) {
-        left_var = nullptr;  // Force lvalue path
+    // Force lvalue path for types where load-compute-store creates O(n) copies:
+    // - Objects: object + hash = hash (not object), needs in-place member merge
+    // - Lists: list + element copies the entire list, making loops O(n^2)
+    // - Hashes: hash + hash copies the entire hash
+    // Using AddAssignLValue goes through QorePlusEqualsOperatorNode which does
+    // proper in-place modification via lvalue semantics.
+    if (left_var && left_var->getTypeInfo()) {
+        const QoreTypeInfo* ti = left_var->getTypeInfo();
+        if (QoreTypeInfo::getUniqueReturnClass(ti) != nullptr
+                || QoreTypeInfo::isListType(ti)
+                || QoreTypeInfo::isHashType(ti)) {
+            left_var = nullptr;  // Force lvalue path
+        }
     }
     QoreValue right_expr(op->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
