@@ -124,7 +124,29 @@ add_custom_target(REFLECTION_QPP_GENERATED_FILES DEPENDS qpp ${REFLECTION_QPP_SO
 set(reflection_module_name "reflection")
 
 if (SINGLE_COMPILATION_UNIT)
-    add_library(${reflection_module_name} MODULE src/reflection_scu.cpp)
+    # Generate the SCU dynamically from source lists with dependency tracking
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/src)
+    set(REFL_SCU_CONTENT "/* Auto-generated single compilation unit - do not edit */\n")
+    set(REFL_SCU_DEPS "")
+    foreach(src ${REFLECTION_CPP_SRC})
+        if (IS_ABSOLUTE "${src}")
+            set(abs_src "${src}")
+        else()
+            set(abs_src "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
+        endif()
+        list(APPEND REFL_SCU_DEPS "${abs_src}")
+        string(APPEND REFL_SCU_CONTENT "#include \"${abs_src}\"\n")
+    endforeach()
+    foreach(src ${REFLECTION_QPP_SOURCES})
+        string(APPEND REFL_SCU_CONTENT "#include \"${src}\"\n")
+        list(APPEND REFL_SCU_DEPS "${src}")
+    endforeach()
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/src/reflection_scu.cpp "${REFL_SCU_CONTENT}")
+    add_library(${reflection_module_name} MODULE
+        ${CMAKE_CURRENT_BINARY_DIR}/src/reflection_scu.cpp)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_BINARY_DIR}/src/reflection_scu.cpp
+        PROPERTIES OBJECT_DEPENDS "${REFL_SCU_DEPS}")
 else (SINGLE_COMPILATION_UNIT)
     add_library(${reflection_module_name} MODULE ${REFLECTION_CPP_SRC} ${REFLECTION_QPP_SOURCES})
 endif (SINGLE_COMPILATION_UNIT)

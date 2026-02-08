@@ -122,7 +122,58 @@ add_custom_target(ASTPARSER_FLEX_GENERATED_FILES DEPENDS ${FLEX_ast_scanner_OUTP
 set(astparser_module_name "astparser")
 
 if (SINGLE_COMPILATION_UNIT)
-    add_library(${astparser_module_name} MODULE src/astparser_scu.cpp)
+    # Generate the SCU dynamically from source lists with dependency tracking.
+    # Bison/flex generated files must be included first to avoid macro conflicts.
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/src)
+    set(AST_SCU_CONTENT "/* Auto-generated single compilation unit - do not edit */\n")
+    set(AST_SCU_DEPS "")
+    # First pass: emit bison/flex generated files (must come before other sources)
+    foreach(src ${ASTPARSER_CPP_SRC})
+        if (IS_ABSOLUTE "${src}")
+            set(abs_src "${src}")
+        else()
+            set(abs_src "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
+        endif()
+        get_filename_component(basename "${src}" NAME)
+        if (basename STREQUAL "ast_parser.cpp")
+            list(APPEND AST_SCU_DEPS "${abs_src}")
+            string(APPEND AST_SCU_CONTENT
+                "#if defined(__GNUC__)\n"
+                "#pragma GCC diagnostic push\n"
+                "#pragma GCC diagnostic ignored \"-Wfree-nonheap-object\"\n"
+                "#endif\n"
+                "#include \"${abs_src}\"\n"
+                "#if defined(__GNUC__)\n"
+                "#pragma GCC diagnostic pop\n"
+                "#endif\n")
+        elseif (basename STREQUAL "ast_scanner.cpp")
+            list(APPEND AST_SCU_DEPS "${abs_src}")
+            string(APPEND AST_SCU_CONTENT "#include \"${abs_src}\"\n")
+        endif()
+    endforeach()
+    # Second pass: emit remaining source files
+    foreach(src ${ASTPARSER_CPP_SRC})
+        if (IS_ABSOLUTE "${src}")
+            set(abs_src "${src}")
+        else()
+            set(abs_src "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
+        endif()
+        get_filename_component(basename "${src}" NAME)
+        if (NOT basename STREQUAL "ast_parser.cpp" AND NOT basename STREQUAL "ast_scanner.cpp")
+            list(APPEND AST_SCU_DEPS "${abs_src}")
+            string(APPEND AST_SCU_CONTENT "#include \"${abs_src}\"\n")
+        endif()
+    endforeach()
+    foreach(src ${ASTPARSER_QPP_SOURCES})
+        string(APPEND AST_SCU_CONTENT "#include \"${src}\"\n")
+        list(APPEND AST_SCU_DEPS "${src}")
+    endforeach()
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/src/astparser_scu.cpp "${AST_SCU_CONTENT}")
+    add_library(${astparser_module_name} MODULE
+        ${CMAKE_CURRENT_BINARY_DIR}/src/astparser_scu.cpp)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_BINARY_DIR}/src/astparser_scu.cpp
+        PROPERTIES OBJECT_DEPENDS "${AST_SCU_DEPS}")
 else (SINGLE_COMPILATION_UNIT)
     add_library(${astparser_module_name} MODULE ${ASTPARSER_CPP_SRC} ${ASTPARSER_QPP_SOURCES})
 endif (SINGLE_COMPILATION_UNIT)

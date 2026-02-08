@@ -1011,6 +1011,13 @@ else (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
 endif (SINGLE_COMPILATION_UNIT)
 
+if (SINGLE_COMPILATION_UNIT)
+    add_custom_target(rebuild-scu
+        COMMAND ${CMAKE_COMMAND} -E touch
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+        COMMENT "Forcing SCU rebuild")
+endif (SINGLE_COMPILATION_UNIT)
+
 add_dependencies(QPP_GENERATED_FILES qpp)
 add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES)
 
