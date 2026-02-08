@@ -43,6 +43,19 @@
 #include <qore/intern/SelfVarrefNode.h>
 #include <qore/intern/ObjectMethodReferenceNode.h>
 #include <qore/intern/ParseReferenceNode.h>
+#include <qore/intern/StatementBlock.h>
+#include <qore/intern/IfStatement.h>
+#include <qore/intern/WhileStatement.h>
+#include <qore/intern/ForStatement.h>
+#include <qore/intern/ForEachStatement.h>
+#include <qore/intern/SwitchStatement.h>
+#include <qore/intern/TryStatement.h>
+#include <qore/intern/ReturnStatement.h>
+#include <qore/intern/ThrowStatement.h>
+#include <qore/intern/OnBlockExitStatement.h>
+#include <qore/intern/DebugStatement.h>
+#include <qore/intern/AssertStatement.h>
+#include <qore/intern/ExpressionStatement.h>
 
 // isTerminator() is now defined in QoreIR.h
 
@@ -960,9 +973,9 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
 static bool isDelegateToASTStatement(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::Foreach:       // Reference foreach delegates to AST
-        case QoreIROpcode::OnBlockExit:   // Registers AST code for later execution
-        case QoreIROpcode::Debug:         // Debug statement delegates to AST
-        case QoreIROpcode::Assert:        // Assert statement delegates to AST
+        // OnBlockExit: handler body locals are now analyzed via collectLocalsFromStatementBlock()
+        // Debug: now lowered inline (expression or block form)
+        // Assert: condition is now lowered inline; Assert opcode only on failure path
         case QoreIROpcode::Context:       // Context statement delegates to AST
         case QoreIROpcode::Summarize:     // Summarize statement delegates to AST
         case QoreIROpcode::MapSelectAny:  // Delegate-to-AST functional operator
@@ -1164,6 +1177,118 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     unknown_node_found = true;
 }
 
+//! Recursively walks a StatementBlock AST tree to find all local variable references.
+//! This is used to determine which locals are referenced by on_block_exit handler bodies
+//! so they can be excluded from IR-only classification.
+static void collectLocalsFromStatementBlock(const StatementBlock* block,
+        std::unordered_set<const void*>& ast_locals, bool& unknown_node_found) {
+    if (!block) {
+        return;
+    }
+    for (const auto* stmt : block->getStatements()) {
+        if (!stmt) {
+            continue;
+        }
+        // ExpressionStatement: walk expression
+        if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
+            collectLocalsFromExpr(expr_stmt->getExpression(), ast_locals, unknown_node_found);
+            continue;
+        }
+        // IfStatement: walk condition, then-block, else-block
+        if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
+            collectLocalsFromExpr(if_stmt->getCond(), ast_locals, unknown_node_found);
+            collectLocalsFromStatementBlock(if_stmt->getIfCode(), ast_locals,
+                    unknown_node_found);
+            collectLocalsFromStatementBlock(if_stmt->getElseCode(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // WhileStatement / DoWhileStatement: walk condition, body
+        if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
+            collectLocalsFromExpr(while_stmt->getCond(), ast_locals, unknown_node_found);
+            collectLocalsFromStatementBlock(while_stmt->getCode(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // ForStatement: walk init, condition, increment, body
+        if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
+            collectLocalsFromExpr(for_stmt->getAssignment(), ast_locals, unknown_node_found);
+            collectLocalsFromExpr(for_stmt->getCond(), ast_locals, unknown_node_found);
+            collectLocalsFromExpr(for_stmt->getIterator(), ast_locals, unknown_node_found);
+            collectLocalsFromStatementBlock(for_stmt->getCode(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // ForEachStatement: walk variable, list, body
+        if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
+            collectLocalsFromExpr(foreach_stmt->getVar(), ast_locals, unknown_node_found);
+            collectLocalsFromExpr(foreach_stmt->getList(), ast_locals, unknown_node_found);
+            collectLocalsFromStatementBlock(foreach_stmt->getCode(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // SwitchStatement: walk switch expression, case expressions and blocks
+        if (auto* switch_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
+            collectLocalsFromExpr(switch_stmt->getSwitchExp(), ast_locals,
+                    unknown_node_found);
+            for (const CaseNode* cn = switch_stmt->getCases(); cn; cn = cn->next) {
+                collectLocalsFromExpr(cn->val, ast_locals, unknown_node_found);
+                collectLocalsFromStatementBlock(cn->code, ast_locals, unknown_node_found);
+            }
+            continue;
+        }
+        // TryStatement: walk try block, catch block
+        if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
+            collectLocalsFromStatementBlock(try_stmt->getTryBlock(), ast_locals,
+                    unknown_node_found);
+            collectLocalsFromStatementBlock(try_stmt->getCatchBlock(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // ReturnStatement: walk return expression
+        if (auto* ret_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
+            collectLocalsFromExpr(ret_stmt->getExpression(), ast_locals, unknown_node_found);
+            continue;
+        }
+        // ThrowStatement: walk throw args
+        if (auto* throw_stmt = dynamic_cast<const ThrowStatement*>(stmt)) {
+            collectLocalsFromExpr(throw_stmt->getArgs(), ast_locals, unknown_node_found);
+            continue;
+        }
+        // OnBlockExitStatement: walk handler body
+        if (auto* obe_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
+            collectLocalsFromStatementBlock(obe_stmt->getCode(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // DebugStatement: walk expression or block
+        if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
+            if (debug_stmt->getBlock()) {
+                collectLocalsFromStatementBlock(debug_stmt->getBlock(), ast_locals,
+                        unknown_node_found);
+            }
+            if (debug_stmt->getExpression()) {
+                collectLocalsFromExpr(debug_stmt->getExpression(), ast_locals,
+                        unknown_node_found);
+            }
+            continue;
+        }
+        // AssertStatement: walk condition expression
+        if (auto* assert_stmt = dynamic_cast<const AssertStatement*>(stmt)) {
+            collectLocalsFromExpr(assert_stmt->getCondition(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // Nested StatementBlock: recurse
+        if (auto* sub_block = dynamic_cast<const StatementBlock*>(stmt)) {
+            collectLocalsFromStatementBlock(sub_block, ast_locals, unknown_node_found);
+            continue;
+        }
+        // Unknown statement type — conservatively mark for fallback
+        unknown_node_found = true;
+    }
+}
+
 //! Extracts the AST expression from an instruction that stores one.
 //! Returns nullptr if the instruction type doesn't have an expr field.
 static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
@@ -1282,9 +1407,15 @@ void QoreIRFunction::computeIROnlyLocals() {
             if (isDelegateToASTStatement(inst->opcode)) {
                 has_delegate_to_ast = true;
             }
-            // ScopeExit executes on_block_exit handlers (AST code)
-            if (inst->opcode == QoreIROpcode::ScopeExit) {
-                has_delegate_to_ast = true;
+
+            // OnBlockExit: walk handler body AST to find referenced locals.
+            // Only those locals must remain AST-visible — others can be IR-only.
+            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                auto* obe_inst = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+                if (obe_inst->stmt) {
+                    collectLocalsFromStatementBlock(obe_inst->stmt->getCode(),
+                            ast_referenced_locals, unknown_node_found);
+                }
             }
         }
     }
@@ -1295,35 +1426,44 @@ void QoreIRFunction::computeIROnlyLocals() {
     // If the function has delegate-to-AST statements, ALL locals are AST-visible
     // because the AST execution could access any local through the thread-local stack.
     if (has_delegate_to_ast) {
+        printd(5, "computeIROnlyLocals '%s': has_delegate_to_ast, all AST-visible\n", name.c_str());
         return;  // ir_only_locals stays empty — all locals are AST-visible
     }
 
     // If the AST walker hit an unknown node type, conservatively treat all locals
     // as AST-visible.  This ensures correctness even for unhandled AST structures.
     if (unknown_node_found) {
+        printd(5, "computeIROnlyLocals '%s': unknown_node_found, all AST-visible\n", name.c_str());
         return;
     }
+
+    printd(5, "computeIROnlyLocals '%s': all_locals=%d ast_referenced=%d\n",
+        name.c_str(), (int)all_locals.size(), (int)ast_referenced_locals.size());
 
     // A local is IR-only if:
     // 1. It appears in LoadLocal/StoreLocal/UninstantiateLocal (the IR access path)
     // 2. It is NOT referenced by any AST expression tree (Call/Invoke/Lvalue exprs)
     // 3. It is NOT a reference type (which can alias other variables)
     for (const void* key : all_locals) {
+        const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
         // Local appears in AST expression trees — must stay AST-visible
         if (ast_referenced_locals.count(key)) {
+            printd(5, "  local '%s' (%p): AST-referenced (non-IR-only)\n", lv->getName(), key);
             continue;
         }
-        const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
         // Closure-captured locals use the closure variable stack (not the regular
         // local variable stack).  qore_rt_assign_local routes through the closure
         // stack when closure_use is true, so we must NOT skip it.
         if (lv->closureUse()) {
+            printd(5, "  local '%s' (%p): closure-captured (non-IR-only)\n", lv->getName(), key);
             continue;
         }
         // Reference-type locals can alias other variables — must stay AST-visible
         if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
+            printd(5, "  local '%s' (%p): reference type (non-IR-only)\n", lv->getName(), key);
             continue;
         }
+        printd(5, "  local '%s' (%p): IR-ONLY\n", lv->getName(), key);
         ir_only_locals.insert(key);
     }
 

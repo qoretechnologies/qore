@@ -139,6 +139,9 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("direct function call", \testCallDirect());
         addTestCase("function call in loop (stack safety)", \testCallInLoopStackSafety());
         addTestCase("fast function call", \testFastCall());
+        addTestCase("IR-only body locals skip instantiation", \testIROnlyBodyLocals());
+        addTestCase("assert with IR-only locals", \testAssertIROnly());
+        addTestCase("on_block_exit with IR-only locals", \testOnBlockExitWithIROnlyLocals());
         set_return_value(main());
     }
 
@@ -3989,6 +3992,256 @@ printf(\"%s\\n\", result);
             string result = trim(runScript(code, mode));
             assertEq("hello, world!", result,
                     sprintf("fast call string args %s", mode));
+        }
+    }
+
+    testIROnlyBodyLocals() {
+        # Test function with IR-only body locals (int) — verifies that the fast call
+        # path correctly skips body local instantiation when all body locals are IR-only
+        string code = "%modern
+int sub compute(int a, int b) {
+    int x = a * 2;
+    int y = b + 3;
+    int z = x + y;
+    return z;
+}
+int result = 0;
+for (int i = 0; i < 100; ++i) {
+    result = compute(10, 20);
+}
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("43", result,
+                    sprintf("ir-only body locals int %s", mode));
+        }
+
+        # Test function with IR-only body locals (float) — native float locals
+        code = "%modern
+float sub compute_float(float a, float b) {
+    float x = a * 2.0;
+    float y = b + 3.0;
+    float z = x + y;
+    return z;
+}
+float result = 0.0;
+for (int i = 0; i < 100; ++i) {
+    result = compute_float(10.0, 20.0);
+}
+printf(\"%d\\n\", int(result));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("43", result,
+                    sprintf("ir-only body locals float %s", mode));
+        }
+
+        # Test function with IR-only body locals in conditional branches
+        code = "%modern
+int sub branched(int n) {
+    int result;
+    if (n > 10) {
+        int high = n * 2;
+        result = high;
+    } else {
+        int low = n + 5;
+        result = low;
+    }
+    return result;
+}
+int r1 = branched(20);
+int r2 = branched(5);
+printf(\"%d %d\\n\", r1, r2);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("40 10", result,
+                    sprintf("ir-only body locals branches %s", mode));
+        }
+    }
+
+    testAssertIROnly() {
+        # Test that @assert with inline condition lowering works correctly
+        # and doesn't prevent locals from being IR-only
+        string code = "%modern
+int sub checked_add(int a, int b) {
+    int result = a + b;
+    @assert(result >= 0);
+    return result;
+}
+int val = 0;
+for (int i = 0; i < 100; ++i) {
+    val = checked_add(10, 20);
+}
+printf(\"%d\\n\", val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30", result,
+                    sprintf("assert passing %s", mode));
+        }
+
+        # Test assertion failure raises ASSERTION-ERROR
+        code = "%modern
+int sub must_fail(int x) {
+    @assert(x > 100, \"value too small: %d\", x);
+    return x;
+}
+try {
+    must_fail(5);
+    printf(\"FAIL\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("ASSERTION-ERROR", result,
+                    sprintf("assert failing %s", mode));
+        }
+
+        # Test assert in loop with IR-only body locals
+        code = "%modern
+int sub sum_with_asserts(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += i;
+        @assert(total >= 0);
+    }
+    return total;
+}
+printf(\"%d\\n\", sum_with_asserts(10));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("45", result,
+                    sprintf("assert in loop %s", mode));
+        }
+    }
+
+    testOnBlockExitWithIROnlyLocals() {
+        # Test 1: on_exit handler does NOT reference an IR-only local
+        # The IR-only local (total) should keep its value through on_exit execution
+        string code = "%modern
+int sub compute() {
+    int total = 0;
+    {
+        on_exit { printf(\"exit\\n\"); }
+        for (int i = 0; i < 5; ++i) {
+            total += i;
+        }
+    }
+    return total;
+}
+printf(\"%d\\n\", compute());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("exit\n10", result,
+                    sprintf("on_exit with IR-only local %s", mode));
+        }
+
+        # Test 2: on_exit handler DOES reference a local — that local must work correctly
+        code = "%modern
+int sub compute_with_cleanup() {
+    int total = 0;
+    {
+        on_exit { total = 99; }
+        total = 42;
+    }
+    return total;
+}
+printf(\"%d\\n\", compute_with_cleanup());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("99", result,
+                    sprintf("on_exit modifying local %s", mode));
+        }
+
+        # Test 3: on_success handler — only runs when no exception
+        code = "%modern
+int sub test_on_success() {
+    int total = 0;
+    {
+        on_success { total += 100; }
+        total = 5;
+    }
+    return total;
+}
+printf(\"%d\\n\", test_on_success());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("105", result,
+                    sprintf("on_success handler %s", mode));
+        }
+
+        # Test 4: on_error handler — only runs on exception
+        code = "%modern
+string sub test_on_error() {
+    string result = \"none\";
+    try {
+        {
+            on_error { result = \"caught\"; }
+            throw \"TEST-ERROR\", \"test\";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        # exception was raised
+    }
+    return result;
+}
+printf(\"%s\\n\", test_on_error());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("caught", result,
+                    sprintf("on_error handler %s", mode));
+        }
+
+        # Test 5: Nested scopes with on_exit and IR-only locals
+        code = "%modern
+int sub test_nested_scopes() {
+    int a = 0;
+    int b = 0;
+    {
+        on_exit { a += 10; }
+        a = 1;
+        {
+            on_exit { b += 20; }
+            b = 2;
+        }
+    }
+    return a + b;
+}
+printf(\"%d\\n\", test_nested_scopes());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("33", result,
+                    sprintf("nested on_exit scopes %s", mode));
+        }
+
+        # Test 6: on_exit in a loop — handler executes each iteration
+        code = "%modern
+int sub test_loop_on_exit() {
+    int count = 0;
+    int total = 0;
+    for (int i = 0; i < 3; ++i) {
+        {
+            on_exit { count += 1; }
+            total += i;
+        }
+    }
+    return count * 100 + total;
+}
+printf(\"%d\\n\", test_loop_on_exit());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("303", result,
+                    sprintf("on_exit in loop %s", mode));
         }
     }
 }

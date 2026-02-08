@@ -57,6 +57,12 @@ public:
 
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
+    //! Returns the expression (for expression form) or an invalid QoreValue (for block form)
+    DLLLOCAL QoreValue getExpression() const { return expression; }
+
+    //! Returns the statement block (for block form) or nullptr (for expression form)
+    DLLLOCAL StatementBlock* getBlock() const { return code; }
+
 private:
     QoreValue expression{};           //!< The expression to evaluate (if expression form)
     class StatementBlock* code;     //!< The statement block to execute (if block form)

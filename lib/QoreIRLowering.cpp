@@ -693,16 +693,60 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
-        auto* inst = builder.createDebug(debug_stmt, stmt->loc);
-        if (!exception_stack.empty()) {
-            inst->exception_target = exception_stack.back();
+        // Lower debug statements inline rather than delegating to AST.
+        // Expression form (@debug(expr)): lower the expression and discard result.
+        // Block form (@debug { ... }): recursively lower the statement block.
+        if (StatementBlock* block = debug_stmt->getBlock()) {
+            return lowerStatementBlock(block, error);
+        }
+        QoreValue expr = debug_stmt->getExpression();
+        if (expr) {
+            QoreIRValue lowered = lowerExpression(expr, error);
+            if (!lowered.isValid()) {
+                return false;
+            }
         }
         return true;
     }
     if (auto* assert_stmt = dynamic_cast<const AssertStatement*>(stmt)) {
-        auto* inst = builder.createAssert(assert_stmt, stmt->loc);
-        if (!exception_stack.empty()) {
-            inst->exception_target = exception_stack.back();
+        // Lower the condition expression inline so locals referenced in the condition
+        // can be classified as IR-only (not delegate-to-AST).  The Assert opcode is
+        // only emitted on the failure path where it re-evaluates via AST and raises
+        // ASSERTION-ERROR.
+        QoreValue cond = assert_stmt->getCondition();
+        if (cond) {
+            QoreIRValue cond_val = lowerConditionValue(cond, error);
+            if (!cond_val.isValid()) {
+                return false;
+            }
+            QoreIRBasicBlock* fail_block = createBlock("assert.fail");
+            QoreIRBasicBlock* merge_block = createBlock("assert.merge");
+            if (!fail_block || !merge_block) {
+                error = "IR builder failed to create blocks for assert";
+                return false;
+            }
+            builder.createBranchIf(cond_val, merge_block, fail_block);
+
+            // Failure path: delegate to AST for message evaluation and exception
+            builder.setBlock(fail_block);
+            auto* inst = builder.createAssert(assert_stmt, stmt->loc);
+            if (!exception_stack.empty()) {
+                inst->exception_target = exception_stack.back();
+            }
+            // Assert always raises an exception on this path, but the IR still needs
+            // a terminator.  The LLVM lowering's emitExceptionCheck handles the jump
+            // to the exception handler.  Add a branch to merge for IR well-formedness.
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createBranch(merge_block);
+            }
+
+            builder.setBlock(merge_block);
+        } else {
+            // No condition — fall back to delegate-to-AST
+            auto* inst = builder.createAssert(assert_stmt, stmt->loc);
+            if (!exception_stack.empty()) {
+                inst->exception_target = exception_stack.back();
+            }
         }
         return true;
     }

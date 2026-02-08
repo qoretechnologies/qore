@@ -658,6 +658,8 @@ protected:
     mutable std::atomic<uint32_t> deopt_count{0};
     //! Flag to allow a single recompilation attempt after deopt
     mutable std::once_flag jit_recompile_once;
+    //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
+    mutable bool all_body_locals_ir_only = false;
 
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
             ExceptionSink* xsink) const;
@@ -744,6 +746,9 @@ public:
 
     //! Returns the body locals vector for fast call setup
     DLLLOCAL const std::vector<LocalVar*>& getBodyLocals() const;
+
+    //! Returns true if all body locals are IR-only (can skip instantiation in fast call path)
+    DLLLOCAL bool areAllBodyLocalsIROnly() const;
 
     //! Returns true if this variant is statically eligible for the fast call path
     //! (no default args, not synchronized). Runtime readiness (has cached function)

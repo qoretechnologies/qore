@@ -153,6 +153,11 @@ private:
     std::unordered_set<const void*> native_int_locals;
     std::unordered_set<const void*> native_float_locals;
 
+    // Set of body locals that are IR-only — these can have their allocas initialized
+    // to NOTHING directly instead of loading from the runtime stack (since the fast
+    // call path skips their instantiation when all body locals are IR-only).
+    std::unordered_set<const void*> ir_only_body_locals;
+
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
 

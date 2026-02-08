@@ -608,8 +608,9 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
         bool is_native_float = native_float_locals.count(key) > 0;
         llvm::Type* alloca_type = is_native_float ? double_type : i64_type;
         llvm::AllocaInst* alloca = alloca_builder.CreateAlloca(alloca_type, nullptr, "local");
-        if (pre_instantiated_locals && pre_instantiated_locals->count(key)) {
-            // Pre-instantiated: initialize from runtime stack
+        if (pre_instantiated_locals && pre_instantiated_locals->count(key)
+                && !ir_only_body_locals.count(key)) {
+            // Pre-instantiated and NOT IR-only: initialize from runtime stack
             if (aot_mode) {
                 auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
                     llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
@@ -1100,6 +1101,18 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     all_locals_ir_only = ir_only_locals_set
         && func.total_local_count > 0
         && ir_only_locals_set->size() == func.total_local_count;
+
+    // Phase A: Identify IR-only body locals — these can skip thread-local stack
+    // instantiation in the fast call path and have allocas initialized to NOTHING.
+    ir_only_body_locals.clear();
+    if (ir_only_locals_set && !func.all_body_locals.empty()) {
+        for (LocalVar* lv : func.all_body_locals) {
+            const void* key = reinterpret_cast<const void*>(lv);
+            if (ir_only_locals_set->count(key)) {
+                ir_only_body_locals.insert(key);
+            }
+        }
+    }
 
     // Phase 3: Identify IR-only locals that can use native (unboxed) allocas.
     // Typed int/float locals that are IR-only skip boxing/unboxing overhead entirely.
@@ -1945,7 +1958,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // emitLocalInstantiation which runs after these entry-block allocas).
                 if (linst->local && pre_instantiated_locals &&
                         pre_instantiated_locals->count(key)) {
-                    if (aot_mode) {
+                    if (ir_only_body_locals.count(key)) {
+                        // IR-only body local: not on the runtime stack (fast call path
+                        // skips instantiation), so initialize alloca to default value
+                        if (is_native_int) {
+                            alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, 0), alloca);
+                        } else if (is_native_float) {
+                            alloca_builder.CreateStore(llvm::ConstantFP::get(double_type, 0.0), alloca);
+                        } else {
+                            alloca_builder.CreateStore(
+                                    llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+                        }
+                    } else if (aot_mode) {
                         auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
                             llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);

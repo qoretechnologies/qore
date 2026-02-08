@@ -1631,13 +1631,15 @@ extern "C" uint64_t qore_rt_call_fast(const QoreFunction* func,
 
         // Note: synchronized functions are excluded at compile time (isStaticallyFastCallEligible check)
 
-        // Get body locals
-        const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
-
-        // Instantiate body locals
-        int64 po = uvb->pgm->getParseOptions64();
-        for (LocalVar* lv : body_locals) {
-            lv->instantiate(po);
+        // Get body locals — skip instantiation if all are IR-only (managed by LLVM allocas,
+        // never accessed via thread-local stack)
+        bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
+        if (!skip_body_locals) {
+            const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+            int64 po = uvb->pgm->getParseOptions64();
+            for (LocalVar* lv : body_locals) {
+                lv->instantiate(po);
+            }
         }
 
         uint64_t result_bits = uvb->execCachedFunction(xsink);
@@ -1645,9 +1647,12 @@ extern "C" uint64_t qore_rt_call_fast(const QoreFunction* func,
         std::memcpy(&result, &result_bits, sizeof(result));
         val = result;
 
-        // Uninstantiate body locals in reverse order
-        for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
-            body_locals[i]->uninstantiate(xsink);
+        if (!skip_body_locals) {
+            const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+            // Uninstantiate body locals in reverse order
+            for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+                body_locals[i]->uninstantiate(xsink);
+            }
         }
     }
 

@@ -77,6 +77,9 @@ struct QoreAOTContext {
     //! All body locals from the fresh IR (needed by evalTiered for instantiation)
     std::vector<LocalVar*> all_body_locals;
 
+    //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
+    bool all_body_locals_ir_only = false;
+
     //! Pre-resolved CallDirect targets indexed by expr slot.
     //! Populated during buildAOTContext() to avoid per-call dynamic_cast in qore_rt_call_direct_aot()
     //! Size == num_exprs; entries with func==nullptr are not CallDirect slots.

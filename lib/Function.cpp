@@ -49,6 +49,7 @@
 #include "qore/intern/WhileStatement.h"
 #include "qore/intern/TryStatement.h"
 #include "qore/intern/SwitchStatement.h"
+#include "qore/intern/DebugStatement.h"
 #include "qore/intern/QoreAOT.h"
 
 #include <cassert>
@@ -2105,6 +2106,13 @@ const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
     return cached_ir->all_body_locals;
 }
 
+bool UserVariantBase::areAllBodyLocalsIROnly() const {
+    if (cached_aot_ctx) {
+        return cached_aot_ctx->all_body_locals_ir_only;
+    }
+    return all_body_locals_ir_only;
+}
+
 void UserVariantBase::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
     signature.parseInitPushLocalVars(classTypeInfo);
 }
@@ -2217,8 +2225,14 @@ static void collectStatementLocals(const AbstractStatement* stmt, std::vector<Lo
             collectBlockLocals(foreach_stmt->getLVList(), locals);
             collectAllStatementLocals(foreach_stmt->getCode(), locals);
         }
+    } else if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
+        // Debug is now fully lowered to IR: expression form has no locals,
+        // block form recurses into the statement block.
+        if (StatementBlock* block = debug_stmt->getBlock()) {
+            collectAllStatementLocals(block, locals);
+        }
     }
-    // OnBlockExitStatement, ContextStatement, SummarizeStatement, DebugStatement,
+    // OnBlockExitStatement, ContextStatement, SummarizeStatement,
     // AssertStatement: these generate special IR opcodes that call into the AST,
     // which handles their locals via LVListInstantiator. Skip them.
 }
@@ -2311,6 +2325,17 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     }
     // Classify locals as IR-only vs AST-visible for optimization
     func->computeIROnlyLocals();
+    // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
+    if (!func->all_body_locals.empty() && !func->ir_only_locals.empty()) {
+        bool all_ir = true;
+        for (LocalVar* lv : func->all_body_locals) {
+            if (!func->ir_only_locals.count(reinterpret_cast<const void*>(lv))) {
+                all_ir = false;
+                break;
+            }
+        }
+        all_body_locals_ir_only = all_ir;
+    }
     // Initialize type profiling for guards
     func->initGuardProfiles();
     cached_ir = func;
