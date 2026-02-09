@@ -2818,13 +2818,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::GlobalValue::PrivateLinkage, arr_init, "switch_string_cases");
 
             // Get pointer to first element
-            llvm::Value* arr_ptr = builder->CreateBitCast(case_arr,
-                    llvm::PointerType::get(ptr_type, 0));
+            llvm::Value* arr_ptr = builder->CreateBitCast(case_arr, ptr_type);
 
             // Call runtime helper: int32_t qore_rt_switch_string_lookup(uint64_t, const char**, int32_t)
             auto helper = module.getOrInsertFunction("qore_rt_switch_string_lookup",
                     llvm::FunctionType::get(i32_type,
-                            {i64_type, llvm::PointerType::get(ptr_type, 0), i32_type}, false));
+                            {i64_type, ptr_type, i32_type}, false));
             llvm::Value* case_idx = builder->CreateCall(helper,
                     {val_boxed, arr_ptr,
                      llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i32_type),

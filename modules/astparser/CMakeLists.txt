@@ -64,8 +64,8 @@ include(${CMAKE_SOURCE_DIR}/cmake/QoreMacros.cmake)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-include_directories(${CMAKE_SOURCE_DIR/build/include})
-include_directories(${CMAKE_SOURCE_DIR/include})
+include_directories(BEFORE ${CMAKE_BINARY_DIR}/include)
+include_directories(BEFORE ${CMAKE_SOURCE_DIR}/include)
 
 # source files
 set(ASTPARSER_QPP_SRC

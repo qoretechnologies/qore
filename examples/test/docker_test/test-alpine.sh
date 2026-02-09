@@ -40,10 +40,12 @@ fi
 find / -name "libqore.so*" -exec rm -f {} \;
 
 # ensure LLVM static libraries are installed (needed for JIT/AOT linking)
-# clang-dev provides cmake configs and .so files but NOT the .a files that cmake requires
-if ! ls /usr/lib/llvm*/lib/libLLVMDemangle.a 1>/dev/null 2>&1; then
-    echo "-- installing llvm-dev --"
-    apk add --no-cache llvm-dev
+# Alpine splits static libs into -static and -gtest packages
+echo "-- ensuring LLVM static libraries --"
+apk update
+LLVM_VER=$(ls -d /usr/lib/llvm* 2>/dev/null | sed 's|.*/llvm||' | sort -n | tail -1)
+if [ -n "$LLVM_VER" ]; then
+    apk add --no-cache llvm${LLVM_VER}-static llvm${LLVM_VER}-gtest
 fi
 
 # ensure CMAKE_PREFIX_PATH includes LLVM (for images without it in env.sh)

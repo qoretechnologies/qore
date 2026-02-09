@@ -441,7 +441,11 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     } else {
         triple = llvm::sys::getDefaultTargetTriple();
     }
+#if LLVM_VERSION_MAJOR >= 21
+    module.setTargetTriple(llvm::Triple(triple));
+#else
     module.setTargetTriple(triple);
+#endif
 
     std::string target_error;
     auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
@@ -1671,25 +1675,19 @@ static void generateModuleABI(llvm::LLVMContext& ctx, llvm::Module& module,
     // Export global function pointer variables (as binary modules expect)
     // qore_module_init: qore_module_init_t (function pointer)
     {
-        auto* init_fn_type = llvm::FunctionType::get(ptr_type, {}, false);
-        auto* init_ptr_type = llvm::PointerType::get(init_fn_type, 0);
-        new llvm::GlobalVariable(module, init_ptr_type, true,
+        new llvm::GlobalVariable(module, ptr_type, true,
             llvm::GlobalValue::ExternalLinkage, init_impl_fn, "qore_module_init");
     }
 
     // qore_module_ns_init: qore_module_ns_init_t (function pointer)
     {
-        auto* ns_init_fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
-        auto* ns_init_ptr_type = llvm::PointerType::get(ns_init_fn_type, 0);
-        new llvm::GlobalVariable(module, ns_init_ptr_type, true,
+        new llvm::GlobalVariable(module, ptr_type, true,
             llvm::GlobalValue::ExternalLinkage, ns_init_impl_fn, "qore_module_ns_init");
     }
 
     // qore_module_delete: qore_module_delete_t (function pointer)
     {
-        auto* del_fn_type = llvm::FunctionType::get(void_type, {}, false);
-        auto* del_ptr_type = llvm::PointerType::get(del_fn_type, 0);
-        new llvm::GlobalVariable(module, del_ptr_type, true,
+        new llvm::GlobalVariable(module, ptr_type, true,
             llvm::GlobalValue::ExternalLinkage, del_impl_fn, "qore_module_delete");
     }
 }
@@ -1888,25 +1886,19 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
     // Export global function pointer variables (as binary modules expect)
     // qore_module_init: qore_module_init_t (function pointer)
     {
-        auto* init_fn_type = llvm::FunctionType::get(ptr_type, {}, false);
-        auto* init_ptr_type = llvm::PointerType::get(init_fn_type, 0);
-        new llvm::GlobalVariable(module, init_ptr_type, true,
+        new llvm::GlobalVariable(module, ptr_type, true,
             llvm::GlobalValue::ExternalLinkage, init_impl_fn, "qore_module_init");
     }
 
     // qore_module_ns_init: qore_module_ns_init_t (function pointer)
     {
-        auto* ns_init_fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
-        auto* ns_init_ptr_type = llvm::PointerType::get(ns_init_fn_type, 0);
-        new llvm::GlobalVariable(module, ns_init_ptr_type, true,
+        new llvm::GlobalVariable(module, ptr_type, true,
             llvm::GlobalValue::ExternalLinkage, ns_init_impl_fn, "qore_module_ns_init");
     }
 
     // qore_module_delete: qore_module_delete_t (function pointer)
     {
-        auto* del_fn_type = llvm::FunctionType::get(void_type, {}, false);
-        auto* del_ptr_type = llvm::PointerType::get(del_fn_type, 0);
-        new llvm::GlobalVariable(module, del_ptr_type, true,
+        new llvm::GlobalVariable(module, ptr_type, true,
             llvm::GlobalValue::ExternalLinkage, del_impl_fn, "qore_module_delete");
     }
 }
