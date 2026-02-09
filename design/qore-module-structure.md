@@ -75,6 +75,65 @@ Rules:
   - Use `%try-module` only for optional deps.
 - Avoid circular load paths where possible; move optional services into a separate module.
 
+## Module Documentation
+
+### Intro Section Naming Convention
+
+Every module's `@mainpage` must start with a section using the naming convention
+`@section <lowercasemodname>intro <ModuleName> Module Introduction`, where the section
+ID is the module name in all lowercase concatenated with `intro` (no underscores, no
+hyphens).
+
+Examples:
+- `@section swaggerintro Swagger Module Introduction`
+- `@section httpserverintro HttpServer Module Introduction`
+- `@section dataproviderintro DataProvider Module Introduction`
+- `@section ncursesuiintro NcursesUi Module Introduction`
+
+This convention enables cross-referencing via `@ref <modname>intro "display text"` from
+other documentation. In the qore lang docs, these section IDs are referenced from the
+module list in `doxygen/lang/120_modules.dox.tmpl` and release notes.
+
+### Two-Phase Doc Build for External Modules with User Sub-Modules
+
+When an external binary module includes user sub-modules (e.g., ncurses includes
+NcursesUi and NcursesReplUi), the binary module docs should be built twice so that the
+binary module's mainpage can `@ref` into user module symbols:
+
+1. **Initial pass** (`docs-module`): generates the binary module's tag file (e.g.,
+   `ncurses.tag`) with empty `TAGFILES` and `WARN_IF_DOC_ERROR = NO` to suppress
+   unresolved cross-reference warnings.
+2. **User module builds** (`docs-<ModuleName>`): each generates its own tag file,
+   referencing the binary module's tag file for cross-references back to binary module
+   symbols.
+3. **Final pass** (`docs-module-final`): rebuilds binary module docs with user module
+   tag files in `TAGFILES`, enabling `@ref` cross-references from the mainpage into
+   user module symbols.
+
+Implementation pattern (in `CMakeLists.txt`):
+```cmake
+# Suppress warnings in initial pass
+file(APPEND ${CMAKE_BINARY_DIR}/Doxyfile
+    "\nWARN_IF_DOC_ERROR = NO\n")
+
+# Configure final-pass Doxyfile with user module tag files
+set(TAGFILES "\"${CMAKE_BINARY_DIR}/UserMod1.tag=../UserMod1/html\" ...")
+configure_file(${QORE_USERMODULE_DOXYGEN_TEMPLATE}
+    ${CMAKE_BINARY_DIR}/Doxyfile.final @ONLY)
+
+# Create final-pass target
+add_custom_target(docs-module-final
+    COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile.final
+    COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ...
+    ...)
+add_dependencies(docs-module-final docs-UserMod1 docs-UserMod2)
+add_dependencies(docs docs-module-final)
+```
+
+Reference implementations:
+- qore lang docs two-phase build: `CMakeLists.txt` (search for `docs-lang-final`)
+- ncurses module: `CMakeLists.txt` (search for `docs-module-final`)
+
 ## %include Deprecation (Modules)
 
 The `%include` parse directive is deprecated for Qore user modules in this
@@ -113,3 +172,6 @@ Current usages to migrate:
 - [ ] External module dependencies use `%try-module` (not `%requires`) — only in-repo modules use hard `%requires`
 - [ ] all scripts have the execute bit set
 - [ ] all tests and scripts use `%modern`
+- [ ] module mainpage has `@section <lowercasemodname>intro` as first section
+- [ ] documentation section IDs use `<modname>` prefix (not underscored variants)
+- [ ] external modules with user sub-modules: two-phase doc build configured

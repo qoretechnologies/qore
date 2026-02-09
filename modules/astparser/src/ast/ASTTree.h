@@ -34,6 +34,7 @@
 
 #include <vector>
 
+#include "ASTComment.h"
 #include "ASTNode.h"
 
 //! Represents the AST tree.
@@ -41,16 +42,29 @@ class ASTTree {
 public:
     std::vector<ASTNode*> nodes;
 
+    //! All comments found in the source code, in source order.
+    std::vector<ASTComment*> comments;
+
     ASTTree() {}
 
     virtual ~ASTTree() {
-        for (size_t i = 0, count = nodes.size(); i < count; i++)
+        for (size_t i = 0, count = nodes.size(); i < count; i++) {
             delete nodes[i];
+        }
         nodes.clear();
+        for (size_t i = 0, count = comments.size(); i < count; i++) {
+            delete comments[i];
+        }
+        comments.clear();
     }
 
     void addNode(ASTNode* node) {
         nodes.push_back(node);
+    }
+
+    //! Add a comment to the tree's comment list.
+    void addComment(ASTComment* c) {
+        comments.push_back(c);
     }
 };
 

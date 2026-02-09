@@ -158,4 +158,144 @@ string diff = diff_text(str1, str2);
         }
         return from + ',' + to;
     }
+
+    #! produces unified diff output between two strings, similar to \c "diff -u"
+    /** @par Example:
+        @code{.py}
+string result = diff_unified(old_text, new_text);
+# or with file labels:
+string result = diff_unified(old_text, new_text, "a/file.txt", "b/file.txt");
+        @endcode
+
+        @param s1 the original string
+        @param s2 the modified string
+        @param label1 label for the original file (default: \c "a")
+        @param label2 label for the modified file (default: \c "b")
+        @param ctx_lines number of context lines around each change (default: 3)
+
+        @return unified diff string; empty string if inputs are identical
+
+        @since Diff 1.1
+    */
+    public string sub diff_unified(string s1, string s2, string label1 = "a", string label2 = "b",
+            int ctx_lines = 3) {
+        if (s1 == s2) {
+            return "";
+        }
+
+        list<string> old_lines = s1.split("\n");
+        list<string> new_lines = s2.split("\n");
+
+        # Get the raw diff result (list of matched lines and {d:, i:} hashes)
+        list<auto> results = diff(old_lines, new_lines);
+
+        # Build a list of edit operations with line numbers
+        # Each entry: {type: "equal"|"delete"|"insert", old_line: int, new_line: int, text: string}
+        list<hash<auto>> ops = ();
+        int old_idx = 0;
+        int new_idx = 0;
+        foreach auto item in (results) {
+            if (item.typeCode() == NT_HASH) {
+                list<auto> del = item.d;
+                list<auto> ins = item.i;
+                foreach auto d in (del) {
+                    ops += {"type": "delete", "old_line": old_idx, "new_line": new_idx, "text": string(d)};
+                    ++old_idx;
+                }
+                foreach auto i in (ins) {
+                    ops += {"type": "insert", "old_line": old_idx, "new_line": new_idx, "text": string(i)};
+                    ++new_idx;
+                }
+            } else {
+                ops += {"type": "equal", "old_line": old_idx, "new_line": new_idx, "text": string(item)};
+                ++old_idx;
+                ++new_idx;
+            }
+        }
+
+        # Group changes into hunks with context
+        list<list<hash<auto>>> hunks = ();
+        int i = 0;
+        while (i < ops.size()) {
+            if (ops[i].type == "equal") {
+                ++i;
+                continue;
+            }
+            # Found a change — expand to include context
+            int hunk_start = i - ctx_lines;
+            if (hunk_start < 0) {
+                hunk_start = 0;
+            }
+            # Find the end of this change group (including merging nearby changes)
+            int hunk_end = i;
+            while (hunk_end < ops.size()) {
+                if (ops[hunk_end].type != "equal") {
+                    hunk_end++;
+                    continue;
+                }
+                # Count consecutive equal lines
+                int eq_count = 0;
+                int j = hunk_end;
+                while (j < ops.size() && ops[j].type == "equal") {
+                    ++eq_count;
+                    ++j;
+                }
+                if (j < ops.size() && eq_count <= ctx_lines * 2) {
+                    # Merge with next change
+                    hunk_end = j;
+                } else {
+                    # End this hunk with context after the last change
+                    hunk_end += ctx_lines;
+                    if (hunk_end > ops.size()) {
+                        hunk_end = ops.size();
+                    }
+                    break;
+                }
+            }
+            if (hunk_end > ops.size()) {
+                hunk_end = ops.size();
+            }
+            hunks += (ops[hunk_start..hunk_end - 1],);
+            i = hunk_end;
+        }
+
+        # Format output
+        string output = sprintf("--- %s\n+++ %s\n", label1, label2);
+        foreach list<hash<auto>> hunk in (hunks) {
+            # Calculate hunk header
+            int old_start = hunk[0].old_line + 1;
+            int new_start = hunk[0].new_line + 1;
+            int old_count = 0;
+            int new_count = 0;
+            foreach hash<auto> op in (hunk) {
+                switch (op.type) {
+                    case "equal":
+                        ++old_count;
+                        ++new_count;
+                        break;
+                    case "delete":
+                        ++old_count;
+                        break;
+                    case "insert":
+                        ++new_count;
+                        break;
+                }
+            }
+            output += sprintf("@@ -%d,%d +%d,%d @@\n", old_start, old_count, new_start, new_count);
+            foreach hash<auto> op in (hunk) {
+                switch (op.type) {
+                    case "equal":
+                        output += " " + op.text + "\n";
+                        break;
+                    case "delete":
+                        output += "-" + op.text + "\n";
+                        break;
+                    case "insert":
+                        output += "+" + op.text + "\n";
+                        break;
+                }
+            }
+        }
+        return output;
+    }
 }

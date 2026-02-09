@@ -129,6 +129,11 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - Variables will not be auto-initialized with default values based on type
     @endparblock
 
+    @par C++17 Required
+    @parblock
+    %Qore now requires a C++ compiler with C++17 support. Previously, C++11 was sufficient.
+    @endparblock
+
     @subsection qore_2_3_0_new_features New Features in Qore
     @par New Required Libraries: nghttp2, Brotli, Zstd, and LZ4
     @parblock
@@ -145,6 +150,27 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
     - @ref Qore::Option::HAVE_ZSTD "Option::HAVE_ZSTD"
     - @ref Qore::Option::HAVE_LZ4 "Option::HAVE_LZ4"
+    @endparblock
+
+    @par New Build Requirement: Rust Toolchain and tree-sitter CLI
+    @parblock
+    The \c astparser module now uses a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based
+    parser backend for Qore source code analysis. Building %Qore from source now requires a
+    <a href="https://rustup.rs/">Rust toolchain</a> (cargo) and the \c tree-sitter CLI tool to generate the
+    parser from the Qore grammar definition.
+
+    Install the Rust toolchain packages:
+    - <b>RHEL/Fedora:</b> \c rust, \c cargo
+    - <b>Debian/Ubuntu:</b> \c cargo
+    - <b>Alpine:</b> \c cargo, \c rust
+
+    Then install the tree-sitter CLI:
+    @code
+cargo install tree-sitter-cli@0.26.5
+    @endcode
+
+    The tree-sitter C runtime library is fetched automatically by CMake via \c FetchContent; only the CLI tool
+    needs to be pre-installed.
     @endparblock
 
     - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>
@@ -259,7 +285,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         - supports strings, comments, regex, heredocs, substitution, and transliteration
         - new @ref Qdx::count_braces() "count_braces()" and @ref Qdx::count_all_brackets() "count_all_brackets()"
           helper functions for accurate bracket counting in Qore code
-    - @ref restschemamdataproviderintro "RestSchemaDataProvider" module
+    - @ref restschemadataproviderintro "RestSchemaDataProvider" module
       - new module providing a unified data provider API for both Swagger 2.0 and OpenAPI 3.0 / 3.1 REST schemas
     - @ref httpserverintro "HttpServer" module
       - implemented async I/O mode for high-concurrency connection handling (enabled by default)
@@ -272,12 +298,12 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
         - new @ref HttpServer::HttpServer::isAsyncMode() "HttpServer::isAsyncMode()" method to check if async mode is enabled
         - new @ref HttpServer::HttpServer::queueAsyncResponse() "HttpServer::queueAsyncResponse()" method for async response sending
         - set \c async_mode to \c False in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" to disable
-    - @ref httpserverasyncio_intro "HttpServerAsyncIo" module
+    - @ref httpserverasynciointro "HttpServerAsyncIo" module
       - new module providing async I/O support classes for the @ref httpserverintro "HttpServer" module
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
       - new @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" class for HTTP/2 server connection handling
       - \c HttpAsyncSocketIoController supports HTTP/2 via \c http_version option
-    - @ref http2clientio_intro "Http2ClientIo" module
+    - @ref http2clientiointro "Http2ClientIo" module
       - new module providing HTTP/2 multiplexed client I/O support
       - enables multiple concurrent streams on a single TCP connection
       - new @ref Http2ClientIo::Http2ClientConnectionManager "Http2ClientConnectionManager" class for connection pooling
@@ -571,7 +597,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - new module providing a REST client for Unleashed Software API
       - supports HMAC-SHA256 signature-based authentication
       - provides UnleashedRestConnection for connection management with \c unleashed:// URL scheme
-    - @ref unleashedataproviderintro "UnleashedDataProvider" module
+    - @ref unleasheddataproviderintro "UnleashedDataProvider" module
       - new module providing a data provider API for Unleashed inventory management and purchasing
       - customer management (create, read, update, search)
       - product catalog management (create, read, update, obsolete, search)
@@ -605,6 +631,10 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - preserves all previously committed program state (variables, functions, classes, etc.)
       - enables REPL-style interactive programming where parse errors don't destroy the @ref Qore::Program "Program" object
     - @ref astparserintro "astparser" module
+      - added a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based parser backend
+        for Qore source code analysis, providing a full concrete syntax tree (CST) for accurate formatting and
+        code transformation; the tree-sitter Qore grammar supports all Qore language constructs including
+        parse directives, regex literals, heredocs, implicit arguments, and complex expressions
       - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()" for
         scope-aware symbol completion with scope level information
         (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
@@ -621,6 +651,13 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line numbers
         (now returns 0-indexed values consistent with LSP convention)
         (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+    - \c QoreCodeFormat user module
+      - new module providing automated Qore source code formatting using the tree-sitter-based CST from the
+        \c astparser module
+      - line-length-aware wrapping (120 character default) with intelligent binary expression chain and ternary
+        operator wrapping
+      - preserves comments, parse directives, and string literals
+      - idempotent formatting (formatting already-formatted code produces identical output)
 
     @subsection qore_2_3_0_deprecated Deprecated Features
     - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now
@@ -1272,7 +1309,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - <a href="../../modules/RestClient/html/index.html#restclientintro">RestClient</a> module
       - fixed URI path reporting in REST error messages
         (<a href="https://github.com/qoretechnologies/qore/issues/4760">issue 4760</a>)
-    - <a href="../../modules/ServiceNowRestClient/html/index.html#serviceNowrestclientintro">ServiceNowRestClient</a> module
+    - <a href="../../modules/ServiceNowRestClient/html/index.html#servicenowrestclientintro">ServiceNowRestClient</a> module
       - create URI request paths properly; restored functionality with recent versions of ServiceNow
         (<a href="https://github.com/qoretechnologies/qore/issues/4758">issue 4758</a>)
     - <a href="../../modules/ServiceNowRestDataProvider/html/index.html#servicenowrestdataproviderintro">ServiceNowRestDataProvider</a> module
@@ -1399,7 +1436,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
 
     @subsection qore_1_15_new_features New Features in Qore
     - New user modules:
-      - <a href="../../modules/JdbcMicrosoftSqlUtil/html/index.html#JdbcMicrosoftSqlUtilintro">JdbcMicrosoftSqlUtil</a>
+      - <a href="../../modules/JdbcMicrosoftSqlUtil/html/index.html#jdbcmicrosoftsqlutilintro">JdbcMicrosoftSqlUtil</a>
         (<a href="https://github.com/qoretechnologies/qore/issues/4705">issue 4705</a>)
       - <a href="../../modules/JdbcOracleSqlUtil/html/index.html#jdbcoraclesqlutilintro">MssqlSqlUtilBase</a>
         (<a href="https://github.com/qoretechnologies/qore/issues/4705">issue 4705</a>)
@@ -1532,7 +1569,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - <a href="../../modules/RestHandler/html/index.html#resthandlerintro">RestHandler</a> module
       - always set the \c socketobject request context property
         (<a href="https://github.com/qoretechnologies/qore/issues/4666">issue 4666</a>)
-    - <a href="../../modules/ServiceNowRestClient/html/index.html#serviceNowrestclientintro">ServiceNowRestClient</a> module
+    - <a href="../../modules/ServiceNowRestClient/html/index.html#servicenowrestclientintro">ServiceNowRestClient</a> module
       - support full ping operations, also with polling, using an authenticated request
         (<a href="https://github.com/qoretechnologies/qore/issues/4677">issue 4677</a>)
     - fixed a bug where @ref Qore::parse_url() "parse_url()" failed with passwords with / characters
@@ -1750,7 +1787,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     Bugfix release with minor new features in user modules; see below for more information
 
     @subsection qore_1_10_0_new_features New Features in Qore
-    - <a href="../../modules/AwsRestClientDataProvider/html/index.html#awsrestclientdataprovider_intro">AwsRestClientDataProvider</a> module
+    - <a href="../../modules/AwsRestClientDataProvider/html/index.html#awsrestclientdataproviderintro">AwsRestClientDataProvider</a> module
       - new module
         (<a href="https://github.com/qoretechnologies/qore/issues/4564">issue 4564</a>)
     - <a href="../../modules/DataProvider/html/index.html#dataproviderintro">DataProvider</a> module
@@ -2426,7 +2463,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - <a href="../../modules/OracleSqlUtil/html/index.html#oraclesqlutilintro">OracleSqlUtil</a> module
       - fixed a bug where keywords were not properly quoted in merge / upsert statements
         (<a href="https://github.com/qoretechnologies/qore/issues/4297">issue 4297</a>)
-    - <a href="../../modules/ServiceNowRestClient/html/index.html#serviceNowrestclientintro">ServiceNowRestClient</a> module
+    - <a href="../../modules/ServiceNowRestClient/html/index.html#servicenowrestclientintro">ServiceNowRestClient</a> module
       - updated to no longer require OAuth2 login params
         (<a href="https://github.com/qoretechnologies/qore/issues/4295">issue 4295</a>)
     - <a href="../../modules/ServiceNowRestDataProvider/html/index.html#servicenowrestdataproviderintro">ServiceNowRestDataProvider</a> module
@@ -2704,7 +2741,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     Bugfix release; see below for more information
 
     @subsection qore_0910_new_modules New Modules in Qore
-    - <a href="../../modules/ServiceNowRestClient/html/index.html#serviceNowrestclientintro">ServiceNowRestClient</a>: provides APIs for
+    - <a href="../../modules/ServiceNowRestClient/html/index.html#servicenowrestclientintro">ServiceNowRestClient</a>: provides APIs for
       communicating with the ServiceNow REST API
     - <a href="../../modules/ServiceNowRestDataProvider/html/index.html#servicenowrestdataproviderintro">ServiceNowRestDataProvider</a>: Provides a
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for the ServiceNow REST API

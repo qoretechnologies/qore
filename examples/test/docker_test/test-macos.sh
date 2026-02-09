@@ -17,6 +17,12 @@ BUILD_DIR="${QORE_SRC_DIR}/build-ci"
 rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
 
+# install tree-sitter CLI for astparser module build
+if ! command -v tree-sitter > /dev/null 2>&1; then
+    echo "=== Installing tree-sitter CLI ==="
+    cargo install tree-sitter-cli@0.26.5
+fi
+
 echo "=== Building Qore on macOS ==="
 cd "${BUILD_DIR}"
 

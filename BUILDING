@@ -7,7 +7,7 @@ see README-WINDOWS for info specific to the windows builds
 
 Build Requirements
 ------------------
-*) a C++ compiler with C++11 support
+*) a C++ compiler with C++17 support
 
 *) flex 2.5.31 (or greater -- 2.5.4 or before will NOT work, sorry.  flex 2.5.37 or greater is recommended)
 qore requires this very new version of flex in order to build a reentrant parser.  I was not able to build a reentrant parser with earler versions of flex (including 2.5.4).  many older linux distributions ship with flex 2.5.4; this version will not work and the configure script will exit an error message if only this version is found.  You can download flex 2.5.37 at:
@@ -20,9 +20,9 @@ qore requires bison 1.85+ to be able to interface properly with the scanner prod
 *) POSIX threads
 OS-level POSIX thread support is required to build qore.
 
-*) PCRE 6 or higher (earlier versions will probably work as well)
-for Perl-Compatible Regular Expressions, Qore now uses the PCRE2 library instead of PCRE functions.
-	http://www.pcre.org
+*) PCRE2 (libpcre2-8)
+for Perl-Compatible Regular Expressions. Install libpcre2-dev (Debian/Ubuntu), pcre2-devel (RHEL/Fedora), or pcre2-dev (Alpine).
+	https://github.com/PCRE2Project/pcre2
 if you have the PCRE2 headers and libraries in a location the configure script cannot find, then you can either use the --with-pcre2-libs and --with-pcre2-libraries options, or set the PCRE_DIR environment variable before running configure
 
 *) openssl 0.9.7 or higher (3.0 or better recommended)
@@ -38,9 +38,33 @@ if you have the open headers and libraries in a location the configure script ca
 	http://gmplib.org/
 This is for the arbitrary-precision numeric type introduced with Qore 0.8.6
 
+*) brotli
+	https://github.com/google/brotli
+Required for Brotli compression support. Install libbrotli-dev (Debian/Ubuntu), brotli-devel (RHEL/Fedora), or brotli-dev (Alpine).
+
+*) zstd (Zstandard) 1.4 or higher
+	https://facebook.github.io/zstd/
+Required for Zstandard compression support. Install libzstd-dev (Debian/Ubuntu), libzstd-devel (RHEL/Fedora), or zstd-dev (Alpine).
+
+*) lz4
+	https://lz4.github.io/lz4/
+Required for LZ4 compression support. Install liblz4-dev (Debian/Ubuntu), lz4-devel (RHEL/Fedora), or lz4-dev (Alpine).
+
 *) nghttp2
 	https://nghttp2.org/
-Required for HTTP/2 support. Install libnghttp2-dev (Debian/Ubuntu) or nghttp2-devel (RHEL/Fedora).
+Required for HTTP/2 support. Install libnghttp2-dev (Debian/Ubuntu), nghttp2-devel (RHEL/Fedora), or nghttp2-dev (Alpine).
+
+*) Rust toolchain with cargo
+	https://rustup.rs/
+Required for building the tree-sitter CLI tool used by the astparser module.
+Install rust and cargo: rust cargo (RHEL/Fedora), cargo (Debian/Ubuntu), cargo rust (Alpine).
+Then install the tree-sitter CLI: cargo install tree-sitter-cli@0.26.5
+
+*) tree-sitter CLI (for building the astparser module)
+	https://tree-sitter.github.io/tree-sitter/
+Required for generating the Qore grammar parser used by the astparser module and the documentation system.
+Install with: cargo install tree-sitter-cli@0.26.5
+The tree-sitter C runtime library is fetched automatically by CMake at build time; only the CLI tool needs to be pre-installed.
 
 CMAKE Build
 -----------
@@ -108,7 +132,7 @@ note that there is a freebsd port of Qore available (http://www.freebsd.org/cgi/
 One of the main development platforms for Qore.  No particular issues with recent versions of OS/X.  Note that there is a port available for Qore in macports (https://trac.macports.org/browser/trunk/dports/lang/qore/Portfile); there are also ports for the development version and for many binary modules
 
 *) Solaris:
-Supported with g++ with c++11 support, Oracle Studio CC not tested recently
+Supported with g++ with c++17 support, Oracle Studio CC not tested recently
 
 *) HP-UX
 Qore supported HP-UX in the past, but it has not been tested for a few years.

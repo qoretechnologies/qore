@@ -1,0 +1,44 @@
+{
+  "name": "tree-sitter-qore",
+  "version": "1.0.0",
+  "description": "Qore grammar for tree-sitter",
+  "main": "bindings/node",
+  "keywords": [
+    "parser",
+    "tree-sitter",
+    "qore"
+  ],
+  "author": "Qore Technologies",
+  "license": "LGPL-2.1",
+  "dependencies": {
+    "nan": "^2.17.0"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.24.7"
+  },
+  "scripts": {
+    "build": "tree-sitter generate",
+    "test": "tree-sitter test"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.qore",
+      "file-types": [
+        "q",
+        "qm",
+        "qr",
+        "qtest",
+        "qc",
+        "ql",
+        "qsd",
+        "qfd",
+        "qwf",
+        "qjob",
+        "qclass",
+        "qconst",
+        "qconn"
+      ],
+      "injection-regex": "qore"
+    }
+  ]
+}

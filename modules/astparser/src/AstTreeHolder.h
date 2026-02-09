@@ -2,9 +2,9 @@
 /*
   AstTreeHolder.h
 
-  Qore AST Parser
+  Qore AST Parser — tree-sitter backend
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -34,25 +34,26 @@
 
 #include "qore/Qore.h"
 
-class ASTNode;
-class ASTParseError;
-class ASTTree;
+class AstParseResult;
 
 class AstTreeHolder : public AbstractPrivateData {
 private:
-    ASTTree* tree;
+    AstParseResult* result;
 
 public:
-    AstTreeHolder(ASTTree* t = nullptr);
+    AstTreeHolder(AstParseResult* r = nullptr);
     ~AstTreeHolder();
 
     void printTree(std::ostream& os);
 
     QoreListNode* getNodesInfo();
 
-    void set(ASTTree* t);
-    ASTTree* get();
-    ASTTree* release();
+    //! Get all comments from the tree.
+    QoreListNode* getComments();
+
+    void set(AstParseResult* r);
+    AstParseResult* get();
+    AstParseResult* release();
 };
 
 #endif // _QLS_ASTTREEHOLDER_H

@@ -39,6 +39,12 @@ fi
 
 find / -name "libqore.so*" -exec rm -f {} \;
 
+# install tree-sitter CLI for astparser module build
+if ! command -v tree-sitter > /dev/null 2>&1; then
+    echo && echo "-- installing tree-sitter CLI --"
+    cargo install tree-sitter-cli@0.26.5
+fi
+
 # build Qore and install
 echo && echo "-- building Qore --"
 cd ${QORE_SRC_DIR}

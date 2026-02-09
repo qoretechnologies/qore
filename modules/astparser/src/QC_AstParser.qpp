@@ -30,8 +30,8 @@
 
 #include "AstParserHolder.h"
 #include "AstTreeHolder.h"
+#include "AstParser.h"
 #include "ast/ASTParseError.h"
-#include "ast/ASTTree.h"
 
 #include "QC_AstTree.h"
 
@@ -55,11 +55,11 @@ AstParser::constructor() {
     @return parsed AST tree
  */
 *AstTree AstParser::parseFile(string filename) {
-    std::unique_ptr<ASTTree> tree(aph->parseFile(filename->getBuffer()));
-    if (!tree)
+    std::unique_ptr<AstParseResult> result(aph->parseFile(filename->getBuffer()));
+    if (!result)
         return QoreValue();
 
-    std::unique_ptr<AstTreeHolder> ath(new AstTreeHolder(tree.release()));
+    std::unique_ptr<AstTreeHolder> ath(new AstTreeHolder(result.release()));
     return new QoreObject(QC_ASTTREE, getProgram(), ath.release());
 }
 
@@ -69,11 +69,11 @@ AstParser::constructor() {
     @return parsed AST tree
  */
 *AstTree AstParser::parseString(string str) {
-    std::unique_ptr<ASTTree> tree(aph->parseString(str->getBuffer()));
-    if (!tree)
+    std::unique_ptr<AstParseResult> result(aph->parseString(str->getBuffer()));
+    if (!result)
         return QoreValue();
 
-    std::unique_ptr<AstTreeHolder> ath(new AstTreeHolder(tree.release()));
+    std::unique_ptr<AstTreeHolder> ath(new AstTreeHolder(result.release()));
     return new QoreObject(QC_ASTTREE, getProgram(), ath.release());
 }
 

@@ -2,9 +2,9 @@
 /*
   GetNodesInfoQuery.h
 
-  Qore AST Parser
+  Qore AST Parser — tree-sitter backend
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -28,45 +28,23 @@
 #ifndef _QLS_QUERIES_GETNODESINFOQUERY_H
 #define _QLS_QUERIES_GETNODESINFOQUERY_H
 
-#include <vector>
-
-#include "ast/ASTModifiers.h"
-#include "ast/ASTName.h"
-#include "ast/ASTOperator.h"
-
-class ASTDeclaration;
-class ASTExpression;
-class ASTParseOption;
-class ASTStatement;
-class ASTTree;
+class AstParseResult;
 
 class ExceptionSink;
 class QoreHashNode;
 class QoreListNode;
-class QoreStringNode;
 
 class GetNodesInfoQuery {
 public:
     GetNodesInfoQuery() = delete;
     GetNodesInfoQuery(const GetNodesInfoQuery& other) = delete;
 
-    //! Get info about nodes in the given tree.
+    //! Get info about nodes in the given tree-sitter parse result.
     /**
-        @param tree tree to search
+        @param result tree-sitter parse result to query
         @return list of info about nodes
     */
-    static QoreListNode* get(ASTTree* tree);
-
-private:
-    static QoreHashNode* getDeclaration(ASTTree* tree, ASTDeclaration* decl, ExceptionSink* xsink);
-    static QoreHashNode* getExpression(ASTTree* tree, ASTExpression* expr, ExceptionSink* xsink);
-    static QoreHashNode* getLocation(const ASTParseLocation& loc, ExceptionSink* xsink);
-    static QoreStringNode* getModifiers(ASTModifiers& mods);
-    static QoreHashNode* getName(ASTTree* tree, ASTName& name, ExceptionSink* xsink);
-    static QoreHashNode* getName(ASTTree* tree, ASTName* name, ExceptionSink* xsink);
-    static QoreStringNode* getOperator(ASTOperator& op);
-    static QoreHashNode* getParseOption(ASTTree* tree, ASTParseOption* po, ExceptionSink* xsink);
-    static QoreHashNode* getStatement(ASTTree* tree, ASTStatement* stmt, ExceptionSink* xsink);
+    static QoreListNode* get(AstParseResult* result);
 };
 
 #endif // _QLS_QUERIES_GETNODESINFOQUERY_H
