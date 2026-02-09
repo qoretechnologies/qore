@@ -355,6 +355,27 @@ QoreIRVarInstruction* QoreIRBuilder::createStoreThreadLocal(Var* var, QoreIRValu
     return inst;
 }
 
+QoreIRHashKeyAccessInstruction* QoreIRBuilder::createHashKeyAccess(const char* key_name,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRHashKeyAccessInstruction>(key_name);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInvokeInstruction* QoreIRBuilder::createInvokeHashKeyAccess(const char* key_name,
+        const QoreValue& expr, const std::vector<QoreIRValue>& operands,
+        QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInvokeInstruction>(expr, normal_target, exception_target);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = operands;
+    inst->invoke_opcode = QoreIROpcode::HashKeyAccess;
+    inst->invoke_key_name = key_name;
+    return inst;
+}
+
 QoreIRSelfMemberInstruction* QoreIRBuilder::createLoadSelfMember(const char* member_name,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRSelfMemberInstruction>(member_name);

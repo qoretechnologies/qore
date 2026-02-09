@@ -257,6 +257,24 @@ private:
     };
     std::vector<FlowTarget> flow_stack;
     std::vector<QoreIRBasicBlock*> exception_stack;
+
+    //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
+    /** When active, $1/$2/$# references in lowerExpression() use these IR values directly
+     * instead of emitting LoadImplicitArg/LoadImplicitElement runtime calls.
+     * This eliminates 6+ runtime calls (push/pop/load for arg and element) per loop iteration.
+     */
+    struct VirtualImplicitContext {
+        QoreIRValue arg0;      //!< virtual $1 value (offset 0)
+        QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
+        QoreIRValue element;   //!< virtual $# value
+        bool active = false;   //!< true when virtual context is in effect
+    };
+    VirtualImplicitContext virtual_implicit;
+
+    //! Counter for AST-delegated instructions (Call/Invoke with expr, DotEval* except
+    //! DotEvalMethodDirect/HashKeyAccess).  Used by lowerMapNative to determine whether
+    //! push/pop implicit arg calls are needed for the map body.
+    int ast_delegate_count = 0;
 };
 
 #endif

@@ -844,10 +844,15 @@ extern "C" uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, 
     QoreValue v = fromBits(hash_val);
     if (v.getType() == NT_HASH) {
         const QoreHashNode* h = v.get<const QoreHashNode>();
-        QoreValue result = h->getKeyValue(key);
-        return toBits(result.refSelf());
+        QoreValue result = h->getKeyValue(key, xsink);
+        return *xsink ? toBits(QoreValue()) : toBits(result.refSelf());
     }
-    // Not a hash (or NOTHING/NULL): return NOTHING
+    if (v.getType() == NT_OBJECT) {
+        QoreObject* o = const_cast<QoreObject*>(v.get<const QoreObject>());
+        QoreValue rv = o->evalMember(key, xsink);
+        return *xsink ? toBits(QoreValue()) : toBits(rv);
+    }
+    // Not a hash or object (or NOTHING/NULL): return NOTHING
     return toBits(QoreValue());
 }
 

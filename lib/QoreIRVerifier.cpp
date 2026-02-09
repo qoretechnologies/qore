@@ -172,6 +172,16 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::FoldlMinFloat:
         case QoreIROpcode::FoldlMaxInt:
         case QoreIROpcode::FoldlMaxFloat:
+        case QoreIROpcode::FoldrSumInt:
+        case QoreIROpcode::FoldrSumFloat:
+        case QoreIROpcode::FoldrProdInt:
+        case QoreIROpcode::FoldrProdFloat:
+        case QoreIROpcode::FoldrDiffInt:
+        case QoreIROpcode::FoldrDiffFloat:
+        case QoreIROpcode::FoldrMinInt:
+        case QoreIROpcode::FoldrMinFloat:
+        case QoreIROpcode::FoldrMaxInt:
+        case QoreIROpcode::FoldrMaxFloat:
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat:
@@ -275,6 +285,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::LoadClosure:
         case QoreIROpcode::LoadGlobal:
         case QoreIROpcode::LoadThreadLocal:
+        case QoreIROpcode::HashKeyAccess:
         case QoreIROpcode::LoadSelfMember:
         case QoreIROpcode::LoadStaticVar:
         case QoreIROpcode::NewObject:
@@ -456,6 +467,16 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::FoldlMinFloat:
         case QoreIROpcode::FoldlMaxInt:
         case QoreIROpcode::FoldlMaxFloat:
+        case QoreIROpcode::FoldrSumInt:
+        case QoreIROpcode::FoldrSumFloat:
+        case QoreIROpcode::FoldrProdInt:
+        case QoreIROpcode::FoldrProdFloat:
+        case QoreIROpcode::FoldrDiffInt:
+        case QoreIROpcode::FoldrDiffFloat:
+        case QoreIROpcode::FoldrMinInt:
+        case QoreIROpcode::FoldrMinFloat:
+        case QoreIROpcode::FoldrMaxInt:
+        case QoreIROpcode::FoldrMaxFloat:
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat:
@@ -597,6 +618,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::NewComplexList:     // Uses QoreIRNewComplexListInstruction, no operands
         case QoreIROpcode::VrnConstruct:       // Uses QoreIRVrnConstructInstruction, no operands
             return 0;
+        case QoreIROpcode::HashKeyAccess:         // 1 operand: hash value (key stored in QoreIRHashKeyAccessInstruction)
         case QoreIROpcode::IteratorCreateReverse: // 1 operand: iterable
             return 1;
         case QoreIROpcode::HashSetKeyValue:    // 3 operands: hash, key, value
@@ -741,6 +763,22 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
         const QoreIRInstruction* last = block->instructions.back().get();
         if (!isTerminator(last->opcode)) {
             error = "basic block '" + block->name + "' missing terminator";
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "VERIFIER: block '%s' has %zu instructions, last opcode=%d\n",
+                    block->name.c_str(), block->instructions.size(), static_cast<int>(last->opcode));
+                for (size_t i = 0; i < block->instructions.size(); ++i) {
+                    fprintf(stderr, "  inst[%zu]: opcode=%d\n", i,
+                        static_cast<int>(block->instructions[i]->opcode));
+                }
+                // Also dump all blocks
+                for (const auto& b : func.blocks) {
+                    fprintf(stderr, "BLOCK '%s' (%zu instructions):", b->name.c_str(), b->instructions.size());
+                    for (const auto& inst : b->instructions) {
+                        fprintf(stderr, " %d", static_cast<int>(inst->opcode));
+                    }
+                    fprintf(stderr, "\n");
+                }
+            }
             return false;
         }
     }

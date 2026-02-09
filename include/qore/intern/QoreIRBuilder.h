@@ -94,6 +94,13 @@ public:
     QoreIRVarInstruction* createLoadThreadLocal(Var* var, const QoreProgramLocation* loc = nullptr);
     QoreIRVarInstruction* createStoreThreadLocal(Var* var, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
+    // Hash key access
+    QoreIRHashKeyAccessInstruction* createHashKeyAccess(const char* key_name,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInvokeInstruction* createInvokeHashKeyAccess(const char* key_name,
+        const QoreValue& expr, const std::vector<QoreIRValue>& operands,
+        QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc = nullptr);
     // Self member access
     QoreIRSelfMemberInstruction* createLoadSelfMember(const char* member_name,
         const QoreProgramLocation* loc = nullptr);

@@ -166,6 +166,9 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
     if (!lowering.lowerStatementBlock(statements, error)) {
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT-LOWER: lowering failed for '%s': %s\n", name, error.c_str());
+        }
         delete ir_func;
         ir_func = nullptr;
         return -1;
@@ -179,6 +182,11 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         builder.createReturnNothing();
     }
     if (!QoreIRVerifier::verify(*ir_func, error)) {
+        if (getenv("QORE_AOT_DUMP_IR")) {
+            fprintf(stderr, "=== FAILED IR for %s ===\n", name);
+            QoreIRPrinter::print(*ir_func, std::cerr);
+            fprintf(stderr, "=== VERIFY ERROR: %s ===\n", error.c_str());
+        }
         delete ir_func;
         ir_func = nullptr;
         return -1;
@@ -939,14 +947,18 @@ bool QoreAOT::compile(QoreProgram* pgm,
         std::string lower_error;
         bool toplevel_ok = false;
         if (lowering.lowerStatementBlock(&sb, lower_error)) {
-            // Ensure terminator
-            auto& last_block = ir_func->blocks.back();
-            if (last_block->instructions.empty() ||
-                    (last_block->instructions.back()->opcode != QoreIROpcode::Return &&
-                     last_block->instructions.back()->opcode != QoreIROpcode::ReturnNothing &&
-                     last_block->instructions.back()->opcode != QoreIROpcode::Br &&
-                     last_block->instructions.back()->opcode != QoreIROpcode::Rethrow)) {
+            // Ensure terminator for the current block (where the builder is pointing)
+            // After lowering control flow constructs like try-catch, the builder may be pointing
+            // to a merge block that needs an implicit return
+            QoreIRBasicBlock* current_block = builder.getBlock();
+            if (current_block && (current_block->instructions.empty() ||
+                    !isTerminator(current_block->instructions.back()->opcode))) {
                 builder.createReturnNothing();
+            }
+            if (getenv("QORE_AOT_DUMP_IR")) {
+                fprintf(stderr, "=== IR for _toplevel ===\n");
+                QoreIRPrinter::print(*ir_func, std::cerr);
+                fprintf(stderr, "========================\n");
             }
             std::string verify_error;
             if (QoreIRVerifier::verify(*ir_func, verify_error)) {
@@ -978,12 +990,23 @@ bool QoreAOT::compile(QoreProgram* pgm,
                         (int)slots.local_slots.size(), (int)slots.global_slots.size(),
                         (int)slots.expr_slots.size(), (int)slots.stmt_slots.size());
                 } else {
+                    if (getenv("QORE_AOT_DEBUG")) {
+                        fprintf(stderr, "AOT: LLVM lowering failed for _toplevel: %s\n",
+                            llvm_error.c_str());
+                    }
                     printd(2, "AOT: LLVM lowering failed for _toplevel: %s\n", llvm_error.c_str());
                 }
             } else {
+                if (getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr, "AOT: _toplevel verification failed: %s\n",
+                        verify_error.c_str());
+                }
                 printd(2, "AOT: _toplevel verification failed: %s\n", verify_error.c_str());
             }
         } else {
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: _toplevel IR lowering failed: %s\n", lower_error.c_str());
+            }
             printd(2, "AOT: _toplevel IR lowering failed: %s\n", lower_error.c_str());
         }
         delete ir_func;

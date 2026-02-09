@@ -239,6 +239,16 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::FoldlMinFloat: return "foldl.min.float";
         case QoreIROpcode::FoldlMaxInt: return "foldl.max.int";
         case QoreIROpcode::FoldlMaxFloat: return "foldl.max.float";
+        case QoreIROpcode::FoldrSumInt: return "foldr.sum.int";
+        case QoreIROpcode::FoldrSumFloat: return "foldr.sum.float";
+        case QoreIROpcode::FoldrProdInt: return "foldr.prod.int";
+        case QoreIROpcode::FoldrProdFloat: return "foldr.prod.float";
+        case QoreIROpcode::FoldrDiffInt: return "foldr.diff.int";
+        case QoreIROpcode::FoldrDiffFloat: return "foldr.diff.float";
+        case QoreIROpcode::FoldrMinInt: return "foldr.min.int";
+        case QoreIROpcode::FoldrMinFloat: return "foldr.min.float";
+        case QoreIROpcode::FoldrMaxInt: return "foldr.max.int";
+        case QoreIROpcode::FoldrMaxFloat: return "foldr.max.float";
         case QoreIROpcode::MapAny: return "map.any";
         case QoreIROpcode::MapInt: return "map.int";
         case QoreIROpcode::MapFloat: return "map.float";
@@ -306,6 +316,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::PopImplicitArg: return "pop.implicit.arg";
         case QoreIROpcode::PushImplicitElement: return "push.implicit.element";
         case QoreIROpcode::PopImplicitElement: return "pop.implicit.element";
+        case QoreIROpcode::HashKeyAccess: return "hash.key.access";
         case QoreIROpcode::LoadSelfMember: return "load.self.member";
         case QoreIROpcode::LoadStaticVar: return "load.static.var";
         case QoreIROpcode::NewObject: return "new.object";
@@ -422,6 +433,11 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* lv_inst = dynamic_cast<const QoreIRLValueInstruction*>(inst.get());
                 if (lv_inst && lv_inst->lvalue.hasNode()) {
                     out << " <lvalue>";
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyAccess) {
+                auto* hka_inst = dynamic_cast<const QoreIRHashKeyAccessInstruction*>(inst.get());
+                if (hka_inst) {
+                    out << " ." << hka_inst->key_name;
                 }
             } else if (inst->opcode == QoreIROpcode::LoadSelfMember) {
                 auto* sm_inst = dynamic_cast<const QoreIRSelfMemberInstruction*>(inst.get());

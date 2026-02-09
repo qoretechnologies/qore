@@ -269,6 +269,17 @@ enum class QoreIROpcode : uint16_t {
     FoldlMinFloat,
     FoldlMaxInt,        // foldl max($1, $2), list, init
     FoldlMaxFloat,
+    // Optimized foldr operations (native LLVM loops)
+    FoldrSumInt,        // foldr $1 + $2, list
+    FoldrSumFloat,
+    FoldrProdInt,       // foldr $1 * $2, list
+    FoldrProdFloat,
+    FoldrDiffInt,       // foldr $1 - $2, list (reverse iteration)
+    FoldrDiffFloat,
+    FoldrMinInt,        // foldr min($1, $2), list
+    FoldrMinFloat,
+    FoldrMaxInt,        // foldr max($1, $2), list
+    FoldrMaxFloat,
     MapAny,
     MapInt,
     MapFloat,
@@ -345,6 +356,9 @@ enum class QoreIROpcode : uint16_t {
     PopImplicitArg,     // Restore previous $1 context (operand = old context)
     PushImplicitElement,// Push index as $#, result = old element for restoration
     PopImplicitElement, // Restore previous $# context (operand = old element)
+
+    // Hash key access
+    HashKeyAccess,      // Load hash.key - direct hash member access without AST delegation
 
     // Self member access
     LoadSelfMember,     // Load self.member_name - accesses current object's member
@@ -512,6 +526,16 @@ inline bool isBinaryInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::FoldlMinFloat:
         case QoreIROpcode::FoldlMaxInt:
         case QoreIROpcode::FoldlMaxFloat:
+        case QoreIROpcode::FoldrSumInt:
+        case QoreIROpcode::FoldrSumFloat:
+        case QoreIROpcode::FoldrProdInt:
+        case QoreIROpcode::FoldrProdFloat:
+        case QoreIROpcode::FoldrDiffInt:
+        case QoreIROpcode::FoldrDiffFloat:
+        case QoreIROpcode::FoldrMinInt:
+        case QoreIROpcode::FoldrMinFloat:
+        case QoreIROpcode::FoldrMaxInt:
+        case QoreIROpcode::FoldrMaxFloat:
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat:
@@ -822,6 +846,16 @@ public:
     }
 
     int offset = 0;  // 0 for $1, 1 for $2, etc.
+};
+
+//! Hash key access instruction - loads hash.key directly (no AST delegation)
+class QoreIRHashKeyAccessInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRHashKeyAccessInstruction(const char* n_key_name)
+            : QoreIRInstruction(QoreIROpcode::HashKeyAccess), key_name(n_key_name) {
+    }
+
+    std::string key_name;
 };
 
 //! Self member access instruction - loads self.member_name
@@ -1316,6 +1350,7 @@ public:
     QoreIROpcode invoke_opcode = QoreIROpcode::Invoke;
     QoreIRBasicBlock* normal_target = nullptr;
     QoreIRBasicBlock* exception_target = nullptr;
+    std::string invoke_key_name;  //!< Key name for HashKeyAccess invoke path
 };
 
 //! Switch regex case match instruction - tests if switch value matches a regex case
@@ -1341,6 +1376,11 @@ public:
         T* ptr = inst.get();
         instructions.push_back(std::move(inst));
         return ptr;
+    }
+
+    //! Insert instruction at the beginning of the block
+    void prependInstruction(std::unique_ptr<QoreIRInstruction> inst) {
+        instructions.insert(instructions.begin(), std::move(inst));
     }
 
     std::string name;
@@ -1442,6 +1482,7 @@ inline bool isTerminator(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::Invoke:
         case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
         case QoreIROpcode::Br:
         case QoreIROpcode::BrIf:
         case QoreIROpcode::SwitchInt:
