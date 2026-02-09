@@ -123,6 +123,15 @@ struct qore_qf_private {
             return -1;
         }
 
+        // flush any C stdio-buffered data to the current (old) target before
+        // changing the underlying fd; this prevents data loss when redirecting
+        // stdout/stderr to a different destination (e.g. pipe for output capture)
+        if (fd == STDOUT_FILENO) {
+            fflush(stdout);
+        } else if (fd == STDERR_FILENO) {
+            fflush(stderr);
+        }
+
         // dup2() will close this file descriptor
         int rc = dup2(file.fd, fd);
         if (rc == -1) {
