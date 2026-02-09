@@ -28,7 +28,22 @@
 public namespace QoreRepl {
 
 #! QoreRepl module version
-public const Version = "1.0";
+public const Version = "1.3";
+
+#! Structured completion item - re-exported from QoreCodeCompletion for API compatibility
+public hashdecl CompletionItem {
+    #! Display label for the completion
+    string label;
+    #! Kind of completion: "keyword", "function", "class", "variable", "constant",
+    #! "namespace", "method", "member", "hashdecl", "enum", "enum_value"
+    string kind;
+    #! Optional type signature or detail
+    *string detail;
+    #! Optional documentation comment
+    *string documentation;
+    #! Whether the item is callable (method/function)
+    bool isCallable = False;
+}
 
 #! REPL result indicating the command requests exit
 public const ReplExit = {"exit": True};
@@ -60,7 +75,7 @@ public class QoreRepl {
         const DefaultPrompt = "qore> ";
 
         #! Continuation prompt for multi-line input
-        const ContinuationPrompt = "...> ";
+        const ContinuationPrompt = "    > ";
 
         #! Version string
         const Version = "1.0";
@@ -96,6 +111,12 @@ public class QoreRepl {
 
         #! Color output helper
         Util::TerminalColor color();
+
+        #! Pending indent level for the next continuation line
+        int pending_indent_level = 0;
+
+        #! Completion context: REPL command starting with /
+        const CC_COMMAND = 5;
 
         #! List of all REPL commands for completion
         const ReplCommands = (
@@ -346,12 +367,15 @@ if (!exists result) {
 
         # Check if input is complete
         if (!isComplete(pending_input)) {
+            # Calculate indent level for the next continuation line
+            pending_indent_level = QoreCodeFormat::CodeFormatter::calculateIndentLevel(pending_input);
             return NOTHING;
         }
 
         # Get the complete input and reset
         string code = pending_input;
         pending_input = "";
+        pending_indent_level = 0;
 
         # Add to history
         history += code;
@@ -474,6 +498,7 @@ if (!exists result) {
     #! Resets the pending input state
     reset() {
         pending_input = "";
+        pending_indent_level = 0;
     }
 
     #! Returns the underlying Program instance
@@ -481,6 +506,17 @@ if (!exists result) {
     */
     Program getProgram() {
         return pgm;
+    }
+
+    #! Returns the current indent level for continuation lines
+    /** This is useful for WebSocket/action clients that need to know the
+        indent level to provide auto-indentation on the client side.
+
+        @return The indent level (number of indent steps) for the next line,
+            or 0 if not in multi-line mode
+    */
+    int getIndentLevel() {
+        return pending_indent_level;
     }
 
     #! Formats a value for display
@@ -554,12 +590,12 @@ if (!exists result) {
         help += helpLine("/cd <dir>", "Change working directory");
         help += "\nQore expressions and statements are evaluated directly.\n";
         help += sprintf("Multi-line input is supported - the prompt changes to '%s' when more input is needed.\n",
-            color.value("...>"));
+            color.value("    >"));
 %ifndef NoLinenoise
         help += sprintf("\n%s\n", color.key("Keyboard shortcuts (linenoise):"));
         help += helpLine("Up/Down", "Navigate history");
         help += helpLine("Ctrl+R", "Reverse search history");
-        help += helpLine("Tab", "Complete REPL commands");
+        help += helpLine("Tab", "Complete commands, keywords, symbols, and members");
         help += helpLine("Ctrl+C", "Cancel current input / exit");
 %endif
         return help;
@@ -1492,6 +1528,7 @@ if (!exists result) {
         # Initialize linenoise
         Linenoise::history_set_max_len(MaxHistoryLen);
         Linenoise::set_callback(\completion());
+        Linenoise::set_auto_dedent(QoreCodeFormat::SourceEmitter::INDENT_STR, "}");
         loadHistoryFile();
 %endif
 
@@ -1559,8 +1596,22 @@ if (!exists result) {
     */
     private *string readLine(string prompt) {
 %ifndef NoLinenoise
+        if (pending_indent_level > 0) {
+            Linenoise::preload_buffer(strmul(QoreCodeFormat::SourceEmitter::INDENT_STR,
+                pending_indent_level));
+        }
         return Linenoise::line(prompt);
 %else
+        if (pending_indent_level > 0) {
+            string indent = strmul(QoreCodeFormat::SourceEmitter::INDENT_STR, pending_indent_level);
+            stdout.printf(prompt + indent);
+            stdout.sync();
+            *string line = stdin.readLine(False);
+            if (exists line) {
+                return indent + line;
+            }
+            return line;
+        }
         stdout.printf(prompt);
         stdout.sync();
         return stdin.readLine(False);
@@ -1595,20 +1646,111 @@ if (!exists result) {
 %endif
     }
 
-    #! Provides tab completion for REPL commands
-    /** @param input The current input string
-        @return A list of matching command completions
+    #! Linenoise tab completion callback
+    /** @param input The full line up to cursor position (from linenoise)
+        @return A list of word-level replacement strings for linenoise
+
+        @note Linenoise passes the full line buffer up to the cursor position and
+        replaces the current word (from the last break character to the cursor) with
+        the returned completion strings. This method uses the full line for context
+        detection but returns word-level completions.
     */
     private softlist<string> completion(string input) {
-        # Only complete commands starting with /
-        if (!input.startsWith("/")) {
+        try {
+            list<string> full_completions = completionForContext(input);
+
+            # Compute the word start position (same algorithm as linenoise's breakChars)
+            # to determine what prefix linenoise will replace
+            int strip_len = computeWordStart(input);
+            if (strip_len == 0) {
+                return full_completions;
+            }
+
+            # Strip the line_before prefix that linenoise handles itself
+            # The full completions include line_before + word; linenoise only wants the word
+            list<string> result = ();
+            foreach string c in (full_completions) {
+                if (c.length() > strip_len) {
+                    result += c.substr(strip_len);
+                } else {
+                    result += c;
+                }
+            }
+            return result;
+        } catch () {
+            # Never let completion crash the REPL
             return ();
         }
+    }
 
-        # Lowercase input for case-insensitive matching (consistent with command execution)
-        string input_lower = input.lwr();
+    #! Returns full-line completions for a given input using context detection
+    /** @param input The full input line
+        @return A list of full-line completion strings
+    */
+    private list<string> completionForContext(string input) {
+        # Handle REPL-specific command completion
+        if (input.startsWith("/") && input.find(" ") == -1) {
+            return completeCommand({"prefix": input});
+        }
 
-        # Find commands that match the input prefix
+        # Delegate to shared engine
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext(input);
+        QoreCodeCompletion::CompletionEngine engine(new ReflectionCompletionProvider(pgm));
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.completeForContext(ctx);
+
+        # Convert to full-line strings with suffixes
+        list<string> result = ();
+        hash<string, bool> seen;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            string label = item.label;
+            if (item.isCallable) {
+                label += "(";
+            } else if (item.kind == "namespace") {
+                label += "::";
+            }
+            string full = ctx.line_before + label;
+            if (!seen{full}) {
+                seen{full} = True;
+                result += full;
+            }
+        }
+        return result;
+    }
+
+    #! Computes the word start position using the same break characters as linenoise
+    /** @param input The full input line
+        @return The position of the first character of the current word
+
+        @note Break characters must match linenoise's breakChars in linenoise.cpp
+    */
+    static int computeWordStart(string input) {
+        return QoreCodeCompletion::CompletionEngine::computeWordStart(input);
+    }
+
+    #! Extracts completion context from the current input line
+    /** @param input The current input line
+        @return A hash with keys: kind (int), prefix (string), target (*string), line_before (string)
+
+        @note This method adds REPL-specific CC_COMMAND detection on top of the shared
+        QoreCodeCompletion::CompletionEngine::extractCompletionContext() logic.
+    */
+    hash<auto> extractCompletionContext(string input) {
+        # Command completion: only if input starts with "/" and has no space
+        # (a space indicates command arguments, which should be completed as identifiers)
+        if (input.startsWith("/") && input.find(" ") == -1) {
+            return {
+                "kind": CC_COMMAND,
+                "prefix": input,
+                "line_before": "",
+            };
+        }
+
+        return QoreCodeCompletion::CompletionEngine::extractCompletionContext(input);
+    }
+
+    #! Completes REPL commands starting with /
+    private list<string> completeCommand(hash<auto> ctx) {
+        string input_lower = ctx.prefix.lwr();
         list<string> matches = ();
         foreach string cmd in (ReplCommands) {
             if (cmd.equalPartial(input_lower)) {
@@ -1616,6 +1758,55 @@ if (!exists result) {
             }
         }
         return matches;
+    }
+
+
+    #! Returns rich completion details for WebSocket/action clients
+    /** @param input The current input string
+        @return A list of structured CompletionItem hashes
+    */
+    list<hash<CompletionItem>> getCompletionDetails(string input) {
+        try {
+            # Handle REPL-specific command completion
+            if (input.startsWith("/") && input.find(" ") == -1) {
+                return getCommandDetails({"prefix": input});
+            }
+
+            # Delegate to shared engine
+            hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext(input);
+            QoreCodeCompletion::CompletionEngine engine(new ReflectionCompletionProvider(pgm));
+            list<hash<QoreCodeCompletion::CompletionItem>> items = engine.completeForContext(ctx);
+
+            # Convert to QoreRepl::CompletionItem
+            list<hash<CompletionItem>> result = ();
+            foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+                result += <CompletionItem>{
+                    "label": item.label,
+                    "kind": item.kind,
+                    "detail": item.detail,
+                    "documentation": item.documentation,
+                    "isCallable": item.isCallable,
+                };
+            }
+            return result;
+        } catch () {
+            return ();
+        }
+    }
+
+    #! Returns rich completion details for REPL commands
+    private list<hash<CompletionItem>> getCommandDetails(hash<auto> ctx) {
+        string input_lower = ctx.prefix.lwr();
+        list<hash<CompletionItem>> result = ();
+        foreach string cmd in (ReplCommands) {
+            if (cmd.equalPartial(input_lower)) {
+                result += <CompletionItem>{
+                    "label": cmd,
+                    "kind": "keyword",
+                };
+            }
+        }
+        return result;
     }
 
     #! Loads history from the history file
@@ -1653,12 +1844,344 @@ if (!exists result) {
 %endif
     }
 
-    #! Returns completions for a given input (for testing)
+    #! Returns full-line completions for a given input
     /** @param input The input string to complete
-        @return A list of matching completions
+        @return A list of full-line matching completions
     */
     softlist<string> getCompletions(string input) {
+        try {
+            return completionForContext(input);
+        } catch () {
+            return ();
+        }
+    }
+
+    #! Returns word-level completions as linenoise would receive them
+    /** @param input The full line input (as linenoise passes to the callback)
+        @return A list of word-level completion strings
+    */
+    softlist<string> getLinenoiseCompletions(string input) {
         return completion(input);
+    }
+}
+
+#! Completion provider using Qore's Reflection API for runtime symbol resolution
+/** This provider is used by the QoreRepl class to provide context-aware code completion
+    based on the runtime state of the Program object (functions, classes, namespaces, etc.).
+*/
+class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvider {
+    private {
+        Program pgm;
+    }
+
+    constructor(Program pgm) {
+        self.pgm = pgm;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getVisibleSymbols(string prefix) {
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+
+        # Functions, classes, constants, and namespace names from all namespaces (recursively)
+        try {
+            Reflection::Namespace root = Reflection::Namespace::forName(pgm, "::");
+            collectAllSymbolDetails(root, prefix, \result, \seen);
+        } catch () {
+            # Ignore
+        }
+
+        # Global variables
+        try {
+            hash<auto> vars = pgm.getGlobalVars();
+            foreach string name in (keys vars) {
+                if (name !~ /^__/ && name !~ /^Qore::/ && !seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": "variable",
+                    };
+                }
+            }
+        } catch () {
+            # Ignore
+        }
+
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getClassNames(string prefix) {
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+        try {
+            Reflection::Namespace root = Reflection::Namespace::forName(pgm, "::");
+            collectClassDetails(root, "", prefix, \result, \seen);
+        } catch () {
+            # Ignore
+        }
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getInstanceMembers(string target, string prefix) {
+        *Reflection::Class cls = resolveType(target);
+        if (!cls) {
+            return ();
+        }
+
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+
+        # Normal methods (skip constructor/destructor/copy)
+        try {
+            foreach Reflection::AbstractMethod m in (cls.getNormalMethods()) {
+                string name = m.getName();
+                if (name != "constructor" && name != "destructor" && name != "copy"
+                        && !seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": "method",
+                        "isCallable": True,
+                    };
+                }
+            }
+        } catch () {
+            # Ignore
+        }
+
+        # Members (non-static)
+        try {
+            foreach Reflection::AbstractMember m in (cls.getMembers()) {
+                list<string> mods = m.getModifierList();
+                string name = m.getName();
+                if (!inlist("static", mods) && !seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    string type_name;
+                    try {
+                        type_name = m.getType().getName();
+                    } catch () {
+                        type_name = "";
+                    }
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": "member",
+                        "detail": type_name,
+                    };
+                }
+            }
+        } catch () {
+            # Ignore
+        }
+
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getScopeMembers(string target, string prefix) {
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+
+        auto addItem = sub (string label, string kind, *string detail, bool callable = False) {
+            if (!seen{label}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(label, prefix)) {
+                seen{label} = True;
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": label,
+                    "kind": kind,
+                    "detail": detail,
+                    "isCallable": callable,
+                };
+            }
+        };
+
+        # Try as namespace
+        try {
+            Reflection::Namespace ns;
+            try {
+                ns = Reflection::Namespace::forName(pgm, target);
+            } catch () {
+                ns = Reflection::Namespace::forName(target);
+            }
+            foreach Reflection::Namespace child in (ns.getNamespaces()) {
+                addItem(child.getName(), "namespace");
+            }
+            foreach Reflection::Class cls in (ns.getClasses()) {
+                addItem(cls.getName(), "class");
+            }
+            foreach Reflection::Function f in (ns.getFunctions()) {
+                addItem(f.getName(), "function", NOTHING, True);
+            }
+            foreach Reflection::Constant c in (ns.getConstants()) {
+                addItem(c.getName(), "constant");
+            }
+        } catch () {
+            # Not a namespace
+        }
+
+        # Try as class (static members/constants)
+        try {
+            Reflection::Class cls;
+            try {
+                cls = Reflection::Class::forName(pgm, target);
+            } catch () {
+                cls = Reflection::Class::forName(target);
+            }
+            try {
+                foreach Reflection::Constant c in (cls.getConstants()) {
+                    addItem(c.getName(), "constant");
+                }
+            } catch () {
+                # Ignore
+            }
+            try {
+                foreach Reflection::AbstractMethod m in (cls.getStaticMethods()) {
+                    addItem(m.getName(), "method", NOTHING, True);
+                }
+            } catch () {
+                # Ignore
+            }
+        } catch () {
+            # Not a class
+        }
+
+        # Try as enum
+        try {
+            Reflection::Enum en;
+            try {
+                en = Reflection::Enum::forName(pgm, target);
+            } catch () {
+                en = Reflection::Enum::forName(target);
+            }
+            foreach Reflection::EnumMember m in (en.getMembers()) {
+                addItem(m.getName(), "enum_value");
+            }
+        } catch () {
+            # Not an enum
+        }
+
+        return result;
+    }
+
+    #! Resolves a variable or type name to a Reflection::Class for dot-completion
+    private *Reflection::Class resolveType(string name) {
+        # Try to resolve from global variables
+        try {
+            hash<auto> vars = pgm.getGlobalVars();
+            if (exists vars{name}) {
+                auto val = vars{name};
+                if (val.typeCode() == NT_OBJECT) {
+                    string class_name = val.className();
+                    try {
+                        return Reflection::Class::forName(pgm, class_name);
+                    } catch () {
+                        return Reflection::Class::forName(class_name);
+                    }
+                }
+            }
+        } catch () {
+            # Ignore
+        }
+
+        # Fall back: try as a class name
+        try {
+            return Reflection::Class::forName(pgm, name);
+        } catch () {
+            try {
+                return Reflection::Class::forName(name);
+            } catch () {
+                # Not resolvable
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Recursively collects all symbol details from a namespace tree
+    private collectAllSymbolDetails(Reflection::Namespace ns, string prefix,
+            reference<list<hash<QoreCodeCompletion::CompletionItem>>> result,
+            reference<hash<string, bool>> seen) {
+        foreach Reflection::Function f in (ns.getFunctions()) {
+            string name = f.getName();
+            if (name !~ /^__repl_expr_/ && !seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": "function",
+                    "isCallable": True,
+                };
+            }
+        }
+        foreach Reflection::Class cls in (ns.getClasses()) {
+            string name = cls.getName();
+            if (!seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": "class",
+                };
+            }
+        }
+        foreach Reflection::Constant c in (ns.getConstants()) {
+            string name = c.getName();
+            if (!seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": "constant",
+                };
+            }
+        }
+        foreach Reflection::Namespace child in (ns.getNamespaces()) {
+            string name = child.getName();
+            if (!seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": "namespace",
+                };
+            }
+            collectAllSymbolDetails(child, prefix, \result, \seen);
+        }
+    }
+
+    #! Recursively collects class details for new-completion
+    private collectClassDetails(Reflection::Namespace ns, string ns_prefix, string prefix,
+            reference<list<hash<QoreCodeCompletion::CompletionItem>>> result,
+            reference<hash<string, bool>> seen) {
+        foreach Reflection::Class cls in (ns.getClasses()) {
+            string name = cls.getName();
+            if (!seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": "class",
+                    "isCallable": True,
+                };
+            }
+            if (ns_prefix.length() > 0) {
+                string qname = ns_prefix + name;
+                if (!seen{qname}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(qname, prefix)) {
+                    seen{qname} = True;
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": qname,
+                        "kind": "class",
+                        "isCallable": True,
+                    };
+                }
+            }
+        }
+        foreach Reflection::Namespace child in (ns.getNamespaces()) {
+            string sub_prefix = ns_prefix.length() > 0
+                ? ns_prefix + child.getName() + "::"
+                : child.getName() + "::";
+            collectClassDetails(child, sub_prefix, prefix, \result, \seen);
+        }
     }
 }
 

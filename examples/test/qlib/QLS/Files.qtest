@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Files.qtest Copyright 2017 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QLS
+
+%exec-class FilesTest
+
+class FilesTest inherits QUnit::Test {
+    constructor() : Test("Files", "1.0") {
+        addTestCase("QORE_EXTENSIONS constant", \testQoreExtensions());
+        addTestCase("is_valid_qore_file by extension", \testIsValidByExtension());
+        addTestCase("is_valid_qore_file by magic", \testIsValidByMagic());
+        addTestCase("is_valid_qore_file by alt shebang", \testIsValidByAltShebang());
+        addTestCase("is_valid_qore_file invalid", \testIsValidInvalid());
+        addTestCase("is_valid_qore_file no ext no magic", \testIsValidNoExtNoMagic());
+        addTestCase("is_valid_qore_file nonexistent", \testIsValidNonexistent());
+        addTestCase("find_std_modules", \testFindStdModules());
+        addTestCase("find_qore_files", \testFindQoreFiles());
+        addTestCase("find_qore_files bad path", \testFindQoreFilesBadPath());
+
+        set_return_value(main());
+    }
+
+    private string testDataDir() {
+        return get_script_dir() + "/testdata/";
+    }
+
+    testQoreExtensions() {
+        assertEq(Type::Hash, QLS::Files::QORE_EXTENSIONS.type());
+        assertEq(True, QLS::Files::QORE_EXTENSIONS.hasKey("q"));
+        assertEq(True, QLS::Files::QORE_EXTENSIONS.hasKey("qm"));
+        assertEq(True, QLS::Files::QORE_EXTENSIONS.hasKey("qtest"));
+        assertEq(True, QLS::Files::QORE_EXTENSIONS.hasKey("qr"));
+    }
+
+    testIsValidByExtension() {
+        assertEq(True, QLS::Files::is_valid_qore_file(testDataDir() + "valid_qore_file.q"),
+            "valid by .q extension");
+        assertEq(True, QLS::Files::is_valid_qore_file(testDataDir() + "valid_qore_file.qr"),
+            "valid by .qr extension");
+    }
+
+    testIsValidByMagic() {
+        assertEq(True, QLS::Files::is_valid_qore_file(testDataDir() + "valid_qore_file"),
+            "valid by magic header");
+    }
+
+    testIsValidByAltShebang() {
+        assertEq(True, QLS::Files::is_valid_qore_file(testDataDir() + "valid_qore_file_alt_shebang"),
+            "valid by alternative shebang");
+    }
+
+    testIsValidInvalid() {
+        assertEq(False, QLS::Files::is_valid_qore_file(testDataDir() + "invalid_qore_file.txt"),
+            "invalid by .txt extension");
+    }
+
+    testIsValidNoExtNoMagic() {
+        assertEq(False, QLS::Files::is_valid_qore_file(testDataDir() + "no_ext_no_magic"),
+            "invalid - no extension and no magic");
+    }
+
+    testIsValidNonexistent() {
+        assertEq(False, QLS::Files::is_valid_qore_file(testDataDir() + "does_not_exist"),
+            "nonexistent file returns False");
+    }
+
+    testFindStdModules() {
+        list files = QLS::Files::find_std_modules();
+        # there should be at least one module
+        bool success = False;
+        if (files.size()) {
+            foreach auto f in (files) {
+                success = success || QLS::Files::is_valid_qore_file(f);
+            }
+        }
+        assertEq(True, success, "find_std_modules should find at least one valid file");
+    }
+
+    testFindQoreFiles() {
+        list files = QLS::Files::find_qore_files(testDataDir());
+        # should find the valid files in testdata
+        assertGt(0, files.size(), "find_qore_files should find at least one file");
+        # all found files should be valid
+        foreach auto f in (files) {
+            assertEq(True, QLS::Files::is_valid_qore_file(f),
+                sprintf("found file should be valid: %s", f));
+        }
+    }
+
+    testFindQoreFilesBadPath() {
+        assertThrows("WORKSPACE-PATH-ERROR", sub() {
+            QLS::Files::find_qore_files("/nonexistent/path/that/does/not/exist");
+        });
+    }
+}

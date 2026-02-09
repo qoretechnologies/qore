@@ -610,10 +610,16 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
       - @ref Qore::RegexExtract "RegexExtract" - pre-compiled regex extraction with global mode support
+    - @ref qorecodecompletionintro "QoreCodeCompletion" module
+      - new module providing a shared code completion engine for %Qore tools
+      - context-aware completion: identifiers, @c new, dot-access (@c .), scope (@c ::)
+      - abstract provider interface for pluggable symbol resolution backends
+      - %Qore keyword and built-in type completions
     - @ref qorereplintro "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore
       - can be used from command-line applications or network handlers (WebSocket, HTTP, etc.)
       - supports multi-line input detection, incremental parsing, and special commands (/help, /vars, /reset, etc.)
+      - uses @ref qorecodecompletionintro "QoreCodeCompletion" module for context-aware code completion
     - integrated REPL mode in the \c qore binary
       - automatically enters REPL mode when run interactively in a terminal with no script file
       - new \c --interactive command-line option to force REPL mode
@@ -651,6 +657,13 @@ cargo install tree-sitter-cli@0.26.5
       - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line numbers
         (now returns 0-indexed values consistent with LSP convention)
         (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+    - @ref qlsintro "QLS" module
+      - new module providing a Language Server Protocol (LSP) implementation for %Qore
+      - supports hover information, go-to-definition, find references, and document/workspace symbols
+      - added code completion support (@c textDocument/completion) using @ref qorecodecompletionintro "QoreCodeCompletion"
+      - supports identifier, @c new, dot-access, and scope (@c ::) completion contexts
+      - trigger characters: @c . and @c :
+      - installed as @c qls system command, usable from any editor
     - \c QoreCodeFormat user module
       - new module providing automated Qore source code formatting using the tree-sitter-based CST from the
         \c astparser module

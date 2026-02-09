@@ -26,6 +26,10 @@
 
 %requires QUnit
 
+%try-module QoreCodeFormat
+%define NoQoreCodeFormat
+%endtry
+
 %try-module QoreRepl
 %define NoQoreRepl
 %endtry
@@ -38,6 +42,9 @@
 
 public class QoreReplTest inherits QUnit::Test {
     private checkModule() {
+%ifdef NoQoreCodeFormat
+        testSkip("no QoreCodeFormat module");
+%endif
 %ifdef NoQoreRepl
         testSkip("no QoreRepl module");
 %endif
@@ -123,10 +130,30 @@ public class QoreReplTest inherits QUnit::Test {
         addTestCase("Rollback: closures", \testRollbackPreservesClosures());
         addTestCase("Rollback: stress test", \testRollbackStressTest());
 
+        # Auto-indentation tests
+        addTestCase("calculateIndentLevel: basic cases", \testCalculateIndentLevelBasic());
+        addTestCase("calculateIndentLevel: namespace exclusion", \testCalculateIndentLevelNamespace());
+        addTestCase("calculateIndentLevel: switch case extra indent", \testCalculateIndentLevelSwitch());
+        addTestCase("calculateIndentLevel: nested and closed blocks", \testCalculateIndentLevelNested());
+        addTestCase("calculateIndentLevelFallback: brace counting", \testCalculateIndentLevelFallback());
+        addTestCase("QoreRepl.getIndentLevel() integration", \testGetIndentLevel());
+
         # Linenoise-related tests
         addTestCase("Command completion", \testCommandCompletion());
         addTestCase("History file path initialization", \testHistoryFilePath());
         addTestCase("run() integration", \testRunIntegration());
+
+        # Code completion tests
+        addTestCase("Context extraction", \testContextExtraction());
+        addTestCase("Identifier completion", \testIdentifierCompletion());
+        addTestCase("New completion", \testNewCompletion());
+        addTestCase("Dot completion", \testDotCompletion());
+        addTestCase("Scope completion", \testScopeCompletion());
+        addTestCase("Completion edge cases", \testCompletionEdgeCases());
+        addTestCase("Completion case sensitivity", \testCompletionCaseSensitivity());
+        addTestCase("Linenoise word-level completion", \testLinenoiseWordLevel());
+        addTestCase("getCompletionDetails", \testGetCompletionDetails());
+        addTestCase("WebSocket completion", \testWebSocketCompletion());
 
         set_return_value(main());
     }
@@ -362,7 +389,7 @@ public class QoreReplTest inherits QUnit::Test {
         *hash<auto> result = repl.eval("if (True) {");
         assertFalse(exists result, "Should need more input");
         assertTrue(repl.needsMoreInput(), "Should be in multi-line mode");
-        assertEq("...> ", repl.getPrompt(), "Should show continuation prompt");
+        assertEq("    > ", repl.getPrompt(), "Should show continuation prompt");
 
         # Clear the pending input
         result = repl.eval("/clear");
@@ -1620,6 +1647,176 @@ public class QoreReplTest inherits QUnit::Test {
 %endif
     }
 
+    #! Test calculateIndentLevel basic cases
+    testCalculateIndentLevelBasic() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        # Open if block -> indent 1
+        assertEq(1, QoreCodeFormat::CodeFormatter::calculateIndentLevel("if (True) {"),
+            "open if block should be indent 1");
+
+        # Open class body -> indent 1
+        assertEq(1, QoreCodeFormat::CodeFormatter::calculateIndentLevel("class Foo {"),
+            "open class body should be indent 1");
+
+        # Open enum -> indent 1
+        assertEq(1, QoreCodeFormat::CodeFormatter::calculateIndentLevel("enum Color {"),
+            "open enum should be indent 1");
+
+        # Hash literal -> indent 1
+        assertEq(1, QoreCodeFormat::CodeFormatter::calculateIndentLevel("hash<auto> h = {"),
+            "open hash literal should be indent 1");
+
+        # Complete expression -> indent 0
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevel("1 + 1"),
+            "complete expression should be indent 0");
+
+        # Empty string -> indent 0
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevel(""),
+            "empty string should be indent 0");
+%endif
+    }
+
+    #! Test calculateIndentLevel namespace exclusion
+    testCalculateIndentLevelNamespace() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        # Namespace body should NOT create indent (Qore convention: left-justified)
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevel("namespace Foo {"),
+            "namespace should be indent 0");
+
+        # Namespace with nested class should only indent for class
+        assertEq(1, QoreCodeFormat::CodeFormatter::calculateIndentLevel("namespace Foo {\nclass Bar {"),
+            "namespace + class should be indent 1");
+%endif
+    }
+
+    #! Test calculateIndentLevel switch/case handling
+    testCalculateIndentLevelSwitch() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        # Switch body -> indent 1
+        assertEq(1, QoreCodeFormat::CodeFormatter::calculateIndentLevel("switch (x) {"),
+            "switch body should be indent 1");
+
+        # Switch + case -> indent 2 (switch body + case body)
+        assertEq(2, QoreCodeFormat::CodeFormatter::calculateIndentLevel("switch (x) {\n    case 1:"),
+            "switch + case should be indent 2");
+
+        # Switch + default -> indent 2
+        assertEq(2, QoreCodeFormat::CodeFormatter::calculateIndentLevel("switch (x) {\n    default:"),
+            "switch + default should be indent 2");
+%endif
+    }
+
+    #! Test calculateIndentLevel with nested and closed blocks
+    testCalculateIndentLevelNested() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        # Closed block -> indent 0
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevel("if (True) {\n}"),
+            "closed block should be indent 0");
+
+        # Nested open blocks -> indent 2
+        assertEq(2, QoreCodeFormat::CodeFormatter::calculateIndentLevel("if (True) {\n    if (True) {"),
+            "nested open blocks should be indent 2");
+
+        # Inner closed, outer open -> indent 1
+        assertEq(1, QoreCodeFormat::CodeFormatter::calculateIndentLevel("if (True) {\n    if (True) {\n    }"),
+            "inner closed outer open should be indent 1");
+
+        # Both closed -> indent 0
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevel("if (True) {\n    if (True) {\n    }\n}"),
+            "both closed should be indent 0");
+
+        # Class with method -> indent 2
+        assertEq(2, QoreCodeFormat::CodeFormatter::calculateIndentLevel("class Foo {\n    int getX() {"),
+            "class + method body should be indent 2");
+%endif
+    }
+
+    #! Test calculateIndentLevelFallback directly
+    testCalculateIndentLevelFallback() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        # Simple brace counting
+        assertEq(1, QoreCodeFormat::CodeFormatter::calculateIndentLevelFallback("{"),
+            "single open brace");
+        assertEq(2, QoreCodeFormat::CodeFormatter::calculateIndentLevelFallback("{{"),
+            "double open brace");
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevelFallback("{}"),
+            "balanced braces");
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevelFallback(""),
+            "empty string");
+
+        # Braces inside strings should not be counted
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevelFallback("string s = \"{\""),
+            "brace in double-quoted string");
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevelFallback("string s = '{'"),
+            "brace in single-quoted string");
+
+        # Braces in comments should not be counted
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevelFallback("# {"),
+            "brace in line comment");
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevelFallback("/* { */"),
+            "brace in block comment");
+
+        # Negative depth clamps to 0
+        assertEq(0, QoreCodeFormat::CodeFormatter::calculateIndentLevelFallback("}"),
+            "extra close brace clamps to 0");
+%endif
+    }
+
+    #! Test QoreRepl.getIndentLevel() integration
+    testGetIndentLevel() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # Initially indent level should be 0
+        assertEq(0, repl.getIndentLevel(), "initial indent level should be 0");
+
+        # Start a block -> indent 1
+        *hash<auto> result = repl.eval("if (True) {");
+        assertFalse(exists result, "should need more input");
+        assertEq(1, repl.getIndentLevel(), "after open block, indent should be 1");
+
+        # Nested block -> indent 2
+        result = repl.eval("    if (True) {");
+        assertFalse(exists result, "should still need more input");
+        assertEq(2, repl.getIndentLevel(), "after nested block, indent should be 2");
+
+        # Close inner block -> indent 1
+        result = repl.eval("    }");
+        assertFalse(exists result, "outer block still open");
+        assertEq(1, repl.getIndentLevel(), "after closing inner, indent should be 1");
+
+        # Close outer block -> completes, indent resets to 0
+        result = repl.eval("}");
+        assertTrue(exists result, "should complete");
+        assertEq(0, repl.getIndentLevel(), "after completing, indent should be 0");
+
+        # Test reset clears indent level
+        repl.eval("class Foo {");
+        assertEq(1, repl.getIndentLevel(), "class body indent should be 1");
+        repl.reset();
+        assertEq(0, repl.getIndentLevel(), "reset should clear indent level");
+
+        # Test class with method
+        repl.eval("class Foo {");
+        assertEq(1, repl.getIndentLevel(), "class body indent");
+        repl.eval("    int getX() {");
+        assertEq(2, repl.getIndentLevel(), "class + method body indent");
+        repl.eval("        return 1;");
+        assertEq(2, repl.getIndentLevel(), "still in method body");
+        repl.eval("    }");
+        assertEq(1, repl.getIndentLevel(), "back to class body");
+        result = repl.eval("}");
+        assertTrue(exists result, "class complete");
+        assertEq(0, repl.getIndentLevel(), "class done");
+%endif
+    }
+
     #! Test command completion functionality
     testCommandCompletion() {
         checkModule();
@@ -1673,6 +1870,18 @@ public class QoreReplTest inherits QUnit::Test {
 
         completions = repl.getCompletions("/Desc");
         assertTrue(inlist("/describe", completions), "/Desc should match /describe (case-insensitive)");
+
+        # Command with argument: /describe M should return identifier completions
+        completions = repl.getCompletions("/describe M");
+        assertTrue(completions.size() > 0, "'/describe M' should return argument completions");
+        bool has_mutex = False;
+        foreach string c in (completions) {
+            if (c =~ /Mutex/) {
+                has_mutex = True;
+                break;
+            }
+        }
+        assertTrue(has_mutex, "'/describe M' should include 'Mutex' in argument completions");
 %endif
     }
 
@@ -1695,6 +1904,494 @@ public class QoreReplTest inherits QUnit::Test {
         # Test default REPL (no options) - should use default history file
         QoreRepl default_repl();
         assertTrue(True, "Default REPL should create successfully with default history");
+%endif
+    }
+
+    #! Test completion context extraction
+    testContextExtraction() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # Empty input -> CC_NONE
+        hash<auto> ctx = repl.extractCompletionContext("");
+        assertEq(0, ctx.kind, "empty input should be CC_NONE");
+
+        # Whitespace only -> CC_NONE
+        ctx = repl.extractCompletionContext("   ");
+        assertEq(0, ctx.kind, "whitespace should be CC_NONE");
+
+        # Command
+        ctx = repl.extractCompletionContext("/he");
+        assertEq(5, ctx.kind, "'/he' should be CC_COMMAND");
+        assertEq("/he", ctx.prefix, "command prefix should be '/he'");
+
+        # Bare identifier
+        ctx = repl.extractCompletionContext("pri");
+        assertEq(1, ctx.kind, "'pri' should be CC_IDENTIFIER");
+        assertEq("pri", ctx.prefix, "prefix should be 'pri'");
+        assertEq("", ctx.line_before, "line_before should be empty");
+
+        # Identifier with code before
+        ctx = repl.extractCompletionContext("int x = my");
+        assertEq(1, ctx.kind, "'int x = my' should be CC_IDENTIFIER");
+        assertEq("my", ctx.prefix, "prefix should be 'my'");
+        assertEq("int x = ", ctx.line_before, "line_before should be 'int x = '");
+
+        # New with prefix
+        ctx = repl.extractCompletionContext("new My");
+        assertEq(2, ctx.kind, "'new My' should be CC_NEW");
+        assertEq("My", ctx.prefix, "prefix should be 'My'");
+
+        # New without prefix
+        ctx = repl.extractCompletionContext("new ");
+        assertEq(2, ctx.kind, "'new ' should be CC_NEW");
+        assertEq("", ctx.prefix, "prefix should be empty for 'new '");
+
+        # Dot with prefix
+        ctx = repl.extractCompletionContext("obj.get");
+        assertEq(3, ctx.kind, "'obj.get' should be CC_DOT");
+        assertEq("obj", ctx.target, "target should be 'obj'");
+        assertEq("get", ctx.prefix, "prefix should be 'get'");
+
+        # Dot without prefix
+        ctx = repl.extractCompletionContext("obj.");
+        assertEq(3, ctx.kind, "'obj.' should be CC_DOT");
+        assertEq("obj", ctx.target, "target should be 'obj'");
+        assertEq("", ctx.prefix, "prefix should be empty for 'obj.'");
+
+        # Scope with prefix
+        ctx = repl.extractCompletionContext("Qore::Thread::M");
+        assertEq(4, ctx.kind, "'Qore::Thread::M' should be CC_SCOPE");
+        assertEq("Qore::Thread", ctx.target, "target should be 'Qore::Thread'");
+        assertEq("M", ctx.prefix, "prefix should be 'M'");
+
+        # Scope without prefix
+        ctx = repl.extractCompletionContext("Mutex::");
+        assertEq(4, ctx.kind, "'Mutex::' should be CC_SCOPE");
+        assertEq("Mutex", ctx.target, "target should be 'Mutex'");
+        assertEq("", ctx.prefix, "prefix should be empty for 'Mutex::'");
+
+        # Command with argument: /describe M should be CC_IDENTIFIER (not CC_COMMAND)
+        ctx = repl.extractCompletionContext("/describe M");
+        assertEq(1, ctx.kind, "'/describe M' should be CC_IDENTIFIER for argument");
+        assertEq("M", ctx.prefix, "prefix should be 'M' for '/describe M'");
+
+        # Command without argument: /desc should still be CC_COMMAND
+        ctx = repl.extractCompletionContext("/desc");
+        assertEq(5, ctx.kind, "'/desc' should be CC_COMMAND");
+%endif
+    }
+
+    #! Test identifier completion
+    testIdentifierCompletion() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # Keywords: "for" should include "foreach" and "for"
+        softlist<string> completions = repl.getCompletions("for");
+        assertTrue(inlist("foreach", completions), "'for' should complete to 'foreach'");
+        assertTrue(inlist("for", completions), "'for' should complete to 'for'");
+
+        # Built-in functions: "prin" should include "printf"
+        completions = repl.getCompletions("prin");
+        bool has_printf = False;
+        foreach string c in (completions) {
+            if (c =~ /printf/) {
+                has_printf = True;
+                break;
+            }
+        }
+        assertTrue(has_printf, "'prin' should include a printf match");
+
+        # User function: after defining myFunc, "myF" should include "myFunc"
+        repl.eval("sub myFunc() { return 42; }");
+        completions = repl.getCompletions("myF");
+        bool has_myFunc = False;
+        foreach string c in (completions) {
+            if (c =~ /myFunc/) {
+                has_myFunc = True;
+                break;
+            }
+        }
+        assertTrue(has_myFunc, "'myF' should include 'myFunc'");
+
+        # User class: after defining Foo, "Fo" should include "Foo"
+        repl.eval("class Foo { public { int val; } }");
+        completions = repl.getCompletions("Fo");
+        bool has_Foo = False;
+        foreach string c in (completions) {
+            if (c =~ /Foo/) {
+                has_Foo = True;
+                break;
+            }
+        }
+        assertTrue(has_Foo, "'Fo' should include 'Foo'");
+
+        # Global variable: after defining myVar, "myV" should include "myVar"
+        repl.eval("our int myVar = 1;");
+        completions = repl.getCompletions("myV");
+        bool has_myVar = False;
+        foreach string c in (completions) {
+            if (c =~ /myVar/) {
+                has_myVar = True;
+                break;
+            }
+        }
+        assertTrue(has_myVar, "'myV' should include 'myVar'");
+
+        # No match: "xyz_nothing" should be empty
+        completions = repl.getCompletions("xyz_nothing");
+        assertEq(0, completions.size(), "'xyz_nothing' should have no completions");
+
+        # Full-line: "int x = pri" should include "int x = printf"
+        completions = repl.getCompletions("int x = prin");
+        bool has_fullline_printf = False;
+        foreach string c in (completions) {
+            if (c =~ /^int x = .*printf/) {
+                has_fullline_printf = True;
+                break;
+            }
+        }
+        assertTrue(has_fullline_printf, "'int x = prin' should include full-line printf match");
+%endif
+    }
+
+    #! Test "new" completion
+    testNewCompletion() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # "new Mut" should include "new Mutex"
+        softlist<string> completions = repl.getCompletions("new Mut");
+        bool has_mutex = False;
+        foreach string c in (completions) {
+            if (c =~ /new Mutex/) {
+                has_mutex = True;
+                break;
+            }
+        }
+        assertTrue(has_mutex, "'new Mut' should include 'new Mutex'");
+
+        # "new " with empty prefix should return classes
+        completions = repl.getCompletions("new ");
+        assertTrue(completions.size() > 0, "'new ' should return available classes");
+%endif
+    }
+
+    #! Test dot-completion
+    testDotCompletion() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # Create a Mutex instance as a global variable
+        repl.eval("our Mutex m();");
+
+        # "m." should include method completions
+        softlist<string> completions = repl.getCompletions("m.");
+        assertTrue(completions.size() > 0, "'m.' should return method completions for Mutex");
+        bool has_lock = False;
+        foreach string c in (completions) {
+            if (c =~ /lock/) {
+                has_lock = True;
+                break;
+            }
+        }
+        assertTrue(has_lock, "'m.' should include 'lock(' method");
+
+        # "m.lo" should filter to lock-related methods
+        completions = repl.getCompletions("m.lo");
+        assertTrue(completions.size() > 0, "'m.lo' should return filtered completions");
+
+        # Unknown variable should return empty
+        completions = repl.getCompletions("unknown_var.");
+        assertEq(0, completions.size(), "unknown variable dot-completion should be empty");
+%endif
+    }
+
+    #! Test scope completion
+    testScopeCompletion() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # "Qore::" should include Qore namespace members
+        softlist<string> completions = repl.getCompletions("Qore::");
+        assertTrue(completions.size() > 0, "'Qore::' should return namespace members");
+
+        # Define an enum and test "Color::"
+        repl.eval("enum Color { Red = 0, Green = 1, Blue = 2 }");
+        completions = repl.getCompletions("Color::");
+        bool has_red = False;
+        bool has_green = False;
+        foreach string c in (completions) {
+            if (c =~ /Red/) {
+                has_red = True;
+            }
+            if (c =~ /Green/) {
+                has_green = True;
+            }
+        }
+        assertTrue(has_red, "'Color::' should include 'Red'");
+        assertTrue(has_green, "'Color::' should include 'Green'");
+
+        # "Color::R" should filter to Red
+        completions = repl.getCompletions("Color::R");
+        has_red = False;
+        foreach string c in (completions) {
+            if (c =~ /Red/) {
+                has_red = True;
+                break;
+            }
+        }
+        assertTrue(has_red, "'Color::R' should include 'Red'");
+%endif
+    }
+
+    #! Test completion edge cases
+    testCompletionEdgeCases() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # Internal names (__repl_expr_*) should be excluded
+        repl.eval("1 + 1");  # Creates __repl_expr_1__
+        softlist<string> completions = repl.getCompletions("__repl");
+        assertEq(0, completions.size(), "internal __repl_expr names should be excluded");
+
+        # Completion after /reset should work (empty program)
+        repl.eval("/reset");
+        completions = repl.getCompletions("for");
+        assertTrue(completions.size() > 0, "completion should work after /reset");
+        assertTrue(inlist("foreach", completions), "'for' should still complete to 'foreach' after reset");
+
+        # Short prefix (1 char) should not include keywords (noise reduction)
+        completions = repl.getCompletions("i");
+        # Should have classes/functions matching 'i' but NOT keywords
+        bool has_if_keyword = inlist("if", completions);
+        assertFalse(has_if_keyword, "1-char prefix should not include keywords");
+
+        # 2-char prefix should include keywords
+        completions = repl.getCompletions("if");
+        assertTrue(inlist("if", completions), "2-char prefix should include keywords");
+%endif
+    }
+
+    #! Test case-sensitive completion matching
+    testCompletionCaseSensitivity() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # "new M" should only return classes starting with uppercase M
+        softlist<string> completions = repl.getCompletions("new M");
+        foreach string c in (completions) {
+            # Each completion should be "new <ClassName>" where ClassName starts with M
+            string suffix = c.substr(4);  # Remove "new " prefix
+            assertTrue(suffix[0] == "M",
+                sprintf("'new M' completion '%s' should start with uppercase M", c));
+        }
+        assertTrue(completions.size() > 0, "'new M' should return at least one class");
+
+        # "new m" should not match Mutex (uppercase)
+        completions = repl.getCompletions("new m");
+        bool has_Mutex = False;
+        foreach string c in (completions) {
+            if (c =~ /Mutex/) {
+                has_Mutex = True;
+                break;
+            }
+        }
+        assertFalse(has_Mutex, "'new m' should NOT match 'Mutex' (case-sensitive)");
+
+        # "Prin" should not match "printf" (lowercase)
+        completions = repl.getCompletions("Prin");
+        bool has_printf = False;
+        foreach string c in (completions) {
+            if (c =~ /^printf$/) {
+                has_printf = True;
+                break;
+            }
+        }
+        assertFalse(has_printf, "'Prin' should NOT match 'printf' (case-sensitive)");
+
+        # "prin" should match "printf" (same case)
+        completions = repl.getCompletions("prin");
+        has_printf = False;
+        foreach string c in (completions) {
+            if (c =~ /printf/) {
+                has_printf = True;
+                break;
+            }
+        }
+        assertTrue(has_printf, "'prin' should match 'printf' (same case)");
+
+        # REPL commands should remain case-insensitive: "/H" matches "/help"
+        completions = repl.getCompletions("/H");
+        bool has_help = False;
+        foreach string c in (completions) {
+            if (c =~ /help/) {
+                has_help = True;
+                break;
+            }
+        }
+        assertTrue(has_help, "REPL commands should be case-insensitive: '/H' matches '/help'");
+
+        # Scope completion: "Color::r" should NOT match "Red" (different case)
+        repl.eval("enum Color { Red = 0, Green = 1, Blue = 2 }");
+        completions = repl.getCompletions("Color::r");
+        bool has_Red = False;
+        foreach string c in (completions) {
+            if (c =~ /Red/) {
+                has_Red = True;
+                break;
+            }
+        }
+        assertFalse(has_Red, "'Color::r' should NOT match 'Red' (case-sensitive)");
+
+        # "Color::R" should match "Red"
+        completions = repl.getCompletions("Color::R");
+        has_Red = False;
+        foreach string c in (completions) {
+            if (c =~ /Red/) {
+                has_Red = True;
+                break;
+            }
+        }
+        assertTrue(has_Red, "'Color::R' should match 'Red' (same case)");
+%endif
+    }
+
+    #! Test word-level completion for linenoise (computeWordStart + stripping)
+    testLinenoiseWordLevel() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # computeWordStart: break chars " =+-/\\*?\"'`&<>:;|@{([])}";
+        # "new M" → word starts at 4 (after space)
+        assertEq(4, QoreRepl::computeWordStart("new M"));
+        # "m.get" → no break chars, word starts at 0
+        assertEq(0, QoreRepl::computeWordStart("m.get"));
+        # "Qore::M" → : is a break char, word starts at 6 (after second :)
+        assertEq(6, QoreRepl::computeWordStart("Qore::M"));
+        # "/h" → / is a break char, word starts at 1
+        assertEq(1, QoreRepl::computeWordStart("/h"));
+        # "int x = prin" → space before 'p', word starts at 8
+        assertEq(8, QoreRepl::computeWordStart("int x = prin"));
+        # "" → word starts at 0
+        assertEq(0, QoreRepl::computeWordStart(""));
+        # "M" → word starts at 0 (no break chars)
+        assertEq(0, QoreRepl::computeWordStart("M"));
+        # "HTTP2Mode::" → : is a break char, word starts at 11
+        assertEq(11, QoreRepl::computeWordStart("HTTP2Mode::"));
+        # "HTTP2Mode::A" → word starts at 11
+        assertEq(11, QoreRepl::computeWordStart("HTTP2Mode::A"));
+
+        # getCompletions returns full-line results (for programmatic callers)
+        softlist<string> full = repl.getCompletions("new Mut");
+        bool has_full_mutex = False;
+        foreach string c in (full) {
+            if (c == "new Mutex(") {
+                has_full_mutex = True;
+                break;
+            }
+        }
+        assertTrue(has_full_mutex, "getCompletions('new Mut') should return 'new Mutex'");
+
+        # getCompletions returns only classes for "new" context
+        foreach string c in (full) {
+            assertTrue(c.startsWith("new "), sprintf("new context completion '%s' should start with 'new '", c));
+        }
+%endif
+    }
+
+    #! Test getCompletionDetails returns structured items
+    testGetCompletionDetails() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        QoreRepl repl();
+
+        # Identifier details
+        list<hash<CompletionItem>> items = repl.getCompletionDetails("prin");
+        assertTrue(items.size() > 0, "'prin' should return completion details");
+        # Check structure of first item
+        hash<CompletionItem> first = items[0];
+        assertTrue(exists first.label, "item should have label");
+        assertTrue(exists first.kind, "item should have kind");
+
+        # Command details - /h matches /help and /history
+        items = repl.getCompletionDetails("/h");
+        assertTrue(items.size() >= 2, "'/h' should return at least 2 command items");
+        bool found_help = False;
+        foreach hash<CompletionItem> item in (items) {
+            if (item.label == "/help") {
+                found_help = True;
+                assertEq("keyword", item.kind, "/help kind should be 'keyword'");
+            }
+        }
+        assertTrue(found_help, "should find /help in command details");
+
+        # New details
+        items = repl.getCompletionDetails("new Mut");
+        assertTrue(items.size() > 0, "'new Mut' should return class details");
+        bool found_mutex = False;
+        foreach hash<CompletionItem> item in (items) {
+            if (item.label == "Mutex") {
+                found_mutex = True;
+                assertEq("class", item.kind, "Mutex kind should be 'class'");
+                assertTrue(item.isCallable, "Mutex should be callable (constructor)");
+            }
+        }
+        assertTrue(found_mutex, "should find Mutex in new details");
+
+        # Scope details
+        items = repl.getCompletionDetails("Qore::");
+        assertTrue(items.size() > 0, "'Qore::' should return scope details");
+
+        # Dot details with Mutex global
+        repl.eval("our Mutex m();");
+        items = repl.getCompletionDetails("m.");
+        assertTrue(items.size() > 0, "'m.' should return dot details");
+        bool found_method = False;
+        foreach hash<CompletionItem> item in (items) {
+            if (item.kind == "method") {
+                found_method = True;
+                assertTrue(item.isCallable, "methods should be callable");
+                break;
+            }
+        }
+        assertTrue(found_method, "should find methods in dot details");
+%endif
+    }
+
+    #! Test WebSocket completion integration
+    testWebSocketCompletion() {
+        checkModule();
+%if !defined(NoQoreRepl)
+        # Test via action session
+        QoreReplActionSession session();
+        list<hash<auto>> events = session.handleAction("repl-complete", {
+            "input": "prin",
+            "id": "test-1",
+        });
+        assertEq(1, events.size(), "should return 1 event");
+        assertEq("repl-completion", events[0].event, "event should be repl-completion");
+        assertEq("test-1", events[0].data.request_id, "request_id should be preserved");
+        assertTrue(events[0].data.items.size() > 0, "should have completion items");
+
+        # Test missing input parameter
+        bool caught = False;
+        try {
+            session.handleAction("repl-complete", {});
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("MISSING-PARAMETER", ex.err, "should get MISSING-PARAMETER");
+        }
+        assertTrue(caught, "missing input should throw");
 %endif
     }
 

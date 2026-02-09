@@ -64,6 +64,24 @@ struct CSTScopeSymbolInfo {
         : symbol(sym), scopeLevel(level) {}
 };
 
+//! Parameter info for detailed symbol data.
+struct CSTParamInfo {
+    std::string name;
+    std::string typeName;    //!< empty if untyped
+    std::string defaultVal;  //!< empty if no default
+};
+
+//! Detailed symbol info with type, access, parameters, etc.
+struct CSTSymbolDetail {
+    CSTSymbolInfo symbol;
+    int scopeLevel = 0;
+    std::string returnType;  //!< for methods/functions
+    std::string typeName;    //!< for variables/members/params
+    std::string access;      //!< "public", "private", "private:internal", etc.
+    bool isStatic = false;
+    std::vector<CSTParamInfo> params;  //!< for callables
+};
+
 //! Static utility class for searching tree-sitter CST nodes.
 class CSTSearcher {
 public:
@@ -132,6 +150,22 @@ public:
     static std::vector<CSTScopeSymbolInfo>* findScopeSymbols(
         const AstParseResult* result,
         uint32_t line, uint32_t col);
+
+    //! Find scope symbols with detailed metadata (type, access, params, etc.).
+    static std::vector<CSTSymbolDetail>* findScopeSymbolsDetailed(
+        const AstParseResult* result,
+        uint32_t line, uint32_t col);
+
+    //! Resolve the type of a symbol at position (0-indexed).
+    static std::string getSymbolType(
+        const AstParseResult* result,
+        uint32_t line, uint32_t col);
+
+    //! Find members of a named type (class, namespace, hashdecl, enum).
+    static std::vector<CSTSymbolDetail>* findTypeMembers(
+        const AstParseResult* result,
+        const std::string& typeName,
+        bool includeInherited = true);
 
     //! Build hover info description for a declaration at position.
     static std::string buildHoverInfo(
@@ -219,6 +253,49 @@ private:
     //! Case-insensitive substring match.
     static bool matchesQuery(const std::string& name, const std::string& query,
                              bool exactMatch);
+
+    //! Extract access modifier from a declaration node or its parent member_group.
+    static std::string extractAccessModifier(TSNode node, const AstParseResult* result);
+
+    //! Check if a declaration has 'static' modifier.
+    static bool hasStaticModifier(TSNode node, const AstParseResult* result);
+
+    //! Extract parameter info from a function/method/constructor node.
+    static std::vector<CSTParamInfo> extractParameters(TSNode funcNode,
+                                                        const AstParseResult* result);
+
+    //! Extract return type from a function/method node.
+    static std::string extractReturnType(TSNode funcNode, const AstParseResult* result);
+
+    //! Extract type name from a variable/member/parameter declaration.
+    static std::string extractTypeName(TSNode node, const AstParseResult* result);
+
+    //! Enrich a scope symbol with detailed metadata from its declaration node.
+    static CSTSymbolDetail enrichSymbol(const CSTScopeSymbolInfo& ssi,
+                                         const AstParseResult* result);
+
+    //! Find a declaration node by name and type, searching recursively.
+    static bool findDeclarationByName(TSNode root, const AstParseResult* result,
+                                       const std::string& name, const char* nodeType,
+                                       TSNode* outNode);
+
+    //! Collect class members into a detail vector.
+    static void collectClassMembers(TSNode classNode, const AstParseResult* result,
+                                     std::vector<CSTSymbolDetail>* vec,
+                                     std::vector<std::string>* visited = nullptr,
+                                     bool includeInherited = true);
+
+    //! Collect namespace members into a detail vector.
+    static void collectNamespaceMembers(TSNode nsNode, const AstParseResult* result,
+                                         std::vector<CSTSymbolDetail>* vec);
+
+    //! Collect hashdecl members into a detail vector.
+    static void collectHashdeclMembers(TSNode hdNode, const AstParseResult* result,
+                                        std::vector<CSTSymbolDetail>* vec);
+
+    //! Collect enum members into a detail vector.
+    static void collectEnumMembers(TSNode enumNode, const AstParseResult* result,
+                                    std::vector<CSTSymbolDetail>* vec);
 };
 
 #endif // _QLS_CSTSEARCHER_H

@@ -97,10 +97,12 @@ ASTSymbolKind CSTSearcher::nodeTypeToSymbolKind(const char* type) {
         return ASYK_Interface;
     }
     if (strcmp(type, "hash_member_declaration") == 0 ||
-        strcmp(type, "hashdecl_member") == 0) {
+        strcmp(type, "hashdecl_member") == 0 ||
+        strcmp(type, "member_declaration") == 0) {
         return ASYK_Field;
     }
-    if (strcmp(type, "variable_declaration") == 0) {
+    if (strcmp(type, "variable_declaration") == 0 ||
+        strcmp(type, "local_variable_declaration") == 0) {
         return ASYK_Variable;
     }
     if (strcmp(type, "global_variable_declaration") == 0) {
@@ -693,8 +695,19 @@ void CSTSearcher::collectParameters(
     int scopeLevel,
     std::vector<CSTScopeSymbolInfo>* vec) {
 
-    TSNode params = ts_node_child_by_field_name(funcNode, "parameters", 10);
-    if (ts_node_is_null(params)) {
+    // Find parameter_list child by type (it has no field name in the grammar)
+    TSNode params = ts_node_child(funcNode, 0);  // will be overwritten; just need init
+    bool foundParams = false;
+    uint32_t funcChildCount = ts_node_named_child_count(funcNode);
+    for (uint32_t i = 0; i < funcChildCount; i++) {
+        TSNode child = ts_node_named_child(funcNode, i);
+        if (strcmp(ts_node_type(child), "parameter_list") == 0) {
+            params = child;
+            foundParams = true;
+            break;
+        }
+    }
+    if (!foundParams) {
         return;
     }
 
@@ -738,40 +751,55 @@ void CSTSearcher::collectLocalsBeforePosition(
         }
 
         const char* childType = ts_node_type(child);
-        if (strcmp(childType, "variable_declaration") == 0) {
-            std::string name = getNodeName(child, result);
-            if (!name.empty()) {
-                CSTSymbolInfo si;
-                si.kind = ASYK_Variable;
-                si.name = name;
-                TSPoint start = ts_node_start_point(child);
-                TSPoint end = ts_node_end_point(child);
-                si.startLine = start.row;
-                si.startCol = start.column;
-                si.endLine = end.row;
-                si.endCol = end.column;
-                vec->push_back(CSTScopeSymbolInfo(std::move(si), scopeLevel));
-            }
-        }
-        // Also check expression statements that contain variable declarations
-        if (strcmp(childType, "expression_statement") == 0) {
-            uint32_t exprChildCount = ts_node_named_child_count(child);
-            for (uint32_t j = 0; j < exprChildCount; j++) {
-                TSNode exprChild = ts_node_named_child(child, j);
-                const char* exprType = ts_node_type(exprChild);
-                if (strcmp(exprType, "variable_declaration") == 0) {
-                    std::string name = getNodeName(exprChild, result);
+        if (strcmp(childType, "local_variable_declaration") == 0) {
+            // Iterate variable_declarator children to get each declared name
+            uint32_t declChildCount = ts_node_named_child_count(child);
+            for (uint32_t j = 0; j < declChildCount; j++) {
+                TSNode declChild = ts_node_named_child(child, j);
+                const char* declType = ts_node_type(declChild);
+                if (strcmp(declType, "variable_declarator") == 0) {
+                    std::string name = getFieldText(declChild, "name", result);
                     if (!name.empty()) {
                         CSTSymbolInfo si;
                         si.kind = ASYK_Variable;
                         si.name = name;
-                        TSPoint start = ts_node_start_point(exprChild);
-                        TSPoint end = ts_node_end_point(exprChild);
+                        TSPoint start = ts_node_start_point(declChild);
+                        TSPoint end = ts_node_end_point(declChild);
                         si.startLine = start.row;
                         si.startCol = start.column;
                         si.endLine = end.row;
                         si.endCol = end.column;
                         vec->push_back(CSTScopeSymbolInfo(std::move(si), scopeLevel));
+                    }
+                }
+            }
+        }
+        // Also check expression statements that contain local variable declarations
+        if (strcmp(childType, "expression_statement") == 0) {
+            uint32_t exprChildCount = ts_node_named_child_count(child);
+            for (uint32_t j = 0; j < exprChildCount; j++) {
+                TSNode exprChild = ts_node_named_child(child, j);
+                const char* exprType = ts_node_type(exprChild);
+                if (strcmp(exprType, "local_variable_declaration") == 0) {
+                    uint32_t declChildCount = ts_node_named_child_count(exprChild);
+                    for (uint32_t k = 0; k < declChildCount; k++) {
+                        TSNode declChild = ts_node_named_child(exprChild, k);
+                        const char* declType = ts_node_type(declChild);
+                        if (strcmp(declType, "variable_declarator") == 0) {
+                            std::string name = getFieldText(declChild, "name", result);
+                            if (!name.empty()) {
+                                CSTSymbolInfo si;
+                                si.kind = ASYK_Variable;
+                                si.name = name;
+                                TSPoint start = ts_node_start_point(declChild);
+                                TSPoint end = ts_node_end_point(declChild);
+                                si.startLine = start.row;
+                                si.startCol = start.column;
+                                si.endLine = end.row;
+                                si.endCol = end.column;
+                                vec->push_back(CSTScopeSymbolInfo(std::move(si), scopeLevel));
+                            }
+                        }
                     }
                 }
             }
@@ -808,9 +836,8 @@ void CSTSearcher::collectDeclarationsInScope(
             }
         }
 
-        // Look for declarations inside member blocks (public { }, private { })
-        if (strcmp(childType, "member_block") == 0 ||
-            strcmp(childType, "access_modifier_block") == 0) {
+        // Look for declarations inside member groups (public { }, private { })
+        if (strcmp(childType, "member_group") == 0) {
             collectDeclarationsInScope(child, result, scopeLevel, vec);
         }
     }
@@ -895,6 +922,610 @@ std::vector<CSTScopeSymbolInfo>* CSTSearcher::findScopeSymbols(
 }
 
 // --------------------------------------------------------------------------
+// Detailed symbol helpers
+// --------------------------------------------------------------------------
+
+std::string CSTSearcher::extractAccessModifier(TSNode node, const AstParseResult* result) {
+    // Check inline modifiers on the node itself
+    // Grammar: modifiers → modifier → access_modifier
+    uint32_t childCount = ts_node_child_count(node);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_child(node, i);
+        const char* childType = ts_node_type(child);
+        if (strcmp(childType, "modifiers") == 0) {
+            // Walk all children of modifiers (including anonymous)
+            uint32_t modCount = ts_node_child_count(child);
+            for (uint32_t j = 0; j < modCount; j++) {
+                TSNode mod = ts_node_child(child, j);
+                const char* modType = ts_node_type(mod);
+                if (strcmp(modType, "access_modifier") == 0) {
+                    return result->getNodeText(mod);
+                }
+                // modifier wraps access_modifier — check its children
+                if (strcmp(modType, "modifier") == 0) {
+                    uint32_t innerCount = ts_node_child_count(mod);
+                    for (uint32_t k = 0; k < innerCount; k++) {
+                        TSNode inner = ts_node_child(mod, k);
+                        if (strcmp(ts_node_type(inner), "access_modifier") == 0) {
+                            return result->getNodeText(inner);
+                        }
+                    }
+                }
+            }
+        }
+        if (strcmp(childType, "access_modifier") == 0) {
+            return result->getNodeText(child);
+        }
+    }
+
+    // Check parent member_group for its access modifier
+    TSNode parent = ts_node_parent(node);
+    if (!ts_node_is_null(parent) && strcmp(ts_node_type(parent), "member_group") == 0) {
+        uint32_t parentChildCount = ts_node_child_count(parent);
+        for (uint32_t i = 0; i < parentChildCount; i++) {
+            TSNode child = ts_node_child(parent, i);
+            if (strcmp(ts_node_type(child), "access_modifier") == 0) {
+                return result->getNodeText(child);
+            }
+        }
+    }
+
+    return std::string();
+}
+
+bool CSTSearcher::hasStaticModifier(TSNode node, const AstParseResult* result) {
+    uint32_t childCount = ts_node_child_count(node);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_child(node, i);
+        const char* childType = ts_node_type(child);
+        if (strcmp(childType, "modifiers") == 0) {
+            // modifiers → modifier → "static" (anonymous leaf)
+            // Check all children (including anonymous) of modifiers
+            uint32_t modCount = ts_node_child_count(child);
+            for (uint32_t j = 0; j < modCount; j++) {
+                TSNode mod = ts_node_child(child, j);
+                const char* modType = ts_node_type(mod);
+                if (strcmp(modType, "static") == 0) {
+                    return true;
+                }
+                // modifier wraps the keyword — check its text
+                if (strcmp(modType, "modifier") == 0) {
+                    std::string text = result->getNodeText(mod);
+                    if (text == "static") {
+                        return true;
+                    }
+                }
+            }
+        }
+        if (strcmp(childType, "static") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<CSTParamInfo> CSTSearcher::extractParameters(TSNode funcNode,
+                                                          const AstParseResult* result) {
+    std::vector<CSTParamInfo> params;
+
+    // Find parameter_list child by type
+    uint32_t funcChildCount = ts_node_named_child_count(funcNode);
+    bool foundParamList = false;
+    TSNode paramList = ts_node_child(funcNode, 0);
+    for (uint32_t i = 0; i < funcChildCount; i++) {
+        TSNode child = ts_node_named_child(funcNode, i);
+        if (strcmp(ts_node_type(child), "parameter_list") == 0) {
+            paramList = child;
+            foundParamList = true;
+            break;
+        }
+    }
+    if (!foundParamList) {
+        return params;
+    }
+
+    uint32_t childCount = ts_node_named_child_count(paramList);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode param = ts_node_named_child(paramList, i);
+        if (strcmp(ts_node_type(param), "parameter") == 0) {
+            CSTParamInfo pi;
+            pi.name = getFieldText(param, "name", result);
+            pi.typeName = getFieldText(param, "type", result);
+            pi.defaultVal = getFieldText(param, "default", result);
+            params.push_back(std::move(pi));
+        }
+    }
+    return params;
+}
+
+std::string CSTSearcher::extractReturnType(TSNode funcNode, const AstParseResult* result) {
+    // Check field 'return_type' first (before name)
+    std::string rt = getFieldText(funcNode, "return_type", result);
+    if (!rt.empty()) {
+        return rt;
+    }
+    // Check 'returns' clause (after parameter_list)
+    return getFieldText(funcNode, "returns", result);
+}
+
+std::string CSTSearcher::extractTypeName(TSNode node, const AstParseResult* result) {
+    const char* type = ts_node_type(node);
+
+    // For variable_declarator, the type is on the parent local/global_variable_declaration
+    if (strcmp(type, "variable_declarator") == 0) {
+        TSNode parent = ts_node_parent(node);
+        if (!ts_node_is_null(parent)) {
+            return getFieldText(parent, "type", result);
+        }
+        return std::string();
+    }
+
+    // For parameter, member_declaration, hashdecl_member — 'type' field
+    return getFieldText(node, "type", result);
+}
+
+CSTSymbolDetail CSTSearcher::enrichSymbol(const CSTScopeSymbolInfo& ssi,
+                                           const AstParseResult* result) {
+    CSTSymbolDetail detail;
+    detail.symbol = ssi.symbol;
+    detail.scopeLevel = ssi.scopeLevel;
+
+    // Find the declaration node at the symbol's start position
+    std::vector<TSNode> ancestors = findNodeAndParents(
+        result, ssi.symbol.startLine, ssi.symbol.startCol);
+
+    if (ancestors.empty()) {
+        return detail;
+    }
+
+    // Find the nearest declaration/named node
+    for (const auto& anc : ancestors) {
+        const char* type = ts_node_type(anc);
+        ASTSymbolKind kind = nodeTypeToSymbolKind(type);
+
+        if (kind == ASYK_Function || kind == ASYK_Method || kind == ASYK_Constructor) {
+            detail.returnType = extractReturnType(anc, result);
+            detail.params = extractParameters(anc, result);
+            detail.access = extractAccessModifier(anc, result);
+            detail.isStatic = hasStaticModifier(anc, result);
+            return detail;
+        }
+
+        if (strcmp(type, "member_declaration") == 0) {
+            detail.typeName = extractTypeName(anc, result);
+            detail.access = extractAccessModifier(anc, result);
+            detail.isStatic = hasStaticModifier(anc, result);
+            return detail;
+        }
+
+        if (strcmp(type, "variable_declarator") == 0) {
+            detail.typeName = extractTypeName(anc, result);
+            return detail;
+        }
+
+        if (strcmp(type, "local_variable_declaration") == 0 ||
+            strcmp(type, "global_variable_declaration") == 0) {
+            detail.typeName = getFieldText(anc, "type", result);
+            return detail;
+        }
+
+        if (strcmp(type, "parameter") == 0) {
+            detail.typeName = getFieldText(anc, "type", result);
+            return detail;
+        }
+
+        if (strcmp(type, "hashdecl_member") == 0) {
+            detail.typeName = extractTypeName(anc, result);
+            return detail;
+        }
+
+        if (kind == ASYK_Class || kind == ASYK_Namespace || kind == ASYK_Interface ||
+            kind == ASYK_Constant || kind == ASYK_TypeAlias) {
+            detail.access = extractAccessModifier(anc, result);
+            return detail;
+        }
+    }
+
+    return detail;
+}
+
+std::vector<CSTSymbolDetail>* CSTSearcher::findScopeSymbolsDetailed(
+    const AstParseResult* result,
+    uint32_t line, uint32_t col) {
+
+    if (!result) {
+        return nullptr;
+    }
+
+    // Get basic scope symbols first
+    std::unique_ptr<std::vector<CSTScopeSymbolInfo>> basic(
+        findScopeSymbols(result, line, col));
+    if (!basic) {
+        return nullptr;
+    }
+
+    std::unique_ptr<std::vector<CSTSymbolDetail>> vec(
+        new std::vector<CSTSymbolDetail>);
+    vec->reserve(basic->size());
+
+    for (const auto& ssi : *basic) {
+        vec->push_back(enrichSymbol(ssi, result));
+    }
+
+    if (vec->empty()) {
+        return nullptr;
+    }
+    return vec.release();
+}
+
+// --------------------------------------------------------------------------
+// Type resolution and member listing
+// --------------------------------------------------------------------------
+
+std::string CSTSearcher::getSymbolType(
+    const AstParseResult* result,
+    uint32_t line, uint32_t col) {
+
+    if (!result) {
+        return std::string();
+    }
+
+    std::vector<TSNode> ancestors = findNodeAndParents(result, line, col);
+    if (ancestors.empty()) {
+        return std::string();
+    }
+
+    // Check the leaf node and its ancestors
+    for (size_t i = 0; i < ancestors.size(); i++) {
+        const char* type = ts_node_type(ancestors[i]);
+
+        // "self" keyword → find enclosing class
+        if (strcmp(type, "self") == 0) {
+            for (size_t j = i + 1; j < ancestors.size(); j++) {
+                if (strcmp(ts_node_type(ancestors[j]), "class_declaration") == 0) {
+                    return getNodeName(ancestors[j], result);
+                }
+            }
+            return std::string();
+        }
+
+        // Check variable_declarator for type from parent
+        if (strcmp(type, "variable_declarator") == 0) {
+            return extractTypeName(ancestors[i], result);
+        }
+
+        // Check local/global variable declaration
+        if (strcmp(type, "local_variable_declaration") == 0 ||
+            strcmp(type, "global_variable_declaration") == 0) {
+            return getFieldText(ancestors[i], "type", result);
+        }
+
+        // Check parameter
+        if (strcmp(type, "parameter") == 0) {
+            return getFieldText(ancestors[i], "type", result);
+        }
+
+        // Check member_declaration
+        if (strcmp(type, "member_declaration") == 0) {
+            return getFieldText(ancestors[i], "type", result);
+        }
+
+        // For identifiers, check if they match a known type name
+        if (strcmp(type, "identifier") == 0 || strcmp(type, "scoped_identifier") == 0) {
+            // Check if parent is a type node or simple_type
+            if (i + 1 < ancestors.size()) {
+                const char* parentType = ts_node_type(ancestors[i + 1]);
+                if (strcmp(parentType, "simple_type") == 0 ||
+                    strcmp(parentType, "type") == 0) {
+                    return result->getNodeText(ancestors[i]);
+                }
+            }
+        }
+    }
+
+    return std::string();
+}
+
+bool CSTSearcher::findDeclarationByName(TSNode root, const AstParseResult* result,
+                                          const std::string& name, const char* nodeType,
+                                          TSNode* outNode) {
+    uint32_t childCount = ts_node_named_child_count(root);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(root, i);
+        const char* type = ts_node_type(child);
+
+        if (nodeType == nullptr || strcmp(type, nodeType) == 0) {
+            std::string nodeName = getNodeName(child, result);
+            if (nodeName == name) {
+                *outNode = child;
+                return true;
+            }
+        }
+
+        // Recurse into containers
+        if (strcmp(type, "namespace_declaration") == 0 ||
+            strcmp(type, "class_declaration") == 0 ||
+            strcmp(type, "source_file") == 0 ||
+            strcmp(type, "member_group") == 0) {
+            if (findDeclarationByName(child, result, name, nodeType, outNode)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void CSTSearcher::collectClassMembers(TSNode classNode, const AstParseResult* result,
+                                       std::vector<CSTSymbolDetail>* vec,
+                                       std::vector<std::string>* visited,
+                                       bool includeInherited) {
+    std::string className = getNodeName(classNode, result);
+
+    // Prevent infinite recursion in inheritance
+    std::vector<std::string> localVisited;
+    if (!visited) {
+        visited = &localVisited;
+    }
+    for (const auto& v : *visited) {
+        if (v == className) {
+            return;
+        }
+    }
+    visited->push_back(className);
+
+    // Iterate all children
+    uint32_t childCount = ts_node_named_child_count(classNode);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(classNode, i);
+        const char* type = ts_node_type(child);
+
+        if (strcmp(type, "member_group") == 0) {
+            // Get access modifier from the group
+            std::string groupAccess;
+            uint32_t groupChildCount = ts_node_child_count(child);
+            for (uint32_t j = 0; j < groupChildCount; j++) {
+                TSNode gc = ts_node_child(child, j);
+                if (strcmp(ts_node_type(gc), "access_modifier") == 0) {
+                    groupAccess = result->getNodeText(gc);
+                    break;
+                }
+            }
+
+            uint32_t memberCount = ts_node_named_child_count(child);
+            for (uint32_t j = 0; j < memberCount; j++) {
+                TSNode member = ts_node_named_child(child, j);
+                const char* mtype = ts_node_type(member);
+                ASTSymbolKind kind = nodeTypeToSymbolKind(mtype);
+
+                if (kind != ASYK_None) {
+                    CSTSymbolDetail detail;
+                    detail.symbol.kind = kind;
+                    detail.symbol.name = getNodeName(member, result);
+                    detail.symbol.docComment = findDocComment(member, result);
+                    TSPoint start = ts_node_start_point(member);
+                    TSPoint end = ts_node_end_point(member);
+                    detail.symbol.startLine = start.row;
+                    detail.symbol.startCol = start.column;
+                    detail.symbol.endLine = end.row;
+                    detail.symbol.endCol = end.column;
+                    detail.access = groupAccess;
+                    detail.isStatic = hasStaticModifier(member, result);
+
+                    if (kind == ASYK_Method || kind == ASYK_Function || kind == ASYK_Constructor) {
+                        detail.returnType = extractReturnType(member, result);
+                        detail.params = extractParameters(member, result);
+                    } else if (kind == ASYK_Field) {
+                        detail.typeName = extractTypeName(member, result);
+                    }
+
+                    vec->push_back(std::move(detail));
+                }
+            }
+        }
+
+        // Direct children (method_declaration, constructor_declaration, etc.)
+        ASTSymbolKind kind = nodeTypeToSymbolKind(type);
+        if (kind == ASYK_Method || kind == ASYK_Function || kind == ASYK_Constructor) {
+            CSTSymbolDetail detail;
+            detail.symbol.kind = kind;
+            detail.symbol.name = getNodeName(child, result);
+            detail.symbol.docComment = findDocComment(child, result);
+            TSPoint start = ts_node_start_point(child);
+            TSPoint end = ts_node_end_point(child);
+            detail.symbol.startLine = start.row;
+            detail.symbol.startCol = start.column;
+            detail.symbol.endLine = end.row;
+            detail.symbol.endCol = end.column;
+            detail.access = extractAccessModifier(child, result);
+            detail.isStatic = hasStaticModifier(child, result);
+            detail.returnType = extractReturnType(child, result);
+            detail.params = extractParameters(child, result);
+            vec->push_back(std::move(detail));
+        } else if (strcmp(type, "constant_declaration") == 0) {
+            CSTSymbolDetail detail;
+            detail.symbol.kind = ASYK_Constant;
+            detail.symbol.name = getNodeName(child, result);
+            detail.symbol.docComment = findDocComment(child, result);
+            TSPoint start = ts_node_start_point(child);
+            TSPoint end = ts_node_end_point(child);
+            detail.symbol.startLine = start.row;
+            detail.symbol.startCol = start.column;
+            detail.symbol.endLine = end.row;
+            detail.symbol.endCol = end.column;
+            detail.access = extractAccessModifier(child, result);
+            vec->push_back(std::move(detail));
+        }
+
+        // Handle inherited classes
+        if (includeInherited && strcmp(type, "superclass_list") == 0) {
+            uint32_t superCount = ts_node_named_child_count(child);
+            for (uint32_t j = 0; j < superCount; j++) {
+                TSNode superclass = ts_node_named_child(child, j);
+                if (strcmp(ts_node_type(superclass), "superclass") != 0) {
+                    continue;
+                }
+                // Get the class name from the superclass node
+                uint32_t superChildCount = ts_node_named_child_count(superclass);
+                for (uint32_t k = 0; k < superChildCount; k++) {
+                    TSNode sc = ts_node_named_child(superclass, k);
+                    const char* scType = ts_node_type(sc);
+                    if (strcmp(scType, "identifier") == 0 ||
+                        strcmp(scType, "scoped_identifier") == 0) {
+                        std::string parentName = result->getNodeText(sc);
+                        // Find parent class in tree and collect its members
+                        TSNode rootNode = ts_tree_root_node(result->getTree());
+                        TSNode parentClass = rootNode;  // initialized; overwritten by findDeclarationByName
+                        if (findDeclarationByName(rootNode, result, parentName,
+                                                   "class_declaration", &parentClass)) {
+                            collectClassMembers(parentClass, result, vec, visited, true);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void CSTSearcher::collectNamespaceMembers(TSNode nsNode, const AstParseResult* result,
+                                           std::vector<CSTSymbolDetail>* vec) {
+    uint32_t childCount = ts_node_named_child_count(nsNode);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(nsNode, i);
+        const char* type = ts_node_type(child);
+        ASTSymbolKind kind = nodeTypeToSymbolKind(type);
+
+        if (kind != ASYK_None) {
+            CSTSymbolDetail detail;
+            detail.symbol.kind = kind;
+            detail.symbol.name = getNodeName(child, result);
+            detail.symbol.docComment = findDocComment(child, result);
+            TSPoint start = ts_node_start_point(child);
+            TSPoint end = ts_node_end_point(child);
+            detail.symbol.startLine = start.row;
+            detail.symbol.startCol = start.column;
+            detail.symbol.endLine = end.row;
+            detail.symbol.endCol = end.column;
+            detail.access = extractAccessModifier(child, result);
+
+            if (kind == ASYK_Function) {
+                detail.returnType = extractReturnType(child, result);
+                detail.params = extractParameters(child, result);
+            }
+
+            vec->push_back(std::move(detail));
+        }
+    }
+}
+
+void CSTSearcher::collectHashdeclMembers(TSNode hdNode, const AstParseResult* result,
+                                          std::vector<CSTSymbolDetail>* vec) {
+    uint32_t childCount = ts_node_named_child_count(hdNode);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(hdNode, i);
+        if (strcmp(ts_node_type(child), "hashdecl_member") == 0) {
+            CSTSymbolDetail detail;
+            detail.symbol.kind = ASYK_Field;
+            detail.symbol.name = getFieldText(child, "name", result);
+            detail.symbol.docComment = findDocComment(child, result);
+            detail.typeName = getFieldText(child, "type", result);
+            TSPoint start = ts_node_start_point(child);
+            TSPoint end = ts_node_end_point(child);
+            detail.symbol.startLine = start.row;
+            detail.symbol.startCol = start.column;
+            detail.symbol.endLine = end.row;
+            detail.symbol.endCol = end.column;
+            vec->push_back(std::move(detail));
+        }
+    }
+}
+
+void CSTSearcher::collectEnumMembers(TSNode enumNode, const AstParseResult* result,
+                                      std::vector<CSTSymbolDetail>* vec) {
+    uint32_t childCount = ts_node_named_child_count(enumNode);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(enumNode, i);
+        if (strcmp(ts_node_type(child), "enum_member") == 0) {
+            CSTSymbolDetail detail;
+            detail.symbol.kind = ASYK_Constant;
+            detail.symbol.name = getFieldText(child, "name", result);
+            detail.symbol.docComment = findDocComment(child, result);
+            TSPoint start = ts_node_start_point(child);
+            TSPoint end = ts_node_end_point(child);
+            detail.symbol.startLine = start.row;
+            detail.symbol.startCol = start.column;
+            detail.symbol.endLine = end.row;
+            detail.symbol.endCol = end.column;
+            // Store enum value if present
+            std::string val = getFieldText(child, "value", result);
+            if (!val.empty()) {
+                detail.typeName = val;
+            }
+            vec->push_back(std::move(detail));
+        }
+    }
+}
+
+std::vector<CSTSymbolDetail>* CSTSearcher::findTypeMembers(
+    const AstParseResult* result,
+    const std::string& typeName,
+    bool includeInherited) {
+
+    if (!result || typeName.empty()) {
+        return nullptr;
+    }
+
+    TSNode root = ts_tree_root_node(result->getTree());
+
+    // Try class first
+    TSNode found = root;  // initialized; overwritten by findDeclarationByName
+    if (findDeclarationByName(root, result, typeName, "class_declaration", &found)) {
+        std::unique_ptr<std::vector<CSTSymbolDetail>> vec(
+            new std::vector<CSTSymbolDetail>);
+        collectClassMembers(found, result, vec.get(), nullptr, includeInherited);
+        if (vec->empty()) {
+            return nullptr;
+        }
+        return vec.release();
+    }
+
+    // Try namespace
+    if (findDeclarationByName(root, result, typeName, "namespace_declaration", &found)) {
+        std::unique_ptr<std::vector<CSTSymbolDetail>> vec(
+            new std::vector<CSTSymbolDetail>);
+        collectNamespaceMembers(found, result, vec.get());
+        if (vec->empty()) {
+            return nullptr;
+        }
+        return vec.release();
+    }
+
+    // Try hashdecl
+    if (findDeclarationByName(root, result, typeName, "hashdecl_declaration", &found)) {
+        std::unique_ptr<std::vector<CSTSymbolDetail>> vec(
+            new std::vector<CSTSymbolDetail>);
+        collectHashdeclMembers(found, result, vec.get());
+        if (vec->empty()) {
+            return nullptr;
+        }
+        return vec.release();
+    }
+
+    // Try enum
+    if (findDeclarationByName(root, result, typeName, "enum_declaration", &found)) {
+        std::unique_ptr<std::vector<CSTSymbolDetail>> vec(
+            new std::vector<CSTSymbolDetail>);
+        collectEnumMembers(found, result, vec.get());
+        if (vec->empty()) {
+            return nullptr;
+        }
+        return vec.release();
+    }
+
+    return nullptr;
+}
+
+// --------------------------------------------------------------------------
 // Hover info
 // --------------------------------------------------------------------------
 
@@ -972,11 +1603,18 @@ std::string CSTSearcher::buildFunctionSignature(TSNode node, const AstParseResul
         ss << getNodeName(node, result);
     }
 
-    // Parameters
-    TSNode params = ts_node_child_by_field_name(node, "parameters", 10);
-    if (!ts_node_is_null(params)) {
-        ss << result->getNodeText(params);
-    } else {
+    // Parameters — find parameter_list by type (no field name in grammar)
+    bool foundParams = false;
+    uint32_t namedCount = ts_node_named_child_count(node);
+    for (uint32_t i = 0; i < namedCount; i++) {
+        TSNode child = ts_node_named_child(node, i);
+        if (strcmp(ts_node_type(child), "parameter_list") == 0) {
+            ss << result->getNodeText(child);
+            foundParams = true;
+            break;
+        }
+    }
+    if (!foundParams) {
         ss << "()";
     }
 

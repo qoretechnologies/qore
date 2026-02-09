@@ -1,0 +1,309 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  DocumentFormatting.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires json
+%requires ../../../../qlib/QLS
+
+%exec-class DocumentFormattingTest
+
+class DocumentFormattingTest inherits QUnit::Test {
+    private {
+        QLS::QLSServer server;
+        int reqId = 0;
+    }
+
+    constructor() : Test("QLS DocumentFormatting", "1.0") {
+        addTestCase("capability advertised", \testCapability());
+        addTestCase("format unformatted code", \testFormatUnformatted());
+        addTestCase("already formatted code", \testAlreadyFormatted());
+        addTestCase("empty document", \testEmptyDocument());
+        addTestCase("parse error document", \testParseErrorDocument());
+        addTestCase("missing params", \testMissingParams());
+        addTestCase("non-existent document", \testNonExistentDocument());
+        addTestCase("format replaces full range", \testFormatFullRange());
+        addTestCase("invalid textDocument param", \testInvalidTextDocumentParam());
+        addTestCase("full round-trip: open, format, change, format", \testFullRoundTrip());
+
+        set_return_value(main());
+    }
+
+    private setup(string text) {
+        server = new QLS::QLSServer();
+
+        # Initialize
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        # Send initialized notification
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+
+        # Open a document
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": "file:///test/format.q",
+                "languageId": "qore",
+                "version": 1,
+                "text": text,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+    }
+
+    private hash<auto> makeRequest(string method, *hash<auto> params) {
+        return {
+            "jsonrpc": "2.0",
+            "id": ++reqId,
+            "method": method,
+            "params": params,
+        };
+    }
+
+    private *list<auto> sendFormatting() {
+        hash<auto> req = makeRequest("textDocument/formatting", {
+            "textDocument": {"uri": "file:///test/format.q"},
+            "options": {"tabSize": 4, "insertSpaces": True},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    testCapability() {
+        assertEq(True, QLS::ServerCapabilities.documentFormattingProvider,
+            "documentFormattingProvider should be True");
+    }
+
+    testFormatUnformatted() {
+        # Unformatted code: wrong indentation
+        string text = "%modern\nclass Foo {\nint bar() {\nreturn 1;\n}\n}\n";
+        setup(text);
+
+        *list<auto> edits = sendFormatting();
+        assertTrue(exists edits, "should return edits for unformatted code");
+        assertEq(1, edits.size(), "should return exactly one edit (full replacement)");
+
+        hash<auto> edit = edits[0];
+        assertEq(0, edit.range.start.line, "edit start should be line 0");
+        assertEq(0, edit.range.start.character, "edit start should be character 0");
+        assertTrue(edit.newText.size() > 0, "newText should not be empty");
+        # The formatted text should differ from the original
+        assertNeq(text, edit.newText, "formatted text should differ from original");
+    }
+
+    testAlreadyFormatted() {
+        # Use a simple, well-formatted file (no extra blank lines the formatter would strip)
+        string text = "%modern\nint x = 1;\n";
+        setup(text);
+
+        *list<auto> edits = sendFormatting();
+        # Should return empty edits or an edit with identical content
+        if (edits && edits.size() > 0) {
+            # If formatter returns an edit, verify the newText matches original
+            assertEq(text, edits[0].newText,
+                "formatter should return identical content for already-formatted code");
+        } else {
+            assertEq(0, edits.size(), "should return empty edits for already-formatted code");
+        }
+    }
+
+    testEmptyDocument() {
+        setup("");
+
+        *list<auto> edits = sendFormatting();
+        assertEq(0, edits.size(), "should return empty edits for empty document");
+    }
+
+    testParseErrorDocument() {
+        # Document with parse errors — formatter should handle gracefully
+        string text = "%modern\nclass { broken syntax\n";
+        setup(text);
+
+        *list<auto> edits = sendFormatting();
+        # Should return empty edits (don't break editing on parse errors)
+        assertEq(0, edits.size(), "should return empty edits for document with parse errors");
+    }
+
+    testMissingParams() {
+        server = new QLS::QLSServer();
+
+        # Initialize first
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+
+        # Send request with missing params
+        hash<auto> req = makeRequest("textDocument/formatting");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses, "should return error response for missing params");
+        assertTrue(responses.size() > 0, "should have at least one response");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    testNonExistentDocument() {
+        string text = "%modern\nclass Foo {}\n";
+        setup(text);
+
+        # Request formatting for a document that doesn't exist
+        hash<auto> req = makeRequest("textDocument/formatting", {
+            "textDocument": {"uri": "file:///nonexistent.q"},
+            "options": {"tabSize": 4, "insertSpaces": True},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses, "should return response for non-existent document");
+        hash<auto> resp = parse_json(responses[0]);
+        assertEq(0, resp.result.size(), "should return empty edit list for non-existent document");
+    }
+
+    testInvalidTextDocumentParam() {
+        string text = "%modern\nint x = 1;\n";
+        setup(text);
+
+        # Send request with params but missing textDocument
+        hash<auto> req = makeRequest("textDocument/formatting", {
+            "options": {"tabSize": 4, "insertSpaces": True},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return response for missing textDocument");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "should return error when textDocument is missing");
+    }
+
+    testFormatFullRange() {
+        # Verify the edit range covers the entire document
+        string text = "%modern\nclass Foo {\nint bar() {\nreturn 1;\n}\n}\n";
+        setup(text);
+
+        *list<auto> edits = sendFormatting();
+        assertTrue(exists edits && edits.size() > 0, "should return edits");
+
+        hash<auto> edit = edits[0];
+        # Start should be (0, 0)
+        assertEq(0, edit.range.start.line, "range start line should be 0");
+        assertEq(0, edit.range.start.character, "range start character should be 0");
+        # End should be at the last line
+        list<string> lines = text.split("\n");
+        int lastLine = lines.size() - 1;
+        assertEq(lastLine, edit.range.end.line, "range end line should be last line");
+    }
+
+    testFullRoundTrip() {
+        # Full LSP round-trip: initialize → open → format → didChange → format again
+        server = new QLS::QLSServer();
+
+        # 1. Initialize
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        softlist<auto> initResponses = server.handleRequest(make_json(initReq));
+        assertTrue(initResponses.size() > 0, "initialize should return a response");
+        hash<auto> initResp = parse_json(initResponses[0]);
+        assertTrue(exists initResp.result.capabilities,
+            "initialize response should include capabilities");
+        assertTrue(exists initResp.result.capabilities.documentFormattingProvider,
+            "capabilities should include documentFormattingProvider");
+
+        # 2. Initialized notification
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+
+        # 3. Open document with unformatted code
+        string uri = "file:///test/roundtrip.q";
+        string text1 = "%modern\nclass Foo {\nint bar() {\nreturn 1;\n}\n}\n";
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "qore",
+                "version": 1,
+                "text": text1,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+
+        # 4. Format
+        hash<auto> fmtReq1 = makeRequest("textDocument/formatting", {
+            "textDocument": {"uri": uri},
+            "options": {"tabSize": 4, "insertSpaces": True},
+        });
+        softlist<auto> fmtResponses1 = server.handleRequest(make_json(fmtReq1));
+        assertTrue(fmtResponses1.size() > 0, "first format should return a response");
+        hash<auto> fmtResp1 = parse_json(fmtResponses1[0]);
+        assertTrue(exists fmtResp1.result, "first format response should have result");
+        list<auto> edits1 = fmtResp1.result;
+        assertTrue(edits1.size() > 0, "first format should produce edits");
+        string formatted = edits1[0].newText;
+        assertNeq(text1, formatted, "formatted text should differ from unformatted");
+
+        # 5. Simulate client applying the edit and sending didChange
+        hash<auto> changeReq = makeRequest("textDocument/didChange", {
+            "textDocument": {"uri": uri, "version": 2},
+            "contentChanges": ({"text": formatted},),
+        });
+        delete changeReq.id;
+        server.handleRequest(make_json(changeReq));
+
+        # 6. Format again — should produce no edits (idempotent)
+        hash<auto> fmtReq2 = makeRequest("textDocument/formatting", {
+            "textDocument": {"uri": uri},
+            "options": {"tabSize": 4, "insertSpaces": True},
+        });
+        softlist<auto> fmtResponses2 = server.handleRequest(make_json(fmtReq2));
+        assertTrue(fmtResponses2.size() > 0, "second format should return a response");
+        hash<auto> fmtResp2 = parse_json(fmtResponses2[0]);
+        list<auto> edits2 = fmtResp2.result;
+        # Either no edits or edit with same content (idempotent formatting)
+        if (edits2.size() > 0) {
+            assertEq(formatted, edits2[0].newText,
+                "re-formatting should produce identical output (idempotent)");
+        } else {
+            assertEq(0, edits2.size(), "re-formatting should produce no edits");
+        }
+    }
+}

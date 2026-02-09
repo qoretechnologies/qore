@@ -433,3 +433,263 @@ AstTreeSearcher::constructor() {
 
     return lst.release();
 }
+
+//! Find scope symbols with detailed metadata.
+/**
+    @param tree AST tree structure
+    @param uri document's uri
+    @param line on what line lies the position (0-indexed)
+    @param col on what column lies the position (0-indexed)
+
+    @return list of detailed symbols with returnType, typeName, access, isStatic, params, or NOTHING
+
+    @since %Qore 2.2
+ */
+*list AstTreeSearcher::findScopeSymbolsDetailed(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col) {
+    ReferenceHolder<AstTreeHolder> holder(tree, xsink);
+
+    AstParseResult* result = tree->get();
+    if (!result) {
+        return QoreValue();
+    }
+
+    std::unique_ptr<std::vector<CSTSymbolDetail>> vec(
+        CSTSearcher::findScopeSymbolsDetailed(result,
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col)));
+    if (!vec) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
+    for (size_t i = 0, count = vec->size(); i < count; i++) {
+        const CSTSymbolDetail& sd = vec->at(i);
+        const CSTSymbolInfo& si = sd.symbol;
+
+        ReferenceHolder<QoreHashNode> symbolInfo(new QoreHashNode, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        ReferenceHolder<QoreHashNode> startHash(new QoreHashNode, xsink);
+        ReferenceHolder<QoreHashNode> endHash(new QoreHashNode, xsink);
+        ReferenceHolder<QoreHashNode> range(new QoreHashNode, xsink);
+        ReferenceHolder<QoreHashNode> location(new QoreHashNode, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        startHash->setKeyValue("line", static_cast<int64>(si.startLine), xsink);
+        startHash->setKeyValue("character", static_cast<int64>(si.startCol), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        endHash->setKeyValue("line", static_cast<int64>(si.endLine), xsink);
+        endHash->setKeyValue("character", static_cast<int64>(si.endCol), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        range->setKeyValue("start", startHash.release(), xsink);
+        range->setKeyValue("end", endHash.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        location->setKeyValue("uri", uri->stringRefSelf(), xsink);
+        location->setKeyValue("range", range.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        symbolInfo->setKeyValue("name", new QoreStringNode(si.name), xsink);
+        symbolInfo->setKeyValue("kind", static_cast<int64>(si.kind), xsink);
+        symbolInfo->setKeyValue("location", location.release(), xsink);
+        symbolInfo->setKeyValue("scope_level", static_cast<int64>(sd.scopeLevel), xsink);
+        if (!si.docComment.empty()) {
+            symbolInfo->setKeyValue("docComment", new QoreStringNode(si.docComment), xsink);
+        }
+        if (!sd.returnType.empty()) {
+            symbolInfo->setKeyValue("returnType", new QoreStringNode(sd.returnType), xsink);
+        }
+        if (!sd.typeName.empty()) {
+            symbolInfo->setKeyValue("typeName", new QoreStringNode(sd.typeName), xsink);
+        }
+        if (!sd.access.empty()) {
+            symbolInfo->setKeyValue("access", new QoreStringNode(sd.access), xsink);
+        }
+        symbolInfo->setKeyValue("isStatic", sd.isStatic, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        // Add params list
+        if (!sd.params.empty()) {
+            ReferenceHolder<QoreListNode> paramList(new QoreListNode, xsink);
+            for (const auto& p : sd.params) {
+                ReferenceHolder<QoreHashNode> paramHash(new QoreHashNode, xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                paramHash->setKeyValue("name", new QoreStringNode(p.name), xsink);
+                if (!p.typeName.empty()) {
+                    paramHash->setKeyValue("typeName", new QoreStringNode(p.typeName), xsink);
+                }
+                if (!p.defaultVal.empty()) {
+                    paramHash->setKeyValue("defaultVal", new QoreStringNode(p.defaultVal), xsink);
+                }
+                if (*xsink) {
+                    return QoreValue();
+                }
+                paramList->push(paramHash.release(), xsink);
+            }
+            symbolInfo->setKeyValue("params", paramList.release(), xsink);
+        }
+        if (*xsink) {
+            return QoreValue();
+        }
+        lst->push(symbolInfo.release(), xsink);
+    }
+
+    return lst.release();
+}
+
+//! Resolve the type of a symbol at position.
+/**
+    @param tree AST tree structure
+    @param line on what line lies the position (0-indexed)
+    @param col on what column lies the position (0-indexed)
+
+    @return type name string, or NOTHING if not found
+
+    @since %Qore 2.2
+ */
+*string AstTreeSearcher::getSymbolType(astparser::AstTree[AstTreeHolder] tree, int line, int col) {
+    ReferenceHolder<AstTreeHolder> holder(tree, xsink);
+
+    AstParseResult* result = tree->get();
+    if (!result) {
+        return QoreValue();
+    }
+
+    std::string typeName = CSTSearcher::getSymbolType(
+        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col));
+
+    if (typeName.empty()) {
+        return QoreValue();
+    }
+
+    return new QoreStringNode(typeName);
+}
+
+//! Find members of a named type.
+/**
+    @param tree AST tree structure
+    @param uri document's uri
+    @param typeName name of the type to find members for
+    @param includeInherited whether to include inherited members (default True)
+
+    @return list of detailed member symbols, or NOTHING if not found
+
+    @since %Qore 2.2
+ */
+*list AstTreeSearcher::findTypeMembers(astparser::AstTree[AstTreeHolder] tree, string uri, string typeName, bool includeInherited = True) {
+    ReferenceHolder<AstTreeHolder> holder(tree, xsink);
+
+    AstParseResult* result = tree->get();
+    if (!result) {
+        return QoreValue();
+    }
+
+    std::string typeStr(typeName->c_str());
+    std::unique_ptr<std::vector<CSTSymbolDetail>> vec(
+        CSTSearcher::findTypeMembers(result, typeStr, includeInherited));
+    if (!vec) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
+    for (size_t i = 0, count = vec->size(); i < count; i++) {
+        const CSTSymbolDetail& sd = vec->at(i);
+        const CSTSymbolInfo& si = sd.symbol;
+
+        ReferenceHolder<QoreHashNode> symbolInfo(new QoreHashNode, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        ReferenceHolder<QoreHashNode> startHash(new QoreHashNode, xsink);
+        ReferenceHolder<QoreHashNode> endHash(new QoreHashNode, xsink);
+        ReferenceHolder<QoreHashNode> range(new QoreHashNode, xsink);
+        ReferenceHolder<QoreHashNode> location(new QoreHashNode, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        startHash->setKeyValue("line", static_cast<int64>(si.startLine), xsink);
+        startHash->setKeyValue("character", static_cast<int64>(si.startCol), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        endHash->setKeyValue("line", static_cast<int64>(si.endLine), xsink);
+        endHash->setKeyValue("character", static_cast<int64>(si.endCol), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        range->setKeyValue("start", startHash.release(), xsink);
+        range->setKeyValue("end", endHash.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        location->setKeyValue("uri", uri->stringRefSelf(), xsink);
+        location->setKeyValue("range", range.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        symbolInfo->setKeyValue("name", new QoreStringNode(si.name), xsink);
+        symbolInfo->setKeyValue("kind", static_cast<int64>(si.kind), xsink);
+        symbolInfo->setKeyValue("location", location.release(), xsink);
+        if (!si.docComment.empty()) {
+            symbolInfo->setKeyValue("docComment", new QoreStringNode(si.docComment), xsink);
+        }
+        if (!sd.returnType.empty()) {
+            symbolInfo->setKeyValue("returnType", new QoreStringNode(sd.returnType), xsink);
+        }
+        if (!sd.typeName.empty()) {
+            symbolInfo->setKeyValue("typeName", new QoreStringNode(sd.typeName), xsink);
+        }
+        if (!sd.access.empty()) {
+            symbolInfo->setKeyValue("access", new QoreStringNode(sd.access), xsink);
+        }
+        symbolInfo->setKeyValue("isStatic", sd.isStatic, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        if (!sd.params.empty()) {
+            ReferenceHolder<QoreListNode> paramList(new QoreListNode, xsink);
+            for (const auto& p : sd.params) {
+                ReferenceHolder<QoreHashNode> paramHash(new QoreHashNode, xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                paramHash->setKeyValue("name", new QoreStringNode(p.name), xsink);
+                if (!p.typeName.empty()) {
+                    paramHash->setKeyValue("typeName", new QoreStringNode(p.typeName), xsink);
+                }
+                if (!p.defaultVal.empty()) {
+                    paramHash->setKeyValue("defaultVal", new QoreStringNode(p.defaultVal), xsink);
+                }
+                if (*xsink) {
+                    return QoreValue();
+                }
+                paramList->push(paramHash.release(), xsink);
+            }
+            symbolInfo->setKeyValue("params", paramList.release(), xsink);
+        }
+        if (*xsink) {
+            return QoreValue();
+        }
+        lst->push(symbolInfo.release(), xsink);
+    }
+
+    return lst.release();
+}

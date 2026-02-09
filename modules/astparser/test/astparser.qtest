@@ -476,6 +476,15 @@ sub test() {
         addTestCase("Default param - list default", \testDefaultParamListDefault());
         addTestCase("Literal kinds", \testLiteralKinds());
         addTestCase("Hash kind - curly vs parens", \testHashKind());
+%ifdef HasAstTreeSearcher
+        addTestCase("Scope symbols detailed", \testScopeSymbolsDetailed());
+        addTestCase("Get symbol type", \testGetSymbolType());
+        addTestCase("Find type members - class", \testFindTypeMembersClass());
+        addTestCase("Find type members - hashdecl", \testFindTypeMembersHashdecl());
+        addTestCase("Find type members - namespace", \testFindTypeMembersNamespace());
+        addTestCase("Find type members - enum", \testFindTypeMembersEnum());
+        addTestCase("Find type members - inheritance", \testFindTypeMembersInheritance());
+%endif
 %endif
         set_return_value(main());
     }
@@ -1332,7 +1341,11 @@ namespace MyNamespace {
             }
         }
 
-        # Verify we found expected symbols - at minimum we should have class and namespace
+        # Verify we found all expected symbols
+        assertTrue(hasLocalVar, "found localVar symbol");
+        assertTrue(hasParam, "found param symbol");
+        assertTrue(hasMemberVar, "found memberVar symbol");
+        assertTrue(hasMyMethod, "found myMethod symbol");
         assertTrue(hasMyClass, "found MyClass symbol");
         assertTrue(hasNamespace, "found MyNamespace symbol");
     }
@@ -2591,6 +2604,368 @@ class Used {}
         assertTrue(exists(emptyHashNode), "empty: expr is hash_literal");
         list<auto> emptyEntries = findAllChildrenByType(emptyHashNode, "hash_entry");
         assertEq(0, emptyEntries.size(), "empty hash has 0 entries");
+    }
+
+    testScopeSymbolsDetailed() {
+        string testCode = "
+%new-style
+namespace MyNs {
+    class MyClass {
+        public {
+            int memberVar;
+            static string staticMember;
+        }
+        private {
+            float privateMember;
+        }
+        public int myMethod(string name, int count = 10) {
+            int localVar = 1;
+            return localVar;
+        }
+        private:internal static bool helperMethod() {
+            return True;
+        }
+    }
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+
+        # Position inside myMethod body (line with "int localVar = 1;")
+        # In the test code: %new-style is line 1, namespace is line 2, class line 3,
+        # public { is line 4, int memberVar line 5, static string line 6, } line 7,
+        # private { line 8, float line 9, } line 10,
+        # public int myMethod line 11, int localVar line 12
+        # 0-indexed: line 12, col 12
+        *list detailed = searcher.findScopeSymbolsDetailed(tree, "test.q", 12, 12);
+        assertTrue(exists(detailed), "detailed scope symbols found");
+        assertTrue(detailed.size() > 0, "at least one detailed symbol");
+
+        # Check detailed fields
+        bool foundLocalVar = False;
+        bool foundParam = False;
+        bool foundMethod = False;
+        bool foundMemberVar = False;
+        bool foundStaticMember = False;
+        bool foundHelperMethod = False;
+        foreach auto s in (detailed) {
+            switch (s.name) {
+                case "localVar":
+                    foundLocalVar = True;
+                    assertEq(0, s.scope_level, "localVar scope_level 0");
+                    assertEq(ASYK_Variable, s.kind, "localVar is Variable");
+                    assertEq("int", s.typeName, "localVar typeName is int");
+                    break;
+                case "name":
+                    foundParam = True;
+                    assertEq(0, s.scope_level, "param scope_level 0");
+                    assertEq("string", s.typeName, "param name typeName is string");
+                    break;
+                case "myMethod":
+                    foundMethod = True;
+                    assertEq("int", s.returnType, "myMethod returnType is int");
+                    assertEq("public", s.access, "myMethod access is public");
+                    assertEq(False, s.isStatic, "myMethod is not static");
+                    assertTrue(exists(s.params), "myMethod has params");
+                    assertEq(2, s.params.size(), "myMethod has 2 params");
+                    assertEq("name", s.params[0].name, "first param name");
+                    assertEq("string", s.params[0].typeName, "first param type");
+                    assertEq("count", s.params[1].name, "second param name");
+                    assertEq("int", s.params[1].typeName, "second param type");
+                    assertEq("10", s.params[1].defaultVal, "second param default");
+                    break;
+                case "memberVar":
+                    foundMemberVar = True;
+                    assertEq("int", s.typeName, "memberVar typeName is int");
+                    assertEq("public", s.access, "memberVar access is public");
+                    break;
+                case "staticMember":
+                    foundStaticMember = True;
+                    assertEq("string", s.typeName, "staticMember typeName");
+                    assertEq(True, s.isStatic, "staticMember is static");
+                    assertEq("public", s.access, "staticMember access is public");
+                    break;
+                case "helperMethod":
+                    foundHelperMethod = True;
+                    assertEq("bool", s.returnType, "helperMethod returnType is bool");
+                    assertEq(True, s.isStatic, "helperMethod is static");
+                    assertEq("private:internal", s.access, "helperMethod access is private:internal");
+                    break;
+            }
+        }
+
+        assertTrue(foundLocalVar, "found localVar with detail");
+        assertTrue(foundParam, "found param with detail");
+        assertTrue(foundMethod, "found myMethod with detail");
+        assertTrue(foundMemberVar, "found memberVar with detail");
+        assertTrue(foundStaticMember, "found staticMember with detail");
+        assertTrue(foundHelperMethod, "found helperMethod with detail");
+    }
+
+    testGetSymbolType() {
+        string testCode = "
+%new-style
+class MyClass {
+    public {
+        int memberVar;
+    }
+    string myMethod(float param) {
+        int localVar = 1;
+        return localVar;
+    }
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+
+        # Position on the local variable declaration type ("int localVar = 1;")
+        # %new-style line 1, class MyClass { line 2, public { line 3, int memberVar line 4,
+        # } line 5, string myMethod line 6, int localVar line 7
+        # 0-indexed: line 7, col 8 (the 'i' in 'int')
+        *string localType = searcher.getSymbolType(tree, 7, 8);
+        assertTrue(exists(localType), "local variable type found");
+        assertEq("int", localType, "local variable type is int");
+
+        # Position on the parameter type ("float param")
+        # line 6, col 23 (the 'f' in 'float')
+        *string paramType = searcher.getSymbolType(tree, 6, 23);
+        assertTrue(exists(paramType), "parameter type found");
+        assertEq("float", paramType, "parameter type is float");
+    }
+
+    testFindTypeMembersClass() {
+        string testCode = "
+%new-style
+class MyClass {
+    public {
+        int memberVar;
+        static string staticMember;
+    }
+    private {
+        float privateMember;
+    }
+    /** Doc for myMethod */
+    public int myMethod(string name) {
+        return 1;
+    }
+    constructor(int x) {
+    }
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list members = searcher.findTypeMembers(tree, "test.q", "MyClass");
+        assertTrue(exists(members), "class members found");
+        assertTrue(members.size() >= 4, "at least 4 class members (got " + members.size() + ")");
+
+        # Check member details
+        bool foundMemberVar = False;
+        bool foundStaticMember = False;
+        bool foundPrivateMember = False;
+        bool foundMyMethod = False;
+        bool foundConstructor = False;
+        foreach auto m in (members) {
+            switch (m.name) {
+                case "memberVar":
+                    foundMemberVar = True;
+                    assertEq(ASYK_Field, m.kind, "memberVar is Field");
+                    assertEq("int", m.typeName, "memberVar type");
+                    assertEq("public", m.access, "memberVar access");
+                    break;
+                case "staticMember":
+                    foundStaticMember = True;
+                    assertEq(True, m.isStatic, "staticMember is static");
+                    assertEq("public", m.access, "staticMember access");
+                    break;
+                case "privateMember":
+                    foundPrivateMember = True;
+                    assertEq("private", m.access, "privateMember access");
+                    break;
+                case "myMethod":
+                    foundMyMethod = True;
+                    assertEq("int", m.returnType, "myMethod returnType");
+                    assertTrue(exists(m.params), "myMethod has params");
+                    assertEq(1, m.params.size(), "myMethod 1 param");
+                    assertEq("name", m.params[0].name, "myMethod param name");
+                    assertEq("string", m.params[0].typeName, "myMethod param type");
+                    break;
+                case "constructor":
+                    foundConstructor = True;
+                    assertTrue(exists(m.params), "constructor has params");
+                    assertEq(1, m.params.size(), "constructor 1 param");
+                    break;
+            }
+        }
+
+        assertTrue(foundMemberVar, "found memberVar");
+        assertTrue(foundStaticMember, "found staticMember");
+        assertTrue(foundPrivateMember, "found privateMember");
+        assertTrue(foundMyMethod, "found myMethod");
+        assertTrue(foundConstructor, "found constructor");
+    }
+
+    testFindTypeMembersHashdecl() {
+        string testCode = "
+%new-style
+hashdecl MyRecord {
+    string name;
+    int age;
+    *float score = 0.0;
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list members = searcher.findTypeMembers(tree, "test.q", "MyRecord");
+        assertTrue(exists(members), "hashdecl members found");
+        assertEq(3, members.size(), "3 hashdecl members");
+
+        # Check member names and types
+        assertEq("name", members[0].name, "first member name");
+        assertEq("string", members[0].typeName, "first member type");
+        assertEq("age", members[1].name, "second member name");
+        assertEq("int", members[1].typeName, "second member type");
+        assertEq("score", members[2].name, "third member name");
+    }
+
+    testFindTypeMembersNamespace() {
+        string testCode = "
+%new-style
+namespace MyNs {
+    class MyClass {}
+    sub myFunc(int x) {}
+    const MY_CONST = 42;
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list members = searcher.findTypeMembers(tree, "test.q", "MyNs");
+        assertTrue(exists(members), "namespace members found");
+        assertTrue(members.size() >= 3, "at least 3 namespace members (got " + members.size() + ")");
+
+        bool foundClass = False;
+        bool foundFunc = False;
+        bool foundConst = False;
+        foreach auto m in (members) {
+            switch (m.name) {
+                case "MyClass":
+                    foundClass = True;
+                    assertEq(ASYK_Class, m.kind, "MyClass is Class");
+                    break;
+                case "myFunc":
+                    foundFunc = True;
+                    assertEq(ASYK_Function, m.kind, "myFunc is Function");
+                    assertTrue(exists(m.params), "myFunc has params");
+                    break;
+                case "MY_CONST":
+                    foundConst = True;
+                    assertEq(ASYK_Constant, m.kind, "MY_CONST is Constant");
+                    break;
+            }
+        }
+
+        assertTrue(foundClass, "found MyClass in namespace");
+        assertTrue(foundFunc, "found myFunc in namespace");
+        assertTrue(foundConst, "found MY_CONST in namespace");
+    }
+
+    testFindTypeMembersEnum() {
+        string testCode = "
+%new-style
+public enum Color {
+    Red = 1,
+    Green = 2,
+    Blue = 3,
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+        *list members = searcher.findTypeMembers(tree, "test.q", "Color");
+        assertTrue(exists(members), "enum members found");
+        assertEq(3, members.size(), "3 enum members");
+
+        assertEq("Red", members[0].name, "first enum member");
+        assertEq(ASYK_Constant, members[0].kind, "enum member is Constant");
+        assertEq("Green", members[1].name, "second enum member");
+        assertEq("Blue", members[2].name, "third enum member");
+    }
+
+    testFindTypeMembersInheritance() {
+        string testCode = "
+%new-style
+class Base {
+    public {
+        int baseField;
+    }
+    public int baseMethod() {
+        return 1;
+    }
+}
+class Child inherits Base {
+    public {
+        string childField;
+    }
+    public string childMethod() {
+        return \"hello\";
+    }
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        AstTreeSearcher searcher();
+
+        # With inheritance
+        *list members = searcher.findTypeMembers(tree, "test.q", "Child", True);
+        assertTrue(exists(members), "inherited members found");
+
+        bool foundChildField = False;
+        bool foundChildMethod = False;
+        bool foundBaseField = False;
+        bool foundBaseMethod = False;
+        foreach auto m in (members) {
+            switch (m.name) {
+                case "childField": foundChildField = True; break;
+                case "childMethod": foundChildMethod = True; break;
+                case "baseField": foundBaseField = True; break;
+                case "baseMethod": foundBaseMethod = True; break;
+            }
+        }
+
+        assertTrue(foundChildField, "found childField");
+        assertTrue(foundChildMethod, "found childMethod");
+        assertTrue(foundBaseField, "found inherited baseField");
+        assertTrue(foundBaseMethod, "found inherited baseMethod");
+
+        # Without inheritance
+        *list noInherit = searcher.findTypeMembers(tree, "test.q", "Child", False);
+        assertTrue(exists(noInherit), "no-inherit members found");
+
+        bool hasBase = False;
+        foreach auto m in (noInherit) {
+            if (m.name == "baseField" || m.name == "baseMethod") {
+                hasBase = True;
+            }
+        }
+        assertEq(False, hasBase, "no base members without inheritance");
     }
 
 %endif

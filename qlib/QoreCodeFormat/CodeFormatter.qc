@@ -2443,6 +2443,230 @@ public class CodeFormatter {
         }
         return result;
     }
+
+    #! Node types that create an indent level when unclosed
+    /** These are block-level constructs whose body is indented by one level.
+        \c namespace_declaration is intentionally excluded because Qore convention
+        is to keep namespace contents at the top level (left-justified).
+    */
+    public const IndentNodeTypes = {
+        "block": True,
+        "class_declaration": True,
+        "enum_declaration": True,
+        "switch_statement": True,
+        "hash_literal": True,
+    };
+
+    #! Node types that create an extra indent level inside switch blocks
+    public const SwitchCaseNodeTypes = {
+        "switch_case": True,
+        "default_case": True,
+    };
+
+    #! Calculates the indent level for the next line of input
+    /** Uses namespace-aware brace counting (string/comment aware) as the primary method,
+        enhanced with tree-sitter CST analysis to detect switch case/default statements
+        (which get an extra indent level).
+
+        @param code The accumulated code so far (incomplete)
+        @return The indent level (number of indent steps) for the next line
+
+        @par Example
+        @code{.py}
+int level = CodeFormatter::calculateIndentLevel("if (True) {");
+# level == 1
+string indent = strmul(SourceEmitter::INDENT_STR, level);
+# indent == "    "
+        @endcode
+    */
+    public static int calculateIndentLevel(string code) {
+        # Use namespace-aware brace counting (handles nested/incomplete code reliably)
+        int depth = calculateIndentLevelNsAware(code);
+
+        # Use CST to detect switch cases for refinement
+        try {
+            AstParser parser();
+            *AstTree tree = parser.parseString(code);
+            if (exists tree) {
+                *list<hash<auto>> nodes = tree.getNodesInfo();
+                if (nodes) {
+                    int lastLine = code.split("\n").size() - 1;
+                    int case_depth = 0;
+                    foreach hash<auto> node in (nodes) {
+                        walkForCaseDepth(node, lastLine, \case_depth);
+                    }
+                    depth += case_depth;
+                }
+            }
+        } catch () {
+            # CST unavailable; brace counting result stands
+        }
+
+        return depth > 0 ? depth : 0;
+    }
+
+    #! Walks a CST node tree to detect switch case/default nodes
+    /** @param node The CST node to examine
+        @param lastLine The 0-based line number of the last line of input
+        @param case_depth Reference to switch case depth counter
+    */
+    public static walkForCaseDepth(hash<auto> node, int lastLine, reference<int> case_depth) {
+        string type = node.type ?? "";
+
+        # Get end_line from the loc hash
+        int end_line = -1;
+        if (node.loc) {
+            end_line = node.loc.end_line ?? -1;
+        }
+
+        # Detect switch case/default extending to end — adds extra indent
+        if (SwitchCaseNodeTypes{type} && end_line >= lastLine) {
+            case_depth += 1;
+        }
+
+        # Recurse into children
+        if (node.children) {
+            foreach hash<auto> child in (node.children) {
+                walkForCaseDepth(child, lastLine, \case_depth);
+            }
+        }
+    }
+
+    #! Namespace-aware indent level calculation using brace counting
+    /** Counts `{`/`}` while skipping strings and comments, and excludes braces
+        that belong to namespace declarations (Qore convention: namespace contents
+        are left-justified).
+
+        @param code The accumulated code
+        @return The indent level based on net open braces (excluding namespace braces)
+    */
+    public static int calculateIndentLevelNsAware(string code) {
+        return countBraceDepth(code, True);
+    }
+
+    #! Fallback indent level calculation using simple brace counting
+    /** Used when tree-sitter parsing fails. Counts `{`/`}` while skipping
+        strings and comments.
+
+        @param code The accumulated code
+        @return The indent level based on net open braces
+    */
+    public static int calculateIndentLevelFallback(string code) {
+        return countBraceDepth(code, False);
+    }
+
+    #! Core brace-counting implementation shared by namespace-aware and fallback modes
+    /** Counts `{`/`}` while skipping strings and comments.  When @a ns_aware
+        is True, braces belonging to namespace declarations are excluded from
+        the depth count (Qore convention: namespace contents are left-justified).
+
+        @param code The accumulated code
+        @param ns_aware When True, exclude namespace braces from the count
+        @return The indent level based on net open braces (clamped to >= 0)
+    */
+    private static int countBraceDepth(string code, bool ns_aware) {
+        int depth = 0;
+        bool in_string = False;
+        string string_char;
+        bool escape_next = False;
+        bool in_block_comment = False;
+
+        # Namespace tracking (only used when ns_aware is True)
+        list<bool> ns_brace_stack = ();
+        bool namespace_pending = False;
+
+        for (int i = 0; i < code.length(); i++) {
+            string c = code[i];
+
+            # Block comment handling
+            if (in_block_comment) {
+                if (c == "*" && i + 1 < code.length() && code[i + 1] == "/") {
+                    in_block_comment = False;
+                    i++;
+                }
+                continue;
+            }
+
+            if (in_string) {
+                if (escape_next) {
+                    escape_next = False;
+                    continue;
+                }
+                if (c == "\\") {
+                    escape_next = True;
+                    continue;
+                }
+                if (c == string_char) {
+                    in_string = False;
+                }
+                continue;
+            }
+
+            # Check for block comment start
+            if (c == "/" && i + 1 < code.length() && code[i + 1] == "*") {
+                in_block_comment = True;
+                i++;
+                continue;
+            }
+
+            # Line comment - skip to end of line
+            if (c == "#") {
+                int eol = code.find("\n", i);
+                if (eol < 0) {
+                    break;
+                }
+                i = eol;
+                continue;
+            }
+
+            # String start
+            if (c == "\"" || c == "'") {
+                in_string = True;
+                string_char = c;
+                continue;
+            }
+
+            # Check for "namespace" keyword at word boundary
+            if (ns_aware && c == "n" && !namespace_pending) {
+                string remainder = code.substr(i);
+                if (remainder =~ /^namespace\b/) {
+                    namespace_pending = True;
+                    i += 8;  # skip "namespace" (9 chars - 1 since loop increments)
+                    continue;
+                }
+            }
+
+            # Reset namespace_pending on semicolon (forward declaration: "namespace Foo;")
+            if (c == ";" && namespace_pending) {
+                namespace_pending = False;
+            }
+
+            if (c == "{") {
+                if (ns_aware && namespace_pending) {
+                    # This brace belongs to a namespace — don't count it
+                    ns_brace_stack += True;
+                    namespace_pending = False;
+                } else {
+                    if (ns_aware) {
+                        ns_brace_stack += False;
+                    }
+                    depth++;
+                }
+            } else if (c == "}") {
+                if (ns_aware && ns_brace_stack.size() > 0) {
+                    bool was_ns = ns_brace_stack.last();
+                    splice ns_brace_stack, ns_brace_stack.size() - 1, 1;
+                    if (!was_ns) {
+                        depth--;
+                    }
+                } else {
+                    depth--;
+                }
+            }
+        }
+
+        return depth > 0 ? depth : 0;
+    }
 }
 
 } # namespace QoreCodeFormat

@@ -1,0 +1,233 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  DocumentHighlight.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires json
+%requires ../../../../qlib/QLS
+
+%exec-class DocumentHighlightTest
+
+class DocumentHighlightTest inherits QUnit::Test {
+    private {
+        QLS::QLSServer server;
+        int reqId = 0;
+    }
+
+    constructor() : Test("QLS DocumentHighlight", "1.0") {
+        addTestCase("capability advertised", \testCapability());
+        addTestCase("highlight variable references", \testHighlightVariable());
+        addTestCase("highlight function name", \testHighlightFunction());
+        addTestCase("highlight at empty position", \testHighlightEmptyPosition());
+        addTestCase("all highlights have kind=1 (Text)", \testHighlightKind());
+        addTestCase("all highlights have range", \testHighlightRange());
+        addTestCase("empty document", \testEmptyDocument());
+        addTestCase("parse error document", \testParseErrorDocument());
+        addTestCase("missing params", \testMissingParams());
+        addTestCase("non-existent document", \testNonExistentDocument());
+        addTestCase("invalid position params", \testInvalidPositionParams());
+
+        set_return_value(main());
+    }
+
+    private setup(string text) {
+        server = new QLS::QLSServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": "file:///test/highlight.q",
+                "languageId": "qore",
+                "version": 1,
+                "text": text,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+    }
+
+    private hash<auto> makeRequest(string method, *hash<auto> params) {
+        return {
+            "jsonrpc": "2.0",
+            "id": ++reqId,
+            "method": method,
+            "params": params,
+        };
+    }
+
+    private *list<auto> sendHighlight(int line, int character) {
+        hash<auto> req = makeRequest("textDocument/documentHighlight", {
+            "textDocument": {"uri": "file:///test/highlight.q"},
+            "position": {"line": line, "character": character},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    testCapability() {
+        assertEq(True, QLS::ServerCapabilities.documentHighlightProvider,
+            "documentHighlightProvider should be True");
+    }
+
+    testHighlightVariable() {
+        # Variable 'x' used on lines 2 and 3
+        string text = "%modern\nsub test() {\n    int x = 1;\n    return x + 1;\n}\n";
+        setup(text);
+
+        # Position on 'x' declaration — line 2, col 8 ("    int x")
+        *list<auto> highlights = sendHighlight(2, 8);
+        assertTrue(exists highlights, "should return highlights for variable 'x'");
+        assertTrue(highlights.size() >= 1, "should find at least 1 highlight for 'x'");
+    }
+
+    testHighlightFunction() {
+        string text = "%modern\nsub myFunc() { return 1; }\nsub caller() { return myFunc(); }\n";
+        setup(text);
+
+        # Position on 'myFunc' declaration — line 1, col 4
+        *list<auto> highlights = sendHighlight(1, 4);
+        assertTrue(exists highlights, "should return highlights for function 'myFunc'");
+        assertTrue(highlights.size() >= 1, "should find at least 1 highlight for myFunc");
+    }
+
+    testHighlightEmptyPosition() {
+        string text = "%modern\nint x = 1;\n";
+        setup(text);
+
+        # Position at start of file (parse directive, not a symbol)
+        *list<auto> highlights = sendHighlight(0, 0);
+        assertEq(0, highlights.size(), "should return empty list at non-symbol position");
+    }
+
+    testHighlightKind() {
+        # All highlights should have kind=1 (Text)
+        string text = "%modern\nsub test() {\n    int x = 1;\n    return x + 1;\n}\n";
+        setup(text);
+
+        *list<auto> highlights = sendHighlight(2, 8);
+        assertTrue(exists highlights && highlights.size() > 0, "should return highlights for kind test");
+        foreach hash<auto> h in (highlights) {
+            assertEq(1, h.kind, "highlight kind should be 1 (Text)");
+        }
+    }
+
+    testHighlightRange() {
+        string text = "%modern\nsub test() {\n    int x = 1;\n    return x + 1;\n}\n";
+        setup(text);
+
+        *list<auto> highlights = sendHighlight(2, 8);
+        assertTrue(exists highlights && highlights.size() > 0, "should return highlights for range test");
+        foreach hash<auto> h in (highlights) {
+            assertTrue(exists h.range, "highlight should have a range");
+            assertTrue(exists h.range.start, "range should have start");
+            assertTrue(exists h.range.end, "range should have end");
+            assertTrue(exists h.range.start.line, "start should have line");
+            assertTrue(exists h.range.start.character, "start should have character");
+        }
+    }
+
+    testEmptyDocument() {
+        setup("");
+
+        *list<auto> highlights = sendHighlight(0, 0);
+        assertEq(0, highlights.size(), "should return empty list for empty document");
+    }
+
+    testParseErrorDocument() {
+        string text = "%modern\nclass { broken\n";
+        setup(text);
+
+        *list<auto> highlights = sendHighlight(0, 0);
+        assertEq(0, highlights.size(), "should return empty list for parse error document");
+    }
+
+    testMissingParams() {
+        server = new QLS::QLSServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+
+        hash<auto> req = makeRequest("textDocument/documentHighlight");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses, "should return error response for missing params");
+        assertTrue(responses.size() > 0, "should have at least one response");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    testInvalidPositionParams() {
+        string text = "%modern\nint x = 1;\n";
+        setup(text);
+
+        # Send request with params but missing position
+        hash<auto> req = makeRequest("textDocument/documentHighlight", {
+            "textDocument": {"uri": "file:///test/highlight.q"},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return response for missing position");
+        hash<auto> resp = parse_json(responses[0]);
+        # Should gracefully handle missing position — either error or empty result
+        assertTrue(exists resp.error || exists resp.result,
+            "response should have error or result");
+    }
+
+    testNonExistentDocument() {
+        string text = "%modern\nint x = 1;\n";
+        setup(text);
+
+        hash<auto> req = makeRequest("textDocument/documentHighlight", {
+            "textDocument": {"uri": "file:///nonexistent.q"},
+            "position": {"line": 0, "character": 0},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses, "should return response for non-existent document");
+        hash<auto> resp = parse_json(responses[0]);
+        assertEq(0, resp.result.size(), "should return empty list for non-existent document");
+    }
+}
