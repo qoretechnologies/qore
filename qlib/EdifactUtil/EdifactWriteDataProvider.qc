@@ -22,10 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
 
 #! The EdifactUtil namespace contains all the definitions in the EdifactUtil module
 public namespace EdifactUtil {
