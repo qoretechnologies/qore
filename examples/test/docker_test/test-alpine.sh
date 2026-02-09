@@ -39,9 +39,9 @@ fi
 
 find / -name "libqore.so*" -exec rm -f {} \;
 
-# ensure LLVM dev libraries are installed (needed for JIT/AOT)
-if ! ls /usr/lib/llvm*/lib/libLLVM*.a 1>/dev/null 2>&1 && \
-   ! ls /usr/lib/llvm*/lib/libLLVM*.so 1>/dev/null 2>&1; then
+# ensure LLVM static libraries are installed (needed for JIT/AOT linking)
+# clang-dev provides cmake configs and .so files but NOT the .a files that cmake requires
+if ! ls /usr/lib/llvm*/lib/libLLVMDemangle.a 1>/dev/null 2>&1; then
     echo "-- installing llvm-dev --"
     apk add --no-cache llvm-dev
 fi

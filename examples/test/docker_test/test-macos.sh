@@ -20,20 +20,26 @@ mkdir -p "${BUILD_DIR}"
 echo "=== Building Qore on macOS ==="
 cd "${BUILD_DIR}"
 
-# Find LLVM installation (Homebrew or manual install)
+# Find LLVM installation (Homebrew, manual install, or llvm-config)
 LLVM_PREFIX=""
 for dir in /opt/homebrew/opt/llvm /usr/local/opt/llvm /opt/homebrew/opt/llvm@* /usr/local/opt/llvm@*; do
     if [ -d "$dir" ]; then
         LLVM_PREFIX="$dir"
     fi
 done
-# Also check for manually installed LLVM (e.g., /usr/local/Cellar/llvm/*)
+# Check for manually installed LLVM (e.g., /usr/local/Cellar/llvm/*)
 if [ -z "$LLVM_PREFIX" ]; then
     for dir in /usr/local/Cellar/llvm/*/lib/cmake/llvm; do
         if [ -d "$dir" ]; then
             LLVM_PREFIX="$(dirname "$(dirname "$(dirname "$dir")")")"
         fi
     done
+fi
+# Try llvm-config as last resort (works for manual/source installs)
+if [ -z "$LLVM_PREFIX" ]; then
+    if command -v llvm-config >/dev/null 2>&1; then
+        LLVM_PREFIX="$(llvm-config --prefix)"
+    fi
 fi
 
 CMAKE_EXTRA_ARGS=""
