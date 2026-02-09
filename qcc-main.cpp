@@ -60,6 +60,7 @@ static bool module_mode = false;
 static bool verbose = false;
 static bool show_help = false;
 static bool show_version = false;
+static bool show_targets = false;
 
 static void print_usage(const char* prog) {
     printf("Qore Code Compiler (qcc) v%s\n", QCC_VERSION);
@@ -72,6 +73,7 @@ static void print_usage(const char* prog) {
     printf("  -s, --strip-source     Strip source code from binary (IP protection)\n");
     printf("  -S, --static           Link statically against libqore\n");
     printf("  -t, --target=TRIPLE    Target triple for cross-compilation\n");
+    printf("      --show-targets     Show supported target architectures and quit\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
@@ -103,6 +105,7 @@ static struct option long_options[] = {
     {"strip-source", no_argument,       nullptr, 's'},
     {"static",       no_argument,       nullptr, 'S'},
     {"target",       required_argument, nullptr, 't'},
+    {"show-targets", no_argument,       nullptr, 'T'},
     {"verbose",      no_argument,       nullptr, 'v'},
     {"help",         no_argument,       nullptr, 'h'},
     {"version",      no_argument,       nullptr, 'V'},
@@ -111,7 +114,7 @@ static struct option long_options[] = {
 
 static int parse_options_cmdline(int argc, char** argv) {
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:O:msSt:vhV", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:O:msSt:TvhV", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'o':
                 output_path = optarg;
@@ -134,6 +137,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 't':
                 target_triple = optarg;
+                break;
+            case 'T':
+                show_targets = true;
                 break;
             case 'v':
                 verbose = true;
@@ -221,6 +227,11 @@ int main(int argc, char** argv) {
 
     if (show_version) {
         print_version();
+        return 0;
+    }
+
+    if (show_targets) {
+        QoreAOT::printSupportedTargets();
         return 0;
     }
 

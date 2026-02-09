@@ -71,7 +71,7 @@ static cl_mod_list_t cl_mod_list;
 static int64 parse_options = PO_DEFAULT;
 static int warnings = QP_WARN_DEFAULT;
 static int qore_lib_options = QLO_NONE;
-static qore_exec_mode_t exec_mode = QEM_IR;
+static qore_exec_mode_t exec_mode = QEM_TIERED;
 
 // lock options
 static bool lock_options = false;
@@ -137,6 +137,9 @@ static bool compile_module_mode = false;
 // AOT strip-source mode (binary metadata instead of embedded source)
 static bool aot_strip_source = false;
 
+// show supported target architectures
+static bool show_targets = false;
+
 // program text given on the command-line
 static const char* cl_pgm = 0;
 
@@ -180,8 +183,8 @@ static const char helpstr[] =
    "  -c, --charset=arg            sets default character set encoding\n"
    "  -D, --define=arg             sets the value of a parse define\n"
    "  -e, --exec=arg               execute program given on command-line\n"
-   "      --exec-mode=arg          execution mode: ast, ir (default), jit, or\n"
-   "                               tiered (auto-promote AST->IR->JIT per function)\n"
+   "      --exec-mode=arg          execution mode: ast, ir, jit, or tiered\n"
+   "                               (default; auto-promote AST->IR->JIT per function)\n"
    "      --ir-dump                dump IR representation before execution\n"
    "      --ir-fallback-warn       warn on stderr when IR falls back to AST\n"
    "      --ir-fallback-report     print IR fallback counts by category at exit\n"
@@ -231,6 +234,7 @@ static const char helpstr[] =
    "                               default: 2)\n"
    "      --target=TRIPLE          target triple for cross-compilation\n"
    "                               (default: native host)\n"
+   "      --show-targets           show supported target architectures and quit\n"
    "      --static                 statically link libqore (requires\n"
    "                               BUILD_STATIC_LIBQORE=ON in CMake)\n"
    "      --compile-module         compile a .qm user module to a native\n"
@@ -1143,6 +1147,10 @@ static void set_aot_target(const char* arg) {
     aot_target = arg;
 }
 
+static void set_show_targets(const char* arg) {
+    show_targets = true;
+}
+
 static void set_aot_static(const char* arg) {
     aot_static = true;
 }
@@ -1268,6 +1276,7 @@ static struct opt_struct_s {
    { '\0', "output",               ARG_MAND, set_aot_output },
    { '\0', "opt-level",            ARG_MAND, set_opt_level },
    { '\0', "target",               ARG_MAND, set_aot_target },
+   { '\0', "show-targets",         ARG_NONE, set_show_targets },
    { '\0', "static",               ARG_NONE, set_aot_static },
    { '\0', "compile-module",       ARG_NONE, set_compile_module },
    { '\0', "strip-source",        ARG_NONE, set_strip_source },
@@ -1498,6 +1507,12 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
 
    // initialize Qore subsystem
    qore_init(license, def_charset, show_mod_errs, qore_lib_options);
+
+   if (show_targets) {
+       QoreAOT::printSupportedTargets();
+       qore_cleanup();
+       return 0;
+   }
 
    // apply tiered compilation thresholds from command-line
    if (jit_ir_threshold) {

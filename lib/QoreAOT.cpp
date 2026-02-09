@@ -73,6 +73,7 @@ extern void collectAllStatementLocals(const StatementBlock* block, std::vector<L
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/TargetParser/Host.h>
+#include <llvm/TargetParser/Triple.h>
 
 #include <cstdlib>
 #include <fstream>
@@ -3585,4 +3586,53 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     if (!slots.stmt_slots.empty()) {
         out.has_unsupported_exprs = true;
     }
+}
+
+void QoreAOT::printSupportedTargets() {
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmPrinters();
+
+    std::string default_triple = llvm::sys::getDefaultTargetTriple();
+    printf("Default target: %s\n\n", default_triple.c_str());
+    printf("Target triple format: <arch>-<vendor>-<os>[-<environment>]\n\n");
+
+    printf("Registered architectures:\n");
+    for (const auto& target : llvm::TargetRegistry::targets()) {
+        printf("  %-24s %s\n", target.getName(), target.getShortDescription());
+    }
+
+    printf("\nVendors:\n ");
+    for (int i = (int)llvm::Triple::UnknownVendor + 1; i <= (int)llvm::Triple::LastVendorType; ++i) {
+        llvm::StringRef name = llvm::Triple::getVendorTypeName((llvm::Triple::VendorType)i);
+        if (!name.empty()) {
+            printf(" %s", name.str().c_str());
+        }
+    }
+    printf("\n");
+
+    printf("\nOperating systems:\n ");
+    for (int i = (int)llvm::Triple::UnknownOS + 1; i <= (int)llvm::Triple::LastOSType; ++i) {
+        llvm::StringRef name = llvm::Triple::getOSTypeName((llvm::Triple::OSType)i);
+        if (!name.empty()) {
+            printf(" %s", name.str().c_str());
+        }
+    }
+    printf("\n");
+
+    printf("\nEnvironments:\n ");
+    for (int i = (int)llvm::Triple::UnknownEnvironment + 1; i <= (int)llvm::Triple::LastEnvironmentType; ++i) {
+        llvm::StringRef name = llvm::Triple::getEnvironmentTypeName((llvm::Triple::EnvironmentType)i);
+        if (!name.empty()) {
+            printf(" %s", name.str().c_str());
+        }
+    }
+    printf("\n");
+
+    printf("\nExamples:\n");
+    printf("  x86_64-pc-linux-gnu       Linux x86-64 (GNU libc)\n");
+    printf("  aarch64-unknown-linux-gnu  Linux ARM64 (GNU libc)\n");
+    printf("  x86_64-unknown-linux-musl  Linux x86-64 (musl libc / Alpine)\n");
+    printf("  aarch64-apple-darwin       macOS ARM64\n");
+    printf("  x86_64-apple-darwin        macOS x86-64\n");
 }

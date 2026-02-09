@@ -850,9 +850,9 @@ const PO_NO_ENUM = PO_NO_ENUM;
 //! Execution mode for @ref Qore::Program "Program" objects
 /** This enum determines how code is executed:
     - @ref EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
-    - @ref EM_IR: Bytecode interpreter (default; good balance of startup time and speed)
+    - @ref EM_IR: Bytecode interpreter (good balance of startup time and speed)
     - @ref EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
-    - @ref EM_TIERED: Adaptive compilation (starts with AST, promotes hot code to IR/JIT)
+    - @ref EM_TIERED: Adaptive compilation (default; starts with AST, promotes hot code to IR/JIT)
 
     @see Program::setExecMode()
     @see Program::getExecMode()
@@ -862,11 +862,11 @@ const PO_NO_ENUM = PO_NO_ENUM;
 enum Qore::ExecMode : int {
     //! AST execution mode - traditional tree-walking interpreter; most mature, no compilation overhead
     EM_AST = QEM_AST,
-    //! IR execution mode - bytecode interpreter (default); good balance of startup time and speed
+    //! IR execution mode - bytecode interpreter; good balance of startup time and speed
     EM_IR = QEM_IR,
     //! JIT execution mode - compile to native code via LLVM; fastest execution but has compilation overhead
     EM_JIT = QEM_JIT,
-    //! Tiered execution mode - adaptive compilation; auto-promotes hot functions from AST to IR to JIT
+    //! Tiered execution mode (default) - adaptive compilation; auto-promotes hot functions from AST to IR to JIT
     EM_TIERED = QEM_TIERED,
 };
 
@@ -2026,9 +2026,9 @@ if (sm) {
 //! Sets the execution mode for the Program object
 /** The execution mode determines how code is executed:
     - @ref EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
-    - @ref EM_IR: Bytecode interpreter (default; good balance of startup time and speed)
+    - @ref EM_IR: Bytecode interpreter (good balance of startup time and speed)
     - @ref EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
-    - @ref EM_TIERED: Adaptive compilation (starts with AST, promotes hot code to IR/JIT)
+    - @ref EM_TIERED: Adaptive compilation (default; starts with AST, promotes hot code to IR/JIT)
 
     @param mode The execution mode to set
 

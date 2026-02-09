@@ -332,6 +332,9 @@ public:
                                        int opt_level = 2,
                                        const char* target_triple = nullptr,
                                        bool strip_source = false);
+
+    //! Print supported LLVM target architectures to stdout
+    static void printSupportedTargets();
 };
 
 //! Build an AOTSlotMap by walking an IR function's instructions in deterministic order.
