@@ -333,7 +333,7 @@ function main() {
 
     for (let frame = 0; frame < ANIM_FRAMES; frame++) {
         const t = frame / ANIM_FRAMES;
-        const theta = 2 * Math.PI * t + 0.35 * Math.sin(4 * Math.PI * t);
+        const theta = 2 * Math.PI * t;
         mesh.rotation.y = theta;
 
         renderer.render(scene, camera);
