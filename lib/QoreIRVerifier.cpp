@@ -191,6 +191,11 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::MapOffsetFloat:
         case QoreIROpcode::MapSquareInt:
         case QoreIROpcode::MapSquareFloat:
+        case QoreIROpcode::MapHashKeyValue:
+        case QoreIROpcode::MapHashKeyInt:
+        case QoreIROpcode::MapHashKeyOffsetInt:
+        case QoreIROpcode::MapHashKeyScaleInt:
+        case QoreIROpcode::HashMapTwoKeys:
         case QoreIROpcode::SelectAny:
         case QoreIROpcode::SelectInt:
         case QoreIROpcode::SelectFloat:
@@ -286,6 +291,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::LoadGlobal:
         case QoreIROpcode::LoadThreadLocal:
         case QoreIROpcode::HashKeyAccess:
+        case QoreIROpcode::HashKeyAccessInt:
         case QoreIROpcode::LoadSelfMember:
         case QoreIROpcode::LoadStaticVar:
         case QoreIROpcode::NewObject:
@@ -486,6 +492,8 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::MapOffsetFloat:
         case QoreIROpcode::MapSquareInt:
         case QoreIROpcode::MapSquareFloat:
+        case QoreIROpcode::MapHashKeyOffsetInt:
+        case QoreIROpcode::MapHashKeyScaleInt:
         case QoreIROpcode::SelectAny:
         case QoreIROpcode::SelectInt:
         case QoreIROpcode::SelectFloat:
@@ -619,6 +627,10 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::VrnConstruct:       // Uses QoreIRVrnConstructInstruction, no operands
             return 0;
         case QoreIROpcode::HashKeyAccess:         // 1 operand: hash value (key stored in QoreIRHashKeyAccessInstruction)
+        case QoreIROpcode::HashKeyAccessInt:      // 1 operand: hash value (key stored in QoreIRHashKeyAccessInstruction)
+        case QoreIROpcode::MapHashKeyValue:      // 1 operand: list (key stored in QoreIRMapHashKeyInstruction)
+        case QoreIROpcode::MapHashKeyInt:        // 1 operand: list (key stored in QoreIRMapHashKeyInstruction)
+        case QoreIROpcode::HashMapTwoKeys:       // 1 operand: list (keys stored in QoreIRMapHashKeyInstruction)
         case QoreIROpcode::IteratorCreateReverse: // 1 operand: iterable
             return 1;
         case QoreIROpcode::HashSetKeyValue:    // 3 operands: hash, key, value

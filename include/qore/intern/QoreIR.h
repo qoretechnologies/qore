@@ -290,6 +290,12 @@ enum class QoreIROpcode : uint16_t {
     MapOffsetFloat,
     MapSquareInt,       // map $1 * $1, list
     MapSquareFloat,
+    // Fully specialized hash-key map operations (single C++ runtime call)
+    MapHashKeyValue,    // map $1.key, list<hash> → list<auto>
+    MapHashKeyInt,      // map $1.key, list<hash> → list<int> (int values)
+    MapHashKeyOffsetInt,// map ($1.key + N), list<hash> → list<int>
+    MapHashKeyScaleInt, // map ($1.key * N), list<hash> → list<int>
+    HashMapTwoKeys,     // map {$1.k1: $1.k2}, list<hash> → hash<auto>
     SelectAny,
     SelectInt,
     SelectFloat,
@@ -359,6 +365,7 @@ enum class QoreIROpcode : uint16_t {
 
     // Hash key access
     HashKeyAccess,      // Load hash.key - direct hash member access without AST delegation
+    HashKeyAccessInt,   // Load hash.key as native int64 (known int value type)
 
     // Self member access
     LoadSelfMember,     // Load self.member_name - accesses current object's member
@@ -851,11 +858,23 @@ public:
 //! Hash key access instruction - loads hash.key directly (no AST delegation)
 class QoreIRHashKeyAccessInstruction : public QoreIRInstruction {
 public:
-    explicit QoreIRHashKeyAccessInstruction(const char* n_key_name)
-            : QoreIRInstruction(QoreIROpcode::HashKeyAccess), key_name(n_key_name) {
+    explicit QoreIRHashKeyAccessInstruction(const char* n_key_name,
+            QoreIROpcode op = QoreIROpcode::HashKeyAccess)
+            : QoreIRInstruction(op), key_name(n_key_name) {
     }
 
     std::string key_name;
+};
+
+//! Map hash key instruction - fully specialized map over hash key access
+class QoreIRMapHashKeyInstruction : public QoreIRInstruction {
+public:
+    QoreIRMapHashKeyInstruction(QoreIROpcode op, const char* n_key1, const char* n_key2 = nullptr)
+            : QoreIRInstruction(op), key1(n_key1), key2(n_key2 ? n_key2 : "") {
+    }
+
+    std::string key1;  //!< primary key name
+    std::string key2;  //!< secondary key (HashMapTwoKeys only)
 };
 
 //! Self member access instruction - loads self.member_name

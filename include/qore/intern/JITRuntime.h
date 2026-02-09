@@ -382,6 +382,9 @@ void qore_rt_list_set_float(uint64_t list_bits, int64_t index, double value);
 //! Takes ownership of the reference (no additional ref needed).
 void qore_rt_list_set_value(uint64_t list_bits, int64_t index, uint64_t value_bits);
 
+//! Increment reference count for heap-allocated values; no-op for inline values.
+uint64_t qore_rt_refself(uint64_t bits);
+
 //! Get runtime class pointer from an object value; returns 0 if not an object.
 uint64_t qore_rt_get_object_class(uint64_t obj_bits);
 

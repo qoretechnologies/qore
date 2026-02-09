@@ -856,6 +856,14 @@ extern "C" uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, 
     return toBits(QoreValue());
 }
 
+extern "C" int64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key) {
+    QoreValue v = fromBits(hash_val);
+    if (v.getType() == NT_HASH) {
+        return v.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt();
+    }
+    return 0;
+}
+
 extern "C" uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() == NT_LIST) {
@@ -956,6 +964,11 @@ extern "C" void qore_rt_list_set_value(uint64_t list_bits, int64_t index, uint64
             priv->incScanCount(1);
         }
     }
+}
+
+extern "C" uint64_t qore_rt_refself(uint64_t bits) {
+    QoreValue v = fromBits(bits);
+    return toBits(v.refSelf());
 }
 
 extern "C" uint64_t qore_rt_get_object_class(uint64_t obj_bits) {
@@ -1080,6 +1093,111 @@ extern "C" uint64_t qore_rt_map_square_float(uint64_t list_val) {
     for (size_t i = 0; i < sz; ++i) {
         double val = l->retrieveEntry(i).getAsFloat();
         result->push(val * val, nullptr);
+    }
+    return toBits(result.release());
+}
+
+// Fully specialized hash-key map operations (single runtime call per entire map)
+extern "C" uint64_t qore_rt_map_hash_key_value(uint64_t list_val, const char* key) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue());
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        QoreValue elem = l->retrieveEntry(i);
+        if (elem.getType() == NT_HASH) {
+            QoreValue val = elem.get<const QoreHashNode>()->getKeyValue(key);
+            result->push(val.refSelf(), nullptr);
+        } else {
+            result->push(QoreValue(), nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" uint64_t qore_rt_map_hash_key_int(uint64_t list_val, const char* key) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue());
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        QoreValue elem = l->retrieveEntry(i);
+        if (elem.getType() == NT_HASH) {
+            result->push(elem.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt(), nullptr);
+        } else {
+            result->push(0ll, nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" uint64_t qore_rt_map_hash_key_offset_int(uint64_t list_val, const char* key, int64_t offset) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue());
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        QoreValue elem = l->retrieveEntry(i);
+        if (elem.getType() == NT_HASH) {
+            result->push(elem.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt() + offset, nullptr);
+        } else {
+            result->push(offset, nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" uint64_t qore_rt_map_hash_key_scale_int(uint64_t list_val, const char* key, int64_t scale) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue());
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        QoreValue elem = l->retrieveEntry(i);
+        if (elem.getType() == NT_HASH) {
+            result->push(elem.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt() * scale, nullptr);
+        } else {
+            result->push(0ll, nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const char* key1, const char* key2) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue());
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    size_t sz = l->size();
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoHashTypeInfo), nullptr);
+    for (size_t i = 0; i < sz; ++i) {
+        QoreValue elem = l->retrieveEntry(i);
+        if (elem.getType() == NT_HASH) {
+            const QoreHashNode* h = elem.get<const QoreHashNode>();
+            QoreValue k = h->getKeyValue(key1);
+            QoreValue val = h->getKeyValue(key2);
+            QoreString key_str;
+            if (k.getType() == NT_STRING) {
+                key_str.set(k.get<const QoreStringNode>()->c_str());
+            } else {
+                QoreStringValueHelper sh(k);
+                key_str.set(sh->c_str());
+            }
+            result->setKeyValue(key_str.c_str(), val.refSelf(), nullptr);
+        }
     }
     return toBits(result.release());
 }

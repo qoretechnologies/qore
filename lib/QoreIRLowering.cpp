@@ -173,6 +173,20 @@ static bool blockHasTerminator(const QoreIRBasicBlock* block) {
 #include <qore/intern/Variable.h>
 #include <qore/QoreStringNode.h>
 
+// Get parse-time type info from a QoreValue expression.
+// QoreValue::getTypeInfo() returns type based on runtime value, which returns null for
+// parse nodes like VarRefNode. This helper checks for specific node types that have
+// parse-time type info, which is needed for type-aware optimizations in map/select/fold etc.
+static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
+    const AbstractQoreNode* node = val.getInternalNode();
+    if (node) {
+        if (auto* var_ref = dynamic_cast<const VarRefNode*>(node)) {
+            return var_ref->getTypeInfo();
+        }
+    }
+    return val.getTypeInfo();
+}
+
 QoreIRLowering::QoreIRLowering(QoreIRBuilder& n_builder, QoreParseContext* n_parse_context)
         : builder(n_builder), parse_context(n_parse_context) {
 }
@@ -4573,6 +4587,15 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
         std::vector<QoreIRValue> operands{base_val};
         QoreIRValue result;
         bool should_invoke = !exception_stack.empty() && expressionCanThrow(expr);
+        // Plain hash<auto> (no hashdecl, not object) never throws on key access
+        if (should_invoke) {
+            const QoreTypeInfo* base_type = getExprTypeInfo(op->getLeft());
+            if (QoreTypeInfo::parseReturns(base_type, NT_HASH) == QTI_IDENT
+                    && !QoreTypeInfo::getUniqueReturnHashDecl(base_type)
+                    && !QoreTypeInfo::getUniqueReturnClass(base_type)) {
+                should_invoke = false;
+            }
+        }
         if (should_invoke) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -4585,9 +4608,20 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
             builder.setBlock(normal_block);
             result = inst->result;
         } else {
-            auto* hka_inst = builder.createHashKeyAccess(key_str, op->loc);
-            hka_inst->operands = operands;
-            result = hka_inst->result;
+            // Check if value type is known int for HashKeyAccessInt optimization
+            const QoreTypeInfo* base_type = getExprTypeInfo(op->getLeft());
+            const QoreTypeInfo* hash_val_type = QoreTypeInfo::getUniqueReturnComplexHash(base_type);
+            if (hash_val_type
+                    && QoreTypeInfo::parseReturns(hash_val_type, NT_INT) == QTI_IDENT) {
+                // Native int return - no refcounting needed
+                auto* hka_inst = builder.createHashKeyAccessInt(key_str, op->loc);
+                hka_inst->operands = operands;
+                result = hka_inst->result;
+            } else {
+                auto* hka_inst = builder.createHashKeyAccess(key_str, op->loc);
+                hka_inst->operands = operands;
+                result = hka_inst->result;
+            }
         }
         return result;
     }
@@ -5591,7 +5625,7 @@ static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTyp
                 if (impl_arg0 && impl_arg1 && impl_arg0->getOffset() == 0 && impl_arg1->getOffset() == 1) {
                     // min/max return the same type as their arguments
                     // Try the argument type first, then fall back to list element type
-                    result_type = arg0.getTypeInfo();
+                    result_type = getExprTypeInfo(arg0);
                     if (QoreTypeInfo::parseReturns(result_type, NT_INT) == QTI_IDENT) {
                         return is_min ? QoreIROpcode::FoldlMinInt : QoreIROpcode::FoldlMaxInt;
                     } else if (QoreTypeInfo::parseReturns(result_type, NT_FLOAT) == QTI_IDENT) {
@@ -5718,6 +5752,120 @@ static QoreIROpcode analyzeMapPattern(const QoreValue& map_expr, const QoreTypeI
     return QoreIROpcode::MapAny;
 }
 
+// Helper: check if an expression is $1.key (hash object dereference with implicit arg and constant string key)
+// Returns the key name if matched, nullptr otherwise
+static const char* getImplicitHashKeyAccess(const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* deref = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
+    if (!deref) {
+        return nullptr;
+    }
+    // Check left is $1
+    QoreValue left_val = deref->getLeft();
+    auto* impl_arg = dynamic_cast<const QoreImplicitArgumentNode*>(left_val.getInternalNode());
+    if (!impl_arg || impl_arg->getOffset() != 0) {
+        return nullptr;
+    }
+    // Check right is constant string
+    QoreValue right_val = deref->getRight();
+    if (!right_val.hasNode() || right_val.getType() != NT_STRING) {
+        return nullptr;
+    }
+    return right_val.get<const QoreStringNode>()->c_str();
+}
+
+// Pattern analysis for hash-key map operations
+// Detects: map $1.key, list / map ($1.key + N), list / map ($1.key * N), list
+// Returns optimized opcode or MapAny for fallback
+// Sets key_name to the key name and constant_val for offset/scale patterns
+static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, const char*& key_name,
+        QoreValue& constant_val) {
+    // Direct $1.key pattern
+    const char* key = getImplicitHashKeyAccess(map_expr);
+    if (key) {
+        key_name = key;
+        return QoreIROpcode::MapHashKeyValue;
+    }
+
+    const AbstractQoreNode* node = map_expr.getInternalNode();
+    if (!node) {
+        return QoreIROpcode::MapAny;
+    }
+
+    // Check for Plus operator: $1.key + const
+    if (auto* plus_op = dynamic_cast<const QorePlusOperatorNode*>(node)) {
+        QoreValue left = plus_op->getLeft();
+        QoreValue right = plus_op->getRight();
+
+        // Pattern: $1.key + const
+        const char* k = getImplicitHashKeyAccess(left);
+        if (k && !right.hasNode() && (right.getType() == NT_INT)) {
+            // Check result type is int
+            const QoreTypeInfo* rtype = plus_op->getTypeInfo();
+            if (QoreTypeInfo::parseReturns(rtype, NT_INT) == QTI_IDENT) {
+                key_name = k;
+                constant_val = right;
+                return QoreIROpcode::MapHashKeyOffsetInt;
+            }
+        }
+
+        // Pattern: const + $1.key
+        k = getImplicitHashKeyAccess(right);
+        if (k && !left.hasNode() && (left.getType() == NT_INT)) {
+            const QoreTypeInfo* rtype = plus_op->getTypeInfo();
+            if (QoreTypeInfo::parseReturns(rtype, NT_INT) == QTI_IDENT) {
+                key_name = k;
+                constant_val = left;
+                return QoreIROpcode::MapHashKeyOffsetInt;
+            }
+        }
+    }
+
+    // Check for Multiply operator: $1.key * const
+    if (auto* mul_op = dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
+        QoreValue left = mul_op->getLeft();
+        QoreValue right = mul_op->getRight();
+
+        // Pattern: $1.key * const
+        const char* k = getImplicitHashKeyAccess(left);
+        if (k && !right.hasNode() && (right.getType() == NT_INT)) {
+            const QoreTypeInfo* rtype = mul_op->getTypeInfo();
+            if (QoreTypeInfo::parseReturns(rtype, NT_INT) == QTI_IDENT) {
+                key_name = k;
+                constant_val = right;
+                return QoreIROpcode::MapHashKeyScaleInt;
+            }
+        }
+
+        // Pattern: const * $1.key
+        k = getImplicitHashKeyAccess(right);
+        if (k && !left.hasNode() && (left.getType() == NT_INT)) {
+            const QoreTypeInfo* rtype = mul_op->getTypeInfo();
+            if (QoreTypeInfo::parseReturns(rtype, NT_INT) == QTI_IDENT) {
+                key_name = k;
+                constant_val = left;
+                return QoreIROpcode::MapHashKeyScaleInt;
+            }
+        }
+    }
+
+    return QoreIROpcode::MapAny;
+}
+
+// Pattern analysis for hash map two-keys: map {$1.k1: $1.k2}, list
+// Returns HashMapTwoKeys opcode if both key and value are $1.key patterns
+static QoreIROpcode analyzeHashMapTwoKeysPattern(const QoreValue& key_expr, const QoreValue& val_expr,
+        const char*& key1_name, const char*& key2_name) {
+    const char* k1 = getImplicitHashKeyAccess(key_expr);
+    const char* k2 = getImplicitHashKeyAccess(val_expr);
+    if (k1 && k2) {
+        key1_name = k1;
+        key2_name = k2;
+        return QoreIROpcode::HashMapTwoKeys;
+    }
+    return QoreIROpcode::MapAny;
+}
+
 // Pattern analysis for optimized select operations
 // Returns optimized opcode if pattern detected, or SelectAny for fallback
 static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr, const QoreTypeInfo*& result_type) {
@@ -5775,7 +5923,7 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
     // Try to detect optimizable pattern first
     const QoreTypeInfo* result_type = nullptr;
     // Get list type info for fallback type detection
-    const QoreTypeInfo* list_type = foldl->getRight().getTypeInfo();
+    const QoreTypeInfo* list_type = getExprTypeInfo(foldl->getRight());
     QoreIROpcode opt_opcode = analyzeFoldPattern(foldl->getLeft(), result_type, list_type);
 
     if (opt_opcode != QoreIROpcode::FoldlAny) {
@@ -5934,7 +6082,7 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
 
     // Try to detect optimizable pattern (reuse analyzeFoldPattern from foldl)
     const QoreTypeInfo* result_type = nullptr;
-    const QoreTypeInfo* list_type = foldr->getRight().getTypeInfo();
+    const QoreTypeInfo* list_type = getExprTypeInfo(foldr->getRight());
     QoreIROpcode foldl_opcode = analyzeFoldPattern(foldr->getLeft(), result_type, list_type);
 
     if (foldl_opcode != QoreIROpcode::FoldlAny) {
@@ -5984,12 +6132,57 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
     // which generates direct-index loops that LLVM can optimize (vectorize, unroll, etc.)
     // This is faster than pattern-matched opcodes which delegate to opaque C++ runtime calls.
     {
-        const QoreTypeInfo* list_type = map->getRight().getTypeInfo();
+        const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
         if (elem_type) {
             if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT
                     || QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
                 return lowerMapNative(map, expr, error);
+            }
+        }
+    }
+
+    // Try hash-key specialized opcodes for hash-typed lists
+    {
+        const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
+        const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+        if (elem_type && QoreTypeInfo::parseReturns(elem_type, NT_HASH) != QTI_NOT_EQUAL) {
+            const char* key_name = nullptr;
+            QoreValue hk_constant;
+            QoreIROpcode hk_opcode = analyzeMapHashKeyPattern(map->getLeft(), key_name, hk_constant);
+
+            if (hk_opcode != QoreIROpcode::MapAny) {
+                // Check if value type is known int for MapHashKeyInt detection
+                if (hk_opcode == QoreIROpcode::MapHashKeyValue) {
+                    // Check if the value type for this key is known to be int
+                    const QoreTypeInfo* hash_val_type = QoreTypeInfo::getUniqueReturnComplexHash(elem_type);
+                    if (hash_val_type
+                            && QoreTypeInfo::parseReturns(hash_val_type, NT_INT) == QTI_IDENT) {
+                        hk_opcode = QoreIROpcode::MapHashKeyInt;
+                    }
+                }
+
+                // Lower the input list
+                QoreIRValue list_val = lowerExpression(map->getRight(), error);
+                if (!list_val.isValid()) {
+                    return QoreIRValue();
+                }
+
+                // Create the specialized instruction
+                auto* inst = builder.createMapHashKey(hk_opcode, key_name, nullptr, map->loc);
+                inst->operands.push_back(list_val);
+
+                // For offset/scale patterns, add the constant operand
+                if (hk_opcode == QoreIROpcode::MapHashKeyOffsetInt
+                        || hk_opcode == QoreIROpcode::MapHashKeyScaleInt) {
+                    QoreIRValue const_ir = lowerConstant(hk_constant, error);
+                    if (!const_ir.isValid()) {
+                        return QoreIRValue();
+                    }
+                    inst->operands.push_back(const_ir);
+                }
+
+                return inst->result;
             }
         }
     }
@@ -6201,6 +6394,30 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
 
+    // Try HashMapTwoKeys specialized opcode: map {$1.k1: $1.k2}, list
+    {
+        const QoreTypeInfo* list_type = getExprTypeInfo(map->get(2));
+        const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+        if (elem_type && QoreTypeInfo::parseReturns(elem_type, NT_HASH) != QTI_NOT_EQUAL) {
+            const char* key1_name = nullptr;
+            const char* key2_name = nullptr;
+            QoreIROpcode hk_opcode = analyzeHashMapTwoKeysPattern(map->get(0), map->get(1),
+                key1_name, key2_name);
+            if (hk_opcode == QoreIROpcode::HashMapTwoKeys) {
+                // Lower the input list
+                QoreIRValue list_val = lowerExpression(map->get(2), error);
+                if (!list_val.isValid()) {
+                    return QoreIRValue();
+                }
+
+                auto* inst = builder.createMapHashKey(QoreIROpcode::HashMapTwoKeys,
+                    key1_name, key2_name, map->loc);
+                inst->operands.push_back(list_val);
+                return inst->result;
+            }
+        }
+    }
+
     // Native IR lowering with hash building
     return lowerHashMapNative(map, expr, error);
 }
@@ -6223,7 +6440,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     }
 
     // Check if the input list has a known element type for direct-index optimization
-    const QoreTypeInfo* list_type = map->getRight().getTypeInfo();
+    const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
     bool use_direct_index = false;
     bool elem_is_int = false;
@@ -6258,27 +6475,23 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         QoreIRValue list_size = builder.createListSize(input_list, map->loc)->result;
 
         // Create blocks AFTER evaluating the input expression
-        QoreIRBasicBlock* empty_check_block = createBlock("map.empty.check");
+        // No empty check needed: createSizedList(0) produces an empty list,
+        // and the header condition (0 >= 0) immediately exits the loop.
         QoreIRBasicBlock* preheader_block = createBlock("map.preheader");
         QoreIRBasicBlock* header_block = createBlock("map.header");
         QoreIRBasicBlock* body_block = createBlock("map.body");
         QoreIRBasicBlock* exit_block = createBlock("map.exit");
-        if (!empty_check_block || !preheader_block || !header_block || !body_block || !exit_block) {
+        if (!preheader_block || !header_block || !body_block || !exit_block) {
             error = "IR builder failed to create blocks for map";
             return QoreIRValue();
         }
         header_block->is_loop_header = true;
 
-        builder.createBranch(empty_check_block, map->loc);
+        builder.createBranch(preheader_block, map->loc);
 
-        // Empty check: if size == 0, return NOTHING
-        builder.setBlock(empty_check_block);
-        QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
-        QoreIRValue is_empty = builder.createBinaryOp(QoreIROpcode::EqInt, list_size, zero, map->loc)->result;
-        builder.createBranchIf(is_empty, exit_block, preheader_block, map->loc);
-
-        // Preheader: create pre-sized result list
+        // Preheader: create pre-sized result list (size 0 for empty input is fine)
         builder.setBlock(preheader_block);
+        QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
         QoreIRValue result_list = builder.createSizedList(list_size, map->loc)->result;
         builder.createBranch(header_block, map->loc);
 
@@ -6376,17 +6589,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         index_phi->operands.push_back(zero);
         index_phi->operands.push_back(next_index);
 
-        // Exit block: PHI between empty list (empty) and result_list
+        // Exit block: result_list is the result (empty for size 0, filled for size > 0)
         builder.setBlock(exit_block);
 
-        QoreIRValue empty_list = builder.createEmptyList(map->loc)->result;
-
-        std::vector<QoreIRPhiIncoming> result_incoming;
-        result_incoming.push_back({empty_list, empty_check_block});    // Empty list
-        result_incoming.push_back({result_list, header_block});        // Normal loop exit
-        auto* result_phi = builder.createPhi(result_incoming, map->loc);
-
-        return result_phi->result;
+        return result_list;
     }
 
     // Fallback: iterator-based loop for untyped lists
@@ -6521,11 +6727,157 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         return QoreIRValue();
     }
 
+    // Check if the input list has a known element type for direct-index optimization
+    const QoreTypeInfo* list_type = getExprTypeInfo(select->getLeft());
+    const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+    bool use_direct_index = (elem_type != nullptr);
+    bool elem_is_int = false;
+    bool elem_is_float = false;
+    if (elem_type) {
+        if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
+            elem_is_int = true;
+        } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+            elem_is_float = true;
+        }
+    }
+
     // Evaluate the input list (left operand of select)
     QoreIRValue input_list = lowerExpression(select->getLeft(), error);
     if (!input_list.isValid()) {
         return QoreIRValue();
     }
+
+    if (use_direct_index) {
+        // Direct-index loop: avoid iterator overhead for typed lists
+        QoreIRValue list_size = builder.createListSize(input_list, select->loc)->result;
+
+        // Create blocks AFTER evaluating the input expression
+        // No empty check needed: createEmptyList produces an empty list for empty input,
+        // and the header condition (0 >= 0) immediately exits the loop.
+        QoreIRBasicBlock* preheader_block = createBlock("select.preheader");
+        QoreIRBasicBlock* header_block = createBlock("select.header");
+        QoreIRBasicBlock* body_block = createBlock("select.body");
+        QoreIRBasicBlock* append_block = createBlock("select.append");
+        QoreIRBasicBlock* cont_block = createBlock("select.cont");
+        QoreIRBasicBlock* exit_block = createBlock("select.exit");
+        if (!preheader_block || !header_block || !body_block
+                || !append_block || !cont_block || !exit_block) {
+            error = "IR builder failed to create blocks for select";
+            return QoreIRValue();
+        }
+        header_block->is_loop_header = true;
+
+        builder.createBranch(preheader_block, select->loc);
+
+        // Preheader: create empty result list (filtered, size unknown)
+        builder.setBlock(preheader_block);
+        QoreIRValue zero = builder.createConstInt(0, select->loc)->result;
+        QoreIRValue result_list = builder.createEmptyList(select->loc)->result;
+        builder.createBranch(header_block, select->loc);
+
+        // Header block: check if index < size
+        builder.setBlock(header_block);
+
+        auto* index_phi = builder.createPhi({}, select->loc);
+        QoreIRValue index_val = index_phi->result;
+
+        QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
+            select->loc)->result;
+        builder.createBranchIf(at_end, exit_block, body_block, select->loc);
+
+        // Body block: load element, evaluate predicate
+        builder.setBlock(body_block);
+
+        // Load element at current index
+        QoreIRValue element_val;
+        if (elem_is_int) {
+            element_val = builder.createListGetInt(input_list, index_val, select->loc)->result;
+        } else if (elem_is_float) {
+            element_val = builder.createListGetFloat(input_list, index_val, select->loc)->result;
+        } else {
+            element_val = builder.createListGetValue(input_list, index_val, select->loc)->result;
+        }
+
+        // Set virtual implicit context
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = element_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = index_val;
+        virtual_implicit.active = true;
+
+        // Lower predicate - track AST delegation
+        int saved_ast_count = ast_delegate_count;
+        QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
+
+        // Restore virtual context
+        virtual_implicit = saved;
+
+        if (!predicate_result.isValid()) {
+            return QoreIRValue();
+        }
+
+        bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
+        if (needs_implicit_push) {
+            QoreIRFunction* func = builder.getFunction();
+
+            auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
+            push_elem->result = func->createValue();
+            push_elem->operands.push_back(index_val);
+            push_elem->loc = select->loc;
+            QoreIRValue old_element = push_elem->result;
+
+            auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
+            push_argv->result = func->createValue();
+            push_argv->operands.push_back(element_val);
+            push_argv->loc = select->loc;
+            QoreIRValue old_argv = push_argv->result;
+
+            size_t insert_pos = 1;  // After element load
+            body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
+                std::move(push_elem));
+            body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
+                std::move(push_argv));
+
+            builder.createPopImplicitArg(old_argv, select->loc);
+            builder.createPopImplicitElement(old_element, select->loc);
+        }
+
+        // Convert predicate to bool
+        QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result,
+            select->loc)->result;
+
+        // Branch: if true append, else skip
+        builder.createBranchIf(predicate_bool, append_block, cont_block, select->loc);
+
+        // Append block: add element to result list
+        builder.setBlock(append_block);
+        builder.createListAppend(result_list, element_val, select->loc);
+        builder.createBranch(cont_block, select->loc);
+
+        // Continue block: increment index and loop back
+        builder.setBlock(cont_block);
+
+        QoreIRValue one = builder.createConstInt(1, select->loc)->result;
+        QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,
+            select->loc)->result;
+
+        QoreIRBasicBlock* cont_exit_block = builder.getBlock();
+
+        builder.createBranch(header_block, select->loc);
+
+        // Complete PHI nodes
+        index_phi->incoming.push_back({zero, preheader_block});
+        index_phi->incoming.push_back({next_index, cont_exit_block});
+        index_phi->operands.push_back(zero);
+        index_phi->operands.push_back(next_index);
+
+        // Exit block: result_list is the result (empty for size 0)
+        builder.setBlock(exit_block);
+
+        return result_list;
+    }
+
+    // Fallback: iterator-based loop for untyped lists
 
     // Create iterator from input list
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, select->loc);
@@ -6643,7 +6995,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     }
 
     // Check if the input list has a known element type for direct-index optimization
-    const QoreTypeInfo* list_type = foldl->getRight().getTypeInfo();
+    const QoreTypeInfo* list_type = getExprTypeInfo(foldl->getRight());
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
     bool use_direct_index = false;
     bool elem_is_int = false;
@@ -7001,11 +7353,163 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     // e[0] = map expression, e[1] = iterator/input, e[2] = select predicate
 
+    // Check if the input list has a known element type for direct-index optimization
+    const QoreTypeInfo* list_type = getExprTypeInfo(ms->get(1));
+    const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+    bool use_direct_index = (elem_type != nullptr);
+    bool elem_is_int = false;
+    bool elem_is_float = false;
+    if (elem_type) {
+        if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
+            elem_is_int = true;
+        } else if (QoreTypeInfo::parseReturns(elem_type, NT_FLOAT) == QTI_IDENT) {
+            elem_is_float = true;
+        }
+    }
+
     // Evaluate the input list (operand 1)
     QoreIRValue input_list = lowerExpression(ms->get(1), error);
     if (!input_list.isValid()) {
         return QoreIRValue();
     }
+
+    if (use_direct_index) {
+        // Direct-index loop: avoid iterator overhead for typed lists
+        QoreIRValue list_size = builder.createListSize(input_list, ms->loc)->result;
+
+        // Create blocks AFTER evaluating the input expression
+        // No empty check needed: createEmptyList produces an empty list,
+        // and the header condition (0 >= 0) immediately exits the loop.
+        QoreIRBasicBlock* preheader_block = createBlock("mapselect.preheader");
+        QoreIRBasicBlock* header_block = createBlock("mapselect.header");
+        QoreIRBasicBlock* body_block = createBlock("mapselect.body");
+        QoreIRBasicBlock* append_block = createBlock("mapselect.append");
+        QoreIRBasicBlock* cont_block = createBlock("mapselect.cont");
+        QoreIRBasicBlock* exit_block = createBlock("mapselect.exit");
+        if (!preheader_block || !header_block || !body_block
+                || !append_block || !cont_block || !exit_block) {
+            error = "IR builder failed to create blocks for map+select";
+            return QoreIRValue();
+        }
+        header_block->is_loop_header = true;
+
+        builder.createBranch(preheader_block, ms->loc);
+
+        // Preheader: create empty result list (filtered, size unknown)
+        builder.setBlock(preheader_block);
+        QoreIRValue zero = builder.createConstInt(0, ms->loc)->result;
+        QoreIRValue result_list = builder.createEmptyList(ms->loc)->result;
+        builder.createBranch(header_block, ms->loc);
+
+        // Header block: check if index < size
+        builder.setBlock(header_block);
+
+        auto* index_phi = builder.createPhi({}, ms->loc);
+        QoreIRValue index_val = index_phi->result;
+
+        QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
+            ms->loc)->result;
+        builder.createBranchIf(at_end, exit_block, body_block, ms->loc);
+
+        // Body block: load element, evaluate predicate
+        builder.setBlock(body_block);
+
+        // Load element at current index
+        QoreIRValue element_val;
+        if (elem_is_int) {
+            element_val = builder.createListGetInt(input_list, index_val, ms->loc)->result;
+        } else if (elem_is_float) {
+            element_val = builder.createListGetFloat(input_list, index_val, ms->loc)->result;
+        } else {
+            element_val = builder.createListGetValue(input_list, index_val, ms->loc)->result;
+        }
+
+        // Set virtual implicit context
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = element_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = index_val;
+        virtual_implicit.active = true;
+
+        // Track AST delegation
+        int saved_ast_count = ast_delegate_count;
+
+        // Lower the select predicate (operand 2)
+        QoreIRValue predicate_result = lowerExpression(ms->get(2), error);
+        if (!predicate_result.isValid()) {
+            virtual_implicit = saved;
+            return QoreIRValue();
+        }
+
+        QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result,
+            ms->loc)->result;
+        builder.createBranchIf(predicate_bool, append_block, cont_block, ms->loc);
+
+        // Append block: evaluate map expression and append to result
+        builder.setBlock(append_block);
+
+        QoreIRValue map_result = lowerExpression(ms->get(0), error);
+        if (!map_result.isValid()) {
+            virtual_implicit = saved;
+            return QoreIRValue();
+        }
+
+        // Restore virtual context
+        virtual_implicit = saved;
+
+        bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
+        if (needs_implicit_push) {
+            QoreIRFunction* func = builder.getFunction();
+
+            auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
+            push_elem->result = func->createValue();
+            push_elem->operands.push_back(index_val);
+            push_elem->loc = ms->loc;
+            QoreIRValue old_element = push_elem->result;
+
+            auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
+            push_argv->result = func->createValue();
+            push_argv->operands.push_back(element_val);
+            push_argv->loc = ms->loc;
+            QoreIRValue old_argv = push_argv->result;
+
+            size_t insert_pos = 1;  // After element load
+            body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
+                std::move(push_elem));
+            body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
+                std::move(push_argv));
+
+            builder.createPopImplicitArg(old_argv, ms->loc);
+            builder.createPopImplicitElement(old_element, ms->loc);
+        }
+
+        builder.createListAppend(result_list, map_result, ms->loc);
+        builder.createBranch(cont_block, ms->loc);
+
+        // Continue block: increment index, loop back
+        builder.setBlock(cont_block);
+
+        QoreIRValue one = builder.createConstInt(1, ms->loc)->result;
+        QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,
+            ms->loc)->result;
+
+        QoreIRBasicBlock* cont_exit_block = builder.getBlock();
+
+        builder.createBranch(header_block, ms->loc);
+
+        // Complete PHI nodes
+        index_phi->incoming.push_back({zero, preheader_block});
+        index_phi->incoming.push_back({next_index, cont_exit_block});
+        index_phi->operands.push_back(zero);
+        index_phi->operands.push_back(next_index);
+
+        // Exit block: result_list is the result (empty for size 0)
+        builder.setBlock(exit_block);
+
+        return result_list;
+    }
+
+    // Fallback: iterator-based loop for untyped lists
 
     // Create iterator from input list
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, ms->loc);
@@ -7129,7 +7633,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     // e[0] = key expression, e[1] = value expression, e[2] = iterator/input
 
     // Check if the input list has a known element type for direct-index optimization
-    const QoreTypeInfo* list_type = hm->get(2).getTypeInfo();
+    const QoreTypeInfo* list_type = getExprTypeInfo(hm->get(2));
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
     bool use_direct_index = (elem_type != nullptr);
 
@@ -7144,27 +7648,23 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         QoreIRValue list_size = builder.createListSize(input_list, hm->loc)->result;
 
         // Create blocks AFTER evaluating the input expression
-        QoreIRBasicBlock* empty_check_block = createBlock("hashmap.empty.check");
+        // No empty check needed: createMakeHash produces an empty hash,
+        // and the header condition (0 >= 0) immediately exits the loop.
         QoreIRBasicBlock* preheader_block = createBlock("hashmap.preheader");
         QoreIRBasicBlock* header_block = createBlock("hashmap.header");
         QoreIRBasicBlock* body_block = createBlock("hashmap.body");
         QoreIRBasicBlock* exit_block = createBlock("hashmap.exit");
-        if (!empty_check_block || !preheader_block || !header_block || !body_block || !exit_block) {
+        if (!preheader_block || !header_block || !body_block || !exit_block) {
             error = "IR builder failed to create blocks for hash map";
             return QoreIRValue();
         }
         header_block->is_loop_header = true;
 
-        builder.createBranch(empty_check_block, hm->loc);
-
-        // Empty check: if size == 0, return empty hash
-        builder.setBlock(empty_check_block);
-        QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
-        QoreIRValue is_empty = builder.createBinaryOp(QoreIROpcode::EqInt, list_size, zero, hm->loc)->result;
-        builder.createBranchIf(is_empty, exit_block, preheader_block, hm->loc);
+        builder.createBranch(preheader_block, hm->loc);
 
         // Preheader: create empty result hash and proceed to loop
         builder.setBlock(preheader_block);
+        QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
         QoreIRValue result_hash = builder.createMakeHash({}, hm->loc)->result;
         builder.createBranch(header_block, hm->loc);
 
@@ -7256,17 +7756,10 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         index_phi->operands.push_back(zero);
         index_phi->operands.push_back(next_index);
 
-        // Exit block: PHI between empty hash (empty) and result_hash
+        // Exit block: result_hash is the result (empty for size 0)
         builder.setBlock(exit_block);
 
-        QoreIRValue empty_hash = builder.createMakeHash({}, hm->loc)->result;
-
-        std::vector<QoreIRPhiIncoming> result_incoming;
-        result_incoming.push_back({empty_hash, empty_check_block});    // Empty list
-        result_incoming.push_back({result_hash, header_block});        // Normal loop exit
-        auto* result_phi = builder.createPhi(result_incoming, hm->loc);
-
-        return result_phi->result;
+        return result_hash;
     }
 
     // Fallback: iterator-based loop for untyped lists
@@ -7407,7 +7900,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     // e[0] = key expression, e[1] = value expression, e[2] = iterator/input, e[3] = select predicate
 
     // Check if the input list has a known element type for direct-index optimization
-    const QoreTypeInfo* list_type = hms->get(2).getTypeInfo();
+    const QoreTypeInfo* list_type = getExprTypeInfo(hms->get(2));
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
     bool use_direct_index = (elem_type != nullptr);
 
@@ -7422,30 +7915,26 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         QoreIRValue list_size = builder.createListSize(input_list, hms->loc)->result;
 
         // Create blocks AFTER evaluating the input expression
-        QoreIRBasicBlock* empty_check_block = createBlock("hashmapselect.empty.check");
+        // No empty check needed: createMakeHash produces an empty hash,
+        // and the header condition (0 >= 0) immediately exits the loop.
         QoreIRBasicBlock* preheader_block = createBlock("hashmapselect.preheader");
         QoreIRBasicBlock* header_block = createBlock("hashmapselect.header");
         QoreIRBasicBlock* body_block = createBlock("hashmapselect.body");
         QoreIRBasicBlock* insert_block = createBlock("hashmapselect.insert");
         QoreIRBasicBlock* cont_block = createBlock("hashmapselect.cont");
         QoreIRBasicBlock* exit_block = createBlock("hashmapselect.exit");
-        if (!empty_check_block || !preheader_block || !header_block || !body_block
+        if (!preheader_block || !header_block || !body_block
                 || !insert_block || !cont_block || !exit_block) {
             error = "IR builder failed to create blocks for hash map+select";
             return QoreIRValue();
         }
         header_block->is_loop_header = true;
 
-        builder.createBranch(empty_check_block, hms->loc);
-
-        // Empty check: if size == 0, return empty hash
-        builder.setBlock(empty_check_block);
-        QoreIRValue zero = builder.createConstInt(0, hms->loc)->result;
-        QoreIRValue is_empty = builder.createBinaryOp(QoreIROpcode::EqInt, list_size, zero, hms->loc)->result;
-        builder.createBranchIf(is_empty, exit_block, preheader_block, hms->loc);
+        builder.createBranch(preheader_block, hms->loc);
 
         // Preheader: create empty result hash and proceed to loop
         builder.setBlock(preheader_block);
+        QoreIRValue zero = builder.createConstInt(0, hms->loc)->result;
         QoreIRValue result_hash = builder.createMakeHash({}, hms->loc)->result;
         builder.createBranch(header_block, hms->loc);
 
@@ -7557,17 +8046,10 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         index_phi->operands.push_back(zero);
         index_phi->operands.push_back(next_index);
 
-        // Exit block: PHI between empty hash (empty) and result_hash
+        // Exit block: result_hash is the result (empty for size 0)
         builder.setBlock(exit_block);
 
-        QoreIRValue empty_hash = builder.createMakeHash({}, hms->loc)->result;
-
-        std::vector<QoreIRPhiIncoming> result_incoming;
-        result_incoming.push_back({empty_hash, empty_check_block});    // Empty list
-        result_incoming.push_back({result_hash, header_block});        // Normal loop exit
-        auto* result_phi = builder.createPhi(result_incoming, hms->loc);
-
-        return result_phi->result;
+        return result_hash;
     }
 
     // Fallback: iterator-based loop for untyped lists

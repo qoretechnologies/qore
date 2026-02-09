@@ -1844,6 +1844,158 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ++ip;
                 break;
             }
+            case QoreIROpcode::HashKeyAccessInt: {
+                auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
+                QoreValue base = getIRValue(values, hka_inst->operands[0]);
+                int64 out = 0;
+                if (base.getType() == NT_HASH) {
+                    const QoreHashNode* h = base.get<const QoreHashNode>();
+                    out = h->getKeyValue(hka_inst->key_name.c_str()).getAsBigInt();
+                }
+                setValueSlot(values, hka_inst->result.id, out, xsink);
+                ++ip;
+                break;
+            }
+            // Fully specialized hash-key map operations
+            case QoreIROpcode::MapHashKeyValue: {
+                const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+                QoreValue list_val = getIRValue(values, mhk->operands[0]);
+                QoreValue out;
+                if (list_val.getType() == NT_LIST) {
+                    const QoreListNode* l = list_val.get<const QoreListNode>();
+                    size_t sz = l->size();
+                    ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
+                    for (size_t i = 0; i < sz; ++i) {
+                        QoreValue elem = l->retrieveEntry(i);
+                        if (elem.getType() == NT_HASH) {
+                            QoreValue val = elem.get<const QoreHashNode>()->getKeyValue(mhk->key1.c_str());
+                            result->push(val.refSelf(), xsink);
+                        } else {
+                            result->push(QoreValue(), xsink);
+                        }
+                    }
+                    out = result.release();
+                }
+                setValueSlot(values, mhk->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(mhk->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::MapHashKeyInt: {
+                const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+                QoreValue list_val = getIRValue(values, mhk->operands[0]);
+                QoreValue out;
+                if (list_val.getType() == NT_LIST) {
+                    const QoreListNode* l = list_val.get<const QoreListNode>();
+                    size_t sz = l->size();
+                    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+                    for (size_t i = 0; i < sz; ++i) {
+                        QoreValue elem = l->retrieveEntry(i);
+                        if (elem.getType() == NT_HASH) {
+                            result->push(
+                                elem.get<const QoreHashNode>()->getKeyValue(mhk->key1.c_str()).getAsBigInt(), xsink);
+                        } else {
+                            result->push(0ll, xsink);
+                        }
+                    }
+                    out = result.release();
+                }
+                setValueSlot(values, mhk->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(mhk->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::MapHashKeyOffsetInt: {
+                const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+                QoreValue list_val = getIRValue(values, mhk->operands[0]);
+                QoreValue offset_val = getIRValue(values, mhk->operands[1]);
+                int64_t offset = offset_val.getAsBigInt();
+                QoreValue out;
+                if (list_val.getType() == NT_LIST) {
+                    const QoreListNode* l = list_val.get<const QoreListNode>();
+                    size_t sz = l->size();
+                    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+                    for (size_t i = 0; i < sz; ++i) {
+                        QoreValue elem = l->retrieveEntry(i);
+                        if (elem.getType() == NT_HASH) {
+                            result->push(
+                                elem.get<const QoreHashNode>()->getKeyValue(mhk->key1.c_str()).getAsBigInt()
+                                    + offset,
+                                xsink);
+                        } else {
+                            result->push(offset, xsink);
+                        }
+                    }
+                    out = result.release();
+                }
+                setValueSlot(values, mhk->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(mhk->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::MapHashKeyScaleInt: {
+                const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+                QoreValue list_val = getIRValue(values, mhk->operands[0]);
+                QoreValue scale_val = getIRValue(values, mhk->operands[1]);
+                int64_t scale = scale_val.getAsBigInt();
+                QoreValue out;
+                if (list_val.getType() == NT_LIST) {
+                    const QoreListNode* l = list_val.get<const QoreListNode>();
+                    size_t sz = l->size();
+                    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+                    for (size_t i = 0; i < sz; ++i) {
+                        QoreValue elem = l->retrieveEntry(i);
+                        if (elem.getType() == NT_HASH) {
+                            result->push(
+                                elem.get<const QoreHashNode>()->getKeyValue(mhk->key1.c_str()).getAsBigInt()
+                                    * scale,
+                                xsink);
+                        } else {
+                            result->push(0ll, xsink);
+                        }
+                    }
+                    out = result.release();
+                }
+                setValueSlot(values, mhk->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(mhk->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::HashMapTwoKeys: {
+                const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+                QoreValue list_val = getIRValue(values, mhk->operands[0]);
+                QoreValue out;
+                if (list_val.getType() == NT_LIST) {
+                    const QoreListNode* l = list_val.get<const QoreListNode>();
+                    size_t sz = l->size();
+                    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoHashTypeInfo), nullptr);
+                    for (size_t i = 0; i < sz; ++i) {
+                        QoreValue elem = l->retrieveEntry(i);
+                        if (elem.getType() == NT_HASH) {
+                            const QoreHashNode* h = elem.get<const QoreHashNode>();
+                            QoreValue k = h->getKeyValue(mhk->key1.c_str());
+                            QoreValue val = h->getKeyValue(mhk->key2.c_str());
+                            QoreStringValueHelper key_str(k);
+                            result->setKeyValue(key_str->c_str(), val.refSelf(), nullptr);
+                        }
+                    }
+                    out = result.release();
+                }
+                setValueSlot(values, mhk->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(mhk->result.id);
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::LoadSelfMember: {
                 auto* sm_inst = static_cast<QoreIRSelfMemberInstruction*>(inst);
                 QoreObject* obj = runtime_get_stack_object();

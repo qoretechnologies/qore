@@ -153,6 +153,13 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("call closure/callref direct", \testCallClosureDirect());
         addTestCase("dot-eval method fast call", \testDotEvalMethodFastCall());
         addTestCase("builtin function fast call", \testBuiltinFastCall());
+        addTestCase("specialized hash-key map opcodes", \testMapHashKeyOpcodes());
+        addTestCase("direct-index select on typed lists", \testDirectIndexSelect());
+        addTestCase("hash key access skip invoke for plain hash", \testHashKeyAccessSkipInvoke());
+        addTestCase("hash key access int opcode", \testHashKeyAccessInt());
+        addTestCase("direct-index map with heap-allocated results", \testDirectIndexMapHeapResults());
+        addTestCase("hash map duplicate keys", \testHashMapDuplicateKeys());
+        addTestCase("hash key access int missing key", \testHashKeyAccessIntMissingKey());
         set_return_value(main());
     }
 
@@ -5072,6 +5079,430 @@ printf(\"%s\\n\", result);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(builtin_exception, mode));
             assertEq("caught", result, sprintf("builtin exception %s", mode));
+        }
+    }
+
+    testMapHashKeyOpcodes() {
+        # MapHashKeyValue: map $1.key, list<hash<auto>>
+        string code = "%modern
+list<hash<auto>> items = ({\"val\": \"a\"}, {\"val\": \"b\"}, {\"val\": \"c\"});
+list<auto> result = map $1.val, items;
+printf(\"%s:%s:%s\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("a:b:c", result,
+                    sprintf("MapHashKeyValue %s", mode));
+        }
+
+        # MapHashKeyValue with int values
+        code = "%modern
+list<hash<auto>> items = ({\"n\": 10}, {\"n\": 20}, {\"n\": 30});
+list<auto> result = map $1.n, items;
+printf(\"%d\\n\", (foldl $1 + $2, result));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("60", result,
+                    sprintf("MapHashKeyValue int values %s", mode));
+        }
+
+        # MapHashKeyOffsetInt: map ($1.key + N), list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map ($1.val + 100), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("101:102:103", result,
+                    sprintf("MapHashKeyOffsetInt %s", mode));
+        }
+
+        # MapHashKeyScaleInt: map ($1.key * N), list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 2}, {\"val\": 3}, {\"val\": 5});
+list<auto> result = map ($1.val * 10), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("20:30:50", result,
+                    sprintf("MapHashKeyScaleInt %s", mode));
+        }
+
+        # HashMapTwoKeys: map {$1.k1: $1.k2}, list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25});
+hash<auto> result = map {$1.name: $1.age}, items;
+printf(\"%d:%d\\n\", result.alice, result.bob);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:25", result,
+                    sprintf("HashMapTwoKeys %s", mode));
+        }
+
+        # Empty list - all hash-key opcodes should handle gracefully
+        code = "%modern
+list<hash<auto>> empty = ();
+list<auto> r1 = map $1.val, empty;
+printf(\"%s %d\\n\", r1.type(), r1.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("list 0", result,
+                    sprintf("MapHashKey empty list %s", mode));
+        }
+
+        # MapHashKeyOffsetInt with const + $1.key (reversed)
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map (100 + $1.val), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("101:102:103", result,
+                    sprintf("MapHashKeyOffsetInt reversed %s", mode));
+        }
+
+        # MapHashKeyScaleInt with const * $1.key (reversed)
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 2}, {\"val\": 3}, {\"val\": 5});
+list<auto> result = map (10 * $1.val), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("20:30:50", result,
+                    sprintf("MapHashKeyScaleInt reversed %s", mode));
+        }
+
+        # HashMapTwoKeys with more items
+        code = "%modern
+list<hash<auto>> items = (
+    {\"k\": \"x\", \"v\": 10},
+    {\"k\": \"y\", \"v\": 20},
+    {\"k\": \"z\", \"v\": 30},
+);
+hash<auto> result = map {$1.k: $1.v}, items;
+printf(\"%d:%d:%d\\n\", result.x, result.y, result.z);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10:20:30", result,
+                    sprintf("HashMapTwoKeys three items %s", mode));
+        }
+    }
+
+    testDirectIndexSelect() {
+        # Select on typed hash list (direct-index optimization)
+        string code = "%modern
+list<hash<auto>> items = ({\"val\": 10}, {\"val\": 5}, {\"val\": 20}, {\"val\": 3});
+list<auto> result = (select items, $1.val > 8);
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2", result,
+                    sprintf("select on typed hash list %s", mode));
+        }
+
+        # Select on typed int list (direct-index)
+        code = "%modern
+list<int> vals = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+list<auto> result = (select vals, $1 > 5);
+printf(\"%d:%d\\n\", result.size(), (foldl $1 + $2, result));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:40", result,
+                    sprintf("select on typed int list %s", mode));
+        }
+
+        # Select on typed float list (direct-index)
+        code = "%modern
+list<float> vals = (1.5, 2.5, 3.5, 0.5);
+list<auto> result = (select vals, $1 > 2.0);
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2", result,
+                    sprintf("select on typed float list %s", mode));
+        }
+
+        # Map+select on typed hash list (direct-index)
+        code = "%modern
+list<hash<auto>> items = ({\"name\": \"a\", \"val\": 10}, {\"name\": \"b\", \"val\": 5}, {\"name\": \"c\", \"val\": 20});
+list<auto> result = map $1.name, items, $1.val > 8;
+printf(\"%s:%s\\n\", result[0], result[1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("a:c", result,
+                    sprintf("map+select on typed hash list %s", mode));
+        }
+
+        # Empty list select (direct-index)
+        code = "%modern
+list<int> empty = ();
+list<auto> result = (select empty, $1 > 0);
+printf(\"%s %d\\n\", result.type(), result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("list 0", result,
+                    sprintf("select on empty typed list %s", mode));
+        }
+
+        # Map+select on typed int list (direct-index)
+        code = "%modern
+list<int> vals = (1, 2, 3, 4, 5);
+list<auto> result = map $1 * 10, vals, $1 > 2;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:40:50", result,
+                    sprintf("map+select on typed int list %s", mode));
+        }
+    }
+
+    testHashKeyAccessSkipInvoke() {
+        # Plain hash access inside try-catch should not use invoke path
+        string code = "%modern
+hash<auto> h = {\"a\": 1, \"b\": 2, \"c\": 3};
+int total = 0;
+try {
+    total = h.a + h.b + h.c;
+} catch (hash<auto> ex) {
+    total = -1;
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("6", result,
+                    sprintf("hash key access in try-catch %s", mode));
+        }
+
+        # Missing key on plain hash returns NOTHING, doesn't throw
+        code = "%modern
+hash<auto> h = {\"a\": 1};
+string result;
+try {
+    auto v = h.missing_key;
+    result = exists v ? \"exists\" : \"nothing\";
+} catch (hash<auto> ex) {
+    result = \"error\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("nothing", result,
+                    sprintf("missing key plain hash try-catch %s", mode));
+        }
+    }
+
+    testHashKeyAccessInt() {
+        # hash<string, int> key access returns native int (HashKeyAccessInt opcode)
+        string code = "%modern
+hash<string, int> h = {\"a\": 10, \"b\": 20, \"c\": 30};
+int total = h.a + h.b + h.c;
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("60", result,
+                    sprintf("hash<string,int> key access %s", mode));
+        }
+
+        # hash<string, int> key access with arithmetic
+        code = "%modern
+hash<string, int> h = {\"x\": 5, \"y\": 3};
+int result = h.x * h.y + h.x - h.y;
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("17", result,
+                    sprintf("hash<string,int> key arithmetic %s", mode));
+        }
+
+        # hash<string, int> key access in a loop
+        code = "%modern
+hash<string, int> h = {\"val\": 7};
+int total = 0;
+for (int i = 0; i < 100; ++i) {
+    total += h.val;
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("700", result,
+                    sprintf("hash<string,int> key in loop %s", mode));
+        }
+
+        # hash<string, int> missing key - accessing non-existent key returns 0 via auto conversion
+        code = "%modern
+hash<string, int> h = {\"a\": 42, \"b\": 0};
+int val = h.b;
+printf(\"%d\\n\", val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("0", result,
+                    sprintf("hash<string,int> zero value key %s", mode));
+        }
+
+        # map with hash<string, int> element access (combines with map optimization)
+        code = "%modern
+list<hash<string, int>> data = ({\"v\": 1}, {\"v\": 2}, {\"v\": 3}, {\"v\": 4}, {\"v\": 5});
+list<int> result = map $1.v * 2, data;
+int total = 0;
+foreach int x in (result) {
+    total += x;
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30", result,
+                    sprintf("map over hash<string,int> list %s", mode));
+        }
+    }
+
+    testDirectIndexMapHeapResults() {
+        # map with method call returning heap-allocated QoreStringNode
+        # Tests that ListSetValue correctly handles refcounting when
+        # trackResultForCleanup also tracks the invoke result
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> scaled = (map $1 * 2, nums);
+string result = (map $1.toString(), scaled).join(\",\");
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2,4,6,8,10", result,
+                    sprintf("map toString over direct-index result %s", mode));
+        }
+
+        # map with hash key access returning string values (heap-allocated)
+        code = "%modern
+list<hash<auto>> items = ({\"name\": \"alice\"}, {\"name\": \"bob\"}, {\"name\": \"charlie\"});
+list<auto> names = map $1.name, items;
+printf(\"%s\\n\", names.join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("alice,bob,charlie", result,
+                    sprintf("map hash key string values %s", mode));
+        }
+
+        # map with computation producing heap-allocated result ($1.val + 1)
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map ($1.val + 1), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2:3:4", result,
+                    sprintf("map hash key add computation %s", mode));
+        }
+
+        # Chained maps: result of first map used in second map
+        code = "%modern
+list<int> nums = (10, 20, 30);
+list<auto> strs = map $1.toString() + \"x\", nums;
+printf(\"%s\\n\", strs.join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10x,20x,30x", result,
+                    sprintf("map toString + string concat %s", mode));
+        }
+    }
+
+    testHashMapDuplicateKeys() {
+        # HashMapTwoKeys with duplicate keys — last value wins
+        string code = "%modern
+list<hash<auto>> items = (
+    {\"name\": \"alice\", \"age\": 30},
+    {\"name\": \"alice\", \"age\": 25},
+    {\"name\": \"bob\", \"age\": 35},
+);
+hash<auto> result = map {$1.name: $1.age}, items;
+printf(\"%d:%d\\n\", result.size(), result.alice);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2:25", result,
+                    sprintf("HashMapTwoKeys duplicate keys %s", mode));
+        }
+
+        # All duplicate keys — result should have 1 entry
+        code = "%modern
+list<hash<auto>> items = (
+    {\"k\": \"x\", \"v\": 1},
+    {\"k\": \"x\", \"v\": 2},
+    {\"k\": \"x\", \"v\": 3},
+);
+hash<auto> result = map {$1.k: $1.v}, items;
+printf(\"%d:%d\\n\", result.size(), result.x);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:3", result,
+                    sprintf("HashMapTwoKeys all duplicates %s", mode));
+        }
+    }
+
+    testHashKeyAccessIntMissingKey() {
+        # HashKeyAccessInt: present key returns correct value
+        string code = "%modern
+hash<string, int> h = {\"a\": 1, \"b\": 2};
+int present = h.a;
+printf(\"%d\\n\", present);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1", result,
+                    sprintf("HashKeyAccessInt present key %s", mode));
+        }
+
+        # Missing key in hash<string, int> assigned to auto — returns NOTHING in AST,
+        # returns 0 in IR/JIT (native int64_t has no NOTHING representation)
+        code = "%modern
+hash<string, int> h = {\"a\": 1, \"b\": 2};
+auto missing = h.nonexistent;
+printf(\"%s\\n\", exists missing ? string(missing) : \"NOTHING\");
+";
+        assertEq("NOTHING", trim(runScript(code, "ast")),
+                "HashKeyAccessInt missing key ast returns NOTHING");
+        assertEq("0", trim(runScript(code, "ir")),
+                "HashKeyAccessInt missing key ir returns 0");
+        assertEq("0", trim(runScript(code, "jit")),
+                "HashKeyAccessInt missing key jit returns 0");
+
+        # Map over hash<string, int> with present keys — all modes agree
+        code = "%modern
+list<hash<string, int>> items = ({\"val\": 10}, {\"val\": 20}, {\"val\": 30});
+int total = 0;
+foreach hash<string, int> item in (items) {
+    total += item.val;
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("60", result,
+                    sprintf("hash<string,int> foreach sum %s", mode));
         }
     }
 }

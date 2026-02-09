@@ -258,6 +258,11 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::MapOffsetFloat: return "map.offset.float";
         case QoreIROpcode::MapSquareInt: return "map.square.int";
         case QoreIROpcode::MapSquareFloat: return "map.square.float";
+        case QoreIROpcode::MapHashKeyValue: return "map.hashkey.value";
+        case QoreIROpcode::MapHashKeyInt: return "map.hashkey.int";
+        case QoreIROpcode::MapHashKeyOffsetInt: return "map.hashkey.offset.int";
+        case QoreIROpcode::MapHashKeyScaleInt: return "map.hashkey.scale.int";
+        case QoreIROpcode::HashMapTwoKeys: return "hashmap.twokeys";
         case QoreIROpcode::SelectAny: return "select.any";
         case QoreIROpcode::SelectInt: return "select.int";
         case QoreIROpcode::SelectFloat: return "select.float";
@@ -317,6 +322,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::PushImplicitElement: return "push.implicit.element";
         case QoreIROpcode::PopImplicitElement: return "pop.implicit.element";
         case QoreIROpcode::HashKeyAccess: return "hash.key.access";
+        case QoreIROpcode::HashKeyAccessInt: return "hash.key.access.int";
         case QoreIROpcode::LoadSelfMember: return "load.self.member";
         case QoreIROpcode::LoadStaticVar: return "load.static.var";
         case QoreIROpcode::NewObject: return "new.object";
@@ -434,10 +440,23 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 if (lv_inst && lv_inst->lvalue.hasNode()) {
                     out << " <lvalue>";
                 }
-            } else if (inst->opcode == QoreIROpcode::HashKeyAccess) {
+            } else if (inst->opcode == QoreIROpcode::HashKeyAccess
+                    || inst->opcode == QoreIROpcode::HashKeyAccessInt) {
                 auto* hka_inst = dynamic_cast<const QoreIRHashKeyAccessInstruction*>(inst.get());
                 if (hka_inst) {
                     out << " ." << hka_inst->key_name;
+                }
+            } else if (inst->opcode == QoreIROpcode::MapHashKeyValue
+                    || inst->opcode == QoreIROpcode::MapHashKeyInt
+                    || inst->opcode == QoreIROpcode::MapHashKeyOffsetInt
+                    || inst->opcode == QoreIROpcode::MapHashKeyScaleInt
+                    || inst->opcode == QoreIROpcode::HashMapTwoKeys) {
+                auto* mhk_inst = dynamic_cast<const QoreIRMapHashKeyInstruction*>(inst.get());
+                if (mhk_inst) {
+                    out << " ." << mhk_inst->key1;
+                    if (!mhk_inst->key2.empty()) {
+                        out << " ." << mhk_inst->key2;
+                    }
                 }
             } else if (inst->opcode == QoreIROpcode::LoadSelfMember) {
                 auto* sm_inst = dynamic_cast<const QoreIRSelfMemberInstruction*>(inst.get());

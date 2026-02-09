@@ -4798,9 +4798,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
             llvm::Value* val_boxed = boxValue(val, inst->operands[2].id);
+            // refSelf before ownership transfer: the value may also be tracked by
+            // trackResultForCleanup (invoke results) or boxValue's internal cleanup
+            // (big int boxing), so the list needs its own reference
+            auto refself_fn = module.getOrInsertFunction("qore_rt_refself",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* val_ref = builder->CreateCall(refself_fn, {val_boxed});
             auto helper = module.getOrInsertFunction("qore_rt_list_set_value",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
-            builder->CreateCall(helper, {list_boxed, idx_int, val_boxed});
+            builder->CreateCall(helper, {list_boxed, idx_int, val_ref});
             return true;
         }
         case QoreIROpcode::GetObjectClass: {
@@ -4936,6 +4942,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(values[inst->result.id], inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::HashKeyAccessInt: {
+            const auto* hka_inst = static_cast<const QoreIRHashKeyAccessInstruction*>(inst);
+            auto* base = getVal(inst->operands[0].id, error);
+            if (!base) {
+                return false;
+            }
+            llvm::Value* base_boxed = boxValue(base, inst->operands[0].id);
+            llvm::Constant* key_const = builder->CreateGlobalString(hka_inst->key_name,
+                    "hash_key_int");
+            auto helper = module.getOrInsertFunction("qore_rt_hash_key_access_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            values[inst->result.id] = builder->CreateCall(helper, {base_boxed, key_const});
+            // Result is native int64, NOT nanboxed — no trackResultForCleanup needed
             return true;
         }
         case QoreIROpcode::LoadSelfMember: {
@@ -6126,6 +6147,82 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_map_square_float",
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        // === Fully specialized hash-key map operations ===
+        case QoreIROpcode::MapHashKeyValue: {
+            const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1, "map_hk_key");
+            auto helper = module.getOrInsertFunction("qore_rt_map_hash_key_value",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::MapHashKeyInt: {
+            const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1, "map_hk_key");
+            auto helper = module.getOrInsertFunction("qore_rt_map_hash_key_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::MapHashKeyOffsetInt: {
+            const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* offset = getVal(inst->operands[1].id, error);
+            if (!list || !offset) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* offset_int = ensureIntTypeInline(offset, inst->operands[1].id);
+            llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1, "map_hk_key");
+            auto helper = module.getOrInsertFunction("qore_rt_map_hash_key_offset_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const, offset_int});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::MapHashKeyScaleInt: {
+            const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* scale = getVal(inst->operands[1].id, error);
+            if (!list || !scale) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* scale_int = ensureIntTypeInline(scale, inst->operands[1].id);
+            llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1, "map_hk_key");
+            auto helper = module.getOrInsertFunction("qore_rt_map_hash_key_scale_int",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const, scale_int});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::HashMapTwoKeys: {
+            const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Constant* key1_const = builder->CreateGlobalString(mhk->key1, "map_hk_key1");
+            llvm::Constant* key2_const = builder->CreateGlobalString(mhk->key2, "map_hk_key2");
+            auto helper = module.getOrInsertFunction("qore_rt_hash_map_two_keys",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, key1_const, key2_const});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

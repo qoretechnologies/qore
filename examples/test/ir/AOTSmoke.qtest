@@ -73,6 +73,9 @@ class AOTSmokeTest inherits QUnit::Test {
         # Class inheritance and static member tests
         addTestCase("AOT strip source class inheritance", \testStripSourceClassInheritance());
         addTestCase("AOT strip source static members", \testStripSourceStaticMembers());
+        # Map optimization opcodes
+        addTestCase("AOT map hash key opcodes", \testAOTMapHashKeyOpcodes());
+        addTestCase("AOT direct-index map with heap results", \testAOTDirectIndexMapHeapResults());
         set_return_value(main());
     }
 
@@ -2034,5 +2037,100 @@ exit(0);
 
         assertEq("[Static] Hello\n42\n", out,
             "static members from strip-source module work correctly");
+    }
+
+    testAOTMapHashKeyOpcodes() {
+        # MapHashKeyValue: map $1.key, list<hash<auto>>
+        string code = "%modern
+list<hash<auto>> items = ({\"val\": \"a\"}, {\"val\": \"b\"}, {\"val\": \"c\"});
+list<auto> result = map $1.val, items;
+printf(\"%s:%s:%s\\n\", result[0], result[1], result[2]);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKeyValue matches interpreter");
+
+        # HashMapTwoKeys: map {$1.k1: $1.k2}, list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25});
+hash<auto> result = map {$1.name: $1.age}, items;
+printf(\"%d:%d\\n\", result.alice, result.bob);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT HashMapTwoKeys matches interpreter");
+
+        # HashMapTwoKeys with duplicate keys
+        code = "%modern
+list<hash<auto>> items = ({\"k\": \"x\", \"v\": 1}, {\"k\": \"x\", \"v\": 2}, {\"k\": \"y\", \"v\": 3});
+hash<auto> result = map {$1.k: $1.v}, items;
+printf(\"%d:%d:%d\\n\", result.size(), result.x, result.y);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT HashMapTwoKeys duplicate keys matches interpreter");
+
+        # MapHashKeyOffsetInt: map ($1.key + N), list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map ($1.val + 10), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKeyOffsetInt matches interpreter");
+
+        # MapHashKeyScaleInt: map ($1.key * N), list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 5}, {\"val\": 10}, {\"val\": 15});
+list<auto> result = map ($1.val * 3), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKeyScaleInt matches interpreter");
+
+        # Empty list edge case
+        code = "%modern
+list<hash<auto>> empty = ();
+list<auto> result = map $1.val, empty;
+printf(\"%s %d\\n\", result.type(), result.size());
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKey empty list matches interpreter");
+    }
+
+    testAOTDirectIndexMapHeapResults() {
+        # map with method call returning heap-allocated results (tests refSelf fix)
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> scaled = (map $1 * 2, nums);
+string result = (map $1.toString(), scaled).join(\",\");
+printf(\"%s\\n\", result);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT map toString over direct-index result");
+
+        # map with hash key access + computation
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map ($1.val + 1), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT map hash key add computation");
+
+        # Direct-index select on typed list
+        code = "%modern
+list<int> nums = (1, -2, 3, -4, 5);
+list<auto> pos = (select nums, $1 > 0);
+printf(\"%d\\n\", pos.size());
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT select on typed int list");
     }
 }
