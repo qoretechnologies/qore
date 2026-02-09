@@ -126,9 +126,12 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("runtime constants", \testRuntimeConstants());
         addTestCase("closure creation", \testClosureCreation());
         addTestCase("foldr native", \testFoldrNative());
+        addTestCase("empty-list fold min/max returns NOTHING", \testEmptyListFoldMinMax());
         addTestCase("map+select fused", \testMapSelectFused());
         addTestCase("hash map native", \testHashMapNative());
         addTestCase("hash map+select native", \testHashMapSelectNative());
+        addTestCase("hash map over typed hash list", \testHashMapOverTypedHashList());
+        addTestCase("map tuple over typed hash list", \testMapTupleOverTypedHashList());
         addTestCase("typed container construction", \testTypedContainerConstruction());
         addTestCase("call references", \testCallReferences());
         addTestCase("parse references", \testParseReferences());
@@ -3349,6 +3352,104 @@ printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
         }
     }
 
+    testEmptyListFoldMinMax() {
+        # Empty list foldl min should return NOTHING (not 0)
+        string foldl_min_empty = "%modern
+list<int> empty = ();
+auto result = (foldl min($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_min_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldl min empty list %s", mode));
+        }
+
+        # Empty list foldl max should return NOTHING (not 0)
+        string foldl_max_empty = "%modern
+list<int> empty = ();
+auto result = (foldl max($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_max_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldl max empty list %s", mode));
+        }
+
+        # Empty list foldr min should return NOTHING (not 0)
+        string foldr_min_empty = "%modern
+list<int> empty = ();
+auto result = (foldr min($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldr_min_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldr min empty list %s", mode));
+        }
+
+        # Empty list foldr max should return NOTHING (not 0)
+        string foldr_max_empty = "%modern
+list<int> empty = ();
+auto result = (foldr max($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldr_max_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldr max empty list %s", mode));
+        }
+
+        # Empty list foldl min float should return NOTHING (not 0.0)
+        string foldl_minf_empty = "%modern
+list<float> empty = ();
+auto result = (foldl min($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_minf_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldl min float empty list %s", mode));
+        }
+
+        # Empty list foldl max float should return NOTHING (not 0.0)
+        string foldl_maxf_empty = "%modern
+list<float> empty = ();
+auto result = (foldl max($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_maxf_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldl max float empty list %s", mode));
+        }
+
+        # Empty list foldr min float should return NOTHING
+        string foldr_minf_empty = "%modern
+list<float> empty = ();
+auto result = (foldr min($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldr_minf_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldr min float empty list %s", mode));
+        }
+
+        # Empty list foldr max float should return NOTHING
+        string foldr_maxf_empty = "%modern
+list<float> empty = ();
+auto result = (foldr max($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldr_maxf_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldr max float empty list %s", mode));
+        }
+    }
+
     testMapSelectFused() {
         # Basic map+select
         string code = "%modern
@@ -3462,6 +3563,94 @@ printf(\"%d\\n\", h.size());
             string result = trim(runScript(code, mode));
             assertEq("3", result,
                     sprintf("hash map+select filtering %s", mode));
+        }
+    }
+
+    testHashMapOverTypedHashList() {
+        # map {} over list<hash<auto>> — direct-index optimization with hash key access
+        string code = "%modern
+list<hash<auto>> people = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25});
+hash<auto> result = map {$1.name: $1.age}, people;
+printf(\"%d:%d\\n\", result.alice, result.bob);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:25", result,
+                    sprintf("hash map over typed hash list %s", mode));
+        }
+
+        # map {} over list<hash<auto>> with value computation
+        code = "%modern
+list<hash<auto>> items = ({\"k\": \"x\", \"v\": 10}, {\"k\": \"y\", \"v\": 20}, {\"k\": \"z\", \"v\": 30});
+hash<auto> result = map {$1.k: $1.v * 2}, items;
+printf(\"%d:%d:%d\\n\", result.x, result.y, result.z);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("20:40:60", result,
+                    sprintf("hash map over typed hash list computation %s", mode));
+        }
+
+        # empty list<hash<auto>> — should return empty hash
+        code = "%modern
+list<hash<auto>> empty = ();
+hash<auto> result = map {$1.name: $1.age}, empty;
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("0", result,
+                    sprintf("hash map over empty typed hash list %s", mode));
+        }
+
+        # map {} over list<hash<auto>> with select
+        code = "%modern
+list<hash<auto>> people = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25}, {\"name\": \"charlie\", \"age\": 35});
+hash<auto> result = map {$1.name: $1.age}, people, $1.age > 28;
+printf(\"%d:%d\\n\", result.size(), result.alice + result.charlie);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2:65", result,
+                    sprintf("hash map+select over typed hash list %s", mode));
+        }
+    }
+
+    testMapTupleOverTypedHashList() {
+        # map () over list<hash<auto>> — direct-index with tuple construction
+        string code = "%modern
+list<hash<auto>> people = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25});
+list<auto> result = map ($1.name, $1.age), people;
+printf(\"%s:%d:%s:%d\\n\", result[0][0], result[0][1], result[1][0], result[1][1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("alice:30:bob:25", result,
+                    sprintf("map tuple over typed hash list %s", mode));
+        }
+
+        # map with hash key access and computation
+        code = "%modern
+list<hash<auto>> items = ({\"x\": 10, \"y\": 20}, {\"x\": 30, \"y\": 40});
+list<int> sums = map ($1.x + $1.y), items;
+printf(\"%d:%d\\n\", sums[0], sums[1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:70", result,
+                    sprintf("map hash key access computation %s", mode));
+        }
+
+        # map single hash key access
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<int> vals = map $1.val, items;
+printf(\"%d\\n\", (foldl $1 + $2, vals));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("6", result,
+                    sprintf("map single hash key access %s", mode));
         }
     }
 

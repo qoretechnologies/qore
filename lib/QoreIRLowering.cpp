@@ -7128,11 +7128,148 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
     // e[0] = key expression, e[1] = value expression, e[2] = iterator/input
 
+    // Check if the input list has a known element type for direct-index optimization
+    const QoreTypeInfo* list_type = hm->get(2).getTypeInfo();
+    const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+    bool use_direct_index = (elem_type != nullptr);
+
     // Evaluate the input (operand 2)
     QoreIRValue input_list = lowerExpression(hm->get(2), error);
     if (!input_list.isValid()) {
         return QoreIRValue();
     }
+
+    if (use_direct_index) {
+        // Direct-index loop: avoid iterator overhead for typed lists
+        QoreIRValue list_size = builder.createListSize(input_list, hm->loc)->result;
+
+        // Create blocks AFTER evaluating the input expression
+        QoreIRBasicBlock* empty_check_block = createBlock("hashmap.empty.check");
+        QoreIRBasicBlock* preheader_block = createBlock("hashmap.preheader");
+        QoreIRBasicBlock* header_block = createBlock("hashmap.header");
+        QoreIRBasicBlock* body_block = createBlock("hashmap.body");
+        QoreIRBasicBlock* exit_block = createBlock("hashmap.exit");
+        if (!empty_check_block || !preheader_block || !header_block || !body_block || !exit_block) {
+            error = "IR builder failed to create blocks for hash map";
+            return QoreIRValue();
+        }
+        header_block->is_loop_header = true;
+
+        builder.createBranch(empty_check_block, hm->loc);
+
+        // Empty check: if size == 0, return empty hash
+        builder.setBlock(empty_check_block);
+        QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
+        QoreIRValue is_empty = builder.createBinaryOp(QoreIROpcode::EqInt, list_size, zero, hm->loc)->result;
+        builder.createBranchIf(is_empty, exit_block, preheader_block, hm->loc);
+
+        // Preheader: create empty result hash and proceed to loop
+        builder.setBlock(preheader_block);
+        QoreIRValue result_hash = builder.createMakeHash({}, hm->loc)->result;
+        builder.createBranch(header_block, hm->loc);
+
+        // Header block: check if index < size
+        builder.setBlock(header_block);
+
+        auto* index_phi = builder.createPhi({}, hm->loc);
+        QoreIRValue index_val = index_phi->result;
+
+        QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
+            hm->loc)->result;
+        builder.createBranchIf(at_end, exit_block, body_block, hm->loc);
+
+        // Body block: load element, evaluate key and value, insert into hash
+        builder.setBlock(body_block);
+
+        // Load element at current index
+        QoreIRValue element_val = builder.createListGetValue(input_list, index_val, hm->loc)->result;
+
+        // Set virtual implicit context: $1 = element, $# = index
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = element_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = index_val;
+        virtual_implicit.active = true;
+
+        // Lower key and value expressions — track AST delegation
+        int saved_ast_count = ast_delegate_count;
+
+        QoreIRValue key_result = lowerExpression(hm->get(0), error);
+        if (!key_result.isValid()) {
+            virtual_implicit = saved;
+            return QoreIRValue();
+        }
+
+        QoreIRValue value_result = lowerExpression(hm->get(1), error);
+        if (!value_result.isValid()) {
+            virtual_implicit = saved;
+            return QoreIRValue();
+        }
+
+        // Restore virtual context
+        virtual_implicit = saved;
+
+        bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
+        if (needs_implicit_push) {
+            // Body contains AST-delegated calls: insert push/pop implicit args
+            QoreIRFunction* func = builder.getFunction();
+
+            auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
+            push_elem->result = func->createValue();
+            push_elem->operands.push_back(index_val);
+            push_elem->loc = hm->loc;
+            QoreIRValue old_element = push_elem->result;
+
+            auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
+            push_argv->result = func->createValue();
+            push_argv->operands.push_back(element_val);
+            push_argv->loc = hm->loc;
+            QoreIRValue old_argv = push_argv->result;
+
+            // Insert after element load instruction in body_block
+            size_t insert_pos = 1;
+            body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
+                std::move(push_elem));
+            body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
+                std::move(push_argv));
+
+            // Pop after body expression (in current block which may be invoke.cont)
+            builder.createPopImplicitArg(old_argv, hm->loc);
+            builder.createPopImplicitElement(old_element, hm->loc);
+        }
+
+        // Set key-value in hash
+        builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc);
+
+        // Increment index
+        QoreIRValue one = builder.createConstInt(1, hm->loc)->result;
+        QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, hm->loc)->result;
+
+        QoreIRBasicBlock* body_exit_block = builder.getBlock();
+
+        // Branch back to header
+        builder.createBranch(header_block, hm->loc);
+
+        // Complete PHI nodes
+        index_phi->incoming.push_back({zero, preheader_block});
+        index_phi->incoming.push_back({next_index, body_exit_block});
+        index_phi->operands.push_back(zero);
+        index_phi->operands.push_back(next_index);
+
+        // Exit block: PHI between empty hash (empty) and result_hash
+        builder.setBlock(exit_block);
+
+        QoreIRValue empty_hash = builder.createMakeHash({}, hm->loc)->result;
+
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({empty_hash, empty_check_block});    // Empty list
+        result_incoming.push_back({result_hash, header_block});        // Normal loop exit
+        auto* result_phi = builder.createPhi(result_incoming, hm->loc);
+
+        return result_phi->result;
+    }
+
+    // Fallback: iterator-based loop for untyped lists
 
     // Create iterator from input
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, hm->loc);
@@ -7171,12 +7308,8 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, hm->loc);
     QoreIRValue element_val = next_inst->result;
 
-    // Body block: push implicit args, evaluate key and value expressions
+    // Body block: evaluate key and value expressions
     builder.setBlock(body_block);
-
-    // Push implicit args to thread-local stack (needed for AST-delegated sub-expressions)
-    QoreIRValue old_element_hm = builder.createPushImplicitElement(index_val, hm->loc)->result;
-    QoreIRValue old_argv_hm = builder.createPushImplicitArg(element_val, hm->loc)->result;
 
     // Set virtual implicit context: $1 = element, $# = index (fast path for IR-lowered refs)
     VirtualImplicitContext saved = virtual_implicit;
@@ -7185,27 +7318,54 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     virtual_implicit.element = index_val;
     virtual_implicit.active = true;
 
-    // Lower the key expression (operand 0)
+    // Lower key and value expressions — track AST delegation
+    int saved_ast_count = ast_delegate_count;
+
     QoreIRValue key_result = lowerExpression(hm->get(0), error);
     if (!key_result.isValid()) {
         virtual_implicit = saved;
         return QoreIRValue();
     }
 
-    // Lower the value expression (operand 1)
     QoreIRValue value_result = lowerExpression(hm->get(1), error);
     if (!value_result.isValid()) {
         virtual_implicit = saved;
         return QoreIRValue();
     }
 
+    // Restore virtual context
+    virtual_implicit = saved;
+
+    bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
+    if (needs_implicit_push) {
+        // Body contains AST-delegated calls: insert push/pop
+        QoreIRFunction* func = builder.getFunction();
+
+        auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
+        push_elem->result = func->createValue();
+        push_elem->operands.push_back(index_val);
+        push_elem->loc = hm->loc;
+        QoreIRValue old_element = push_elem->result;
+
+        auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
+        push_argv->result = func->createValue();
+        push_argv->operands.push_back(element_val);
+        push_argv->loc = hm->loc;
+        QoreIRValue old_argv = push_argv->result;
+
+        // Insert after start of body_block (which follows IteratorNext)
+        size_t insert_pos = 0;
+        body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
+            std::move(push_elem));
+        body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
+            std::move(push_argv));
+
+        builder.createPopImplicitArg(old_argv, hm->loc);
+        builder.createPopImplicitElement(old_element, hm->loc);
+    }
+
     // Set key-value in hash
     builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc);
-
-    // Restore virtual context and thread-local stack
-    virtual_implicit = saved;
-    builder.createPopImplicitArg(old_argv_hm, hm->loc);
-    builder.createPopImplicitElement(old_element_hm, hm->loc);
 
     // Increment index
     QoreIRValue one = builder.createConstInt(1, hm->loc)->result;
@@ -7246,11 +7406,171 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
 
     // e[0] = key expression, e[1] = value expression, e[2] = iterator/input, e[3] = select predicate
 
+    // Check if the input list has a known element type for direct-index optimization
+    const QoreTypeInfo* list_type = hms->get(2).getTypeInfo();
+    const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+    bool use_direct_index = (elem_type != nullptr);
+
     // Evaluate the input (operand 2)
     QoreIRValue input_list = lowerExpression(hms->get(2), error);
     if (!input_list.isValid()) {
         return QoreIRValue();
     }
+
+    if (use_direct_index) {
+        // Direct-index loop: avoid iterator overhead for typed lists
+        QoreIRValue list_size = builder.createListSize(input_list, hms->loc)->result;
+
+        // Create blocks AFTER evaluating the input expression
+        QoreIRBasicBlock* empty_check_block = createBlock("hashmapselect.empty.check");
+        QoreIRBasicBlock* preheader_block = createBlock("hashmapselect.preheader");
+        QoreIRBasicBlock* header_block = createBlock("hashmapselect.header");
+        QoreIRBasicBlock* body_block = createBlock("hashmapselect.body");
+        QoreIRBasicBlock* insert_block = createBlock("hashmapselect.insert");
+        QoreIRBasicBlock* cont_block = createBlock("hashmapselect.cont");
+        QoreIRBasicBlock* exit_block = createBlock("hashmapselect.exit");
+        if (!empty_check_block || !preheader_block || !header_block || !body_block
+                || !insert_block || !cont_block || !exit_block) {
+            error = "IR builder failed to create blocks for hash map+select";
+            return QoreIRValue();
+        }
+        header_block->is_loop_header = true;
+
+        builder.createBranch(empty_check_block, hms->loc);
+
+        // Empty check: if size == 0, return empty hash
+        builder.setBlock(empty_check_block);
+        QoreIRValue zero = builder.createConstInt(0, hms->loc)->result;
+        QoreIRValue is_empty = builder.createBinaryOp(QoreIROpcode::EqInt, list_size, zero, hms->loc)->result;
+        builder.createBranchIf(is_empty, exit_block, preheader_block, hms->loc);
+
+        // Preheader: create empty result hash and proceed to loop
+        builder.setBlock(preheader_block);
+        QoreIRValue result_hash = builder.createMakeHash({}, hms->loc)->result;
+        builder.createBranch(header_block, hms->loc);
+
+        // Header block: check if index < size
+        builder.setBlock(header_block);
+
+        auto* index_phi = builder.createPhi({}, hms->loc);
+        QoreIRValue index_val = index_phi->result;
+
+        QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
+            hms->loc)->result;
+        builder.createBranchIf(at_end, exit_block, body_block, hms->loc);
+
+        // Body block: load element, evaluate predicate
+        builder.setBlock(body_block);
+
+        // Load element at current index
+        QoreIRValue element_val = builder.createListGetValue(input_list, index_val, hms->loc)->result;
+
+        // Set virtual implicit context: $1 = element, $# = index
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = element_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = index_val;
+        virtual_implicit.active = true;
+
+        // Lower all body expressions — track AST delegation
+        int saved_ast_count = ast_delegate_count;
+
+        // Lower the select predicate (operand 3)
+        QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
+        if (!predicate_result.isValid()) {
+            virtual_implicit = saved;
+            return QoreIRValue();
+        }
+
+        // Convert predicate to bool
+        QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result,
+            hms->loc)->result;
+
+        // Branch based on predicate
+        builder.createBranchIf(predicate_bool, insert_block, cont_block, hms->loc);
+
+        // Insert block: evaluate key and value, insert into hash
+        builder.setBlock(insert_block);
+
+        QoreIRValue key_result = lowerExpression(hms->get(0), error);
+        if (!key_result.isValid()) {
+            virtual_implicit = saved;
+            return QoreIRValue();
+        }
+
+        QoreIRValue value_result = lowerExpression(hms->get(1), error);
+        if (!value_result.isValid()) {
+            virtual_implicit = saved;
+            return QoreIRValue();
+        }
+
+        // Set key-value in hash
+        builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc);
+        builder.createBranch(cont_block, hms->loc);
+
+        // Continue block: restore virtual context
+        builder.setBlock(cont_block);
+        virtual_implicit = saved;
+
+        bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
+        if (needs_implicit_push) {
+            // Body contains AST-delegated calls: insert push/pop implicit args
+            QoreIRFunction* func = builder.getFunction();
+
+            auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
+            push_elem->result = func->createValue();
+            push_elem->operands.push_back(index_val);
+            push_elem->loc = hms->loc;
+            QoreIRValue old_element = push_elem->result;
+
+            auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
+            push_argv->result = func->createValue();
+            push_argv->operands.push_back(element_val);
+            push_argv->loc = hms->loc;
+            QoreIRValue old_argv = push_argv->result;
+
+            // Insert after element load instruction in body_block
+            size_t insert_pos = 1;
+            body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
+                std::move(push_elem));
+            body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
+                std::move(push_argv));
+
+            // Pop in cont block (reached from both insert and skip paths)
+            builder.createPopImplicitArg(old_argv, hms->loc);
+            builder.createPopImplicitElement(old_element, hms->loc);
+        }
+
+        // Increment index
+        QoreIRValue one = builder.createConstInt(1, hms->loc)->result;
+        QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,
+            hms->loc)->result;
+
+        QoreIRBasicBlock* cont_exit_block = builder.getBlock();
+
+        // Branch back to header
+        builder.createBranch(header_block, hms->loc);
+
+        // Complete PHI nodes
+        index_phi->incoming.push_back({zero, preheader_block});
+        index_phi->incoming.push_back({next_index, cont_exit_block});
+        index_phi->operands.push_back(zero);
+        index_phi->operands.push_back(next_index);
+
+        // Exit block: PHI between empty hash (empty) and result_hash
+        builder.setBlock(exit_block);
+
+        QoreIRValue empty_hash = builder.createMakeHash({}, hms->loc)->result;
+
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({empty_hash, empty_check_block});    // Empty list
+        result_incoming.push_back({result_hash, header_block});        // Normal loop exit
+        auto* result_phi = builder.createPhi(result_incoming, hms->loc);
+
+        return result_phi->result;
+    }
+
+    // Fallback: iterator-based loop for untyped lists
 
     // Create iterator from input
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, hms->loc);
@@ -7292,19 +7612,18 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, hms->loc);
     QoreIRValue element_val = next_inst->result;
 
-    // Body block: push implicit args, evaluate select predicate
+    // Body block: evaluate select predicate
     builder.setBlock(body_block);
 
-    // Push implicit args to thread-local stack (needed for AST-delegated sub-expressions)
-    QoreIRValue old_element_hms = builder.createPushImplicitElement(index_val, hms->loc)->result;
-    QoreIRValue old_argv_hms = builder.createPushImplicitArg(element_val, hms->loc)->result;
-
-    // Set virtual implicit context: $1 = element, $# = index (fast path for IR-lowered refs)
+    // Set virtual implicit context: $1 = element, $# = index
     VirtualImplicitContext saved = virtual_implicit;
     virtual_implicit.arg0 = element_val;
     virtual_implicit.arg1 = QoreIRValue();
     virtual_implicit.element = index_val;
     virtual_implicit.active = true;
+
+    // Lower all body expressions — track AST delegation
+    int saved_ast_count = ast_delegate_count;
 
     // Lower the select predicate (operand 3)
     QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
@@ -7322,14 +7641,12 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     // Insert block: evaluate key and value, insert into hash
     builder.setBlock(insert_block);
 
-    // Lower the key expression (operand 0)
     QoreIRValue key_result = lowerExpression(hms->get(0), error);
     if (!key_result.isValid()) {
         virtual_implicit = saved;
         return QoreIRValue();
     }
 
-    // Lower the value expression (operand 1)
     QoreIRValue value_result = lowerExpression(hms->get(1), error);
     if (!value_result.isValid()) {
         virtual_implicit = saved;
@@ -7340,13 +7657,36 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc);
     builder.createBranch(cont_block, hms->loc);
 
-    // Continue block: increment index, loop back
+    // Continue block: restore virtual context
     builder.setBlock(cont_block);
-
-    // Restore virtual context and thread-local stack
     virtual_implicit = saved;
-    builder.createPopImplicitArg(old_argv_hms, hms->loc);
-    builder.createPopImplicitElement(old_element_hms, hms->loc);
+
+    bool needs_implicit_push = (ast_delegate_count > saved_ast_count);
+    if (needs_implicit_push) {
+        // Body contains AST-delegated calls: insert push/pop
+        QoreIRFunction* func = builder.getFunction();
+
+        auto push_elem = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
+        push_elem->result = func->createValue();
+        push_elem->operands.push_back(index_val);
+        push_elem->loc = hms->loc;
+        QoreIRValue old_element = push_elem->result;
+
+        auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
+        push_argv->result = func->createValue();
+        push_argv->operands.push_back(element_val);
+        push_argv->loc = hms->loc;
+        QoreIRValue old_argv = push_argv->result;
+
+        size_t insert_pos = 0;
+        body_block->instructions.insert(body_block->instructions.begin() + insert_pos,
+            std::move(push_elem));
+        body_block->instructions.insert(body_block->instructions.begin() + insert_pos + 1,
+            std::move(push_argv));
+
+        builder.createPopImplicitArg(old_argv, hms->loc);
+        builder.createPopImplicitElement(old_element, hms->loc);
+    }
 
     // Increment index
     QoreIRValue one = builder.createConstInt(1, hms->loc)->result;

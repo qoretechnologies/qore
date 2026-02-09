@@ -32,6 +32,7 @@
 #ifndef _QORE_QOREIRTOLLVM_H
 #define _QORE_QOREIRTOLLVM_H
 
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -436,6 +437,38 @@ private:
     // is_eq=true for EqHard (===), false for NeHard (!==).
     llvm::Value* emitHardEqualityFastPath(bool is_eq, llvm::Value* lhs, llvm::Value* rhs,
             llvm::Function* llvm_func, llvm::Module& module);
+
+    //! Emit a forward-iteration fold loop over a list.
+    //! @param inst the IR instruction (for result id + operand)
+    //! @param module LLVM module
+    //! @param llvm_func LLVM function
+    //! @param label block name prefix (e.g., "foldl_sum")
+    //! @param is_float true for float element access, false for int
+    //! @param identity_val initial accumulator for identity-init opcodes (sum→0, prod→1);
+    //!        nullptr for first-element-init opcodes (diff/min/max)
+    //! @param empty_nothing true if empty list returns NOTHING (min/max); false returns identity/0
+    //! @param accumulate lambda (acc, elem) → new_acc
+    //! @param error error string for reporting
+    //! @return true on success
+    bool emitFoldLoop(const QoreIRInstruction* inst, llvm::Module& module,
+            llvm::Function* llvm_func, const char* label, bool is_float,
+            llvm::Value* identity_val, bool empty_nothing,
+            std::function<llvm::Value*(llvm::Value*, llvm::Value*)> accumulate,
+            std::string& error);
+
+    //! Emit a reverse-iteration fold loop over a list (for FoldrDiff only).
+    //! @param inst the IR instruction (for result id + operand)
+    //! @param module LLVM module
+    //! @param llvm_func LLVM function
+    //! @param label block name prefix (e.g., "foldr_diff")
+    //! @param is_float true for float element access, false for int
+    //! @param accumulate lambda (acc, elem) → new_acc
+    //! @param error error string for reporting
+    //! @return true on success
+    bool emitFoldReverseLoop(const QoreIRInstruction* inst, llvm::Module& module,
+            llvm::Function* llvm_func, const char* label, bool is_float,
+            std::function<llvm::Value*(llvm::Value*, llvm::Value*)> accumulate,
+            std::string& error);
 };
 
 #endif
