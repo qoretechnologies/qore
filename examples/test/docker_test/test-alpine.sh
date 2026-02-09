@@ -39,12 +39,27 @@ fi
 
 find / -name "libqore.so*" -exec rm -f {} \;
 
+# ensure LLVM dev libraries are installed (needed for JIT/AOT)
+if ! ls /usr/lib/llvm*/lib/libLLVM*.a 1>/dev/null 2>&1 && \
+   ! ls /usr/lib/llvm*/lib/libLLVM*.so 1>/dev/null 2>&1; then
+    echo "-- installing llvm-dev --"
+    apk add --no-cache llvm-dev
+fi
+
+# ensure CMAKE_PREFIX_PATH includes LLVM (for images without it in env.sh)
+if [ -z "${CMAKE_PREFIX_PATH}" ]; then
+    LLVM_PREFIX=$(ls -d /usr/lib/llvm* 2>/dev/null | sort -V | tail -1)
+    if [ -n "$LLVM_PREFIX" ]; then
+        export CMAKE_PREFIX_PATH="${LLVM_PREFIX}"
+    fi
+fi
+
 # build Qore and install
 echo && echo "-- building Qore --"
 cd ${QORE_SRC_DIR}
 mkdir build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 make -j${MAKE_JOBS}
 make install
 

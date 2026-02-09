@@ -35,6 +35,7 @@
 
 #define _QORE_QOREPROGRAM_H
 
+#include <qore/common.h>
 #include <qore/AbstractPrivateData.h>
 #include <qore/Restrictions.h>
 #include <qore/OutputStream.h>
