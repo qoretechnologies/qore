@@ -20,13 +20,21 @@ mkdir -p "${BUILD_DIR}"
 echo "=== Building Qore on macOS ==="
 cd "${BUILD_DIR}"
 
-# Find LLVM installation (Homebrew, manual install, or llvm-config)
+# Find LLVM installation (Homebrew, MacPorts, manual install, or llvm-config)
 LLVM_PREFIX=""
 for dir in /opt/homebrew/opt/llvm /usr/local/opt/llvm /opt/homebrew/opt/llvm@* /usr/local/opt/llvm@*; do
     if [ -d "$dir" ]; then
         LLVM_PREFIX="$dir"
     fi
 done
+# Check MacPorts (highest version)
+if [ -z "$LLVM_PREFIX" ]; then
+    for dir in /opt/local/libexec/llvm-*; do
+        if [ -d "$dir" ]; then
+            LLVM_PREFIX="$dir"
+        fi
+    done
+fi
 # Check for manually installed LLVM (e.g., /usr/local/Cellar/llvm/*)
 if [ -z "$LLVM_PREFIX" ]; then
     for dir in /usr/local/Cellar/llvm/*/lib/cmake/llvm; do
