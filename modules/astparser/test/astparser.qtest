@@ -484,6 +484,7 @@ sub test() {
         addTestCase("Find type members - namespace", \testFindTypeMembersNamespace());
         addTestCase("Find type members - enum", \testFindTypeMembersEnum());
         addTestCase("Find type members - inheritance", \testFindTypeMembersInheritance());
+        addTestCase("Resolve definition", \testResolveDefinition());
 %endif
 %endif
         set_return_value(main());
@@ -2966,6 +2967,89 @@ class Child inherits Base {
             }
         }
         assertEq(False, hasBase, "no base members without inheritance");
+    }
+
+    testResolveDefinition() {
+        # Test code with various symbol kinds:
+        # Line 0: (empty)
+        # Line 1: %new-style
+        # Line 2: class Calculator {
+        # Line 3:     private { int total = 0; }
+        # Line 4:     constructor(int initial) { total = initial; }
+        # Line 5:     int add(int n) { total += n; return total; }
+        # Line 6:     static int zero() { return 0; }
+        # Line 7: }
+        # Line 8: sub helper(int x) { return x + 1; }
+        # Line 9: Calculator calc(10);
+        # Line 10: calc.add(5);
+        # Line 11: int result = helper(calc.add(3));
+        # Line 12: Calculator::zero();
+        # Line 13: foreach int item in ((1, 2, 3)) { printf("%d", item); }
+        string testCode = "
+%new-style
+class Calculator {
+    private { int total = 0; }
+    constructor(int initial) { total = initial; }
+    int add(int n) { total += n; return total; }
+    static int zero() { return 0; }
+}
+sub helper(int x) { return x + 1; }
+Calculator calc(10);
+calc.add(5);
+int result = helper(calc.add(3));
+Calculator::zero();
+foreach int item in ((1, 2, 3)) { printf(\"%d\", item); }
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "resolveDefinition: no parse errors");
+
+        AstTreeSearcher searcher();
+
+        # Test: class reference "Calculator" in "Calculator calc(10)" → class declaration
+        # "Calculator" on line 9, col 0
+        *list<auto> resolved = searcher.resolveDefinition(tree, "test.q", 9, 0);
+        assertTrue(exists resolved, "resolveDefinition: class reference resolved");
+        if (resolved) {
+            assertEq(1, resolved.size(), "resolveDefinition: one class result");
+            assertEq(2, resolved[0].range.start.line,
+                "resolveDefinition: class points to line 2");
+        }
+
+        # Test: function call "helper" in "helper(calc.add(3))" → function decl
+        # "helper" on line 11, col 13
+        resolved = searcher.resolveDefinition(tree, "test.q", 11, 13);
+        assertTrue(exists resolved, "resolveDefinition: function ref resolved");
+        if (resolved) {
+            assertEq(1, resolved.size(), "resolveDefinition: one func result");
+            assertEq(8, resolved[0].range.start.line,
+                "resolveDefinition: function points to line 8");
+        }
+
+        # Test: already at declaration → returns NOTHING
+        # "Calculator" on line 2 col 6 (the name in "class Calculator")
+        resolved = searcher.resolveDefinition(tree, "test.q", 2, 6);
+        assertEq(NOTHING, resolved, "resolveDefinition: at declaration returns NOTHING");
+
+        # Test: local variable "calc" in "calc.add(5)" → variable declaration
+        # "calc" on line 10, col 0
+        resolved = searcher.resolveDefinition(tree, "test.q", 10, 0);
+        assertTrue(exists resolved, "resolveDefinition: local var resolved");
+        if (resolved) {
+            assertEq(1, resolved.size(), "resolveDefinition: one local var result");
+            assertEq(9, resolved[0].range.start.line,
+                "resolveDefinition: local var points to line 9");
+        }
+
+        # Test: foreach variable "item" in printf → foreach iterator declaration
+        # "item" at line 13, col 47
+        resolved = searcher.resolveDefinition(tree, "test.q", 13, 47);
+        assertTrue(exists resolved, "resolveDefinition: foreach var resolved");
+        if (resolved) {
+            assertEq(1, resolved.size(), "resolveDefinition: one foreach var result");
+            assertEq(13, resolved[0].range.start.line,
+                "resolveDefinition: foreach var points to line 13");
+        }
     }
 
 %endif

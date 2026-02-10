@@ -155,6 +155,32 @@ public class QoreReplTest inherits QUnit::Test {
         addTestCase("getCompletionDetails", \testGetCompletionDetails());
         addTestCase("WebSocket completion", \testWebSocketCompletion());
 
+        # Auto-promote to global tests
+        addTestCase("Auto-promote: typed variable declarations", \testAutoPromoteTyped());
+        addTestCase("Auto-promote: class instances", \testAutoPromoteClassInstance());
+        addTestCase("Auto-promote: skip functions and keywords", \testAutoPromoteSkipFunctions());
+
+        # Static method completion tests
+        addTestCase("Static method completion", \testStaticMethodCompletion());
+
+        # ClassName:: suffix tests
+        addTestCase("Class scope suffix completion", \testClassScopeSuffix());
+
+        # No-arg callable () suffix tests
+        addTestCase("No-arg callable trailing )", \testNoArgCallableTrailingParen());
+
+        # Hints callback tests
+        addTestCase("Function signature hints", \testFunctionSignatureHints());
+
+        # CC_CALL argument completion tests
+        addTestCase("Call arg completion: after open paren", \testCallArgAfterParen());
+        addTestCase("Call arg completion: after comma", \testCallArgAfterComma());
+        addTestCase("Call arg completion: partial arg", \testCallArgPartial());
+
+        # Code variable hint tests
+        addTestCase("Code variable hints: typed closure", \testCodeVariableHints());
+        addTestCase("Code variable hints: bare code type", \testCodeVariableHintsBareCode());
+
         set_return_value(main());
     }
 
@@ -2452,6 +2478,314 @@ printf('OK');
         # Clean up
         unlink(temp_script);
 %endif
+    }
+
+    # ==================== Auto-promote tests ====================
+
+    testAutoPromoteTyped() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        # int x = 5 should be auto-promoted to global
+        *hash<auto> result = repl.eval("int x = 5");
+        assertTrue(exists result, "typed int should return result");
+        assertTrue(!result.error, "typed int should not error: " + (result.error.desc ?? ""));
+        assertEq(5, repl.getProgram().getGlobalVariable("x"), "x should be 5");
+
+        # string s = "hello" should be auto-promoted
+        result = repl.eval("string s = \"hello\"");
+        assertTrue(!result.error, "typed string should not error: " + (result.error.desc ?? ""));
+        assertEq("hello", repl.getProgram().getGlobalVariable("s"), "s should be 'hello'");
+
+        # *int nullable should be auto-promoted
+        result = repl.eval("*int nullable_val");
+        assertTrue(!result.error, "nullable typed should not error: " + (result.error.desc ?? ""));
+
+        # hash<auto> h should be auto-promoted
+        result = repl.eval("hash<auto> h = {\"a\": 1}");
+        assertTrue(!result.error, "hash<auto> should not error: " + (result.error.desc ?? ""));
+
+        # Already has 'our' — should not double-prefix
+        result = repl.eval("our float f = 3.14");
+        assertTrue(!result.error, "our float should not error: " + (result.error.desc ?? ""));
+
+        # Already has 'my' — should not be promoted
+        result = repl.eval("my int local_only = 99");
+        assertTrue(!result.error, "my int should not error: " + (result.error.desc ?? ""));
+    }
+
+    testAutoPromoteClassInstance() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        # Mutex m() should be auto-promoted — class name starts uppercase
+        *hash<auto> result = repl.eval("Mutex m()");
+        assertTrue(!result.error, "Mutex m() should not error: " + (result.error.desc ?? ""));
+        # Verify the variable is accessible
+        auto val = repl.getProgram().getGlobalVariable("m");
+        assertTrue(exists val, "m should exist as global");
+        assertEq("Mutex", val.className(), "m should be a Mutex");
+
+        # Counter c(1) should be auto-promoted
+        result = repl.eval("Counter c(1)");
+        assertTrue(!result.error, "Counter c(1) should not error: " + (result.error.desc ?? ""));
+        auto cval = repl.getProgram().getGlobalVariable("c");
+        assertTrue(exists cval, "c should exist as global");
+    }
+
+    testAutoPromoteSkipFunctions() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        # "int sub foo() { return 1; }" should NOT be promoted (second word is 'sub')
+        *hash<auto> result = repl.eval("int sub foo() { return 1; }");
+        assertTrue(!result.error, "function def should not error: " + (result.error.desc ?? ""));
+
+        # "string sub bar(int n) { return string(n); }" should NOT be promoted
+        result = repl.eval("string sub bar(int n) { return string(n); }");
+        assertTrue(!result.error, "function def with args should not error: " + (result.error.desc ?? ""));
+
+        # Verify the functions work
+        result = repl.eval("foo()");
+        assertTrue(!result.error, "foo() should not error");
+        assertEq(1, result.value, "foo() should return 1");
+
+        result = repl.eval("bar(42)");
+        assertTrue(!result.error, "bar(42) should not error");
+        assertEq("42", result.value, "bar(42) should return '42'");
+
+        # Control flow (if, while, etc.) should NOT be promoted
+        result = repl.eval("if (True) {}");
+        assertTrue(!result.error, "if statement should not error");
+
+        # Class names starting with uppercase as variable name should NOT be promoted
+        # e.g., "Mutex Foo" would have uppercase var name — should not promote
+        # (though this isn't valid Qore anyway, the logic should not promote it)
+    }
+
+    # ==================== Static method completion tests ====================
+
+    testStaticMethodCompletion() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        # TimeZone:: should show static methods
+        list<string> completions = repl.getCompletions("TimeZone::");
+        assertTrue(completions.size() > 0, "TimeZone:: should have completions");
+
+        # Check for known static methods
+        bool has_get = False;
+        foreach string c in (completions) {
+            if (c =~ /get\(/) {
+                has_get = True;
+            }
+        }
+        assertTrue(has_get, "TimeZone:: should include get( method");
+
+        # Mutex:: should show static methods (if any) or constants
+        completions = repl.getCompletions("Mutex::");
+        # Mutex doesn't have static methods — may be empty, that's fine
+    }
+
+    # ==================== Class scope suffix tests ====================
+
+    testClassScopeSuffix() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        # Completing "Mutex" in identifier context should offer both Mutex and Mutex::
+        list<string> completions = repl.getCompletions("Mutex");
+        bool has_plain = False;
+        bool has_scope = False;
+        foreach string c in (completions) {
+            if (c == "Mutex::") {
+                has_scope = True;
+            } else if (c == "Mutex") {
+                has_plain = True;
+            }
+        }
+        # Both Mutex (bare class name) and Mutex:: (scope) should be offered
+        assertTrue(has_scope, "Mutex should offer Mutex:: variant");
+        assertTrue(has_plain, "Mutex should offer Mutex variant");
+
+        # Completing "TimeZone" should offer TimeZone::
+        completions = repl.getCompletions("TimeZone");
+        has_scope = False;
+        foreach string c in (completions) {
+            if (c == "TimeZone::") {
+                has_scope = True;
+            }
+        }
+        assertTrue(has_scope, "TimeZone should offer TimeZone:: variant");
+    }
+
+    # ==================== No-arg callable trailing ) tests ====================
+
+    testNoArgCallableTrailingParen() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        # Create a Mutex so we can test its methods
+        repl.eval("Mutex m()");
+
+        # m.lock has two variants (no-arg and timeout arg) so should get "("
+        list<string> completions = repl.getCompletions("m.lock");
+        bool has_lock_open = False;
+        foreach string c in (completions) {
+            if (c == "m.lock(") {
+                has_lock_open = True;
+            }
+        }
+        assertTrue(has_lock_open, "m.lock should complete as m.lock( (multi-variant)");
+
+        # m.unlock has only one no-arg variant → should get "()"
+        completions = repl.getCompletions("m.unlock");
+        bool has_unlock_closed = False;
+        foreach string c in (completions) {
+            if (c == "m.unlock()") {
+                has_unlock_closed = True;
+            }
+        }
+        assertTrue(has_unlock_closed, "m.unlock should complete as m.unlock() (no-arg)");
+
+        # m.trylock has only one no-arg variant → should get "()"
+        completions = repl.getCompletions("m.trylock");
+        bool has_trylock_closed = False;
+        foreach string c in (completions) {
+            if (c == "m.trylock()") {
+                has_trylock_closed = True;
+            }
+        }
+        assertTrue(has_trylock_closed, "m.trylock should complete as m.trylock() (no-arg)");
+
+        # get_module_hash should complete with () since it takes no args
+        completions = repl.getCompletions("get_module_ha");
+        bool has_gmh_closed = False;
+        foreach string c in (completions) {
+            if (c == "get_module_hash()") {
+                has_gmh_closed = True;
+            }
+        }
+        assertTrue(has_gmh_closed, "get_module_hash should complete as get_module_hash()");
+
+        # printf should complete with ( since it takes args
+        completions = repl.getCompletions("printf");
+        bool has_printf_open = False;
+        foreach string c in (completions) {
+            if (c == "printf(") {
+                has_printf_open = True;
+            }
+        }
+        assertTrue(has_printf_open, "printf should complete as printf( (has args)");
+    }
+
+    # ==================== Hints callback tests ====================
+
+    testFunctionSignatureHints() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        # Test getHintText directly via the REPL
+        # We can't call the private getHintText directly, so we test via
+        # the hintsForInput method indirectly through the public API
+
+        # Define a function with known signature
+        repl.eval("int sub add(int a, int b) { return a + b; }");
+
+        # Test that the hints callback doesn't crash for various inputs
+        # (We can't directly test the linenoise rendering, but we verify
+        # the REPL loads without errors with the hints callback set)
+        *hash<auto> result = repl.eval("add(1, 2)");
+        assertTrue(!result.error, "add() call should not error");
+        assertEq(3, result.value, "add(1, 2) should return 3");
+    }
+
+    testCallArgAfterParen() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        # Define a variable so we have something to complete
+        repl.eval("our int testCallVar = 42;");
+
+        # TAB after "(" should return completions (CC_CALL dispatches to identifier completion)
+        softlist<string> completions = repl.getCompletions("printf(");
+        assertTrue(completions.size() > 0, "completions after ( should not be empty");
+
+        # Should include global variable
+        bool found = False;
+        foreach string c in (completions) {
+            if (c.find("testCallVar") >= 0) {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found, "scope variable should appear as arg candidate after (");
+    }
+
+    testCallArgAfterComma() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        repl.eval("our int testCommaVar = 99;");
+
+        # TAB after "," should return completions
+        softlist<string> completions = repl.getCompletions("printf(\"%d\", ");
+        assertTrue(completions.size() > 0, "completions after , should not be empty");
+
+        # Should include global variable
+        bool found = False;
+        foreach string c in (completions) {
+            if (c.find("testCommaVar") >= 0) {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found, "scope variable should appear as arg candidate after ,");
+    }
+
+    testCallArgPartial() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        repl.eval("our int testPartialVar = 7;");
+
+        # Partial arg "test" after ( should return completions via CC_IDENTIFIER
+        softlist<string> completions = repl.getCompletions("printf(testP");
+        bool found = False;
+        foreach string c in (completions) {
+            if (c.find("testPartialVar") >= 0) {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found, "partial arg should complete to scope variable");
+    }
+
+    testCodeVariableHints() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        # Define a typed code variable
+        repl.eval("our code<int(string, int)> myFunc = int sub (string s, int n) { return n; };");
+
+        # getHints should show the parameter types
+        *string hint = repl.getHints("myFunc(");
+        assertTrue(exists hint, "hint should exist for typed code variable");
+        assertTrue(hint.find("string") >= 0, "hint should contain 'string' parameter type");
+        assertTrue(hint.find("int") >= 0, "hint should contain 'int' parameter type");
+    }
+
+    testCodeVariableHintsBareCode() {
+        checkModule();
+        QoreRepl::QoreRepl repl();
+
+        # Define a bare code variable (untyped)
+        repl.eval("our code myCb = sub () {};");
+
+        # getHints should return a hint indicating unknown signature
+        *string hint = repl.getHints("myCb(");
+        assertTrue(exists hint, "hint should exist for bare code variable");
+        assertTrue(hint.find("unknown") >= 0, "hint should indicate signature is unknown");
     }
 }
 

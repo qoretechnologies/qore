@@ -390,6 +390,9 @@ if (!exists result) {
         # for expressions that don't already have a terminator.
         code = ensureTerminated(code);
 
+        # Auto-promote variable declarations to global scope so they persist
+        code = autoPromoteToGlobal(code);
+
         # Try to detect pure expressions so their value is displayed
         # This makes the REPL more intuitive - "1 + 1" will show "=> 2"
         string wrapped_code = wrapExpressionIfNeeded(code);
@@ -481,6 +484,111 @@ if (!exists result) {
 
         # Add semicolon for expressions and statements without terminator
         return trimmed + ";";
+    }
+
+    #! Type keywords that indicate a typed variable declaration
+    const TypeKeywords = {
+        "int": True,
+        "float": True,
+        "number": True,
+        "string": True,
+        "bool": True,
+        "date": True,
+        "binary": True,
+        "hash": True,
+        "list": True,
+        "object": True,
+        "auto": True,
+        "any": True,
+        "nothing": True,
+        "softint": True,
+        "softfloat": True,
+        "softnumber": True,
+        "softstring": True,
+        "softbool": True,
+        "softdate": True,
+        "softlist": True,
+        "timeout": True,
+        "code": True,
+        "reference": True,
+        "data": True,
+    };
+
+    #! Auto-promotes bare variable declarations to global scope
+    /** Detects patterns like "Type varName ..." and prepends "our " so the variable
+        persists across REPL evaluations. Without this, typed variable declarations
+        like "Mutex m()" or "int x = 1" would be local to the parse unit and lost.
+
+        @param code The code to check (already terminated with ;)
+        @return The code with "our " prepended if it's a variable declaration
+
+        @par Detection rules
+        - Skip if already has "our" or "my" prefix
+        - Extract first word (ignoring leading * for nullable types)
+        - Check if it's a known type keyword or starts with uppercase (class name)
+        - Verify the next identifier starts lowercase (variable name)
+        - Pattern: [*]Type[<params>] varName [= | ( | ;]
+    */
+    private string autoPromoteToGlobal(string code) {
+        string trimmed = ltrim(code);
+
+        # Skip if empty or already has scope qualifier
+        if (trimmed.length() == 0) {
+            return code;
+        }
+
+        # Check first word - skip if already scoped
+        *list<*string> first_match = (trimmed =~ x/^([a-zA-Z_][a-zA-Z0-9_]*)/);
+        if (first_match) {
+            string first_word = first_match[0];
+            if (first_word == "our" || first_word == "my") {
+                return code;
+            }
+        }
+
+        # Match pattern: [*]TypeName[<...>] varName
+        # The type can be a keyword (int, string, etc.) or start uppercase (class name)
+        # Allow leading * for nullable types
+        *list<*string> match = (trimmed =~ x/^\*?([a-zA-Z_][a-zA-Z0-9_]*)\s*(<[^>]*>)?\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
+        if (!match) {
+            return code;
+        }
+
+        string type_name = match[0];
+        string var_name = match[2];
+
+        # Check if the first identifier is a type
+        bool is_type = TypeKeywords{type_name} ?? False;
+        if (!is_type) {
+            # Class names start with uppercase
+            if (type_name[0] >= "A" && type_name[0] <= "Z") {
+                is_type = True;
+            }
+        }
+
+        if (!is_type) {
+            return code;
+        }
+
+        # Variable name should start with lowercase or underscore (not another type/class)
+        if (var_name[0] >= "A" && var_name[0] <= "Z") {
+            return code;
+        }
+
+        # Don't promote if the "variable name" is actually a keyword (e.g., "int sub foo()")
+        if (StatementKeywords{var_name}) {
+            return code;
+        }
+
+        # This looks like a variable declaration - promote to global
+        # Ensure it ends with ; since declarations always need a terminator
+        # (ensureTerminated may have skipped it for code ending with "}")
+        string promoted = "our " + code;
+        string trimmed_end = rtrim(promoted);
+        if (!trimmed_end.endsWith(";")) {
+            promoted = trimmed_end + ";";
+        }
+        return promoted;
     }
 
     #! Returns True if the REPL is waiting for more input
@@ -1528,6 +1636,7 @@ if (!exists result) {
         # Initialize linenoise
         Linenoise::history_set_max_len(MaxHistoryLen);
         Linenoise::set_callback(\completion());
+        Linenoise::set_hints_callback(\hintsForInput());
         Linenoise::set_auto_dedent(QoreCodeFormat::SourceEmitter::INDENT_STR, "}");
         loadHistoryFile();
 %endif
@@ -1683,6 +1792,264 @@ if (!exists result) {
         }
     }
 
+    #! Linenoise hints callback for inline argument display
+    /** @param input The current input line
+        @return A hint string to display after the cursor, or NOTHING
+    */
+    private auto hintsForInput(string input) {
+        try {
+            return getHintText(input);
+        } catch () {
+            # Never let hints crash the REPL
+        }
+    }
+
+    #! Computes hint text for the current input
+    /** Looks for an open function/method call and returns the signature.
+        @param input The current input line
+        @return A hint string, or NOTHING
+    */
+    private *string getHintText(string input) {
+        string trimmed = rtrim(input);
+        if (trimmed.length() == 0) {
+            return NOTHING;
+        }
+
+        # Find the function/method name before an unbalanced open paren
+        # Walk backward to find unbalanced '('
+        int depth = 0;
+        int paren_pos = -1;
+        for (int i = trimmed.length() - 1; i >= 0; i--) {
+            string c = trimmed[i];
+            if (c == ")") {
+                depth++;
+            } else if (c == "(") {
+                if (depth == 0) {
+                    paren_pos = i;
+                    break;
+                }
+                depth--;
+            }
+        }
+
+        if (paren_pos < 0) {
+            return NOTHING;
+        }
+
+        # Extract the function/method name before the paren
+        string before_paren = trimmed.substr(0, paren_pos);
+        before_paren = rtrim(before_paren);
+        if (before_paren.length() == 0) {
+            return NOTHING;
+        }
+
+        # Collect the identifier (and possible . or :: qualifier)
+        int name_end = before_paren.length();
+        int pos = name_end - 1;
+        while (pos >= 0 && (before_paren[pos] =~ /[a-zA-Z_0-9]/)) {
+            pos--;
+        }
+        string func_name = before_paren.substr(pos + 1);
+        if (func_name.length() == 0) {
+            return NOTHING;
+        }
+
+        # Check for . or :: before the name
+        string before_name = pos >= 0 ? before_paren.substr(0, pos + 1) : "";
+        before_name = rtrim(before_name);
+
+        *string sig;
+        if (before_name.length() > 0 && before_name[before_name.length() - 1] == ".") {
+            # Instance method call: target.method(
+            string target_before = before_name.substr(0, before_name.length() - 1);
+            string target = QoreCodeCompletion::CompletionEngine::collectTargetBackward(target_before);
+            sig = getMethodSignature(target, func_name);
+        } else if (before_name.length() >= 2
+                && before_name.substr(before_name.length() - 2) == "::") {
+            # Static method call: Class::method(
+            string target_before = before_name.substr(0, before_name.length() - 2);
+            string target = QoreCodeCompletion::CompletionEngine::collectTargetBackward(target_before);
+            sig = getStaticMethodSignature(target, func_name);
+        } else {
+            # Plain function call: func(
+            sig = getFunctionSignature(func_name);
+            if (!sig) {
+                # Try as a code variable (closure/callref)
+                sig = getCodeVariableSignature(func_name);
+            }
+        }
+
+        if (!sig) {
+            return NOTHING;
+        }
+
+        # Count the number of commas at depth 0 after the open paren to determine
+        # which parameter the user is currently typing
+        string after_paren = trimmed.substr(paren_pos + 1);
+        return " " + sig;
+    }
+
+    #! Gets the signature for a plain function
+    private *string getFunctionSignature(string name) {
+        try {
+            Reflection::Function f;
+            try {
+                f = Reflection::Function::forName(pgm, name);
+            } catch () {
+                f = Reflection::Function::forName(name);
+            }
+            list<Reflection::FunctionVariant> variants = f.getVariants();
+            list<string> sigs = ();
+            foreach Reflection::FunctionVariant v in (variants) {
+                sigs += formatVariantParams(v);
+            }
+            return sigs.join(" | ");
+        } catch () {
+            # Not found
+        }
+        return NOTHING;
+    }
+
+    #! Gets the signature hint for a code variable (closure or callref)
+    private *string getCodeVariableSignature(string name) {
+        try {
+            Reflection::GlobalVar gv = Reflection::GlobalVar::forName(pgm, name);
+            Reflection::Type t = gv.getType();
+            string type_name = t.getName();
+            # Parse code<ReturnType(ParamTypes)> pattern
+            *list<*string> match = (type_name =~ x/^code<(.+)\(([^)]*)\)>$/);
+            if (match) {
+                *string params = match[1];
+                if (!params || params.length() == 0) {
+                    return "(no args)";
+                }
+                return params;
+            }
+            # Bare "code" type — no signature info available
+            if (type_name == "code") {
+                return "(code - signature unknown)";
+            }
+        } catch () {
+            # Not found
+        }
+        return NOTHING;
+    }
+
+    #! Resolves a variable or type name to a Reflection::Class
+    private *Reflection::Class resolveTypeForHints(string name) {
+        # Try from global variables first
+        try {
+            hash<auto> vars = pgm.getGlobalVars();
+            if (exists vars{name}) {
+                auto val = vars{name};
+                if (val.typeCode() == NT_OBJECT) {
+                    string class_name = val.className();
+                    try {
+                        return Reflection::Class::forName(pgm, class_name);
+                    } catch () {
+                        return Reflection::Class::forName(class_name);
+                    }
+                }
+            }
+        } catch () {
+            # Ignore
+        }
+
+        # Fall back: try as a class name
+        try {
+            return Reflection::Class::forName(pgm, name);
+        } catch () {
+            try {
+                return Reflection::Class::forName(name);
+            } catch () {
+                # Not resolvable
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Gets the signature for an instance method
+    private *string getMethodSignature(string target, string method_name) {
+        *Reflection::Class cls = resolveTypeForHints(target);
+        if (!cls) {
+            return NOTHING;
+        }
+        try {
+            Reflection::AbstractMethod m = cls.getNormalMethod(method_name);
+            list<Reflection::AbstractMethodVariant> variants = m.getVariants();
+            list<string> sigs = ();
+            foreach Reflection::AbstractMethodVariant v in (variants) {
+                sigs += formatMethodVariantParams(v);
+            }
+            return sigs.join(" | ");
+        } catch () {
+            # Not found
+        }
+        return NOTHING;
+    }
+
+    #! Gets the signature for a static method
+    private *string getStaticMethodSignature(string target, string method_name) {
+        try {
+            Reflection::Class cls;
+            try {
+                cls = Reflection::Class::forName(pgm, target);
+            } catch () {
+                cls = Reflection::Class::forName(target);
+            }
+            Reflection::AbstractMethod m = cls.getStaticMethod(method_name);
+            list<Reflection::AbstractMethodVariant> variants = m.getVariants();
+            list<string> sigs = ();
+            foreach Reflection::AbstractMethodVariant v in (variants) {
+                sigs += formatMethodVariantParams(v);
+            }
+            return sigs.join(" | ");
+        } catch () {
+            # Not found
+        }
+        return NOTHING;
+    }
+
+    #! Formats the parameter list of a function variant for hint display
+    private string formatVariantParams(Reflection::FunctionVariant v) {
+        list<Reflection::Type> param_types = v.getParamTypes();
+        if (param_types.size() == 0) {
+            return "(no args)";
+        }
+        list<string> param_names = v.getParamNames();
+        list<string> parts = ();
+        for (int i = 0; i < param_types.size(); i++) {
+            string type_name = param_types[i].getName();
+            *string param_name = i < param_names.size() ? param_names[i] : NOTHING;
+            if (param_name) {
+                parts += type_name + " " + param_name;
+            } else {
+                parts += type_name;
+            }
+        }
+        return parts.join(", ");
+    }
+
+    #! Formats the parameter list of a method variant for hint display
+    private string formatMethodVariantParams(Reflection::AbstractMethodVariant v) {
+        list<Reflection::Type> param_types = v.getParamTypes();
+        if (param_types.size() == 0) {
+            return "(no args)";
+        }
+        list<string> param_names = v.getParamNames();
+        list<string> parts = ();
+        for (int i = 0; i < param_types.size(); i++) {
+            string type_name = param_types[i].getName();
+            *string param_name = i < param_names.size() ? param_names[i] : NOTHING;
+            if (param_name) {
+                parts += type_name + " " + param_name;
+            } else {
+                parts += type_name;
+            }
+        }
+        return parts.join(", ");
+    }
+
     #! Returns full-line completions for a given input using context detection
     /** @param input The full input line
         @return A list of full-line completion strings
@@ -1704,7 +2071,7 @@ if (!exists result) {
         foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
             string label = item.label;
             if (item.isCallable) {
-                label += "(";
+                label += item.noArgsOnly ? "()" : "(";
             } else if (item.kind == "namespace") {
                 label += "::";
             }
@@ -1712,6 +2079,14 @@ if (!exists result) {
             if (!seen{full}) {
                 seen{full} = True;
                 result += full;
+            }
+            # For class items in CC_IDENTIFIER context, also offer ClassName::
+            if (item.kind == "class" && ctx.kind == QoreCodeCompletion::CC_IDENTIFIER) {
+                string scope_full = ctx.line_before + item.label + "::";
+                if (!seen{scope_full}) {
+                    seen{scope_full} = True;
+                    result += scope_full;
+                }
             }
         }
         return result;
@@ -1844,6 +2219,18 @@ if (!exists result) {
 %endif
     }
 
+    #! Returns hint text for the current input
+    /** @param input The current input line
+        @return A hint string, or NOTHING
+    */
+    *string getHints(string input) {
+        try {
+            return getHintText(input);
+        } catch () {
+            return NOTHING;
+        }
+    }
+
     #! Returns full-line completions for a given input
     /** @param input The input string to complete
         @return A list of full-line matching completions
@@ -1943,6 +2330,8 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
                         "label": name,
                         "kind": "method",
                         "isCallable": True,
+                        "noArgsOnly": isMethodNoArgsOnly(m),
+                        "detail": formatMethodVariantDetail(m),
                     };
                 }
             }
@@ -1982,7 +2371,8 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
         list<hash<QoreCodeCompletion::CompletionItem>> result = ();
         hash<string, bool> seen;
 
-        auto addItem = sub (string label, string kind, *string detail, bool callable = False) {
+        auto addItem = sub (string label, string kind, *string detail, bool callable = False,
+                bool no_args = False) {
             if (!seen{label}
                     && QoreCodeCompletion::CompletionEngine::matchesPrefix(label, prefix)) {
                 seen{label} = True;
@@ -1991,6 +2381,7 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
                     "kind": kind,
                     "detail": detail,
                     "isCallable": callable,
+                    "noArgsOnly": no_args,
                 };
             }
         };
@@ -2010,7 +2401,7 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
                 addItem(cls.getName(), "class");
             }
             foreach Reflection::Function f in (ns.getFunctions()) {
-                addItem(f.getName(), "function", NOTHING, True);
+                addItem(f.getName(), "function", formatVariantDetail(f), True, isNoArgsOnly(f));
             }
             foreach Reflection::Constant c in (ns.getConstants()) {
                 addItem(c.getName(), "constant");
@@ -2035,8 +2426,11 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
                 # Ignore
             }
             try {
-                foreach Reflection::AbstractMethod m in (cls.getStaticMethods()) {
-                    addItem(m.getName(), "method", NOTHING, True);
+                foreach Reflection::AbstractMethod m in (cls.getMethods()) {
+                    if (m.isStatic()) {
+                        addItem(m.getName(), "method", formatMethodVariantDetail(m), True,
+                            isMethodNoArgsOnly(m));
+                    }
                 }
             } catch () {
                 # Ignore
@@ -2096,6 +2490,62 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
         return NOTHING;
     }
 
+    #! Checks if a function has only a single no-argument variant
+    private bool isNoArgsOnly(Reflection::Function f) {
+        try {
+            list<Reflection::FunctionVariant> variants = f.getVariants();
+            if (variants.size() == 1 && variants[0].getParamTypes().size() == 0) {
+                return True;
+            }
+        } catch () {
+            # Ignore
+        }
+        return False;
+    }
+
+    #! Checks if a method has only a single no-argument variant
+    private bool isMethodNoArgsOnly(Reflection::AbstractMethod m) {
+        try {
+            list<Reflection::AbstractMethodVariant> variants = m.getVariants();
+            if (variants.size() == 1 && variants[0].getParamTypes().size() == 0) {
+                return True;
+            }
+        } catch () {
+            # Ignore
+        }
+        return False;
+    }
+
+    #! Formats variant signatures for detail display
+    private *string formatVariantDetail(Reflection::Function f) {
+        try {
+            list<Reflection::FunctionVariant> variants = f.getVariants();
+            list<string> sigs = ();
+            foreach Reflection::FunctionVariant v in (variants) {
+                sigs += v.toString();
+            }
+            return sigs.join("; ");
+        } catch () {
+            # Ignore
+        }
+        return NOTHING;
+    }
+
+    #! Formats method variant signatures for detail display
+    private *string formatMethodVariantDetail(Reflection::AbstractMethod m) {
+        try {
+            list<Reflection::AbstractMethodVariant> variants = m.getVariants();
+            list<string> sigs = ();
+            foreach Reflection::AbstractMethodVariant v in (variants) {
+                sigs += v.toString();
+            }
+            return sigs.join("; ");
+        } catch () {
+            # Ignore
+        }
+        return NOTHING;
+    }
+
     #! Recursively collects all symbol details from a namespace tree
     private collectAllSymbolDetails(Reflection::Namespace ns, string prefix,
             reference<list<hash<QoreCodeCompletion::CompletionItem>>> result,
@@ -2109,6 +2559,8 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
                     "label": name,
                     "kind": "function",
                     "isCallable": True,
+                    "noArgsOnly": isNoArgsOnly(f),
+                    "detail": formatVariantDetail(f),
                 };
             }
         }

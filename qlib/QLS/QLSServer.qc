@@ -1541,7 +1541,13 @@ public class QLSServer {
         # get the document
         Document doc = documents{request.params.textDocument.uri};
 
-        # find requested symbol in the document
+        # try single-document resolveDefinition first (handles locals, params, members)
+        *list<auto> resolved = doc.resolveDefinition(request.params.position);
+        if (resolved) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, resolved);
+        }
+
+        # fall back to cross-document search
         *hash<auto> symbolInfo = doc.findSymbolInfo(request.params.position);
         if (!symbolInfo) {
             return make_jsonrpc_response(jsonRpcVer, request.id, ());

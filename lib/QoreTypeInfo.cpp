@@ -43,6 +43,8 @@
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/Function.h"
+#include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/CallReferenceNode.h"
 
 #include <algorithm>
 #include <set>
@@ -1252,6 +1254,32 @@ const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
             return static_cast<const WeakListReferenceNode*>(n)->get()->getTypeInfo();
         case NT_REFERENCE:
             return static_cast<const ReferenceNode*>(n)->getTypeInfo();
+        case NT_RUNTIME_CLOSURE: {
+            const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(n);
+            if (cb) {
+                const QoreTypeInfo* ti = cb->getCallTypeInfo();
+                if (ti) {
+                    return ti;
+                }
+            }
+            break;
+        }
+        case NT_FUNCREF: {
+            // Call references have getFunction() that returns the underlying function;
+            // if it has a unique signature, return the typed code type
+            const ResolvedCallReferenceNode* cr =
+                dynamic_cast<const ResolvedCallReferenceNode*>(n);
+            if (cr) {
+                QoreFunction* f = cr->getFunction();
+                if (f) {
+                    AbstractFunctionSignature* sig = f->getUniqueSignature();
+                    if (sig) {
+                        return qore_get_complex_code_type_from_signature(sig);
+                    }
+                }
+            }
+            break;
+        }
         default:
             break;
     }

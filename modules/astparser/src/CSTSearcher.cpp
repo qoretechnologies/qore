@@ -1526,6 +1526,394 @@ std::vector<CSTSymbolDetail>* CSTSearcher::findTypeMembers(
 }
 
 // --------------------------------------------------------------------------
+// Resolve definition
+// --------------------------------------------------------------------------
+
+//! Check if a usage kind is a declaration name (already at definition).
+static bool isDeclNameUsage(ASTSymbolUsageKind usage) {
+    switch (usage) {
+        case ASUK_ClassDeclName:
+        case ASUK_ConstantDeclName:
+        case ASUK_FuncDeclName:
+        case ASUK_NamespaceDeclName:
+        case ASUK_VarDeclName:
+        case ASUK_HashDeclName:
+        case ASUK_HashMemberName:
+        case ASUK_TypedefDeclName:
+        case ASUK_ModuleDeclName:
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Check if a node type is a function-like declaration.
+static bool isFunctionLike(const char* type) {
+    return strcmp(type, "function_declaration") == 0
+        || strcmp(type, "method_declaration") == 0
+        || strcmp(type, "constructor_declaration") == 0
+        || strcmp(type, "destructor_declaration") == 0;
+}
+
+//! Search a class body for a member matching a name.
+static bool findMemberInClass(TSNode classNode, const AstParseResult* result,
+                               const std::string& name, TSNode* outNode) {
+    uint32_t childCount = ts_node_named_child_count(classNode);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(classNode, i);
+        const char* type = ts_node_type(child);
+
+        // Direct children: method, constructor, destructor, member, constant
+        if (strcmp(type, "method_declaration") == 0 ||
+            strcmp(type, "constructor_declaration") == 0 ||
+            strcmp(type, "destructor_declaration") == 0 ||
+            strcmp(type, "member_declaration") == 0 ||
+            strcmp(type, "constant_declaration") == 0) {
+            std::string nodeName = CSTSearcher::getNodeName(child, result);
+            if (nodeName == name) {
+                *outNode = child;
+                return true;
+            }
+        }
+
+        // member_group: walk its children
+        if (strcmp(type, "member_group") == 0) {
+            uint32_t memberCount = ts_node_named_child_count(child);
+            for (uint32_t j = 0; j < memberCount; j++) {
+                TSNode member = ts_node_named_child(child, j);
+                const char* mtype = ts_node_type(member);
+                if (strcmp(mtype, "method_declaration") == 0 ||
+                    strcmp(mtype, "constructor_declaration") == 0 ||
+                    strcmp(mtype, "destructor_declaration") == 0 ||
+                    strcmp(mtype, "member_declaration") == 0 ||
+                    strcmp(mtype, "constant_declaration") == 0) {
+                    std::string nodeName = CSTSearcher::getNodeName(member, result);
+                    if (nodeName == name) {
+                        *outNode = member;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool CSTSearcher::findLocalDeclaration(
+    const std::vector<TSNode>& ancestors,
+    const AstParseResult* result,
+    const std::string& name,
+    uint32_t line, uint32_t col,
+    TSNode* outNode) {
+
+    for (size_t i = 0; i < ancestors.size(); i++) {
+        const char* type = ts_node_type(ancestors[i]);
+
+        // Check foreach_statement: iterator variable
+        if (strcmp(type, "foreach_statement") == 0) {
+            TSNode varNode = ts_node_child_by_field_name(ancestors[i], "variable", 8);
+            if (!ts_node_is_null(varNode)) {
+                // The variable field might be an identifier or a typed declaration
+                // Check if the variable field's text contains the name
+                std::string varText = result->getNodeText(varNode);
+                // For "int item", the variable field includes the type — find the
+                // identifier within it
+                if (varText == name) {
+                    *outNode = varNode;
+                    return true;
+                }
+                // Try to find the name child within the variable node
+                TSNode nameChild = ts_node_child_by_field_name(varNode, "name", 4);
+                if (!ts_node_is_null(nameChild)) {
+                    std::string nameText = result->getNodeText(nameChild);
+                    if (nameText == name) {
+                        *outNode = nameChild;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Check any block ancestor: search locals declared before cursor position.
+        // This handles locals in function bodies, if/while/for blocks, etc.
+        if (strcmp(type, "block") == 0) {
+            // Search local_variable_declaration children before position
+            uint32_t childCount = ts_node_named_child_count(ancestors[i]);
+            for (uint32_t c = 0; c < childCount; c++) {
+                TSNode child = ts_node_named_child(ancestors[i], c);
+                TSPoint childStart = ts_node_start_point(child);
+                if (childStart.row > line ||
+                    (childStart.row == line && childStart.column > col)) {
+                    break;
+                }
+
+                const char* childType = ts_node_type(child);
+
+                // Check local_variable_declaration directly
+                if (strcmp(childType, "local_variable_declaration") == 0) {
+                    uint32_t declCount = ts_node_named_child_count(child);
+                    for (uint32_t d = 0; d < declCount; d++) {
+                        TSNode declChild = ts_node_named_child(child, d);
+                        if (strcmp(ts_node_type(declChild), "variable_declarator") == 0) {
+                            std::string declName = getFieldText(declChild, "name", result);
+                            if (declName == name) {
+                                TSNode nameNode = ts_node_child_by_field_name(
+                                    declChild, "name", 4);
+                                if (!ts_node_is_null(nameNode)) {
+                                    *outNode = nameNode;
+                                } else {
+                                    *outNode = declChild;
+                                }
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                // Also check expression_statement containing local_variable_declaration
+                if (strcmp(childType, "expression_statement") == 0) {
+                    uint32_t exprCount = ts_node_named_child_count(child);
+                    for (uint32_t e = 0; e < exprCount; e++) {
+                        TSNode exprChild = ts_node_named_child(child, e);
+                        if (strcmp(ts_node_type(exprChild),
+                                  "local_variable_declaration") == 0) {
+                            uint32_t declCount = ts_node_named_child_count(exprChild);
+                            for (uint32_t d = 0; d < declCount; d++) {
+                                TSNode declChild = ts_node_named_child(exprChild, d);
+                                if (strcmp(ts_node_type(declChild),
+                                          "variable_declarator") == 0) {
+                                    std::string declName = getFieldText(
+                                        declChild, "name", result);
+                                    if (declName == name) {
+                                        TSNode nameNode = ts_node_child_by_field_name(
+                                            declChild, "name", 4);
+                                        if (!ts_node_is_null(nameNode)) {
+                                            *outNode = nameNode;
+                                        } else {
+                                            *outNode = declChild;
+                                        }
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If this block's parent is function-like, also search parameters
+            if (i + 1 < ancestors.size()) {
+                const char* parentType = ts_node_type(ancestors[i + 1]);
+                if (isFunctionLike(parentType)) {
+                    TSNode funcNode = ancestors[i + 1];
+                    uint32_t funcChildCount = ts_node_named_child_count(funcNode);
+                    for (uint32_t f = 0; f < funcChildCount; f++) {
+                        TSNode funcChild = ts_node_named_child(funcNode, f);
+                        if (strcmp(ts_node_type(funcChild), "parameter_list") == 0) {
+                            uint32_t paramCount = ts_node_named_child_count(funcChild);
+                            for (uint32_t p = 0; p < paramCount; p++) {
+                                TSNode param = ts_node_named_child(funcChild, p);
+                                if (strcmp(ts_node_type(param), "parameter") == 0) {
+                                    std::string paramName = getFieldText(
+                                        param, "name", result);
+                                    if (paramName == name) {
+                                        TSNode nameNode = ts_node_child_by_field_name(
+                                            param, "name", 4);
+                                        if (!ts_node_is_null(nameNode)) {
+                                            *outNode = nameNode;
+                                        } else {
+                                            *outNode = param;
+                                        }
+                                        return true;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+std::vector<TSNode>* CSTSearcher::resolveDefinition(
+    const AstParseResult* result,
+    uint32_t line, uint32_t col) {
+
+    if (!result) {
+        return nullptr;
+    }
+
+    // 1. Get symbol info at position
+    CSTSymbolInfo si = findSymbolInfo(result, line, col);
+
+    // 2. Get ancestors for context analysis
+    std::vector<TSNode> ancestors = findNodeAndParents(result, line, col);
+    if (ancestors.empty()) {
+        return nullptr;
+    }
+
+    // If findSymbolInfo didn't find a name (no declaration ancestor), fall back
+    // to the leaf node text (handles bare identifiers in expression contexts)
+    if (si.name.empty()) {
+        std::string nodeText = result->getNodeText(ancestors[0]);
+        if (nodeText.empty()) {
+            return nullptr;
+        }
+        si.name = nodeText;
+    }
+
+    // 3. If already at a declaration name, return nullptr
+    if (isDeclNameUsage(si.usage)) {
+        return nullptr;
+    }
+
+    TSNode root = result->getRootNode();
+    TSNode foundNode = make_null_node();
+
+    // 4. MEMBER ACCESS: Check if parent is member_expression
+    if (ancestors.size() >= 2) {
+        TSNode parentNode = ancestors[1];
+        const char* parentType = ts_node_type(parentNode);
+        if (strcmp(parentType, "member_expression") == 0) {
+            // Check if we're the "member" field (right side of the dot)
+            TSNode memberField = ts_node_child_by_field_name(parentNode, "member", 6);
+            if (!ts_node_is_null(memberField) && ts_node_eq(memberField, ancestors[0])) {
+                // Get the "object" field's type
+                TSNode objNode = ts_node_child_by_field_name(parentNode, "object", 6);
+                if (!ts_node_is_null(objNode)) {
+                    TSPoint objPos = ts_node_start_point(objNode);
+                    std::string typeName = getSymbolType(result, objPos.row, objPos.column);
+                    if (!typeName.empty()) {
+                        // Find the class declaration and search for the member
+                        TSNode classNode = make_null_node();
+                        if (findDeclarationByName(root, result, typeName,
+                                                   "class_declaration", &classNode)) {
+                            TSNode memberNode = make_null_node();
+                            if (findMemberInClass(classNode, result, si.name, &memberNode)) {
+                                std::unique_ptr<std::vector<TSNode>> rv(
+                                    new std::vector<TSNode>);
+                                rv->push_back(memberNode);
+                                return rv.release();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. SCOPE ACCESS: Check if we're inside a scoped_identifier
+    for (size_t i = 1; i < ancestors.size(); i++) {
+        const char* ancType = ts_node_type(ancestors[i]);
+        if (strcmp(ancType, "scoped_identifier") == 0) {
+            // Extract the scope part (everything before the last ::)
+            std::string fullText = result->getNodeText(ancestors[i]);
+            size_t lastColon = fullText.rfind("::");
+            if (lastColon != std::string::npos) {
+                std::string scopeName = fullText.substr(0, lastColon);
+                // Try to find as a class
+                TSNode scopeNode = make_null_node();
+                if (findDeclarationByName(root, result, scopeName,
+                                           "class_declaration", &scopeNode)) {
+                    TSNode memberNode = make_null_node();
+                    if (findMemberInClass(scopeNode, result, si.name, &memberNode)) {
+                        std::unique_ptr<std::vector<TSNode>> rv(
+                            new std::vector<TSNode>);
+                        rv->push_back(memberNode);
+                        return rv.release();
+                    }
+                }
+                // Try to find as a namespace
+                if (findDeclarationByName(root, result, scopeName,
+                                           "namespace_declaration", &scopeNode)) {
+                    // Search namespace body for the declaration
+                    if (findDeclarationByName(scopeNode, result, si.name,
+                                               nullptr, &foundNode)) {
+                        std::unique_ptr<std::vector<TSNode>> rv(
+                            new std::vector<TSNode>);
+                        rv->push_back(foundNode);
+                        return rv.release();
+                    }
+                }
+            }
+            break;
+        }
+        // Only walk through simple ancestors, not past declarations
+        if (CSTSearcher::isDeclarationNode(ancType)) {
+            break;
+        }
+    }
+
+    // 6. LOCAL VARIABLE / PARAMETER
+    if (findLocalDeclaration(ancestors, result, si.name, line, col, &foundNode)) {
+        std::unique_ptr<std::vector<TSNode>> rv(new std::vector<TSNode>);
+        rv->push_back(foundNode);
+        return rv.release();
+    }
+
+    // 6.5. CLASS MEMBER (bare identifier inside a method)
+    // When inside a method body, check the enclosing class for a matching member
+    for (size_t i = 0; i < ancestors.size(); i++) {
+        const char* atype = ts_node_type(ancestors[i]);
+        if (strcmp(atype, "class_declaration") == 0) {
+            if (findMemberInClass(ancestors[i], result, si.name, &foundNode)) {
+                std::unique_ptr<std::vector<TSNode>> rv(new std::vector<TSNode>);
+                rv->push_back(foundNode);
+                return rv.release();
+            }
+            break;
+        }
+    }
+
+    // 7. TOP-LEVEL DECLARATION (named declarations like class, function, etc.)
+    if (findDeclarationByName(root, result, si.name, nullptr, &foundNode)) {
+        std::unique_ptr<std::vector<TSNode>> rv(new std::vector<TSNode>);
+        rv->push_back(foundNode);
+        return rv.release();
+    }
+
+    // 7.5. TOP-LEVEL VARIABLE DECLARATION (local_variable_declaration → variable_declarator)
+    // findDeclarationByName doesn't find these because getNodeName returns empty for
+    // local_variable_declaration (name is in variable_declarator child)
+    {
+        uint32_t rootChildCount = ts_node_named_child_count(root);
+        for (uint32_t i = 0; i < rootChildCount; i++) {
+            TSNode child = ts_node_named_child(root, i);
+            const char* ctype = ts_node_type(child);
+            if (strcmp(ctype, "local_variable_declaration") == 0) {
+                uint32_t declChildCount = ts_node_named_child_count(child);
+                for (uint32_t j = 0; j < declChildCount; j++) {
+                    TSNode declChild = ts_node_named_child(child, j);
+                    if (strcmp(ts_node_type(declChild), "variable_declarator") == 0) {
+                        std::string declName = getFieldText(declChild, "name", result);
+                        if (declName == si.name) {
+                            TSNode nameNode = ts_node_child_by_field_name(
+                                declChild, "name", 4);
+                            if (!ts_node_is_null(nameNode)) {
+                                foundNode = nameNode;
+                            } else {
+                                foundNode = declChild;
+                            }
+                            std::unique_ptr<std::vector<TSNode>> rv(
+                                new std::vector<TSNode>);
+                            rv->push_back(foundNode);
+                            return rv.release();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 8. Not found in this document
+    return nullptr;
+}
+
+// --------------------------------------------------------------------------
 // Hover info
 // --------------------------------------------------------------------------
 

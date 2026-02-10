@@ -679,11 +679,24 @@ public class CSTTranslator {
             return result;
         }
 
-        # Regular member variable declaration → DeclExpr
+        # Regular member variable declaration → DeclExpr with declaration sub-field
+        hash<auto> decl = {
+            "nodetype": ANT_Declaration,
+            "kind": ADK_Variable,
+            "loc": node.loc,
+        };
+        if (exists nameNode) {
+            decl.name = makeName(nameNode);
+        }
+        if (exists typeNode) {
+            decl.typeName = {"name": extractText(typeNode)};
+        }
+
         hash<auto> result = {
             "nodetype": ANT_Expression,
             "kind": AEK_Decl,
             "loc": node.loc,
+            "declaration": decl,
         };
 
         if (exists defaultNode) {

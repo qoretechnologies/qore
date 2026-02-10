@@ -34,9 +34,13 @@ class DocumentFormattingTest inherits QUnit::Test {
     private {
         QLS::QLSServer server;
         int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
     }
 
     constructor() : Test("QLS DocumentFormatting", "1.0") {
+        initServer();
+
         addTestCase("capability advertised", \testCapability());
         addTestCase("format unformatted code", \testFormatUnformatted());
         addTestCase("already formatted code", \testAlreadyFormatted());
@@ -51,10 +55,9 @@ class DocumentFormattingTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private setup(string text) {
+    private initServer() {
         server = new QLS::QLSServer();
 
-        # Initialize
         hash<auto> initReq = makeRequest("initialize", {
             "processId": getpid(),
             "capabilities": {},
@@ -62,15 +65,21 @@ class DocumentFormattingTest inherits QUnit::Test {
         });
         server.handleRequest(make_json(initReq));
 
-        # Send initialized notification
         hash<auto> initializedReq = makeRequest("initialized");
         delete initializedReq.id;
         server.handleRequest(make_json(initializedReq));
+    }
 
-        # Open a document
+    #! Opens a document on the shared server, caching by content; returns the URI
+    private string setupDoc(string text) {
+        *string cached = docCache{text};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/fmt%d.q", ++docCount);
         hash<auto> openReq = makeRequest("textDocument/didOpen", {
             "textDocument": {
-                "uri": "file:///test/format.q",
+                "uri": uri,
                 "languageId": "qore",
                 "version": 1,
                 "text": text,
@@ -78,6 +87,8 @@ class DocumentFormattingTest inherits QUnit::Test {
         });
         delete openReq.id;
         server.handleRequest(make_json(openReq));
+        docCache{text} = uri;
+        return uri;
     }
 
     private hash<auto> makeRequest(string method, *hash<auto> params) {
@@ -89,9 +100,9 @@ class DocumentFormattingTest inherits QUnit::Test {
         };
     }
 
-    private *list<auto> sendFormatting() {
+    private *list<auto> sendFormatting(string uri) {
         hash<auto> req = makeRequest("textDocument/formatting", {
-            "textDocument": {"uri": "file:///test/format.q"},
+            "textDocument": {"uri": uri},
             "options": {"tabSize": 4, "insertSpaces": True},
         });
         softlist<auto> responses = server.handleRequest(make_json(req));
@@ -110,9 +121,9 @@ class DocumentFormattingTest inherits QUnit::Test {
     testFormatUnformatted() {
         # Unformatted code: wrong indentation
         string text = "%modern\nclass Foo {\nint bar() {\nreturn 1;\n}\n}\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> edits = sendFormatting();
+        *list<auto> edits = sendFormatting(uri);
         assertTrue(exists edits, "should return edits for unformatted code");
         assertEq(1, edits.size(), "should return exactly one edit (full replacement)");
 
@@ -127,9 +138,9 @@ class DocumentFormattingTest inherits QUnit::Test {
     testAlreadyFormatted() {
         # Use a simple, well-formatted file (no extra blank lines the formatter would strip)
         string text = "%modern\nint x = 1;\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> edits = sendFormatting();
+        *list<auto> edits = sendFormatting(uri);
         # Should return empty edits or an edit with identical content
         if (edits && edits.size() > 0) {
             # If formatter returns an edit, verify the newText matches original
@@ -141,41 +152,40 @@ class DocumentFormattingTest inherits QUnit::Test {
     }
 
     testEmptyDocument() {
-        setup("");
+        string uri = setupDoc("");
 
-        *list<auto> edits = sendFormatting();
+        *list<auto> edits = sendFormatting(uri);
         assertEq(0, edits.size(), "should return empty edits for empty document");
     }
 
     testParseErrorDocument() {
         # Document with parse errors — formatter should handle gracefully
         string text = "%modern\nclass { broken syntax\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> edits = sendFormatting();
+        *list<auto> edits = sendFormatting(uri);
         # Should return empty edits (don't break editing on parse errors)
         assertEq(0, edits.size(), "should return empty edits for document with parse errors");
     }
 
     testMissingParams() {
-        server = new QLS::QLSServer();
+        QLS::QLSServer errorServer();
 
-        # Initialize first
         hash<auto> initReq = makeRequest("initialize", {
             "processId": getpid(),
             "capabilities": {},
             "rootUri": NOTHING,
         });
-        server.handleRequest(make_json(initReq));
+        errorServer.handleRequest(make_json(initReq));
 
         hash<auto> initializedReq = makeRequest("initialized");
         delete initializedReq.id;
-        server.handleRequest(make_json(initializedReq));
+        errorServer.handleRequest(make_json(initializedReq));
 
         # Send request with missing params
         hash<auto> req = makeRequest("textDocument/formatting");
         delete req.params;
-        softlist<auto> responses = server.handleRequest(make_json(req));
+        softlist<auto> responses = errorServer.handleRequest(make_json(req));
         assertTrue(exists responses, "should return error response for missing params");
         assertTrue(responses.size() > 0, "should have at least one response");
         hash<auto> resp = parse_json(responses[0]);
@@ -184,7 +194,7 @@ class DocumentFormattingTest inherits QUnit::Test {
 
     testNonExistentDocument() {
         string text = "%modern\nclass Foo {}\n";
-        setup(text);
+        setupDoc(text);
 
         # Request formatting for a document that doesn't exist
         hash<auto> req = makeRequest("textDocument/formatting", {
@@ -199,7 +209,7 @@ class DocumentFormattingTest inherits QUnit::Test {
 
     testInvalidTextDocumentParam() {
         string text = "%modern\nint x = 1;\n";
-        setup(text);
+        setupDoc(text);
 
         # Send request with params but missing textDocument
         hash<auto> req = makeRequest("textDocument/formatting", {
@@ -215,9 +225,9 @@ class DocumentFormattingTest inherits QUnit::Test {
     testFormatFullRange() {
         # Verify the edit range covers the entire document
         string text = "%modern\nclass Foo {\nint bar() {\nreturn 1;\n}\n}\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> edits = sendFormatting();
+        *list<auto> edits = sendFormatting(uri);
         assertTrue(exists edits && edits.size() > 0, "should return edits");
 
         hash<auto> edit = edits[0];
@@ -232,7 +242,8 @@ class DocumentFormattingTest inherits QUnit::Test {
 
     testFullRoundTrip() {
         # Full LSP round-trip: initialize → open → format → didChange → format again
-        server = new QLS::QLSServer();
+        # Uses its own server to test the complete lifecycle
+        QLS::QLSServer rtServer();
 
         # 1. Initialize
         hash<auto> initReq = makeRequest("initialize", {
@@ -240,7 +251,7 @@ class DocumentFormattingTest inherits QUnit::Test {
             "capabilities": {},
             "rootUri": NOTHING,
         });
-        softlist<auto> initResponses = server.handleRequest(make_json(initReq));
+        softlist<auto> initResponses = rtServer.handleRequest(make_json(initReq));
         assertTrue(initResponses.size() > 0, "initialize should return a response");
         hash<auto> initResp = parse_json(initResponses[0]);
         assertTrue(exists initResp.result.capabilities,
@@ -251,7 +262,7 @@ class DocumentFormattingTest inherits QUnit::Test {
         # 2. Initialized notification
         hash<auto> initializedReq = makeRequest("initialized");
         delete initializedReq.id;
-        server.handleRequest(make_json(initializedReq));
+        rtServer.handleRequest(make_json(initializedReq));
 
         # 3. Open document with unformatted code
         string uri = "file:///test/roundtrip.q";
@@ -265,14 +276,14 @@ class DocumentFormattingTest inherits QUnit::Test {
             },
         });
         delete openReq.id;
-        server.handleRequest(make_json(openReq));
+        rtServer.handleRequest(make_json(openReq));
 
         # 4. Format
         hash<auto> fmtReq1 = makeRequest("textDocument/formatting", {
             "textDocument": {"uri": uri},
             "options": {"tabSize": 4, "insertSpaces": True},
         });
-        softlist<auto> fmtResponses1 = server.handleRequest(make_json(fmtReq1));
+        softlist<auto> fmtResponses1 = rtServer.handleRequest(make_json(fmtReq1));
         assertTrue(fmtResponses1.size() > 0, "first format should return a response");
         hash<auto> fmtResp1 = parse_json(fmtResponses1[0]);
         assertTrue(exists fmtResp1.result, "first format response should have result");
@@ -287,14 +298,14 @@ class DocumentFormattingTest inherits QUnit::Test {
             "contentChanges": ({"text": formatted},),
         });
         delete changeReq.id;
-        server.handleRequest(make_json(changeReq));
+        rtServer.handleRequest(make_json(changeReq));
 
         # 6. Format again — should produce no edits (idempotent)
         hash<auto> fmtReq2 = makeRequest("textDocument/formatting", {
             "textDocument": {"uri": uri},
             "options": {"tabSize": 4, "insertSpaces": True},
         });
-        softlist<auto> fmtResponses2 = server.handleRequest(make_json(fmtReq2));
+        softlist<auto> fmtResponses2 = rtServer.handleRequest(make_json(fmtReq2));
         assertTrue(fmtResponses2.size() > 0, "second format should return a response");
         hash<auto> fmtResp2 = parse_json(fmtResponses2[0]);
         list<auto> edits2 = fmtResp2.result;

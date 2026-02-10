@@ -1337,6 +1337,24 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
         }
     }
 
+    #! Strips conditional compilation directives from source code
+    /** Removes \c %ifdef, \c %ifndef, \c %if, \c %elif, \c %else, and \c %endif
+        lines from the source while preserving line numbers (lines are replaced
+        with empty strings).
+
+        This is needed for the tree-sitter backend where conditional directives are
+        handled as extras and cause code between \c %ifdef and \c %else / \c %endif
+        to be invisible to the parser. Stripping these directives ensures all code
+        branches are parsed.
+
+        @param source the Qore source code
+        @return the source with conditional directive lines replaced by empty lines
+    */
+    public string sub stripConditionalDirectives(string source) {
+        return regex_subst(source, "^%(ifdef|ifndef|if |elif |else|endif).*", "",
+            RE_MultiLine | RE_Global);
+    }
+
     #! Formats astparser diagnostics for output
     /** @param path source path used in formatted output
         @param code source contents

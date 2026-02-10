@@ -37,6 +37,8 @@ public hashdecl CompletionItem {
     *string documentation;
     #! Whether the item is callable (method/function)
     bool isCallable = False;
+    #! Whether the callable has only a single no-argument variant
+    bool noArgsOnly = False;
 }
 
 #! Completion context: no completable token
@@ -49,6 +51,8 @@ public const CC_NEW = 2;
 public const CC_DOT = 3;
 #! Completion context: after "::" -- namespace/class static/enum members
 public const CC_SCOPE = 4;
+#! Completion context: inside function/method call arguments (after "(" or ",")
+public const CC_CALL = 5;
 
 #! Qore keywords and built-in type names for identifier completion
 public const QoreKeywords = (
@@ -157,6 +161,8 @@ public class CompletionEngine {
                 return completeDot(ctx);
             case CC_SCOPE:
                 return completeScope(ctx);
+            case CC_CALL:
+                return completeIdentifier(ctx);
         }
         return ();
     }
@@ -224,6 +230,18 @@ public class CompletionEngine {
 
         # Bare identifier or nothing
         if (prefix.length() == 0) {
+            # Check if we're inside a call context (after "(" or ",")
+            string trimmed_bp = rtrim(before_prefix);
+            if (trimmed_bp.length() > 0) {
+                string tc = trimmed_bp[trimmed_bp.length() - 1];
+                if (tc == "(" || tc == ",") {
+                    return {
+                        "kind": CC_CALL,
+                        "prefix": "",
+                        "line_before": before_prefix,
+                    };
+                }
+            }
             return {
                 "kind": CC_NONE,
                 "prefix": "",

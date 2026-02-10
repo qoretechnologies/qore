@@ -173,6 +173,18 @@ public:
         ASTSymbolKind kind,
         uint32_t line, uint32_t col);
 
+    //! Resolve the definition location for the symbol at position (0-indexed).
+    /** Handles local variables, parameters, member access, scoped access,
+        and top-level declarations within a single document.
+        @param result parse result
+        @param line 0-indexed line
+        @param col 0-indexed column
+        @return vector of definition TSNodes, or nullptr if not found
+    */
+    static std::vector<TSNode>* resolveDefinition(
+        const AstParseResult* result,
+        uint32_t line, uint32_t col);
+
 private:
     //! Recursively collect symbols into vec, tracking scope prefix.
     static void collectSymbolsRecursive(
@@ -273,6 +285,14 @@ private:
     //! Enrich a scope symbol with detailed metadata from its declaration node.
     static CSTSymbolDetail enrichSymbol(const CSTScopeSymbolInfo& ssi,
                                          const AstParseResult* result);
+
+    //! Find the declaration of a local variable or parameter in the scope chain.
+    static bool findLocalDeclaration(
+        const std::vector<TSNode>& ancestors,
+        const AstParseResult* result,
+        const std::string& name,
+        uint32_t line, uint32_t col,
+        TSNode* outNode);
 
     //! Find a declaration node by name and type, searching recursively.
     static bool findDeclarationByName(TSNode root, const AstParseResult* result,

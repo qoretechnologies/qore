@@ -34,9 +34,13 @@ class DocumentHighlightTest inherits QUnit::Test {
     private {
         QLS::QLSServer server;
         int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
     }
 
     constructor() : Test("QLS DocumentHighlight", "1.0") {
+        initServer();
+
         addTestCase("capability advertised", \testCapability());
         addTestCase("highlight variable references", \testHighlightVariable());
         addTestCase("highlight function name", \testHighlightFunction());
@@ -52,7 +56,7 @@ class DocumentHighlightTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private setup(string text) {
+    private initServer() {
         server = new QLS::QLSServer();
 
         hash<auto> initReq = makeRequest("initialize", {
@@ -65,10 +69,18 @@ class DocumentHighlightTest inherits QUnit::Test {
         hash<auto> initializedReq = makeRequest("initialized");
         delete initializedReq.id;
         server.handleRequest(make_json(initializedReq));
+    }
 
+    #! Opens a document on the shared server, caching by content; returns the URI
+    private string setupDoc(string text) {
+        *string cached = docCache{text};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/hl%d.q", ++docCount);
         hash<auto> openReq = makeRequest("textDocument/didOpen", {
             "textDocument": {
-                "uri": "file:///test/highlight.q",
+                "uri": uri,
                 "languageId": "qore",
                 "version": 1,
                 "text": text,
@@ -76,6 +88,8 @@ class DocumentHighlightTest inherits QUnit::Test {
         });
         delete openReq.id;
         server.handleRequest(make_json(openReq));
+        docCache{text} = uri;
+        return uri;
     }
 
     private hash<auto> makeRequest(string method, *hash<auto> params) {
@@ -87,9 +101,9 @@ class DocumentHighlightTest inherits QUnit::Test {
         };
     }
 
-    private *list<auto> sendHighlight(int line, int character) {
+    private *list<auto> sendHighlight(string uri, int line, int character) {
         hash<auto> req = makeRequest("textDocument/documentHighlight", {
-            "textDocument": {"uri": "file:///test/highlight.q"},
+            "textDocument": {"uri": uri},
             "position": {"line": line, "character": character},
         });
         softlist<auto> responses = server.handleRequest(make_json(req));
@@ -108,39 +122,39 @@ class DocumentHighlightTest inherits QUnit::Test {
     testHighlightVariable() {
         # Variable 'x' used on lines 2 and 3
         string text = "%modern\nsub test() {\n    int x = 1;\n    return x + 1;\n}\n";
-        setup(text);
+        string uri = setupDoc(text);
 
         # Position on 'x' declaration — line 2, col 8 ("    int x")
-        *list<auto> highlights = sendHighlight(2, 8);
+        *list<auto> highlights = sendHighlight(uri, 2, 8);
         assertTrue(exists highlights, "should return highlights for variable 'x'");
         assertTrue(highlights.size() >= 1, "should find at least 1 highlight for 'x'");
     }
 
     testHighlightFunction() {
         string text = "%modern\nsub myFunc() { return 1; }\nsub caller() { return myFunc(); }\n";
-        setup(text);
+        string uri = setupDoc(text);
 
         # Position on 'myFunc' declaration — line 1, col 4
-        *list<auto> highlights = sendHighlight(1, 4);
+        *list<auto> highlights = sendHighlight(uri, 1, 4);
         assertTrue(exists highlights, "should return highlights for function 'myFunc'");
         assertTrue(highlights.size() >= 1, "should find at least 1 highlight for myFunc");
     }
 
     testHighlightEmptyPosition() {
         string text = "%modern\nint x = 1;\n";
-        setup(text);
+        string uri = setupDoc(text);
 
         # Position at start of file (parse directive, not a symbol)
-        *list<auto> highlights = sendHighlight(0, 0);
+        *list<auto> highlights = sendHighlight(uri, 0, 0);
         assertEq(0, highlights.size(), "should return empty list at non-symbol position");
     }
 
     testHighlightKind() {
         # All highlights should have kind=1 (Text)
         string text = "%modern\nsub test() {\n    int x = 1;\n    return x + 1;\n}\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> highlights = sendHighlight(2, 8);
+        *list<auto> highlights = sendHighlight(uri, 2, 8);
         assertTrue(exists highlights && highlights.size() > 0, "should return highlights for kind test");
         foreach hash<auto> h in (highlights) {
             assertEq(1, h.kind, "highlight kind should be 1 (Text)");
@@ -149,9 +163,9 @@ class DocumentHighlightTest inherits QUnit::Test {
 
     testHighlightRange() {
         string text = "%modern\nsub test() {\n    int x = 1;\n    return x + 1;\n}\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> highlights = sendHighlight(2, 8);
+        *list<auto> highlights = sendHighlight(uri, 2, 8);
         assertTrue(exists highlights && highlights.size() > 0, "should return highlights for range test");
         foreach hash<auto> h in (highlights) {
             assertTrue(exists h.range, "highlight should have a range");
@@ -163,37 +177,37 @@ class DocumentHighlightTest inherits QUnit::Test {
     }
 
     testEmptyDocument() {
-        setup("");
+        string uri = setupDoc("");
 
-        *list<auto> highlights = sendHighlight(0, 0);
+        *list<auto> highlights = sendHighlight(uri, 0, 0);
         assertEq(0, highlights.size(), "should return empty list for empty document");
     }
 
     testParseErrorDocument() {
         string text = "%modern\nclass { broken\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> highlights = sendHighlight(0, 0);
+        *list<auto> highlights = sendHighlight(uri, 0, 0);
         assertEq(0, highlights.size(), "should return empty list for parse error document");
     }
 
     testMissingParams() {
-        server = new QLS::QLSServer();
+        QLS::QLSServer errorServer();
 
         hash<auto> initReq = makeRequest("initialize", {
             "processId": getpid(),
             "capabilities": {},
             "rootUri": NOTHING,
         });
-        server.handleRequest(make_json(initReq));
+        errorServer.handleRequest(make_json(initReq));
 
         hash<auto> initializedReq = makeRequest("initialized");
         delete initializedReq.id;
-        server.handleRequest(make_json(initializedReq));
+        errorServer.handleRequest(make_json(initializedReq));
 
         hash<auto> req = makeRequest("textDocument/documentHighlight");
         delete req.params;
-        softlist<auto> responses = server.handleRequest(make_json(req));
+        softlist<auto> responses = errorServer.handleRequest(make_json(req));
         assertTrue(exists responses, "should return error response for missing params");
         assertTrue(responses.size() > 0, "should have at least one response");
         hash<auto> resp = parse_json(responses[0]);
@@ -202,11 +216,11 @@ class DocumentHighlightTest inherits QUnit::Test {
 
     testInvalidPositionParams() {
         string text = "%modern\nint x = 1;\n";
-        setup(text);
+        string uri = setupDoc(text);
 
         # Send request with params but missing position
         hash<auto> req = makeRequest("textDocument/documentHighlight", {
-            "textDocument": {"uri": "file:///test/highlight.q"},
+            "textDocument": {"uri": uri},
         });
         softlist<auto> responses = server.handleRequest(make_json(req));
         assertTrue(exists responses && responses.size() > 0,
@@ -219,7 +233,7 @@ class DocumentHighlightTest inherits QUnit::Test {
 
     testNonExistentDocument() {
         string text = "%modern\nint x = 1;\n";
-        setup(text);
+        setupDoc(text);
 
         hash<auto> req = makeRequest("textDocument/documentHighlight", {
             "textDocument": {"uri": "file:///nonexistent.q"},

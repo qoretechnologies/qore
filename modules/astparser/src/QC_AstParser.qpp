@@ -89,7 +89,7 @@ int AstParser::getErrorCount() {
 /**
     @return list of diagnostic hashes
  */
-*list AstParser::getDiagnostics() {
+*list<auto> AstParser::getDiagnostics() {
     size_t errorCount = aph->getErrorCount();
     if (errorCount == 0)
         return QoreValue();

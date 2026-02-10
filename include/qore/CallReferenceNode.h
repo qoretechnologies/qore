@@ -143,7 +143,7 @@ public:
     DLLEXPORT virtual QoreProgram* getProgram() const;
 
     //! Returns the internal function object, if any; can return nullptr
-    DLLLOCAL virtual QoreFunction* getFunction() = 0;
+    DLLLOCAL virtual QoreFunction* getFunction() const = 0;
 
     //! references itself and returns this
     DLLLOCAL ResolvedCallReferenceNode* refRefSelf() const {

@@ -308,6 +308,18 @@ public class Document {
         return NOTHING;
     }
 
+    #! Resolve definition location(s) for the symbol at position
+    /** @param Position LSP position {line, character}
+        @return list of {uri, range} locations, or NOTHING
+    */
+    *list<auto> resolveDefinition(hash<auto> Position) {
+        AstTreeSearcher searcher();
+        if (tree) {
+            return searcher.resolveDefinition(tree, uri, Position.line, Position.character);
+        }
+        return NOTHING;
+    }
+
     #! Find members of a type (class, namespace, hashdecl, enum)
     /** @param typeName name of the type to look up
         @param includeInherited whether to include inherited members

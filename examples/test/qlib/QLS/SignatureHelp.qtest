@@ -34,6 +34,8 @@ class SignatureHelpTest inherits QUnit::Test {
     private {
         QLS::QLSServer server;
         int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
 
         # Valid source with complete function calls — cursor position determines the paren context
         # Line 0: %modern
@@ -57,6 +59,8 @@ class SignatureHelpTest inherits QUnit::Test {
     }
 
     constructor() : Test("QLS SignatureHelp", "1.0") {
+        initServer();
+
         addTestCase("capability advertised", \testCapability());
         addTestCase("signature for known function", \testKnownFunction());
         addTestCase("active parameter at first position", \testActiveParamFirst());
@@ -73,7 +77,7 @@ class SignatureHelpTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private setup(string text) {
+    private initServer() {
         server = new QLS::QLSServer();
 
         hash<auto> initReq = makeRequest("initialize", {
@@ -86,10 +90,18 @@ class SignatureHelpTest inherits QUnit::Test {
         hash<auto> initializedReq = makeRequest("initialized");
         delete initializedReq.id;
         server.handleRequest(make_json(initializedReq));
+    }
 
+    #! Opens a document on the shared server, caching by content; returns the URI
+    private string setupDoc(string text) {
+        *string cached = docCache{text};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/sig%d.q", ++docCount);
         hash<auto> openReq = makeRequest("textDocument/didOpen", {
             "textDocument": {
-                "uri": "file:///test/sig.q",
+                "uri": uri,
                 "languageId": "qore",
                 "version": 1,
                 "text": text,
@@ -97,6 +109,8 @@ class SignatureHelpTest inherits QUnit::Test {
         });
         delete openReq.id;
         server.handleRequest(make_json(openReq));
+        docCache{text} = uri;
+        return uri;
     }
 
     private hash<auto> makeRequest(string method, *hash<auto> params) {
@@ -108,9 +122,9 @@ class SignatureHelpTest inherits QUnit::Test {
         };
     }
 
-    private hash<auto> sendSignatureHelp(int line, int character) {
+    private hash<auto> sendSignatureHelp(string uri, int line, int character) {
         hash<auto> req = makeRequest("textDocument/signatureHelp", {
-            "textDocument": {"uri": "file:///test/sig.q"},
+            "textDocument": {"uri": uri},
             "position": {"line": line, "character": character},
         });
         softlist<auto> responses = server.handleRequest(make_json(req));
@@ -131,9 +145,9 @@ class SignatureHelpTest inherits QUnit::Test {
     testKnownFunction() {
         # Line 3: "sub caller() { myFunc(1, "hello"); }"
         # Cursor at col 22, right after "myFunc(" — lineText up to cursor = "sub caller() { myFunc("
-        setup(FuncSource);
+        string uri = setupDoc(FuncSource);
 
-        hash<auto> result = sendSignatureHelp(3, 22);
+        hash<auto> result = sendSignatureHelp(uri, 3, 22);
         assertTrue(result.signatures.size() > 0,
             "should find signature for myFunc");
         hash<auto> sig = result.signatures[0];
@@ -144,10 +158,10 @@ class SignatureHelpTest inherits QUnit::Test {
 
     testActiveParamFirst() {
         # Cursor right after ( — activeParameter should be 0
-        setup(FuncSource);
+        string uri = setupDoc(FuncSource);
 
         # Line 3: "sub caller() { myFunc(1, "hello"); }" — col 22 = after "("
-        hash<auto> result = sendSignatureHelp(3, 22);
+        hash<auto> result = sendSignatureHelp(uri, 3, 22);
         assertTrue(result.signatures.size() > 0, "should find signature");
         assertEq(0, result.activeParameter, "activeParameter should be 0 right after (");
     }
@@ -155,9 +169,9 @@ class SignatureHelpTest inherits QUnit::Test {
     testActiveParamAfterComma() {
         # Cursor after first comma: col 25 in "sub caller() { myFunc(1, "hello"); }"
         # Text up to col 25: "sub caller() { myFunc(1, " — 1 comma at depth 0
-        setup(FuncSource);
+        string uri = setupDoc(FuncSource);
 
-        hash<auto> result = sendSignatureHelp(3, 25);
+        hash<auto> result = sendSignatureHelp(uri, 3, 25);
         assertTrue(result.signatures.size() > 0, "should find signature for activeParam test");
         assertEq(1, result.activeParameter, "activeParameter should be 1 after first comma");
     }
@@ -171,11 +185,11 @@ class SignatureHelpTest inherits QUnit::Test {
         string text = "%modern\nsub foo() { return 1; }\n"
             "sub myFunc(int x, string y) { return; }\n"
             "sub caller() { myFunc(foo(), \"hello\"); }\n";
-        setup(text);
+        string uri = setupDoc(text);
 
         # Line 3: "sub caller() { myFunc(foo(), "hello"); }"
         # Col 29: after "myFunc(foo(), " — foo() has balanced parens, comma is for myFunc
-        hash<auto> result = sendSignatureHelp(3, 29);
+        hash<auto> result = sendSignatureHelp(uri, 3, 29);
         assertTrue(result.signatures.size() > 0,
             "should find signature for myFunc in nested parens context");
         assertEq(1, result.activeParameter,
@@ -185,45 +199,45 @@ class SignatureHelpTest inherits QUnit::Test {
     testUnknownFunction() {
         # Source where unknownFunc doesn't exist
         string text = "%modern\nsub caller() { int x = unknownFunc(1); }\n";
-        setup(text);
+        string uri = setupDoc(text);
 
         # Line 1: "sub caller() { int x = unknownFunc(1); }" — col 36 = after "unknownFunc("
-        hash<auto> result = sendSignatureHelp(1, 36);
+        hash<auto> result = sendSignatureHelp(uri, 1, 36);
         assertEq(0, result.signatures.size(), "should return empty signatures for unknown function");
     }
 
     testNoParenOnLine() {
         string text = "%modern\nint x = 1;\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        hash<auto> result = sendSignatureHelp(1, 5);
+        hash<auto> result = sendSignatureHelp(uri, 1, 5);
         assertEq(0, result.signatures.size(), "should return empty signatures when no paren found");
     }
 
     testEmptyDocument() {
-        setup("");
+        string uri = setupDoc("");
 
-        hash<auto> result = sendSignatureHelp(0, 0);
+        hash<auto> result = sendSignatureHelp(uri, 0, 0);
         assertEq(0, result.signatures.size(), "should return empty signatures for empty document");
     }
 
     testMissingParams() {
-        server = new QLS::QLSServer();
+        QLS::QLSServer errorServer();
 
         hash<auto> initReq = makeRequest("initialize", {
             "processId": getpid(),
             "capabilities": {},
             "rootUri": NOTHING,
         });
-        server.handleRequest(make_json(initReq));
+        errorServer.handleRequest(make_json(initReq));
 
         hash<auto> initializedReq = makeRequest("initialized");
         delete initializedReq.id;
-        server.handleRequest(make_json(initializedReq));
+        errorServer.handleRequest(make_json(initializedReq));
 
         hash<auto> req = makeRequest("textDocument/signatureHelp");
         delete req.params;
-        softlist<auto> responses = server.handleRequest(make_json(req));
+        softlist<auto> responses = errorServer.handleRequest(make_json(req));
         assertTrue(exists responses, "should return error response for missing params");
         assertTrue(responses.size() > 0, "should have at least one response");
         hash<auto> resp = parse_json(responses[0]);
@@ -231,7 +245,7 @@ class SignatureHelpTest inherits QUnit::Test {
     }
 
     testNonExistentDocument() {
-        setup(FuncSource);
+        string uri = setupDoc(FuncSource);
 
         hash<auto> req = makeRequest("textDocument/signatureHelp", {
             "textDocument": {"uri": "file:///nonexistent.q"},
@@ -245,19 +259,19 @@ class SignatureHelpTest inherits QUnit::Test {
     }
 
     testOutOfRangePosition() {
-        setup(FuncSource);
+        string uri = setupDoc(FuncSource);
 
         # Request at a line way beyond the document
-        hash<auto> result = sendSignatureHelp(999, 0);
+        hash<auto> result = sendSignatureHelp(uri, 999, 0);
         assertEq(0, result.signatures.size(),
             "should return empty signatures for out-of-range position");
     }
 
     testDotAccessMethod() {
         # Line 6: "    int r = obj.getVal(42);" — cursor at col 23 = after "obj.getVal("
-        setup(MethodSource);
+        string uri = setupDoc(MethodSource);
 
-        hash<auto> result = sendSignatureHelp(6, 23);
+        hash<auto> result = sendSignatureHelp(uri, 6, 23);
         assertTrue(result.signatures.size() > 0,
             "should find signature for dot-access method getVal");
         hash<auto> sig = result.signatures[0];

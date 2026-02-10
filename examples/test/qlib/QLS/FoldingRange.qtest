@@ -34,9 +34,13 @@ class FoldingRangeTest inherits QUnit::Test {
     private {
         QLS::QLSServer server;
         int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
     }
 
     constructor() : Test("QLS FoldingRange", "1.0") {
+        initServer();
+
         addTestCase("capability advertised", \testCapability());
         addTestCase("class with methods", \testClassWithMethods());
         addTestCase("namespace folds", \testNamespace());
@@ -52,7 +56,7 @@ class FoldingRangeTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private setup(string text) {
+    private initServer() {
         server = new QLS::QLSServer();
 
         hash<auto> initReq = makeRequest("initialize", {
@@ -65,10 +69,18 @@ class FoldingRangeTest inherits QUnit::Test {
         hash<auto> initializedReq = makeRequest("initialized");
         delete initializedReq.id;
         server.handleRequest(make_json(initializedReq));
+    }
 
+    #! Opens a document on the shared server, caching by content; returns the URI
+    private string setupDoc(string text) {
+        *string cached = docCache{text};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/fold%d.q", ++docCount);
         hash<auto> openReq = makeRequest("textDocument/didOpen", {
             "textDocument": {
-                "uri": "file:///test/fold.q",
+                "uri": uri,
                 "languageId": "qore",
                 "version": 1,
                 "text": text,
@@ -76,6 +88,8 @@ class FoldingRangeTest inherits QUnit::Test {
         });
         delete openReq.id;
         server.handleRequest(make_json(openReq));
+        docCache{text} = uri;
+        return uri;
     }
 
     private hash<auto> makeRequest(string method, *hash<auto> params) {
@@ -87,9 +101,9 @@ class FoldingRangeTest inherits QUnit::Test {
         };
     }
 
-    private *list<auto> sendFoldingRange() {
+    private *list<auto> sendFoldingRange(string uri) {
         hash<auto> req = makeRequest("textDocument/foldingRange", {
-            "textDocument": {"uri": "file:///test/fold.q"},
+            "textDocument": {"uri": uri},
         });
         softlist<auto> responses = server.handleRequest(make_json(req));
         if (!responses || !responses[0]) {
@@ -106,9 +120,9 @@ class FoldingRangeTest inherits QUnit::Test {
 
     testClassWithMethods() {
         string text = "%modern\nclass Foo {\n    int getValue() {\n        return 1;\n    }\n}\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> ranges = sendFoldingRange();
+        *list<auto> ranges = sendFoldingRange(uri);
         assertTrue(exists ranges, "should return folding ranges");
         assertTrue(ranges.size() >= 2, sprintf("should have at least 2 ranges (class + method), got %d",
             ranges.size()));
@@ -133,9 +147,9 @@ class FoldingRangeTest inherits QUnit::Test {
 
     testNamespace() {
         string text = "%modern\npublic namespace MyNs {\n    our int x = 1;\n}\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> ranges = sendFoldingRange();
+        *list<auto> ranges = sendFoldingRange(uri);
         assertTrue(exists ranges, "should return folding ranges");
 
         # Find namespace range
@@ -151,9 +165,9 @@ class FoldingRangeTest inherits QUnit::Test {
 
     testControlFlow() {
         string text = "%modern\nsub test() {\n    if (True) {\n        int x = 1;\n    }\n}\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> ranges = sendFoldingRange();
+        *list<auto> ranges = sendFoldingRange(uri);
         assertTrue(exists ranges, "should return folding ranges");
 
         # Should have at least function + if_statement
@@ -164,9 +178,9 @@ class FoldingRangeTest inherits QUnit::Test {
 
     testBlockComments() {
         string text = "%modern\n/*\n * Multi-line\n * block comment\n */\nint x = 1;\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> ranges = sendFoldingRange();
+        *list<auto> ranges = sendFoldingRange(uri);
         assertTrue(exists ranges, "should return folding ranges");
 
         # Find comment range
@@ -184,9 +198,9 @@ class FoldingRangeTest inherits QUnit::Test {
     testSingleLineExcluded() {
         # A function on a single line should not produce a folding range
         string text = "%modern\nsub foo() { return 1; }\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> ranges = sendFoldingRange();
+        *list<auto> ranges = sendFoldingRange(uri);
         # Verify no single-line ranges exist
         int singleLineCount = 0;
         if (ranges) {
@@ -200,29 +214,29 @@ class FoldingRangeTest inherits QUnit::Test {
     }
 
     testEmptyDocument() {
-        setup("");
+        string uri = setupDoc("");
 
-        *list<auto> ranges = sendFoldingRange();
+        *list<auto> ranges = sendFoldingRange(uri);
         assertEq(0, ranges.size(), "should return empty list for empty document");
     }
 
     testMissingParams() {
-        server = new QLS::QLSServer();
+        QLS::QLSServer errorServer();
 
         hash<auto> initReq = makeRequest("initialize", {
             "processId": getpid(),
             "capabilities": {},
             "rootUri": NOTHING,
         });
-        server.handleRequest(make_json(initReq));
+        errorServer.handleRequest(make_json(initReq));
 
         hash<auto> initializedReq = makeRequest("initialized");
         delete initializedReq.id;
-        server.handleRequest(make_json(initializedReq));
+        errorServer.handleRequest(make_json(initializedReq));
 
         hash<auto> req = makeRequest("textDocument/foldingRange");
         delete req.params;
-        softlist<auto> responses = server.handleRequest(make_json(req));
+        softlist<auto> responses = errorServer.handleRequest(make_json(req));
         assertTrue(exists responses, "should return error response for missing params");
         assertTrue(responses.size() > 0, "should have at least one response");
         hash<auto> resp = parse_json(responses[0]);
@@ -231,7 +245,7 @@ class FoldingRangeTest inherits QUnit::Test {
 
     testNonExistentDocument() {
         string text = "%modern\nclass Foo {}\n";
-        setup(text);
+        setupDoc(text);
 
         hash<auto> req = makeRequest("textDocument/foldingRange", {
             "textDocument": {"uri": "file:///nonexistent.q"},
@@ -245,9 +259,9 @@ class FoldingRangeTest inherits QUnit::Test {
     testParseErrorDocument() {
         # Document with parse errors should still return foldable ranges or empty list
         string text = "%modern\nclass Foo {\n    broken syntax\n}\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> ranges = sendFoldingRange();
+        *list<auto> ranges = sendFoldingRange(uri);
         # tree-sitter produces partial parse; verify result contains only valid ranges
         if (ranges) {
             foreach hash<auto> r in (ranges) {
@@ -262,9 +276,9 @@ class FoldingRangeTest inherits QUnit::Test {
     testFoldingRangeStructure() {
         # Verify all ranges have required fields
         string text = "%modern\nclass Foo {\n    int getValue() {\n        return 1;\n    }\n}\n";
-        setup(text);
+        string uri = setupDoc(text);
 
-        *list<auto> ranges = sendFoldingRange();
+        *list<auto> ranges = sendFoldingRange(uri);
         assertTrue(exists ranges && ranges.size() > 0, "should have ranges");
 
         foreach hash<auto> r in (ranges) {

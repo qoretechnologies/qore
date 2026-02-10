@@ -10,17 +10,9 @@
 
 include(FetchContent)
 
-# Find tree-sitter CLI (installed via: cargo install tree-sitter-cli)
-find_program(TREE_SITTER_CLI tree-sitter
-    HINTS "$ENV{HOME}/.cargo/bin" "/usr/local/bin"
-)
-if(NOT TREE_SITTER_CLI)
-    message(FATAL_ERROR
-        "tree-sitter CLI not found. Install it with: cargo install tree-sitter-cli\n"
-        "Ensure ~/.cargo/bin is in your PATH."
-    )
-endif()
-message(STATUS "Found tree-sitter CLI: ${TREE_SITTER_CLI}")
+# tree-sitter CLI is only needed when changing grammar.js (developer workflow):
+#   cd grammars/tree-sitter-qore && tree-sitter generate grammar.js
+# The generated src/ files are committed to source control.
 
 # Fetch tree-sitter C runtime library (same version as module-treesitter)
 FetchContent_Declare(
@@ -43,37 +35,19 @@ target_include_directories(tree-sitter-lib PUBLIC
     ${tree-sitter_SOURCE_DIR}/lib/src
 )
 
-# Generate parser.c from grammar.js at build time
+# Use pre-generated parser files from source tree.
+# Developers: run "tree-sitter generate grammar.js" manually when grammar.js changes,
+# then commit the updated src/ files.
 set(TS_QORE_GRAMMAR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/grammars/tree-sitter-qore)
-set(TS_QORE_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/tree-sitter-qore-generated)
+set(TS_QORE_SRC_DIR ${TS_QORE_GRAMMAR_DIR}/src)
 
-add_custom_command(
-    OUTPUT ${TS_QORE_GENERATED_DIR}/parser.c
-           ${TS_QORE_GENERATED_DIR}/tree_sitter/parser.h
-           ${TS_QORE_GENERATED_DIR}/grammar.json
-           ${TS_QORE_GENERATED_DIR}/node-types.json
-    COMMAND ${TREE_SITTER_CLI} generate
-            ${TS_QORE_GRAMMAR_DIR}/grammar.js
-            --output ${TS_QORE_GENERATED_DIR}
-    WORKING_DIRECTORY ${TS_QORE_GRAMMAR_DIR}
-    DEPENDS ${TS_QORE_GRAMMAR_DIR}/grammar.js
-    COMMENT "Generating tree-sitter Qore parser from grammar.js"
-    VERBATIM
-)
-
-add_custom_target(ASTPARSER_TS_GENERATE
-    DEPENDS ${TS_QORE_GENERATED_DIR}/parser.c
-)
-
-# Build generated Qore grammar parser as a static library
+# Build Qore grammar parser as a static library from committed generated sources
 add_library(tree-sitter-qore-grammar STATIC
-    ${TS_QORE_GENERATED_DIR}/parser.c
+    ${TS_QORE_SRC_DIR}/parser.c
 )
-add_dependencies(tree-sitter-qore-grammar ASTPARSER_TS_GENERATE)
-set_source_files_properties(${TS_QORE_GENERATED_DIR}/parser.c PROPERTIES GENERATED TRUE)
 target_include_directories(tree-sitter-qore-grammar PUBLIC
     ${tree-sitter_SOURCE_DIR}/lib/include
-    ${TS_QORE_GENERATED_DIR}
+    ${TS_QORE_SRC_DIR}
 )
 
 # start of hacks to simulate installed QoreConfig.cmake
@@ -188,23 +162,23 @@ endif (SINGLE_COMPILATION_UNIT)
 # Link against tree-sitter libraries and add include paths
 target_include_directories(${astparser_module_name} PRIVATE
     ${tree-sitter_SOURCE_DIR}/lib/include
-    ${TS_QORE_GENERATED_DIR}
+    ${TS_QORE_SRC_DIR}
 )
 target_link_libraries(${astparser_module_name} tree-sitter-lib tree-sitter-qore-grammar)
 
-add_dependencies(${astparser_module_name} libqore ASTPARSER_QPP_GENERATED_FILES ASTPARSER_TS_GENERATE)
+add_dependencies(${astparser_module_name} libqore ASTPARSER_QPP_GENERATED_FILES)
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/astparser/mainpage.dox ${_dox_src})
 qore_binary_module_qore(${astparser_module_name} "${VERSION}" "/${VERSION}")
 
 # Install grammar artifacts so module-treesitter can reuse them
 install(FILES
-    ${TS_QORE_GENERATED_DIR}/parser.c
-    ${TS_QORE_GENERATED_DIR}/grammar.json
-    ${TS_QORE_GENERATED_DIR}/node-types.json
+    ${TS_QORE_SRC_DIR}/parser.c
+    ${TS_QORE_SRC_DIR}/grammar.json
+    ${TS_QORE_SRC_DIR}/node-types.json
     DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/treesitter/tree-sitter-qore/src
 )
 install(FILES
-    ${TS_QORE_GENERATED_DIR}/tree_sitter/parser.h
+    ${TS_QORE_SRC_DIR}/tree_sitter/parser.h
     DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/treesitter/tree-sitter-qore/src/tree_sitter
 )
 install(FILES

@@ -58,7 +58,7 @@ AstTreeSearcher::constructor() {
 
     @return hash with hover info containing "description" key, or NOTHING if not found
  */
-*hash AstTreeSearcher::hoverInfo(astparser::AstTree[AstTreeHolder] tree, int kind, int line, int col) {
+*hash<auto> AstTreeSearcher::hoverInfo(astparser::AstTree[AstTreeHolder] tree, int kind, int line, int col) {
     ReferenceHolder<AstTreeHolder> holder(tree, xsink);
 
     AstParseResult* result = tree->get();
@@ -93,7 +93,7 @@ AstTreeSearcher::constructor() {
 
     @return hash with symbol info (kind, usage, name, range) or NOTHING if not found
  */
-*hash AstTreeSearcher::findSymbolInfo(astparser::AstTree[AstTreeHolder] tree, int line, int col) {
+*hash<auto> AstTreeSearcher::findSymbolInfo(astparser::AstTree[AstTreeHolder] tree, int line, int col) {
     ReferenceHolder<AstTreeHolder> holder(tree, xsink);
 
     AstParseResult* result = tree->get();
@@ -159,7 +159,7 @@ AstTreeSearcher::constructor() {
 
     @return list of reference locations, or NOTHING if none found
  */
-*list AstTreeSearcher::findReferences(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col, bool includeDecl) {
+*list<auto> AstTreeSearcher::findReferences(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col, bool includeDecl) {
     ReferenceHolder<AstTreeHolder> holder(tree, xsink);
 
     AstParseResult* result = tree->get();
@@ -193,6 +193,51 @@ AstTreeSearcher::constructor() {
     return lst.release();
 }
 
+//! Resolve the definition location for the symbol at position.
+/**
+    @param tree AST tree structure
+    @param uri document's URI
+    @param line 0-indexed line
+    @param col 0-indexed column
+
+    @return list of location hashes {uri, range}, or NOTHING if not found
+
+    @since %Qore 2.2
+ */
+*list<auto> AstTreeSearcher::resolveDefinition(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col) {
+    ReferenceHolder<AstTreeHolder> holder(tree, xsink);
+
+    AstParseResult* result = tree->get();
+    if (!result) {
+        return QoreValue();
+    }
+
+    std::unique_ptr<std::vector<TSNode>> vec(
+        CSTSearcher::resolveDefinition(result,
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col)));
+    if (!vec) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
+    for (size_t i = 0, count = vec->size(); i < count; i++) {
+        TSNode node = vec->at(i);
+        QoreHashNode* location = CSTSearcher::makeLocation(
+            node, std::string(uri->c_str()), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (location) {
+            lst->push(location, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+    }
+
+    return lst.release();
+}
+
 //! Find all symbols in a document.
 /**
     @param tree AST tree structure
@@ -202,7 +247,7 @@ AstTreeSearcher::constructor() {
 
     @return list of symbols, or NOTHING if none found
  */
-*list AstTreeSearcher::findSymbols(astparser::AstTree[AstTreeHolder] tree, string uri, bool fixSymbols = True, bool bareNames = False) {
+*list<auto> AstTreeSearcher::findSymbols(astparser::AstTree[AstTreeHolder] tree, string uri, bool fixSymbols = True, bool bareNames = False) {
     ReferenceHolder<AstTreeHolder> holder(tree, xsink);
 
     AstParseResult* result = tree->get();
@@ -280,7 +325,7 @@ AstTreeSearcher::constructor() {
 
     @return list of symbols, or NOTHING if none found
  */
-*list AstTreeSearcher::findMatchingSymbols(astparser::AstTree[AstTreeHolder] tree, string uri, string query, bool exactMatch = False, bool fixSymbols = True, bool bareNames = False) {
+*list<auto> AstTreeSearcher::findMatchingSymbols(astparser::AstTree[AstTreeHolder] tree, string uri, string query, bool exactMatch = False, bool fixSymbols = True, bool bareNames = False) {
     ReferenceHolder<AstTreeHolder> holder(tree, xsink);
 
     AstParseResult* result = tree->get();
@@ -363,7 +408,7 @@ AstTreeSearcher::constructor() {
 
     @since %Qore 2.2
  */
-*list AstTreeSearcher::findScopeSymbols(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col) {
+*list<auto> AstTreeSearcher::findScopeSymbols(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col) {
     ReferenceHolder<AstTreeHolder> holder(tree, xsink);
 
     AstParseResult* result = tree->get();
@@ -445,7 +490,7 @@ AstTreeSearcher::constructor() {
 
     @since %Qore 2.2
  */
-*list AstTreeSearcher::findScopeSymbolsDetailed(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col) {
+*list<auto> AstTreeSearcher::findScopeSymbolsDetailed(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col) {
     ReferenceHolder<AstTreeHolder> holder(tree, xsink);
 
     AstParseResult* result = tree->get();
@@ -590,7 +635,7 @@ AstTreeSearcher::constructor() {
 
     @since %Qore 2.2
  */
-*list AstTreeSearcher::findTypeMembers(astparser::AstTree[AstTreeHolder] tree, string uri, string typeName, bool includeInherited = True) {
+*list<auto> AstTreeSearcher::findTypeMembers(astparser::AstTree[AstTreeHolder] tree, string uri, string typeName, bool includeInherited = True) {
     ReferenceHolder<AstTreeHolder> holder(tree, xsink);
 
     AstParseResult* result = tree->get();
