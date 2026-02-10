@@ -37,6 +37,66 @@
 
 #include <cerrno>
 
+//! @cond INTERNAL
+static int condition_wait_impl(Condition* c, AbstractSmartLock* lock, int64 timeout_ms, ExceptionSink* xsink) {
+    // Check for sandbox interrupt - use polling if sandbox manager exists
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        const int poll_ms = 500;  // 500ms polling interval
+        int64 remaining = timeout_ms;
+        bool infinite = (timeout_ms <= 0);
+
+        while (true) {
+            if (smh->isInterruptRequested()) {
+                xsink->raiseException("PROGRAM-INTERRUPTED",
+                    "program execution was interrupted while waiting on condition");
+                return -1;
+            }
+
+            int this_timeout;
+            if (infinite) {
+                this_timeout = poll_ms;
+            } else {
+                this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+            }
+
+            int rc = c->wait(lock, this_timeout, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            if (rc == 0) {
+                return 0;
+            }
+            if (rc != ETIMEDOUT) {
+                xsink->raiseErrnoException("CONDITION-WAIT-ERROR", rc,
+                    "unknown system error code returned from "
+                    "Condition::wait(lock: %s, timeout: %d): rc: %d", lock->getName(), this_timeout, rc);
+                return rc;
+            }
+
+            // ETIMEDOUT - check if overall timeout exceeded
+            if (!infinite) {
+                remaining -= this_timeout;
+                if (remaining <= 0) {
+                    return ETIMEDOUT;
+                }
+            }
+        }
+    }
+
+    int rc = timeout_ms > 0
+        ? c->wait(lock, timeout_ms, xsink)
+        : c->wait(lock, xsink);
+
+    if (rc && rc != ETIMEDOUT && !*xsink) {
+        xsink->raiseErrnoException("CONDITION-WAIT-ERROR", rc,
+            "unknown system error code returned from "
+            "Condition::wait(lock: %s, timeout: " QLLD "): rc: %d", lock->getName(), timeout_ms, rc);
+    }
+    return rc;
+}
+//! @endcond
+
 //! The Condition class can be used For blocking a thread until a condition becomes @ref True
 /** Condition objects, when used along with an AbstractSmartLock object (such as RWLock and Mutex objects), allow
     %Qore threads to sleep until a certain condition becomes @ref True.
@@ -148,61 +208,55 @@ printf("finally some_value is 0\n");
  */
 int Condition::wait(AbstractSmartLock[AbstractSmartLock] lock, timeout timeout_ms = 0) {
     ReferenceHolder<AbstractSmartLock> holder(lock, xsink);
+    return condition_wait_impl(c, lock, timeout_ms, xsink);
+}
 
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        int64 remaining = timeout_ms;
-        bool infinite = (timeout_ms <= 0);
+//! Blocks a thread until signaled; accepts a relative date/time timeout value
+/** Must be called with an AbstractSmartLock argument, and the AbstractSmartLock must be locked before the call. This
+    method will atomically unlock the AbstractSmartLock object and wait on this Condition object to be woken up with a
+    Condition::signal() or Condition::broadcast() method call in another thread. At this point, the AbstractSmartLock
+    will be reacquired with the same state as it was acquired previously before control returns to the blocked thread.
+    The wait condition should always be tested again when the thread is unblocked.
 
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting on condition");
-                return -1;
-            }
+    This variant accepts a @ref relative_dates "relative date/time value" directly, avoiding the loss of sub-millisecond
+    precision that occurs with the \c timeout type conversion.  For example, \c 500us will correctly result in a timed
+    wait rather than an indefinite wait.
 
-            int this_timeout;
-            if (infinite) {
-                this_timeout = poll_ms;
-            } else {
-                this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
-            }
+    @param lock the AbstractSmartLock object to use for synchronization on this Condition object. The
+    AbstractSmartLock must be locked before calling this method
+    @param timeout_date a @ref relative_dates "relative date/time value" for the timeout; the value has a resolution of
+    milliseconds.  If the timeout value is zero or negative, the method will wait indefinitely.  If a positive timeout
+    is given and the call times out, the AbstractSmartLock will also be acquired when the Condition::wait() call returns
+    and \c ETIMEDOUT will be returned.
 
-            int rc = c->wait(lock, this_timeout, xsink);
-            if (*xsink) {
-                return -1;  // Error occurred
-            }
-            if (rc == 0) {
-                return 0;  // Condition was signaled
-            }
-            if (rc != ETIMEDOUT) {
-                xsink->raiseErrnoException("CONDITION-WAIT-ERROR", rc, "unknown system error code returned from " \
-                    "Condition::wait(lock: %s, timeout: %d): rc: %d", lock->getName(), this_timeout, rc);
-                return rc;
-            }
+    @return 0 for success, \c ETIMEDOUT if a timeout has occurred
 
-            // ETIMEDOUT - check if overall timeout exceeded
-            if (!infinite) {
-                remaining -= this_timeout;
-                if (remaining <= 0) {
-                    return ETIMEDOUT;  // Overall timeout exceeded
-                }
-            }
-        }
+    @par Example:
+    @code{.py}
+m.lock();
+on_exit m.unlock();
+while (some_value > 0) {
+    cond.wait(m, 2s);
+}
+    @endcode
+
+    @throw CONDITION-SIGNAL-ERROR This exception should never be thrown; it indicates a low-level error in executing
+    the method
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method polls for interrupt requests every 500ms
+
+    @since %Qore 2.3
+ */
+int Condition::wait(AbstractSmartLock[AbstractSmartLock] lock, date<relative> timeout_date) {
+    ReferenceHolder<AbstractSmartLock> holder(lock, xsink);
+
+    int64 timeout_ms = timeout_date->getRelativeMilliseconds();
+    // ensure positive sub-millisecond timeouts don't truncate to 0
+    // (0 is the "indefinite wait" sentinel)
+    if (timeout_ms == 0 && timeout_date->getRelativeMicroseconds() > 0) {
+        timeout_ms = 1;
     }
 
-    int rc = timeout_ms > 0
-        ? c->wait(lock, timeout_ms, xsink)
-        : c->wait(lock, xsink);
-
-    //printd(5, "Condition::wait() m: %s (%p) timeout: %d rc: %d\n", lock->getName(), lock, timeout_ms, rc);
-
-    if (rc && rc != ETIMEDOUT && !*xsink) {
-        xsink->raiseErrnoException("CONDITION-WAIT-ERROR", rc, "unknown system error code returned from " \
-            "Condition::wait(lock: %s, timeout: %d): rc: %d", lock->getName(), timeout_ms, rc);
-    }
-    return rc;
+    return condition_wait_impl(c, lock, timeout_ms, xsink);
 }
 
 //! Returns the number of threads currently blocked on this object using the AbstractSmartLock passed
