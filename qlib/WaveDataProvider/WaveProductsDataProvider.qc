@@ -112,7 +112,8 @@ public class WaveProductsDataProvider inherits WaveDataProviderBase {
                 });
                 product = data.business.product;
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "GRAPHQL-ERROR") {
+                # Wave API throws NOT_FOUND for non-existent product IDs
+                if (ex.err == "GRAPHQL-ERROR" && ex.arg[0].extensions.code == "NOT_FOUND") {
                     product = NOTHING;
                 } else {
                     rethrow;

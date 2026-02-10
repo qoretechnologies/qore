@@ -150,7 +150,12 @@ public class WaveCustomersDataProvider inherits WaveDataProviderBase {
                     hash<auto> customer = flattenEdges(edge.node);
                     if (customer.email && customer.email.lwr() == search_options.email.lwr()) {
                         results += customer;
+                        break;  # Email addresses are unique
                     }
+                }
+                # Stop if we found a match (email addresses are unique)
+                if (results.size()) {
+                    break;
                 }
                 if (!customers.pageInfo || vars.page >= customers.pageInfo.totalPages) {
                     break;

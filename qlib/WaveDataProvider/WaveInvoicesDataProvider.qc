@@ -169,7 +169,8 @@ public class WaveInvoicesDataProvider inherits WaveDataProviderBase {
                 });
                 invoice = data.business.invoice;
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "GRAPHQL-ERROR") {
+                # Wave API throws NOT_FOUND for non-existent invoice IDs
+                if (ex.err == "GRAPHQL-ERROR" && ex.arg[0].extensions.code == "NOT_FOUND") {
                     invoice = NOTHING;
                 } else {
                     rethrow;
@@ -203,7 +204,12 @@ public class WaveInvoicesDataProvider inherits WaveDataProviderBase {
                         if (!search_options.status || invoice.status == search_options.status) {
                             results += invoice;
                         }
+                        break;  # Invoice numbers are unique
                     }
+                }
+                # Stop if we found a match (invoice numbers are unique)
+                if (results.size()) {
+                    break;
                 }
                 if (!invoices.pageInfo || vars.page >= invoices.pageInfo.totalPages) {
                     break;
@@ -232,6 +238,10 @@ public class WaveInvoicesDataProvider inherits WaveDataProviderBase {
                     if (invoice.status == search_options.status) {
                         results += invoice;
                     }
+                }
+                # Stop early if limit is reached
+                if (search_options.limit && results.size() >= search_options.limit) {
+                    break;
                 }
                 if (!invoices.pageInfo || vars.page >= invoices.pageInfo.totalPages) {
                     break;

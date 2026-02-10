@@ -529,9 +529,10 @@ cargo install tree-sitter-cli@0.26.5
     - @ref wavedataproviderintro "WaveDataProvider" module
       - new module providing a data provider API for Wave accounting and invoicing services
       - hierarchical data provider structure: customers, invoices, products, accounts, transactions, sales taxes
-      - full CRUD support for customers, products, invoices, accounts, and transactions
+      - full CRUD support for customers; create/read/update for products; create/read for invoices and accounts; create-only for transactions and sales taxes
+      - invoice workflow actions: approve and send via email
       - search capabilities with filtering for customers, invoices, and products
-      - action catalog integration with 19 actions including invoice approval and sending
+      - action catalog integration with 22 actions
       - webhook-based event trigger for new invoices
       - connection support with \c wave:// URL scheme
     - @ref mailgunrestclientintro "MailgunRestClient" module
