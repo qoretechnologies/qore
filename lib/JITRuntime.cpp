@@ -365,6 +365,29 @@ extern "C" uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink) {
     return toBits(result);
 }
 
+extern "C" void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsink) {
+    if (!var) {
+        return;
+    }
+    if (var->closureUse()) {
+        // Closure-captured locals live on the cvstack.  Clear the value under
+        // the write lock to trigger timely destruction at block scope exit.
+        ClosureVarValue* cvv = thread_find_closure_var(var->getName());
+        if (cvv) {
+            cvv->clearValue(xsink);
+        }
+    } else {
+        // Find the local on the thread-local variable stack by name pointer
+        LocalVarValue* lvar = thread_find_lvar(var->getName());
+        if (lvar) {
+            // del() calls val.removeValue(true).discard(xsink) — no LValueHelper
+            // assert, safe even when xsink already has an exception from a prior
+            // destructor in the same scope
+            lvar->del(xsink);
+        }
+    }
+}
+
 extern "C" void qore_rt_uninstantiate_local(LocalVar* var, ExceptionSink* xsink) {
     if (var) {
         var->uninstantiate(xsink);
@@ -2263,6 +2286,11 @@ extern "C" void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint6
 extern "C" void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_instantiate_local(ctx->locals[idx]);
+}
+
+extern "C" void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_clear_local(ctx->locals[idx], xsink);
 }
 
 extern "C" void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {

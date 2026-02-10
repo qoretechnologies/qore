@@ -236,28 +236,17 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     std::vector<QoreIRValue> operands;
                     const QoreProgramLocation* loc = nullptr;
                     bool invoked = false;
-                    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
-                        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
-                            return false;
-                        }
-                        loc = call->loc;
-                        invoked = true;
-                    // CallReferenceCallNode is NOT handled here — it falls through to
-                    // lowerExpression() -> lowerCallReference() which uses CallClosureDirect
-                    // for fast closure/callref invocation in both normal and invoke paths.
-                    } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
-                        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
-                            return false;
-                        }
-                        loc = call->loc;
-                        invoked = true;
-                    } else if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
-                        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
-                            return false;
-                        }
-                        loc = call->loc;
-                        invoked = true;
-                    } else if (auto* cast = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+                    // FunctionCallNode, SelfFunctionCallNode, StaticMethodCallNode, and
+                    // CallReferenceCallNode are NOT handled here — they fall through to
+                    // lowerExpression() which dispatches to lowerFunctionCall(),
+                    // lowerSelfCall(), lowerStaticCall(), and lowerCallReference()
+                    // respectively. Those functions correctly set invoke_opcode on the
+                    // Invoke instruction, while this early path would create an Invoke
+                    // with default invoke_opcode, causing the IR interpreter to
+                    // re-evaluate the full AST expression — double-executing side effects
+                    // in arguments (e.g. assertTrue(obj.doWork()) would call doWork()
+                    // twice).
+                    if (auto* cast = dynamic_cast<const QoreCastOperatorNode*>(node)) {
                         const QoreSingleExpressionOperatorNode<>* cast_node = cast;
                         QoreIRValue value = lowerExpression(cast_node->getExp(), error);
                         if (!value.isValid()) {

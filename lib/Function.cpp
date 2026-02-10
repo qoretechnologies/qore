@@ -2277,7 +2277,13 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     assert(pgm);
     assert(statements);
 
-    QoreIRFunction* func = new QoreIRFunction(name);
+    // Make the IR function name unique per variant to avoid name collisions in the
+    // JIT's compiled_functions map.  Multiple closures (or overloaded functions) can
+    // share the same display name (e.g. "<anonymous closure>"), but each variant has
+    // its own LocalVar pointers baked into IR/JIT code, so they must compile to
+    // distinct JIT entries.
+    std::string unique_name = std::string(name) + "@" + std::to_string((uintptr_t)this);
+    QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
     // Record which locals are pre-instantiated by the calling convention so the JIT
     // skips instantiation/uninstantiation for them.
     for (unsigned i = 0; i < signature.numParams(); ++i) {
@@ -2619,6 +2625,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     if (tier == TIER_JIT && (cached_jit_fn || cached_aot_fn)) {
         printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",
             name, exec_count.load(), (void*)cached_aot_ctx);
+
         // self might be 0 if instantiated by a constructor call
         if (self && signature.selfid) {
             signature.selfid->instantiateSelf(self);

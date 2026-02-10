@@ -2502,6 +2502,10 @@ int64 runtime_get_parse_options() {
     return (thread_data.get())->runtime_po;
 }
 
+void runtime_set_parse_options(int64 po) {
+    thread_data.get()->runtime_po = po;
+}
+
 int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
     assert(n);
     ThreadData* td = thread_data.get();

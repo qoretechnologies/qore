@@ -261,6 +261,7 @@ DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg_type_info();
 
 DLLLOCAL int64 parse_get_parse_options();
 DLLLOCAL int64 runtime_get_parse_options();
+DLLLOCAL void runtime_set_parse_options(int64 po);
 DLLLOCAL int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
 
 DLLLOCAL bool parse_check_parse_option(int64 o);

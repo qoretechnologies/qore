@@ -1948,6 +1948,25 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     if (*xsink)
         return QoreValue();
     ensureIrExecMode(priv);
+
+    // Save and set runtime_po for this program's top-level code.
+    // Without this, runtime_po retains the outer program's value,
+    // causing runtime_check_parse_option() to check the wrong program's
+    // options (e.g., PO_STRICT_ARGS from an outer %modern program leaking
+    // into a sub-program without it).
+    // RAII guard ensures restore even if an unexpected C++ exception propagates.
+    class RuntimePoGuard {
+    public:
+        DLLLOCAL RuntimePoGuard(int64 new_po) : saved_po(runtime_get_parse_options()) {
+            runtime_set_parse_options(new_po);
+        }
+        DLLLOCAL ~RuntimePoGuard() {
+            runtime_set_parse_options(saved_po);
+        }
+    private:
+        int64 saved_po;
+    };
+    RuntimePoGuard po_guard(priv->pwo.parse_options);
     return priv->sb.exec(xsink);
 }
 

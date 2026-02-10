@@ -173,6 +173,10 @@ private:
     // Track which non-entry-block locals have had their instantiation code emitted
     std::unordered_set<const void*> instantiated_non_entry_locals;
 
+    // Set of locals that have explicit UninstantiateLocal instructions in the IR
+    // (block-scoped locals that need mid-function destruction)
+    std::unordered_set<const void*> block_scoped_locals;
+
     // Track which value IDs already contain NaN-boxed i64 (from Invoke, Call, CatchException,
     // make_string, .any ops, LoadLocal).  Values NOT in this set are raw typed values.
     std::unordered_set<uint32_t> nanboxed_values;
@@ -224,6 +228,11 @@ private:
     std::vector<llvm::Value*> invoke_result_allocas;
     // Map from value ID to invoke-result alloca (for clearing at Return)
     std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
+    // Map from local key (LocalVar* as void*) to invoke-result cleanup allocas
+    // that hold references to values stored in this local.  Used by
+    // UninstantiateLocal to clear cleanup allocas when block-scoped locals
+    // are destroyed, preventing deferred-to-exit cleanup from keeping objects alive.
+    std::unordered_map<const void*, std::vector<llvm::Value*>> local_cleanup_allocas;
 
     // Reload tracker allocas for local variables modified by lvalue operations.
     // Each tracker alloca holds the most recent qore_rt_load_local reload value

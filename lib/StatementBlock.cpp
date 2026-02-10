@@ -732,10 +732,15 @@ int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsi
 int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     // do not instantiate local vars here; they are instantiated by the QoreProgram object for each thread
 
-    // Get the parse options from the current program at runtime
-    // NOTE: We can't use pwo.parse_options here because the TopLevelStatementBlock is constructed
-    // before the program's pwo is initialized (due to C++ member initialization order)
-    QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
+    // Get the parse options from the current program at runtime.
+    // Use getProgram() (the thread-local current program set by ProgramThreadCountContextHelper)
+    // rather than rc.getProgram() which may return the outer/calling program.
+    // NOTE: We can't use pwo.parse_options because the TopLevelStatementBlock is constructed
+    // before the program's pwo is initialized (due to C++ member initialization order).
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        pgm = rc.getProgram();
+    }
     int64 runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
 
     // AOT pre-compiled top-level function — execute directly if registered
@@ -788,7 +793,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
         qore_exec_mode_t exec_mode = qore_program_private::get(*pgm)->exec_mode;
         // QEM_TIERED uses IR/JIT immediately for top-level code (same as QEM_JIT)
-        if (exec_mode == QEM_IR || exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+        // but only for %modern programs — legacy parse options are not supported by IR
+        if (exec_mode == QEM_IR || exec_mode == QEM_JIT
+            || (exec_mode == QEM_TIERED
+                && (runtime_parse_options & PO_MODERN) == PO_MODERN)) {
             // Try to use cached IR if available
             QoreIRFunction* ir_func = cached_toplevel_ir;
             bool need_lower = !ir_func && !toplevel_ir_failed;

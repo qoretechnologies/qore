@@ -173,6 +173,14 @@ void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 //! variable stack.
 uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
 
+//! Clear a local variable's value on the Qore thread-local variable stack
+//! without popping the stack entry.  This triggers destructors (via decref)
+//! at block scope exit for pre-instantiated locals whose stack entry must
+//! remain for the caller to clean up.
+//! Uses thread_find_lvar() + del(xsink) — bypasses LValueHelper::assign()
+//! which asserts !*xsink (unsafe when a prior destructor already set xsink).
+void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsink);
+
 //! Uninstantiate a local variable from the Qore thread-local variable stack.
 //! Must be called once per local at JIT function exit.
 //! Accepts the LocalVar* to dispatch correctly between lvstack and cvstack
@@ -407,6 +415,9 @@ void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, Ex
 
 //! Instantiate a local variable via AOT context slot
 void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx);
+
+//! Clear a local variable's value via AOT context slot (block scope exit)
+void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! Uninstantiate a local variable via AOT context slot
 void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);

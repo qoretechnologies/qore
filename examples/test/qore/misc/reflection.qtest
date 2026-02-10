@@ -1153,13 +1153,13 @@ class ReflectionTest inherits QUnit::Test {
         {
             Program p(PO_NEW_STYLE | PO_NO_THREAD_CLASSES);
             p.parse("(Class::forName(\"Mutex\")).getConstructorVariant().call();", "");
-            assertThrows("INVALID-FUNCTION-ACCESS", "parse options", \p.run());
+            assertThrows("INVALID-FUNCTION-ACCESS", "access.*method", \p.run());
         }
 
         {
             Program p(PO_NEW_STYLE | PO_NO_THREAD_CLASSES);
             p.parse("(Class::forName(\"Mutex\")).getConstructorVariant().callArgs();", "");
-            assertThrows("INVALID-FUNCTION-ACCESS", "parse options", \p.run());
+            assertThrows("INVALID-FUNCTION-ACCESS", "access.*method", \p.run());
         }
 
         {

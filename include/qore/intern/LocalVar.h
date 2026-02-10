@@ -291,6 +291,15 @@ public:
         return VarValueBase::finalize();
     }
 
+    //! Clears the variable's value under the write lock (runs destructor via decref)
+    /** Unlike finalize(), this does not set the finalized flag — it just clears the value.
+        Used at block scope exit to trigger timely destruction without popping the cvstack.
+    */
+    DLLLOCAL void clearValue(ExceptionSink* xsink) {
+        QoreSafeVarRWWriteLocker sl(rml);
+        val.removeValue(true).discard(xsink);
+    }
+
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
         QoreSafeVarRWReadLocker sl(rml);
         if (val.getType() == NT_REFERENCE) {
