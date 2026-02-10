@@ -48,8 +48,8 @@
 # QoreCodeFormat module for auto-indentation support
 %requires QoreCodeFormat
 
-# QoreCodeCompletion module for shared code completion engine
-%requires QoreCodeCompletion
+# QoreCodeCompletion module for shared code completion engine (re-exported for CompletionItem)
+%requires(reexport) QoreCodeCompletion
 
 module QoreRepl {
     version = "1.0";

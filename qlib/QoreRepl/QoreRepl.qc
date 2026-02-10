@@ -30,21 +30,6 @@ public namespace QoreRepl {
 #! QoreRepl module version
 public const Version = "1.3";
 
-#! Structured completion item - re-exported from QoreCodeCompletion for API compatibility
-public hashdecl CompletionItem {
-    #! Display label for the completion
-    string label;
-    #! Kind of completion: "keyword", "function", "class", "variable", "constant",
-    #! "namespace", "method", "member", "hashdecl", "enum", "enum_value"
-    string kind;
-    #! Optional type signature or detail
-    *string detail;
-    #! Optional documentation comment
-    *string documentation;
-    #! Whether the item is callable (method/function)
-    bool isCallable = False;
-}
-
 #! REPL result indicating the command requests exit
 public const ReplExit = {"exit": True};
 
@@ -2140,7 +2125,7 @@ if (!exists result) {
     /** @param input The current input string
         @return A list of structured CompletionItem hashes
     */
-    list<hash<CompletionItem>> getCompletionDetails(string input) {
+    list<hash<QoreCodeCompletion::CompletionItem>> getCompletionDetails(string input) {
         try {
             # Handle REPL-specific command completion
             if (input.startsWith("/") && input.find(" ") == -1) {
@@ -2150,32 +2135,19 @@ if (!exists result) {
             # Delegate to shared engine
             hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext(input);
             QoreCodeCompletion::CompletionEngine engine(new ReflectionCompletionProvider(pgm));
-            list<hash<QoreCodeCompletion::CompletionItem>> items = engine.completeForContext(ctx);
-
-            # Convert to QoreRepl::CompletionItem
-            list<hash<CompletionItem>> result = ();
-            foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
-                result += <CompletionItem>{
-                    "label": item.label,
-                    "kind": item.kind,
-                    "detail": item.detail,
-                    "documentation": item.documentation,
-                    "isCallable": item.isCallable,
-                };
-            }
-            return result;
+            return engine.completeForContext(ctx);
         } catch () {
             return ();
         }
     }
 
     #! Returns rich completion details for REPL commands
-    private list<hash<CompletionItem>> getCommandDetails(hash<auto> ctx) {
+    private list<hash<QoreCodeCompletion::CompletionItem>> getCommandDetails(hash<auto> ctx) {
         string input_lower = ctx.prefix.lwr();
-        list<hash<CompletionItem>> result = ();
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
         foreach string cmd in (ReplCommands) {
             if (cmd.equalPartial(input_lower)) {
-                result += <CompletionItem>{
+                result += <QoreCodeCompletion::CompletionItem>{
                     "label": cmd,
                     "kind": "keyword",
                 };

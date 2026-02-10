@@ -51,6 +51,11 @@ class DefinitionTest inherits QUnit::Test {
         addTestCase("cross-doc fallback for declaration name", \testCrossDocFallback());
         addTestCase("unknown symbol returns empty", \testUnknownSymbol());
         addTestCase("member field access", \testMemberFieldAccess());
+        addTestCase("inherited method via instance", \testInheritedMethodViaInstance());
+        addTestCase("inherited field via instance", \testInheritedFieldViaInstance());
+        addTestCase("inherited method via scope", \testInheritedMethodViaScope());
+        addTestCase("deep inheritance chain", \testDeepInheritance());
+        addTestCase("inherited constant via scope", \testInheritedConstant());
         addTestCase("missing params", \testMissingParams());
         addTestCase("non-existent document", \testNonExistentDocument());
 
@@ -270,6 +275,144 @@ class Foo {
         if (result && result.size() > 0) {
             assertEq(2, result[0].range.start.line,
                 "member 'count' via self should resolve to line 2");
+        }
+    }
+
+    # Inheritance test source:
+    # Line 0: %modern
+    # Line 1: class Base {
+    # Line 2:     private { int count = 0; }
+    # Line 3:     int getValue() { return count; }
+    # Line 4: }
+    # Line 5: class Child inherits Base {
+    # Line 6:     string getName() { return "child"; }
+    # Line 7: }
+    # Line 8: class GrandChild inherits Child {
+    # Line 9:     bool isValid() { return True; }
+    # Line 10: }
+    # Line 11: sub test() {
+    # Line 12:     Child c();
+    # Line 13:     c.getValue();
+    # Line 14:     c.count;
+    # Line 15:     GrandChild gc();
+    # Line 16:     gc.getValue();
+    # Line 17: }
+    private string getInheritanceCode() {
+        return "%modern
+class Base {
+    private { int count = 0; }
+    int getValue() { return count; }
+}
+class Child inherits Base {
+    string getName() { return \"child\"; }
+}
+class GrandChild inherits Child {
+    bool isValid() { return True; }
+}
+sub test() {
+    Child c();
+    c.getValue();
+    c.count;
+    GrandChild gc();
+    gc.getValue();
+}
+";
+    }
+
+    # Constants test source:
+    # Line 0: %modern
+    # Line 1: class Base {
+    # Line 2:     const VERSION = "1.0";
+    # Line 3: }
+    # Line 4: class Child inherits Base {}
+    # Line 5: Child::VERSION;
+    private string getConstantCode() {
+        return "%modern
+class Base {
+    const VERSION = \"1.0\";
+}
+class Child inherits Base {}
+Child::VERSION;
+";
+    }
+
+    testInheritedMethodViaInstance() {
+        string uri = setupDoc(getInheritanceCode());
+
+        # "getValue" in "c.getValue()" at line 13 col 6 → method in Base at line 3
+        *list<auto> result = sendDefinition(uri, 13, 6);
+        assertTrue(exists result && result.size() > 0,
+            "inherited method 'getValue' via instance should resolve");
+        if (result) {
+            assertEq(3, result[0].range.start.line,
+                "inherited method 'getValue' should resolve to line 3 in Base");
+        }
+    }
+
+    testInheritedFieldViaInstance() {
+        string uri = setupDoc(getInheritanceCode());
+
+        # "count" in "c.count" at line 14 col 6 → member in Base at line 2
+        *list<auto> result = sendDefinition(uri, 14, 6);
+        assertTrue(exists result && result.size() > 0,
+            "inherited field 'count' via instance should resolve");
+        if (result) {
+            assertEq(2, result[0].range.start.line,
+                "inherited field 'count' should resolve to line 2 in Base");
+        }
+    }
+
+    testInheritedMethodViaScope() {
+        # Use a separate source with explicit scope access
+        string scopeCode = "%modern
+class Base {
+    int getValue() { return 0; }
+}
+class Child inherits Base {}
+Child::getValue();
+";
+        # Line 0: %modern
+        # Line 1: class Base {
+        # Line 2:     int getValue() { return 0; }
+        # Line 3: }
+        # Line 4: class Child inherits Base {}
+        # Line 5: Child::getValue();
+        string scopeUri = setupDoc(scopeCode);
+
+        # "getValue" at line 5, col 7 → method in Base at line 2
+        *list<auto> result = sendDefinition(scopeUri, 5, 7);
+        assertTrue(exists result && result.size() > 0,
+            "inherited method 'getValue' via scope should resolve");
+        if (result) {
+            assertEq(2, result[0].range.start.line,
+                "inherited method via scope should resolve to line 2 in Base");
+        }
+    }
+
+    testDeepInheritance() {
+        string uri = setupDoc(getInheritanceCode());
+
+        # "getValue" in "gc.getValue()" at line 16 col 7 → method in Base at line 3
+        # (GrandChild → Child → Base)
+        *list<auto> result = sendDefinition(uri, 16, 7);
+        assertTrue(exists result && result.size() > 0,
+            "deep inherited method 'getValue' should resolve");
+        if (result) {
+            assertEq(3, result[0].range.start.line,
+                "deep inherited method should resolve to line 3 in Base");
+        }
+    }
+
+    testInheritedConstant() {
+        string uri = setupDoc(getConstantCode());
+
+        # "VERSION" in "Child::VERSION" at line 5, col 7 → constant in Base at line 2
+        *list<auto> result = sendDefinition(uri, 5, 7);
+        assertTrue(exists result && result.size() > 0,
+            "inherited constant 'VERSION' should resolve");
+        if (result) {
+            assertEq(2, result[0].range.start.line,
+                "inherited constant should resolve to line 2 in Base");
         }
     }
 

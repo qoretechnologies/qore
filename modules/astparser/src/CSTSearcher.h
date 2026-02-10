@@ -299,6 +299,15 @@ private:
                                        const std::string& name, const char* nodeType,
                                        TSNode* outNode);
 
+    //! Search a class body for a member matching a name, walking the inheritance chain.
+    static bool findMemberInClass(TSNode classNode, const AstParseResult* result,
+                                   const std::string& name, TSNode* outNode);
+
+    //! Search a class body for a member matching a name, with visited set for cycle detection.
+    static bool findMemberInClass(TSNode classNode, const AstParseResult* result,
+                                   const std::string& name, TSNode* outNode,
+                                   std::vector<std::string>& visited);
+
     //! Collect class members into a detail vector.
     static void collectClassMembers(TSNode classNode, const AstParseResult* result,
                                      std::vector<CSTSymbolDetail>* vec,

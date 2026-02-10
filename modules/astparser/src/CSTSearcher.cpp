@@ -1556,8 +1556,27 @@ static bool isFunctionLike(const char* type) {
 }
 
 //! Search a class body for a member matching a name.
-static bool findMemberInClass(TSNode classNode, const AstParseResult* result,
-                               const std::string& name, TSNode* outNode) {
+bool CSTSearcher::findMemberInClass(TSNode classNode, const AstParseResult* result,
+                                     const std::string& name, TSNode* outNode) {
+    std::vector<std::string> visited;
+    return findMemberInClass(classNode, result, name, outNode, visited);
+}
+
+//! Search a class body for a member matching a name, walking the inheritance chain.
+bool CSTSearcher::findMemberInClass(TSNode classNode, const AstParseResult* result,
+                                     const std::string& name, TSNode* outNode,
+                                     std::vector<std::string>& visited) {
+    // Cycle detection
+    std::string className = CSTSearcher::getNodeName(classNode, result);
+    if (!className.empty()) {
+        for (const auto& v : visited) {
+            if (v == className) {
+                return false;
+            }
+        }
+        visited.push_back(className);
+    }
+
     uint32_t childCount = ts_node_named_child_count(classNode);
     for (uint32_t i = 0; i < childCount; i++) {
         TSNode child = ts_node_named_child(classNode, i);
@@ -1596,6 +1615,47 @@ static bool findMemberInClass(TSNode classNode, const AstParseResult* result,
             }
         }
     }
+
+    // Walk superclass_list for inherited members
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(classNode, i);
+        if (strcmp(ts_node_type(child), "superclass_list") != 0) {
+            continue;
+        }
+
+        uint32_t superCount = ts_node_named_child_count(child);
+        for (uint32_t j = 0; j < superCount; j++) {
+            TSNode superclass = ts_node_named_child(child, j);
+            if (strcmp(ts_node_type(superclass), "superclass") != 0) {
+                continue;
+            }
+
+            // Extract parent class name (identifier or scoped_identifier)
+            uint32_t scCount = ts_node_named_child_count(superclass);
+            for (uint32_t k = 0; k < scCount; k++) {
+                TSNode sc = ts_node_named_child(superclass, k);
+                const char* scType = ts_node_type(sc);
+                if (strcmp(scType, "identifier") != 0 &&
+                    strcmp(scType, "scoped_identifier") != 0) {
+                    continue;
+                }
+
+                std::string parentName = result->getNodeText(sc);
+
+                // Find parent class and recurse
+                TSNode root = ts_tree_root_node(result->getTree());
+                TSNode parentClass = root;
+                if (CSTSearcher::findDeclarationByName(root, result, parentName,
+                                                        "class_declaration", &parentClass)) {
+                    if (findMemberInClass(parentClass, result, name, outNode, visited)) {
+                        return true;
+                    }
+                }
+                break;  // only one name per superclass node
+            }
+        }
+    }
+
     return false;
 }
 
