@@ -119,7 +119,12 @@ public class Document {
     }
 
     private:internal handleParseErrors() {
-        tree = NOTHING;
+        # NOTE: do NOT set tree = NOTHING here. Tree-sitter's error recovery produces
+        # partial trees with ERROR nodes that still contain valid structure (classes,
+        # functions, variables). Keeping the tree enables CST features (scope resolution,
+        # symbol search, go-to-definition, etc.) even when the source has parse errors,
+        # which is the normal state while actively editing code.
+        # When the parser returned NOTHING (total failure), tree is already NOTHING.
         parseOk = False;
         parseError = sprintf("Error parsing text document '%s'\n\n", uri);
         if (parser.getErrorCount()) {
