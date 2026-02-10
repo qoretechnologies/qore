@@ -55,6 +55,9 @@ public class Document {
 
         #! Cached split lines for efficient line access.
         *list<string> cachedLines;
+
+        #! Conditional parsing defines (e.g., for %ifdef directives).
+        list<string> defines = ();
     }
 
     constructor(string n_uri, string n_text, string n_languageId, int n_version) {
@@ -106,6 +109,10 @@ public class Document {
         delete tree;
         parseOk = True;
         parser = new astparser::AstParser();
+        if (defines) {
+            parser.setConditionalParsing(True);
+            parser.setDefines(defines);
+        }
     }
 
     private:internal handleParseErrors() {
@@ -455,6 +462,22 @@ public class Document {
             return cachedLines[lineNum];
         }
         return NOTHING;
+    }
+
+    #! Set conditional parsing defines and re-parse
+    /** @param new_defines list of define names (e.g., ("MyDefine", "Debug")); pass NOTHING or empty list to clear
+    */
+    setDefines(*list<string> new_defines) {
+        defines = new_defines ?? ();
+        delete cachedLines;
+        parseText();
+    }
+
+    #! Get the current conditional parsing defines
+    /** @return list of define names
+    */
+    list<string> getDefines() {
+        return defines;
     }
 }
 
