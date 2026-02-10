@@ -155,6 +155,8 @@ public class DataProvider {
 
             "unleashed": "UnleashedDataProvider",
 
+            "wave": "WaveDataProvider",
+
             "zohobooks": "ZohoBooksDataProvider",
             "zohoinvoice": "ZohoInvoiceDataProvider",
         };

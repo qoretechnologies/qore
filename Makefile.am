@@ -65,6 +65,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/DiscordRestClient.qm \
 	qlib/DiscordWebSocketClient.qm \
 	qlib/LinearRestClient.qm \
+	qlib/WaveRestClient.qm \
 	qlib/GoogleRestClient.qm \
 	qlib/HueRestClient.qm \
 	qlib/HttpStreamClient.qm \
@@ -122,6 +123,7 @@ DOX_SPLIT_MODULES = \
     qlib/CdsRestDataProvider \
     qlib/DiscordDataProvider \
     qlib/LinearDataProvider \
+    qlib/WaveDataProvider \
     qlib/FileDataProvider \
 	qlib/FixedLengthUtil \
     qlib/FtpClientDataProvider \
@@ -168,6 +170,7 @@ EdifactUtil_modverdir = $(modverdir)/EdifactUtil
 DbDataProvider_modverdir = $(modverdir)/DbDataProvider
 DiscordDataProvider_modverdir = $(modverdir)/DiscordDataProvider
 LinearDataProvider_modverdir = $(modverdir)/LinearDataProvider
+WaveDataProvider_modverdir = $(modverdir)/WaveDataProvider
 ElasticSearchDataProvider_modverdir = $(modverdir)/ElasticSearchDataProvider
 EmpathicBuildingDataProvider_modverdir = $(modverdir)/EmpathicBuildingDataProvider
 GeneratorDataProvider_modverdir = $(modverdir)/GeneratorDataProvider
@@ -223,6 +226,7 @@ dist_EdifactUtil_modver_DATA = $(wildcard qlib/EdifactUtil/*.q[cm])
 dist_DbDataProvider_modver_DATA = $(wildcard qlib/DbDataProvider/*.q[cm])
 dist_DiscordDataProvider_modver_DATA = $(wildcard qlib/DiscordDataProvider/*.q[cm])
 dist_LinearDataProvider_modver_DATA = $(wildcard qlib/LinearDataProvider/*.q[cm])
+dist_WaveDataProvider_modver_DATA = $(wildcard qlib/WaveDataProvider/*.q[cm])
 dist_ElasticSearchDataProvider_modver_DATA = $(wildcard qlib/ElasticSearchDataProvider/*.q[cm])
 dist_EmpathicBuildingDataProvider_modver_DATA = $(wildcard qlib/EmpathicBuildingDataProvider/*.q[cm])
 dist_GeneratorDataProvider_modver_DATA = $(wildcard qlib/GeneratorDataProvider/*.q[cm])
@@ -1196,6 +1200,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/DbDataProvider/db-logo.svg \
 	qlib/DiscordDataProvider/discord-logo.svg \
 	qlib/LinearDataProvider/linear-logo.svg \
+	qlib/WaveDataProvider/wave-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \
 	qlib/EmpathicBuildingDataProvider/Haltian-EmpathicBuilding.svg \
 	qlib/GeneratorDataProvider/generator-logo.svg \

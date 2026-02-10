@@ -1,0 +1,1378 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  WaveDataProvider.qtest Copyright 2025 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/WaveRestClient.qm
+%requires ../../../../qlib/WaveDataProvider
+
+%exec-class WaveDataProviderTest
+
+public class WaveDataProviderTest inherits QUnit::Test {
+    private {
+        #! Wave REST client for integration tests
+        *WaveRestClient::WaveRestClient client;
+
+        #! Business ID for integration tests
+        *string businessId;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "token": "t,token=s",
+            "conn": "c,connection=s",
+            "business_id": "b,business-id=s",
+        };
+    }
+
+    constructor() : Test("WaveDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require WAVE_TOKEN environment variable or -t option)
+        addTestCase("integration tests", \integrationTests());
+
+        # Webhook trigger tests (require WAVE_TOKEN and webhook infrastructure)
+        addTestCase("webhook trigger tests", \webhookTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Creates a WaveDataProvider for unit tests
+    private *WaveDataProvider::WaveDataProvider tryCreateProvider() {
+        try {
+            return new WaveDataProvider::WaveDataProvider({"token": "x"});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to Wave API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Sets up the Wave client for integration tests
+    private setupConnection() {
+        *string token = m_options.token ?? ENV.WAVE_TOKEN;
+        if (!token) {
+            if (m_options.verbose) {
+                printf("No token provided (use -t option or WAVE_TOKEN env var)\n");
+            }
+            return;
+        }
+        client = new WaveRestClient::WaveRestClient({"token": token});
+
+        # Try to get business ID from option or by querying
+        businessId = m_options.business_id ?? ENV.WAVE_BUSINESS_ID;
+        if (!businessId) {
+            # Query for the first business
+            try {
+                hash<auto> response = client.graphql(WaveDataProvider::ListBusinessesQuery);
+                if (response.body.data.businesses.edges.size() > 0) {
+                    businessId = response.body.data.businesses.edges[0].node.id;
+                    if (m_options.verbose) {
+                        printf("Using business: %s (ID: %s)\n",
+                            response.body.data.businesses.edges[0].node.name, businessId);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to query businesses: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        *WaveDataProvider::WaveDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        assertEq("wave", prov.getName());
+        assertEq("Wave data provider for accounting and invoicing", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("wave");
+        assertEq("wave", factory.getInfo().name);
+        assertEq("Wave data provider factory", factory.getInfo().desc);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("token"));
+        assertTrue(factoryOpts.hasKey("waverestclient"));
+        assertTrue(factoryOpts.hasKey("oauth2_client_id"));
+        assertTrue(factoryOpts.hasKey("oauth2_client_secret"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        *WaveDataProvider::WaveDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertEq("WaveDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("token"));
+        assertTrue(info.constructor_options.hasKey("waverestclient"));
+        assertTrue(info.constructor_options.hasKey("oauth2_client_id"));
+        assertTrue(info.constructor_options.hasKey("oauth2_client_secret"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        *WaveDataProvider::WaveDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+        assertTrue(children.contains("customers"));
+        assertTrue(children.contains("invoices"));
+        assertTrue(children.contains("products"));
+        assertTrue(children.contains("events"));
+        assertTrue(children.contains("create-customer"));
+        assertTrue(children.contains("create-invoice"));
+        assertTrue(children.contains("approve-invoice"));
+        assertTrue(children.contains("send-invoice"));
+        assertTrue(children.contains("delete-customer"));
+        assertTrue(children.contains("update-customer"));
+        assertTrue(children.contains("update-product"));
+        assertTrue(children.contains("execute-graphql"));
+        assertTrue(children.contains("accounts"));
+
+        # Check customers child provider
+        AbstractDataProvider customers = prov.getChildProvider("customers");
+        assertEq("customers", customers.getName());
+        hash<DataProviderInfo> customersInfo = customers.getInfo();
+        assertTrue(customersInfo.supports_read);
+        assertTrue(customersInfo.supports_create);
+        assertTrue(customersInfo.supports_native_search);
+        assertTrue(customersInfo.has_record);
+
+        # Check invoices child provider
+        AbstractDataProvider invoices = prov.getChildProvider("invoices");
+        assertEq("invoices", invoices.getName());
+        hash<DataProviderInfo> invoicesInfo = invoices.getInfo();
+        assertTrue(invoicesInfo.supports_read);
+        assertTrue(invoicesInfo.supports_native_search);
+        assertTrue(invoicesInfo.has_record);
+
+        # Check products child provider
+        AbstractDataProvider products = prov.getChildProvider("products");
+        assertEq("products", products.getName());
+        hash<DataProviderInfo> productsInfo = products.getInfo();
+        assertTrue(productsInfo.supports_read);
+        assertTrue(productsInfo.supports_native_search);
+        assertTrue(productsInfo.has_record);
+
+        # Check accounts child provider
+        AbstractDataProvider accounts = prov.getChildProvider("accounts");
+        assertEq("accounts", accounts.getName());
+        hash<DataProviderInfo> accountsInfo = accounts.getInfo();
+        assertTrue(accountsInfo.supports_read);
+        assertTrue(accountsInfo.supports_native_search);
+        assertTrue(accountsInfo.has_record);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test customer data type
+        WaveDataProvider::WaveCustomerDataType customerType();
+        hash<string, AbstractDataField> customerFields = customerType.getFields();
+        assertTrue(customerFields.hasKey("id"));
+        assertTrue(customerFields.hasKey("name"));
+        assertTrue(customerFields.hasKey("email"));
+        assertTrue(customerFields.hasKey("phone"));
+        assertTrue(customerFields.hasKey("address"));
+        assertTrue(customerFields.hasKey("createdAt"));
+        assertTrue(customerFields.hasKey("modifiedAt"));
+
+        # Test customer create data type
+        WaveDataProvider::WaveCustomerCreateDataType customerCreateType();
+        hash<string, AbstractDataField> customerCreateFields = customerCreateType.getFields();
+        assertTrue(customerCreateFields.hasKey("businessId"));
+        assertTrue(customerCreateFields.hasKey("name"));
+
+        # Test customer update data type
+        WaveDataProvider::WaveCustomerUpdateDataType customerUpdateType();
+        hash<string, AbstractDataField> customerUpdateFields = customerUpdateType.getFields();
+        assertTrue(customerUpdateFields.hasKey("id"));
+        assertTrue(customerUpdateFields.hasKey("name"));
+
+        # Test invoice data type
+        WaveDataProvider::WaveInvoiceDataType invoiceType();
+        hash<string, AbstractDataField> invoiceFields = invoiceType.getFields();
+        assertTrue(invoiceFields.hasKey("id"));
+        assertTrue(invoiceFields.hasKey("invoiceNumber"));
+        assertTrue(invoiceFields.hasKey("status"));
+        assertTrue(invoiceFields.hasKey("customer"));
+        assertTrue(invoiceFields.hasKey("total"));
+        assertTrue(invoiceFields.hasKey("items"));
+
+        # Test invoice create data type
+        WaveDataProvider::WaveInvoiceCreateDataType invoiceCreateType();
+        hash<string, AbstractDataField> invoiceCreateFields = invoiceCreateType.getFields();
+        assertTrue(invoiceCreateFields.hasKey("businessId"));
+        assertTrue(invoiceCreateFields.hasKey("customerId"));
+
+        # Test product data type
+        WaveDataProvider::WaveProductDataType productType();
+        hash<string, AbstractDataField> productFields = productType.getFields();
+        assertTrue(productFields.hasKey("id"));
+        assertTrue(productFields.hasKey("name"));
+        assertTrue(productFields.hasKey("unitPrice"));
+        assertTrue(productFields.hasKey("isSold"));
+        assertTrue(productFields.hasKey("isBought"));
+
+        # Test product create data type
+        WaveDataProvider::WaveProductCreateDataType productCreateType();
+        hash<string, AbstractDataField> productCreateFields = productCreateType.getFields();
+        assertTrue(productCreateFields.hasKey("businessId"));
+        assertTrue(productCreateFields.hasKey("name"));
+
+        # Test account data type
+        WaveDataProvider::WaveAccountDataType accountType();
+        hash<string, AbstractDataField> accountFields = accountType.getFields();
+        assertTrue(accountFields.hasKey("id"));
+        assertTrue(accountFields.hasKey("name"));
+        assertTrue(accountFields.hasKey("type"));
+        assertTrue(accountFields.hasKey("subtype"));
+
+        # Test sales tax data type
+        WaveDataProvider::WaveSalesTaxDataType salesTaxType();
+        hash<string, AbstractDataField> salesTaxFields = salesTaxType.getFields();
+        assertTrue(salesTaxFields.hasKey("id"));
+        assertTrue(salesTaxFields.hasKey("name"));
+        assertTrue(salesTaxFields.hasKey("rate"));
+
+        # Test business data type
+        WaveDataProvider::WaveBusinessDataType businessType();
+        hash<string, AbstractDataField> businessFields = businessType.getFields();
+        assertTrue(businessFields.hasKey("id"));
+        assertTrue(businessFields.hasKey("name"));
+        assertTrue(businessFields.hasKey("type"));
+        assertTrue(businessFields.hasKey("currency"));
+
+        # Test transaction data type
+        WaveDataProvider::WaveTransactionDataType transactionType();
+        hash<string, AbstractDataField> transactionFields = transactionType.getFields();
+        assertTrue(transactionFields.hasKey("id"));
+        assertTrue(transactionFields.hasKey("date"));
+        assertTrue(transactionFields.hasKey("description"));
+
+        # Test webhook event data type
+        WaveDataProvider::WaveInvoiceWebhookEventDataType webhookType();
+        hash<string, AbstractDataField> webhookFields = webhookType.getFields();
+        assertTrue(webhookFields.hasKey("business_id"));
+        assertTrue(webhookFields.hasKey("event"));
+        assertTrue(webhookFields.hasKey("triggered_at"));
+        assertTrue(webhookFields.hasKey("data"));
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        *WaveDataProvider::WaveDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test factory - providers can be created without options (lazy connection)
+        AbstractDataProviderFactory factory = DataProvider::getFactory("wave");
+        try {
+            AbstractDataProvider emptyProv = factory.create({});
+            assertEq("wave", emptyProv.getName());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                # Skip this assertion if connection fails
+            } else {
+                rethrow;
+            }
+        }
+
+        # Test that data types handle field validation
+        WaveDataProvider::WaveCustomerDataType customerType();
+        hash<string, AbstractDataField> fields = customerType.getFields();
+        assertEq("string", fields.id.getType().getName());
+        assertEq("string", fields.name.getType().getName());
+    }
+
+    #! Corner case tests - test edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+        *WaveDataProvider::WaveDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Test empty child provider list iteration
+        list<string> children = prov.getChildProviderNames();
+        assertTrue(children.size() > 0);
+
+        # Test multiple getChildProvider calls return consistent results
+        AbstractDataProvider customers1 = prov.getChildProvider("customers");
+        AbstractDataProvider customers2 = prov.getChildProvider("customers");
+        assertEq(customers1.getName(), customers2.getName());
+        assertEq(customers1.getInfo().type, customers2.getInfo().type);
+
+        # Test provider info consistency
+        hash<DataProviderInfo> info1 = prov.getInfo();
+        hash<DataProviderInfo> info2 = prov.getInfo();
+        assertEq(info1.name, info2.name);
+        assertEq(info1.type, info2.type);
+
+        # Test data type field count consistency
+        WaveDataProvider::WaveCustomerDataType customerType1();
+        WaveDataProvider::WaveCustomerDataType customerType2();
+        assertEq(customerType1.getFields().size(), customerType2.getFields().size());
+
+        # Test all child providers have valid info
+        foreach string childName in (children) {
+            AbstractDataProvider child = prov.getChildProvider(childName);
+            hash<DataProviderInfo> childInfo = child.getInfo();
+            assertTrue(childInfo.name.val());
+            assertTrue(childInfo.type.val());
+        }
+
+        # Test flattenEdges utility
+        hash<auto> testData = {
+            "simple": "value",
+            "nested": {
+                "edges": (
+                    {"node": {"id": "1", "name": "test1"}},
+                    {"node": {"id": "2", "name": "test2"}},
+                ),
+            },
+        };
+        hash<auto> flattened = WaveDataProvider::WaveDataProviderBase::flattenEdges(testData);
+        assertEq("value", flattened.simple);
+        assertEq(2, flattened.nested.size());
+        assertEq("1", flattened.nested[0].id);
+        assertEq("test2", flattened.nested[1].name);
+    }
+
+    #! Connection tests - test connection provider functionality
+    connectionTests() {
+        checkJson();
+        # Test connection scheme is registered
+        hash<auto> schemeInfo = ConnectionSchemeCache::getScheme("wave");
+        assertTrue(schemeInfo.hasKey("cls"));
+        assertEq("WaveRestConnection", schemeInfo.cls.getName());
+
+        # Test connection creation
+        WaveRestClient::WaveRestConnection conn("test-conn", "Test Connection",
+            "wave://gql.waveapps.com/graphql/public", {}, {"token": "test-token"});
+        assertEq("wave", conn.getType());
+        assertTrue(conn.hasDataProvider());
+        assertEq("Wave", conn.getAppName());
+
+        # Test connection scheme info
+        hash<ConnectionSchemeInfo> connScheme = conn.getConnectionSchemeInfo();
+        assertEq("Wave REST Connection", connScheme.display_name);
+        assertTrue(connScheme.schemes.hasKey("wave"));
+
+        # Test connection URL handling
+        string url = conn.getUrl();
+        assertTrue(url.val());
+    }
+
+    #! Action catalog tests - verify action registrations have proper options
+    actionCatalogTests() {
+        checkJson();
+        # Verify Wave app is registered
+        *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Wave");
+        assertTrue(exists app, "Wave app should be registered");
+        assertEq("Wave", app.name);
+        assertEq("Wave", app.display_name);
+
+        # Get all actions for the Wave app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Wave");
+        assertTrue(actions.size() > 0, "Wave app should have actions");
+        assertEq(22, actions.size(), "Wave app should have exactly 22 actions");
+
+        # === Verify create-customer action ===
+        *hash<DataProviderActionInfo> createCustomer = DataProviderActionCatalog::getAppAction("Wave", "create-customer");
+        assertTrue(exists createCustomer, "create-customer action should exist");
+        assertEq("create-customer", createCustomer.action);
+        assertEq(DPAT_API, createCustomer.action_code);
+        assertTrue(createCustomer.options.hasKey("businessId"), "create-customer should have businessId option");
+        assertTrue(createCustomer.options.hasKey("name"), "create-customer should have name option");
+        assertTrue(createCustomer.options.businessId.required, "create-customer businessId should be required");
+        assertTrue(createCustomer.options.name.required, "create-customer name should be required");
+        assertEq("businesses", createCustomer.options.businessId.ref_data, "businessId should have ref_data=businesses");
+
+        # === Verify update-customer action ===
+        *hash<DataProviderActionInfo> updateCustomer = DataProviderActionCatalog::getAppAction("Wave", "update-customer");
+        assertTrue(exists updateCustomer, "update-customer action should exist");
+        assertEq(DPAT_API, updateCustomer.action_code);
+        assertTrue(updateCustomer.options.hasKey("id"), "update-customer should have id option");
+        assertTrue(updateCustomer.options.id.required, "update-customer id should be required");
+        assertEq("customers", updateCustomer.options.id.ref_data, "update-customer id should have ref_data=customers");
+
+        # === Verify delete-customer action ===
+        *hash<DataProviderActionInfo> deleteCustomer = DataProviderActionCatalog::getAppAction("Wave", "delete-customer");
+        assertTrue(exists deleteCustomer, "delete-customer action should exist");
+        assertEq(DPAT_API, deleteCustomer.action_code);
+        assertTrue(deleteCustomer.options.hasKey("id"), "delete-customer should have id option");
+        assertEq("customers", deleteCustomer.options.id.ref_data, "delete-customer id should have ref_data=customers");
+
+        # === Verify create-product action ===
+        *hash<DataProviderActionInfo> createProduct = DataProviderActionCatalog::getAppAction("Wave", "create-product");
+        assertTrue(exists createProduct, "create-product action should exist");
+        assertEq(DPAT_API, createProduct.action_code);
+        assertTrue(createProduct.options.hasKey("businessId"), "create-product should have businessId option");
+        assertTrue(createProduct.options.hasKey("name"), "create-product should have name option");
+        assertEq("businesses", createProduct.options.businessId.ref_data, "businessId should have ref_data=businesses");
+
+        # === Verify update-product action ===
+        *hash<DataProviderActionInfo> updateProduct = DataProviderActionCatalog::getAppAction("Wave", "update-product");
+        assertTrue(exists updateProduct, "update-product action should exist");
+        assertTrue(updateProduct.options.hasKey("id"), "update-product should have id option");
+        assertEq("products", updateProduct.options.id.ref_data, "update-product id should have ref_data=products");
+
+        # === Verify create-invoice action ===
+        *hash<DataProviderActionInfo> createInvoice = DataProviderActionCatalog::getAppAction("Wave", "create-invoice");
+        assertTrue(exists createInvoice, "create-invoice action should exist");
+        assertEq(DPAT_API, createInvoice.action_code);
+        assertTrue(createInvoice.options.hasKey("businessId"), "create-invoice should have businessId option");
+        assertTrue(createInvoice.options.hasKey("customerId"), "create-invoice should have customerId option");
+        assertEq("businesses", createInvoice.options.businessId.ref_data, "businessId should have ref_data=businesses");
+        assertEq("customers", createInvoice.options.customerId.ref_data, "customerId should have ref_data=customers");
+
+        # === Verify approve-invoice action ===
+        *hash<DataProviderActionInfo> approveInvoice = DataProviderActionCatalog::getAppAction("Wave", "approve-invoice");
+        assertTrue(exists approveInvoice, "approve-invoice action should exist");
+        assertEq(DPAT_API, approveInvoice.action_code);
+        assertTrue(approveInvoice.options.hasKey("invoiceId"), "approve-invoice should have invoiceId option");
+        assertEq("invoices", approveInvoice.options.invoiceId.ref_data, "invoiceId should have ref_data=invoices");
+
+        # === Verify send-invoice action ===
+        *hash<DataProviderActionInfo> sendInvoice = DataProviderActionCatalog::getAppAction("Wave", "send-invoice");
+        assertTrue(exists sendInvoice, "send-invoice action should exist");
+        assertEq(DPAT_API, sendInvoice.action_code);
+        assertTrue(sendInvoice.options.hasKey("invoiceId"), "send-invoice should have invoiceId option");
+        assertEq("invoices", sendInvoice.options.invoiceId.ref_data, "invoiceId should have ref_data=invoices");
+
+        # === Verify create-sales-tax action ===
+        *hash<DataProviderActionInfo> createSalesTax = DataProviderActionCatalog::getAppAction("Wave", "create-sales-tax");
+        assertTrue(exists createSalesTax, "create-sales-tax action should exist");
+        assertEq(DPAT_API, createSalesTax.action_code);
+        assertTrue(createSalesTax.options.hasKey("businessId"), "create-sales-tax should have businessId");
+        assertTrue(createSalesTax.options.hasKey("name"), "create-sales-tax should have name");
+        assertTrue(createSalesTax.options.hasKey("rate"), "create-sales-tax should have rate");
+
+        # === Verify create-account action ===
+        *hash<DataProviderActionInfo> createAccount = DataProviderActionCatalog::getAppAction("Wave", "create-account");
+        assertTrue(exists createAccount, "create-account action should exist");
+        assertEq(DPAT_API, createAccount.action_code);
+        assertTrue(createAccount.options.hasKey("type"), "create-account should have type option");
+        assertTrue(createAccount.options.type.allowed_values.size() > 0, "type should have allowed_values");
+
+        # === Verify create-transaction action ===
+        *hash<DataProviderActionInfo> createTransaction = DataProviderActionCatalog::getAppAction("Wave", "create-transaction");
+        assertTrue(exists createTransaction, "create-transaction action should exist");
+        assertEq(DPAT_API, createTransaction.action_code);
+        assertTrue(createTransaction.options.hasKey("businessId"), "create-transaction should have businessId");
+        assertTrue(createTransaction.options.hasKey("externalId"), "create-transaction should have externalId");
+
+        # === Verify create-income-expense action ===
+        *hash<DataProviderActionInfo> createIncomeExpense = DataProviderActionCatalog::getAppAction("Wave", "create-income-expense");
+        assertTrue(exists createIncomeExpense, "create-income-expense action should exist");
+        assertEq(DPAT_API, createIncomeExpense.action_code);
+        assertTrue(createIncomeExpense.options.hasKey("type"), "create-income-expense should have type option");
+        assertTrue(createIncomeExpense.options.type.allowed_values.size() == 2, "type should have 2 allowed_values (income, expense)");
+
+        # === Verify execute-graphql action ===
+        *hash<DataProviderActionInfo> executeGraphql = DataProviderActionCatalog::getAppAction("Wave", "execute-graphql");
+        assertTrue(exists executeGraphql, "execute-graphql action should exist");
+        assertEq(DPAT_API, executeGraphql.action_code);
+        assertTrue(executeGraphql.options.hasKey("query"), "execute-graphql should have query option");
+        assertTrue(executeGraphql.options.query.required, "query should be required");
+
+        # === Verify search-customers action (DPAT_FIND) ===
+        *hash<DataProviderActionInfo> searchCustomers = DataProviderActionCatalog::getAppAction("Wave", "search-customers");
+        assertTrue(exists searchCustomers, "search-customers action should exist");
+        assertEq(DPAT_FIND, searchCustomers.action_code);
+        assertTrue(searchCustomers.options.hasKey("businessId"), "search-customers should have businessId");
+        assertEq("businesses", searchCustomers.options.businessId.ref_data, "businessId should have ref_data=businesses");
+
+        # === Verify search-invoices action (DPAT_FIND) ===
+        *hash<DataProviderActionInfo> searchInvoices = DataProviderActionCatalog::getAppAction("Wave", "search-invoices");
+        assertTrue(exists searchInvoices, "search-invoices action should exist");
+        assertEq(DPAT_FIND, searchInvoices.action_code);
+        assertTrue(searchInvoices.options.hasKey("status"), "search-invoices should have status option");
+        assertTrue(searchInvoices.options.status.allowed_values.size() > 0, "status should have allowed_values");
+
+        # === Verify search-products action (DPAT_FIND) ===
+        *hash<DataProviderActionInfo> searchProducts = DataProviderActionCatalog::getAppAction("Wave", "search-products");
+        assertTrue(exists searchProducts, "search-products action should exist");
+        assertEq(DPAT_FIND, searchProducts.action_code);
+
+        # === Verify get-customer action (DPAT_FIND_SINGLE) ===
+        *hash<DataProviderActionInfo> getCustomer = DataProviderActionCatalog::getAppAction("Wave", "get-customer");
+        assertTrue(exists getCustomer, "get-customer action should exist");
+        assertEq(DPAT_FIND_SINGLE, getCustomer.action_code);
+        assertTrue(getCustomer.options.hasKey("businessId"), "get-customer should have businessId");
+        assertTrue(getCustomer.options.hasKey("id"), "get-customer should have id option");
+        assertEq("customers", getCustomer.options.id.ref_data, "get-customer id should have ref_data=customers");
+        assertTrue(getCustomer.options.id.required, "get-customer id should be required");
+
+        # === Verify get-customer-by-email action (DPAT_FIND_SINGLE) ===
+        *hash<DataProviderActionInfo> getCustomerByEmail = DataProviderActionCatalog::getAppAction("Wave", "get-customer-by-email");
+        assertTrue(exists getCustomerByEmail, "get-customer-by-email action should exist");
+        assertEq(DPAT_FIND_SINGLE, getCustomerByEmail.action_code);
+        assertTrue(getCustomerByEmail.options.hasKey("email"), "get-customer-by-email should have email option");
+        assertTrue(getCustomerByEmail.options.email.required, "email should be required");
+
+        # === Verify invoice-created event (DPAT_EVENT) ===
+        *hash<DataProviderActionInfo> invoiceCreated = DataProviderActionCatalog::getAppAction("Wave", "invoice-created");
+        assertTrue(exists invoiceCreated, "invoice-created action should exist");
+        assertEq(DPAT_EVENT, invoiceCreated.action_code);
+        assertEq(WaveDataProvider::EVENT_INVOICE_CREATED, invoiceCreated.action_val);
+
+        # === Verify get-invoice action (DPAT_FIND_SINGLE) ===
+        *hash<DataProviderActionInfo> getInvoice = DataProviderActionCatalog::getAppAction("Wave", "get-invoice");
+        assertTrue(exists getInvoice, "get-invoice action should exist");
+        assertEq(DPAT_FIND_SINGLE, getInvoice.action_code);
+        assertTrue(getInvoice.options.hasKey("businessId"), "get-invoice should have businessId");
+        assertTrue(getInvoice.options.hasKey("id"), "get-invoice should have id option");
+        assertEq("invoices", getInvoice.options.id.ref_data, "get-invoice id should have ref_data=invoices");
+        assertTrue(getInvoice.options.id.required, "get-invoice id should be required");
+        assertEq("businesses", getInvoice.options.businessId.ref_data, "get-invoice businessId should have ref_data=businesses");
+
+        # === Verify get-product action (DPAT_FIND_SINGLE) ===
+        *hash<DataProviderActionInfo> getProduct = DataProviderActionCatalog::getAppAction("Wave", "get-product");
+        assertTrue(exists getProduct, "get-product action should exist");
+        assertEq(DPAT_FIND_SINGLE, getProduct.action_code);
+        assertTrue(getProduct.options.hasKey("businessId"), "get-product should have businessId");
+        assertTrue(getProduct.options.hasKey("id"), "get-product should have id option");
+        assertEq("products", getProduct.options.id.ref_data, "get-product id should have ref_data=products");
+        assertTrue(getProduct.options.id.required, "get-product id should be required");
+        assertEq("businesses", getProduct.options.businessId.ref_data, "get-product businessId should have ref_data=businesses");
+
+        # === Verify search-accounts action (DPAT_FIND) ===
+        *hash<DataProviderActionInfo> searchAccounts = DataProviderActionCatalog::getAppAction("Wave", "search-accounts");
+        assertTrue(exists searchAccounts, "search-accounts action should exist");
+        assertEq(DPAT_FIND, searchAccounts.action_code);
+        assertTrue(searchAccounts.options.hasKey("businessId"), "search-accounts should have businessId");
+        assertEq("businesses", searchAccounts.options.businessId.ref_data, "search-accounts businessId should have ref_data=businesses");
+
+        if (m_options.verbose) {
+            printf("Action catalog tests passed - all 22 actions have proper options\n");
+            printf("Found %d actions for Wave app\n", actions.size());
+        }
+    }
+
+    #! Integration tests - require actual Wave credentials
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No connection to Wave (set WAVE_TOKEN env var or use -t option)");
+        }
+        if (!businessId) {
+            testSkip("No business ID available (set WAVE_BUSINESS_ID env var or use -b option)");
+        }
+
+        # Test basic API connectivity with user query
+        hash<auto> response = client.graphql(WaveDataProvider::UserQuery);
+        assertTrue(response.body.data.user.hasKey("id"));
+        assertTrue(response.body.data.user.hasKey("firstName"));
+        if (m_options.verbose) {
+            printf("Connected as: %s %s\n", response.body.data.user.firstName,
+                response.body.data.user.lastName);
+        }
+
+        # Test data provider with real connection
+        WaveDataProvider::WaveDataProvider prov(client);
+
+        # ============================================
+        # Test listing customers
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Customer Operations ---\n");
+        }
+
+        AbstractDataProvider customers = prov.getChildProvider("customers");
+        AbstractDataProviderRecordIterator customersIter = customers.searchRecords(
+            NOTHING, {"businessId": businessId, "limit": 5});
+        int customerCount = 0;
+        while (customersIter.next()) {
+            customerCount++;
+            hash<auto> customer = customersIter.getValue();
+            assertTrue(customer.hasKey("id"));
+            assertTrue(customer.hasKey("name"));
+            if (m_options.verbose) {
+                printf("Customer: %s (%s)\n", customer.name, customer.email ?? "no email");
+            }
+        }
+        if (m_options.verbose) {
+            printf("Found %d customer(s)\n", customerCount);
+        }
+
+        # Create a test customer
+        string testCustomerName = "Test Customer QUnit " + now_us().toString();
+        hash<auto> newCustomer = customers.createRecord({
+            "businessId": businessId,
+            "name": testCustomerName,
+            "email": "test-" + now_us().format("YYYYMMDDHHmmssuu") + "@example.com",
+        });
+        assertTrue(newCustomer.hasKey("id"));
+        assertEq(testCustomerName, newCustomer.name);
+        if (m_options.verbose) {
+            printf("Created customer: %s (ID: %s)\n", newCustomer.name, newCustomer.id);
+        }
+
+        # Get the customer by ID
+        AbstractDataProviderRecordIterator getCustomerIter = customers.searchRecords(
+            NOTHING, {"businessId": businessId, "id": newCustomer.id});
+        assertTrue(getCustomerIter.next());
+        hash<auto> fetchedCustomer = getCustomerIter.getValue();
+        assertEq(newCustomer.id, fetchedCustomer.id);
+        assertEq(testCustomerName, fetchedCustomer.name);
+        if (m_options.verbose) {
+            printf("Fetched customer by ID: %s\n", fetchedCustomer.name);
+        }
+
+        # ============================================
+        # Test update-customer action
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Update Customer ---\n");
+        }
+
+        AbstractDataProvider updateCustomerProv = prov.getChildProvider("update-customer");
+        string updatedCustomerName = "Updated Customer " + now_us().toString();
+        string updatedCustomerEmail = "updated-" + now_us().format("YYYYMMDDHHmmssuu") + "@example.com";
+        hash<auto> updatedCustomer = updateCustomerProv.doRequest({
+            "id": newCustomer.id,
+            "name": updatedCustomerName,
+            "email": updatedCustomerEmail,
+        });
+        assertEq(updatedCustomerName, updatedCustomer.name, "Customer name should be updated");
+        assertEq(updatedCustomerEmail, updatedCustomer.email, "Customer email should be updated");
+        if (m_options.verbose) {
+            printf("Updated customer: name=%s email=%s\n", updatedCustomer.name, updatedCustomer.email);
+        }
+
+        # Verify the update persisted by re-fetching
+        AbstractDataProviderRecordIterator verifyUpdateIter = customers.searchRecords(
+            NOTHING, {"businessId": businessId, "id": newCustomer.id});
+        assertTrue(verifyUpdateIter.next());
+        hash<auto> verifiedCustomer = verifyUpdateIter.getValue();
+        assertEq(updatedCustomerName, verifiedCustomer.name, "Persisted customer name should match update");
+        assertEq(updatedCustomerEmail, verifiedCustomer.email, "Persisted customer email should match update");
+        if (m_options.verbose) {
+            printf("Verified update persisted: name=%s email=%s\n", verifiedCustomer.name, verifiedCustomer.email);
+        }
+
+        # ============================================
+        # Test get-customer-by-email (client-side filter)
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Get Customer By Email ---\n");
+        }
+
+        AbstractDataProviderRecordIterator emailIter = customers.searchRecords(
+            NOTHING, {"businessId": businessId, "email": updatedCustomerEmail});
+        assertTrue(emailIter.next(), "Should find customer by email");
+        hash<auto> emailCustomer = emailIter.getValue();
+        assertEq(newCustomer.id, emailCustomer.id, "Email search should return correct customer");
+        assertEq(updatedCustomerName, emailCustomer.name, "Email search customer should have correct name");
+        if (m_options.verbose) {
+            printf("Found customer by email: %s (%s)\n", emailCustomer.name, emailCustomer.email);
+        }
+
+        # Test email search is case-insensitive
+        AbstractDataProviderRecordIterator emailUpperIter = customers.searchRecords(
+            NOTHING, {"businessId": businessId, "email": updatedCustomerEmail.upr()});
+        assertTrue(emailUpperIter.next(), "Email search should be case-insensitive");
+        assertEq(newCustomer.id, emailUpperIter.getValue().id, "Case-insensitive email search should return same customer");
+        if (m_options.verbose) {
+            printf("Case-insensitive email search works\n");
+        }
+
+        # Test email search with non-existent email returns no results
+        AbstractDataProviderRecordIterator noEmailIter = customers.searchRecords(
+            NOTHING, {"businessId": businessId, "email": "nonexistent-" + now_us().format("YYYYMMDDHHmmssuu") + "@example.com"});
+        assertFalse(noEmailIter.next(), "Non-existent email should return no results");
+        if (m_options.verbose) {
+            printf("Non-existent email correctly returns empty results\n");
+        }
+
+        # Delete the test customer (cleanup)
+        AbstractDataProvider deleteCustomerProv = prov.getChildProvider("delete-customer");
+        hash<auto> deleteResult = deleteCustomerProv.doRequest({"id": newCustomer.id});
+        assertTrue(deleteResult.didSucceed);
+        if (m_options.verbose) {
+            printf("Deleted test customer: %s\n", newCustomer.id);
+        }
+
+        # ============================================
+        # Test product operations
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Product Operations ---\n");
+        }
+
+        AbstractDataProvider products = prov.getChildProvider("products");
+        AbstractDataProviderRecordIterator productsIter = products.searchRecords(
+            NOTHING, {"businessId": businessId, "limit": 5});
+        int productCount = 0;
+        while (productsIter.next()) {
+            productCount++;
+            hash<auto> product = productsIter.getValue();
+            assertTrue(product.hasKey("id"));
+            assertTrue(product.hasKey("name"));
+            if (m_options.verbose) {
+                printf("Product: %s (price: %y)\n", product.name, product.unitPrice);
+            }
+        }
+        if (m_options.verbose) {
+            printf("Found %d product(s)\n", productCount);
+        }
+
+        # Find an income account for product creation (required by Wave API)
+        # Must be subtype INCOME (not GAIN_ON_FOREIGN_EXCHANGE, OTHER_INCOME, etc.)
+        *string incomeAccountId;
+        {
+            int acctPage = 1;
+            while (!incomeAccountId) {
+                hash<auto> accountsResponse = client.graphql(WaveDataProvider::ListAccountsQuery, {
+                    "businessId": businessId, "page": acctPage, "pageSize": 50,
+                });
+                foreach hash<auto> edge in (accountsResponse.body.data.business.accounts.edges) {
+                    if (edge.node.type.value == "INCOME" && edge.node.subtype.value == "INCOME") {
+                        incomeAccountId = edge.node.id;
+                        if (m_options.verbose) {
+                            printf("Using income account: %s\n", edge.node.name);
+                        }
+                        break;
+                    }
+                }
+                if (acctPage >= accountsResponse.body.data.business.accounts.pageInfo.totalPages) {
+                    break;
+                }
+                acctPage++;
+            }
+        }
+        if (!incomeAccountId) {
+            testSkip("No suitable income account found for product creation");
+        }
+
+        # Create a test product
+        string testProductName = "Test Product QUnit " + now_us().toString();
+        AbstractDataProvider createProductProv = prov.getChildProvider("create-product");
+        hash<auto> newProduct = createProductProv.doRequest({
+            "businessId": businessId,
+            "name": testProductName,
+            "unitPrice": 99.99,
+            "incomeAccountId": incomeAccountId,
+        });
+        assertTrue(newProduct.hasKey("id"), "Created product should have an id");
+        assertEq(testProductName, newProduct.name, "Created product name should match input");
+        if (m_options.verbose) {
+            printf("Created product: %s (ID: %s)\n", newProduct.name, newProduct.id);
+        }
+
+        # Verify the product can be found in the list
+        AbstractDataProviderRecordIterator verifyProductIter = products.searchRecords(
+            NOTHING, {"businessId": businessId, "limit": 100});
+        bool foundProduct = False;
+        while (verifyProductIter.next()) {
+            hash<auto> p = verifyProductIter.getValue();
+            if (p.id == newProduct.id) {
+                foundProduct = True;
+                assertEq(testProductName, p.name, "Product name should persist in listing");
+                break;
+            }
+        }
+        assertTrue(foundProduct, "Created product should appear in product listing");
+        if (m_options.verbose) {
+            printf("Verified product appears in listing\n");
+        }
+
+        # Update the test product
+        AbstractDataProvider updateProductProv = prov.getChildProvider("update-product");
+        string updatedProductName = "Updated Product " + now_us().toString();
+        hash<auto> updatedProduct = updateProductProv.doRequest({
+            "id": newProduct.id,
+            "name": updatedProductName,
+            "unitPrice": 149.99,
+        });
+        assertEq(updatedProductName, updatedProduct.name, "Updated product name should match input");
+        if (m_options.verbose) {
+            printf("Updated product: %s\n", updatedProduct.name);
+        }
+
+        # Verify the update persisted by re-listing
+        AbstractDataProviderRecordIterator verifyProductUpdateIter = products.searchRecords(
+            NOTHING, {"businessId": businessId, "limit": 100});
+        bool foundUpdatedProduct = False;
+        while (verifyProductUpdateIter.next()) {
+            hash<auto> p = verifyProductUpdateIter.getValue();
+            if (p.id == newProduct.id) {
+                foundUpdatedProduct = True;
+                assertEq(updatedProductName, p.name, "Updated product name should persist");
+                break;
+            }
+        }
+        assertTrue(foundUpdatedProduct, "Updated product should still appear in listing");
+        if (m_options.verbose) {
+            printf("Verified product update persisted\n");
+        }
+
+        # ============================================
+        # Test invoice operations
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Invoice Operations ---\n");
+        }
+
+        # Create a customer first for invoicing
+        string invoiceCustomerName = "Invoice Test Customer " + now_us().toString();
+        hash<auto> invoiceCustomer = customers.createRecord({
+            "businessId": businessId,
+            "name": invoiceCustomerName,
+            "email": "invoice-test-" + now_us().format("YYYYMMDDHHmmssuu") + "@example.com",
+        });
+
+        # List invoices
+        AbstractDataProvider invoices = prov.getChildProvider("invoices");
+        AbstractDataProviderRecordIterator invoicesIter = invoices.searchRecords(
+            NOTHING, {"businessId": businessId, "limit": 5});
+        int invoiceCount = 0;
+        while (invoicesIter.next()) {
+            invoiceCount++;
+            hash<auto> invoice = invoicesIter.getValue();
+            assertTrue(invoice.hasKey("id"));
+            assertTrue(invoice.hasKey("invoiceNumber"));
+            if (m_options.verbose) {
+                printf("Invoice: #%s - %s (%s)\n", invoice.invoiceNumber,
+                    invoice.customer.name ?? "unknown", invoice.status);
+            }
+        }
+        if (m_options.verbose) {
+            printf("Found %d invoice(s)\n", invoiceCount);
+        }
+
+        # Create a test invoice
+        AbstractDataProvider createInvoiceProv = prov.getChildProvider("create-invoice");
+        hash<auto> newInvoice = createInvoiceProv.doRequest({
+            "businessId": businessId,
+            "customerId": invoiceCustomer.id,
+            "status": "DRAFT",
+        });
+        assertTrue(newInvoice.hasKey("id"), "Created invoice should have an id");
+        assertTrue(newInvoice.hasKey("invoiceNumber"), "Created invoice should have an invoiceNumber");
+        assertEq("DRAFT", newInvoice.status, "Created invoice should be in DRAFT status");
+        if (m_options.verbose) {
+            printf("Created invoice: #%s (ID: %s, status: %s)\n", newInvoice.invoiceNumber, newInvoice.id,
+                newInvoice.status);
+        }
+
+        # Verify the invoice appears in the listing
+        AbstractDataProviderRecordIterator verifyInvoiceIter = invoices.searchRecords(
+            NOTHING, {"businessId": businessId, "limit": 100});
+        bool foundInvoice = False;
+        while (verifyInvoiceIter.next()) {
+            hash<auto> inv = verifyInvoiceIter.getValue();
+            if (inv.id == newInvoice.id) {
+                foundInvoice = True;
+                assertEq(newInvoice.invoiceNumber, inv.invoiceNumber, "Invoice number should persist");
+                break;
+            }
+        }
+        assertTrue(foundInvoice, "Created invoice should appear in invoice listing");
+        if (m_options.verbose) {
+            printf("Verified invoice appears in listing\n");
+        }
+
+        # ============================================
+        # Test get-invoice (DPAT_FIND_SINGLE via id search option)
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Get Invoice by ID ---\n");
+        }
+
+        AbstractDataProviderRecordIterator getInvoiceIter = invoices.searchRecords(
+            NOTHING, {"businessId": businessId, "id": newInvoice.id});
+        assertTrue(getInvoiceIter.next(), "Should find invoice by ID");
+        hash<auto> fetchedInvoice = getInvoiceIter.getValue();
+        assertEq(newInvoice.id, fetchedInvoice.id, "Fetched invoice ID should match");
+        assertEq(newInvoice.invoiceNumber, fetchedInvoice.invoiceNumber, "Fetched invoice number should match");
+        assertEq("DRAFT", fetchedInvoice.status, "Fetched invoice status should be DRAFT");
+        assertFalse(getInvoiceIter.next(), "Should only return one invoice");
+        if (m_options.verbose) {
+            printf("Fetched invoice by ID: #%s (status: %s)\n", fetchedInvoice.invoiceNumber,
+                fetchedInvoice.status);
+        }
+
+        # Test get-invoice with non-existent ID returns empty results
+        AbstractDataProviderRecordIterator emptyInvoiceIter = invoices.searchRecords(
+            NOTHING, {"businessId": businessId, "id": "QnVzaW5lc3M6AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="});
+        assertFalse(emptyInvoiceIter.next(), "Non-existent invoice ID should return empty results");
+        if (m_options.verbose) {
+            printf("Verified non-existent invoice ID returns empty results\n");
+        }
+
+        # ============================================
+        # Test get-product (DPAT_FIND_SINGLE via id search option)
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Get Product by ID ---\n");
+        }
+
+        AbstractDataProviderRecordIterator getProductIter = products.searchRecords(
+            NOTHING, {"businessId": businessId, "id": newProduct.id});
+        assertTrue(getProductIter.next(), "Should find product by ID");
+        hash<auto> fetchedProduct = getProductIter.getValue();
+        assertEq(newProduct.id, fetchedProduct.id, "Fetched product ID should match");
+        assertEq(updatedProductName, fetchedProduct.name, "Fetched product name should match updated name");
+        assertFalse(getProductIter.next(), "Should only return one product");
+        if (m_options.verbose) {
+            printf("Fetched product by ID: %s (price: %y)\n", fetchedProduct.name,
+                fetchedProduct.unitPrice);
+        }
+
+        # Test get-product with non-existent ID returns empty results
+        AbstractDataProviderRecordIterator emptyProductIter = products.searchRecords(
+            NOTHING, {"businessId": businessId, "id": "QnVzaW5lc3M6AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="});
+        assertFalse(emptyProductIter.next(), "Non-existent product ID should return empty results");
+        if (m_options.verbose) {
+            printf("Verified non-existent product ID returns empty results\n");
+        }
+
+        # ============================================
+        # Test search-accounts (DPAT_FIND)
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Search Accounts ---\n");
+        }
+
+        AbstractDataProvider accountsProv = prov.getChildProvider("accounts");
+        AbstractDataProviderRecordIterator accountsIter = accountsProv.searchRecords(
+            NOTHING, {"businessId": businessId, "limit": 10});
+        int accountCount = 0;
+        while (accountsIter.next()) {
+            accountCount++;
+            hash<auto> account = accountsIter.getValue();
+            assertTrue(account.hasKey("id"), "Account should have id field");
+            assertTrue(account.hasKey("name"), "Account should have name field");
+            assertTrue(account.hasKey("type"), "Account should have type field");
+            if (m_options.verbose) {
+                printf("Account: %s (%s - %s)\n", account.name,
+                    account.type.name ?? "unknown type", account.subtype.name ?? "unknown subtype");
+            }
+        }
+        assertTrue(accountCount > 0, "Business should have at least one account");
+        if (m_options.verbose) {
+            printf("Found %d account(s)\n", accountCount);
+        }
+
+        # Cleanup - delete the invoice first, then the customer (Wave won't delete a customer with invoices)
+        AbstractDataProvider executeGraphqlCleanup = prov.getChildProvider("execute-graphql");
+        hash<auto> deleteInvoiceResult = executeGraphqlCleanup.doRequest({
+            "query": "mutation InvoiceDelete($input: InvoiceDeleteInput!) { invoiceDelete(input: $input) { "
+                "didSucceed inputErrors { code message path } } }",
+            "variables": {"input": {"invoiceId": newInvoice.id}},
+        });
+        assertTrue(deleteInvoiceResult.invoiceDelete.didSucceed, "Invoice should be deleted successfully");
+        if (m_options.verbose) {
+            printf("Deleted test invoice: %s\n", newInvoice.id);
+        }
+
+        deleteCustomerProv.doRequest({"id": invoiceCustomer.id});
+        if (m_options.verbose) {
+            printf("Cleaned up invoice test customer\n");
+        }
+
+        # ============================================
+        # Test search with filters returning no results
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Empty Search Results ---\n");
+        }
+
+        # Search for a non-existent customer ID - should return empty results
+        # NOTE: Wave soft-deletes customers (accounting data must be preserved), so we use a
+        # fabricated ID that doesn't exist rather than deleting one
+        string fakeId = "QnVzaW5lc3M6AAAAAAAAAAAAAAAAAAAAAAAAAAAAO0N1c3RvbWVyOjk5OTk5OTk5OQ==";
+        AbstractDataProviderRecordIterator emptyIter = customers.searchRecords(
+            NOTHING, {"businessId": businessId, "id": fakeId});
+        assertFalse(emptyIter.next(), "Non-existent customer ID should return empty results");
+        if (m_options.verbose) {
+            printf("Verified non-existent customer ID returns empty results\n");
+        }
+
+        # ============================================
+        # Test execute-graphql action
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Execute GraphQL ---\n");
+        }
+
+        AbstractDataProvider executeGraphqlProv = prov.getChildProvider("execute-graphql");
+        hash<auto> graphqlResult = executeGraphqlProv.doRequest({
+            "query": WaveDataProvider::UserQuery,
+        });
+        assertTrue(graphqlResult.hasKey("user"));
+        assertTrue(graphqlResult.user.hasKey("id"));
+        if (m_options.verbose) {
+            printf("GraphQL query returned user: %s %s\n", graphqlResult.user.firstName,
+                graphqlResult.user.lastName);
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- All Integration Tests Completed Successfully ---\n");
+        }
+    }
+
+    #! Webhook trigger tests
+    webhookTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No connection to Wave (set WAVE_TOKEN env var or use -t option)");
+        }
+
+        # Track webhooks created/deleted to verify lifecycle
+        list<hash<auto>> created_webhooks = ();
+        list<int> deleted_webhook_ids = ();
+        int webhook_counter = 0;
+
+        # Register mock webhook APIs for testing
+        bool registered_mock = False;
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            code mockCreate = hash<auto> sub (hash<auto> config) {
+                webhook_counter++;
+                string url = sprintf("https://test-webhook-%d.example.com/wave", webhook_counter);
+                hash<auto> ctx = {
+                    "id": webhook_counter,
+                    "config": config,
+                };
+                created_webhooks += {"url": url, "ctx": ctx};
+                return {"url": url, "ctx": ctx};
+            };
+            code mockDelete = sub (hash<auto> info) {
+                deleted_webhook_ids += info.ctx.id;
+            };
+            DataProvider::DataProviderWebhook::registerWebhookApis(mockCreate, mockDelete);
+            registered_mock = True;
+        }
+
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            testSkip("Webhook infrastructure not available and could not register mock");
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Webhook Trigger ---\n");
+        }
+
+        # ============================================
+        # Test Invoice Created Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting WaveInvoiceEventDataProvider (invoice-created)...\n");
+        }
+
+        # Create invoice event provider
+        WaveDataProvider::WaveInvoiceEventDataProvider invoiceCreatedProvider(client, {
+            "event_type": WaveDataProvider::EVENT_INVOICE_CREATED,
+        });
+
+        # Verify provider metadata
+        assertEq(WaveDataProvider::EVENT_INVOICE_CREATED, invoiceCreatedProvider.getName());
+        assertTrue(invoiceCreatedProvider.getInfo().supports_observable);
+
+        # Get event types
+        hash<string, hash<DataProviderMessageInfo>> eventTypes = invoiceCreatedProvider.getEventTypes();
+        assertTrue(eventTypes.hasKey(WaveDataProvider::EVENT_INVOICE_CREATED));
+        assertTrue(eventTypes{WaveDataProvider::EVENT_INVOICE_CREATED}.desc.val());
+
+        # Get example event data and verify structure
+        auto exampleData = invoiceCreatedProvider.getExampleEventData(WaveDataProvider::EVENT_INVOICE_CREATED);
+        assertTrue(exampleData.hasKey("business_id"), "Example data should have business_id");
+        assertTrue(exampleData.hasKey("event"), "Example data should have event");
+        assertTrue(exampleData.hasKey("triggered_at"), "Example data should have triggered_at");
+        assertTrue(exampleData.hasKey("data"), "Example data should have data");
+        assertEq(WaveDataProvider::WaveActionCreated, exampleData.event);
+
+        # Verify data contains invoice fields
+        assertTrue(exampleData.data.hasKey("id"), "Example invoice data should have id");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys eventTypes);
+            printf("  Example data has keys: %y\n", keys exampleData);
+        }
+
+        # Track webhook count before
+        int webhookCountBefore = created_webhooks.size();
+
+        # Create a test observer and test webhook lifecycle
+        TestObserver observer();
+        invoiceCreatedProvider.registerObserver(observer);
+
+        # Trigger observer ready - creates local webhook
+        invoiceCreatedProvider.observersReady();
+
+        if (registered_mock) {
+            assertEq(webhookCountBefore + 1, created_webhooks.size(), "One webhook should have been created");
+        }
+
+        if (m_options.verbose) {
+            printf("  Webhook endpoint created successfully\n");
+        }
+
+        # Track delete count before
+        int deleteCountBefore = deleted_webhook_ids.size();
+
+        # Stop events - cleans up webhook
+        invoiceCreatedProvider.stopEvents();
+
+        if (registered_mock) {
+            assertEq(deleteCountBefore + 1, deleted_webhook_ids.size(), "One webhook should have been deleted");
+        }
+
+        if (m_options.verbose) {
+            printf("  Invoice-created webhook lifecycle test passed\n");
+        }
+
+        # ============================================
+        # Test Business ID Filter
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting business ID filter option...\n");
+        }
+
+        WaveDataProvider::WaveInvoiceEventDataProvider filteredProvider(client, {
+            "event_type": WaveDataProvider::EVENT_INVOICE_CREATED,
+            "businessId": businessId ?? "test-business-id",
+        });
+
+        assertEq(WaveDataProvider::EVENT_INVOICE_CREATED, filteredProvider.getName());
+
+        TestObserver filteredObserver();
+        filteredProvider.registerObserver(filteredObserver);
+
+        int beforeFilterCount = created_webhooks.size();
+        filteredProvider.observersReady();
+        if (registered_mock) {
+            assertEq(beforeFilterCount + 1, created_webhooks.size(),
+                "Filtered provider should create a webhook");
+        }
+
+        filteredProvider.stopEvents();
+        if (m_options.verbose) {
+            printf("  Business ID filter test passed\n");
+        }
+
+        # ============================================
+        # Test Multiple Webhooks Simultaneously
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting multiple webhooks simultaneously...\n");
+        }
+
+        WaveDataProvider::WaveInvoiceEventDataProvider multi1(client, {
+            "event_type": WaveDataProvider::EVENT_INVOICE_CREATED,
+        });
+        WaveDataProvider::WaveInvoiceEventDataProvider multi2(client, {
+            "event_type": WaveDataProvider::EVENT_INVOICE_CREATED,
+            "businessId": "test-multi-business-1",
+        });
+
+        TestObserver multiObserver1();
+        TestObserver multiObserver2();
+
+        multi1.registerObserver(multiObserver1);
+        multi2.registerObserver(multiObserver2);
+
+        int beforeMultiCount = created_webhooks.size();
+
+        # Register both
+        multi1.observersReady();
+        multi2.observersReady();
+
+        if (registered_mock) {
+            assertEq(beforeMultiCount + 2, created_webhooks.size(),
+                "Two webhooks should have been created simultaneously");
+        }
+
+        if (m_options.verbose) {
+            printf("  Created 2 webhooks simultaneously\n");
+        }
+
+        # Stop both
+        int beforeMultiDeleteCount = deleted_webhook_ids.size();
+        multi1.stopEvents();
+        multi2.stopEvents();
+
+        if (registered_mock) {
+            assertEq(beforeMultiDeleteCount + 2, deleted_webhook_ids.size(),
+                "Both webhooks should have been deleted");
+        }
+
+        if (m_options.verbose) {
+            printf("  Deleted both webhooks successfully\n");
+        }
+
+        # ============================================
+        # Test Destructor Cleanup
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting destructor cleanup...\n");
+        }
+
+        int beforeDestructorCreateCount = created_webhooks.size();
+        int beforeDestructorDeleteCount = deleted_webhook_ids.size();
+
+        {
+            WaveDataProvider::WaveInvoiceEventDataProvider destructorTest(client, {
+                "event_type": WaveDataProvider::EVENT_INVOICE_CREATED,
+            });
+            TestObserver destructorObserver();
+            destructorTest.registerObserver(destructorObserver);
+            destructorTest.observersReady();
+
+            # Verify webhook was created
+            if (registered_mock) {
+                assertEq(beforeDestructorCreateCount + 1, created_webhooks.size(),
+                    "Webhook should be created before destructor");
+            }
+        }
+        # destructorTest goes out of scope, destructor should clean up
+
+        # Small delay to allow cleanup to complete
+        sleep(1);
+
+        if (registered_mock) {
+            assertEq(beforeDestructorDeleteCount + 1, deleted_webhook_ids.size(),
+                "Destructor should have deleted the webhook");
+        }
+
+        if (m_options.verbose) {
+            printf("  Destructor cleanup test passed\n");
+        }
+
+        # ============================================
+        # Test Events via Root Provider Hierarchy
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting events via root provider hierarchy...\n");
+        }
+
+        WaveDataProvider::WaveDataProvider rootProv(client);
+        AbstractDataProvider events = rootProv.getChildProvider("events");
+        assertEq("events", events.getName());
+
+        # Get child providers of events
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains(WaveDataProvider::EVENT_INVOICE_CREATED),
+            "Events provider should have invoice-created child");
+
+        # Get the invoice-created event provider from the hierarchy
+        AbstractDataProvider invoiceEventFromHierarchy = events.getChildProvider(WaveDataProvider::EVENT_INVOICE_CREATED);
+        assertEq(WaveDataProvider::EVENT_INVOICE_CREATED, invoiceEventFromHierarchy.getName());
+        assertTrue(invoiceEventFromHierarchy.getInfo().supports_observable);
+
+        if (m_options.verbose) {
+            printf("  Events hierarchy test passed\n");
+            printf("\n--- All Webhook Trigger Tests Completed Successfully ---\n");
+        }
+    }
+}
+
+#! Test observer for webhook events
+class TestObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events += {"event_id": event_id, "data": data_};
+    }
+}

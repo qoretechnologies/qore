@@ -522,6 +522,19 @@ cargo install tree-sitter-cli@0.26.5
       - search capabilities with filtering for all entity types
       - action catalog integration with sensible default actions
       - connection support with \c linear:// URL scheme
+    - @ref waverestclientintro "WaveRestClient" module
+      - new module providing a REST client for Wave's GraphQL API
+      - supports OAuth2 authentication with Bearer tokens
+      - provides WaveRestConnection for connection management with \c wave:// URL scheme
+    - @ref wavedataproviderintro "WaveDataProvider" module
+      - new module providing a data provider API for Wave accounting and invoicing services
+      - hierarchical data provider structure: customers, invoices, products, accounts, transactions, sales taxes
+      - full CRUD support for customers; create/read/update for products; create/read for invoices and accounts; create-only for transactions and sales taxes
+      - invoice workflow actions: approve and send via email
+      - search capabilities with filtering for customers, invoices, and products
+      - action catalog integration with 22 actions
+      - webhook-based event trigger for new invoices
+      - connection support with \c wave:// URL scheme
     - @ref mailgunrestclientintro "MailgunRestClient" module
       - new module providing a REST client for Mailgun's email API
       - supports API key authentication with US and EU region endpoints
