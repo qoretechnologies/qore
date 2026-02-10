@@ -98,7 +98,7 @@ if (result.value) {
 
 # Multi-line input
 result = repl.eval("if (True) {");  # Returns NOTHING - needs more input
-printf("Prompt: %s\n", repl.getPrompt());  # "...> "
+printf("Prompt: %s\n", repl.getPrompt());  # "    > "
 result = repl.eval("    print('hello');");
 result = repl.eval("}");  # Now complete, executes
     @endcode

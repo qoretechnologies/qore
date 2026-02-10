@@ -245,7 +245,7 @@ class SignatureHelpTest inherits QUnit::Test {
     }
 
     testNonExistentDocument() {
-        string uri = setupDoc(FuncSource);
+        setupDoc(FuncSource);
 
         hash<auto> req = makeRequest("textDocument/signatureHelp", {
             "textDocument": {"uri": "file:///nonexistent.q"},

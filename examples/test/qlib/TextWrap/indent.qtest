@@ -6,8 +6,7 @@
 %require-types
 %enable-all-warnings
 
-%requires Util
-
+%requires ../../../../qlib/Util.qm
 %exec-class IndentTest
 
 #! Test TextWrap::indent()

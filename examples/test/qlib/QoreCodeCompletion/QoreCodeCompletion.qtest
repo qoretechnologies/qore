@@ -24,8 +24,8 @@
 
 %modern
 
-%requires QUnit
-%requires QoreCodeCompletion
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreCodeCompletion
 
 %exec-class QoreCodeCompletionTest
 

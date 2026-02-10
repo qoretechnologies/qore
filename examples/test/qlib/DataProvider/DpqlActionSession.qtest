@@ -24,8 +24,8 @@
 
 %modern
 
-%requires QUnit
-%requires DataProvider
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
 
 %exec-class DpqlActionSessionTest
 

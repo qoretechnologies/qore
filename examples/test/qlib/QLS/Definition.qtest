@@ -298,7 +298,7 @@ class Foo {
     }
 
     testNonExistentDocument() {
-        string uri = setupDoc();
+        setupDoc();
 
         hash<auto> req = makeRequest("textDocument/definition", {
             "textDocument": {"uri": "file:///nonexistent.q"},

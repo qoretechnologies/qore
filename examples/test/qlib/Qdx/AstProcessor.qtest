@@ -25,9 +25,9 @@
 %modern
 %exec-class AstProcessorTests
 
-%requires Qdx
+%requires ../../../../qlib/Qdx.qm
 %requires astparser
-%requires QUnit
+%requires ../../../../qlib/QUnit.qm
 
 public class AstProcessorTests inherits QUnit::Test {
     constructor() : Test("AstProcessorTests", "1.0") {

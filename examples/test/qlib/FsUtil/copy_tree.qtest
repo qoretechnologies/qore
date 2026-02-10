@@ -1,7 +1,6 @@
 #!/usr/bin/env qore
 
-%requires Util
-
+%requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/FsUtil.qm
 %requires ../../../../qlib/QUnit.qm
 
