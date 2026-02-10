@@ -24,50 +24,29 @@
 
 %modern
 
-%requires QUnit
-%requires Logger
-%requires FsUtil
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/FsUtil.qm
 
 %try-module json
 %define NoJson
 %endtry
 
-%try-module HttpServerUtil
-%define NoHttpServerUtil
-%endtry
-
-%try-module HttpServerAsyncIo
-%define NoHttpServerAsyncIo
-%endtry
-
-%try-module HttpServer
-%define NoHttpServer
-%endtry
-
-%try-module WebSocketClient
-%define NoWebSocketClient
-%endtry
-
-%try-module WebSocketHandler
-%define NoWebSocketHandler
-%endtry
-
-%try-module DpqlWebSocket
-%define NoDpqlWebSocket
-%endtry
-
-%try-module CsvUtil
-%define NoCsvUtil
-%endtry
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/DpqlWebSocket
+%requires ../../../../qlib/CsvUtil
 
 %exec-class DpqlWebSocketTest
 
 public class DpqlWebSocketTest inherits QUnit::Test {
     public {
-%if !defined(NoDpqlWebSocket) && !defined(NoHttpServer)
         HttpServer server;
         DataProvider::DpqlWebSocketHandler ws_handler;
-%endif
         Logger logger;
         int port;
         TmpDir csv_dir;
@@ -77,27 +56,6 @@ public class DpqlWebSocketTest inherits QUnit::Test {
     private checkModule() {
 %ifdef NoJson
         testSkip("no json module");
-%endif
-%ifdef NoHttpServerUtil
-        testSkip("no HttpServerUtil module");
-%endif
-%ifdef NoHttpServerAsyncIo
-        testSkip("no HttpServerAsyncIo module");
-%endif
-%ifdef NoHttpServer
-        testSkip("no HttpServer module");
-%endif
-%ifdef NoWebSocketClient
-        testSkip("no WebSocketClient module");
-%endif
-%ifdef NoWebSocketHandler
-        testSkip("no WebSocketHandler module");
-%endif
-%ifdef NoDpqlWebSocket
-        testSkip("no DpqlWebSocket module");
-%endif
-%ifdef NoCsvUtil
-        testSkip("no CsvUtil module");
 %endif
     }
 
@@ -125,7 +83,6 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         csv_path = csv_dir.path + "/data.csv";
         writeCsvFile();
 
-%if !defined(NoDpqlWebSocket) && !defined(NoHttpServer)
         ws_handler = new DataProvider::DpqlWebSocketHandler(NOTHING, {
             "logger": logger,
         });
@@ -138,7 +95,6 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         server.setHandler("dpql", "/ws/dpql", NOTHING, ws_handler);
         port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         on_exit server.stop();
-%endif
 
         set_return_value(main());
     }
@@ -227,7 +183,6 @@ public class DpqlWebSocketTest inherits QUnit::Test {
 
     testHandlerOptions() {
         checkModule();
-%if !defined(NoDpqlWebSocket)
         DataProvider::DpqlWebSocketHandler h();
         assertEq(0, h.getMaxConnections(), "Default max connections should be 0");
 
@@ -240,21 +195,17 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
             new DataProvider::DpqlWebSocketHandler(NOTHING, {"max_connections": -1});
         });
-%endif
     }
 
     testSessionConnection() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoWebSocketClient)
         hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
         WebSocketClient client = cx.client;
         client.disconnect();
-%endif
     }
 
     testContextResponse() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoWebSocketClient)
         hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
         Queue msgs = cx.messages;
         WebSocketClient client = cx.client;
@@ -272,12 +223,10 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertTrue(has_name, "Context should include 'name' field");
 
         client.disconnect();
-%endif
     }
 
     testTokenize() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoWebSocketClient)
         hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
         Queue msgs = cx.messages;
         WebSocketClient client = cx.client;
@@ -290,12 +239,10 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertEq(DPQL_TOK_FIELD, response.tokens[0].type);
 
         client.disconnect();
-%endif
     }
 
     testParse() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoWebSocketClient)
         hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
         Queue msgs = cx.messages;
         WebSocketClient client = cx.client;
@@ -308,12 +255,10 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertTrue(response.diagnostics.size() > 0, "Parse diagnostics expected");
 
         client.disconnect();
-%endif
     }
 
     testValidate() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoWebSocketClient)
         hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
         Queue msgs = cx.messages;
         WebSocketClient client = cx.client;
@@ -326,12 +271,10 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertTrue(response.diagnostics[0].code == "DPQL-E010", "Unknown field diagnostic");
 
         client.disconnect();
-%endif
     }
 
     testComplete() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoWebSocketClient)
         hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
         Queue msgs = cx.messages;
         WebSocketClient client = cx.client;
@@ -351,12 +294,10 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertTrue(has_name, "Completion should include 'name'");
 
         client.disconnect();
-%endif
     }
 
     testSerialize() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoWebSocketClient)
         hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
         Queue msgs = cx.messages;
         WebSocketClient client = cx.client;
@@ -378,12 +319,10 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertEq('@name == "John"', response.dpql);
 
         client.disconnect();
-%endif
     }
 
     testNoContextCompletion() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoWebSocketClient)
         hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
         Queue msgs = cx.messages;
         WebSocketClient client = cx.client;
@@ -394,12 +333,10 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertEq("NO-CONTEXT", response.error);
 
         client.disconnect();
-%endif
     }
 
     testInvalidJson() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoWebSocketClient)
         hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
         Queue msgs = cx.messages;
         WebSocketClient client = cx.client;
@@ -409,12 +346,10 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertEq("JSON-PARSE-ERROR", response.error);
 
         client.disconnect();
-%endif
     }
 
     testUnknownMessage() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoWebSocketClient)
         hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
         Queue msgs = cx.messages;
         WebSocketClient client = cx.client;
@@ -425,12 +360,10 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertEq("UNKNOWN-MESSAGE-TYPE", response.error);
 
         client.disconnect();
-%endif
     }
 
     testAuthCallback() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoHttpServer) && !defined(NoWebSocketClient)
         DataProvider::DpqlWebSocketHandler auth_handler(NOTHING, {
             "logger": logger,
             "auth_callback": bool sub (hash<auto> cx, hash<auto> hdr) {
@@ -468,12 +401,10 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         hash<auto> session = parse_json(msgs.get(5s));
         assertEq("session", session.type);
         good_client.disconnect();
-%endif
     }
 
     testMaxConnections() {
         checkModule();
-%if !defined(NoDpqlWebSocket) && !defined(NoHttpServer) && !defined(NoWebSocketClient)
         DataProvider::DpqlWebSocketHandler limit_handler(NOTHING, {
             "logger": logger,
             "max_connections": 1,
@@ -519,6 +450,5 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         client3.connect();
         assertTrue(client3.isOpen(), "Connection after disconnect should succeed");
         client3.disconnect();
-%endif
     }
 }

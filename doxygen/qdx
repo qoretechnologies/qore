@@ -286,7 +286,7 @@ class qdx {
         AstParser parser();
         parser.setConditionalParsing(True);
         list<string> defines = ();
-        string env_defines = getenv("QORE_DOC_DEFINES");
+        *string env_defines = getenv("QORE_DOC_DEFINES");
         if (exists env_defines) {
             defines += parseDefines(env_defines);
         }

@@ -1,0 +1,32 @@
+{
+  "grammars": [
+    {
+      "name": "qore",
+      "path": ".",
+      "scope": "source.qore",
+      "file-types": [
+        "q",
+        "qm",
+        "qtest",
+        "qc",
+        "ql",
+        "qsd",
+        "qfd",
+        "qwf",
+        "qjob",
+        "qclass",
+        "qconst",
+        "qconn"
+      ],
+      "injection-regex": "qore"
+    }
+  ],
+  "bindings": {
+    "c": true
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "license": "LGPL-2.1",
+    "description": "Qore grammar for tree-sitter"
+  }
+}

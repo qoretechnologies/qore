@@ -488,7 +488,6 @@ extern std::string* takeSubDocComment();
 %type <funcdecl>       inline_methoddef
 %type <membergroup>    internal_member_list
 %type <list>           list
-%type <expression>     list_item list_item_n
 %type <list>           list_n
 %type <expression>     member
 %type <expression>     member2
@@ -531,7 +530,7 @@ extern std::string* takeSubDocComment();
 %type <constdecl>      unscoped_const_decl
 
  // destructor actions for elements that need deleting when parse errors occur
-%destructor { delete $$; $$ = nullptr; } DOT_KW_IDENTIFIER PARSE_OPTION_END PARSE_OPTION_FULL QUOTED_WORD REGEX REGEX_EXTRACT REGEX_SUBST REGEX_TRANS alt_hash base_constructor base_constructor_list block case_block case_code classvardecl class_def context_mod enum_def enum_member exp exp_c exp_n exp_nl gvardecl hash hash_element hashdecl_def hashdecl_inherits hashdecl_member immediate_typed_hash inline_methoddef internal_member_list list list_item list_item_n list_n member member2 myexp namespace_decl optname outofline_methoddef parse_option private_member_list public_member_list qtypedef return_statement return_value scalar scoped_const_decl scoped_sub_def statement statements statement_or_block string sub_def superclass switch_statement top_level_command top_namespace_decl transient_member transient_member2 try_statement typedef_def uncqtypedef unscoped_const_decl
+%destructor { delete $$; $$ = nullptr; } DOT_KW_IDENTIFIER PARSE_OPTION_END PARSE_OPTION_FULL QUOTED_WORD REGEX REGEX_EXTRACT REGEX_SUBST REGEX_TRANS alt_hash base_constructor base_constructor_list block case_block case_code classvardecl class_def context_mod enum_def enum_member exp exp_c exp_n exp_nl gvardecl hash hash_element hashdecl_def hashdecl_inherits hashdecl_member immediate_typed_hash inline_methoddef internal_member_list list list_n member member2 myexp namespace_decl optname outofline_methoddef parse_option private_member_list public_member_list qtypedef return_statement return_value scalar scoped_const_decl scoped_sub_def statement statements statement_or_block string sub_def superclass switch_statement top_level_command top_namespace_decl transient_member transient_member2 try_statement typedef_def uncqtypedef unscoped_const_decl
 %destructor { free($$); $$ = nullptr; } ANGLE_IDENTIFIER BACKQUOTE BASE_CLASS_CALL BINARY CLASS_SCOPED_REF CLASS_STRING COMPLEX_CONTEXT_REF CONTEXT_REF DATETIME HASHDECL_IDENTIFIER_OPENCURLY IDENTIFIER KW_IDENTIFIER_OPENPAREN NAMESPACE NUMBER QORE_CAST SCOPED_REF SCOPED_VREF SELF_REF VAR_REF ident_openparen
 %destructor { if ($$) { for (int i = 0, count = $$->size(); i < count; i++) {delete (*$$)[i];} delete $$; } $$ = nullptr; } base_constructors class_attributes context_mods enum_members hashdecl_attributes inheritance_list member_list member_list2 namespace_decls superclass_list
 %destructor { delete $$; $$ = nullptr; } module_decls
@@ -2624,17 +2623,26 @@ scoped_sub_def:
         ;
 
 list:
-        list_item ',' list_item {
-            $$ = new ASTListExpression;
-            if ($1) {
-                $$->elements.push_back($1);
+        exp ',' exp {
+            if ($1 && $1->getKind() == ASTExpressionKind::AEK_List) {
+                // Flatten: left side is already a list, append right element
+                $$ = static_cast<ASTListExpression*>($1);
+                if ($3) {
+                    $$->elements.push_back($3);
+                }
+                $$->loc.setLast(@3);
+            } else {
+                $$ = new ASTListExpression;
+                if ($1) {
+                    $$->elements.push_back($1);
+                }
+                if ($3) {
+                    $$->elements.push_back($3);
+                }
+                $$->loc.set(@1, @3);
             }
-            if ($3) {
-                $$->elements.push_back($3);
-            }
-            $$->loc.set(@1, @3);
         }
-        | list_item ',' {
+        | exp ',' {
             if ($1 && $1->getKind() == ASTExpressionKind::AEK_List) {
                 $$ = static_cast<ASTListExpression*>($1);
             }
@@ -2668,17 +2676,26 @@ list:
         ;
 
 list_n:
-        list_item_n ',' list_item_n {
-            $$ = new ASTListExpression;
-            if ($1) {
-                $$->elements.push_back($1);
+        exp_n ',' exp {
+            if ($1 && $1->getKind() == ASTExpressionKind::AEK_List) {
+                // Flatten: left side is already a list, append right element
+                $$ = static_cast<ASTListExpression*>($1);
+                if ($3) {
+                    $$->elements.push_back($3);
+                }
+                $$->loc.setLast(@3);
+            } else {
+                $$ = new ASTListExpression;
+                if ($1) {
+                    $$->elements.push_back($1);
+                }
+                if ($3) {
+                    $$->elements.push_back($3);
+                }
+                $$->loc.set(@1, @3);
             }
-            if ($3) {
-                $$->elements.push_back($3);
-            }
-            $$->loc.set(@1, @3);
         }
-        | list_item_n ',' {
+        | exp_n ',' {
             if ($1 && $1->getKind() == ASTExpressionKind::AEK_List) {
                 $$ = static_cast<ASTListExpression*>($1);
             }
@@ -2709,14 +2726,6 @@ list_n:
             $$ = new ASTListExpression;
             $$->loc = @1;
         }
-        ;
-
-list_item:
-        exp { $$ = $1; }
-        ;
-
-list_item_n:
-        exp_n { $$ = $1; }
         ;
 
 hash:
@@ -2897,10 +2906,12 @@ exp_c:
         | '(' hash ')' {
             $$ = $2;
             $$->loc.set(@1, @3);
+            static_cast<ASTHashExpression*>($$)->hashKind = ASTHashExpression::HashKind::AHE_Parentheses;
         }
         | HASH_PAREN_OPEN hash ')' {
             $$ = $2;
             $$->loc.set(@1, @3);
+            static_cast<ASTHashExpression*>($$)->hashKind = ASTHashExpression::HashKind::AHE_Parentheses;
         }
         | SCOPED_REF {
             ASTName name($1, ASTNameKind::ANK_ScopedRef);

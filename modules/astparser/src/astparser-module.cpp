@@ -59,8 +59,8 @@ QoreNamespace AstParserNS("Qore::astparser");
 
 static void astparser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     AstParserNS.addSystemClass(initAstTreeClass(AstParserNS));
-    AstParserNS.addSystemClass(initAstTreeSearcherClass(AstParserNS));
     AstParserNS.addSystemClass(initAstParserClass(AstParserNS));
+    AstParserNS.addSystemClass(initAstTreeSearcherClass(AstParserNS));
     init_ast_constants(AstParserNS);
 }
 

@@ -42,7 +42,7 @@ module HttpServerAsyncIo {
 
     @tableofcontents
 
-    @section httpserverasyncio_intro Introduction
+    @section httpserverasynciointro Introduction
 
     The %HttpServerAsyncIo module provides async I/O poll operations for the HttpServer module,
     enabling high-performance non-blocking I/O for HTTP, SSE, and WebSocket connections.

@@ -48,6 +48,8 @@ module SchemaReverse {
 
 /** @mainpage SchemaReverse Module
 
+    @section schemareverseintro SchemaReverse Module Introduction
+
 SchemaReverse module provides functionality to create Qore source code usable
 as an input for Schema::AbstractSchema (Schema.qm user module).
 

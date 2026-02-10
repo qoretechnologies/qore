@@ -42,7 +42,7 @@ module Http2ClientIo {
 
     @tableofcontents
 
-    @section http2clientio_intro Introduction
+    @section http2clientiointro Introduction
 
     The %Http2ClientIo module provides HTTP/2 multiplexed client I/O support, enabling
     multiple concurrent streams on a single TCP connection for RestClient, WebSocketClient,

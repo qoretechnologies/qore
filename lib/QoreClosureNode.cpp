@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,18 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreTypeInfo.h"
+
+const QoreTypeInfo* QoreClosureBase::getCallTypeInfo() const {
+    UserClosureFunction* f = closure->getFunction();
+    if (f) {
+        AbstractFunctionSignature* sig = f->getUniqueSignature();
+        if (sig) {
+            return qore_get_complex_code_type_from_signature(sig);
+        }
+    }
+    return nullptr;
+}
 
 ThreadSafeLocalVarRuntimeEnvironmentHelper::ThreadSafeLocalVarRuntimeEnvironmentHelper(
         const QoreClosureBase* current

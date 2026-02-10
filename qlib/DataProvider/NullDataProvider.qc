@@ -17,10 +17,6 @@
     from Qore Technologies, s.r.o..
 */
 
-%new-style
-%require-types
-%strict-args
-
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! A dummy request data provider that provides an empty hash as the request and response types

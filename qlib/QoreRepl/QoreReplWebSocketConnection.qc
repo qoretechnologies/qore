@@ -109,6 +109,10 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
                 handleCommand(id, request.command);
                 break;
 
+            case "complete":
+                handleComplete(id, request.input);
+                break;
+
             case "interrupt":
                 handleInterrupt(id);
                 break;
@@ -165,6 +169,23 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
             "command": command,
             "id": id,
         }));
+    }
+
+    #! Handles a completion request
+    /** @param id Optional request ID for correlation
+        @param input The current input string to complete
+    */
+    private handleComplete(*string id, *string input) {
+        if (!exists input) {
+            sendError(id, "MISSING-PARAMETER", "Missing 'input' parameter");
+            return;
+        }
+        list<hash<CompletionItem>> items = session.getRepl().getCompletionDetails(input);
+        sendMessage({
+            "type": "completion",
+            "id": id,
+            "items": items,
+        });
     }
 
     #! Handles an interrupt request
@@ -254,6 +275,16 @@ public class QoreReplWebSocketConnection inherits WebSocketHandler::WebSocketCon
                         "type": "prompt",
                         "value": data.value,
                         "needsMoreInput": data.needs_more_input,
+                        "indentLevel": data.indent_level ?? 0,
+                    });
+                    break;
+
+                case "completion":
+                case "repl-completion":
+                    sendMessage({
+                        "type": "completion",
+                        "id": data.request_id,
+                        "items": data.items ?? (),
                     });
                     break;
 

@@ -44,6 +44,8 @@ BuildRequires:  pkgconfig(libbrotlienc)
 BuildRequires:  pkgconfig(libbrotlidec)
 BuildRequires:  pkgconfig(libzstd)
 BuildRequires:  pkgconfig(liblz4)
+BuildRequires:  rust
+BuildRequires:  cargo
 Requires:       %{_bindir}/env
 Requires(post):    shared-mime-info
 Requires(postun):  shared-mime-info
@@ -157,6 +159,7 @@ This package contains tool for working with:
 %{_bindir}/saprest
 %{_bindir}/sqlutil
 %{_bindir}/schema-reverse
+%{_bindir}/qfmt
 
 %prep
 %autosetup -p1

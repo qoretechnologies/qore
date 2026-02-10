@@ -24,15 +24,9 @@
 
 %modern
 
-%requires QUnit
-
-%try-module reflection
-%define NoReflection
-%endtry
-
-%try-module QoreRepl
-%define NoQoreRepl
-%endtry
+%requires ../../../../qlib/QUnit.qm
+%requires reflection
+%requires ../../../../qlib/QoreRepl
 
 %exec-class QoreReplActionSessionTest
 
@@ -46,22 +40,8 @@ class QoreReplActionSessionTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private checkModule() {
-%ifdef NoReflection
-        testSkip("no reflection module");
-%endif
-%ifdef NoQoreRepl
-        testSkip("no QoreRepl module");
-%endif
-    }
-
-    private *object newSession() {
-        checkModule();
-        *Class cls = Class::forName("QoreRepl::QoreReplActionSession");
-        if (!cls) {
-            testSkip("no QoreRepl module");
-        }
-        return cls.newObject();
+    private QoreRepl::QoreReplActionSession newSession() {
+        return new QoreRepl::QoreReplActionSession();
     }
 
     private *hash<auto> findEvent(list<hash<auto>> events, string name) {
@@ -74,7 +54,7 @@ class QoreReplActionSessionTest inherits QUnit::Test {
     }
 
     testEval() {
-        *object session = newSession();
+        QoreRepl::QoreReplActionSession session = newSession();
         list<hash<auto>> events = session.handleAction("repl-eval", {
             "code": "1 + 1",
         });
@@ -87,7 +67,7 @@ class QoreReplActionSessionTest inherits QUnit::Test {
     }
 
     testCommand() {
-        *object session = newSession();
+        QoreRepl::QoreReplActionSession session = newSession();
         list<hash<auto>> events = session.handleAction("repl-command", {
             "command": "vars",
         });
@@ -96,7 +76,7 @@ class QoreReplActionSessionTest inherits QUnit::Test {
     }
 
     testInterrupt() {
-        *object session = newSession();
+        QoreRepl::QoreReplActionSession session = newSession();
         list<hash<auto>> events = session.handleAction("repl-interrupt", {});
         *hash<auto> err_evt = findEvent(events, "repl-error");
         assertTrue(err_evt ? True : False, "Should include error event");
@@ -104,7 +84,7 @@ class QoreReplActionSessionTest inherits QUnit::Test {
     }
 
     testClose() {
-        *object session = newSession();
+        QoreRepl::QoreReplActionSession session = newSession();
         list<hash<auto>> events = session.handleAction("repl-close", {});
         *hash<auto> exit_evt = findEvent(events, "repl-exit");
         assertTrue(exit_evt ? True : False, "Should include exit event");

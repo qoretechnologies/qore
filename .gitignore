@@ -142,6 +142,10 @@ Doxyfile.???*
 # VS Code
 .vscode
 
+# Node (tools)
+tools/render-version-art/node_modules/
+tools/render-version-art/package-lock.json
+
 # ignore cmake build directories
 build*/
 

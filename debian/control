@@ -18,6 +18,7 @@ Build-Depends: debhelper (>= 13),
                libbrotli-dev,
                libzstd-dev,
                liblz4-dev,
+               cargo,
                doxygen
 Standards-Version: 4.6.2
 Homepage: https://qore.org

@@ -1,0 +1,289 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  OnTypeFormatting.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires json
+%requires ../../../../qlib/QLS
+
+%exec-class OnTypeFormattingTest
+
+class OnTypeFormattingTest inherits QUnit::Test {
+    private {
+        QLS::QLSServer server;
+        int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
+    }
+
+    constructor() : Test("QLS OnTypeFormatting", "1.0") {
+        initServer();
+
+        addTestCase("capability advertised", \testCapability());
+        addTestCase("} dedent depth 2 to 1", \testBraceDedentDepth2());
+        addTestCase("} dedent depth 1 to 0", \testBraceDedentDepth1());
+        addTestCase("} with non-whitespace prefix", \testBraceNonWhitespacePrefix());
+        addTestCase("} at zero indent", \testBraceZeroIndent());
+        addTestCase("\\n after {", \testNewlineAfterBrace());
+        addTestCase("\\n after nested {{", \testNewlineAfterNestedBrace());
+        addTestCase("\\n after } closes all", \testNewlineAfterCloseAll());
+        addTestCase("\\n inside namespace", \testNewlineInsideNamespace());
+        addTestCase("\\n on first line", \testNewlineFirstLine());
+        addTestCase("unknown trigger char", \testUnknownTrigger());
+        addTestCase("missing params", \testMissingParams());
+        addTestCase("non-existent document", \testNonExistentDocument());
+
+        set_return_value(main());
+    }
+
+    private initServer() {
+        server = new QLS::QLSServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+    }
+
+    #! Opens a document on the shared server, caching by content; returns the URI
+    private string setupDoc(string text) {
+        *string cached = docCache{text};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/otf%d.q", ++docCount);
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "qore",
+                "version": 1,
+                "text": text,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+        docCache{text} = uri;
+        return uri;
+    }
+
+    private hash<auto> makeRequest(string method, *hash<auto> params) {
+        return {
+            "jsonrpc": "2.0",
+            "id": ++reqId,
+            "method": method,
+            "params": params,
+        };
+    }
+
+    private *list<hash<auto>> sendFormatting(string uri, string ch, int line, int character) {
+        hash<auto> req = makeRequest("textDocument/onTypeFormatting", {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "ch": ch,
+            "options": {"tabSize": 4, "insertSpaces": True},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    testCapability() {
+        assertEq("}",
+            QLS::ServerCapabilities.documentOnTypeFormattingProvider.firstTriggerCharacter,
+            "first trigger character should be }");
+        assertEq(("\n",),
+            QLS::ServerCapabilities.documentOnTypeFormattingProvider.moreTriggerCharacter,
+            "more trigger characters should include newline");
+    }
+
+    testBraceDedentDepth2() {
+        # Line 4 has "        }" (8 spaces + }), simulating depth 2 → should dedent to depth 1 (4 spaces)
+        string text = "%modern\nclass Foo {\n    int bar() {\n        int x = 1;\n        }\n}\n";
+        string uri = setupDoc(text);
+
+        # character=9 means cursor is right after the "}" on line 4 ("        }" has } at pos 8, cursor at 9)
+        *list<hash<auto>> edits = sendFormatting(uri, "}", 4, 9);
+        assertTrue(exists edits, "should return edits for } at depth 2");
+        assertEq(1, edits.size(), "should return exactly one edit");
+
+        hash<auto> edit = edits[0];
+        assertEq(4, edit.range.start.line, "edit should be on line 4");
+        assertEq(0, edit.range.start.character, "edit start should be column 0");
+        assertEq(4, edit.range.end.line, "edit end should be on line 4");
+        assertEq(8, edit.range.end.character, "edit end should be at column 8 (prefix length)");
+        assertEq("    ", edit.newText, "should dedent to 4 spaces (one indent level)");
+    }
+
+    testBraceDedentDepth1() {
+        # Line 2 has "    }" (4 spaces + }), depth 1 → should dedent to 0
+        string text = "%modern\nclass Foo {\n    }\n";
+        string uri = setupDoc(text);
+
+        # character=5 means cursor right after "}" on line 2 ("    }" has } at pos 4, cursor at 5)
+        *list<hash<auto>> edits = sendFormatting(uri, "}", 2, 5);
+        assertTrue(exists edits, "should return edits for } at depth 1");
+        assertEq(1, edits.size(), "should return exactly one edit");
+
+        hash<auto> edit = edits[0];
+        assertEq(4, edit.range.end.character, "edit end should cover the 4-space prefix");
+        assertEq("", edit.newText, "should dedent to 0 spaces");
+    }
+
+    testBraceNonWhitespacePrefix() {
+        # Line 2 has "    x = {}" — } has non-whitespace before it → no edit
+        string text = "%modern\nsub test() {\n    x = {};\n}\n";
+        string uri = setupDoc(text);
+
+        # The } in {} on line 2 — "    x = {}" — the second } is at pos 9, cursor at 10
+        *list<hash<auto>> edits = sendFormatting(uri, "}", 2, 10);
+        assertEq(0, edits.size(), "should return no edits when } has non-whitespace prefix");
+    }
+
+    testBraceZeroIndent() {
+        # Line 1 has "}" at column 0 — no indent to remove
+        string text = "%modern\n}\n";
+        string uri = setupDoc(text);
+
+        # } at col 0, cursor at col 1
+        *list<hash<auto>> edits = sendFormatting(uri, "}", 1, 1);
+        assertEq(0, edits.size(), "should return no edits when } is already at column 0");
+    }
+
+    testNewlineAfterBrace() {
+        # After "class Foo {", new line should be indented 1 level
+        string text = "%modern\nclass Foo {\n\n}\n";
+        string uri = setupDoc(text);
+
+        # position.line=2 is the empty new line after "class Foo {"
+        *list<hash<auto>> edits = sendFormatting(uri, "\n", 2, 0);
+        assertTrue(exists edits, "should return edits for newline after {");
+        assertEq(1, edits.size(), "should return exactly one edit");
+
+        hash<auto> edit = edits[0];
+        assertEq(2, edit.range.start.line, "edit should be on the new line");
+        assertEq(0, edit.range.start.character, "edit start should be column 0");
+        assertEq("    ", edit.newText, "should indent one level (4 spaces)");
+    }
+
+    testNewlineAfterNestedBrace() {
+        # After "class Foo { int bar() {", new line should be indented 2 levels
+        string text = "%modern\nclass Foo {\n    int bar() {\n\n    }\n}\n";
+        string uri = setupDoc(text);
+
+        # position.line=3 is the empty line inside bar()
+        *list<hash<auto>> edits = sendFormatting(uri, "\n", 3, 0);
+        assertTrue(exists edits, "should return edits for newline after nested {");
+        assertEq(1, edits.size(), "should return exactly one edit");
+        assertEq("        ", edits[0].newText, "should indent two levels (8 spaces)");
+    }
+
+    testNewlineAfterCloseAll() {
+        # After closing all braces, indent should be 0
+        string text = "%modern\nclass Foo {\n    int bar() {\n        return 1;\n    }\n}\n\n";
+        string uri = setupDoc(text);
+
+        # position.line=6 is the empty line after "}"
+        *list<hash<auto>> edits = sendFormatting(uri, "\n", 6, 0);
+        assertEq(0, edits.size(), "should return no edits when indent level is 0");
+    }
+
+    testNewlineInsideNamespace() {
+        # Namespace braces don't count for indent (Qore convention)
+        string text = "%modern\npublic namespace Foo {\n\n}\n";
+        string uri = setupDoc(text);
+
+        # position.line=2 is inside the namespace
+        *list<hash<auto>> edits = sendFormatting(uri, "\n", 2, 0);
+        assertEq(0, edits.size(),
+            "should return no edits inside namespace (namespace braces don't count)");
+    }
+
+    testNewlineFirstLine() {
+        # position.line=0 → no previous line to calculate from
+        string text = "%modern\nclass Foo {\n}\n";
+        string uri = setupDoc(text);
+
+        *list<hash<auto>> edits = sendFormatting(uri, "\n", 0, 0);
+        assertEq(0, edits.size(), "should return no edits for newline on first line");
+    }
+
+    testUnknownTrigger() {
+        string text = "%modern\nclass Foo {\n}\n";
+        string uri = setupDoc(text);
+
+        *list<hash<auto>> edits = sendFormatting(uri, "x", 1, 1);
+        assertEq(0, edits.size(), "should return no edits for unknown trigger character");
+    }
+
+    testMissingParams() {
+        QLS::QLSServer errorServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        errorServer.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        errorServer.handleRequest(make_json(initializedReq));
+
+        # Send request with missing params
+        hash<auto> req = makeRequest("textDocument/onTypeFormatting");
+        delete req.params;
+        softlist<auto> responses = errorServer.handleRequest(make_json(req));
+        assertTrue(exists responses, "should return error response for missing params");
+        assertTrue(responses.size() > 0, "should have at least one response");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    testNonExistentDocument() {
+        string text = "%modern\nclass Foo {\n}\n";
+        setupDoc(text);
+
+        # Request formatting for a document that doesn't exist
+        hash<auto> req = makeRequest("textDocument/onTypeFormatting", {
+            "textDocument": {"uri": "file:///nonexistent.q"},
+            "position": {"line": 1, "character": 0},
+            "ch": "\n",
+            "options": {"tabSize": 4, "insertSpaces": True},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses, "should return response for non-existent document");
+        hash<auto> resp = parse_json(responses[0]);
+        assertEq(list(), resp.result, "should return empty edit list for non-existent document");
+    }
+}

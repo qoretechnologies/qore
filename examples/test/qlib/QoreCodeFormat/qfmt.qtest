@@ -1,0 +1,311 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# qfmt integration tests
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/Util.qm
+
+%exec-class QfmtTest
+
+class QfmtTest inherits QUnit::Test {
+    private {
+        #! Path to the qore executable
+        string qorePath;
+        #! Environment prefix for running with the build qore
+        string envPrefix;
+        #! Path to qfmt
+        string qfmtPath;
+        #! Temporary directory for test files
+        string tmpDir;
+    }
+
+    constructor() : Test("qfmt integration tests", "1.0") {
+        # Determine paths
+        qorePath = ENV.QORE_PATH ?? get_qore_path();
+        string envParts = "";
+        if (ENV.LD_LIBRARY_PATH) {
+            envParts += sprintf("LD_LIBRARY_PATH=%s ", ENV.LD_LIBRARY_PATH);
+        }
+        if (ENV.QORE_MODULE_DIR) {
+            envParts += sprintf("QORE_MODULE_DIR=%s ", ENV.QORE_MODULE_DIR);
+        }
+        envPrefix = envParts;
+
+        # Find qfmt relative to this test file
+        qfmtPath = normalize_dir(get_script_dir() + "/../../../../bin/qfmt");
+
+        # Create temp directory
+        tmpDir = make_tmp_dir();
+
+        addTestCase("default mode: stdin to stdout", \testDefaultStdin());
+        addTestCase("default mode: file to stdout", \testDefaultFile());
+        addTestCase("check mode: already formatted", \testCheckFormatted());
+        addTestCase("check mode: needs formatting", \testCheckNeedsFormat());
+        addTestCase("diff mode", \testDiffMode());
+        addTestCase("in-place mode", \testInPlace());
+        addTestCase("in-place no change", \testInPlaceNoChange());
+        addTestCase("directory mode", \testDirectoryMode());
+        addTestCase("nonexistent file", \testNonexistentFile());
+        addTestCase("help flag", \testHelpFlag());
+        addTestCase("empty stdin", \testEmptyStdin());
+        addTestCase("multiple files", \testMultipleFiles());
+
+        set_return_value(main());
+
+        # Cleanup temp directory
+        if (is_dir(tmpDir)) {
+            system(sprintf("rm -rf %s", tmpDir));
+        }
+    }
+
+    private string get_qore_path() {
+        # Try to find qore in the build directory
+        string buildQore = normalize_dir(get_script_dir() + "/../../../../build/qore");
+        if (is_file(buildQore)) {
+            return buildQore;
+        }
+        return "qore";
+    }
+
+    #! Run qfmt with given arguments and optional stdin input
+    #! Returns a hash with "stdout", "stderr", and "rc" keys
+    private hash<auto> runQfmt(string args, *string stdinData) {
+        string outFile = tmpDir + "/stdout.txt";
+        string errFile = tmpDir + "/stderr.txt";
+
+        string cmd;
+        if (exists stdinData) {
+            # Write stdin data to a temp file and pipe it
+            string inFile = tmpDir + "/stdin.txt";
+            {
+                File f();
+                f.open2(inFile, O_WRONLY | O_TRUNC | O_CREAT);
+                f.write(stdinData);
+            }
+            cmd = sprintf("%s%s %s %s < %s > %s 2> %s",
+                envPrefix, qorePath, qfmtPath, args, inFile, outFile, errFile);
+        } else {
+            cmd = sprintf("%s%s %s %s > %s 2> %s",
+                envPrefix, qorePath, qfmtPath, args, outFile, errFile);
+        }
+
+        int rc = system(cmd);
+
+        string stdout_str = "";
+        if (is_file(outFile)) {
+            stdout_str = ReadOnlyFile::readTextFile(outFile);
+        }
+        string stderr_str = "";
+        if (is_file(errFile)) {
+            stderr_str = ReadOnlyFile::readTextFile(errFile);
+        }
+
+        return {
+            "stdout": stdout_str,
+            "stderr": stderr_str,
+            "rc": rc,
+        };
+    }
+
+    #! Write a test file with given content, return its path
+    private string writeTestFile(string name, string content) {
+        string path = tmpDir + "/" + name;
+        {
+            File f();
+            f.open2(path, O_WRONLY | O_TRUNC | O_CREAT);
+            f.write(content);
+        }
+        return path;
+    }
+
+    testDefaultStdin() {
+        # Simple well-formatted input should pass through unchanged
+        string src = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+";
+        hash<auto> r = runQfmt("--stdin", src);
+        assertEq(0, r.rc, "exit code 0 for valid input");
+        assertEq(src, r.stdout, "formatted output matches input");
+    }
+
+    testDefaultFile() {
+        string src = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+";
+        string path = writeTestFile("test_default.qore", src);
+        hash<auto> r = runQfmt(path);
+        assertEq(0, r.rc, "exit code 0");
+        assertEq(src, r.stdout, "formatted output to stdout");
+    }
+
+    testCheckFormatted() {
+        # Already formatted file → exit 0, no stdout
+        string src = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+";
+        string path = writeTestFile("test_check_ok.qore", src);
+        hash<auto> r = runQfmt(sprintf("--check %s", path));
+        assertEq(0, r.rc, "exit code 0 for already-formatted");
+        assertEq("", r.stdout, "no output for formatted file");
+    }
+
+    testCheckNeedsFormat() {
+        # Unformatted file → exit 1, prints filename
+        string src = "%modern
+int sub add(int a,int b){
+return a+b;
+}
+";
+        string path = writeTestFile("test_check_bad.qore", src);
+        hash<auto> r = runQfmt(sprintf("--check %s", path));
+        assertEq(1, r.rc, "exit code 1 for needs-formatting");
+        assertTrue(r.stdout.find(path) >= 0, "output contains file path");
+    }
+
+    testDiffMode() {
+        # Unformatted file → shows unified diff
+        string src = "%modern
+int sub add(int a,int b){
+return a+b;
+}
+";
+        string path = writeTestFile("test_diff.qore", src);
+        hash<auto> r = runQfmt(sprintf("--diff %s", path));
+        assertEq(0, r.rc, "exit code 0 for diff mode");
+        assertTrue(r.stdout.size() > 0, "diff output not empty");
+        assertTrue(regex(r.stdout, "^---", RE_MultiLine), "diff has --- header");
+        assertTrue(regex(r.stdout, "^\\+\\+\\+", RE_MultiLine), "diff has +++ header");
+        assertTrue(regex(r.stdout, "^@@", RE_MultiLine), "diff has hunk header");
+    }
+
+    testInPlace() {
+        # Unformatted file → modified in place
+        string src = "%modern
+int sub add(int a,int b){
+return a+b;
+}
+";
+        string path = writeTestFile("test_inplace.qore", src);
+        hash<auto> r = runQfmt(sprintf("--in-place %s", path));
+        assertEq(0, r.rc, "exit code 0");
+        assertEq("", r.stdout, "no stdout for in-place mode");
+
+        # Read back the file and verify it was formatted
+        string result = ReadOnlyFile::readTextFile(path);
+        assertTrue(result != src, "file was modified");
+        assertTrue(result.find("return a + b;") >= 0, "file contains formatted code");
+    }
+
+    testInPlaceNoChange() {
+        # Already formatted file → file unchanged
+        string src = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+";
+        string path = writeTestFile("test_inplace_ok.qore", src);
+        # Get original mtime
+        hash<StatInfo> st1 = hstat(path);
+
+        # Small sleep to ensure mtime would differ if file is rewritten
+        usleep(100000);
+
+        hash<auto> r = runQfmt(sprintf("--in-place %s", path));
+        assertEq(0, r.rc, "exit code 0");
+
+        # File should not have been rewritten
+        hash<StatInfo> st2 = hstat(path);
+        assertEq(st1.mtime, st2.mtime, "file not rewritten when already formatted");
+    }
+
+    testDirectoryMode() {
+        # Create a subdirectory with Qore files
+        string subDir = tmpDir + "/subdir";
+        mkdir(subDir);
+
+        string src1 = "%modern
+int sub f1() {
+    return 1;
+}
+";
+        string src2 = "%modern
+int sub f2() {
+    return 2;
+}
+";
+        # Write .qc and .qore files
+        {
+            File f();
+            f.open2(subDir + "/a.qc", O_WRONLY | O_TRUNC | O_CREAT);
+            f.write(src1);
+        }
+        {
+            File f();
+            f.open2(subDir + "/b.qore", O_WRONLY | O_TRUNC | O_CREAT);
+            f.write(src2);
+        }
+        # Write a non-Qore file that should be ignored
+        {
+            File f();
+            f.open2(subDir + "/c.txt", O_WRONLY | O_TRUNC | O_CREAT);
+            f.write("not qore code");
+        }
+
+        hash<auto> r = runQfmt(sprintf("--check %s", subDir));
+        assertEq(0, r.rc, "exit code 0 for formatted directory");
+        assertEq("", r.stdout, "no output for formatted directory");
+    }
+
+    testNonexistentFile() {
+        hash<auto> r = runQfmt("/tmp/nonexistent_qfmt_test_file.qore");
+        assertEq(2, r.rc, "exit code 2 for nonexistent file");
+        assertTrue(r.stderr.find("no such file") >= 0, "stderr has error message");
+    }
+
+    testHelpFlag() {
+        hash<auto> r = runQfmt("--help");
+        assertEq(0, r.rc, "exit code 0 for --help");
+        assertTrue(r.stdout.find("Usage:") >= 0, "help output contains Usage");
+        assertTrue(r.stdout.find("--in-place") >= 0, "help mentions --in-place");
+        assertTrue(r.stdout.find("--diff") >= 0, "help mentions --diff");
+        assertTrue(r.stdout.find("--check") >= 0, "help mentions --check");
+    }
+
+    testEmptyStdin() {
+        hash<auto> r = runQfmt("--stdin", "");
+        assertEq(0, r.rc, "exit code 0 for empty stdin");
+        assertEq("", r.stdout, "no output for empty stdin");
+    }
+
+    testMultipleFiles() {
+        string src1 = "%modern
+int sub f1() {
+    return 1;
+}
+";
+        string src2 = "%modern
+int sub f2(){
+return 2;
+}
+";
+        string path1 = writeTestFile("multi_ok.qore", src1);
+        string path2 = writeTestFile("multi_bad.qore", src2);
+
+        # Check mode with multiple files - one formatted, one not
+        hash<auto> r = runQfmt(sprintf("--check %s %s", path1, path2));
+        assertEq(1, r.rc, "exit code 1 when any file needs formatting");
+        assertTrue(r.stdout.find(path2) >= 0, "output shows unformatted file");
+        assertTrue(r.stdout.find(path1) < 0, "output does not show formatted file");
+    }
+}

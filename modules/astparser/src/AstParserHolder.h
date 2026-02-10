@@ -34,8 +34,8 @@
 #include "qore/Qore.h"
 
 class AstParser;
+class AstParseResult;
 class ASTParseError;
-class ASTTree;
 
 class AstParserHolder : public AbstractPrivateData {
 private:
@@ -45,11 +45,11 @@ public:
     AstParserHolder();
     ~AstParserHolder();
 
-    ASTTree* parseFile(const char* filename);
-    ASTTree* parseFile(std::string& filename);
+    AstParseResult* parseFile(const char* filename);
+    AstParseResult* parseFile(std::string& filename);
 
-    ASTTree* parseString(const char* str);
-    ASTTree* parseString(std::string& str);
+    AstParseResult* parseString(const char* str);
+    AstParseResult* parseString(std::string& str);
 
     //! Enable or disable conditional parsing.
     void setConditionalParsing(bool enabled);
