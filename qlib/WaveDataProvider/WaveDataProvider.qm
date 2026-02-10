@@ -1,0 +1,1087 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore WaveDataProvider module definition
+
+/*  WaveDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) WaveRestClient
+
+module WaveDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Wave accounting and invoicing services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new WaveDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": WaveDataProvider::AppName,
+            "display_name": "Wave",
+            "short_desc": "Wave accounting and invoicing",
+            "desc": "Wave is a free accounting, invoicing, and receipt scanning software for small businesses. "
+                "This integration enables managing customers, invoices, products, accounts, and transactions "
+                "through Wave's GraphQL API.",
+            "scheme": "wave",
+            "logo": WaveLogo,
+            "logo_file_name": "wave-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AccountingErp,),
+        });
+
+        # Action 1: approve-invoice (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/approve-invoice",
+            "action": "approve-invoice",
+            "groups": "Invoices",
+            "display_name": "Approve Invoice",
+            "short_desc": "Approve an invoice by ID",
+            "desc": "Approve a draft or saved invoice in Wave, making it ready to send",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveApproveInvoiceDataProvider::ProviderInfo,
+            "options": {
+                "invoiceId": <ActionOptionInfo>{
+                    "display_name": "Invoice",
+                    "short_desc": "The invoice to approve",
+                    "desc": "The invoice to approve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+            "output_type": new WaveInvoiceDataType(),
+        });
+
+        # Action 2: create-customer (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/create-customer",
+            "action": "create-customer",
+            "groups": "Customers",
+            "display_name": "Create Customer",
+            "short_desc": "Create a new customer in Wave",
+            "desc": "Create a new customer in a Wave business with name, email, and contact details",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveCreateCustomerDataProvider::ProviderInfo,
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to create the customer in",
+                    "desc": "The business to create the customer in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The customer name",
+                    "desc": "The name of the customer",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "Acme Corp",
+                },
+                "firstName": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "The customer first name",
+                    "desc": "The first name of the customer contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lastName": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "The customer last name",
+                    "desc": "The last name of the customer contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "The customer email",
+                    "desc": "The email address of the customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "contact@acme.com",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "The customer phone number",
+                    "desc": "The phone number of the customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "The customer website",
+                    "desc": "The website URL of the customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "internalNotes": <ActionOptionInfo>{
+                    "display_name": "Internal Notes",
+                    "short_desc": "Internal notes about the customer",
+                    "desc": "Internal notes about the customer (not visible to the customer)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+            "output_type": new WaveCustomerDataType(),
+        });
+
+        # Action 3: create-product (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/create-product",
+            "action": "create-product",
+            "groups": "Products",
+            "display_name": "Create Product",
+            "short_desc": "Create a new product in Wave",
+            "desc": "Create a new product or service in a Wave business",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveCreateProductDataProvider::ProviderInfo,
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to create the product in",
+                    "desc": "The business to create the product in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The product name",
+                    "desc": "The name of the product or service",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "Consulting Service",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The product description",
+                    "desc": "The description of the product or service",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "unitPrice": <ActionOptionInfo>{
+                    "display_name": "Unit Price",
+                    "short_desc": "The unit price",
+                    "desc": "The unit price of the product or service",
+                    "type": AbstractDataProviderTypeMap."*float",
+                    "example_value": 150.00,
+                },
+            },
+            "output_type": new WaveProductDataType(),
+        });
+
+        # Action 4: create-sales-tax (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/create-sales-tax",
+            "action": "create-sales-tax",
+            "groups": "Taxes",
+            "display_name": "Create Sales Tax",
+            "short_desc": "Create a new sales tax in Wave",
+            "desc": "Create a new sales tax rate in a Wave business",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveCreateSalesTaxDataProvider::ProviderInfo,
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to create the sales tax in",
+                    "desc": "The business to create the sales tax in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The sales tax name",
+                    "desc": "The name of the sales tax",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "HST",
+                },
+                "rate": <ActionOptionInfo>{
+                    "display_name": "Rate",
+                    "short_desc": "The tax rate",
+                    "desc": "The tax rate as a percentage",
+                    "type": AbstractDataProviderTypeMap."*float",
+                    "required": True,
+                    "example_value": 13.0,
+                },
+                "abbreviation": <ActionOptionInfo>{
+                    "display_name": "Abbreviation",
+                    "short_desc": "The tax abbreviation",
+                    "desc": "The abbreviation for the sales tax",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The tax description",
+                    "desc": "The description of the sales tax",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "taxNumber": <ActionOptionInfo>{
+                    "display_name": "Tax Number",
+                    "short_desc": "The tax number",
+                    "desc": "The tax registration number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "isCompound": <ActionOptionInfo>{
+                    "display_name": "Is Compound",
+                    "short_desc": "Whether the tax is compound",
+                    "desc": "Whether the tax is a compound tax (calculated on top of other taxes)",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "isRecoverable": <ActionOptionInfo>{
+                    "display_name": "Is Recoverable",
+                    "short_desc": "Whether the tax is recoverable",
+                    "desc": "Whether the tax is recoverable (can be claimed back)",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+            "output_type": new WaveSalesTaxDataType(),
+        });
+
+        # Action 5: create-transaction (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/create-transaction",
+            "action": "create-transaction",
+            "groups": "Transactions",
+            "display_name": "Create Transaction",
+            "short_desc": "Create a new transaction in Wave",
+            "desc": "Create a new money transaction in a Wave business",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveCreateTransactionDataProvider::ProviderInfo,
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to create the transaction in",
+                    "desc": "The business to create the transaction in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "externalId": <ActionOptionInfo>{
+                    "display_name": "External ID",
+                    "short_desc": "The external transaction ID",
+                    "desc": "A unique external identifier for the transaction (for idempotency)",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "txn-12345",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "The transaction date",
+                    "desc": "The date of the transaction (YYYY-MM-DD format)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "2025-01-15",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The transaction description",
+                    "desc": "The description of the transaction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+            "output_type": new WaveTransactionDataType(),
+        });
+
+        # Action 6: create-account (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/create-account",
+            "action": "create-account",
+            "groups": "Accounts",
+            "display_name": "Create Account",
+            "short_desc": "Create a new account in Wave",
+            "desc": "Create a new chart of accounts entry in a Wave business",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveCreateAccountDataProvider::ProviderInfo,
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to create the account in",
+                    "desc": "The business to create the account in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The account name",
+                    "desc": "The name of the account",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "Office Supplies",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "The account type",
+                    "desc": "The type of account",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "ASSET", "display_name": "Asset", "desc": "Asset account"},
+                        <AllowedValueInfo>{"value": "LIABILITY", "display_name": "Liability", "desc": "Liability account"},
+                        <AllowedValueInfo>{"value": "INCOME", "display_name": "Income", "desc": "Income account"},
+                        <AllowedValueInfo>{"value": "EXPENSE", "display_name": "Expense", "desc": "Expense account"},
+                        <AllowedValueInfo>{"value": "EQUITY", "display_name": "Equity", "desc": "Equity account"},
+                    ),
+                },
+                "subtype": <ActionOptionInfo>{
+                    "display_name": "Subtype",
+                    "short_desc": "The account subtype",
+                    "desc": "The subtype of the account",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The account description",
+                    "desc": "The description of the account",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "currency": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "The account currency",
+                    "desc": "The currency code for the account",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+            "output_type": new WaveAccountDataType(),
+        });
+
+        # Action 7: create-income-expense (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/create-income-expense",
+            "action": "create-income-expense",
+            "groups": "Transactions",
+            "display_name": "Create Income/Expense",
+            "short_desc": "Create an income or expense entry in Wave",
+            "desc": "Create a new income or expense entry in a Wave business",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveCreateIncomeExpenseDataProvider::ProviderInfo,
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to create the entry in",
+                    "desc": "The business to create the income/expense entry in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "externalId": <ActionOptionInfo>{
+                    "display_name": "External ID",
+                    "short_desc": "The external transaction ID",
+                    "desc": "A unique external identifier for the transaction (for idempotency)",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "The transaction date",
+                    "desc": "The date of the income or expense entry",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The transaction description",
+                    "desc": "The description of the income or expense entry",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "The entry type",
+                    "desc": "The type of the entry: income or expense",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "income", "display_name": "Income", "desc": "Income entry"},
+                        <AllowedValueInfo>{"value": "expense", "display_name": "Expense", "desc": "Expense entry"},
+                    ),
+                },
+            },
+            "output_type": new WaveTransactionDataType(),
+        });
+
+        # Action 8: create-invoice (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/create-invoice",
+            "action": "create-invoice",
+            "groups": "Invoices",
+            "display_name": "Create Invoice",
+            "short_desc": "Create a new invoice in Wave",
+            "desc": "Create a new invoice for a customer in a Wave business",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveCreateInvoiceDataProvider::ProviderInfo,
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to create the invoice in",
+                    "desc": "The business to create the invoice in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "customerId": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer to invoice",
+                    "desc": "The customer to create the invoice for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "invoiceDate": <ActionOptionInfo>{
+                    "display_name": "Invoice Date",
+                    "short_desc": "The invoice date",
+                    "desc": "The date of the invoice (YYYY-MM-DD format)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "2025-01-15",
+                },
+                "dueDate": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "The due date",
+                    "desc": "The payment due date of the invoice (YYYY-MM-DD format)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "currency": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "The invoice currency",
+                    "desc": "The currency code for the invoice",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "The invoice status",
+                    "desc": "The initial status of the invoice",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "DRAFT", "display_name": "Draft", "desc": "Draft invoice"},
+                        <AllowedValueInfo>{"value": "SAVED", "display_name": "Saved", "desc": "Saved invoice"},
+                    ),
+                },
+                "memo": <ActionOptionInfo>{
+                    "display_name": "Memo",
+                    "short_desc": "The invoice memo",
+                    "desc": "A memo/note on the invoice",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "footer": <ActionOptionInfo>{
+                    "display_name": "Footer",
+                    "short_desc": "The invoice footer",
+                    "desc": "The footer text on the invoice",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "The invoice title",
+                    "desc": "The title of the invoice",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "subhead": <ActionOptionInfo>{
+                    "display_name": "Subhead",
+                    "short_desc": "The invoice subhead",
+                    "desc": "The subheading of the invoice",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "poNumber": <ActionOptionInfo>{
+                    "display_name": "PO Number",
+                    "short_desc": "The purchase order number",
+                    "desc": "The purchase order number associated with the invoice",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+            "output_type": new WaveInvoiceDataType(),
+        });
+
+        # Action 9: delete-customer (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/delete-customer",
+            "action": "delete-customer",
+            "groups": "Customers",
+            "display_name": "Delete Customer",
+            "short_desc": "Delete a customer in Wave",
+            "desc": "Delete an existing customer from a Wave business",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveDeleteCustomerDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer to delete",
+                    "desc": "The customer to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Action 10: send-invoice (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/send-invoice",
+            "action": "send-invoice",
+            "groups": "Invoices",
+            "display_name": "Send Invoice",
+            "short_desc": "Send an invoice in Wave",
+            "desc": "Send an approved invoice to the customer via email",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveSendInvoiceDataProvider::ProviderInfo,
+            "options": {
+                "invoiceId": <ActionOptionInfo>{
+                    "display_name": "Invoice",
+                    "short_desc": "The invoice to send",
+                    "desc": "The invoice to send",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+            "output_type": new WaveInvoiceDataType(),
+        });
+
+        # Action 11: update-customer (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/update-customer",
+            "action": "update-customer",
+            "groups": "Customers",
+            "display_name": "Update Customer",
+            "short_desc": "Update an existing customer in Wave",
+            "desc": "Update the properties of an existing customer in Wave",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveUpdateCustomerDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer to update",
+                    "desc": "The customer to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The new customer name",
+                    "desc": "The new name of the customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "firstName": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "The new first name",
+                    "desc": "The new first name of the customer contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lastName": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "The new last name",
+                    "desc": "The new last name of the customer contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "The new email",
+                    "desc": "The new email address of the customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "The new phone number",
+                    "desc": "The new phone number of the customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "The new website",
+                    "desc": "The new website URL of the customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "internalNotes": <ActionOptionInfo>{
+                    "display_name": "Internal Notes",
+                    "short_desc": "The new internal notes",
+                    "desc": "The new internal notes about the customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+            "output_type": new WaveCustomerDataType(),
+        });
+
+        # Action 12: update-product (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/update-product",
+            "action": "update-product",
+            "groups": "Products",
+            "display_name": "Update Product",
+            "short_desc": "Update an existing product in Wave",
+            "desc": "Update the properties of an existing product in Wave",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveUpdateProductDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Product",
+                    "short_desc": "The product to update",
+                    "desc": "The product to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "products",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The new product name",
+                    "desc": "The new name of the product",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The new product description",
+                    "desc": "The new description of the product",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "unitPrice": <ActionOptionInfo>{
+                    "display_name": "Unit Price",
+                    "short_desc": "The new unit price",
+                    "desc": "The new unit price of the product",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+            },
+            "output_type": new WaveProductDataType(),
+        });
+
+        # Action 13: execute-graphql (DPAT_API)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/execute-graphql",
+            "action": "execute-graphql",
+            "groups": "Advanced",
+            "display_name": "Execute GraphQL",
+            "short_desc": "Execute an arbitrary GraphQL query",
+            "desc": "Execute an arbitrary GraphQL query or mutation against the Wave API",
+            "action_code": DPAT_API,
+            "data_provider_info": WaveExecuteGraphQLDataProvider::ProviderInfo,
+            "options": {
+                "query": <ActionOptionInfo>{
+                    "display_name": "Query",
+                    "short_desc": "The GraphQL query",
+                    "desc": "The GraphQL query or mutation string to execute",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "query { user { id firstName lastName } }",
+                },
+                "variables": <ActionOptionInfo>{
+                    "display_name": "Variables",
+                    "short_desc": "The query variables",
+                    "desc": "Optional variables to pass to the GraphQL query",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                },
+            },
+        });
+
+        # Action 14: search-customers (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/customers",
+            "action": "search-customers",
+            "groups": "Customers",
+            "display_name": "Search Customers",
+            "short_desc": "Search for customers in Wave",
+            "desc": "Search for customers in a Wave business with optional filters",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WaveCustomersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ListDataType("CustomerList", new WaveCustomerDataType(), True); },
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to search customers in",
+                    "desc": "The business to search customers in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results",
+                    "desc": "Maximum number of results to return",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "example_value": 50,
+                },
+            },
+        });
+
+        # Action 15: search-invoices (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/invoices",
+            "action": "search-invoices",
+            "groups": "Invoices",
+            "display_name": "Search Invoices",
+            "short_desc": "Search for invoices in Wave",
+            "desc": "Search for invoices in a Wave business with optional status filter",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WaveInvoicesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ListDataType("InvoiceList", new WaveInvoiceDataType(), True); },
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to search invoices in",
+                    "desc": "The business to search invoices in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by invoice status",
+                    "desc": "Filter invoices by status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "DRAFT", "display_name": "Draft", "desc": "Draft invoices"},
+                        <AllowedValueInfo>{"value": "SAVED", "display_name": "Saved", "desc": "Saved invoices"},
+                        <AllowedValueInfo>{"value": "SENT", "display_name": "Sent", "desc": "Sent invoices"},
+                        <AllowedValueInfo>{"value": "OVERDUE", "display_name": "Overdue", "desc": "Overdue invoices"},
+                        <AllowedValueInfo>{"value": "PAID", "display_name": "Paid", "desc": "Paid invoices"},
+                        <AllowedValueInfo>{"value": "PARTIAL", "display_name": "Partial", "desc": "Partially paid invoices"},
+                        <AllowedValueInfo>{"value": "UNPAID", "display_name": "Unpaid", "desc": "Unpaid invoices"},
+                        <AllowedValueInfo>{"value": "VIEWED", "display_name": "Viewed", "desc": "Viewed invoices"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results",
+                    "desc": "Maximum number of results to return",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Action 16: search-products (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/products",
+            "action": "search-products",
+            "groups": "Products",
+            "display_name": "Search Products",
+            "short_desc": "Search for products in Wave",
+            "desc": "Search for products in a Wave business",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WaveProductsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ListDataType("ProductList", new WaveProductDataType(), True); },
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to search products in",
+                    "desc": "The business to search products in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results",
+                    "desc": "Maximum number of results to return",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Action 17: get-customer (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/customers",
+            "action": "get-customer",
+            "groups": "Customers",
+            "display_name": "Get Customer",
+            "short_desc": "Get a specific customer from Wave",
+            "desc": "Retrieve a specific customer by their ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": WaveCustomersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WaveCustomerDataType(); },
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business the customer belongs to",
+                    "desc": "The business the customer belongs to",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer to retrieve",
+                    "desc": "The customer to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Action 18: get-customer-by-email (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/customers",
+            "action": "get-customer-by-email",
+            "groups": "Customers",
+            "display_name": "Get Customer by Email",
+            "short_desc": "Get a specific customer by email from Wave",
+            "desc": "Retrieve a specific customer by their email address",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": WaveCustomersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WaveCustomerDataType(); },
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business the customer belongs to",
+                    "desc": "The business the customer belongs to",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "The customer email to search for",
+                    "desc": "The email address of the customer to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "example_value": "customer@example.com",
+                },
+            },
+        });
+
+        # Action 19: invoice-created (DPAT_EVENT)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/events/invoice-created",
+            "action": "invoice-created",
+            "groups": "Triggers",
+            "display_name": "Invoice Created",
+            "short_desc": "Trigger when a new invoice is created",
+            "desc": "Fires when a new invoice is created in Wave. Uses webhooks for real-time notifications.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_INVOICE_CREATED,
+            "get_output_type": AbstractDataProviderType sub () { return new WaveInvoiceWebhookEventDataType(); },
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "Filter to invoices from a specific business",
+                    "desc": "Only trigger for invoices in this business (optional)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "businesses",
+                },
+            },
+        });
+
+        # Action 20: get-invoice (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/invoices",
+            "action": "get-invoice",
+            "groups": "Invoices",
+            "display_name": "Get Invoice",
+            "short_desc": "Get a specific invoice from Wave",
+            "desc": "Retrieve a specific invoice by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": WaveInvoicesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WaveInvoiceDataType(); },
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business the invoice belongs to",
+                    "desc": "The business the invoice belongs to",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice",
+                    "short_desc": "The invoice to retrieve",
+                    "desc": "The invoice to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+        });
+
+        # Action 21: get-product (DPAT_FIND_SINGLE)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/products",
+            "action": "get-product",
+            "groups": "Products",
+            "display_name": "Get Product",
+            "short_desc": "Get a specific product from Wave",
+            "desc": "Retrieve a specific product by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "data_provider_info": WaveProductsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new WaveProductDataType(); },
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business the product belongs to",
+                    "desc": "The business the product belongs to",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Product",
+                    "short_desc": "The product to retrieve",
+                    "desc": "The product to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        # Action 22: search-accounts (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WaveDataProvider::AppName,
+            "path": "/accounts",
+            "action": "search-accounts",
+            "groups": "Accounts",
+            "display_name": "Search Accounts",
+            "short_desc": "Search for accounts in Wave",
+            "desc": "Search for chart of accounts entries in a Wave business",
+            "action_code": DPAT_FIND,
+            "data_provider_info": WaveAccountsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ListDataType("AccountList", new WaveAccountDataType(), True); },
+            "options": {
+                "businessId": <ActionOptionInfo>{
+                    "display_name": "Business",
+                    "short_desc": "The business to search accounts in",
+                    "desc": "The business to search accounts in",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "businesses",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results",
+                    "desc": "Maximum number of results to return",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage WaveDataProvider Module
+
+    @tableofcontents
+
+    @section wavedataproviderintro WaveDataProvider Introduction
+
+    The %WaveDataProvider module provides a data provider API for Wave accounting and invoicing services.
+
+    Wave is a free accounting, invoicing, and receipt scanning software designed for small businesses.
+    This module enables integration with Wave through its GraphQL API, supporting operations on:
+    - Customers (create, read, update, delete, search)
+    - Invoices (create, approve, send, search)
+    - Products (create, read, update, search)
+    - Accounts (create, search)
+    - Transactions (create, search)
+    - Sales Taxes (create)
+    - Events/Triggers (invoice created)
+
+    To use this module, use \c "%requires WaveDataProvider" in your code.
+
+    @section wavedataproviderauth Authentication
+
+    Wave uses OAuth 2.0 for authentication:
+    - **OAuth 2.0**: Use oauth2_client_id and oauth2_client_secret for third-party applications.
+    - **Full-stack Token**: For testing, use the \c token option with a Wave full-stack token.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires WaveDataProvider
+
+WaveDataProvider provider({"token": ENV.WAVE_TOKEN});
+
+# List all customers
+AbstractDataProviderRecordIterator i = provider.getChildProvider("customers").searchRecords({"businessId": business_id});
+while (i.next()) {
+    printf("Customer: %s (%s)\n", i.getValue().name, i.getValue().email);
+}
+
+# Create an invoice
+hash<auto> invoice = provider.getChildProvider("create-invoice").doRequest({
+    "businessId": business_id,
+    "customerId": customer_id,
+    "invoiceDate": "2025-01-15",
+    "status": "DRAFT",
+});
+printf("Created invoice: %s\n", invoice.id);
+    @endcode
+
+    @section wavedataproviderrelnotes Release Notes
+
+    @subsection wavedataproviderv1_0 WaveDataProvider v1.0
+    - Initial release of the %WaveDataProvider module
+*/
+
+#! Contains all public definitions in the WaveDataProvider module
+public namespace WaveDataProvider {
+    # AppName is defined in WaveDataProviderDefs.qc
+}

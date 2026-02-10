@@ -41,6 +41,8 @@ class DocumentTest inherits QUnit::Test {
         addTestCase("findSymbols", \testFindSymbols());
         addTestCase("findMatchingSymbols", \testFindMatchingSymbols());
         addTestCase("hover", \testHover());
+        addTestCase("CST features with parse errors", \testCstFeaturesWithParseErrors());
+        addTestCase("didChange preserves tree on errors", \testDidChangePreservesTree());
 
         set_return_value(main());
     }
@@ -140,5 +142,119 @@ class DocumentTest inherits QUnit::Test {
         QLS::Document doc2("file:///test2.q", text2, "qore", 1);
         hash result2 = doc2.hover({"line": 0, "character": 0});
         assertEq(Type::Hash, result2.type());
+    }
+
+    testCstFeaturesWithParseErrors() {
+        # Source with a valid class + method, followed by incomplete code
+        string text = "%modern
+class MyClass {
+    public {
+        int memberVar;
+    }
+    int getValue() {
+        int localVar = 42;
+        return localVar;
+    }
+}
+
+sub broken(int x) {
+    int y = x +
+";
+        QLS::Document doc("file:///test.q", text, "qore", 1);
+        # Confirm parse errors exist
+        assertGt(0, doc.getParseErrorCount(), "source has parse errors");
+
+        # findSymbols should return symbols from the valid portions of the tree
+        *list<auto> symbols = doc.findSymbols();
+        assertTrue(exists symbols, "findSymbols returns results despite errors");
+        assertTrue(symbols.size() > 0, "at least one symbol found");
+
+        # Verify MyClass is found
+        bool foundClass = False;
+        foreach auto s in (symbols) {
+            if (s.name =~ /MyClass/) {
+                foundClass = True;
+                break;
+            }
+        }
+        assertTrue(foundClass, "MyClass found in symbols despite parse errors");
+
+        # findMatchingSymbols should find symbols despite errors
+        list<auto> matching = doc.findMatchingSymbols("MyClass");
+        assertGt(0, matching.size(), "MyClass found by findMatchingSymbols despite errors");
+
+        list<auto> noMatch = doc.findMatchingSymbols("nonexistent_symbol_xyz");
+        assertEq(0, noMatch.size(), "no false positives");
+
+        # findScopeSymbolsDetailed inside getValue() method body
+        # Line 0: %modern, Line 1: class MyClass {,
+        # Line 2: public {, Line 3: int memberVar;, Line 4: },
+        # Line 5: int getValue() {, Line 6: int localVar = 42;,
+        # Line 7: return localVar;, Line 8: }
+        # Position at line 6 (int localVar = 42;), col 12
+        *list<auto> detailed = doc.findScopeSymbolsDetailed({"line": 6, "character": 12});
+        assertTrue(exists detailed, "findScopeSymbolsDetailed returns results despite errors");
+        assertTrue(detailed.size() > 0, "at least one detailed symbol found");
+
+        bool foundLocalVar = False;
+        bool foundMemberVar = False;
+        foreach auto s in (detailed) {
+            if (s.name == "localVar") {
+                foundLocalVar = True;
+                assertEq("int", s.typeName, "localVar type is int");
+            } else if (s.name == "memberVar") {
+                foundMemberVar = True;
+                assertEq("int", s.typeName, "memberVar type is int");
+            }
+        }
+        assertTrue(foundLocalVar, "localVar found in scope despite parse errors");
+        assertTrue(foundMemberVar, "memberVar found in scope despite parse errors");
+
+        # findSymbolInfo should work for valid portions
+        *hash<auto> info = doc.findSymbolInfo({"line": 1, "character": 6});
+        assertTrue(exists info, "findSymbolInfo works despite parse errors");
+
+        # getTree should return a tree (not NOTHING)
+        assertTrue(exists doc.getTree(), "getTree returns tree despite parse errors");
+
+        # foldingRanges should work
+        *list<auto> folds = doc.foldingRanges();
+        assertTrue(exists folds, "foldingRanges returns results despite errors");
+        assertTrue(folds.size() > 0, "at least one folding range found");
+    }
+
+    testDidChangePreservesTree() {
+        # Start with valid source
+        string text = "%modern\nclass Foo { int x; }\n";
+        QLS::Document doc("file:///test.q", text, "qore", 1);
+        assertEq(0, doc.getParseErrorCount(), "initial parse is clean");
+        assertTrue(exists doc.getTree(), "initial tree exists");
+
+        # Simulate editing: introduce a parse error
+        string brokenText = "%modern\nclass Foo { int x; }\nsub bar() { return 1 +\n";
+        doc.didChange({"text": brokenText});
+        assertGt(0, doc.getParseErrorCount(), "broken text has parse errors");
+
+        # Tree should still be available for CST operations
+        assertTrue(exists doc.getTree(), "tree preserved after didChange with errors");
+
+        # Symbols from the valid class should still be found
+        *list<auto> symbols = doc.findSymbols();
+        assertTrue(exists symbols, "findSymbols works after didChange with errors");
+
+        bool foundFoo = False;
+        foreach auto s in (symbols) {
+            if (s.name =~ /Foo/) {
+                foundFoo = True;
+                break;
+            }
+        }
+        assertTrue(foundFoo, "Foo class found after didChange with errors");
+
+        # Fix the source again
+        string fixedText = "%modern\nclass Foo { int x; }\nsub bar() { return 1; }\n";
+        doc.didChange({"text": fixedText});
+        assertEq(0, doc.getParseErrorCount(), "fixed text has no errors");
+        assertTrue(exists doc.getTree(), "tree exists after fix");
     }
 }

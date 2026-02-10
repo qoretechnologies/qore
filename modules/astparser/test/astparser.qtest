@@ -486,6 +486,7 @@ sub test() {
         addTestCase("Find type members - inheritance", \testFindTypeMembersInheritance());
         addTestCase("Resolve definition", \testResolveDefinition());
         addTestCase("Resolve definition cross-doc", \testResolveDefinitionCrossDoc());
+        addTestCase("Scope symbols with parse errors", \testScopeSymbolsWithErrors());
 %endif
 %endif
         set_return_value(main());
@@ -3252,6 +3253,84 @@ Child2::getValue();
             assertEq(4, resolved[0].range.start.line,
                 "crossDoc: scope access points to line 4");
         }
+    }
+
+    testScopeSymbolsWithErrors() {
+        # Source with a valid class definition followed by incomplete code (parse error)
+        # Tree-sitter error recovery should produce a partial tree containing the class
+        string testCode = "
+%new-style
+class MyClass {
+    public {
+        int memberVar;
+    }
+    int getValue() {
+        int localVar = 42;
+        return localVar;
+    }
+}
+
+# incomplete code causes a parse error
+sub broken(int x) {
+    int y = x +
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        # Expect parse errors due to incomplete code
+        assertGt(0, parser.getErrorCount(), "source has parse errors");
+        # Tree-sitter error recovery should still produce a tree
+        assertTrue(exists tree, "tree exists despite parse errors");
+
+        AstTreeSearcher searcher();
+
+        # Test findSymbols: should find symbols from the valid portions
+        *list<auto> symbols = searcher.findSymbols(tree, "test.q");
+        assertTrue(exists symbols, "findSymbols returns results despite errors");
+        assertTrue(symbols.size() > 0, "at least one symbol found");
+
+        # Check that MyClass is among the symbols
+        bool foundClass = False;
+        foreach auto s in (symbols) {
+            if (s.name =~ /MyClass/) {
+                foundClass = True;
+                break;
+            }
+        }
+        assertTrue(foundClass, "MyClass found in symbols despite parse errors");
+
+        # Test findScopeSymbolsDetailed inside getValue() method body
+        # Line 0: empty, Line 1: %new-style, Line 2: class MyClass {,
+        # Line 3: public {, Line 4: int memberVar;, Line 5: },
+        # Line 6: int getValue() {, Line 7: int localVar = 42;,
+        # Line 8: return localVar;, Line 9: }
+        # Position at line 7 (int localVar = 42;), col 12
+        *list<auto> detailed = searcher.findScopeSymbolsDetailed(tree, "test.q", 7, 12);
+        assertTrue(exists detailed, "findScopeSymbolsDetailed returns results despite errors");
+        assertTrue(detailed.size() > 0, "at least one detailed symbol found");
+
+        bool foundLocalVar = False;
+        bool foundMemberVar = False;
+        foreach auto s in (detailed) {
+            switch (s.name) {
+                case "localVar":
+                    foundLocalVar = True;
+                    assertEq(ASYK_Variable, s.kind, "localVar is Variable");
+                    assertEq("int", s.typeName, "localVar type is int");
+                    break;
+                case "memberVar":
+                    foundMemberVar = True;
+                    assertEq("int", s.typeName, "memberVar type is int");
+                    assertEq("public", s.access, "memberVar access is public");
+                    break;
+            }
+        }
+        assertTrue(foundLocalVar, "localVar found in scope despite parse errors");
+        assertTrue(foundMemberVar, "memberVar found in scope despite parse errors");
+
+        # Test findMatchingSymbols
+        *list<auto> matching = searcher.findMatchingSymbols(tree, "test.q", "MyClass");
+        assertTrue(exists matching, "findMatchingSymbols returns results despite errors");
+        assertGt(0, matching.size(), "MyClass found by findMatchingSymbols");
     }
 
 %endif

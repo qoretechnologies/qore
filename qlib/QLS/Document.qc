@@ -55,6 +55,12 @@ public class Document {
 
         #! Cached split lines for efficient line access.
         *list<string> cachedLines;
+
+        #! Conditional parsing defines (e.g., for %ifdef directives).
+        list<string> defines = ();
+
+        #! Cached parse directive options (invalidated on content change).
+        *int cachedParseOptions;
     }
 
     constructor(string n_uri, string n_text, string n_languageId, int n_version) {
@@ -106,10 +112,19 @@ public class Document {
         delete tree;
         parseOk = True;
         parser = new astparser::AstParser();
+        if (defines) {
+            parser.setConditionalParsing(True);
+            parser.setDefines(defines);
+        }
     }
 
     private:internal handleParseErrors() {
-        tree = NOTHING;
+        # NOTE: do NOT set tree = NOTHING here. Tree-sitter's error recovery produces
+        # partial trees with ERROR nodes that still contain valid structure (classes,
+        # functions, variables). Keeping the tree enables CST features (scope resolution,
+        # symbol search, go-to-definition, etc.) even when the source has parse errors,
+        # which is the normal state while actively editing code.
+        # When the parser returned NOTHING (total failure), tree is already NOTHING.
         parseOk = False;
         parseError = sprintf("Error parsing text document '%s'\n\n", uri);
         if (parser.getErrorCount()) {
@@ -166,6 +181,7 @@ public class Document {
         # Using whole document sync here.
         text = changes.text;
         delete cachedLines;
+        delete cachedParseOptions;
 
         # Re-parse the document.
         parseText();
@@ -455,6 +471,55 @@ public class Document {
             return cachedLines[lineNum];
         }
         return NOTHING;
+    }
+
+    #! Set conditional parsing defines and re-parse
+    /** @param new_defines list of define names (e.g., ("MyDefine", "Debug")); pass NOTHING or empty list to clear
+    */
+    setDefines(*list<string> new_defines) {
+        defines = new_defines ?? ();
+        delete cachedLines;
+        delete cachedParseOptions;
+        parseText();
+    }
+
+    #! Get the current conditional parsing defines
+    /** @return list of define names
+    */
+    list<string> getDefines() {
+        return defines;
+    }
+
+    #! Get parse options derived from parse directives in the document text
+    /** Scans the document text for lines starting with recognized parse directives
+        (e.g., \c %modern, \c %strict-args, \c %no-thread-control) and accumulates the
+        corresponding PO_* flags using the built-in @ref Qore::ParseOptionCmdStringMap
+        "ParseOptionCmdStringMap". The result is cached and invalidated on content changes.
+
+        @return bitfield of PO_* parse option flags, or 0 if no directives found
+    */
+    int getParseDirectiveOptions() {
+        if (exists cachedParseOptions) {
+            return cachedParseOptions;
+        }
+        int result = 0;
+        if (text) {
+            foreach string line in (text.split("\n")) {
+                # Parse directives must start at column 0
+                if (line.size() > 0 && line[0] == "%") {
+                    # Extract the directive token (first %-prefixed word, strip leading %)
+                    *list<auto> match = (line =~ x/^%([a-zA-Z][a-zA-Z0-9_-]*)/);
+                    if (match) {
+                        *int po = ParseOptionCmdStringMap{match[0]};
+                        if (exists po) {
+                            result |= po;
+                        }
+                    }
+                }
+            }
+        }
+        cachedParseOptions = result;
+        return result;
     }
 }
 

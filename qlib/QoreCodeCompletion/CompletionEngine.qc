@@ -113,6 +113,15 @@ public class AbstractCompletionProvider {
         @return A list of matching scope member completion items
     */
     abstract list<hash<CompletionItem>> getScopeMembers(string target, string prefix);
+
+    #! Returns the active parse options for the current context
+    /** Override this to return the parse options from your runtime/document context.
+        The default implementation returns 0 (no restrictions).
+        @return bitfield of PO_* parse option flags
+    */
+    int getParseOptions() {
+        return 0;
+    }
 }
 
 #! Shared completion engine with context detection, dispatch, filtering, and sorting
@@ -323,11 +332,19 @@ public class CompletionEngine {
 
         # Keywords (only if prefix >= 2 chars to reduce noise)
         if (ctx.prefix.length() >= 2) {
+            int po = provider.getParseOptions();
+
             foreach string kw in (QoreKeywords) {
-                if (matchesPrefix(kw, ctx.prefix) && !seen{kw}) {
-                    seen{kw} = True;
-                    result += <CompletionItem>{"label": kw, "kind": "keyword"};
+                if (!matchesPrefix(kw, ctx.prefix) || seen{kw}) {
+                    continue;
                 }
+                # Skip thread-control keywords when PO_NO_THREAD_CONTROL is set
+                if ((po & PO_NO_THREAD_CONTROL)
+                        && (kw == "background" || kw == "thread_exit")) {
+                    continue;
+                }
+                seen{kw} = True;
+                result += <CompletionItem>{"label": kw, "kind": "keyword"};
             }
         }
 
