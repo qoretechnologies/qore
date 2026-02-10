@@ -156,7 +156,14 @@ void QoreEventNotifier::notify() {
         EV_SET(&ev, user_ident, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);
         // Use zero timeout - this is a non-blocking trigger
         struct timespec ts = {0, 0};
-        if (kevent(kq, &ev, 1, nullptr, 0, &ts) < 0) {
+        // Retry on EINTR — a lost notification can cause the I/O thread to
+        // block indefinitely in poll(), since the fallback pipe is closed
+        // after bindToKqueue()
+        int rv;
+        do {
+            rv = kevent(kq, &ev, 1, nullptr, 0, &ts);
+        } while (rv < 0 && errno == EINTR);
+        if (rv < 0) {
             // If kevent fails (e.g., kqueue was closed), fall through to pipe
             // This handles race conditions during unbind gracefully
             if (errno != EBADF && pipe_fd[1] >= 0) {
