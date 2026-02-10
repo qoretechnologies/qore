@@ -26,10 +26,10 @@ if(NOT tree-sitter_POPULATED)
 endif()
 
 # Build tree-sitter C runtime as a static library
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_library(tree-sitter-lib STATIC
     ${tree-sitter_SOURCE_DIR}/lib/src/lib.c
 )
+set_property(TARGET tree-sitter-lib PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_include_directories(tree-sitter-lib PUBLIC
     ${tree-sitter_SOURCE_DIR}/lib/include
     ${tree-sitter_SOURCE_DIR}/lib/src
@@ -45,6 +45,7 @@ set(TS_QORE_SRC_DIR ${TS_QORE_GRAMMAR_DIR}/src)
 add_library(tree-sitter-qore-grammar STATIC
     ${TS_QORE_SRC_DIR}/parser.c
 )
+set_property(TARGET tree-sitter-qore-grammar PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_include_directories(tree-sitter-qore-grammar PUBLIC
     ${tree-sitter_SOURCE_DIR}/lib/include
     ${TS_QORE_SRC_DIR}

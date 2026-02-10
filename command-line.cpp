@@ -854,6 +854,10 @@ static void do_version_animation(const char* arg) {
     struct timespec anim_start;
     clock_gettime(CLOCK_MONOTONIC, &anim_start);
 
+    // Rolling frame deadline; incremented by FRAME_NS each iteration to avoid
+    // overflow from multiplying FRAME_NS * frame_num in unbounded raw_mode
+    struct timespec next_deadline = anim_start;
+
     for (long frame_num = 0; raw_mode || frame_num < ANIM_FRAME_COUNT; ++frame_num) {
         int frame = (int)(frame_num % ANIM_FRAME_COUNT);
 
@@ -913,20 +917,17 @@ static void do_version_animation(const char* arg) {
             }
         }
 
-        // Sleep until the wall-clock time for the next frame
-        long next_frame_ns = FRAME_NS * (frame_num + 1);
-        struct timespec target;
-        target.tv_sec = anim_start.tv_sec + next_frame_ns / 1000000000L;
-        target.tv_nsec = anim_start.tv_nsec + next_frame_ns % 1000000000L;
-        while (target.tv_nsec >= 1000000000L) {
-            target.tv_sec++;
-            target.tv_nsec -= 1000000000L;
+        // Advance rolling deadline by one frame interval
+        next_deadline.tv_nsec += FRAME_NS;
+        if (next_deadline.tv_nsec >= 1000000000L) {
+            next_deadline.tv_sec++;
+            next_deadline.tv_nsec -= 1000000000L;
         }
         // Sleep until the target time (portable: works on macOS and Linux)
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
-        long sleep_ns = (target.tv_sec - now.tv_sec) * 1000000000L
-            + (target.tv_nsec - now.tv_nsec);
+        long sleep_ns = (next_deadline.tv_sec - now.tv_sec) * 1000000000L
+            + (next_deadline.tv_nsec - now.tv_nsec);
         if (sleep_ns > 0) {
             struct timespec rem, req;
             req.tv_sec = sleep_ns / 1000000000L;

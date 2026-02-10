@@ -93,12 +93,12 @@ public class Document {
             - encoded with Qore::encode_url()
      */
     static string getFileUri(string raw_path) {
-        string ret;
-        if (raw_path !~ /^file:\/\//) {
-            ret += Document::getFileUriPrefix();
+        # if the input is already a file URI, return it unchanged to avoid
+        # double-encoding the scheme and slashes
+        if (raw_path =~ /^file:\/\//) {
+            return raw_path;
         }
-        ret += Qore::encode_url(raw_path);
-        return ret;
+        return Document::getFileUriPrefix() + Qore::encode_url(raw_path);
     }
 
     private:internal parseInit() {

@@ -33,6 +33,7 @@
 
 #include "AstParser.h"
 #include "AstTreePrinter.h"
+#include "ast/ASTComment.h"
 #include "queries/GetNodesInfoQuery.h"
 
 AstTreeHolder::AstTreeHolder(AstParseResult* r) : result(r) {
@@ -52,30 +53,22 @@ QoreListNode* AstTreeHolder::getNodesInfo() {
     return GetNodesInfoQuery::get(result);
 }
 
-//! Comment kind enumeration (matching the old ACK_* values).
-enum CommentKind {
-    CK_Line = 0,       //!< Line comment: # ...
-    CK_Block = 1,       //!< Block comment: /* ... */
-    CK_DocLine = 2,     //!< Doc line comment: #! ...
-    CK_DocBlock = 3,    //!< Doc block comment: /** ... */
-};
-
 //! Determine the comment kind from the node type and text.
-static CommentKind classifyComment(const char* nodeType, const std::string& text) {
+static ASTCommentKind classifyComment(const char* nodeType, const std::string& text) {
     if (strcmp(nodeType, "comment") == 0) {
         // Block comment: /* ... */
         // Check if it's a doc block comment: /** ... */
         if (text.size() >= 4 && text[0] == '/' && text[1] == '*' && text[2] == '*') {
-            return CK_DocBlock;
+            return ACK_DocBlock;
         }
-        return CK_Block;
+        return ACK_Block;
     }
     // Line comment: # ...
     // Check if it's a doc line comment: #! ...
     if (text.size() >= 2 && text[0] == '#' && text[1] == '!') {
-        return CK_DocLine;
+        return ACK_DocLine;
     }
-    return CK_Line;
+    return ACK_Line;
 }
 
 //! Recursively collect all comment nodes from the tree-sitter CST.
@@ -85,7 +78,7 @@ static void collectComments(TSNode node, const AstParseResult* result,
 
     if (strcmp(type, "comment") == 0 || strcmp(type, "line_comment") == 0) {
         std::string text = result->getNodeText(node);
-        CommentKind kind = classifyComment(type, text);
+        ASTCommentKind kind = classifyComment(type, text);
 
         TSPoint startPt = ts_node_start_point(node);
         TSPoint endPt = ts_node_end_point(node);

@@ -54,17 +54,18 @@ Required for LZ4 compression support. Install liblz4-dev (Debian/Ubuntu), lz4-de
 	https://nghttp2.org/
 Required for HTTP/2 support. Install libnghttp2-dev (Debian/Ubuntu), nghttp2-devel (RHEL/Fedora), or nghttp2-dev (Alpine).
 
-*) Rust toolchain with cargo
+*) Rust toolchain with cargo (optional)
 	https://rustup.rs/
-Required for building the tree-sitter CLI tool used by the astparser module.
+Optional; only needed for installing the tree-sitter CLI tool when developing the astparser grammar.
 Install rust and cargo: rust cargo (RHEL/Fedora), cargo (Debian/Ubuntu), cargo rust (Alpine).
 Then install the tree-sitter CLI: cargo install tree-sitter-cli@0.26.5
 
-*) tree-sitter CLI (for building the astparser module)
+*) tree-sitter CLI (optional; for astparser grammar development)
 	https://tree-sitter.github.io/tree-sitter/
-Required for generating the Qore grammar parser used by the astparser module and the documentation system.
+Optional; only needed when regenerating the Qore grammar parser sources for the astparser module.
+Pre-generated parser sources are included in the source tree and are used by the CMake build by default.
+The tree-sitter C runtime library is fetched automatically by CMake at build time.
 Install with: cargo install tree-sitter-cli@0.26.5
-The tree-sitter C runtime library is fetched automatically by CMake at build time; only the CLI tool needs to be pre-installed.
 
 CMAKE Build
 -----------
