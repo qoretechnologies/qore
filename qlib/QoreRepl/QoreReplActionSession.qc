@@ -90,6 +90,9 @@ public class QoreReplActionSession {
             case "repl-interrupt":
                 return handleInterrupt(args);
 
+            case "repl-complete":
+                return handleComplete(args);
+
             case "repl-close":
                 return handleClose(args);
         }
@@ -116,6 +119,21 @@ public class QoreReplActionSession {
         *string request_id = args.request_id ?? args.id;
         return (
             makeErrorEvent(request_id, "NOT-IMPLEMENTED", "Interrupt is not currently supported"),
+        );
+    }
+
+    private list<hash<auto>> handleComplete(*hash<auto> args) {
+        string input = getRequiredStringArg(args, "input");
+        *string request_id = args.request_id ?? args.id;
+        list<hash<CompletionItem>> items = repl.getCompletionDetails(input);
+        return (
+            {
+                "event": "repl-completion",
+                "data": {
+                    "request_id": request_id,
+                    "items": items,
+                },
+            },
         );
     }
 
@@ -160,6 +178,7 @@ public class QoreReplActionSession {
                 "request_id": request_id,
                 "value": repl.getPrompt(),
                 "needs_more_input": repl.needsMoreInput(),
+                "indent_level": repl.getIndentLevel(),
             },
         };
     }

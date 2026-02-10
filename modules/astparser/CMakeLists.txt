@@ -1,50 +1,55 @@
-# Allow BISON_EXECUTABLE to be set from environment variable
-if(NOT BISON_EXECUTABLE AND DEFINED ENV{BISON_EXECUTABLE})
-    set(BISON_EXECUTABLE $ENV{BISON_EXECUTABLE} CACHE FILEPATH "Path to bison executable")
-endif()
-get_filename_component(BISON_EXECUTABLE_NAME "${BISON_EXECUTABLE}" NAME)
-get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
-if(BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    unset(BISON_REAL_EXECUTABLE CACHE)
-    unset(BISON_REAL_EXECUTABLE)
-endif()
-if(BISON_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    if(BISON_REAL_EXECUTABLE)
-        get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
-        if(NOT BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-            set(BISON_EXECUTABLE ${BISON_REAL_EXECUTABLE} CACHE FILEPATH "Path to bison executable" FORCE)
-        else()
-            unset(BISON_EXECUTABLE CACHE)
-            unset(BISON_EXECUTABLE)
-        endif()
-    else()
-        unset(BISON_EXECUTABLE CACHE)
-        unset(BISON_EXECUTABLE)
-    endif()
-endif()
-find_package(BISON REQUIRED)
+# tree-sitter build infrastructure for the astparser module
+#
+# Build flow:
+#   grammar.js → tree-sitter generate → parser.c (at build time)
+#   parser.c + tree-sitter C runtime → static libraries
+#   astparser module links against these static libraries
+#
+# Build dependency: tree-sitter CLI (cargo install tree-sitter-cli)
+# Runtime dependency: none (tree-sitter statically linked)
 
-# Wrap bison to handle directive compatibility across versions, avoiding wrapper recursion.
-get_filename_component(BISON_EXECUTABLE_NAME "${BISON_EXECUTABLE}" NAME)
-if(BISON_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    find_program(BISON_REAL_EXECUTABLE NAMES bison)
-else()
-    set(BISON_REAL_EXECUTABLE "${BISON_EXECUTABLE}")
-endif()
-get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
-if(BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    find_program(BISON_REAL_EXECUTABLE NAMES bison)
-endif()
-set(BISON_REAL_EXECUTABLE "${BISON_REAL_EXECUTABLE}" CACHE FILEPATH "Path to real bison executable" FORCE)
-set(BISON_WRAPPER_EXECUTABLE ${CMAKE_SOURCE_DIR}/tools/bison-wrapper.sh)
-set(BISON_WRAPPER_PATH ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
-configure_file(
-    ${CMAKE_SOURCE_DIR}/cmake/bison-wrapper.sh.in
-    ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh
+include(FetchContent)
+
+# tree-sitter CLI is only needed when changing grammar.js (developer workflow):
+#   cd grammars/tree-sitter-qore && tree-sitter generate grammar.js
+# The generated src/ files are committed to source control.
+
+# Fetch tree-sitter C runtime library (same version as module-treesitter)
+FetchContent_Declare(
+    tree-sitter
+    GIT_REPOSITORY https://github.com/tree-sitter/tree-sitter.git
+    GIT_TAG v0.26.5
 )
-execute_process(COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
-set(BISON_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh CACHE FILEPATH "Path to bison executable" FORCE)
-find_package(FLEX 2.5.35 REQUIRED)
+FetchContent_GetProperties(tree-sitter)
+if(NOT tree-sitter_POPULATED)
+    FetchContent_Populate(tree-sitter)
+endif()
+
+# Build tree-sitter C runtime as a static library
+add_library(tree-sitter-lib STATIC
+    ${tree-sitter_SOURCE_DIR}/lib/src/lib.c
+)
+set_property(TARGET tree-sitter-lib PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_include_directories(tree-sitter-lib PUBLIC
+    ${tree-sitter_SOURCE_DIR}/lib/include
+    ${tree-sitter_SOURCE_DIR}/lib/src
+)
+
+# Use pre-generated parser files from source tree.
+# Developers: run "tree-sitter generate grammar.js" manually when grammar.js changes,
+# then commit the updated src/ files.
+set(TS_QORE_GRAMMAR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/grammars/tree-sitter-qore)
+set(TS_QORE_SRC_DIR ${TS_QORE_GRAMMAR_DIR}/src)
+
+# Build Qore grammar parser as a static library from committed generated sources
+add_library(tree-sitter-qore-grammar STATIC
+    ${TS_QORE_SRC_DIR}/parser.c
+)
+set_property(TARGET tree-sitter-qore-grammar PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_include_directories(tree-sitter-qore-grammar PUBLIC
+    ${tree-sitter_SOURCE_DIR}/lib/include
+    ${TS_QORE_SRC_DIR}
+)
 
 # start of hacks to simulate installed QoreConfig.cmake
 # which cannot be available yet - the QORE_LIBRARY is missing
@@ -67,7 +72,25 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(BEFORE ${CMAKE_BINARY_DIR}/include)
 include_directories(BEFORE ${CMAKE_SOURCE_DIR}/include)
 
-# source files
+# Source files organized by type for proper dependency tracking.
+# Direct C++ sources (no generator)
+set(ASTPARSER_DIRECT_CPP_SRC
+    src/astparser-module.cpp
+    src/AstParser.cpp
+    src/AstParserHolder.cpp
+    src/AstTreeHolder.cpp
+    src/AstTreePrinter.cpp
+    src/CSTSearcher.cpp
+    src/queries/GetNodesInfoQuery.cpp
+)
+# NOTE: The following old Bison-based files are excluded from the build.
+# Their functionality has been replaced by CSTSearcher (tree-sitter CST):
+# Excluded: AstPrinter.cpp, AstTreeSearcher.cpp, FindMatchingSymbolsQuery.cpp, FindNodeQuery.cpp,
+#   FindNodeAndParentsQuery.cpp, FindReferencesQuery.cpp,
+#   FindScopeSymbolsQuery.cpp, FindSymbolInfoQuery.cpp,
+#   FindSymbolsQuery.cpp, SymbolInfoFixes.cpp
+
+# QPP sources (.qpp → .cpp via qore_wrap_qpp_value)
 set(ASTPARSER_QPP_SRC
     src/QC_AstParser.qpp
     src/QC_AstTree.qpp
@@ -75,112 +98,94 @@ set(ASTPARSER_QPP_SRC
     src/ql_ast.qpp
 )
 
+# Combined source list for non-SCU builds (no bison/flex sources)
 set(ASTPARSER_CPP_SRC
-    src/astparser-module.cpp
-    src/AstParser.cpp
-    src/AstParserHolder.cpp
-    src/AstPrinter.cpp
-    src/AstTreeHolder.cpp
-    src/AstTreePrinter.cpp
-    src/AstTreeSearcher.cpp
-    src/queries/FindMatchingSymbolsQuery.cpp
-    src/queries/FindNodeQuery.cpp
-    src/queries/FindNodeAndParentsQuery.cpp
-    src/queries/FindReferencesQuery.cpp
-    src/queries/FindScopeSymbolsQuery.cpp
-    src/queries/FindSymbolInfoQuery.cpp
-    src/queries/FindSymbolsQuery.cpp
-    src/queries/GetNodesInfoQuery.cpp
-    src/queries/SymbolInfoFixes.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/ast_parser.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/ast_scanner.cpp
+    ${ASTPARSER_DIRECT_CPP_SRC}
 )
 
 set(QORE_DOX_ASTPARSER_TMPL_SRC
     docs/mainpage.dox.tmpl
 )
 
-# prepare ast_scanner and ast_parser targets
-# The astparser grammar intentionally has conflicts due to parse_option handling.
-# See the comment in ast_parser.ypp for details. Warnings are suppressed with bison 3.0+.
-if(BISON_VERSION VERSION_GREATER_EQUAL "3.0")
-    set(ASTPARSER_BISON_FLAGS "-Wno-conflicts-sr -Wno-conflicts-rr -Wno-other")
-else()
-    set(ASTPARSER_BISON_FLAGS "")
-endif()
-bison_target(ast_parser src/ast_parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/ast_parser.cpp
-    COMPILE_FLAGS "${ASTPARSER_BISON_FLAGS}")
-flex_target(ast_scanner src/ast_scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/ast_scanner.cpp COMPILE_FLAGS --nowarn)
-add_flex_bison_dependency(ast_scanner ast_parser)
-
 qore_wrap_qpp_value(ASTPARSER_QPP_SOURCES DOXLIST _dox_src ${ASTPARSER_QPP_SRC})
 add_custom_target(ASTPARSER_QPP_GENERATED_FILES DEPENDS qpp ${ASTPARSER_QPP_SOURCES})
-add_custom_target(ASTPARSER_BISON_GENERATED_FILES DEPENDS ${BISON_ast_parser_OUTPUTS})
-add_custom_target(ASTPARSER_FLEX_GENERATED_FILES DEPENDS ${FLEX_ast_scanner_OUTPUTS})
 
 # prepare astparser module target
 set(astparser_module_name "astparser")
 
 if (SINGLE_COMPILATION_UNIT)
-    # Generate the SCU dynamically from source lists with dependency tracking.
-    # Bison/flex generated files must be included first to avoid macro conflicts.
-    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/src)
-    set(AST_SCU_CONTENT "/* Auto-generated single compilation unit - do not edit */\n")
-    set(AST_SCU_DEPS "")
-    # First pass: emit bison/flex generated files (must come before other sources)
-    foreach(src ${ASTPARSER_CPP_SRC})
-        if (IS_ABSOLUTE "${src}")
-            set(abs_src "${src}")
-        else()
-            set(abs_src "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
-        endif()
-        get_filename_component(basename "${src}" NAME)
-        if (basename STREQUAL "ast_parser.cpp")
-            list(APPEND AST_SCU_DEPS "${abs_src}")
-            string(APPEND AST_SCU_CONTENT
-                "#if defined(__GNUC__)\n"
-                "#pragma GCC diagnostic push\n"
-                "#pragma GCC diagnostic ignored \"-Wfree-nonheap-object\"\n"
-                "#endif\n"
-                "#include \"${abs_src}\"\n"
-                "#if defined(__GNUC__)\n"
-                "#pragma GCC diagnostic pop\n"
-                "#endif\n")
-        elseif (basename STREQUAL "ast_scanner.cpp")
-            list(APPEND AST_SCU_DEPS "${abs_src}")
-            string(APPEND AST_SCU_CONTENT "#include \"${abs_src}\"\n")
-        endif()
+    # Generate SCU file in build directory with absolute paths and explicit
+    # file-level dependencies for each source category, so cmake properly
+    # rebuilds when any source (.cpp, .qpp) changes.
+    set(ASTPARSER_SCU_PATH ${CMAKE_CURRENT_BINARY_DIR}/astparser_scu.cpp)
+
+    # Build the SCU content programmatically from the source lists
+    set(_scu_content "// Auto-generated astparser single-compilation-unit file\n")
+    set(_scu_content "${_scu_content}// Generated by cmake — do not edit manually\n\n")
+
+    # Direct C++ sources (relative paths → absolute)
+    foreach(_f ${ASTPARSER_DIRECT_CPP_SRC})
+        get_filename_component(_abs ${_f} ABSOLUTE)
+        set(_scu_content "${_scu_content}#include \"${_abs}\"\n")
     endforeach()
-    # Second pass: emit remaining source files
-    foreach(src ${ASTPARSER_CPP_SRC})
-        if (IS_ABSOLUTE "${src}")
-            set(abs_src "${src}")
-        else()
-            set(abs_src "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
-        endif()
-        get_filename_component(basename "${src}" NAME)
-        if (NOT basename STREQUAL "ast_parser.cpp" AND NOT basename STREQUAL "ast_scanner.cpp")
-            list(APPEND AST_SCU_DEPS "${abs_src}")
-            string(APPEND AST_SCU_CONTENT "#include \"${abs_src}\"\n")
-        endif()
+    set(_scu_content "${_scu_content}\n")
+
+    # QPP-generated sources (already absolute paths in build dir)
+    foreach(_f ${ASTPARSER_QPP_SOURCES})
+        set(_scu_content "${_scu_content}#include \"${_f}\"\n")
     endforeach()
-    foreach(src ${ASTPARSER_QPP_SOURCES})
-        string(APPEND AST_SCU_CONTENT "#include \"${src}\"\n")
-        list(APPEND AST_SCU_DEPS "${src}")
+
+    file(WRITE ${ASTPARSER_SCU_PATH} "${_scu_content}")
+
+    add_library(${astparser_module_name} MODULE ${ASTPARSER_SCU_PATH})
+
+    # Declare file-level dependencies so cmake rebuilds the SCU object when
+    # any generated file changes (qpp → .cpp)
+    set(_scu_deps ${ASTPARSER_QPP_SOURCES})
+    # Also depend on direct source files
+    foreach(_f ${ASTPARSER_DIRECT_CPP_SRC})
+        get_filename_component(_abs ${_f} ABSOLUTE)
+        list(APPEND _scu_deps ${_abs})
     endforeach()
-    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/src/astparser_scu.cpp "${AST_SCU_CONTENT}")
-    add_library(${astparser_module_name} MODULE
-        ${CMAKE_CURRENT_BINARY_DIR}/src/astparser_scu.cpp)
-    set_source_files_properties(
-        ${CMAKE_CURRENT_BINARY_DIR}/src/astparser_scu.cpp
-        PROPERTIES OBJECT_DEPENDS "${AST_SCU_DEPS}")
+    set_source_files_properties(${ASTPARSER_SCU_PATH} PROPERTIES
+        OBJECT_DEPENDS "${_scu_deps}"
+    )
+    # The grammar library is detected as an SCU dependency via
+    # target_link_libraries below.  This ensures cmake relinks when
+    # the grammar changes.
+    set_target_properties(${astparser_module_name} PROPERTIES
+        LINK_DEPENDS "$<TARGET_FILE:tree-sitter-qore-grammar>"
+    )
 else (SINGLE_COMPILATION_UNIT)
     add_library(${astparser_module_name} MODULE ${ASTPARSER_CPP_SRC} ${ASTPARSER_QPP_SOURCES})
 endif (SINGLE_COMPILATION_UNIT)
 
-add_dependencies(${astparser_module_name} libqore ASTPARSER_QPP_GENERATED_FILES ASTPARSER_BISON_GENERATED_FILES ASTPARSER_FLEX_GENERATED_FILES)
+# Link against tree-sitter libraries and add include paths
+target_include_directories(${astparser_module_name} PRIVATE
+    ${tree-sitter_SOURCE_DIR}/lib/include
+    ${TS_QORE_SRC_DIR}
+)
+target_link_libraries(${astparser_module_name} tree-sitter-lib tree-sitter-qore-grammar)
+
+add_dependencies(${astparser_module_name} libqore ASTPARSER_QPP_GENERATED_FILES)
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/astparser/mainpage.dox ${_dox_src})
 qore_binary_module_qore(${astparser_module_name} "${VERSION}" "/${VERSION}")
+
+# Install grammar artifacts so module-treesitter can reuse them
+install(FILES
+    ${TS_QORE_SRC_DIR}/parser.c
+    ${TS_QORE_SRC_DIR}/grammar.json
+    ${TS_QORE_SRC_DIR}/node-types.json
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/treesitter/tree-sitter-qore/src
+)
+install(FILES
+    ${TS_QORE_SRC_DIR}/tree_sitter/parser.h
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/treesitter/tree-sitter-qore/src/tree_sitter
+)
+install(FILES
+    ${TS_QORE_GRAMMAR_DIR}/grammar.js
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/treesitter/tree-sitter-qore
+)
 
 if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_ASTPARSER_SRC ${QORE_DOX_ASTPARSER_TMPL_SRC})

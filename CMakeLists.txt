@@ -333,6 +333,8 @@ set(QORE_BIN_FILES
     bin/qdbg-vsc-adapter
     bin/qore-openapi3-gen
     bin/qore-asyncapi-gen
+    bin/qfmt
+    bin/qls
 )
 
 set(QORE_DOX_TMPL_SRC
@@ -1362,6 +1364,9 @@ qore_user_module("qlib/Util.qm" "")
 qore_user_module("qlib/WebSocketUtil.qm" "")
 qore_user_module("qlib/MapperUtil.qm" "")
 qore_user_module("qlib/ProviderIndexUtil" "")
+qore_user_module("qlib/QoreCodeCompletion" "")
+qore_user_module("qlib/QoreCodeFormat" "modules/astparser/astparser")
+qore_user_module("qlib/QLS" "modules/astparser/astparser;QoreCodeCompletion;QoreCodeFormat;Util;Mime")
 
 # base 2 modules
 qore_user_module("qlib/FileLocationHandler" "Util")

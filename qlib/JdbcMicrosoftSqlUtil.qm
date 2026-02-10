@@ -53,7 +53,7 @@ module JdbcMicrosoftSqlUtil {
 
     @tableofcontents
 
-    @section JdbcMicrosoftSqlUtilintro JdbcMicrosoftSqlUtil Module Introduction
+    @section jdbcmicrosoftsqlutilintro JdbcMicrosoftSqlUtil Module Introduction
 
     The %JdbcMicrosoftSqlUtil module provides a high level API for working with MS SQL Server database objects using
     the \c jdbc driver.

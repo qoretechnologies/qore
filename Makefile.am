@@ -151,6 +151,9 @@ DOX_SPLIT_MODULES = \
     qlib/Http2ClientIo \
     qlib/MongoDbDataProvider \
     qlib/DpqlWebSocket \
+    qlib/QoreCodeCompletion \
+    qlib/QoreCodeFormat \
+    qlib/QLS \
     qlib/QoreRepl
 
 AsyncApiDataProvider_modverdir = $(modverdir)/AsyncApiDataProvider
@@ -189,6 +192,9 @@ Pop3ClientDataProvider_modverdir = $(modverdir)/Pop3ClientDataProvider
 ProviderIndex_modverdir = $(modverdir)/ProviderIndex
 RedisDataProvider_modverdir = $(modverdir)/RedisDataProvider
 ProviderIndexUtil_modverdir = $(modverdir)/ProviderIndexUtil
+QoreCodeCompletion_modverdir = $(modverdir)/QoreCodeCompletion
+QoreCodeFormat_modverdir = $(modverdir)/QoreCodeFormat
+QLS_modverdir = $(modverdir)/QLS
 QoreRepl_modverdir = $(modverdir)/QoreRepl
 DpqlWebSocket_modverdir = $(modverdir)/DpqlWebSocket
 RestClientDataProvider_modverdir = $(modverdir)/RestClientDataProvider
@@ -258,6 +264,9 @@ dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[c
 dist_ZohoBooksDataProvider_modver_DATA = $(wildcard qlib/ZohoBooksDataProvider/*.q[cm]) $(wildcard qlib/ZohoBooksDataProvider/*.svg)
 dist_ZohoInvoiceDataProvider_modver_DATA = $(wildcard qlib/ZohoInvoiceDataProvider/*.q[cm]) $(wildcard qlib/ZohoInvoiceDataProvider/*.svg)
 dist_AsyncApiDataProvider_modver_DATA = $(wildcard qlib/AsyncApiDataProvider/*.q[cm])
+dist_QoreCodeCompletion_modver_DATA = $(wildcard qlib/QoreCodeCompletion/*.q[cm])
+dist_QoreCodeFormat_modver_DATA = $(wildcard qlib/QoreCodeFormat/*.q[cm])
+dist_QLS_modver_DATA = $(wildcard qlib/QLS/*.q[cm])
 
 USER_MODULES = $(DOX_SRC_MODULES) \
 	$(DOX_MODULES)
@@ -1588,7 +1597,7 @@ endif
 
 bin_PROGRAMS = qore
 # qr
-dist_bin_SCRIPTS = doxygen/qdx bin/qdp bin/qget doxygen/qjar bin/rest bin/sfrest bin/saprest bin/sqlutil bin/schema-reverse bin/qdbg bin/qdbg-server bin/qdbg-remote bin/qdbg-vsc-adapter bin/qore-openapi3-gen bin/qore-asyncapi-gen
+dist_bin_SCRIPTS = doxygen/qdx bin/qdp bin/qget doxygen/qjar bin/rest bin/sfrest bin/saprest bin/sqlutil bin/schema-reverse bin/qdbg bin/qdbg-server bin/qdbg-remote bin/qdbg-vsc-adapter bin/qore-openapi3-gen bin/qore-asyncapi-gen bin/qfmt bin/qls
 if COND_SINGLE_COMPILATION_UNIT
 qore_SOURCES = qore-single-compilation-unit.cpp
 #qr_SOURCES = qr-single-compilation-unit.cpp

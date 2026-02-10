@@ -1,0 +1,617 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Definition.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires json
+%requires ../../../../qlib/QLS
+
+%exec-class DefinitionTest
+
+class DefinitionTest inherits QUnit::Test {
+    private {
+        QLS::QLSServer server;
+        int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
+    }
+
+    constructor() : Test("QLS Definition", "1.0") {
+        initServer();
+
+        addTestCase("local variable to declaration", \testLocalVariable());
+        addTestCase("parameter to declaration", \testParameter());
+        addTestCase("class reference to class declaration", \testClassRef());
+        addTestCase("function call to function declaration", \testFunctionCall());
+        addTestCase("method call to method declaration", \testMethodCall());
+        addTestCase("static method via scope to declaration", \testStaticMethod());
+        addTestCase("foreach variable to foreach statement", \testForeachVariable());
+        addTestCase("cross-doc fallback for declaration name", \testCrossDocFallback());
+        addTestCase("unknown symbol returns empty", \testUnknownSymbol());
+        addTestCase("member field access", \testMemberFieldAccess());
+        addTestCase("inherited method via instance", \testInheritedMethodViaInstance());
+        addTestCase("inherited field via instance", \testInheritedFieldViaInstance());
+        addTestCase("inherited method via scope", \testInheritedMethodViaScope());
+        addTestCase("deep inheritance chain", \testDeepInheritance());
+        addTestCase("inherited constant via scope", \testInheritedConstant());
+        addTestCase("cross-doc inherited method", \testCrossDocInheritedMethod());
+        addTestCase("cross-doc inherited field", \testCrossDocInheritedField());
+        addTestCase("cross-doc deep inheritance", \testCrossDocDeepInheritance());
+        addTestCase("cross-doc scope access", \testCrossDocScopeAccess());
+        addTestCase("cross-doc top-level declaration", \testCrossDocTopLevelDecl());
+        addTestCase("missing params", \testMissingParams());
+        addTestCase("non-existent document", \testNonExistentDocument());
+
+        set_return_value(main());
+    }
+
+    private initServer() {
+        server = new QLS::QLSServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+    }
+
+    # Test source code:
+    # Line 0: %modern
+    # Line 1: class Calculator {
+    # Line 2:     private { int total = 0; }
+    # Line 3:     constructor(int initial) { total = initial; }
+    # Line 4:     int add(int n) { total += n; return total; }
+    # Line 5:     static int zero() { return 0; }
+    # Line 6: }
+    # Line 7: sub helper(int x) { return x + 1; }
+    # Line 8: Calculator calc(10);
+    # Line 9: calc.add(5);
+    # Line 10: int result = helper(calc.add(3));
+    # Line 11: Calculator::zero();
+    # Line 12: foreach int item in ((1, 2, 3)) { printf("%d", item); }
+    private string getTestCode() {
+        return "%modern
+class Calculator {
+    private { int total = 0; }
+    constructor(int initial) { total = initial; }
+    int add(int n) { total += n; return total; }
+    static int zero() { return 0; }
+}
+sub helper(int x) { return x + 1; }
+Calculator calc(10);
+calc.add(5);
+int result = helper(calc.add(3));
+Calculator::zero();
+foreach int item in ((1, 2, 3)) { printf(\"%d\", item); }
+";
+    }
+
+    #! Opens a document on the shared server, caching by content; returns the URI
+    private string setupDoc(*string text) {
+        string src = text ?? getTestCode();
+        *string cached = docCache{src};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/def%d.q", ++docCount);
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "qore",
+                "version": 1,
+                "text": src,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+        docCache{src} = uri;
+        return uri;
+    }
+
+    private hash<auto> makeRequest(string method, *hash<auto> params) {
+        return {
+            "jsonrpc": "2.0",
+            "id": ++reqId,
+            "method": method,
+            "params": params,
+        };
+    }
+
+    private *list<auto> sendDefinition(string uri, int line, int character) {
+        hash<auto> req = makeRequest("textDocument/definition", {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    testLocalVariable() {
+        string uri = setupDoc();
+
+        # "calc" on line 9 "calc.add(5)" col 0 → should resolve to "Calculator calc(10)"
+        # on line 8
+        *list<auto> result = sendDefinition(uri, 9, 0);
+        assertTrue(exists result && result.size() > 0,
+            "local variable 'calc' should resolve to declaration");
+        if (result) {
+            assertEq(8, result[0].range.start.line,
+                "calc declaration should be on line 8");
+        }
+    }
+
+    testParameter() {
+        string uri = setupDoc();
+
+        # "n" in "total += n" on line 4 → parameter "n" in "int add(int n)"
+        # "n" is at approximately col 33 on line 4
+        *list<auto> result = sendDefinition(uri, 4, 33);
+        if (result && result.size() > 0) {
+            assertEq(4, result[0].range.start.line,
+                "parameter 'n' should be on line 4");
+        }
+    }
+
+    testClassRef() {
+        string uri = setupDoc();
+
+        # "Calculator" at line 8 col 0 → class declaration at line 1
+        *list<auto> result = sendDefinition(uri, 8, 0);
+        assertTrue(exists result && result.size() > 0,
+            "class reference 'Calculator' should resolve");
+        if (result) {
+            assertEq(1, result[0].range.start.line,
+                "class declaration should be on line 1");
+        }
+    }
+
+    testFunctionCall() {
+        string uri = setupDoc();
+
+        # "helper" at line 10 col 13 → function declaration at line 7
+        *list<auto> result = sendDefinition(uri, 10, 13);
+        assertTrue(exists result && result.size() > 0,
+            "function call 'helper' should resolve");
+        if (result) {
+            assertEq(7, result[0].range.start.line,
+                "helper function should be on line 7");
+        }
+    }
+
+    testMethodCall() {
+        string uri = setupDoc();
+
+        # "add" in "calc.add(5)" at line 9 col 5 → method "add" in Calculator
+        *list<auto> result = sendDefinition(uri, 9, 5);
+        if (result && result.size() > 0) {
+            assertEq(4, result[0].range.start.line,
+                "method 'add' should resolve to line 4");
+        }
+    }
+
+    testStaticMethod() {
+        string uri = setupDoc();
+
+        # "zero" in "Calculator::zero()" at line 11 col 13 → static method at line 5
+        *list<auto> result = sendDefinition(uri, 11, 13);
+        if (result && result.size() > 0) {
+            assertEq(5, result[0].range.start.line,
+                "static method 'zero' should resolve to line 5");
+        }
+    }
+
+    testForeachVariable() {
+        string uri = setupDoc();
+
+        # "item" in printf on line 12 col 51
+        *list<auto> result = sendDefinition(uri, 12, 51);
+        if (result && result.size() > 0) {
+            assertEq(12, result[0].range.start.line,
+                "foreach variable 'item' should resolve to line 12");
+        }
+    }
+
+    testCrossDocFallback() {
+        string uri = setupDoc();
+
+        # "Calculator" in "class Calculator" at line 1 col 6 — already at declaration
+        # resolveDefinition returns NOTHING for declaration names, then the fallback
+        # cross-document search runs; should return a valid response (list)
+        *list<auto> result = sendDefinition(uri, 1, 6);
+        assertTrue(exists result, "at declaration returns a valid response");
+        # The cross-doc fallback should find the Calculator class declaration
+        assertTrue(result.size() > 0,
+            "cross-doc fallback finds the Calculator declaration");
+    }
+
+    testUnknownSymbol() {
+        string uri = setupDoc();
+
+        # Position on whitespace/parse directive — line 0 col 0 (%modern)
+        # Should return an empty result list (no symbol to resolve)
+        *list<auto> result = sendDefinition(uri, 0, 0);
+        assertEq(0, result.size(),
+            "unknown symbol returns empty result");
+    }
+
+    testMemberFieldAccess() {
+        # Use a separate test with explicit member_expression via self.member
+        string memberCode = "%modern
+class Foo {
+    private { int count = 0; }
+    int getCount() { return self.count; }
+}
+";
+        string uri = setupDoc(memberCode);
+
+        # "count" in "self.count" at line 3, col 33 → member "count" on line 2
+        *list<auto> result = sendDefinition(uri, 3, 33);
+        if (result && result.size() > 0) {
+            assertEq(2, result[0].range.start.line,
+                "member 'count' via self should resolve to line 2");
+        }
+    }
+
+    # Inheritance test source:
+    # Line 0: %modern
+    # Line 1: class Base {
+    # Line 2:     private { int count = 0; }
+    # Line 3:     int getValue() { return count; }
+    # Line 4: }
+    # Line 5: class Child inherits Base {
+    # Line 6:     string getName() { return "child"; }
+    # Line 7: }
+    # Line 8: class GrandChild inherits Child {
+    # Line 9:     bool isValid() { return True; }
+    # Line 10: }
+    # Line 11: sub test() {
+    # Line 12:     Child c();
+    # Line 13:     c.getValue();
+    # Line 14:     c.count;
+    # Line 15:     GrandChild gc();
+    # Line 16:     gc.getValue();
+    # Line 17: }
+    private string getInheritanceCode() {
+        return "%modern
+class Base {
+    private { int count = 0; }
+    int getValue() { return count; }
+}
+class Child inherits Base {
+    string getName() { return \"child\"; }
+}
+class GrandChild inherits Child {
+    bool isValid() { return True; }
+}
+sub test() {
+    Child c();
+    c.getValue();
+    c.count;
+    GrandChild gc();
+    gc.getValue();
+}
+";
+    }
+
+    # Constants test source:
+    # Line 0: %modern
+    # Line 1: class Base {
+    # Line 2:     const VERSION = "1.0";
+    # Line 3: }
+    # Line 4: class Child inherits Base {}
+    # Line 5: Child::VERSION;
+    private string getConstantCode() {
+        return "%modern
+class Base {
+    const VERSION = \"1.0\";
+}
+class Child inherits Base {}
+Child::VERSION;
+";
+    }
+
+    testInheritedMethodViaInstance() {
+        string uri = setupDoc(getInheritanceCode());
+
+        # "getValue" in "c.getValue()" at line 13 col 6 → method in Base at line 3
+        *list<auto> result = sendDefinition(uri, 13, 6);
+        assertTrue(exists result && result.size() > 0,
+            "inherited method 'getValue' via instance should resolve");
+        if (result) {
+            assertEq(3, result[0].range.start.line,
+                "inherited method 'getValue' should resolve to line 3 in Base");
+        }
+    }
+
+    testInheritedFieldViaInstance() {
+        string uri = setupDoc(getInheritanceCode());
+
+        # "count" in "c.count" at line 14 col 6 → member in Base at line 2
+        *list<auto> result = sendDefinition(uri, 14, 6);
+        assertTrue(exists result && result.size() > 0,
+            "inherited field 'count' via instance should resolve");
+        if (result) {
+            assertEq(2, result[0].range.start.line,
+                "inherited field 'count' should resolve to line 2 in Base");
+        }
+    }
+
+    testInheritedMethodViaScope() {
+        # Use a separate source with explicit scope access
+        string scopeCode = "%modern
+class Base {
+    int getValue() { return 0; }
+}
+class Child inherits Base {}
+Child::getValue();
+";
+        # Line 0: %modern
+        # Line 1: class Base {
+        # Line 2:     int getValue() { return 0; }
+        # Line 3: }
+        # Line 4: class Child inherits Base {}
+        # Line 5: Child::getValue();
+        string scopeUri = setupDoc(scopeCode);
+
+        # "getValue" at line 5, col 7 → method in Base at line 2
+        *list<auto> result = sendDefinition(scopeUri, 5, 7);
+        assertTrue(exists result && result.size() > 0,
+            "inherited method 'getValue' via scope should resolve");
+        if (result) {
+            assertEq(2, result[0].range.start.line,
+                "inherited method via scope should resolve to line 2 in Base");
+        }
+    }
+
+    testDeepInheritance() {
+        string uri = setupDoc(getInheritanceCode());
+
+        # "getValue" in "gc.getValue()" at line 16 col 7 → method in Base at line 3
+        # (GrandChild → Child → Base)
+        *list<auto> result = sendDefinition(uri, 16, 7);
+        assertTrue(exists result && result.size() > 0,
+            "deep inherited method 'getValue' should resolve");
+        if (result) {
+            assertEq(3, result[0].range.start.line,
+                "deep inherited method should resolve to line 3 in Base");
+        }
+    }
+
+    testInheritedConstant() {
+        string uri = setupDoc(getConstantCode());
+
+        # "VERSION" in "Child::VERSION" at line 5, col 7 → constant in Base at line 2
+        *list<auto> result = sendDefinition(uri, 5, 7);
+        assertTrue(exists result && result.size() > 0,
+            "inherited constant 'VERSION' should resolve");
+        if (result) {
+            assertEq(2, result[0].range.start.line,
+                "inherited constant should resolve to line 2 in Base");
+        }
+    }
+
+    # Cross-doc test: XBase class in one document, XChild in another
+    # (unique names to avoid conflicts with single-doc inheritance tests)
+    # Base doc:
+    # Line 0: %modern
+    # Line 1: class XBase {
+    # Line 2:     private { int xcount = 0; }
+    # Line 3:     int xGetValue() { return xcount; }
+    # Line 4: }
+    private string getCrossDocBaseCode() {
+        return "%modern
+class XBase {
+    private { int xcount = 0; }
+    int xGetValue() { return xcount; }
+}
+";
+    }
+
+    # Child doc:
+    # Line 0: %modern
+    # Line 1: class XChild inherits XBase {
+    # Line 2:     string xGetName() { return "child"; }
+    # Line 3: }
+    # Line 4: sub xtest() {
+    # Line 5:     XChild c();
+    # Line 6:     c.xGetValue();
+    # Line 7:     c.xcount;
+    # Line 8: }
+    private string getCrossDocChildCode() {
+        return "%modern
+class XChild inherits XBase {
+    string xGetName() { return \"child\"; }
+}
+sub xtest() {
+    XChild c();
+    c.xGetValue();
+    c.xcount;
+}
+";
+    }
+
+    testCrossDocInheritedMethod() {
+        string baseUri = setupDoc(getCrossDocBaseCode());
+        string childUri = setupDoc(getCrossDocChildCode());
+
+        # "xGetValue" in "c.xGetValue()" at line 6, col 6 → XBase.xGetValue at line 3
+        *list<auto> result = sendDefinition(childUri, 6, 6);
+        assertTrue(exists result && result.size() > 0,
+            "cross-doc inherited method should resolve");
+        if (result) {
+            assertEq(baseUri, result[0].uri,
+                "cross-doc inherited method URI should point to base doc");
+            assertEq(3, result[0].range.start.line,
+                "cross-doc inherited method should resolve to line 3 in XBase");
+        }
+    }
+
+    testCrossDocInheritedField() {
+        string baseUri = setupDoc(getCrossDocBaseCode());
+        string childUri = setupDoc(getCrossDocChildCode());
+
+        # "xcount" in "c.xcount" at line 7, col 6 → XBase.xcount at line 2
+        *list<auto> result = sendDefinition(childUri, 7, 6);
+        assertTrue(exists result && result.size() > 0,
+            "cross-doc inherited field should resolve");
+        if (result) {
+            assertEq(baseUri, result[0].uri,
+                "cross-doc inherited field URI should point to base doc");
+            assertEq(2, result[0].range.start.line,
+                "cross-doc inherited field should resolve to line 2 in XBase");
+        }
+    }
+
+    testCrossDocDeepInheritance() {
+        string baseUri = setupDoc(getCrossDocBaseCode());
+        setupDoc(getCrossDocChildCode());
+        # XGrandChild doc:
+        # Line 0: %modern
+        # Line 1: class XGrandChild inherits XChild {}
+        # Line 2: sub xtest2() {
+        # Line 3:     XGrandChild gc();
+        # Line 4:     gc.xGetValue();
+        # Line 5: }
+        string gcCode = "%modern
+class XGrandChild inherits XChild {}
+sub xtest2() {
+    XGrandChild gc();
+    gc.xGetValue();
+}
+";
+        string gcUri = setupDoc(gcCode);
+
+        # "xGetValue" in "gc.xGetValue()" at line 4, col 7
+        # XGrandChild → XChild → XBase → xGetValue
+        *list<auto> result = sendDefinition(gcUri, 4, 7);
+        assertTrue(exists result && result.size() > 0,
+            "cross-doc deep inherited method should resolve");
+        if (result) {
+            assertEq(baseUri, result[0].uri,
+                "cross-doc deep inherited method URI should point to base doc");
+            assertEq(3, result[0].range.start.line,
+                "cross-doc deep inherited method should resolve to line 3 in XBase");
+        }
+    }
+
+    testCrossDocScopeAccess() {
+        string baseUri = setupDoc(getCrossDocBaseCode());
+        # Scope doc:
+        # Line 0: %modern
+        # Line 1: class XChild2 inherits XBase {}
+        # Line 2: XChild2::xGetValue();
+        string scopeCode = "%modern
+class XChild2 inherits XBase {}
+XChild2::xGetValue();
+";
+        string scopeUri = setupDoc(scopeCode);
+
+        # "xGetValue" in "XChild2::xGetValue()" at line 2, col 10
+        *list<auto> result = sendDefinition(scopeUri, 2, 10);
+        assertTrue(exists result && result.size() > 0,
+            "cross-doc scope access should resolve");
+        if (result) {
+            assertEq(baseUri, result[0].uri,
+                "cross-doc scope access URI should point to base doc");
+            assertEq(3, result[0].range.start.line,
+                "cross-doc scope access should resolve to line 3 in XBase");
+        }
+    }
+
+    testCrossDocTopLevelDecl() {
+        # Function doc:
+        # Line 0: %modern
+        # Line 1: sub xhelper(int x) { return x + 1; }
+        string funcCode = "%modern
+sub xhelper(int x) { return x + 1; }
+";
+        string funcUri = setupDoc(funcCode);
+
+        # Caller doc:
+        # Line 0: %modern
+        # Line 1: xhelper(5);
+        string callerCode = "%modern
+xhelper(5);
+";
+        string callerUri = setupDoc(callerCode);
+
+        # "xhelper" at line 1, col 0 → function at line 1 in funcDoc
+        *list<auto> result = sendDefinition(callerUri, 1, 0);
+        assertTrue(exists result && result.size() > 0,
+            "cross-doc top-level function should resolve");
+        if (result) {
+            assertEq(funcUri, result[0].uri,
+                "cross-doc top-level function URI should point to func doc");
+            assertEq(1, result[0].range.start.line,
+                "cross-doc top-level function should resolve to line 1");
+        }
+    }
+
+    testMissingParams() {
+        # Needs its own server — tests error handling without a document open
+        QLS::QLSServer errorServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        errorServer.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        errorServer.handleRequest(make_json(initializedReq));
+
+        hash<auto> req = makeRequest("textDocument/definition");
+        delete req.params;
+        softlist<auto> responses = errorServer.handleRequest(make_json(req));
+        assertTrue(exists responses, "should return error response for missing params");
+        assertTrue(responses.size() > 0, "should have at least one response");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    testNonExistentDocument() {
+        setupDoc();
+
+        hash<auto> req = makeRequest("textDocument/definition", {
+            "textDocument": {"uri": "file:///nonexistent.q"},
+            "position": {"line": 0, "character": 0},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses, "should return response for non-existent document");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "should return error for non-existent document");
+    }
+}

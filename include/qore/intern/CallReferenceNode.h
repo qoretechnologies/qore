@@ -105,7 +105,7 @@ public:
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
-    DLLLOCAL virtual QoreFunction* getFunction();
+    DLLLOCAL virtual QoreFunction* getFunction() const;
 
 protected:
     const QoreMethod* method;
@@ -189,7 +189,7 @@ public:
 
     DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const;
 
-    DLLLOCAL virtual QoreFunction* getFunction() {
+    DLLLOCAL virtual QoreFunction* getFunction() const {
         return const_cast<QoreFunction*>(uf);
     }
 
@@ -260,7 +260,7 @@ public:
 
     DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const;
 
-    DLLLOCAL virtual QoreFunction* getFunction() {
+    DLLLOCAL virtual QoreFunction* getFunction() const {
         // FIXME: implement type checking and method matching in ParseObjectMethodReferenceNode::parseInit()
         return nullptr;
     }
@@ -290,7 +290,7 @@ public:
 
     DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const;
 
-    DLLLOCAL virtual QoreFunction* getFunction();
+    DLLLOCAL virtual QoreFunction* getFunction() const;
 
 private:
     QoreObject* obj;

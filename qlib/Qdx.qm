@@ -27,6 +27,7 @@
 %modern
 
 %requires Util
+%requires QoreCodeFormat
 
 module Qdx {
     version = "1.1.3";
@@ -1336,21 +1337,23 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
         }
     }
 
-    #! Declaration kind constants from astparser (ADK_*)
-    public const ADK_Class = 1;
-    public const ADK_Closure = 2;
-    public const ADK_Constant = 3;
-    public const ADK_Function = 4;
-    public const ADK_Hash = 5;
-    public const ADK_HashMember = 6;
-    public const ADK_MemberGroup = 7;
-    public const ADK_Namespace = 8;
-    public const ADK_Superclass = 9;
-    public const ADK_Variable = 10;
-    public const ADK_VarList = 11;
-    public const ADK_Typedef = 12;
-    public const ADK_Enum = 13;
-    public const ADK_EnumMember = 14;
+    #! Strips conditional compilation directives from source code
+    /** Removes \c %ifdef, \c %ifndef, \c %if, \c %elif, \c %else, and \c %endif
+        lines from the source while preserving line numbers (lines are replaced
+        with empty strings).
+
+        This is needed for the tree-sitter backend where conditional directives are
+        handled as extras and cause code between \c %ifdef and \c %else / \c %endif
+        to be invisible to the parser. Stripping these directives ensures all code
+        branches are parsed.
+
+        @param source the Qore source code
+        @return the source with conditional directive lines replaced by empty lines
+    */
+    public string sub stripConditionalDirectives(string source) {
+        return regex_subst(source, "^%(ifdef|ifndef|if |elif |else|endif).*", "",
+            RE_MultiLine | RE_Global);
+    }
 
     #! Formats astparser diagnostics for output
     /** @param path source path used in formatted output
@@ -1459,8 +1462,14 @@ string doxygen_output = proc.process();
             - \c no_mainpage: convert \@mainpage to \@page
         */
         constructor(list<auto> nodes, *hash<auto> opts) {
-            self.nodes = nodes;
             self.opts = opts ?? {};
+            # Translate tree-sitter CST nodes to old AST format if needed
+            if (nodes.size() > 0 && exists nodes[0].type && !exists nodes[0].nodetype) {
+                self.nodes = QoreCodeFormat::CSTTranslator::translate(
+                    cast<list<hash<auto>>>(nodes), self.opts.source ?? "");
+            } else {
+                self.nodes = nodes;
+            }
             if (self.opts.source) {
                 self.lines = self.opts.source.split("\n");
             }
@@ -1481,12 +1490,12 @@ string doxygen_output = proc.process();
         #! Processes a single AST node
         private processNode(hash<auto> node) {
             # Skip parse options
-            if (node.nodetype == 4) {  # ANT_ParseOption
+            if (node.nodetype == QoreCodeFormat::ANT_ParseOption) {
                 return;
             }
 
             # Handle declarations
-            if (node.nodetype == 1) {  # ANT_Declaration
+            if (node.nodetype == QoreCodeFormat::ANT_Declaration) {
                 processDeclaration(node);
             }
         }
@@ -1494,28 +1503,28 @@ string doxygen_output = proc.process();
         #! Processes a declaration node
         private processDeclaration(hash<auto> decl) {
             switch (decl.kind) {
-                case ADK_Namespace:
+                case QoreCodeFormat::ADK_Namespace:
                     processNamespace(decl);
                     break;
-                case ADK_Class:
+                case QoreCodeFormat::ADK_Class:
                     processClass(decl);
                     break;
-                case ADK_Function:
+                case QoreCodeFormat::ADK_Function:
                     processFunction(decl);
                     break;
-                case ADK_Constant:
+                case QoreCodeFormat::ADK_Constant:
                     processConstant(decl);
                     break;
-                case ADK_Hash:
+                case QoreCodeFormat::ADK_Hash:
                     processHashdecl(decl);
                     break;
-                case ADK_Typedef:
+                case QoreCodeFormat::ADK_Typedef:
                     processTypedef(decl);
                     break;
-                case ADK_Variable:
+                case QoreCodeFormat::ADK_Variable:
                     processVariable(decl);
                     break;
-                case ADK_Enum:
+                case QoreCodeFormat::ADK_Enum:
                     processEnum(decl);
                     break;
             }
@@ -1603,25 +1612,25 @@ string doxygen_output = proc.process();
         #! Processes a class member (method, variable, etc.)
         private processClassMember(hash<auto> member) {
             switch (member.kind) {
-                case ADK_Function:
+                case QoreCodeFormat::ADK_Function:
                     processMethod(member);
                     break;
-                case ADK_MemberGroup:
+                case QoreCodeFormat::ADK_MemberGroup:
                     processMemberGroup(member);
                     break;
-                case ADK_Constant:
+                case QoreCodeFormat::ADK_Constant:
                     processConstant(member);
                     break;
-                case ADK_Variable:
+                case QoreCodeFormat::ADK_Variable:
                     processVariable(member);
                     break;
-                case ADK_Hash:
+                case QoreCodeFormat::ADK_Hash:
                     processHashdecl(member);
                     break;
-                case ADK_Typedef:
+                case QoreCodeFormat::ADK_Typedef:
                     processTypedef(member);
                     break;
-                case ADK_Enum:
+                case QoreCodeFormat::ADK_Enum:
                     processEnum(member);
                     break;
             }
@@ -1764,7 +1773,7 @@ string doxygen_output = proc.process();
             # Process members
             if (hd.declarations) {
                 foreach auto member in (hd.declarations) {
-                    if (member.kind == ADK_HashMember) {
+                    if (member.kind == QoreCodeFormat::ADK_HashMember) {
                         *string mdoc = getDocForNode(member);
                         if (exists mdoc) {
                             writeDocComment(mdoc);
@@ -1829,7 +1838,7 @@ string doxygen_output = proc.process();
             indent++;
             if (en.declarations) {
                 foreach auto member in (en.declarations) {
-                    if (member.kind == ADK_EnumMember && member.name && member.name.name) {
+                    if (member.kind == QoreCodeFormat::ADK_EnumMember && member.name && member.name.name) {
                         *string mdoc = getDocForNode(member);
                         if (exists mdoc) {
                             writeDocComment(mdoc);
@@ -1844,15 +1853,22 @@ string doxygen_output = proc.process();
         }
 
         #! Formats a type name for doxygen
-        /** Handles special cases like *type which becomes soft<type>
+        /** Converts nullable `*type` prefix to `__7_ type` placeholder for doxygen compatibility.
+            The `qdx --post` step converts `__7_ ` back to `*` in the final HTML output.
+            Without this, doxygen misparses `*name` as a pointer declarator.
         */
         private string formatType(string typeName) {
-            # Handle soft types (*type)
-            if (typeName =~ /^\*/) {
-                typeName = "soft<" + substr(typeName, 1) + ">";
-            }
             # Remove $ from type names
             typeName =~ s/\$//g;
+            # Convert nullable prefix * to __7_ placeholder for doxygen compatibility
+            # (qdx --post converts __7_ back to * in HTML output)
+            if (typeName =~ /^\*/) {
+                typeName = "__7_ " + typeName.substr(1);
+            }
+            # Escape angle brackets for doxygen (prevents <auto>, <code< etc.
+            # from being interpreted as HTML tags)
+            typeName =~ s/</\\</g;
+            typeName =~ s/>/\\>/g;
             return typeName;
         }
 
@@ -1955,8 +1971,8 @@ string doxygen_output = proc.process();
                 int idx = start_line - 1;
                 if (idx >= 0 && idx < lines.size()) {
                     string line = lines[idx];
-                    if ((node.kind == ADK_Function && line.find(name + "(") >= 0)
-                        || (node.kind != ADK_Function && line.find(name) >= 0)) {
+                    if ((node.kind == QoreCodeFormat::ADK_Function && line.find(name + "(") >= 0)
+                        || (node.kind != QoreCodeFormat::ADK_Function && line.find(name) >= 0)) {
                         return start_line;
                     }
                 }
@@ -1966,8 +1982,8 @@ string doxygen_output = proc.process();
                 }
                 for (int i = start_line - 1; i < max_line; ++i) {
                     string line = lines[i];
-                    if ((node.kind == ADK_Function && line.find(name + "(") >= 0)
-                        || (node.kind != ADK_Function && line.find(name) >= 0)) {
+                    if ((node.kind == QoreCodeFormat::ADK_Function && line.find(name + "(") >= 0)
+                        || (node.kind != QoreCodeFormat::ADK_Function && line.find(name) >= 0)) {
                         return i + 1;
                     }
                 }

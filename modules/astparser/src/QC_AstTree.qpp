@@ -3,7 +3,7 @@
 /*
   Qore AST Parser
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -29,7 +29,6 @@
 #include "qore/Qore.h"
 
 #include "AstTreeHolder.h"
-#include "ast/ASTParseError.h"
 
 //! AstTree class
 /** AST tree structure.
@@ -60,4 +59,18 @@ AstTree::printTree(string file) {
  */
 list AstTree::getNodesInfo() {
     return ath->getNodesInfo();
+}
+
+//! Returns a list of all comments found in the source code.
+/** Each entry is a hash with the following keys:
+    - \c "kind" (\c int): comment kind (0 = line, 1 = block, 2 = doc line, 3 = doc block)
+    - \c "text" (\c string): full comment text including delimiters
+    - \c "loc" (\c hash): location hash with keys \c "firstLine", \c "firstCol", \c "lastLine", \c "lastCol"
+
+    @return list of comment hashes, or @ref nothing if no tree is set
+
+    @since astparser 2.0
+ */
+*list<hash<auto>> AstTree::getComments() {
+    return ath->getComments();
 }

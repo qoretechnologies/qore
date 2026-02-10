@@ -51,7 +51,7 @@ module AwsRestClientDataProvider {
 
     @tableofcontents
 
-    @section awsrestclientdataprovider_intro Introduction to the AwsRestClientDataProvider Module
+    @section awsrestclientdataproviderintro Introduction to the AwsRestClientDataProvider Module
 
     The %AwsRestClientDataProvider module provides a data provider API for REST servers through the
     \c dataproviderintro "DataProvider" API.

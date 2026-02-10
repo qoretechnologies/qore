@@ -1,0 +1,617 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreCodeCompletion.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreCodeCompletion
+
+%exec-class QoreCodeCompletionTest
+
+#! Mock completion provider for testing
+class MockCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvider {
+    private {
+        list<hash<QoreCodeCompletion::CompletionItem>> symbols;
+        list<hash<QoreCodeCompletion::CompletionItem>> classes;
+        hash<string, list<hash<QoreCodeCompletion::CompletionItem>>> instanceMembers;
+        hash<string, list<hash<QoreCodeCompletion::CompletionItem>>> scopeMembers;
+    }
+
+    constructor() {
+        symbols = (
+            <QoreCodeCompletion::CompletionItem>{"label": "printf", "kind": "function", "isCallable": True},
+            <QoreCodeCompletion::CompletionItem>{"label": "println", "kind": "function", "isCallable": True},
+            <QoreCodeCompletion::CompletionItem>{"label": "Mutex", "kind": "class"},
+            <QoreCodeCompletion::CompletionItem>{"label": "myVar", "kind": "variable"},
+            <QoreCodeCompletion::CompletionItem>{"label": "MY_CONST", "kind": "constant"},
+            <QoreCodeCompletion::CompletionItem>{"label": "Qore::", "kind": "namespace"},
+        );
+        classes = (
+            <QoreCodeCompletion::CompletionItem>{"label": "Mutex", "kind": "class", "isCallable": True},
+            <QoreCodeCompletion::CompletionItem>{"label": "Counter", "kind": "class", "isCallable": True},
+            <QoreCodeCompletion::CompletionItem>{"label": "File", "kind": "class", "isCallable": True},
+        );
+        instanceMembers = {
+            "Mutex": (
+                <QoreCodeCompletion::CompletionItem>{
+                    "label": "lock", "kind": "method", "isCallable": True,
+                },
+                <QoreCodeCompletion::CompletionItem>{
+                    "label": "unlock", "kind": "method", "isCallable": True,
+                    "noArgsOnly": True,
+                },
+                <QoreCodeCompletion::CompletionItem>{
+                    "label": "trylock", "kind": "method", "isCallable": True,
+                    "noArgsOnly": True, "detail": "() returns int",
+                },
+            ),
+        };
+        scopeMembers = {
+            "Qore": (
+                <QoreCodeCompletion::CompletionItem>{"label": "Thread::", "kind": "namespace"},
+                <QoreCodeCompletion::CompletionItem>{"label": "Mutex", "kind": "class"},
+                <QoreCodeCompletion::CompletionItem>{"label": "printf", "kind": "function", "isCallable": True},
+            ),
+            "Color": (
+                <QoreCodeCompletion::CompletionItem>{"label": "Red", "kind": "enum_value"},
+                <QoreCodeCompletion::CompletionItem>{"label": "Green", "kind": "enum_value"},
+                <QoreCodeCompletion::CompletionItem>{"label": "Blue", "kind": "enum_value"},
+            ),
+        };
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getVisibleSymbols(string prefix) {
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (symbols) {
+            if (QoreCodeCompletion::CompletionEngine::matchesPrefix(item.label, prefix)) {
+                result += item;
+            }
+        }
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getClassNames(string prefix) {
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (classes) {
+            if (QoreCodeCompletion::CompletionEngine::matchesPrefix(item.label, prefix)) {
+                result += item;
+            }
+        }
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getInstanceMembers(string target, string prefix) {
+        *list<hash<QoreCodeCompletion::CompletionItem>> members = instanceMembers{target};
+        if (!members) {
+            return ();
+        }
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (members) {
+            if (QoreCodeCompletion::CompletionEngine::matchesPrefix(item.label, prefix)) {
+                result += item;
+            }
+        }
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getScopeMembers(string target, string prefix) {
+        *list<hash<QoreCodeCompletion::CompletionItem>> members = scopeMembers{target};
+        if (!members) {
+            return ();
+        }
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (members) {
+            if (QoreCodeCompletion::CompletionEngine::matchesPrefix(item.label, prefix)) {
+                result += item;
+            }
+        }
+        return result;
+    }
+}
+
+public class QoreCodeCompletionTest inherits QUnit::Test {
+
+    constructor() : QUnit::Test("QoreCodeCompletion", "1.0") {
+        # Context extraction tests
+        addTestCase("extractCompletionContext: empty input", \testContextEmpty());
+        addTestCase("extractCompletionContext: whitespace", \testContextWhitespace());
+        addTestCase("extractCompletionContext: bare identifier", \testContextIdentifier());
+        addTestCase("extractCompletionContext: identifier with code before", \testContextIdentifierWithCode());
+        addTestCase("extractCompletionContext: new with prefix", \testContextNew());
+        addTestCase("extractCompletionContext: new without prefix", \testContextNewEmpty());
+        addTestCase("extractCompletionContext: dot with prefix", \testContextDot());
+        addTestCase("extractCompletionContext: dot without prefix", \testContextDotEmpty());
+        addTestCase("extractCompletionContext: scope with prefix", \testContextScope());
+        addTestCase("extractCompletionContext: scope without prefix", \testContextScopeEmpty());
+        addTestCase("extractCompletionContext: chained scope", \testContextChainedScope());
+        addTestCase("extractCompletionContext: command arg is identifier", \testContextCommandArg());
+
+        # computeWordStart tests
+        addTestCase("computeWordStart: various inputs", \testComputeWordStart());
+
+        # matchesPrefix tests
+        addTestCase("matchesPrefix: basic cases", \testMatchesPrefix());
+
+        # Engine dispatch tests
+        addTestCase("Engine: identifier dispatch", \testEngineIdentifier());
+        addTestCase("Engine: new dispatch", \testEngineNew());
+        addTestCase("Engine: dot dispatch", \testEngineDot());
+        addTestCase("Engine: scope dispatch", \testEngineScope());
+        addTestCase("Engine: complete() full pipeline", \testEngineComplete());
+
+        # Keyword filtering tests
+        addTestCase("Keywords: 1-char prefix excludes", \testKeywords1Char());
+        addTestCase("Keywords: 2-char prefix includes", \testKeywords2Char());
+
+        # Deduplication and sorting tests
+        addTestCase("Deduplication: duplicate labels collapsed", \testDeduplication());
+        addTestCase("Sorting: results alphabetically ordered", \testSorting());
+
+        # CC_NONE handling
+        addTestCase("Engine: CC_NONE returns empty", \testEngineNone());
+
+        # CC_CALL context tests
+        addTestCase("CC_CALL: after open paren", \testCallAfterParen());
+        addTestCase("CC_CALL: after comma", \testCallAfterComma());
+        addTestCase("CC_CALL: method call", \testCallMethodCall());
+        addTestCase("CC_CALL: nested call", \testCallNestedCall());
+        addTestCase("CC_CALL: partial arg is CC_IDENTIFIER", \testCallPartialArg());
+        addTestCase("CC_CALL: new constructor args", \testCallNewConstructor());
+        addTestCase("CC_CALL: dispatch returns symbols", \testCallDispatch());
+
+        # noArgsOnly field tests
+        addTestCase("noArgsOnly: field preserved through engine", \testNoArgsOnly());
+        addTestCase("noArgsOnly: detail field preserved", \testNoArgsOnlyDetail());
+
+        set_return_value(main());
+    }
+
+    testContextEmpty() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("");
+        assertEq(QoreCodeCompletion::CC_NONE, ctx.kind, "empty input should be CC_NONE");
+        assertEq("", ctx.prefix, "prefix should be empty");
+    }
+
+    testContextWhitespace() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("   ");
+        assertEq(QoreCodeCompletion::CC_NONE, ctx.kind, "whitespace should be CC_NONE");
+    }
+
+    testContextIdentifier() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("pri");
+        assertEq(QoreCodeCompletion::CC_IDENTIFIER, ctx.kind, "'pri' should be CC_IDENTIFIER");
+        assertEq("pri", ctx.prefix, "prefix should be 'pri'");
+        assertEq("", ctx.line_before, "line_before should be empty");
+    }
+
+    testContextIdentifierWithCode() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("int x = my");
+        assertEq(QoreCodeCompletion::CC_IDENTIFIER, ctx.kind, "'int x = my' should be CC_IDENTIFIER");
+        assertEq("my", ctx.prefix, "prefix should be 'my'");
+        assertEq("int x = ", ctx.line_before, "line_before should be 'int x = '");
+    }
+
+    testContextNew() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("new My");
+        assertEq(QoreCodeCompletion::CC_NEW, ctx.kind, "'new My' should be CC_NEW");
+        assertEq("My", ctx.prefix, "prefix should be 'My'");
+    }
+
+    testContextNewEmpty() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("new ");
+        assertEq(QoreCodeCompletion::CC_NEW, ctx.kind, "'new ' should be CC_NEW");
+        assertEq("", ctx.prefix, "prefix should be empty for 'new '");
+    }
+
+    testContextDot() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("obj.get");
+        assertEq(QoreCodeCompletion::CC_DOT, ctx.kind, "'obj.get' should be CC_DOT");
+        assertEq("obj", ctx.target, "target should be 'obj'");
+        assertEq("get", ctx.prefix, "prefix should be 'get'");
+    }
+
+    testContextDotEmpty() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("obj.");
+        assertEq(QoreCodeCompletion::CC_DOT, ctx.kind, "'obj.' should be CC_DOT");
+        assertEq("obj", ctx.target, "target should be 'obj'");
+        assertEq("", ctx.prefix, "prefix should be empty for 'obj.'");
+    }
+
+    testContextScope() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("Mutex::lo");
+        assertEq(QoreCodeCompletion::CC_SCOPE, ctx.kind, "'Mutex::lo' should be CC_SCOPE");
+        assertEq("Mutex", ctx.target, "target should be 'Mutex'");
+        assertEq("lo", ctx.prefix, "prefix should be 'lo'");
+    }
+
+    testContextScopeEmpty() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("Mutex::");
+        assertEq(QoreCodeCompletion::CC_SCOPE, ctx.kind, "'Mutex::' should be CC_SCOPE");
+        assertEq("Mutex", ctx.target, "target should be 'Mutex'");
+        assertEq("", ctx.prefix, "prefix should be empty for 'Mutex::'");
+    }
+
+    testContextChainedScope() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("Qore::Thread::M");
+        assertEq(QoreCodeCompletion::CC_SCOPE, ctx.kind, "'Qore::Thread::M' should be CC_SCOPE");
+        assertEq("Qore::Thread", ctx.target, "target should be 'Qore::Thread'");
+        assertEq("M", ctx.prefix, "prefix should be 'M'");
+    }
+
+    testContextCommandArg() {
+
+        # "/describe M" has a space, so it's not a command — engine sees it as CC_IDENTIFIER
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("/describe M");
+        assertEq(QoreCodeCompletion::CC_IDENTIFIER, ctx.kind, "'/describe M' should be CC_IDENTIFIER");
+        assertEq("M", ctx.prefix, "prefix should be 'M' for '/describe M'");
+    }
+
+    testComputeWordStart() {
+
+        assertEq(4, QoreCodeCompletion::CompletionEngine::computeWordStart("new M"),
+            "'new M' word start at 4");
+        assertEq(6, QoreCodeCompletion::CompletionEngine::computeWordStart("Qore::M"),
+            "'Qore::M' word start at 6");
+        assertEq(11, QoreCodeCompletion::CompletionEngine::computeWordStart("HTTP2Mode::"),
+            "'HTTP2Mode::' word start at 11");
+        assertEq(0, QoreCodeCompletion::CompletionEngine::computeWordStart(""),
+            "empty string word start at 0");
+        assertEq(0, QoreCodeCompletion::CompletionEngine::computeWordStart("M"),
+            "'M' word start at 0");
+        assertEq(8, QoreCodeCompletion::CompletionEngine::computeWordStart("int x = prin"),
+            "'int x = prin' word start at 8");
+        assertEq(1, QoreCodeCompletion::CompletionEngine::computeWordStart("/h"),
+            "'/h' word start at 1");
+    }
+
+    testMatchesPrefix() {
+
+        assertTrue(QoreCodeCompletion::CompletionEngine::matchesPrefix("printf", "pri"),
+            "'printf' matches 'pri'");
+        assertTrue(QoreCodeCompletion::CompletionEngine::matchesPrefix("printf", ""),
+            "'printf' matches empty prefix");
+        assertFalse(QoreCodeCompletion::CompletionEngine::matchesPrefix("printf", "Pri"),
+            "'printf' does NOT match 'Pri' (case-sensitive)");
+        assertTrue(QoreCodeCompletion::CompletionEngine::matchesPrefix("Mutex", "Mu"),
+            "'Mutex' matches 'Mu'");
+        assertFalse(QoreCodeCompletion::CompletionEngine::matchesPrefix("Mutex", "mu"),
+            "'Mutex' does NOT match 'mu' (case-sensitive)");
+    }
+
+    testEngineIdentifier() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("pri");
+        # Should include "printf" and "println" from provider, but NOT keywords (only 3 chars)
+        bool has_printf = False;
+        bool has_println = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "printf") {
+                has_printf = True;
+            }
+            if (item.label == "println") {
+                has_println = True;
+            }
+        }
+        assertTrue(has_printf, "identifier completion should include 'printf'");
+        assertTrue(has_println, "identifier completion should include 'println'");
+    }
+
+    testEngineNew() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("new Mu");
+        bool has_mutex = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "Mutex") {
+                has_mutex = True;
+                assertEq("class", item.kind, "Mutex kind should be 'class'");
+                assertTrue(item.isCallable, "Mutex should be callable");
+            }
+        }
+        assertTrue(has_mutex, "'new Mu' should include 'Mutex'");
+    }
+
+    testEngineDot() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("m.lo");
+        bool has_lock = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "lock") {
+                has_lock = True;
+                assertEq("method", item.kind, "lock kind should be 'method'");
+                assertTrue(item.isCallable, "lock should be callable");
+            }
+        }
+        # Note: "m" resolves to target "m", mock only has "Mutex" key — so this tests the plumbing
+        # The mock returns empty for target "m", so has_lock should be False
+        # Let's test with actual "Mutex" target:
+        items = engine.completeForContext({
+            "kind": QoreCodeCompletion::CC_DOT,
+            "prefix": "lo",
+            "target": "Mutex",
+            "line_before": "m.",
+        });
+        has_lock = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "lock") {
+                has_lock = True;
+            }
+        }
+        assertTrue(has_lock, "dot completion for 'Mutex' target should include 'lock'");
+    }
+
+    testEngineScope() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("Color::");
+        assertTrue(items.size() >= 3, "'Color::' should return at least 3 items");
+        bool has_red = False;
+        bool has_green = False;
+        bool has_blue = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "Red") {
+                has_red = True;
+            }
+            if (item.label == "Green") {
+                has_green = True;
+            }
+            if (item.label == "Blue") {
+                has_blue = True;
+            }
+        }
+        assertTrue(has_red, "'Color::' should include 'Red'");
+        assertTrue(has_green, "'Color::' should include 'Green'");
+        assertTrue(has_blue, "'Color::' should include 'Blue'");
+
+        # With prefix filter
+        items = engine.complete("Color::R");
+        has_red = False;
+        has_green = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "Red") {
+                has_red = True;
+            }
+            if (item.label == "Green") {
+                has_green = True;
+            }
+        }
+        assertTrue(has_red, "'Color::R' should include 'Red'");
+        assertFalse(has_green, "'Color::R' should NOT include 'Green'");
+    }
+
+    testEngineComplete() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+
+        # Full pipeline test
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("Qore::M");
+        bool has_mutex = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "Mutex") {
+                has_mutex = True;
+            }
+        }
+        assertTrue(has_mutex, "complete('Qore::M') should include 'Mutex'");
+    }
+
+    testKeywords1Char() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("i");
+        # 1-char prefix should NOT include keywords
+        bool has_if = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "if" && item.kind == "keyword") {
+                has_if = True;
+            }
+        }
+        assertFalse(has_if, "1-char prefix should NOT include 'if' keyword");
+    }
+
+    testKeywords2Char() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("if");
+        # 2-char prefix should include keywords
+        bool has_if = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "if" && item.kind == "keyword") {
+                has_if = True;
+            }
+        }
+        assertTrue(has_if, "2-char prefix should include 'if' keyword");
+    }
+
+    testDeduplication() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        # "Mu" matches "Mutex" from both keywords and provider; should be deduplicated
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("Mu");
+        int mutex_count = 0;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "Mutex") {
+                mutex_count++;
+            }
+        }
+        assertEq(1, mutex_count, "'Mutex' should appear exactly once (deduplicated)");
+    }
+
+    testSorting() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("Color::");
+        # Results should be alphabetically sorted
+        for (int i = 1; i < items.size(); i++) {
+            assertTrue(items[i - 1].label <= items[i].label,
+                sprintf("items should be sorted: '%s' <= '%s'", items[i - 1].label, items[i].label));
+        }
+    }
+
+    testEngineNone() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("");
+        assertEq(0, items.size(), "CC_NONE should return empty list");
+
+        items = engine.complete("   ");
+        assertEq(0, items.size(), "whitespace should return empty list");
+    }
+
+    testCallAfterParen() {
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("foo(");
+        assertEq(QoreCodeCompletion::CC_CALL, ctx.kind, "after ( should be CC_CALL");
+        assertEq("", ctx.prefix, "empty prefix after (");
+        assertEq("foo(", ctx.line_before, "line_before should be 'foo('");
+    }
+
+    testCallAfterComma() {
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("foo(1, ");
+        assertEq(QoreCodeCompletion::CC_CALL, ctx.kind, "after , should be CC_CALL");
+        assertEq("", ctx.prefix, "empty prefix after ,");
+    }
+
+    testCallMethodCall() {
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("obj.method(");
+        assertEq(QoreCodeCompletion::CC_CALL, ctx.kind, "obj.method( should be CC_CALL");
+        assertEq("", ctx.prefix, "empty prefix for method call");
+    }
+
+    testCallNestedCall() {
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("foo(bar(");
+        assertEq(QoreCodeCompletion::CC_CALL, ctx.kind, "nested ( should be CC_CALL");
+    }
+
+    testCallPartialArg() {
+        # When prefix is non-empty (e.g., "foo(ba"), CC_IDENTIFIER is returned
+        # which correctly provides scope completions for the partial argument
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("foo(ba");
+        assertEq(QoreCodeCompletion::CC_IDENTIFIER, ctx.kind, "partial arg should be CC_IDENTIFIER");
+        assertEq("ba", ctx.prefix, "prefix should be 'ba'");
+    }
+
+    testCallNewConstructor() {
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("new Foo(");
+        assertEq(QoreCodeCompletion::CC_CALL, ctx.kind, "new Foo( should be CC_CALL");
+    }
+
+    testCallDispatch() {
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        # CC_CALL dispatches to completeIdentifier, so should return visible symbols
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.completeForContext({
+            "kind": QoreCodeCompletion::CC_CALL,
+            "prefix": "pri",
+            "line_before": "foo(",
+        });
+        bool has_printf = False;
+        bool has_println = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "printf") {
+                has_printf = True;
+            }
+            if (item.label == "println") {
+                has_println = True;
+            }
+        }
+        assertTrue(has_printf, "CC_CALL should include 'printf' matching 'pri'");
+        assertTrue(has_println, "CC_CALL should include 'println' matching 'pri'");
+
+        # With empty prefix, should return all visible symbols
+        items = engine.completeForContext({
+            "kind": QoreCodeCompletion::CC_CALL,
+            "prefix": "",
+            "line_before": "foo(",
+        });
+        assertTrue(items.size() > 0, "CC_CALL with empty prefix should return symbols");
+    }
+
+    testNoArgsOnly() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        # Dot completion for Mutex — lock has noArgsOnly=False, unlock has noArgsOnly=True
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.completeForContext({
+            "kind": QoreCodeCompletion::CC_DOT,
+            "prefix": "",
+            "target": "Mutex",
+            "line_before": "m.",
+        });
+        *hash<QoreCodeCompletion::CompletionItem> lock_item;
+        *hash<QoreCodeCompletion::CompletionItem> unlock_item;
+        *hash<QoreCodeCompletion::CompletionItem> trylock_item;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "lock") {
+                lock_item = item;
+            } else if (item.label == "unlock") {
+                unlock_item = item;
+            } else if (item.label == "trylock") {
+                trylock_item = item;
+            }
+        }
+        assertEq(True, lock_item.isCallable, "lock should be callable");
+        assertEq(False, lock_item.noArgsOnly, "lock should not be noArgsOnly");
+        assertEq(True, unlock_item.isCallable, "unlock should be callable");
+        assertEq(True, unlock_item.noArgsOnly, "unlock should be noArgsOnly");
+        assertEq(True, trylock_item.noArgsOnly, "trylock should be noArgsOnly");
+    }
+
+    testNoArgsOnlyDetail() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.completeForContext({
+            "kind": QoreCodeCompletion::CC_DOT,
+            "prefix": "try",
+            "target": "Mutex",
+            "line_before": "m.",
+        });
+        assertEq(1, items.size(), "should find exactly trylock");
+        assertEq("trylock", items[0].label, "label should be trylock");
+        assertEq("() returns int", items[0].detail, "detail should be preserved");
+        assertEq(True, items[0].noArgsOnly, "noArgsOnly should be True");
+    }
+}

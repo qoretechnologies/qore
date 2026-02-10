@@ -500,7 +500,7 @@ module UnleashedDataProvider {
 
     @tableofcontents
 
-    @section unleashedataproviderintro UnleashedDataProvider Introduction
+    @section unleasheddataproviderintro UnleashedDataProvider Introduction
 
     The %UnleashedDataProvider module provides a data provider API for Unleashed
     inventory management services through the Unleashed REST API.

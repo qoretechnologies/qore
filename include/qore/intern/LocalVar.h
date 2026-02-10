@@ -462,7 +462,12 @@ public:
             return val->eval(needs_deref, xsink);
         }
 
-        ClosureVarValue* val = thread_find_closure_var(name.c_str());
+        // first try the closure runtime environment (set by ThreadSafeLocalVarRuntimeEnvironmentHelper)
+        // this is needed for background thread closure execution where the cvstack is empty
+        ClosureVarValue* val = thread_get_runtime_closure_var(this);
+        if (!val) {
+            val = thread_find_closure_var(name.c_str());
+        }
         return val->eval(needs_deref, xsink);
     }
 
@@ -488,7 +493,14 @@ public:
     }
 
     DLLLOCAL bool isRef() const {
-        return !closure_use ? get_var()->isRef() : thread_find_closure_var(name.c_str())->isRef();
+        if (!closure_use) {
+            return get_var()->isRef();
+        }
+        ClosureVarValue* val = thread_get_runtime_closure_var(this);
+        if (!val) {
+            val = thread_find_closure_var(name.c_str());
+        }
+        return val->isRef();
     }
 
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
@@ -499,7 +511,13 @@ public:
             return get_var()->getLValue(lvh, for_remove, getTypeInfoForLValue(), refTypeInfo);
         }
 
-        return thread_find_closure_var(name.c_str())->getLValue(lvh, for_remove);
+        // first try the closure runtime environment (set by ThreadSafeLocalVarRuntimeEnvironmentHelper)
+        // this is needed for background thread closure execution where the cvstack is empty
+        ClosureVarValue* val = thread_get_runtime_closure_var(this);
+        if (!val) {
+            val = thread_find_closure_var(name.c_str());
+        }
+        return val->getLValue(lvh, for_remove);
     }
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh) {
@@ -507,7 +525,13 @@ public:
             return get_var()->remove(lvrh, typeInfo);
         }
 
-        return thread_find_closure_var(name.c_str())->remove(lvrh);
+        // first try the closure runtime environment (set by ThreadSafeLocalVarRuntimeEnvironmentHelper)
+        // this is needed for background thread closure execution where the cvstack is empty
+        ClosureVarValue* val = thread_get_runtime_closure_var(this);
+        if (!val) {
+            val = thread_find_closure_var(name.c_str());
+        }
+        return val->remove(lvrh);
     }
 
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const {

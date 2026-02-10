@@ -1490,6 +1490,36 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::CastObject:
         case QoreIROpcode::CastEnum:
         case QoreIROpcode::InvokeSimError:
+        // Lvalue-modifying expression ops (modify variables via AST LValueHelper)
+        // These delegate to AST and read local variables from the thread-local stack.
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
+        case QoreIROpcode::ExtractAny:
+        case QoreIROpcode::ExtractList:
+        case QoreIROpcode::ExtractString:
+        case QoreIROpcode::ExtractBinary:
+        case QoreIROpcode::RemoveAny:
+        case QoreIROpcode::RemoveList:
+        case QoreIROpcode::RemoveHash:
+        case QoreIROpcode::RemoveObject:
+        case QoreIROpcode::RemoveString:
+        case QoreIROpcode::RemoveBinary:
+        case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::RegexSubstString:
+        case QoreIROpcode::TrimAny:
+        case QoreIROpcode::TrimString:
+        case QoreIROpcode::ChompAny:
+        case QoreIROpcode::ChompString:
+        case QoreIROpcode::TransliterateAny:
+        case QoreIROpcode::TransliterateString:
+        // Keys/exists/background ops delegate to AST
+        case QoreIROpcode::KeysAny:
+        case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::BackgroundInt:
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
 
         default:

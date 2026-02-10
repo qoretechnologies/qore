@@ -416,6 +416,7 @@ enum class QoreIROpcode : uint16_t {
 
     LandingPad,
     CatchException,
+    CatchCleanup,
     Rethrow,
     Throw,
     InvokeSimError,
@@ -823,10 +824,12 @@ public:
 
 class QoreIRThrowInstruction : public QoreIRInstruction {
 public:
-    QoreIRThrowInstruction() : QoreIRInstruction(QoreIROpcode::Throw) {
+    QoreIRThrowInstruction(QoreIROpcode op = QoreIROpcode::Throw) : QoreIRInstruction(op) {
     }
 
     QoreIRBasicBlock* exception_target = nullptr;
+    //! Number of active catch scopes to clean up (for Rethrow only)
+    int catch_depth = 0;
 };
 
 class QoreIRLocalInstruction : public QoreIRInstruction {
@@ -1370,6 +1373,24 @@ public:
     QoreIRBasicBlock* normal_target = nullptr;
     QoreIRBasicBlock* exception_target = nullptr;
     std::string invoke_key_name;  //!< Key name for HashKeyAccess invoke path
+};
+
+//! LandingPad instruction - marks the entry point of an exception handler (catch block)
+//! Stores the scope stack depth at the try-catch entry so the IR interpreter can
+//! execute on_error/on_exit handlers for scopes entered within the try body.
+class QoreIRLandingPadInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRLandingPadInstruction(size_t n_scope_depth, uint32_t n_try_scope_id = 0)
+            : QoreIRInstruction(QoreIROpcode::LandingPad), scope_depth(n_scope_depth),
+              try_scope_id(n_try_scope_id) {
+    }
+
+    //! Scope stack depth at the try-catch entry point
+    size_t scope_depth = 0;
+
+    //! Scope ID for the try-level ScopeEnter that saves the OBE count at try entry.
+    //! Used by LLVM lowering to call qore_rt_exec_on_block_exit() with the saved count.
+    uint32_t try_scope_id = 0;
 };
 
 //! Switch regex case match instruction - tests if switch value matches a regex case

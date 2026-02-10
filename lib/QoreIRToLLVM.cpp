@@ -141,6 +141,10 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(i64_type, {ptr_type}, false));
     module.getOrInsertFunction("qore_rt_catch_exception",
             llvm::FunctionType::get(i64_type, {ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_catch_end",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_rethrow",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
 
     // Deopt helper: void qore_rt_deopt(void* deopt_counter_ptr)
     module.getOrInsertFunction("qore_rt_deopt",
@@ -2458,19 +2462,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // The cleanup alloca decref above dropped the original reference from
                 // new_object/invoke.  Together, all references are dropped and the
                 // destructor fires.
-                if (aot_mode) {
-                    auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local_aot",
-                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
-                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-                    builder->CreateCall(clear_helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, slot), xsink_arg});
-                } else {
-                    auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local",
-                            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
-                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(linst->local));
-                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
-                    builder->CreateCall(clear_helper, {var_as_ptr, xsink_arg});
+                // Skip for IR-only body locals: they are not on the thread-local stack
+                // (fast call path skips instantiation when areAllBodyLocalsIROnly()),
+                // so there is nothing to clear on the runtime stack.
+                if (!ir_only_body_locals.count(key)) {
+                    if (aot_mode) {
+                        auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local_aot",
+                                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        builder->CreateCall(clear_helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                    } else {
+                        auto clear_helper = module.getOrInsertFunction("qore_rt_clear_local",
+                                llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+                        llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(linst->local));
+                        llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                        builder->CreateCall(clear_helper, {var_as_ptr, xsink_arg});
+                    }
                 }
 
                 // Reset the local alloca to default (no decref — the cleanup alloca
@@ -3677,21 +3686,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
-        // === Landing pad (no-op in our model; exception state is in ExceptionSink) ===
+        // === Landing pad: execute on_error/on_exit handlers for scopes within the try body ===
         case QoreIROpcode::LandingPad: {
-            // In our JIT model, landing pads don't need special LLVM lowering
-            // since we use ExceptionSink polling rather than C++ exceptions.
+            const auto* lp_inst = static_cast<const QoreIRLandingPadInstruction*>(inst);
+            if (lp_inst->try_scope_id != 0) {
+                auto it = scope_obe_counts.find(lp_inst->try_scope_id);
+                if (it != scope_obe_counts.end()) {
+                    llvm::Value* saved_count = it->second;
+                    auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
+                            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    builder->CreateCall(helper, {saved_count, xsink_arg});
+                    // On-block-exit handlers execute through the AST path and can modify
+                    // any local variable on the thread-local stack
+                    reloadAllLocalsFromRuntime(module, llvm_func);
+                }
+            }
             return true;
         }
 
         // === Catch exception ===
         case QoreIROpcode::CatchException: {
+            // qore_rt_catch_exception: sets td->catchException for rethrow support,
+            // returns NaN-boxed exception info hash
             auto helper = module.getOrInsertFunction("qore_rt_catch_exception",
                     llvm::FunctionType::get(i64_type, {ptr_type}, false));
             llvm::Value* catch_result = builder->CreateCall(helper, {xsink_arg});
             values[inst->result.id] = catch_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(catch_result, inst->result.id, llvm_func);
+            return true;
+        }
+
+        // === Catch cleanup ===
+        case QoreIROpcode::CatchCleanup: {
+            // Restore previous td->catchException and delete the caught exception
+            auto helper = module.getOrInsertFunction("qore_rt_catch_end",
+                    llvm::FunctionType::get(void_type, {ptr_type}, false));
+            builder->CreateCall(helper, {xsink_arg});
             return true;
         }
 
@@ -3726,8 +3757,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
         // === Rethrow ===
         case QoreIROpcode::Rethrow: {
-            // Rethrow: exception is already in the ExceptionSink.
-            // Execute on_block_exit handlers, then return NOTHING; caller sees the exception.
+            const auto* rethrow_inst = static_cast<const QoreIRThrowInstruction*>(inst);
+            // Rethrow: copy exception from td->catchException into xsink,
+            // clean up catch scope.  qore_rt_rethrow() handles 1 catch scope.
+            auto rethrow_helper = module.getOrInsertFunction("qore_rt_rethrow",
+                    llvm::FunctionType::get(void_type, {ptr_type}, false));
+            builder->CreateCall(rethrow_helper, {xsink_arg});
+            // Clean up additional catch scopes beyond the innermost one
+            if (rethrow_inst->catch_depth > 1) {
+                auto catch_end_helper = module.getOrInsertFunction("qore_rt_catch_end",
+                        llvm::FunctionType::get(void_type, {ptr_type}, false));
+                for (int i = 1; i < rethrow_inst->catch_depth; ++i) {
+                    builder->CreateCall(catch_end_helper, {xsink_arg});
+                }
+            }
+            // Branch to outer exception handler if inside nested try/catch
+            if (rethrow_inst->exception_target) {
+                auto it = block_map.find(rethrow_inst->exception_target);
+                if (it != block_map.end()) {
+                    builder->CreateBr(it->second);
+                    return true;
+                }
+            }
+            // No outer handler: return from function; caller sees exception in xsink
             emitOnBlockExitExec(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
@@ -5604,7 +5656,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool nothing = false;
             switch (inst->opcode) {
                 case QoreIROpcode::AddAssignLValue:
-                    iop = llvm::Instruction::Add; fop = llvm::Instruction::FAdd; nothing = true;
+                    iop = llvm::Instruction::Add; fop = llvm::Instruction::FAdd;
                     break;
                 case QoreIROpcode::SubAssignLValue:
                     iop = llvm::Instruction::Sub; fop = llvm::Instruction::FSub;

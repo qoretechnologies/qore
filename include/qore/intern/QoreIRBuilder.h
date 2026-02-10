@@ -206,10 +206,13 @@ public:
     QoreIRReturnInstruction* createReturnNothing(const QoreProgramLocation* loc = nullptr);
     QoreIRThrowInstruction* createThrow(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
-    QoreIRInstruction* createRethrow(const QoreProgramLocation* loc = nullptr);
+    QoreIRThrowInstruction* createRethrow(QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createThreadExit(const QoreProgramLocation* loc = nullptr);
-    QoreIRInstruction* createLandingPad(const QoreProgramLocation* loc = nullptr);
+    QoreIRLandingPadInstruction* createLandingPad(size_t scope_depth, uint32_t try_scope_id = 0,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCatchException(const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createCatchCleanup(const QoreProgramLocation* loc = nullptr);
     QoreIRGuardInstruction* createGuardInt(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
     QoreIRGuardInstruction* createGuardFloat(QoreIRValue value, QoreIRBasicBlock* exception_target,

@@ -2047,7 +2047,7 @@ static bool runIRExecutorCleanupSmoke() {
         builder.setBlock(normal);
         builder.createReturnNothing();
         builder.setBlock(handler);
-        builder.createLandingPad();
+        builder.createLandingPad(0);
         builder.createCatchException();
         builder.createReturnNothing();
 
@@ -2080,7 +2080,7 @@ static bool runIRExecutorCleanupSmoke() {
         builder.setBlock(normal);
         builder.createReturnNothing();
         builder.setBlock(handler);
-        builder.createLandingPad();
+        builder.createLandingPad(0);
         auto* catch_inst = builder.createCatchException();
         builder.createReturn(catch_inst->result);
 
@@ -2127,7 +2127,7 @@ static bool runIRExecutorCleanupSmoke() {
         QoreIRBuilder builder(&func);
         auto* entry = func.createBlock("entry");
         builder.setBlock(entry);
-        builder.createRethrow();
+        builder.createRethrow(nullptr);
 
         QoreValue return_value;
         if (QoreIRInterpreter::execute(func, return_value, &xsink, nullptr) || !xsink) {

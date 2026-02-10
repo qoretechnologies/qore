@@ -254,9 +254,18 @@ private:
         QoreIRBasicBlock* continue_target = nullptr;
         bool is_switch = false;
         size_t scope_stack_depth = 0;  //!< scope_stack depth when this flow target was created
+        int catch_cleanup_depth = 0;   //!< catch_cleanup_depth when this flow target was created
     };
     std::vector<FlowTarget> flow_stack;
     std::vector<QoreIRBasicBlock*> exception_stack;
+    //! Scope stack depth at each exception handler's entry point.
+    //! Parallel to exception_stack — records scope_stack.size() when each handler was pushed.
+    //! Used to set QoreIRInvokeInstruction::exception_scope_depth so the IR interpreter
+    //! can execute on_error/on_exit handlers when an invoke throws.
+    std::vector<size_t> exception_scope_depth_stack;
+
+    //! Depth of active catch scopes that need CatchCleanup on non-local exit
+    int catch_cleanup_depth = 0;
 
     //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
     /** When active, $1/$2/$# references in lowerExpression() use these IR values directly

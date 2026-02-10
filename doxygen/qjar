@@ -121,6 +121,15 @@ class QJar {
                 continue;
             }
 
+            # skip static-only classes (no constructor) — JNI byte code
+            # requires an instantiable class
+            if (!cls.hasConstructorMethod()) {
+                if (opts.verbose) {
+                    stderr.printf("skipping static-only class %y (no constructor)\n", cls.getPathName());
+                }
+                continue;
+            }
+
             # generate byte code
             binary b = p.callFunction("byte_code", cls);
             # get output class file name

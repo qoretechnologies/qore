@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Document.qtest Copyright 2017 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QLS
+
+%exec-class DocumentTest
+
+class DocumentTest inherits QUnit::Test {
+    constructor() : Test("Document", "1.0") {
+        addTestCase("constructor with text", \testConstructorWithText());
+        addTestCase("constructor with URI", \testConstructorWithUri());
+        addTestCase("getFileUriPrefix", \testGetFileUriPrefix());
+        addTestCase("getFileUri", \testGetFileUri());
+        addTestCase("didChange", \testDidChange());
+        addTestCase("changeVersion", \testChangeVersion());
+        addTestCase("parse error handling", \testParseErrors());
+        addTestCase("findSymbols", \testFindSymbols());
+        addTestCase("findMatchingSymbols", \testFindMatchingSymbols());
+        addTestCase("hover", \testHover());
+
+        set_return_value(main());
+    }
+
+    testConstructorWithText() {
+        string text = "%modern\nsub foo() { return 1; }\n";
+        QLS::Document doc("file:///test.q", text, "qore", 1);
+        assertEq("file:///test.q", doc.getUri());
+        assertEq("qore", doc.getLanguageId());
+        assertEq(1, doc.getVersion());
+        assertEq(text, doc.getText());
+        assertEq(0, doc.getParseErrorCount());
+    }
+
+    testConstructorWithUri() {
+        string path = get_script_dir() + "/testdata/valid_qore_file.q";
+        string uri = QLS::Document::getFileUri(path);
+        QLS::Document doc(uri);
+        assertEq(uri, doc.getUri());
+        assertEq("qore", doc.getLanguageId());
+        assertEq(0, doc.getVersion());
+    }
+
+    testGetFileUriPrefix() {
+        string prefix = QLS::Document::getFileUriPrefix();
+        if (PlatformOS == "Windows") {
+            assertEq("file:///", prefix);
+        } else {
+            assertEq("file://", prefix);
+        }
+    }
+
+    testGetFileUri() {
+        string uri = QLS::Document::getFileUri("/tmp/test.q");
+        assertRegex("^file://", uri);
+        assertRegex("test\\.q", uri);
+
+        # should not double-prefix
+        string uri2 = QLS::Document::getFileUri("file:///tmp/test.q");
+        assertRegex("^file://", uri2);
+    }
+
+    testDidChange() {
+        string text = "%modern\nint x = 1;\n";
+        QLS::Document doc("file:///test.q", text, "qore", 1);
+        assertEq(0, doc.getParseErrorCount());
+
+        string newText = "%modern\nint x = 2;\nint y = 3;\n";
+        doc.didChange({"text": newText});
+        assertEq(newText, doc.getText());
+        assertEq(0, doc.getParseErrorCount());
+    }
+
+    testChangeVersion() {
+        QLS::Document doc("file:///test.q", "%modern\n", "qore", 1);
+        assertEq(1, doc.getVersion());
+        doc.changeVersion(5);
+        assertEq(5, doc.getVersion());
+    }
+
+    testParseErrors() {
+        # intentionally broken code
+        string text = "%modern\nclass { broken\n";
+        QLS::Document doc("file:///test.q", text, "qore", 1);
+        assertGt(0, doc.getParseErrorCount());
+        *list diags = doc.getDiagnostics();
+        assertEq(True, exists diags);
+    }
+
+    testFindSymbols() {
+        string text = "%modern\nsub foo() { return 1; }\nsub bar() { return 2; }\n";
+        QLS::Document doc("file:///test.q", text, "qore", 1);
+        *list symbols = doc.findSymbols();
+        assertEq(True, exists symbols);
+        assertGt(0, symbols.size());
+    }
+
+    testFindMatchingSymbols() {
+        string text = "%modern\nsub foo() { return 1; }\nsub bar() { return 2; }\n";
+        QLS::Document doc("file:///test.q", text, "qore", 1);
+        list symbols = doc.findMatchingSymbols("foo");
+        assertGt(0, symbols.size());
+
+        list noMatch = doc.findMatchingSymbols("nonexistent_symbol_xyz");
+        assertEq(0, noMatch.size());
+    }
+
+    testHover() {
+        # test hover on a document with parse errors
+        string text = "%modern\nclass { broken\n";
+        QLS::Document doc("file:///test.q", text, "qore", 1);
+        hash result = doc.hover({"line": 0, "character": 0});
+        assertEq(True, exists result.contents);
+
+        # test hover on a valid document
+        string text2 = "%modern\nsub foo() { return 1; }\n";
+        QLS::Document doc2("file:///test2.q", text2, "qore", 1);
+        hash result2 = doc2.hover({"line": 0, "character": 0});
+        assertEq(Type::Hash, result2.type());
+    }
+}

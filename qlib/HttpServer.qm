@@ -62,7 +62,7 @@ module HttpServer {
     The HttpServer module supports async I/O and HTTP/2. Async I/O mode uses a non-blocking I/O controller to accept
     connections and read headers efficiently, then dispatches request processing to the thread pool. HTTP/2 support
     requires async I/O mode; when async I/O is disabled, the server only supports HTTP/1.x. Enable async I/O with the
-    \c "async_mode" key in @ref HttpServerOptionInfo and see the @ref httpserverasyncio_intro "HttpServerAsyncIo"
+    \c "async_mode" key in @ref HttpServerOptionInfo and see the @ref httpserverasynciointro "HttpServerAsyncIo"
     module for additional details.
 
     To use this module, use \c "%requires HttpServer" in your code.  See examples/httpserver.qr for an example program

@@ -302,6 +302,17 @@ static std::string* pendingEnumDocComment = nullptr;
 // Claimed doc comment for sub declarations - stored separately so body comments don't steal it
 static std::string* pendingSubDocComment = nullptr;
 
+// Tree pointer for comment capture
+static ASTTree* ast_comment_tree = nullptr;
+// Accumulator for line comment text
+static std::string* lineCommentText = nullptr;
+// Start location of current line comment
+static ASTParseLocation lineCommentStartLoc;
+// Accumulator for block comment text
+static std::string* blockCommentText = nullptr;
+// Start location of current block comment
+static ASTParseLocation blockCommentStartLoc;
+
 // Conditional parsing stack entry
 struct ConditionalEntry {
     bool elseSeen;      // Have we seen %else for this level?
@@ -763,6 +774,20 @@ std::string* takeSubDocComment() {
     std::string* result = pendingSubDocComment;
     pendingSubDocComment = nullptr;
     return result;
+}
+
+// Set the tree pointer for comment capture
+extern "C" void ast_scanner_set_tree(ASTTree* tree) {
+    ast_comment_tree = tree;
+}
+
+// Clear the tree pointer after parsing
+extern "C" void ast_scanner_clear_tree() {
+    ast_comment_tree = nullptr;
+    delete lineCommentText;
+    lineCommentText = nullptr;
+    delete blockCommentText;
+    blockCommentText = nullptr;
 }
 %}
 
@@ -1392,18 +1417,41 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             AST_FLEX_DO_EOF
                                         }
 }
-\#!                                     { yylval->String = new std::string("#!"); BEGIN(doc_line_comment); }
-\#                                      BEGIN(line_comment);
+\#!                                     {
+                                            yylval->String = new std::string("#!");
+                                            lineCommentStartLoc = *yylloc;
+                                            BEGIN(doc_line_comment);
+                                        }
+\#                                      {
+                                            delete lineCommentText;
+                                            lineCommentText = new std::string("#");
+                                            lineCommentStartLoc = *yylloc;
+                                            BEGIN(line_comment);
+                                        }
 <doc_line_comment>{
     [\n\r]                              {
                                             // Doc line comment complete - store it
                                             startDocComment(yylval->String->c_str());
+                                            if (ast_comment_tree && yylval->String) {
+                                                ASTParseLocation endLoc = *yylloc;
+                                                lineCommentStartLoc.lastLine = endLoc.firstLine;
+                                                lineCommentStartLoc.lastCol = endLoc.firstCol;
+                                                ast_comment_tree->addComment(new ASTComment(
+                                                    ACK_DocLine, *yylval->String, lineCommentStartLoc));
+                                            }
                                             delete yylval->String;
                                             yylval->String = nullptr;
                                             BEGIN(INITIAL);
                                         }
     <<EOF>>                             {
                                             startDocComment(yylval->String->c_str());
+                                            if (ast_comment_tree && yylval->String) {
+                                                ASTParseLocation endLoc = *yylloc;
+                                                lineCommentStartLoc.lastLine = endLoc.lastLine;
+                                                lineCommentStartLoc.lastCol = endLoc.lastCol;
+                                                ast_comment_tree->addComment(new ASTComment(
+                                                    ACK_DocLine, *yylval->String, lineCommentStartLoc));
+                                            }
                                             delete yylval->String;
                                             yylval->String = nullptr;
                                             AST_FLEX_DO_EOF
@@ -1411,9 +1459,36 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
     [^\n\r]                             { yylval->String->push_back(yytext[0]); }
 }
 <line_comment>{
-    [\n\r]                              { clearPendingDocComment(); BEGIN(INITIAL); }
-    <<EOF>>                             AST_FLEX_DO_EOF
-    [^\n\r]                             // ignore any other character until EOL
+    [\n\r]                              {
+                                            clearPendingDocComment();
+                                            if (ast_comment_tree && lineCommentText) {
+                                                ASTParseLocation endLoc = *yylloc;
+                                                lineCommentStartLoc.lastLine = endLoc.firstLine;
+                                                lineCommentStartLoc.lastCol = endLoc.firstCol;
+                                                ast_comment_tree->addComment(new ASTComment(
+                                                    ACK_Line, *lineCommentText, lineCommentStartLoc));
+                                            }
+                                            delete lineCommentText;
+                                            lineCommentText = nullptr;
+                                            BEGIN(INITIAL);
+                                        }
+    <<EOF>>                             {
+                                            if (ast_comment_tree && lineCommentText) {
+                                                ASTParseLocation endLoc = *yylloc;
+                                                lineCommentStartLoc.lastLine = endLoc.lastLine;
+                                                lineCommentStartLoc.lastCol = endLoc.lastCol;
+                                                ast_comment_tree->addComment(new ASTComment(
+                                                    ACK_Line, *lineCommentText, lineCommentStartLoc));
+                                            }
+                                            delete lineCommentText;
+                                            lineCommentText = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+    [^\n\r]                             {
+                                            if (lineCommentText) {
+                                                lineCommentText->push_back(yytext[0]);
+                                            }
+                                        }
 }
 where                                   return TOK_WHERE;
 private                                 return TOK_PRIVATE;
@@ -1832,19 +1907,40 @@ hash\<{WORD}\>\{                        {
 \<{WS}+\<{WS}*=                         return PO_BROKEN_OPERATORS ? SHIFT_LEFT_EQUALS : WS_SHIFT_LEFT_EQUALS;
 \<{WS}*\<{WS}+=                         return PO_BROKEN_OPERATORS ? SHIFT_LEFT_EQUALS : WS_SHIFT_LEFT_EQUALS;
 
-\/\*\*                                  { yylval->String = new std::string("/**"); BEGIN(doc_block_comment); }
-\/\*                                    BEGIN(block_comment1);
+\/\*\*                                  {
+                                            yylval->String = new std::string("/**");
+                                            blockCommentStartLoc = *yylloc;
+                                            BEGIN(doc_block_comment);
+                                        }
+\/\*                                    {
+                                            delete blockCommentText;
+                                            blockCommentText = new std::string("/*");
+                                            blockCommentStartLoc = *yylloc;
+                                            BEGIN(block_comment1);
+                                        }
 <doc_block_comment>{
     \*\/                                {
                                             // Doc block comment complete - store it
                                             yylval->String->append("*/");
                                             startDocComment(yylval->String->c_str());
+                                            if (ast_comment_tree && yylval->String) {
+                                                blockCommentStartLoc.lastLine = yylloc->lastLine;
+                                                blockCommentStartLoc.lastCol = yylloc->lastCol;
+                                                ast_comment_tree->addComment(new ASTComment(
+                                                    ACK_DocBlock, *yylval->String, blockCommentStartLoc));
+                                            }
                                             delete yylval->String;
                                             yylval->String = nullptr;
                                             BEGIN(INITIAL);
                                         }
     <<EOF>>                             {
                                             startDocComment(yylval->String->c_str());
+                                            if (ast_comment_tree && yylval->String) {
+                                                blockCommentStartLoc.lastLine = yylloc->lastLine;
+                                                blockCommentStartLoc.lastCol = yylloc->lastCol;
+                                                ast_comment_tree->addComment(new ASTComment(
+                                                    ACK_DocBlock, *yylval->String, blockCommentStartLoc));
+                                            }
                                             delete yylval->String;
                                             yylval->String = nullptr;
                                             AST_FLEX_DO_EOF
@@ -1852,15 +1948,55 @@ hash\<{WORD}\>\{                        {
     .|\n                                { yylval->String->append(yytext); }
 }
 <block_comment1>{
-    \*                                  BEGIN(block_comment2);
-    <<EOF>>                             { AST_FLEX_DO_EOF }
-    [^\*]                               // ignore other input
+    \*                                  {
+                                            if (blockCommentText) {
+                                                blockCommentText->push_back('*');
+                                            }
+                                            BEGIN(block_comment2);
+                                        }
+    <<EOF>>                             {
+                                            delete blockCommentText;
+                                            blockCommentText = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+    [^\*]                               {
+                                            if (blockCommentText) {
+                                                blockCommentText->append(yytext, yyleng);
+                                            }
+                                        }
 }
 <block_comment2>{
-    \/                                  { clearPendingDocComment(); BEGIN(INITIAL); }
-    \*                                  // ignore
-    <<EOF>>                             { AST_FLEX_DO_EOF }
-    [^\/\*]                             BEGIN(block_comment1);
+    \/                                  {
+                                            clearPendingDocComment();
+                                            if (blockCommentText) {
+                                                blockCommentText->push_back('/');
+                                            }
+                                            if (ast_comment_tree && blockCommentText) {
+                                                blockCommentStartLoc.lastLine = yylloc->lastLine;
+                                                blockCommentStartLoc.lastCol = yylloc->lastCol;
+                                                ast_comment_tree->addComment(new ASTComment(
+                                                    ACK_Block, *blockCommentText, blockCommentStartLoc));
+                                            }
+                                            delete blockCommentText;
+                                            blockCommentText = nullptr;
+                                            BEGIN(INITIAL);
+                                        }
+    \*                                  {
+                                            if (blockCommentText) {
+                                                blockCommentText->push_back('*');
+                                            }
+                                        }
+    <<EOF>>                             {
+                                            delete blockCommentText;
+                                            blockCommentText = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+    [^\/\*]                             {
+                                            if (blockCommentText) {
+                                                blockCommentText->append(yytext, yyleng);
+                                            }
+                                            BEGIN(block_comment1);
+                                        }
 }
 <regex_googleplex>{
     s\/                                 { yylval->regexsubst = new ASTRegexSubstExpression; yylloc->saveFirst(); BEGIN(regex_subst1); }

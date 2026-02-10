@@ -123,8 +123,15 @@ uint64_t qore_rt_invoke_expr(uint64_t expr_bits, ExceptionSink* xsink);
 uint64_t qore_rt_make_string(const char* str);
 
 //! Get exception info hash from ExceptionSink; returns NaN-boxed QoreValue (hash or NOTHING).
-//! Also clears the exception from the sink.
+//! Also clears the exception from the sink and sets td->catchException for rethrow support.
 uint64_t qore_rt_catch_exception(ExceptionSink* xsink);
+
+//! Clean up catch scope: restore previous td->catchException and delete the caught exception.
+//! Called at the end of each catch block (try.merge) and before function return from within catch.
+void qore_rt_catch_end(ExceptionSink* xsink);
+
+//! Rethrow the current catch exception: copies exception into xsink and cleans up catch scope.
+void qore_rt_rethrow(ExceptionSink* xsink);
 
 // --- Deopt helpers ---
 

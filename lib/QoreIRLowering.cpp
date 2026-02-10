@@ -388,13 +388,19 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                             loc = binary->loc;
                             invoked = true;
                         } else if (auto* unary = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
-                            QoreIRValue value = lowerExpression(unary->getExp(), error);
-                            if (!value.isValid()) {
-                                return false;
+                            // BackgroundOperatorNode inherits from QoreSingleExpressionOperatorNode
+                            // but must NOT be handled here — lowering the inner expression would
+                            // execute the function call directly, then the Invoke would also
+                            // execute background t(...) via AST delegation, causing double execution
+                            if (!dynamic_cast<const QoreBackgroundOperatorNode*>(node)) {
+                                QoreIRValue value = lowerExpression(unary->getExp(), error);
+                                if (!value.isValid()) {
+                                    return false;
+                                }
+                                operands.push_back(value);
+                                loc = unary->loc;
+                                invoked = true;
                             }
-                            operands.push_back(value);
-                            loc = unary->loc;
-                            invoked = true;
                         }
                     }
                     bool use_invoke = handler && (!parse_context || parse_context->expressionCanThrow());
@@ -421,6 +427,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreValue expr = ret_stmt->getExpression();
         // Emit ScopeExit for all active scopes before returning
         emitScopeExits(0, false);
+        // Emit CatchCleanup for all active catch scopes before returning
+        for (int i = 0; i < catch_cleanup_depth; ++i) {
+            builder.createCatchCleanup(stmt->loc);
+        }
         if (!expr || expr.isNothing()) {
             builder.createReturnNothing();
             return true;
@@ -482,7 +492,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size()});
+        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth});
         if (!lowerStatementBlock(do_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -524,7 +534,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createBranchIf(cond, body_block, exit_block);
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size()});
+        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth});
         if (!lowerStatementBlock(while_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -573,7 +583,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createBranchIf(cond_value, body_block, exit_block);
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, iter_block, false, scope_stack.size()});
+        flow_stack.push_back({exit_block, iter_block, false, scope_stack.size(), catch_cleanup_depth});
         if (!lowerStatementBlock(for_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -664,7 +674,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         // Lower the loop body with proper break/continue targets
-        flow_stack.push_back({exit_block, header_block, false, scope_stack.size()});
+        flow_stack.push_back({exit_block, header_block, false, scope_stack.size(), catch_cleanup_depth});
         StatementBlock* body = foreach_stmt->getCode();
         if (body) {
             if (!lowerStatementBlock(body, error)) {
@@ -766,10 +776,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     if (auto* break_stmt = dynamic_cast<const BreakStatement*>(stmt)) {
         QoreIRBasicBlock* target = nullptr;
         size_t target_scope_depth = 0;
+        int target_catch_depth = 0;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->break_target) {
                 target = it->break_target;
                 target_scope_depth = it->scope_stack_depth;
+                target_catch_depth = it->catch_cleanup_depth;
                 break;
             }
         }
@@ -779,16 +791,22 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Emit ScopeExit for scopes entered since the loop started
         emitScopeExits(target_scope_depth, false);
+        // Emit CatchCleanup for catch scopes entered since the loop started
+        for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
+            builder.createCatchCleanup(stmt->loc);
+        }
         builder.createBranch(target);
         return true;
     }
     if (auto* cont_stmt = dynamic_cast<const ContinueStatement*>(stmt)) {
         QoreIRBasicBlock* target = nullptr;
         size_t target_scope_depth = 0;
+        int target_catch_depth = 0;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->continue_target) {
                 target = it->continue_target;
                 target_scope_depth = it->scope_stack_depth;
+                target_catch_depth = it->catch_cleanup_depth;
                 break;
             }
         }
@@ -798,6 +816,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Emit ScopeExit for scopes entered since the loop started
         emitScopeExits(target_scope_depth, false);
+        // Emit CatchCleanup for catch scopes entered since the loop started
+        for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
+            builder.createCatchCleanup(stmt->loc);
+        }
         builder.createBranch(target);
         return true;
     }
@@ -891,7 +913,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchInt(switch_val, default_block_for_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            flow_stack.push_back({end_block, nullptr, true, scope_stack.size()});
+            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -969,7 +991,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchString(switch_val, default_block_for_str_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            flow_stack.push_back({end_block, nullptr, true, scope_stack.size()});
+            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -1094,7 +1116,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(end_block);
         }
 
-        flow_stack.push_back({end_block, nullptr, true, scope_stack.size()});
+        flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth});
         for (size_t i = 0; i < cases.size(); ++i) {
             builder.setBlock(cases[i].block);
             if (cases[i].node->code) {
@@ -1132,19 +1154,41 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRBasicBlock* prev_guard_override = guard_exception_target_override;
         guard_exception_target_override = catch_block;
         exception_stack.push_back(catch_block);
+        size_t try_scope_depth = scope_stack.size();
+        exception_scope_depth_stack.push_back(try_scope_depth);
+
+        // Allocate a try-level scope ID and emit ScopeEnter to save the OBE count
+        // at try entry. This is used by the LandingPad to execute on_error/on_exit
+        // handlers for scopes entered within the try body when an invoke exception
+        // jumps directly to the catch block (bypassing normal ScopeExit).
+        uint32_t try_scope_id = ++scope_counter;
+        scope_stack.push_back(try_scope_id);
+        builder.createScopeEnter(try_scope_id);
+
         if (try_stmt->getTryBlock() && !lowerStatementBlock(try_stmt->getTryBlock(), error)) {
+            scope_stack.pop_back();
             exception_stack.pop_back();
+            exception_scope_depth_stack.pop_back();
             guard_exception_target_override = prev_guard_override;
             return false;
         }
         exception_stack.pop_back();
+        exception_scope_depth_stack.pop_back();
         guard_exception_target_override = prev_guard_override;
         if (!blockHasTerminator(builder.getBlock())) {
+            // On normal path, emit ScopeExit for the try-level scope (no-op since
+            // inner scopes already cleaned up their handlers)
+            builder.createScopeExit(try_scope_id, false);
+            scope_stack.pop_back();
             builder.createBranch(merge_block);
+        } else {
+            scope_stack.pop_back();
         }
 
         builder.setBlock(catch_block);
-        builder.createLandingPad(stmt->loc);
+        // Pass the scope_stack depth and try_scope_id so the LandingPad can
+        // execute on_error/on_exit handlers for scopes entered within the try body
+        builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
         QoreIRInstruction* catch_inst = builder.createCatchException(stmt->loc);
         if (LocalVar* catch_var = try_stmt->getCatchVar()) {
             maybeInsertNotNothingGuard(catch_inst->result, nullptr, catch_inst->loc, catch_var->getTypeInfo());
@@ -1153,10 +1197,18 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 parse_context->markLocalAssignment(catch_var, true, catch_var->getTypeInfo());
             }
         }
+        ++catch_cleanup_depth;
         if (try_stmt->getCatchBlock() && !lowerStatementBlock(try_stmt->getCatchBlock(), error)) {
+            --catch_cleanup_depth;
             return false;
         }
+        --catch_cleanup_depth;
         if (!blockHasTerminator(builder.getBlock())) {
+            // Clean up catch scope before merging: restore previous td->catchException
+            // and delete the caught exception.  This only runs on the catch path's
+            // fallthrough to merge.  Rethrow handles its own cleanup.
+            // Return/throw/break/continue from catch emit their own CatchCleanup.
+            builder.createCatchCleanup(stmt->loc);
             builder.createBranch(merge_block);
         }
 
@@ -1171,6 +1223,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Emit ScopeExit for all active scopes with is_error=true before throwing
         // This ensures on_error handlers are executed
         emitScopeExits(0, true);
+        // Emit CatchCleanup for all active catch scopes before throwing
+        for (int i = 0; i < catch_cleanup_depth; ++i) {
+            builder.createCatchCleanup(stmt->loc);
+        }
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
         builder.createThrow(value, handler, stmt->loc);
         return true;
@@ -1184,12 +1240,22 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
             // Emit ScopeExit for all active scopes with is_error=true before throwing
             emitScopeExits(0, true);
+            // Emit CatchCleanup for all active catch scopes before throwing
+            for (int i = 0; i < catch_cleanup_depth; ++i) {
+                builder.createCatchCleanup(stmt->loc);
+            }
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
             builder.createThrow(value, handler, stmt->loc);
         } else {
             // Emit ScopeExit for all active scopes with is_error=true before rethrowing
             emitScopeExits(0, true);
-            builder.createRethrow(stmt->loc);
+            // Don't emit CatchCleanup before rethrow — rethrow needs td->catchException
+            // intact to get the exception to rethrow.  Instead, store catch_cleanup_depth
+            // in the instruction so the rethrow handler can clean up all catch scopes
+            // AFTER rethrowing.
+            QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
+            auto* rethrow_inst = builder.createRethrow(handler, stmt->loc);
+            rethrow_inst->catch_depth = catch_cleanup_depth;
         }
         return true;
     }

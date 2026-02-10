@@ -478,7 +478,7 @@ bool RunTimeResolvedMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v
     return vc && vc->obj == obj && vc->method == method;
 }
 
-QoreFunction* RunTimeResolvedMethodReferenceNode::getFunction() {
+QoreFunction* RunTimeResolvedMethodReferenceNode::getFunction() const {
     return method ? qore_method_private::get(*method)->getFunction() : 0;
 }
 
@@ -582,7 +582,7 @@ bool LocalStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v
     return vc && method == vc->method;
 }
 
-QoreFunction* LocalStaticMethodCallReferenceNode::getFunction() {
+QoreFunction* LocalStaticMethodCallReferenceNode::getFunction() const {
     return method ? qore_method_private::get(*method)->getFunction() : nullptr;
 }
 

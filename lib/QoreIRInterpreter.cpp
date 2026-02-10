@@ -1072,6 +1072,27 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     std::unordered_map<const void*, QoreValue> closures;
     // on_block_exit handlers collected during IR execution
     std::vector<IROnBlockExitHandler> on_block_exit_handlers;
+    // Catch exception stack for rethrow support
+    struct CatchEntry {
+        QoreException* caught;  // the caught exception
+        QoreException* saved;   // the previous td->catchException value
+    };
+    std::vector<CatchEntry> catch_exception_stack;
+    // RAII cleanup for catch_exception_stack — ensures proper cleanup on all exit paths
+    struct CatchStackCleanup {
+        std::vector<CatchEntry>& stack;
+        ExceptionSink* xsink;
+        ~CatchStackCleanup() {
+            while (!stack.empty()) {
+                auto entry = stack.back();
+                stack.pop_back();
+                if (entry.caught) {
+                    catch_swap_exception(entry.saved);
+                    entry.caught->del(xsink);
+                }
+            }
+        }
+    } catch_stack_cleanup{catch_exception_stack, xsink};
     // Scope stack: tracks handler list indices at each ScopeEnter
     // Used to know which handlers to execute on ScopeExit
     std::vector<size_t> scope_stack;
@@ -1622,19 +1643,78 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ip = 0;
                 break;
             }
-            case QoreIROpcode::LandingPad:
+            case QoreIROpcode::LandingPad: {
+                // Execute on_error/on_exit handlers for scopes entered within the try body
+                // that were not exited due to an invoke exception jumping directly here
+                auto* lp_inst = static_cast<QoreIRLandingPadInstruction*>(inst);
+                while (scope_stack.size() > lp_inst->scope_depth) {
+                    size_t scope_start = scope_stack.back();
+                    scope_stack.pop_back();
+                    // Execute on_error/on_exit handlers in reverse order (LIFO)
+                    if (on_block_exit_handlers.size() > scope_start) {
+                        bool error = xsink && xsink->isException();
+                        ExceptionSink obe_xsink;
+                        for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
+                            obe_type_e type = on_block_exit_handlers[i - 1].type;
+                            if (type == OBE_Unconditional || (error && type == OBE_Error)) {
+                                if (on_block_exit_handlers[i - 1].code) {
+                                    std::unique_ptr<SingleArgvContextHelper> argv_helper;
+                                    std::unique_ptr<CatchExceptionHelper> ex_helper;
+                                    if (type == OBE_Error && xsink) {
+                                        QoreException* except = xsink->getException();
+                                        if (except) {
+                                            ex_helper.reset(new CatchExceptionHelper(except));
+                                            argv_helper.reset(new SingleArgvContextHelper(
+                                                except->makeExceptionObject(), xsink));
+                                        }
+                                    }
+                                    QoreValue rv;
+                                    on_block_exit_handlers[i - 1].code->exec(rv, &obe_xsink);
+                                    // Invalidate caches after AST execution
+                                    cleanupStoredValues(locals, nullptr);
+                                    cleanupStoredValues(globals, nullptr);
+                                    cleanupStoredValues(threadlocals, nullptr);
+                                    cleanupStoredValues(closures, nullptr);
+                                }
+                                if (obe_xsink) {
+                                    if (xsink) {
+                                        xsink->assimilate(obe_xsink);
+                                    }
+                                }
+                            }
+                        }
+                        on_block_exit_handlers.resize(scope_start);
+                    }
+                }
                 ++ip;
                 break;
+            }
             case QoreIROpcode::CatchException: {
                 if (!xsink || !*xsink) {
                     setValueSlot(values, inst->result.id, QoreValue(), xsink);
+                    // Push empty entry for consistent push/pop with CatchCleanup
+                    catch_exception_stack.push_back({nullptr, nullptr});
                     ++ip;
                     break;
                 }
-                QoreHashNode* info = xsink->getExceptionInfo();
+                QoreException* caught = xsink->catchException();
+                QoreException* saved = catch_swap_exception(caught);
+                catch_exception_stack.push_back({caught, saved});
+                QoreHashNode* info = caught->makeExceptionObject();
                 setValueSlot(values, inst->result.id, QoreValue(info), xsink);
                 cleanup.push_back(inst->result.id);
-                xsink->clear();
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CatchCleanup: {
+                if (!catch_exception_stack.empty()) {
+                    auto entry = catch_exception_stack.back();
+                    catch_exception_stack.pop_back();
+                    if (entry.caught) {
+                        catch_swap_exception(entry.saved);
+                        entry.caught->del(xsink);
+                    }
+                }
                 ++ip;
                 break;
             }
@@ -4146,6 +4226,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 return false;
             }
             case QoreIROpcode::Rethrow: {
+                auto* rethrow_inst = static_cast<QoreIRThrowInstruction*>(inst);
                 if (!xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, nullptr);
@@ -4158,7 +4239,26 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (!ex) {
                     xsink->raiseException("IR-EXEC-ERROR", "rethrow without exception");
                 } else {
-                    xsink->raiseException(ex);
+                    qore_es_private::get(*xsink)->rethrow(ex);
+                }
+                // Clean up ALL active catch scopes (catch_depth levels)
+                for (int i = 0; i < rethrow_inst->catch_depth; ++i) {
+                    if (!catch_exception_stack.empty()) {
+                        auto entry = catch_exception_stack.back();
+                        catch_exception_stack.pop_back();
+                        if (entry.caught) {
+                            catch_swap_exception(entry.saved);
+                            entry.caught->del(xsink);
+                        }
+                    }
+                }
+                // Branch to outer landing pad if inside nested try/catch
+                if (rethrow_inst->exception_target) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    prev_block = block;
+                    block = rethrow_inst->exception_target;
+                    ip = 0;
+                    break;
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupStoredValues(locals, nullptr);
@@ -5435,22 +5535,6 @@ QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& 
     QoreValue lvalue_ref = lvalue.refSelf();
     switch (op) {
         case QoreIROpcode::AddAssignLValue: {
-            // Check if lvalue is currently NOTHING; if so, assign right value directly
-            // to avoid NOTHING being treated as an element in list/hash concatenation
-            {
-                QoreValue current = evalLValueLoad(lvalue, xsink);
-                if (xsink && *xsink) {
-                    lvalue_ref.discard(nullptr);
-                    return QoreValue();
-                }
-                if (current.isNothing()) {
-                    current.discard(nullptr);
-                    QoreValue result = evalLValueStore(lvalue, right, xsink);
-                    lvalue_ref.discard(nullptr);
-                    return result;
-                }
-                current.discard(nullptr);
-            }
             ValueHolder node(QoreValue(new QorePlusEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
             return evalAndRef(*node, xsink);
         }

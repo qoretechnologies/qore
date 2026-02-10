@@ -107,6 +107,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("native select with comparison", \testNativeSelectWithComparison());
         addTestCase("native foldl with function call", \testNativeFoldlWithFunctionCall());
         addTestCase("on_block_exit handlers", \testOnBlockExitHandlers());
+        addTestCase("on_block_exit in try-catch with invoke", \testOnBlockExitTryCatchInvoke());
         addTestCase("on_block_exit top-level local update", \testOnBlockExitTopLevelLocalUpdate());
         addTestCase("invoke method direct", \testInvokeMethodDirect());
         addTestCase("big int loop correctness", \testBigIntLoopCorrectness());
@@ -2522,6 +2523,129 @@ printf(\"%y\\n\", log);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(nested_error_test, mode));
             assertEq("[\"inner_error\", \"outer_error\", \"caught\"]", result, sprintf("nested on_error %s", mode));
+        }
+    }
+
+    testOnBlockExitTryCatchInvoke() {
+        # Test on_error inside try-catch when exception comes from an invoke
+        # (function call that can throw). This tests the LLVM LandingPad handler
+        # that must execute on_error/on_exit handlers before entering the catch block.
+        string on_error_invoke = "%modern
+sub thrower() { throw \"TEST\", \"test exception\"; }
+string sub test() {
+    string result = \"none\";
+    try {
+        {
+            on_error { result = \"handled\"; }
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        # caught
+    }
+    return result;
+}
+printf(\"%s\\n\", test());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_error_invoke, mode));
+            assertEq("handled", result, sprintf("on_error invoke in try-catch %s", mode));
+        }
+
+        # Test on_exit inside try-catch with invoke exception
+        string on_exit_invoke = "%modern
+sub thrower() { throw \"TEST\", \"test exception\"; }
+string sub test() {
+    string result = \"none\";
+    try {
+        {
+            on_exit { result = \"exited\"; }
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        # caught
+    }
+    return result;
+}
+printf(\"%s\\n\", test());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_exit_invoke, mode));
+            assertEq("exited", result, sprintf("on_exit invoke in try-catch %s", mode));
+        }
+
+        # Test on_success should NOT fire when invoke throws
+        string on_success_invoke = "%modern
+sub thrower() { throw \"TEST\", \"test exception\"; }
+string sub test() {
+    string result = \"none\";
+    try {
+        {
+            on_success { result = \"success\"; }
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        # caught
+    }
+    return result;
+}
+printf(\"%s\\n\", test());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_success_invoke, mode));
+            assertEq("none", result, sprintf("on_success should not fire on invoke exception %s", mode));
+        }
+
+        # Test nested on_error + on_exit inside try-catch with invoke
+        string nested_invoke = "%modern
+sub thrower() { throw \"TEST\", \"test exception\"; }
+string sub test() {
+    list<string> log = ();
+    try {
+        {
+            on_exit { log += \"outer_exit\"; }
+            {
+                on_error { log += \"inner_error\"; }
+                thrower();
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"caught\";
+    }
+    return log.join(\",\");
+}
+printf(\"%s\\n\", test());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(nested_invoke, mode));
+            assertEq("inner_error,outer_exit,caught", result,
+                sprintf("nested on_error+on_exit invoke in try-catch %s", mode));
+        }
+
+        # Test multiple scopes where exception occurs in middle scope
+        string multi_scope_invoke = "%modern
+sub thrower() { throw \"TEST\", \"test exception\"; }
+string sub test() {
+    list<string> log = ();
+    try {
+        {
+            on_exit { log += \"scope1_exit\"; }
+            log += \"scope1_body\";
+        }
+        {
+            on_error { log += \"scope2_error\"; }
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"caught\";
+    }
+    return log.join(\",\");
+}
+printf(\"%s\\n\", test());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(multi_scope_invoke, mode));
+            assertEq("scope1_body,scope1_exit,scope2_error,caught", result,
+                sprintf("multi-scope invoke in try-catch %s", mode));
         }
     }
 

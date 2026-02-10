@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# assume local var scope, do not use "$" for vars, members, and method calls
-%modern
-
 #! Contains all public definitions in the FixedLengthUtil module
 public namespace FixedLengthUtil {
 #! Provides a data provider for reading fixed-length files

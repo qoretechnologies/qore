@@ -1247,6 +1247,7 @@ void print_node(FILE* fp, const QoreValue qv) {
    printd(5, "print_node() node: %s\n", qv.getTypeName());
    QoreStringValueHelper str(qv);
    fputs(str->getBuffer(), fp);
+   fflush(fp);
 }
 
 void qore_setup_argv(int pos, int argc, char* argv[]) {

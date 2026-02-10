@@ -2,9 +2,9 @@
 /*
   AstTreeHolder.cpp
 
-  Qore AST Parser
+  Qore AST Parser — tree-sitter backend
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -27,39 +27,138 @@
 
 #include "AstTreeHolder.h"
 
+#include <cstring>
+
+#include <tree_sitter/api.h>
+
+#include "AstParser.h"
 #include "AstTreePrinter.h"
-#include "ast/ASTTree.h"
+#include "ast/ASTComment.h"
 #include "queries/GetNodesInfoQuery.h"
 
-AstTreeHolder::AstTreeHolder(ASTTree* t) : tree(t) {
+AstTreeHolder::AstTreeHolder(AstParseResult* r) : result(r) {
 }
 
 AstTreeHolder::~AstTreeHolder() {
-    if (tree)
-        delete tree;
+    delete result;
 }
 
 void AstTreeHolder::printTree(std::ostream& os) {
-    if (tree)
-        AstTreePrinter::printTree(os, tree);
+    if (result) {
+        AstTreePrinter::printTree(os, result);
+    }
 }
 
 QoreListNode* AstTreeHolder::getNodesInfo() {
-    return GetNodesInfoQuery::get(tree);
+    return GetNodesInfoQuery::get(result);
 }
 
-void AstTreeHolder::set(ASTTree* t) {
-    if (tree)
-        delete tree;
-    tree = t;
+//! Determine the comment kind from the node type and text.
+static ASTCommentKind classifyComment(const char* nodeType, const std::string& text) {
+    if (strcmp(nodeType, "comment") == 0) {
+        // Block comment: /* ... */
+        // Check if it's a doc block comment: /** ... */
+        if (text.size() >= 4 && text[0] == '/' && text[1] == '*' && text[2] == '*') {
+            return ACK_DocBlock;
+        }
+        return ACK_Block;
+    }
+    // Line comment: # ...
+    // Check if it's a doc line comment: #! ...
+    if (text.size() >= 2 && text[0] == '#' && text[1] == '!') {
+        return ACK_DocLine;
+    }
+    return ACK_Line;
 }
 
-ASTTree* AstTreeHolder::get() {
-    return tree;
+//! Recursively collect all comment nodes from the tree-sitter CST.
+static void collectComments(TSNode node, const AstParseResult* result,
+                            QoreListNode* lst, ExceptionSink* xsink) {
+    const char* type = ts_node_type(node);
+
+    if (strcmp(type, "comment") == 0 || strcmp(type, "line_comment") == 0) {
+        std::string text = result->getNodeText(node);
+        ASTCommentKind kind = classifyComment(type, text);
+
+        TSPoint startPt = ts_node_start_point(node);
+        TSPoint endPt = ts_node_end_point(node);
+
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode, xsink);
+        if (*xsink) {
+            return;
+        }
+        info->setKeyValue("kind", static_cast<int64>(kind), xsink);
+        info->setKeyValue("text", new QoreStringNode(text), xsink);
+
+        ReferenceHolder<QoreHashNode> locHash(new QoreHashNode, xsink);
+        if (*xsink) {
+            return;
+        }
+        // tree-sitter uses 0-indexed; our API uses 1-indexed
+        locHash->setKeyValue("firstLine", static_cast<int64>(startPt.row + 1), xsink);
+        locHash->setKeyValue("firstCol", static_cast<int64>(startPt.column + 1), xsink);
+        locHash->setKeyValue("lastLine", static_cast<int64>(endPt.row + 1), xsink);
+        locHash->setKeyValue("lastCol", static_cast<int64>(endPt.column + 1), xsink);
+        info->setKeyValue("loc", locHash.release(), xsink);
+
+        if (*xsink) {
+            return;
+        }
+        lst->push(info.release(), xsink);
+        if (*xsink) {
+            return;
+        }
+        return; // Comments don't have children to recurse into
+    }
+
+    // Recurse into all children (including unnamed/extra nodes)
+    uint32_t childCount = ts_node_child_count(node);
+    for (uint32_t i = 0; i < childCount; i++) {
+        collectComments(ts_node_child(node, i), result, lst, xsink);
+        if (*xsink) {
+            return;
+        }
+    }
 }
 
-ASTTree* AstTreeHolder::release() {
-    ASTTree* t = tree;
-    tree = nullptr;
-    return t;
+QoreListNode* AstTreeHolder::getComments() {
+    if (!result) {
+        return nullptr;
+    }
+
+    ExceptionSink xsink;
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, &xsink);
+    if (xsink) {
+        lst = nullptr;
+        xsink.clear();
+        return nullptr;
+    }
+
+    TSNode root = result->getRootNode();
+    collectComments(root, result, *lst, &xsink);
+
+    if (xsink) {
+        lst = nullptr;
+        xsink.clear();
+        return nullptr;
+    }
+
+    return lst.release();
+}
+
+void AstTreeHolder::set(AstParseResult* r) {
+    if (result != r) {
+        delete result;
+        result = r;
+    }
+}
+
+AstParseResult* AstTreeHolder::get() {
+    return result;
+}
+
+AstParseResult* AstTreeHolder::release() {
+    AstParseResult* r = result;
+    result = nullptr;
+    return r;
 }

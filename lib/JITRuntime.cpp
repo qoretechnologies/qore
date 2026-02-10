@@ -279,16 +279,46 @@ extern "C" uint64_t qore_rt_make_string(const char* str) {
     return toBits(v);
 }
 
+// Thread-local stack for catch exception context
+// Tracks the raw QoreException* and the saved previous td->catchException
+// Push on CatchException, pop on CatchCleanup/Rethrow
+struct CatchEntry {
+    QoreException* caught;  // the caught exception
+    QoreException* saved;   // the previous td->catchException value
+};
+static thread_local std::vector<CatchEntry> catch_stack;
+
 extern "C" uint64_t qore_rt_catch_exception(ExceptionSink* xsink) {
     if (!xsink || !*xsink) {
+        catch_stack.push_back({nullptr, nullptr});
         return toBits(QoreValue());
     }
-    QoreHashNode* info = xsink->getExceptionInfo();
-    xsink->clear();
-    if (info) {
-        return toBits(QoreValue(info));
+    QoreException* caught = xsink->catchException();
+    QoreException* saved = catch_swap_exception(caught);
+    catch_stack.push_back({caught, saved});
+    QoreHashNode* info = caught->makeExceptionObject();
+    return toBits(QoreValue(info));
+}
+
+extern "C" void qore_rt_catch_end(ExceptionSink* xsink) {
+    if (catch_stack.empty()) {
+        return;
     }
-    return toBits(QoreValue());
+    auto entry = catch_stack.back();
+    catch_stack.pop_back();
+    if (entry.caught) {
+        catch_swap_exception(entry.saved);
+        entry.caught->del(xsink);
+    }
+}
+
+extern "C" void qore_rt_rethrow(ExceptionSink* xsink) {
+    QoreException* ex = catch_get_exception();
+    if (ex) {
+        qore_es_private::get(*xsink)->rethrow(ex);
+    }
+    // Clean up catch scope after rethrow
+    qore_rt_catch_end(xsink);
 }
 
 // --- Deopt helpers ---

@@ -130,27 +130,37 @@ int QoreEventLoop::modify(int fd, int events, ExceptionSink* xsink) {
 #ifdef DARWIN
     // kqueue: need to remove old events and add new ones
     // Use level-triggered mode (no EV_CLEAR)
-    struct kevent changes[4];
-    int nchanges = 0;
+    //
+    // IMPORTANT: EV_DELETE and EV_ADD must be done in separate kevent() calls.
+    // When kevent() is called with no eventlist (nullptr, 0) and an EV_DELETE
+    // fails (e.g., ENOENT for a filter that wasn't registered), kevent() returns
+    // -1 and stops processing the changelist — any subsequent EV_ADD entries
+    // would never be applied.
+    struct kevent change;
+    struct timespec ts = {0, 0};
 
-    // Disable both filters first, then enable the ones we want
-    EV_SET(&changes[nchanges], fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-    ++nchanges;
-    EV_SET(&changes[nchanges], fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-    ++nchanges;
+    // Step 1: Delete both filters individually, ignoring errors (filter may not exist)
+    EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+    kevent(event_fd, &change, 1, nullptr, 0, &ts);
+    EV_SET(&change, fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
+    kevent(event_fd, &change, 1, nullptr, 0, &ts);
 
+    // Step 2: Add the desired filters
+    struct kevent adds[2];
+    int nadds = 0;
     if (events & QORE_EV_READ) {
-        EV_SET(&changes[nchanges], fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, udata);
-        ++nchanges;
+        EV_SET(&adds[nadds++], fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, udata);
     }
     if (events & QORE_EV_WRITE) {
-        EV_SET(&changes[nchanges], fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, udata);
-        ++nchanges;
+        EV_SET(&adds[nadds++], fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, udata);
     }
-
-    struct timespec ts = {0, 0};
-    // Ignore errors from DELETE (filter might not exist)
-    kevent(event_fd, changes, nchanges, nullptr, 0, &ts);
+    if (nadds > 0) {
+        if (kevent(event_fd, adds, nadds, nullptr, 0, &ts) < 0) {
+            xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno,
+                "kevent() failed to modify events for fd %d", fd);
+            return -1;
+        }
+    }
     return 0;
 
 #elif defined(__linux__)

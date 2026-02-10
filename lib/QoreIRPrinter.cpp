@@ -356,6 +356,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::GuardNotNothing: return "guard.not-nothing";
         case QoreIROpcode::LandingPad: return "landingpad";
         case QoreIROpcode::CatchException: return "catch.exception";
+        case QoreIROpcode::CatchCleanup: return "catch.cleanup";
         case QoreIROpcode::Rethrow: return "rethrow";
         case QoreIROpcode::Throw: return "throw";
         case QoreIROpcode::InvokeSimError: return "invoke.sim.error";
@@ -702,6 +703,27 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                         out << "\"" << sw->cases[i].value << "\" -> " << sw->cases[i].target->name;
                     }
                     out << "]";
+                }
+            } else if (inst->opcode == QoreIROpcode::LandingPad) {
+                auto* lp = dynamic_cast<const QoreIRLandingPadInstruction*>(inst.get());
+                if (lp) {
+                    out << " scope_depth=" << lp->scope_depth;
+                    if (lp->try_scope_id) {
+                        out << " try_scope=" << lp->try_scope_id;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::ScopeEnter) {
+                auto* se = dynamic_cast<const QoreIRScopeEnterInstruction*>(inst.get());
+                if (se) {
+                    out << " scope=" << se->scope_id;
+                }
+            } else if (inst->opcode == QoreIROpcode::ScopeExit) {
+                auto* sx = dynamic_cast<const QoreIRScopeExitInstruction*>(inst.get());
+                if (sx) {
+                    out << " scope=" << sx->scope_id;
+                    if (sx->is_error) {
+                        out << " error";
+                    }
                 }
             }
             out << "\n";

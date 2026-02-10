@@ -773,8 +773,10 @@ QoreIRThrowInstruction* QoreIRBuilder::createThrow(QoreIRValue value, QoreIRBasi
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createRethrow(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::Rethrow);
+QoreIRThrowInstruction* QoreIRBuilder::createRethrow(QoreIRBasicBlock* exception_target,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRThrowInstruction>(QoreIROpcode::Rethrow);
+    inst->exception_target = exception_target;
     inst->loc = loc;
     return inst;
 }
@@ -785,8 +787,9 @@ QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* lo
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createLandingPad(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::LandingPad);
+QoreIRLandingPadInstruction* QoreIRBuilder::createLandingPad(size_t scope_depth, uint32_t try_scope_id,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRLandingPadInstruction>(scope_depth, try_scope_id);
     inst->loc = loc;
     return inst;
 }
@@ -795,6 +798,12 @@ QoreIRInstruction* QoreIRBuilder::createCatchException(const QoreProgramLocation
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CatchException);
     inst->loc = loc;
     inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createCatchCleanup(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CatchCleanup);
+    inst->loc = loc;
     return inst;
 }
 
