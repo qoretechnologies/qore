@@ -323,8 +323,7 @@ public class WaveRestConnection inherits RestClient::RestConnection {
                     "default_value": WaveRestClient::DefaultPingBody,
                 },
             },
-            "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
-                "oauth2_client_id,oauth2_client_secret",
+            "required_options": "oauth2_client_id,oauth2_client_secret",
         };
     }
 
