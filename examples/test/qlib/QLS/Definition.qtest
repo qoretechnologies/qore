@@ -56,6 +56,11 @@ class DefinitionTest inherits QUnit::Test {
         addTestCase("inherited method via scope", \testInheritedMethodViaScope());
         addTestCase("deep inheritance chain", \testDeepInheritance());
         addTestCase("inherited constant via scope", \testInheritedConstant());
+        addTestCase("cross-doc inherited method", \testCrossDocInheritedMethod());
+        addTestCase("cross-doc inherited field", \testCrossDocInheritedField());
+        addTestCase("cross-doc deep inheritance", \testCrossDocDeepInheritance());
+        addTestCase("cross-doc scope access", \testCrossDocScopeAccess());
+        addTestCase("cross-doc top-level declaration", \testCrossDocTopLevelDecl());
         addTestCase("missing params", \testMissingParams());
         addTestCase("non-existent document", \testNonExistentDocument());
 
@@ -413,6 +418,163 @@ Child::getValue();
         if (result) {
             assertEq(2, result[0].range.start.line,
                 "inherited constant should resolve to line 2 in Base");
+        }
+    }
+
+    # Cross-doc test: XBase class in one document, XChild in another
+    # (unique names to avoid conflicts with single-doc inheritance tests)
+    # Base doc:
+    # Line 0: %modern
+    # Line 1: class XBase {
+    # Line 2:     private { int xcount = 0; }
+    # Line 3:     int xGetValue() { return xcount; }
+    # Line 4: }
+    private string getCrossDocBaseCode() {
+        return "%modern
+class XBase {
+    private { int xcount = 0; }
+    int xGetValue() { return xcount; }
+}
+";
+    }
+
+    # Child doc:
+    # Line 0: %modern
+    # Line 1: class XChild inherits XBase {
+    # Line 2:     string xGetName() { return "child"; }
+    # Line 3: }
+    # Line 4: sub xtest() {
+    # Line 5:     XChild c();
+    # Line 6:     c.xGetValue();
+    # Line 7:     c.xcount;
+    # Line 8: }
+    private string getCrossDocChildCode() {
+        return "%modern
+class XChild inherits XBase {
+    string xGetName() { return \"child\"; }
+}
+sub xtest() {
+    XChild c();
+    c.xGetValue();
+    c.xcount;
+}
+";
+    }
+
+    testCrossDocInheritedMethod() {
+        string baseUri = setupDoc(getCrossDocBaseCode());
+        string childUri = setupDoc(getCrossDocChildCode());
+
+        # "xGetValue" in "c.xGetValue()" at line 6, col 6 → XBase.xGetValue at line 3
+        *list<auto> result = sendDefinition(childUri, 6, 6);
+        assertTrue(exists result && result.size() > 0,
+            "cross-doc inherited method should resolve");
+        if (result) {
+            assertEq(baseUri, result[0].uri,
+                "cross-doc inherited method URI should point to base doc");
+            assertEq(3, result[0].range.start.line,
+                "cross-doc inherited method should resolve to line 3 in XBase");
+        }
+    }
+
+    testCrossDocInheritedField() {
+        string baseUri = setupDoc(getCrossDocBaseCode());
+        string childUri = setupDoc(getCrossDocChildCode());
+
+        # "xcount" in "c.xcount" at line 7, col 6 → XBase.xcount at line 2
+        *list<auto> result = sendDefinition(childUri, 7, 6);
+        assertTrue(exists result && result.size() > 0,
+            "cross-doc inherited field should resolve");
+        if (result) {
+            assertEq(baseUri, result[0].uri,
+                "cross-doc inherited field URI should point to base doc");
+            assertEq(2, result[0].range.start.line,
+                "cross-doc inherited field should resolve to line 2 in XBase");
+        }
+    }
+
+    testCrossDocDeepInheritance() {
+        string baseUri = setupDoc(getCrossDocBaseCode());
+        setupDoc(getCrossDocChildCode());
+        # XGrandChild doc:
+        # Line 0: %modern
+        # Line 1: class XGrandChild inherits XChild {}
+        # Line 2: sub xtest2() {
+        # Line 3:     XGrandChild gc();
+        # Line 4:     gc.xGetValue();
+        # Line 5: }
+        string gcCode = "%modern
+class XGrandChild inherits XChild {}
+sub xtest2() {
+    XGrandChild gc();
+    gc.xGetValue();
+}
+";
+        string gcUri = setupDoc(gcCode);
+
+        # "xGetValue" in "gc.xGetValue()" at line 4, col 7
+        # XGrandChild → XChild → XBase → xGetValue
+        *list<auto> result = sendDefinition(gcUri, 4, 7);
+        assertTrue(exists result && result.size() > 0,
+            "cross-doc deep inherited method should resolve");
+        if (result) {
+            assertEq(baseUri, result[0].uri,
+                "cross-doc deep inherited method URI should point to base doc");
+            assertEq(3, result[0].range.start.line,
+                "cross-doc deep inherited method should resolve to line 3 in XBase");
+        }
+    }
+
+    testCrossDocScopeAccess() {
+        string baseUri = setupDoc(getCrossDocBaseCode());
+        # Scope doc:
+        # Line 0: %modern
+        # Line 1: class XChild2 inherits XBase {}
+        # Line 2: XChild2::xGetValue();
+        string scopeCode = "%modern
+class XChild2 inherits XBase {}
+XChild2::xGetValue();
+";
+        string scopeUri = setupDoc(scopeCode);
+
+        # "xGetValue" in "XChild2::xGetValue()" at line 2, col 10
+        *list<auto> result = sendDefinition(scopeUri, 2, 10);
+        assertTrue(exists result && result.size() > 0,
+            "cross-doc scope access should resolve");
+        if (result) {
+            assertEq(baseUri, result[0].uri,
+                "cross-doc scope access URI should point to base doc");
+            assertEq(3, result[0].range.start.line,
+                "cross-doc scope access should resolve to line 3 in XBase");
+        }
+    }
+
+    testCrossDocTopLevelDecl() {
+        # Function doc:
+        # Line 0: %modern
+        # Line 1: sub xhelper(int x) { return x + 1; }
+        string funcCode = "%modern
+sub xhelper(int x) { return x + 1; }
+";
+        string funcUri = setupDoc(funcCode);
+
+        # Caller doc:
+        # Line 0: %modern
+        # Line 1: xhelper(5);
+        string callerCode = "%modern
+xhelper(5);
+";
+        string callerUri = setupDoc(callerCode);
+
+        # "xhelper" at line 1, col 0 → function at line 1 in funcDoc
+        *list<auto> result = sendDefinition(callerUri, 1, 0);
+        assertTrue(exists result && result.size() > 0,
+            "cross-doc top-level function should resolve");
+        if (result) {
+            assertEq(funcUri, result[0].uri,
+                "cross-doc top-level function URI should point to func doc");
+            assertEq(1, result[0].range.start.line,
+                "cross-doc top-level function should resolve to line 1");
         }
     }
 

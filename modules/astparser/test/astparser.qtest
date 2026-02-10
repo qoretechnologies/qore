@@ -485,6 +485,7 @@ sub test() {
         addTestCase("Find type members - enum", \testFindTypeMembersEnum());
         addTestCase("Find type members - inheritance", \testFindTypeMembersInheritance());
         addTestCase("Resolve definition", \testResolveDefinition());
+        addTestCase("Resolve definition cross-doc", \testResolveDefinitionCrossDoc());
 %endif
 %endif
         set_return_value(main());
@@ -3049,6 +3050,207 @@ foreach int item in ((1, 2, 3)) { printf(\"%d\", item); }
             assertEq(1, resolved.size(), "resolveDefinition: one foreach var result");
             assertEq(13, resolved[0].range.start.line,
                 "resolveDefinition: foreach var points to line 13");
+        }
+    }
+
+    testResolveDefinitionCrossDoc() {
+        # Doc 1: Base class with a method and field
+        # Line 0: (empty)
+        # Line 1: %new-style
+        # Line 2: class Base {
+        # Line 3:     private { int count = 0; }
+        # Line 4:     int getValue() { return count; }
+        # Line 5: }
+        string doc1Code = "
+%new-style
+class Base {
+    private { int count = 0; }
+    int getValue() { return count; }
+}
+";
+        AstParser parser1();
+        *AstTree tree1 = parser1.parseString(doc1Code);
+        assertEq(0, parser1.getErrorCount(), "crossDoc: doc1 no parse errors");
+
+        # Doc 2: Child class inheriting from Base, plus usage
+        # Line 0: (empty)
+        # Line 1: %new-style
+        # Line 2: class Child inherits Base {
+        # Line 3:     string getName() { return "child"; }
+        # Line 4: }
+        # Line 5: sub test() {
+        # Line 6:     Child c();
+        # Line 7:     c.getValue();
+        # Line 8:     c.count;
+        # Line 9: }
+        string doc2Code = "
+%new-style
+class Child inherits Base {
+    string getName() { return \"child\"; }
+}
+sub test() {
+    Child c();
+    c.getValue();
+    c.count;
+}
+";
+        AstParser parser2();
+        *AstTree tree2 = parser2.parseString(doc2Code);
+        assertEq(0, parser2.getErrorCount(), "crossDoc: doc2 no parse errors");
+
+        AstTreeSearcher searcher();
+
+        # Build otherDocs hash: doc1 is the "other" doc when searching from doc2
+        hash<auto> otherDocs = {
+            "file:///base.q": tree1,
+        };
+
+        # Test: inherited method "getValue" in "c.getValue()" at line 7, col 6
+        # Should resolve to Base.getValue at line 4 in doc1
+        *list<auto> resolved = searcher.resolveDefinitionCrossDoc(
+            tree2, "file:///child.q", 7, 6, otherDocs);
+        assertTrue(exists resolved, "crossDoc: inherited method resolved");
+        if (resolved) {
+            assertEq(1, resolved.size(), "crossDoc: one result for inherited method");
+            assertEq("file:///base.q", resolved[0].uri,
+                "crossDoc: inherited method URI points to base doc");
+            assertEq(4, resolved[0].range.start.line,
+                "crossDoc: inherited method points to line 4");
+        }
+
+        # Test: inherited field "count" in "c.count" at line 8, col 6
+        # Should resolve to Base.count at line 3 in doc1
+        resolved = searcher.resolveDefinitionCrossDoc(
+            tree2, "file:///child.q", 8, 6, otherDocs);
+        assertTrue(exists resolved, "crossDoc: inherited field resolved");
+        if (resolved) {
+            assertEq(1, resolved.size(), "crossDoc: one result for inherited field");
+            assertEq("file:///base.q", resolved[0].uri,
+                "crossDoc: inherited field URI points to base doc");
+            assertEq(3, resolved[0].range.start.line,
+                "crossDoc: inherited field points to line 3");
+        }
+
+        # Test: local symbol "getName" in doc2 — should resolve within doc2 (empty URI = current)
+        # "getName" is a method of Child, declared at line 3 in doc2
+        # Let's test scope access: Child::getName should find it locally
+        resolved = searcher.resolveDefinitionCrossDoc(
+            tree2, "file:///child.q", 6, 4, otherDocs);
+        if (resolved) {
+            # "Child" at line 6, col 4 → class declaration at line 2 in doc2
+            assertEq("file:///child.q", resolved[0].uri,
+                "crossDoc: local class ref stays in current doc");
+            assertEq(2, resolved[0].range.start.line,
+                "crossDoc: local class ref points to line 2");
+        }
+
+        # Test: deep inheritance (3 docs)
+        # Doc 3: GrandChild inherits Child
+        # Line 0: (empty)
+        # Line 1: %new-style
+        # Line 2: class GrandChild inherits Child {}
+        # Line 3: sub test2() {
+        # Line 4:     GrandChild gc();
+        # Line 5:     gc.getValue();
+        # Line 6: }
+        string doc3Code = "
+%new-style
+class GrandChild inherits Child {}
+sub test2() {
+    GrandChild gc();
+    gc.getValue();
+}
+";
+        AstParser parser3();
+        *AstTree tree3 = parser3.parseString(doc3Code);
+        assertEq(0, parser3.getErrorCount(), "crossDoc: doc3 no parse errors");
+
+        hash<auto> otherDocs3 = {
+            "file:///base.q": tree1,
+            "file:///child.q": tree2,
+        };
+
+        # "getValue" in "gc.getValue()" at line 5, col 7
+        # GrandChild → Child (in child.q) → Base (in base.q) → getValue
+        resolved = searcher.resolveDefinitionCrossDoc(
+            tree3, "file:///grandchild.q", 5, 7, otherDocs3);
+        assertTrue(exists resolved, "crossDoc: deep inherited method resolved");
+        if (resolved) {
+            assertEq(1, resolved.size(), "crossDoc: one result for deep inherited method");
+            assertEq("file:///base.q", resolved[0].uri,
+                "crossDoc: deep inherited method URI points to base doc");
+            assertEq(4, resolved[0].range.start.line,
+                "crossDoc: deep inherited method points to line 4");
+        }
+
+        # Test: top-level function cross-doc
+        # Doc with a function call to a function defined in another doc
+        # Line 0: (empty)
+        # Line 1: %new-style
+        # Line 2: sub helper(int x) { return x + 1; }
+        string funcDoc = "
+%new-style
+sub helper(int x) { return x + 1; }
+";
+        AstParser parserFunc();
+        *AstTree treeFunc = parserFunc.parseString(funcDoc);
+        assertEq(0, parserFunc.getErrorCount(), "crossDoc: funcDoc no parse errors");
+
+        # Line 0: (empty)
+        # Line 1: %new-style
+        # Line 2: helper(5);
+        string callerDoc = "
+%new-style
+helper(5);
+";
+        AstParser parserCaller();
+        *AstTree treeCaller = parserCaller.parseString(callerDoc);
+        assertEq(0, parserCaller.getErrorCount(), "crossDoc: callerDoc no parse errors");
+
+        hash<auto> otherDocsFunc = {
+            "file:///func.q": treeFunc,
+        };
+
+        # "helper" at line 2, col 0 → function at line 2 in funcDoc
+        resolved = searcher.resolveDefinitionCrossDoc(
+            treeCaller, "file:///caller.q", 2, 0, otherDocsFunc);
+        assertTrue(exists resolved, "crossDoc: top-level function resolved");
+        if (resolved) {
+            assertEq(1, resolved.size(), "crossDoc: one result for top-level function");
+            assertEq("file:///func.q", resolved[0].uri,
+                "crossDoc: top-level function URI points to func doc");
+            assertEq(2, resolved[0].range.start.line,
+                "crossDoc: top-level function points to line 2");
+        }
+
+        # Test: scope access cross-doc (Child::getValue where Base in another doc)
+        # Line 0: (empty)
+        # Line 1: %new-style
+        # Line 2: class Child2 inherits Base {}
+        # Line 3: Child2::getValue();
+        string scopeDoc = "
+%new-style
+class Child2 inherits Base {}
+Child2::getValue();
+";
+        AstParser parserScope();
+        *AstTree treeScope = parserScope.parseString(scopeDoc);
+        assertEq(0, parserScope.getErrorCount(), "crossDoc: scopeDoc no parse errors");
+
+        hash<auto> otherDocsScope = {
+            "file:///base.q": tree1,
+        };
+
+        # "getValue" in "Child2::getValue()" at line 3, col 9
+        resolved = searcher.resolveDefinitionCrossDoc(
+            treeScope, "file:///scope.q", 3, 9, otherDocsScope);
+        assertTrue(exists resolved, "crossDoc: scope access inherited method resolved");
+        if (resolved) {
+            assertEq(1, resolved.size(), "crossDoc: one result for scope access");
+            assertEq("file:///base.q", resolved[0].uri,
+                "crossDoc: scope access URI points to base doc");
+            assertEq(4, resolved[0].range.start.line,
+                "crossDoc: scope access points to line 4");
         }
     }
 

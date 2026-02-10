@@ -40,6 +40,18 @@
 #include "ast/ASTSymbolKind.h"
 #include "ast/ASTSymbolUsageKind.h"
 
+//! Reference to another document's parse result for cross-document resolution.
+struct DocumentRef {
+    const AstParseResult* result;
+    std::string uri;
+};
+
+//! Result of cross-document definition resolution (node + owning document URI).
+struct DefinitionResult {
+    TSNode node;
+    std::string uri;
+};
+
 //! Symbol info for CST-based search results.
 struct CSTSymbolInfo {
     ASTSymbolKind kind = ASYK_None;
@@ -185,6 +197,20 @@ public:
         const AstParseResult* result,
         uint32_t line, uint32_t col);
 
+    //! Resolve definition across multiple documents.
+    /** Same logic as resolveDefinition but searches other documents when the
+        current document doesn't contain the target declaration.
+        @param result parse result of the current document
+        @param line 0-indexed line
+        @param col 0-indexed column
+        @param otherDocs other documents to search
+        @return vector of DefinitionResult (node + URI), or nullptr if not found
+    */
+    static std::vector<DefinitionResult>* resolveDefinitionCrossDoc(
+        const AstParseResult* result,
+        uint32_t line, uint32_t col,
+        const std::vector<DocumentRef>& otherDocs);
+
 private:
     //! Recursively collect symbols into vec, tracking scope prefix.
     static void collectSymbolsRecursive(
@@ -307,6 +333,51 @@ private:
     static bool findMemberInClass(TSNode classNode, const AstParseResult* result,
                                    const std::string& name, TSNode* outNode,
                                    std::vector<std::string>& visited);
+
+    //! Search direct members of a class body (no inheritance walk).
+    /** Checks method, constructor, destructor, member, and constant declarations
+        directly within the class node and its member_groups.
+        @param classNode class declaration node
+        @param result parse result owning classNode
+        @param name member name to find
+        @param outNode receives the found node
+        @return true if found
+    */
+    static bool findMemberInClassBody(TSNode classNode, const AstParseResult* result,
+                                       const std::string& name, TSNode* outNode);
+
+    //! Find a declaration by name, searching the current document first, then other documents.
+    /** @param root root node to search first
+        @param result parse result for the root node
+        @param name declaration name to find
+        @param nodeType node type filter (nullptr for any)
+        @param outNode receives the found node
+        @param outResult receives the parse result owning the found node
+        @param otherDocs other documents to search if not found locally
+        @return true if found
+    */
+    static bool findDeclarationByNameCrossDoc(
+        TSNode root, const AstParseResult* result,
+        const std::string& name, const char* nodeType,
+        TSNode* outNode, const AstParseResult** outResult,
+        const std::vector<DocumentRef>& otherDocs);
+
+    //! Search class body for a member, walking inheritance across documents.
+    /** @param classNode class declaration node
+        @param result parse result owning classNode
+        @param name member name to find
+        @param outNode receives the found node
+        @param outResult receives the parse result owning the found node
+        @param visited class names already visited (cycle detection)
+        @param otherDocs other documents to search for parent classes
+        @return true if found
+    */
+    static bool findMemberInClassCrossDoc(
+        TSNode classNode, const AstParseResult* result,
+        const std::string& name, TSNode* outNode,
+        const AstParseResult** outResult,
+        std::vector<std::string>& visited,
+        const std::vector<DocumentRef>& otherDocs);
 
     //! Collect class members into a detail vector.
     static void collectClassMembers(TSNode classNode, const AstParseResult* result,

@@ -1517,6 +1517,39 @@ public class QLSServer {
         return make_jsonrpc_response(jsonRpcVer, request.id, ranges ?? ());
     }
 
+    #! Build a hash of URI → AstTree for all open documents except the given one
+    private *hash<auto> buildOtherTrees(string excludeUri) {
+        hash<auto> otherTrees;
+        foreach string docUri in (keys documents) {
+            if (docUri == excludeUri) {
+                continue;
+            }
+            *astparser::AstTree t = documents{docUri}.getTree();
+            if (t) {
+                otherTrees{docUri} = t;
+            }
+        }
+        foreach string docUri in (keys workspaceDocs) {
+            if (docUri == excludeUri) {
+                continue;
+            }
+            *astparser::AstTree t = workspaceDocs{docUri}.getTree();
+            if (t) {
+                otherTrees{docUri} = t;
+            }
+        }
+        foreach string docUri in (keys stdModuleDocs) {
+            if (docUri == excludeUri) {
+                continue;
+            }
+            *astparser::AstTree t = stdModuleDocs{docUri}.getTree();
+            if (t) {
+                otherTrees{docUri} = t;
+            }
+        }
+        return otherTrees;
+    }
+
     #! "textDocument/definition" method handler
     private *string meth_td_definition(hash<auto> request) {
         # validate request
@@ -1547,7 +1580,16 @@ public class QLSServer {
             return make_jsonrpc_response(jsonRpcVer, request.id, resolved);
         }
 
-        # fall back to cross-document search
+        # try cross-document definition resolution (inheritance, cross-file declarations)
+        *hash<auto> otherTrees = buildOtherTrees(request.params.textDocument.uri);
+        if (otherTrees) {
+            resolved = doc.resolveDefinitionCrossDoc(request.params.position, otherTrees);
+            if (resolved) {
+                return make_jsonrpc_response(jsonRpcVer, request.id, resolved);
+            }
+        }
+
+        # fall back to cross-document keyword search
         *hash<auto> symbolInfo = doc.findSymbolInfo(request.params.position);
         if (!symbolInfo) {
             return make_jsonrpc_response(jsonRpcVer, request.id, ());

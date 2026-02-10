@@ -308,6 +308,13 @@ public class Document {
         return NOTHING;
     }
 
+    #! Get the underlying AST tree (for cross-document resolution)
+    /** @return the AstTree object, or NOTHING if not parsed
+    */
+    *astparser::AstTree getTree() {
+        return tree;
+    }
+
     #! Resolve definition location(s) for the symbol at position
     /** @param Position LSP position {line, character}
         @return list of {uri, range} locations, or NOTHING
@@ -316,6 +323,20 @@ public class Document {
         AstTreeSearcher searcher();
         if (tree) {
             return searcher.resolveDefinition(tree, uri, Position.line, Position.character);
+        }
+        return NOTHING;
+    }
+
+    #! Resolve definition across multiple documents
+    /** @param Position LSP position {line, character}
+        @param otherDocs hash mapping URI → AstTree for other open documents
+        @return list of {uri, range} locations, or NOTHING
+    */
+    *list<auto> resolveDefinitionCrossDoc(hash<auto> Position, *hash<auto> otherDocs) {
+        AstTreeSearcher searcher();
+        if (tree) {
+            return searcher.resolveDefinitionCrossDoc(tree, uri, Position.line,
+                Position.character, otherDocs);
         }
         return NOTHING;
     }

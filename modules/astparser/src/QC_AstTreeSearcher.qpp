@@ -238,6 +238,102 @@ AstTreeSearcher::constructor() {
     return lst.release();
 }
 
+//! Resolve definition across multiple documents.
+/**
+    @param tree AST tree structure for the current document
+    @param uri document's URI
+    @param line 0-indexed line
+    @param col 0-indexed column
+    @param otherDocs hash mapping URI (string) to AstTree objects for other open documents
+
+    @return list of location hashes {uri, range}, or NOTHING if not found
+
+    @since %Qore 2.3
+ */
+*list<auto> AstTreeSearcher::resolveDefinitionCrossDoc(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col, *hash<auto> otherDocs) {
+    ReferenceHolder<AstTreeHolder> holder(tree, xsink);
+
+    AstParseResult* result = tree->get();
+    if (!result) {
+        return QoreValue();
+    }
+
+    // RAII guard for referenced AstTreeHolder pointers
+    struct HolderGuard {
+        std::vector<AstTreeHolder*> holders;
+        ExceptionSink* xsink;
+
+        HolderGuard(ExceptionSink* xs) : xsink(xs) {}
+        ~HolderGuard() {
+            for (auto* h : holders) {
+                h->deref(xsink);
+            }
+        }
+
+        // non-copyable
+        HolderGuard(const HolderGuard&) = delete;
+        HolderGuard& operator=(const HolderGuard&) = delete;
+    };
+
+    HolderGuard guard(xsink);
+
+    // Build vector<DocumentRef> from the otherDocs hash
+    std::vector<DocumentRef> docRefs;
+
+    if (otherDocs && otherDocs->size()) {
+        ConstHashIterator hi(otherDocs);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() != NT_OBJECT) {
+                continue;
+            }
+            QoreObject* obj = val.get<QoreObject>();
+            AstTreeHolder* ath = reinterpret_cast<AstTreeHolder*>(
+                obj->getReferencedPrivateData(CID_ASTTREE, xsink));
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (!ath) {
+                continue;
+            }
+            guard.holders.push_back(ath);
+            AstParseResult* otherResult = ath->get();
+            if (otherResult) {
+                std::string docUri(hi.getKey());
+                docRefs.push_back({otherResult, docUri});
+            }
+        }
+    }
+
+    std::string currentUri(uri->c_str());
+    std::unique_ptr<std::vector<DefinitionResult>> vec(
+        CSTSearcher::resolveDefinitionCrossDoc(result,
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col), docRefs));
+
+    if (!vec) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
+    for (size_t i = 0, count = vec->size(); i < count; i++) {
+        const DefinitionResult& dr = vec->at(i);
+        // Use the result's URI if set, otherwise use current document URI
+        std::string nodeUri = dr.uri.empty() ? currentUri : dr.uri;
+        QoreHashNode* location = CSTSearcher::makeLocation(dr.node, nodeUri, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (location) {
+            lst->push(location, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+    }
+
+    return lst.release();
+}
+
 //! Find all symbols in a document.
 /**
     @param tree AST tree structure

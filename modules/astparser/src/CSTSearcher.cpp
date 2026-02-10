@@ -1555,28 +1555,9 @@ static bool isFunctionLike(const char* type) {
         || strcmp(type, "destructor_declaration") == 0;
 }
 
-//! Search a class body for a member matching a name.
-bool CSTSearcher::findMemberInClass(TSNode classNode, const AstParseResult* result,
-                                     const std::string& name, TSNode* outNode) {
-    std::vector<std::string> visited;
-    return findMemberInClass(classNode, result, name, outNode, visited);
-}
-
-//! Search a class body for a member matching a name, walking the inheritance chain.
-bool CSTSearcher::findMemberInClass(TSNode classNode, const AstParseResult* result,
-                                     const std::string& name, TSNode* outNode,
-                                     std::vector<std::string>& visited) {
-    // Cycle detection
-    std::string className = CSTSearcher::getNodeName(classNode, result);
-    if (!className.empty()) {
-        for (const auto& v : visited) {
-            if (v == className) {
-                return false;
-            }
-        }
-        visited.push_back(className);
-    }
-
+//! Search direct members of a class body (no inheritance walk).
+bool CSTSearcher::findMemberInClassBody(TSNode classNode, const AstParseResult* result,
+                                         const std::string& name, TSNode* outNode) {
     uint32_t childCount = ts_node_named_child_count(classNode);
     for (uint32_t i = 0; i < childCount; i++) {
         TSNode child = ts_node_named_child(classNode, i);
@@ -1615,8 +1596,38 @@ bool CSTSearcher::findMemberInClass(TSNode classNode, const AstParseResult* resu
             }
         }
     }
+    return false;
+}
+
+//! Search a class body for a member matching a name.
+bool CSTSearcher::findMemberInClass(TSNode classNode, const AstParseResult* result,
+                                     const std::string& name, TSNode* outNode) {
+    std::vector<std::string> visited;
+    return findMemberInClass(classNode, result, name, outNode, visited);
+}
+
+//! Search a class body for a member matching a name, walking the inheritance chain.
+bool CSTSearcher::findMemberInClass(TSNode classNode, const AstParseResult* result,
+                                     const std::string& name, TSNode* outNode,
+                                     std::vector<std::string>& visited) {
+    // Cycle detection
+    std::string className = CSTSearcher::getNodeName(classNode, result);
+    if (!className.empty()) {
+        for (const auto& v : visited) {
+            if (v == className) {
+                return false;
+            }
+        }
+        visited.push_back(className);
+    }
+
+    // Search direct members
+    if (findMemberInClassBody(classNode, result, name, outNode)) {
+        return true;
+    }
 
     // Walk superclass_list for inherited members
+    uint32_t childCount = ts_node_named_child_count(classNode);
     for (uint32_t i = 0; i < childCount; i++) {
         TSNode child = ts_node_named_child(classNode, i);
         if (strcmp(ts_node_type(child), "superclass_list") != 0) {
@@ -1970,6 +1981,296 @@ std::vector<TSNode>* CSTSearcher::resolveDefinition(
     }
 
     // 8. Not found in this document
+    return nullptr;
+}
+
+// --------------------------------------------------------------------------
+// Cross-document definition resolution
+// --------------------------------------------------------------------------
+
+bool CSTSearcher::findDeclarationByNameCrossDoc(
+    TSNode root, const AstParseResult* result,
+    const std::string& name, const char* nodeType,
+    TSNode* outNode, const AstParseResult** outResult,
+    const std::vector<DocumentRef>& otherDocs) {
+
+    // Try current document first
+    if (findDeclarationByName(root, result, name, nodeType, outNode)) {
+        *outResult = result;
+        return true;
+    }
+
+    // Search other documents
+    for (const auto& doc : otherDocs) {
+        if (!doc.result) {
+            continue;
+        }
+        TSNode otherRoot = doc.result->getRootNode();
+        if (findDeclarationByName(otherRoot, doc.result, name, nodeType, outNode)) {
+            *outResult = doc.result;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool CSTSearcher::findMemberInClassCrossDoc(
+    TSNode classNode, const AstParseResult* result,
+    const std::string& name, TSNode* outNode,
+    const AstParseResult** outResult,
+    std::vector<std::string>& visited,
+    const std::vector<DocumentRef>& otherDocs) {
+
+    // Cycle detection
+    std::string className = CSTSearcher::getNodeName(classNode, result);
+    if (!className.empty()) {
+        for (const auto& v : visited) {
+            if (v == className) {
+                return false;
+            }
+        }
+        visited.push_back(className);
+    }
+
+    // Search direct members using shared helper
+    if (findMemberInClassBody(classNode, result, name, outNode)) {
+        *outResult = result;
+        return true;
+    }
+
+    // Walk superclass_list for inherited members — cross-doc aware
+    uint32_t childCount = ts_node_named_child_count(classNode);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(classNode, i);
+        if (strcmp(ts_node_type(child), "superclass_list") != 0) {
+            continue;
+        }
+
+        uint32_t superCount = ts_node_named_child_count(child);
+        for (uint32_t j = 0; j < superCount; j++) {
+            TSNode superclass = ts_node_named_child(child, j);
+            if (strcmp(ts_node_type(superclass), "superclass") != 0) {
+                continue;
+            }
+
+            // Extract parent class name (identifier or scoped_identifier)
+            uint32_t scCount = ts_node_named_child_count(superclass);
+            for (uint32_t k = 0; k < scCount; k++) {
+                TSNode sc = ts_node_named_child(superclass, k);
+                const char* scType = ts_node_type(sc);
+                if (strcmp(scType, "identifier") != 0 &&
+                    strcmp(scType, "scoped_identifier") != 0) {
+                    continue;
+                }
+
+                std::string parentName = result->getNodeText(sc);
+
+                // Find parent class across all documents
+                TSNode parentClass = make_null_node();
+                const AstParseResult* parentResult = nullptr;
+                if (findDeclarationByNameCrossDoc(
+                        result->getRootNode(), result, parentName,
+                        "class_declaration", &parentClass, &parentResult,
+                        otherDocs)) {
+                    if (findMemberInClassCrossDoc(parentClass, parentResult,
+                                                   name, outNode, outResult,
+                                                   visited, otherDocs)) {
+                        return true;
+                    }
+                }
+                break;  // only one name per superclass node
+            }
+        }
+    }
+
+    return false;
+}
+
+//! Look up the URI for a found result — empty string means current document.
+static std::string lookupUri(const AstParseResult* foundResult,
+                             const AstParseResult* currentResult,
+                             const std::vector<DocumentRef>& otherDocs) {
+    if (foundResult == currentResult) {
+        return "";
+    }
+    for (const auto& doc : otherDocs) {
+        if (doc.result == foundResult) {
+            return doc.uri;
+        }
+    }
+    return "";
+}
+
+std::vector<DefinitionResult>* CSTSearcher::resolveDefinitionCrossDoc(
+    const AstParseResult* result,
+    uint32_t line, uint32_t col,
+    const std::vector<DocumentRef>& otherDocs) {
+
+    if (!result) {
+        return nullptr;
+    }
+
+    // 1. Get symbol info at position
+    CSTSymbolInfo si = findSymbolInfo(result, line, col);
+
+    // 2. Get ancestors for context analysis
+    std::vector<TSNode> ancestors = findNodeAndParents(result, line, col);
+    if (ancestors.empty()) {
+        return nullptr;
+    }
+
+    // Fall back to leaf node text if findSymbolInfo didn't find a name
+    if (si.name.empty()) {
+        std::string nodeText = result->getNodeText(ancestors[0]);
+        if (nodeText.empty()) {
+            return nullptr;
+        }
+        si.name = nodeText;
+    }
+
+    // 3. If already at a declaration name, return nullptr
+    if (isDeclNameUsage(si.usage)) {
+        return nullptr;
+    }
+
+    TSNode root = result->getRootNode();
+    TSNode foundNode = make_null_node();
+    const AstParseResult* foundResult = nullptr;
+
+    // 4. MEMBER ACCESS: Check if parent is member_expression
+    if (ancestors.size() >= 2) {
+        TSNode parentNode = ancestors[1];
+        const char* parentType = ts_node_type(parentNode);
+        if (strcmp(parentType, "member_expression") == 0) {
+            TSNode memberField = ts_node_child_by_field_name(parentNode, "member", 6);
+            if (!ts_node_is_null(memberField) && ts_node_eq(memberField, ancestors[0])) {
+                TSNode objNode = ts_node_child_by_field_name(parentNode, "object", 6);
+                if (!ts_node_is_null(objNode)) {
+                    TSPoint objPos = ts_node_start_point(objNode);
+                    std::string typeName = getSymbolType(result, objPos.row, objPos.column);
+                    if (!typeName.empty()) {
+                        TSNode classNode = make_null_node();
+                        const AstParseResult* classResult = nullptr;
+                        if (findDeclarationByNameCrossDoc(root, result, typeName,
+                                "class_declaration", &classNode, &classResult, otherDocs)) {
+                            std::vector<std::string> visited;
+                            if (findMemberInClassCrossDoc(classNode, classResult,
+                                    si.name, &foundNode, &foundResult, visited, otherDocs)) {
+                                auto* rv = new std::vector<DefinitionResult>;
+                                rv->push_back({foundNode, lookupUri(foundResult, result, otherDocs)});
+                                return rv;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. SCOPE ACCESS: Check if we're inside a scoped_identifier
+    for (size_t i = 1; i < ancestors.size(); i++) {
+        const char* ancType = ts_node_type(ancestors[i]);
+        if (strcmp(ancType, "scoped_identifier") == 0) {
+            std::string fullText = result->getNodeText(ancestors[i]);
+            size_t lastColon = fullText.rfind("::");
+            if (lastColon != std::string::npos) {
+                std::string scopeName = fullText.substr(0, lastColon);
+                // Try as a class
+                TSNode scopeNode = make_null_node();
+                const AstParseResult* scopeResult = nullptr;
+                if (findDeclarationByNameCrossDoc(root, result, scopeName,
+                        "class_declaration", &scopeNode, &scopeResult, otherDocs)) {
+                    std::vector<std::string> visited;
+                    if (findMemberInClassCrossDoc(scopeNode, scopeResult,
+                            si.name, &foundNode, &foundResult, visited, otherDocs)) {
+                        auto* rv = new std::vector<DefinitionResult>;
+                        rv->push_back({foundNode, lookupUri(foundResult, result, otherDocs)});
+                        return rv;
+                    }
+                }
+                // Try as a namespace — search only within the namespace node
+                if (findDeclarationByNameCrossDoc(root, result, scopeName,
+                        "namespace_declaration", &scopeNode, &scopeResult, otherDocs)) {
+                    if (findDeclarationByName(scopeNode, scopeResult,
+                            si.name, nullptr, &foundNode)) {
+                        auto* rv = new std::vector<DefinitionResult>;
+                        rv->push_back({foundNode, lookupUri(scopeResult, result, otherDocs)});
+                        return rv;
+                    }
+                }
+            }
+            break;
+        }
+        if (CSTSearcher::isDeclarationNode(ancType)) {
+            break;
+        }
+    }
+
+    // 6. LOCAL VARIABLE / PARAMETER (always local — no cross-doc needed)
+    if (findLocalDeclaration(ancestors, result, si.name, line, col, &foundNode)) {
+        auto* rv = new std::vector<DefinitionResult>;
+        rv->push_back({foundNode, ""});  // empty URI = current doc
+        return rv;
+    }
+
+    // 6.5. CLASS MEMBER (bare identifier inside a method)
+    for (size_t i = 0; i < ancestors.size(); i++) {
+        const char* atype = ts_node_type(ancestors[i]);
+        if (strcmp(atype, "class_declaration") == 0) {
+            std::vector<std::string> visited;
+            if (findMemberInClassCrossDoc(ancestors[i], result,
+                    si.name, &foundNode, &foundResult, visited, otherDocs)) {
+                auto* rv = new std::vector<DefinitionResult>;
+                rv->push_back({foundNode, lookupUri(foundResult, result, otherDocs)});
+                return rv;
+            }
+            break;
+        }
+    }
+
+    // 7. TOP-LEVEL DECLARATION (cross-doc aware)
+    {
+        const AstParseResult* topResult = nullptr;
+        if (findDeclarationByNameCrossDoc(root, result, si.name, nullptr,
+                &foundNode, &topResult, otherDocs)) {
+            auto* rv = new std::vector<DefinitionResult>;
+            rv->push_back({foundNode, lookupUri(topResult, result, otherDocs)});
+            return rv;
+        }
+    }
+
+    // 7.5. TOP-LEVEL VARIABLE DECLARATION (always local)
+    {
+        uint32_t rootChildCount = ts_node_named_child_count(root);
+        for (uint32_t i = 0; i < rootChildCount; i++) {
+            TSNode child = ts_node_named_child(root, i);
+            const char* ctype = ts_node_type(child);
+            if (strcmp(ctype, "local_variable_declaration") == 0) {
+                uint32_t declChildCount = ts_node_named_child_count(child);
+                for (uint32_t j = 0; j < declChildCount; j++) {
+                    TSNode declChild = ts_node_named_child(child, j);
+                    if (strcmp(ts_node_type(declChild), "variable_declarator") == 0) {
+                        std::string declName = getFieldText(declChild, "name", result);
+                        if (declName == si.name) {
+                            TSNode nameNode = ts_node_child_by_field_name(
+                                declChild, "name", 4);
+                            if (!ts_node_is_null(nameNode)) {
+                                foundNode = nameNode;
+                            } else {
+                                foundNode = declChild;
+                            }
+                            auto* rv = new std::vector<DefinitionResult>;
+                            rv->push_back({foundNode, ""});
+                            return rv;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 8. Not found
     return nullptr;
 }
 
