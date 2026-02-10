@@ -1,0 +1,3 @@
+#!/usr/local/bin/qore
+
+this file is "valid" by its alternative shebang line

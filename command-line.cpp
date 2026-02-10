@@ -595,7 +595,7 @@ static const int ART_WIDTH = ANIM_FRAME_WIDTH;
 static const int ART_GAP = 2;
 
 // Build version info lines, word-wrapped to fit the terminal
-static void build_version_info(std::vector<std::string>& info, int max_info) {
+static void build_version_info(std::vector<std::string>& info, int max_info, bool show_anim_hint = true) {
     std::vector<std::string> raw_info;
 
     QoreString buf;
@@ -658,6 +658,10 @@ static void build_version_info(std::vector<std::string>& info, int max_info) {
     raw_info.push_back(buf.c_str());
 
     raw_info.push_back("use -B to show build options");
+    if (show_anim_hint) {
+        raw_info.push_back("");
+        raw_info.push_back("run qore --version-animation to see a 3D version of the logo");
+    }
 
     for (const auto& line : raw_info) {
         std::string indent;
@@ -753,6 +757,7 @@ static void do_version(const char* arg) {
             qore_build_host, qore_cplusplus_compiler, qore_cflags, qore_ldflags, mpfrInfo.getBuffer());
 
         printf("use -B to show build options\n");
+        printf("\nrun qore --version-animation to see a 3D version of the logo\n");
 
         exit(0);
     }
@@ -810,28 +815,6 @@ static void do_version_animation(const char* arg) {
     }
     int max_info = term_width > ART_WIDTH + ART_GAP ? term_width - ART_WIDTH - ART_GAP : 0;
 
-    std::vector<std::string> info;
-    build_version_info(info, max_info);
-
-    int info_start = (ART_LINES - (int)info.size()) / 2;
-    if (info_start < 0) {
-        info_start = 0;
-    }
-
-    int total_lines = ART_LINES;
-    if (info_start + (int)info.size() > total_lines) {
-        total_lines = info_start + (int)info.size();
-    }
-
-    // Animation: one full 360-degree rotation over 3 seconds
-    // Frames are pre-rendered by tools/render-version-art/render.mjs
-    static const long ANIM_DURATION_NS = 6000000000L; // 6 seconds in nanoseconds
-
-    // --- Playback ---
-
-    // Hide cursor
-    fputs("\033[?25l", stdout);
-
     // Set stdin to raw non-blocking mode so we can detect keypress
     struct termios orig_termios, raw_termios;
     bool raw_mode = (tcgetattr(STDIN_FILENO, &orig_termios) == 0);
@@ -843,12 +826,43 @@ static void do_version_animation(const char* arg) {
         tcsetattr(STDIN_FILENO, TCSANOW, &raw_termios);
     }
 
+    std::vector<std::string> info;
+    build_version_info(info, max_info, false);
+    if (raw_mode) {
+        info.push_back("");
+        info.push_back("press any key to exit");
+    }
+
+    int info_start = (ART_LINES - (int)info.size()) / 2;
+    if (info_start < 0) {
+        info_start = 0;
+    }
+
+    int total_lines = ART_LINES;
+    if (info_start + (int)info.size() > total_lines) {
+        total_lines = info_start + (int)info.size();
+    }
+
+    // Per-frame interval for ~30 fps (180 frames over 6 seconds)
+    static const long FRAME_NS = 6000000000L / ANIM_FRAME_COUNT;
+
+    // --- Playback ---
+
+    // Hide cursor
+    fputs("\033[?25l", stdout);
+
     struct timespec anim_start;
     clock_gettime(CLOCK_MONOTONIC, &anim_start);
 
-    for (int frame = 0; frame < ANIM_FRAME_COUNT; ++frame) {
+    // Rolling frame deadline; incremented by FRAME_NS each iteration to avoid
+    // overflow from multiplying FRAME_NS * frame_num in unbounded raw_mode
+    struct timespec next_deadline = anim_start;
+
+    for (long frame_num = 0; raw_mode || frame_num < ANIM_FRAME_COUNT; ++frame_num) {
+        int frame = (int)(frame_num % ANIM_FRAME_COUNT);
+
         // Move cursor up to top of art area (except for first frame)
-        if (frame > 0) {
+        if (frame_num > 0) {
             printf("\033[%dA", total_lines);
         }
 
@@ -879,7 +893,7 @@ static void do_version_animation(const char* arg) {
             }
 
             // Print info text only on first frame (it stays in place)
-            if (frame == 0) {
+            if (frame_num == 0) {
                 int info_idx = line - info_start;
                 if (info_idx >= 0 && info_idx < (int)info.size()) {
                     printf("  %s", info[info_idx].c_str());
@@ -891,7 +905,7 @@ static void do_version_animation(const char* arg) {
 
         fflush(stdout);
 
-        // Check for keypress to skip animation
+        // Check for keypress to exit
         if (raw_mode) {
             struct pollfd pfd = { STDIN_FILENO, POLLIN, 0 };
             if (poll(&pfd, 1, 0) > 0) {
@@ -903,20 +917,17 @@ static void do_version_animation(const char* arg) {
             }
         }
 
-        // Sleep until the wall-clock time for the next frame
-        long next_frame_ns = ANIM_DURATION_NS * (frame + 1) / ANIM_FRAME_COUNT;
-        struct timespec target;
-        target.tv_sec = anim_start.tv_sec + next_frame_ns / 1000000000L;
-        target.tv_nsec = anim_start.tv_nsec + next_frame_ns % 1000000000L;
-        if (target.tv_nsec >= 1000000000L) {
-            target.tv_sec++;
-            target.tv_nsec -= 1000000000L;
+        // Advance rolling deadline by one frame interval
+        next_deadline.tv_nsec += FRAME_NS;
+        if (next_deadline.tv_nsec >= 1000000000L) {
+            next_deadline.tv_sec++;
+            next_deadline.tv_nsec -= 1000000000L;
         }
         // Sleep until the target time (portable: works on macOS and Linux)
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
-        long sleep_ns = (target.tv_sec - now.tv_sec) * 1000000000L
-            + (target.tv_nsec - now.tv_nsec);
+        long sleep_ns = (next_deadline.tv_sec - now.tv_sec) * 1000000000L
+            + (next_deadline.tv_nsec - now.tv_nsec);
         if (sleep_ns > 0) {
             struct timespec rem, req;
             req.tv_sec = sleep_ns / 1000000000L;

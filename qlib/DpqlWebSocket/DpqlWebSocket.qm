@@ -42,7 +42,7 @@ module DpqlWebSocket {
 
 /** @mainpage DpqlWebSocket Module
 
-    @section dpqlwsintro Introduction to the DpqlWebSocket Module
+    @section dpqlwebsocketintro Introduction to the DpqlWebSocket Module
 
     The %DpqlWebSocket module provides WebSocket-based DPQL language services
     for DataProvider-aware clients. It exposes a JSON message protocol for

@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SymbolInfoKinds.qtest Copyright 2017 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QLS
+
+%exec-class SymbolInfoKindsTest
+
+class SymbolInfoKindsTest inherits QUnit::Test {
+    constructor() : Test("SymbolInfoKinds", "1.0") {
+        addTestCase("ASTSymbolKind constants", \testASTSymbolKind());
+        addTestCase("ASTSymbolUsageKind constants", \testASTSymbolUsageKind());
+        addTestCase("SymbolUsageStringMap", \testSymbolUsageStringMap());
+        addTestCase("SymbolUsageFastMap", \testSymbolUsageFastMap());
+
+        set_return_value(main());
+    }
+
+    testASTSymbolKind() {
+        assertEq(0, QLS::ASTSymbolKind.None);
+        assertEq(1, QLS::ASTSymbolKind.File);
+        assertEq(5, QLS::ASTSymbolKind.Class);
+        assertEq(6, QLS::ASTSymbolKind.Method);
+        assertEq(12, QLS::ASTSymbolKind.Function);
+        assertEq(13, QLS::ASTSymbolKind.Variable);
+        assertEq(14, QLS::ASTSymbolKind.Constant);
+        assertEq(18, QLS::ASTSymbolKind.Array);
+    }
+
+    testASTSymbolUsageKind() {
+        assertEq(0, QLS::ASTSymbolUsageKind.None);
+        assertEq(100, QLS::ASTSymbolUsageKind.ClassDeclName);
+        assertEq(200, QLS::ASTSymbolUsageKind.AccessVariable);
+        assertEq(300, QLS::ASTSymbolUsageKind.ContextStmtName);
+        assertEq(316, QLS::ASTSymbolUsageKind.WhileStmtCond);
+    }
+
+    testSymbolUsageStringMap() {
+        assertEq(Type::Hash, QLS::SymbolUsageStringMap.type());
+        # ClassDeclName should map to (Class,)
+        assertEq((QLS::ASTSymbolKind.Class,), QLS::SymbolUsageStringMap.ClassDeclName);
+        # FuncDeclName should include Function, Method, Constructor
+        list funcDecl = QLS::SymbolUsageStringMap.FuncDeclName;
+        assertEq(True, funcDecl.contains(QLS::ASTSymbolKind.Function));
+        assertEq(True, funcDecl.contains(QLS::ASTSymbolKind.Method));
+        assertEq(True, funcDecl.contains(QLS::ASTSymbolKind.Constructor));
+    }
+
+    testSymbolUsageFastMap() {
+        assertEq(Type::Hash, QLS::SymbolUsageFastMap.type());
+        # check that the fast map has entries for all usage kinds
+        string key = string(QLS::ASTSymbolUsageKind.ClassDeclName);
+        assertEq(True, QLS::SymbolUsageFastMap.hasKey(key));
+        assertEq((QLS::ASTSymbolKind.Class,), QLS::SymbolUsageFastMap{key});
+    }
+}

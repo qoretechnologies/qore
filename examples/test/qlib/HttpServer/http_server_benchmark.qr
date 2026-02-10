@@ -2,10 +2,9 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 
-%requires HttpServer
-%requires Util
-%requires Mime
-
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Mime.qm
 %exec-class HttpServerBenchmark
 
 class SimpleHandler inherits AbstractHttpRequestHandler {

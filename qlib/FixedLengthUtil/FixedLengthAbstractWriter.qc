@@ -22,10 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-
 #! The FixedLengthUtil namespace contains all the definitions in the FixedLengthUtil module
 public namespace FixedLengthUtil {
 #! Structured abstract writer for fixed-length lines

@@ -54,7 +54,7 @@ module RestSchemaDataProvider {
 
     @tableofcontents
 
-    @section restschemamdataproviderintro Introduction to the RestSchemaDataProvider Module
+    @section restschemadataproviderintro Introduction to the RestSchemaDataProvider Module
 
     The %RestSchemaDataProvider module provides a \c dataproviderintro "data provider" API for REST schemas
     including both Swagger 2.0 and OpenAPI 3.0 schemas.

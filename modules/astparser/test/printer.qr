@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  printer.qr Copyright 2017 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# A script printing debug info about AST tree of a target file.
+# Usage: printer.qr TARGET_FILE [OUTPUT_FILE]
+
+%modern
+
+%requires astparser
+
+sub printUsage() {
+    printf("usage: %s TARGET_FILE [OUTPUT_FILE]\n", get_script_name());
+}
+
+if (ARGV.size() < 1) {
+    stderr.printf("not enough arguments!\n");
+    printUsage();
+    exit(1);
+}
+
+if (ARGV.size() > 2) {
+    stderr.printf("too many arguments!\n");
+    printUsage();
+    exit(1);
+}
+
+string fileToParse = ARGV[0];
+string outFile = (ARGV.size() == 2) ? ARGV[1] : "./tree.out.txt";
+
+astparser::AstParser parser();
+*astparser::AstTree tree = parser.parseFile(fileToParse);
+if (tree) {
+    tree.printTree(outFile);
+} else {
+    stderr.printf("error occurred during parsing!\n");
+}

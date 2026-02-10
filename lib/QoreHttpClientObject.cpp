@@ -4814,6 +4814,30 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
 
     code = stream->status_code;
 
+    // HTTP/2: status code 0 means no :status pseudo-header was received;
+    // this typically indicates the connection was reset or is stale
+    if (code == 0) {
+        // Build minimal response hash for the exception arg
+        ReferenceHolder<QoreHashNode> err_response(new QoreHashNode(autoTypeInfo), xsink);
+        err_response->setKeyValue("status_code", 0, xsink);
+        err_response->setKeyValue("http_version", new QoreStringNode("2"), xsink);
+        if (stream->reset) {
+            err_response->setKeyValue("status_message", new QoreStringNode("Stream Reset"), xsink);
+            xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", err_response.release(),
+                "HTTP/2 stream %d was reset by the remote end (HTTP/2 error code %d); "
+                "the connection is stale and must be re-established",
+                stream_id, (int)stream->error_code);
+        } else {
+            err_response->setKeyValue("status_message",
+                new QoreStringNode("No Response"), xsink);
+            xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", err_response.release(),
+                "HTTP/2 stream %d closed without a response (no :status header received); "
+                "the connection is likely stale and must be re-established",
+                stream_id);
+        }
+        return nullptr;
+    }
+
     // Build response hash similar to HTTP/1.x format
     ReferenceHolder<QoreHashNode> response(new QoreHashNode(autoTypeInfo), xsink);
 

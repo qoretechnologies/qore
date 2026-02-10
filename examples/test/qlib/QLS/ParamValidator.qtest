@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ParamValidator.qtest Copyright 2017 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QLS
+%requires json
+
+%exec-class ParamValidatorTest
+
+class ParamValidatorTest inherits QUnit::Test {
+    constructor() : Test("ParamValidator", "1.0") {
+        addTestCase("required - missing key", \testRequiredMissing());
+        addTestCase("required - wrong type", \testRequiredWrongType());
+        addTestCase("required - valid", \testRequiredValid());
+        addTestCase("initializeParams - valid", \testInitializeParamsValid());
+        addTestCase("initializeParams - missing processId", \testInitializeParamsMissingPid());
+        addTestCase("textDocumentIdentifier - valid", \testTextDocIdentValid());
+        addTestCase("textDocumentIdentifier - missing", \testTextDocIdentMissing());
+        addTestCase("textDocumentItem - valid", \testTextDocItemValid());
+        addTestCase("textDocumentItem - missing fields", \testTextDocItemMissing());
+        addTestCase("versionedTextDocumentIdentifier", \testVersionedTextDoc());
+        addTestCase("textDocumentPositionParams - valid", \testTextDocPosValid());
+        addTestCase("textDocumentPositionParams - missing position", \testTextDocPosMissing());
+        addTestCase("didChangeConfigParams", \testDidChangeConfig());
+        addTestCase("didChangeWatchedFilesParams - valid", \testDidChangeWatchedFiles());
+        addTestCase("didChangeWatchedFilesParams - invalid event", \testDidChangeWatchedFilesInvalid());
+        addTestCase("referenceParams", \testReferenceParams());
+        addTestCase("workspaceSymbolParams", \testWorkspaceSymbolParams());
+
+        set_return_value(main());
+    }
+
+    private hash baseRequest() {
+        return {"jsonrpc": "2.0", "id": 1, "method": "test"};
+    }
+
+    testRequiredMissing() {
+        hash request = baseRequest();
+        string err;
+        bool result = QLS::ParamValidator::required(request, {}, "missing", NT_STRING, \err);
+        assertEq(False, result);
+        assertEq(Type::String, err.type());
+    }
+
+    testRequiredWrongType() {
+        hash request = baseRequest();
+        string err;
+        bool result = QLS::ParamValidator::required(request, {"key": 123}, "key", NT_STRING, \err);
+        assertEq(False, result);
+        assertEq(Type::String, err.type());
+    }
+
+    testRequiredValid() {
+        hash request = baseRequest();
+        string err;
+        bool result = QLS::ParamValidator::required(request, {"key": "value"}, "key", NT_STRING, \err);
+        assertEq(True, result);
+    }
+
+    testInitializeParamsValid() {
+        hash request = baseRequest();
+        hash params = {
+            "processId": 123,
+            "rootPath": "/tmp",
+            "rootUri": "file:///tmp",
+            "capabilities": {},
+        };
+        *string result = QLS::ParamValidator::initializeParams(request, params);
+        assertNothing(result);
+    }
+
+    testInitializeParamsMissingPid() {
+        hash request = baseRequest();
+        hash params = {"capabilities": {}};
+        *string result = QLS::ParamValidator::initializeParams(request, params);
+        assertEq(Type::String, result.type());
+    }
+
+    testTextDocIdentValid() {
+        hash request = baseRequest();
+        hash params = {"textDocument": {"uri": "file:///test.q"}};
+        *string result = QLS::ParamValidator::textDocumentIdentifier(request, params);
+        assertNothing(result);
+    }
+
+    testTextDocIdentMissing() {
+        hash request = baseRequest();
+        *string result = QLS::ParamValidator::textDocumentIdentifier(request, {});
+        assertEq(Type::String, result.type());
+    }
+
+    testTextDocItemValid() {
+        hash request = baseRequest();
+        hash params = {
+            "textDocument": {
+                "uri": "file:///test.q",
+                "languageId": "qore",
+                "version": 1,
+                "text": "code",
+            },
+        };
+        *string result = QLS::ParamValidator::textDocumentItem(request, params);
+        assertNothing(result);
+    }
+
+    testTextDocItemMissing() {
+        hash request = baseRequest();
+        hash params = {
+            "textDocument": {
+                "uri": "file:///test.q",
+                # missing languageId, version, text
+            },
+        };
+        *string result = QLS::ParamValidator::textDocumentItem(request, params);
+        assertEq(Type::String, result.type());
+    }
+
+    testVersionedTextDoc() {
+        hash request = baseRequest();
+        hash params = {"textDocument": {"uri": "file:///test.q", "version": 1}};
+        *string result = QLS::ParamValidator::versionedTextDocumentIdentifier(request, params);
+        assertNothing(result);
+
+        # missing version
+        hash params2 = {"textDocument": {"uri": "file:///test.q"}};
+        *string result2 = QLS::ParamValidator::versionedTextDocumentIdentifier(request, params2);
+        assertEq(Type::String, result2.type());
+    }
+
+    testTextDocPosValid() {
+        hash request = baseRequest();
+        hash params = {
+            "textDocument": {"uri": "file:///test.q"},
+            "position": {"line": 0, "character": 0},
+        };
+        *string result = QLS::ParamValidator::textDocumentPositionParams(request, params);
+        assertNothing(result);
+    }
+
+    testTextDocPosMissing() {
+        hash request = baseRequest();
+        hash params = {"textDocument": {"uri": "file:///test.q"}};
+        *string result = QLS::ParamValidator::textDocumentPositionParams(request, params);
+        assertEq(Type::String, result.type());
+    }
+
+    testDidChangeConfig() {
+        hash request = baseRequest();
+        hash params = {"settings": {"qore": {}}};
+        *string result = QLS::ParamValidator::didChangeConfigParams(request, params);
+        assertNothing(result);
+
+        # missing settings
+        *string result2 = QLS::ParamValidator::didChangeConfigParams(request, {});
+        assertEq(Type::String, result2.type());
+    }
+
+    testDidChangeWatchedFiles() {
+        hash request = baseRequest();
+        hash params = {
+            "changes": ({"uri": "file:///test.q", "type": 1},),
+        };
+        *string result = QLS::ParamValidator::didChangeWatchedFilesParams(request, params);
+        assertNothing(result);
+    }
+
+    testDidChangeWatchedFilesInvalid() {
+        hash request = baseRequest();
+        # event is not a hash
+        hash params = {"changes": ("not a hash",)};
+        *string result = QLS::ParamValidator::didChangeWatchedFilesParams(request, params);
+        assertEq(Type::String, result.type());
+    }
+
+    testReferenceParams() {
+        hash request = baseRequest();
+        hash params = {
+            "textDocument": {"uri": "file:///test.q"},
+            "position": {"line": 0, "character": 0},
+            "context": {"includeDeclaration": True},
+        };
+        *string result = QLS::ParamValidator::referenceParams(request, params);
+        assertNothing(result);
+
+        # missing context
+        hash params2 = {
+            "textDocument": {"uri": "file:///test.q"},
+            "position": {"line": 0, "character": 0},
+        };
+        *string result2 = QLS::ParamValidator::referenceParams(request, params2);
+        assertEq(Type::String, result2.type());
+    }
+
+    testWorkspaceSymbolParams() {
+        hash request = baseRequest();
+        hash params = {"query": "test"};
+        *string result = QLS::ParamValidator::workspaceSymbolParams(request, params);
+        assertNothing(result);
+
+        # missing query
+        *string result2 = QLS::ParamValidator::workspaceSymbolParams(request, {});
+        assertEq(Type::String, result2.type());
+    }
+}

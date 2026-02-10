@@ -8,8 +8,7 @@
 %requires ../../../../qlib/CsvUtil
 
 # Need for tmp_location()
-%requires Util
-
+%requires ../../../../qlib/Util.qm
 %exec-class CsvSampleTest
 
 public class CsvSampleTest inherits QUnit::Test {
