@@ -496,6 +496,18 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       - search capabilities with filtering for all entity types
       - action catalog integration with sensible default actions
       - connection support with \c linear:// URL scheme
+    - @ref waverestclientintro "WaveRestClient" module
+      - new module providing a REST client for Wave's GraphQL API
+      - supports OAuth2 authentication with Bearer tokens
+      - provides WaveRestConnection for connection management with \c wave:// URL scheme
+    - @ref wavedataproviderintro "WaveDataProvider" module
+      - new module providing a data provider API for Wave accounting and invoicing services
+      - hierarchical data provider structure: customers, invoices, products, accounts, transactions, sales taxes
+      - full CRUD support for customers, products, invoices, accounts, and transactions
+      - search capabilities with filtering for customers, invoices, and products
+      - action catalog integration with 19 actions including invoice approval and sending
+      - webhook-based event trigger for new invoices
+      - connection support with \c wave:// URL scheme
     - @ref mailgunrestclientintro "MailgunRestClient" module
       - new module providing a REST client for Mailgun's email API
       - supports API key authentication with US and EU region endpoints

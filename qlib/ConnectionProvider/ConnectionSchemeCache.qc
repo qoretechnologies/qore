@@ -220,6 +220,8 @@ public class ConnectionSchemeCache {
 
             "unleashed": "UnleashedRestClient",
 
+            "wave": "WaveRestClient",
+
             "zohobooks": "ZohoBooksRestClient",
             "zohoinvoice": "ZohoInvoiceRestClient",
         };
