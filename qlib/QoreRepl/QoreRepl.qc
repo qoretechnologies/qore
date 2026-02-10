@@ -2237,14 +2237,19 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
         self.pgm = pgm;
     }
 
+    int getParseOptions() {
+        return pgm.getParseOptions();
+    }
+
     list<hash<QoreCodeCompletion::CompletionItem>> getVisibleSymbols(string prefix) {
         list<hash<QoreCodeCompletion::CompletionItem>> result = ();
         hash<string, bool> seen;
 
         # Functions, classes, constants, and namespace names from all namespaces (recursively)
+        int po = pgm.getParseOptions();
         try {
             Reflection::Namespace root = Reflection::Namespace::forName(pgm, "::");
-            collectAllSymbolDetails(root, prefix, \result, \seen);
+            collectAllSymbolDetails(root, prefix, \result, \seen, po);
         } catch () {
             # Ignore
         }
@@ -2272,9 +2277,10 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
     list<hash<QoreCodeCompletion::CompletionItem>> getClassNames(string prefix) {
         list<hash<QoreCodeCompletion::CompletionItem>> result = ();
         hash<string, bool> seen;
+        int po = pgm.getParseOptions();
         try {
             Reflection::Namespace root = Reflection::Namespace::forName(pgm, "::");
-            collectClassDetails(root, "", prefix, \result, \seen);
+            collectClassDetails(root, "", prefix, \result, \seen, po);
         } catch () {
             # Ignore
         }
@@ -2289,6 +2295,7 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
 
         list<hash<QoreCodeCompletion::CompletionItem>> result = ();
         hash<string, bool> seen;
+        int po = pgm.getParseOptions();
 
         # Normal methods (skip constructor/destructor/copy)
         try {
@@ -2303,7 +2310,7 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
                         "kind": "method",
                         "isCallable": True,
                         "noArgsOnly": isMethodNoArgsOnly(m),
-                        "detail": formatMethodVariantDetail(m),
+                        "detail": formatMethodVariantDetail(m, po),
                     };
                 }
             }
@@ -2342,6 +2349,7 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
     list<hash<QoreCodeCompletion::CompletionItem>> getScopeMembers(string target, string prefix) {
         list<hash<QoreCodeCompletion::CompletionItem>> result = ();
         hash<string, bool> seen;
+        int po = pgm.getParseOptions();
 
         auto addItem = sub (string label, string kind, *string detail, bool callable = False,
                 bool no_args = False) {
@@ -2370,10 +2378,14 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
                 addItem(child.getName(), "namespace");
             }
             foreach Reflection::Class cls in (ns.getClasses()) {
-                addItem(cls.getName(), "class");
+                if (!isClassRestricted(cls, po)) {
+                    addItem(cls.getName(), "class");
+                }
             }
             foreach Reflection::Function f in (ns.getFunctions()) {
-                addItem(f.getName(), "function", formatVariantDetail(f), True, isNoArgsOnly(f));
+                if (!isFunctionRestricted(f, po)) {
+                    addItem(f.getName(), "function", formatVariantDetail(f, po), True, isNoArgsOnly(f));
+                }
             }
             foreach Reflection::Constant c in (ns.getConstants()) {
                 addItem(c.getName(), "constant");
@@ -2400,7 +2412,7 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
             try {
                 foreach Reflection::AbstractMethod m in (cls.getMethods()) {
                     if (m.isStatic()) {
-                        addItem(m.getName(), "method", formatMethodVariantDetail(m), True,
+                        addItem(m.getName(), "method", formatMethodVariantDetail(m, po), True,
                             isMethodNoArgsOnly(m));
                     }
                 }
@@ -2488,15 +2500,68 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
         return False;
     }
 
+    #! Checks if a function is restricted by the active parse options
+    /** @param f the function to check
+        @param po active parse option flags
+        @return True if the function should be hidden from completions
+    */
+    private bool isFunctionRestricted(Reflection::Function f, int po) {
+        # Domain check: function's domain conflicts with parse restrictions
+        if ((po & f.getDomain()) != 0) {
+            return True;
+        }
+        # RUNTIME_NOOP check: when strict-args or require-types is set,
+        # hide functions where ALL variants have CF_RUNTIME_NOOP
+        if ((po & (PO_STRICT_ARGS | PO_REQUIRE_TYPES)) != 0) {
+            try {
+                list<Reflection::FunctionVariant> variants = f.getVariants();
+                if (variants.size() > 0) {
+                    bool all_noop = True;
+                    foreach Reflection::FunctionVariant v in (variants) {
+                        if ((v.getCodeFlags() & CF_RUNTIME_NOOP) == 0) {
+                            all_noop = False;
+                            break;
+                        }
+                    }
+                    if (all_noop) {
+                        return True;
+                    }
+                }
+            } catch () {
+                # Ignore
+            }
+        }
+        return False;
+    }
+
+    #! Checks if a class is restricted by the active parse options
+    /** @param cls the class to check
+        @param po active parse option flags
+        @return True if the class should be hidden from completions
+    */
+    private bool isClassRestricted(Reflection::Class cls, int po) {
+        return (po & cls.getDomain()) != 0;
+    }
+
     #! Formats variant signatures for detail display
-    private *string formatVariantDetail(Reflection::Function f) {
+    /** @param f the function to format
+        @param po active parse option flags; when strict-args/require-types is set,
+               RUNTIME_NOOP variants are omitted from the signature display
+    */
+    private *string formatVariantDetail(Reflection::Function f, int po = 0) {
         try {
+            bool filter_noop = (po & (PO_STRICT_ARGS | PO_REQUIRE_TYPES)) != 0;
             list<Reflection::FunctionVariant> variants = f.getVariants();
             list<string> sigs = ();
             foreach Reflection::FunctionVariant v in (variants) {
+                if (filter_noop && (v.getCodeFlags() & CF_RUNTIME_NOOP) != 0) {
+                    continue;
+                }
                 sigs += v.toString();
             }
-            return sigs.join("; ");
+            if (sigs.size() > 0) {
+                return sigs.join("; ");
+            }
         } catch () {
             # Ignore
         }
@@ -2504,14 +2569,24 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
     }
 
     #! Formats method variant signatures for detail display
-    private *string formatMethodVariantDetail(Reflection::AbstractMethod m) {
+    /** @param m the method to format
+        @param po active parse option flags; when strict-args/require-types is set,
+               RUNTIME_NOOP variants are omitted from the signature display
+    */
+    private *string formatMethodVariantDetail(Reflection::AbstractMethod m, int po = 0) {
         try {
+            bool filter_noop = (po & (PO_STRICT_ARGS | PO_REQUIRE_TYPES)) != 0;
             list<Reflection::AbstractMethodVariant> variants = m.getVariants();
             list<string> sigs = ();
             foreach Reflection::AbstractMethodVariant v in (variants) {
+                if (filter_noop && (v.getCodeFlags() & CF_RUNTIME_NOOP) != 0) {
+                    continue;
+                }
                 sigs += v.toString();
             }
-            return sigs.join("; ");
+            if (sigs.size() > 0) {
+                return sigs.join("; ");
+            }
         } catch () {
             # Ignore
         }
@@ -2521,25 +2596,27 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
     #! Recursively collects all symbol details from a namespace tree
     private collectAllSymbolDetails(Reflection::Namespace ns, string prefix,
             reference<list<hash<QoreCodeCompletion::CompletionItem>>> result,
-            reference<hash<string, bool>> seen) {
+            reference<hash<string, bool>> seen, int po) {
         foreach Reflection::Function f in (ns.getFunctions()) {
             string name = f.getName();
             if (name !~ /^__repl_expr_/ && !seen{name}
-                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)
+                    && !isFunctionRestricted(f, po)) {
                 seen{name} = True;
                 result += <QoreCodeCompletion::CompletionItem>{
                     "label": name,
                     "kind": "function",
                     "isCallable": True,
                     "noArgsOnly": isNoArgsOnly(f),
-                    "detail": formatVariantDetail(f),
+                    "detail": formatVariantDetail(f, po),
                 };
             }
         }
         foreach Reflection::Class cls in (ns.getClasses()) {
             string name = cls.getName();
             if (!seen{name}
-                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)
+                    && !isClassRestricted(cls, po)) {
                 seen{name} = True;
                 result += <QoreCodeCompletion::CompletionItem>{
                     "label": name,
@@ -2568,18 +2645,19 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
                     "kind": "namespace",
                 };
             }
-            collectAllSymbolDetails(child, prefix, \result, \seen);
+            collectAllSymbolDetails(child, prefix, \result, \seen, po);
         }
     }
 
     #! Recursively collects class details for new-completion
     private collectClassDetails(Reflection::Namespace ns, string ns_prefix, string prefix,
             reference<list<hash<QoreCodeCompletion::CompletionItem>>> result,
-            reference<hash<string, bool>> seen) {
+            reference<hash<string, bool>> seen, int po) {
         foreach Reflection::Class cls in (ns.getClasses()) {
             string name = cls.getName();
             if (!seen{name}
-                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)
+                    && !isClassRestricted(cls, po)) {
                 seen{name} = True;
                 result += <QoreCodeCompletion::CompletionItem>{
                     "label": name,
@@ -2604,7 +2682,7 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
             string sub_prefix = ns_prefix.length() > 0
                 ? ns_prefix + child.getName() + "::"
                 : child.getName() + "::";
-            collectClassDetails(child, sub_prefix, prefix, \result, \seen);
+            collectClassDetails(child, sub_prefix, prefix, \result, \seen, po);
         }
     }
 }

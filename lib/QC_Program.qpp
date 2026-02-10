@@ -215,6 +215,41 @@ const DOM_DEBUGGER = QDOM_DEBUGGER;
 const DOM_REFLECTION = QDOM_REFLECTION;
 ///@}
 
+/** @defgroup code_flag_constants Code Flag Constants
+    These are the possible code flags that can be returned by @ref Reflection::AbstractVariant::getCodeFlags()
+    "AbstractVariant::getCodeFlags()" to describe variant attributes.
+
+    @since %Qore 2.3
+*/
+///@{
+//! indicates no code flags are set
+const CF_NO_FLAGS = QCF_NO_FLAGS;
+
+//! indicates that this variant is a noop, returning a constant value with the given argument types
+/** Noop variants are not available at parse time when @ref Qore::PO_STRICT_ARGS "PO_STRICT_ARGS" is set.
+*/
+const CF_NOOP = QCF_NOOP;
+
+//! indicates that the code accesses arguments beyond the declared parameter list
+const CF_USES_EXTRA_ARGS = QCF_USES_EXTRA_ARGS;
+
+//! indicates that the function or method is deprecated and will be removed in a later release
+const CF_DEPRECATED = QCF_DEPRECATED;
+
+//! indicates that the code only returns a value and has no other side effects
+const CF_RET_VALUE_ONLY = QCF_RET_VALUE_ONLY;
+
+//! indicates that this variant is a noop that is additionally not available at runtime with @ref Qore::PO_REQUIRE_TYPES "PO_REQUIRE_TYPES"
+/** Runtime noop variants are not available to programs executing with
+    @ref Qore::PO_REQUIRE_TYPES "PO_REQUIRE_TYPES" or
+    @ref Qore::PO_STRICT_ARGS "PO_STRICT_ARGS".
+*/
+const CF_RUNTIME_NOOP = QCF_RUNTIME_NOOP;
+
+//! indicates that the code is safe to use in a constant expression (i.e. has no side effects and is deterministic)
+const CF_CONSTANT = QCF_CONSTANT;
+///@}
+
 /** @defgroup parse_options Parse Option Constants
     These are the possible values that can be or'ed together to set @ref Qore::Program "Program" parse options
 */
@@ -818,7 +853,7 @@ const PO_BROKEN_VARARGS = PO_BROKEN_VARARGS;
 //! enables \@assert and \@debug statements (otherwise ignored at parse time)
 /** @see @ref enable-debug "%enable-debug"
 
-    @since %Qore 2.1
+    @since %Qore 2.3
 */
 const PO_ENABLE_DEBUG = PO_ENABLE_DEBUG;
 

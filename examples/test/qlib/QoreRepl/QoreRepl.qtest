@@ -160,6 +160,13 @@ public class QoreReplTest inherits QUnit::Test {
         addTestCase("Code variable hints: typed closure", \testCodeVariableHints());
         addTestCase("Code variable hints: bare code type", \testCodeVariableHintsBareCode());
 
+        # Parse-option-aware completion tests
+        addTestCase("Parse options: no-filesystem filters File class", \testParseOptionsNoFilesystem());
+        addTestCase("Parse options: no-thread-control filters background",
+            \testParseOptionsNoThreadControl());
+        addTestCase("Parse options: modern filters runtime-noop functions",
+            \testParseOptionsModernFilterNoop());
+
         set_return_value(main());
     }
 
@@ -2566,6 +2573,106 @@ printf('OK');
         *string hint = repl.getHints("myCb(");
         assertTrue(exists hint, "hint should exist for bare code variable");
         assertTrue(hint.find("unknown") >= 0, "hint should indicate signature is unknown");
+    }
+
+    testParseOptionsNoFilesystem() {
+        QoreRepl::QoreRepl repl({
+            "parse_options": PO_NEW_STYLE | PO_NO_FILESYSTEM,
+        });
+
+        # "File" class has QDOM_FILESYSTEM domain — should be filtered
+        softlist<string> completions = repl.getCompletions("new Fil");
+        bool has_file = False;
+        foreach string c in (completions) {
+            if (c =~ /\bFile\b/) {
+                has_file = True;
+                break;
+            }
+        }
+        assertFalse(has_file, "'File' class should be filtered with PO_NO_FILESYSTEM");
+
+        # "Mutex" has no filesystem domain — should still appear
+        completions = repl.getCompletions("new Mut");
+        bool has_mutex = False;
+        foreach string c in (completions) {
+            if (c =~ /Mutex/) {
+                has_mutex = True;
+                break;
+            }
+        }
+        assertTrue(has_mutex, "'Mutex' should still appear with PO_NO_FILESYSTEM");
+    }
+
+    testParseOptionsNoThreadControl() {
+        QoreRepl::QoreRepl repl({
+            "parse_options": PO_NEW_STYLE | PO_NO_THREAD_CONTROL,
+        });
+
+        # "background" keyword should be filtered
+        softlist<string> completions = repl.getCompletions("ba");
+        bool has_background = False;
+        foreach string c in (completions) {
+            if (c =~ /\bbackground\b/) {
+                has_background = True;
+                break;
+            }
+        }
+        assertFalse(has_background,
+            "'background' keyword should be filtered with PO_NO_THREAD_CONTROL");
+
+        # "save_thread_data" function has QDOM_THREAD_CONTROL — should be filtered
+        completions = repl.getCompletions("save_thread_");
+        bool has_save_thread = False;
+        foreach string c in (completions) {
+            if (c =~ /save_thread_data/) {
+                has_save_thread = True;
+                break;
+            }
+        }
+        assertFalse(has_save_thread,
+            "'save_thread_data' should be filtered with PO_NO_THREAD_CONTROL");
+    }
+
+    testParseOptionsModernFilterNoop() {
+        QoreRepl::QoreRepl repl({
+            "parse_options": PO_MODERN,
+        });
+
+        # "trim" has a RUNTIME_NOOP variant (the no-arg variant) but also non-noop variants
+        # It should NOT be completely filtered out
+        softlist<string> completions = repl.getCompletions("trim");
+        bool has_trim = False;
+        foreach string c in (completions) {
+            if (c =~ /\btrim\b/) {
+                has_trim = True;
+                break;
+            }
+        }
+        assertTrue(has_trim, "'trim' should still appear (has non-noop variants)");
+
+        # "printf" has a NOOP variant (not RUNTIME_NOOP) and a non-noop variant — should appear
+        completions = repl.getCompletions("printf");
+        bool has_printf = False;
+        foreach string c in (completions) {
+            if (c =~ /\bprintf\b/) {
+                has_printf = True;
+                break;
+            }
+        }
+        assertTrue(has_printf, "'printf' should appear (has non-RUNTIME_NOOP variants)");
+
+        # Verify domain filtering still works with PO_MODERN
+        # "File" has QDOM_FILESYSTEM domain — PO_MODERN doesn't restrict filesystem,
+        # so it should still appear
+        completions = repl.getCompletions("new Fil");
+        bool has_file = False;
+        foreach string c in (completions) {
+            if (c =~ /\bFile\b/) {
+                has_file = True;
+                break;
+            }
+        }
+        assertTrue(has_file, "'File' should appear with PO_MODERN (no filesystem restriction)");
     }
 }
 

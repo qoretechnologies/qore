@@ -1657,6 +1657,10 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
         self.position = position;
     }
 
+    int getParseOptions() {
+        return doc.getParseDirectiveOptions();
+    }
+
     list<hash<QoreCodeCompletion::CompletionItem>> getVisibleSymbols(string prefix) {
         *list<auto> symbols = doc.findScopeSymbolsDetailed(position);
         if (!symbols) {

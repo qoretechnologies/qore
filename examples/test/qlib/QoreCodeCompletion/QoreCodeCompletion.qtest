@@ -130,6 +130,21 @@ class MockCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProv
     }
 }
 
+#! Mock provider that returns configurable parse options for testing keyword filtering
+class ParseOptionMockProvider inherits MockCompletionProvider {
+    private {
+        int parseOptions;
+    }
+
+    constructor(int po) {
+        parseOptions = po;
+    }
+
+    int getParseOptions() {
+        return parseOptions;
+    }
+}
+
 public class QoreCodeCompletionTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("QoreCodeCompletion", "1.0") {
@@ -183,6 +198,14 @@ public class QoreCodeCompletionTest inherits QUnit::Test {
         # noArgsOnly field tests
         addTestCase("noArgsOnly: field preserved through engine", \testNoArgsOnly());
         addTestCase("noArgsOnly: detail field preserved", \testNoArgsOnlyDetail());
+
+        # Parse option keyword filtering tests
+        addTestCase("ParseOptions: background filtered with PO_NO_THREAD_CONTROL",
+            \testParseOptionsNoThreadBackground());
+        addTestCase("ParseOptions: thread_exit filtered with PO_NO_THREAD_CONTROL",
+            \testParseOptionsNoThreadThreadExit());
+        addTestCase("ParseOptions: background present without restrictions",
+            \testParseOptionsNoRestrictions());
 
         set_return_value(main());
     }
@@ -613,5 +636,57 @@ public class QoreCodeCompletionTest inherits QUnit::Test {
         assertEq("trylock", items[0].label, "label should be trylock");
         assertEq("() returns int", items[0].detail, "detail should be preserved");
         assertEq(True, items[0].noArgsOnly, "noArgsOnly should be True");
+    }
+
+    testParseOptionsNoThreadBackground() {
+        ParseOptionMockProvider provider(PO_NO_THREAD_CONTROL);
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("ba");
+        bool has_background = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "background" && item.kind == "keyword") {
+                has_background = True;
+            }
+        }
+        assertFalse(has_background,
+            "'background' keyword should be filtered with PO_NO_THREAD_CONTROL");
+    }
+
+    testParseOptionsNoThreadThreadExit() {
+        ParseOptionMockProvider provider(PO_NO_THREAD_CONTROL);
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("thread_");
+        bool has_thread_exit = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "thread_exit" && item.kind == "keyword") {
+                has_thread_exit = True;
+            }
+        }
+        assertFalse(has_thread_exit,
+            "'thread_exit' keyword should be filtered with PO_NO_THREAD_CONTROL");
+    }
+
+    testParseOptionsNoRestrictions() {
+        ParseOptionMockProvider provider(0);
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("ba");
+        bool has_background = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "background" && item.kind == "keyword") {
+                has_background = True;
+            }
+        }
+        assertTrue(has_background,
+            "'background' keyword should be present without thread restrictions");
+
+        items = engine.complete("thread_");
+        bool has_thread_exit = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "thread_exit" && item.kind == "keyword") {
+                has_thread_exit = True;
+            }
+        }
+        assertTrue(has_thread_exit,
+            "'thread_exit' keyword should be present without thread restrictions");
     }
 }
