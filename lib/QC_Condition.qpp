@@ -37,7 +37,6 @@
 
 #include <cerrno>
 
-//! @cond INTERNAL
 static int condition_wait_impl(Condition* c, AbstractSmartLock* lock, int64 timeout_ms, ExceptionSink* xsink) {
     // Check for sandbox interrupt - use polling if sandbox manager exists
     QoreSandboxManagerHelper smh;
@@ -95,8 +94,6 @@ static int condition_wait_impl(Condition* c, AbstractSmartLock* lock, int64 time
     }
     return rc;
 }
-//! @endcond
-
 //! The Condition class can be used For blocking a thread until a condition becomes @ref True
 /** Condition objects, when used along with an AbstractSmartLock object (such as RWLock and Mutex objects), allow
     %Qore threads to sleep until a certain condition becomes @ref True.
