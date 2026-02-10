@@ -77,8 +77,11 @@ ThreadSafeLocalVarRuntimeEnvironment::~ThreadSafeLocalVarRuntimeEnvironment() {
 ClosureVarValue* ThreadSafeLocalVarRuntimeEnvironment::find(const LocalVar* id) const {
     //printd(5, "ThreadSafeLocalVarRuntimeEnvironment::find(%p '%s') this: %p\n", id, id->getName(), this);
     cvar_map_t::const_iterator i = cmap.find(id);
-    assert(i != cmap.end());
-    return i->second;
+    // Return nullptr if not found — the caller (LocalVar::eval(), isRef(), getLValue(), remove())
+    // falls back to thread_find_closure_var(name) which searches the cvstack by name.
+    // This happens when a function with closure_use locals is called from within a
+    // different closure's execution context (closure_rt_env points to the calling closure).
+    return i != cmap.end() ? i->second : nullptr;
 }
 
 bool ThreadSafeLocalVarRuntimeEnvironment::hasVar(ClosureVarValue* cvv) const {

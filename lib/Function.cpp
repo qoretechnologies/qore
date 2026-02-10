@@ -265,6 +265,12 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
+#ifdef QORE_MANAGE_STACK
+    if (check_stack(xsink)) {
+        return;
+    }
+#endif
+
     // set the program context if necessary
     if (pgm_ctx) {
         set(xsink, pgm_ctx, true);
@@ -2959,7 +2965,6 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
 
     assert(!self || (ceh ? ceh->getClass() : qc));
 
-    // UserVariantExecHelper sets the Program thread context
     UserVariantExecHelper uveh(this, ceh, xsink);
     if (!uveh) {
         return QoreValue();

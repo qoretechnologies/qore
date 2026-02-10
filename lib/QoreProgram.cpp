@@ -563,6 +563,9 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, int64 n_parse_opti
     }
     QoreNS = RootNS->rootGetQoreNamespace();
 
+    // inherit parent's execution mode so sub-programs respect --exec-mode=ast
+    exec_mode = p_pgm->priv->exec_mode;
+
     // copy parent feature list
     for (auto& i : p_pgm->priv->featureList) {
         assert(featureList.find(i) == featureList.end());

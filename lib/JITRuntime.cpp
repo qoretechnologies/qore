@@ -1035,6 +1035,9 @@ extern "C" uint64_t qore_rt_get_object_class(uint64_t obj_bits) {
 
 extern "C" uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
@@ -1843,6 +1846,9 @@ extern "C" uint64_t qore_rt_call_function_direct(const QoreFunction* func,
 extern "C" uint64_t qore_rt_call_fast(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
     assert(variant);
 
     const UserVariantBase* uvb = variant->getUserVariantBase();
@@ -2075,6 +2081,9 @@ extern "C" uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_
 
 extern "C" uint64_t qore_rt_call_method_fast(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
     assert(method);
     assert(variant);
 
@@ -2198,6 +2207,9 @@ extern "C" uint64_t qore_rt_call_method_fast(const QoreMethod* method,
 
 extern "C" uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
         xsink->raiseException("JIT-ERROR", "call reference value is not a node");
@@ -2400,6 +2412,9 @@ extern "C" uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot
 
 extern "C" uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
 
     // Use pre-resolved call target (populated during buildAOTContext) to avoid per-call dynamic_cast

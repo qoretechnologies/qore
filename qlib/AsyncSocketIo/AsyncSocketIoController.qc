@@ -1025,12 +1025,17 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                 # Inner loop: process all commands in the queue
                 while (True) {
                     hash<auto> h;
+                    bool no_cmds = False;
                     {
                         AutoLock al(m);
                         if (!cmdq.size()) {
-                            break;
+                            no_cmds = True;
+                        } else {
+                            h = shift cmdq;
                         }
-                        h = shift cmdq;
+                    }
+                    if (no_cmds) {
+                        break;
                     }
                 @debug(++cmd_count);
                 @debug(log(LoggerLevel::INFO, "I/O thread got command: %y", h));
@@ -1056,8 +1061,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         }
                         # IMPORTANT: doCancelIntern() must complete BEFORE broadcasting to waiters
                         # This ensures socket references are released before callers return
-                        map doCancelIntern($1), cancel_list;
-                        map $1.broadcast(), cond_list;
+                        foreach hash<PollInfo> item in (cancel_list) {
+                            doCancelIntern(item);
+                        }
+                        foreach Condition item in (cond_list) {
+                            item.broadcast();
+                        }
                         return True;
                     }
 
@@ -1119,14 +1128,18 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         }
                         # IMPORTANT: doCancelIntern() must complete BEFORE broadcasting to waiters
                         # This ensures socket references are released before callers return
-                        map doCancelIntern($1), cancel_list;
-                        map $1.broadcast(), cond_list;
+                        foreach hash<PollInfo> pi in (cancel_list) {
+                            doCancelIntern(pi);
+                        }
+                        foreach Condition c in (cond_list) {
+                            c.broadcast();
+                        }
                         # Notify the caller that all cancellations are complete
+                        @debug(log(LoggerLevel::INFO, "AsyncSocketIoController canceled %d operations for owner %s",
+                            cancel_list.size(), owner));
                         if (done_cond) {
                             done_cond.broadcast();
                         }
-                        @debug(log(LoggerLevel::INFO, "AsyncSocketIoController canceled %d operations for owner %s",
-                            cancel_list.size(), owner));
                         break;
                     }
 
@@ -1149,26 +1162,25 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
                 # Check if new commands arrived during the drain (fixes race condition)
                 # If cmdq has commands, loop back to process them before returning
+                bool queue_empty;
                 {
                     AutoLock al(m);
-                    if (!cmdq.size()) {
-                        # Both cmdq and notifier are empty - safe to exit
-                        @debug {
-                            if (getenv("QORE_ASYNCIO_PIPE_DEBUG")) {
-                                log(LoggerLevel::INFO, "processCommands: done cmd_count=%d cmdq=%d",
-                                    cmd_count, cmdq.size());
-                            }
-                        }
-                        break;  # Exit outer loop
-                    }
-                    # New commands arrived - continue outer loop to process them
+                    queue_empty = !cmdq.size();
                     @debug {
                         if (getenv("QORE_ASYNCIO_PIPE_DEBUG")) {
-                            log(LoggerLevel::INFO,
-                                "processCommands: new commands arrived during drain, looping back cmdq=%d",
-                                cmdq.size());
+                            if (queue_empty) {
+                                log(LoggerLevel::INFO, "processCommands: done cmd_count=%d cmdq=%d",
+                                    cmd_count, cmdq.size());
+                            } else {
+                                log(LoggerLevel::INFO,
+                                    "processCommands: new commands arrived during drain, looping back cmdq=%d",
+                                    cmdq.size());
+                            }
                         }
                     }
+                }
+                if (queue_empty) {
+                    break;  # Exit outer loop
                 }
             }  # end of outer loop
         } catch(hash<ExceptionInfo> ex) {

@@ -1931,7 +1931,25 @@ void QoreModuleManager::delUser() {
     //md_map.show("md_map");
     //rmd_map.show("rmd_map");
 
-    // first delete user modules in dependency order
+    // issue #5164: Phase 1 - clear namespace data on all user module programs before destroying any modules
+    // This ensures static variable destructors run while all module programs are still alive, preventing
+    // use-after-free when a shared class's static vars are destroyed by the last module to clear them
+    // (which may not be the module that owns the class program)
+    {
+        ExceptionSink xsink;
+        for (auto& name : umset) {
+            auto i = map.find(name.c_str());
+            assert(i != map.end());
+            QoreAbstractModule* m = i->second;
+            assert(m->isUser());
+            QoreUserModule* um = static_cast<QoreUserModule*>(m);
+            QoreProgram* pgm = um->getProgram();
+            pgm->waitForTermination();
+            qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
+        }
+    }
+
+    // Phase 2 - delete user modules in dependency order
     while (!umset.empty()) {
         strset_t::iterator ui = umset.begin();
         module_map_t::iterator i = map.find((*ui).c_str());

@@ -803,7 +803,13 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
 
             if (need_lower) {
                 std::call_once(toplevel_ir_once, [this, pgm]() {
-                    QoreIRFunction* func = new QoreIRFunction("_toplevel");
+                    // Make the top-level function name unique per TopLevelStatementBlock
+                    // to avoid name collisions in the JIT's compiled_functions map.
+                    // Different child Programs each have their own TopLevelStatementBlock
+                    // with different LocalVar* pointers baked into JIT code.
+                    std::string unique_name = std::string("_toplevel@")
+                        + std::to_string((uintptr_t)this);
+                    QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
 
                     // Collect ALL body locals from the statement tree (top-level + nested blocks
                     // from fully-lowered statements like if/for/while/try/switch).  These are
