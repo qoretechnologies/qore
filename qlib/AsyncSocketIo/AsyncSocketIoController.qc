@@ -202,6 +202,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         };
     }
 
+    #! Returns the number of operations in the cache (useful for testing cleanup)
+    int getCacheSize() {
+        AutoLock al(m);
+        return cache.size();
+    }
+
     #! Set autostop flag
     setAutostop(bool autostop = True) {
         self.autostop = autostop;
@@ -1042,7 +1048,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         break;
                     }
                 @debug(++cmd_count);
-                @debug(log(LoggerLevel::INFO, "I/O thread got command: %y", h));
                 list<auto> args = h.args ?? ();
                 switch (h.cmd) {
                     case IoCommand::Quit: {

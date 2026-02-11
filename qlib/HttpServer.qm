@@ -676,6 +676,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         return globalAsyncCtrl;
     }
 
+    #! Returns the HTTP async socket I/O controller (useful for testing cache cleanup)
+    *HttpServerAsyncIo::HttpAsyncSocketIoController getHttpAsyncIo() {
+        return asyncIo;
+    }
+
     #! Returns the owner ID for this server (used to tag async I/O operations)
     string getOwnerId() {
         return self.uniqueHash();

@@ -335,6 +335,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode multiple WebSocket shutdown", \asyncModeMultipleWebSocketShutdownTest());
         addTestCase("async mode mixed streaming shutdown", \asyncModeMixedStreamingShutdownTest());
         addTestCase("async mode accept replenishment", \asyncModeAcceptReplenishmentTest());
+        addTestCase("async mode cache cleanup", \asyncModeCacheCleanupTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -2614,6 +2615,143 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         done.waitForZero(10s);
         assertEq(0, done.getCount(), "all concurrent requests should complete");
         assertTrue(all_success, "all requests should succeed after listener add/remove cycles");
+    }
+
+    /** This test verifies that the AsyncSocketIoController cache is properly cleaned up
+        when connections close. This is the fix for the CLOSE-WAIT socket leak bug where
+        poll operations stayed in the cache even after connections were closed, preventing
+        Socket objects from being destroyed and their destructors (which call close()) from
+        running.
+    */
+    asyncModeCacheCleanupTest() {
+        Logger logger("async-cache-cleanup-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        # Set up a simple handler
+        server.setDefaultHandler("test-handler", new ReqHandler());
+
+        # Add listener
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Get baseline cache size (should just be accept operations)
+        int baseline_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+        if (m_options.verbose > 1) {
+            printf("Baseline cache size: %d\n", baseline_cache_size);
+        }
+
+        # Test 1: HTTP/1.1 connections - create many connections, close them, verify cleanup
+        {
+            int num_connections = 20;
+            list<HTTPClient> clients = ();
+
+            # Create many connections
+            for (int i = 0; i < num_connections; ++i) {
+                HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 2s});
+                client.connect();
+                assertEq("GET, test, /test", client.get("/test"));
+                clients += client;
+            }
+
+            # Verify cache has grown (connections are active)
+            int active_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+            if (m_options.verbose > 1) {
+                printf("Active cache size with %d connections: %d\n", num_connections, active_cache_size);
+            }
+            assertTrue(active_cache_size > baseline_cache_size,
+                "cache should grow when connections are active");
+
+            # Close all connections - this should trigger cache cleanup
+            map $1.disconnect(), clients;
+            delete clients;
+
+            # Give the async I/O system time to process disconnects
+            usleep(500ms);
+
+            # CRITICAL TEST: Verify cache is back to baseline (all connection entries cleaned up)
+            int final_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+            if (m_options.verbose > 1) {
+                printf("Final cache size after disconnect: %d\n", final_cache_size);
+            }
+            assertEq(baseline_cache_size, final_cache_size,
+                "cache should return to baseline after all connections close");
+
+            # Verify we can still make new connections (cache is clean)
+            HTTPClient verify_client({"url": "http://localhost:" + test_port, "timeout": 2s});
+            verify_client.connect();
+            assertEq("GET, test2, /test2", verify_client.get("/test2"));
+            verify_client.disconnect();
+        }
+
+        # Test 2: HTTP/2 connections - same test with HTTP/2 over SSL
+        {
+            # Create HTTPS listener for HTTP/2
+            hash<auto> ssl_info = server.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            int ssl_port = ssl_info.port;
+
+            # Get baseline after adding SSL listener (includes accept ops for both listeners)
+            int h2_baseline = server.getHttpAsyncIo().getTotalCacheSize();
+            if (m_options.verbose > 1) {
+                printf("HTTP/2 baseline cache size: %d\n", h2_baseline);
+            }
+
+            int num_connections = 20;
+            list<HTTPClient> clients = ();
+
+            # Create many HTTP/2 connections (HTTP/2 is negotiated via ALPN over SSL)
+            for (int i = 0; i < num_connections; ++i) {
+                HTTPClient client({"url": "https://localhost:" + ssl_port, "timeout": 2s,
+                    "ssl_verify_cert": False, "http2": True});
+                client.connect();
+                assertEq("GET, test, /test", client.get("/test"));
+                clients += client;
+            }
+
+            # Verify cache has grown (HTTP/2 connections are active)
+            int h2_active = server.getHttpAsyncIo().getTotalCacheSize();
+            if (m_options.verbose > 1) {
+                printf("HTTP/2 active cache size with %d connections: %d\n", num_connections, h2_active);
+            }
+            assertTrue(h2_active > h2_baseline,
+                "cache should grow when HTTP/2 connections are active");
+
+            # Close all connections - this should trigger cache cleanup for HTTP/2
+            map $1.disconnect(), clients;
+            delete clients;
+
+            # Give the async I/O system time to process disconnects
+            usleep(500ms);
+
+            # CRITICAL TEST: Verify cache is back to baseline (all HTTP/2 connection entries cleaned up)
+            int h2_final = server.getHttpAsyncIo().getTotalCacheSize();
+            if (m_options.verbose > 1) {
+                printf("HTTP/2 final cache size after disconnect: %d\n", h2_final);
+            }
+            assertEq(h2_baseline, h2_final,
+                "cache should return to baseline after all HTTP/2 connections close");
+
+            # Verify we can still make new HTTP/2 connections (cache is clean)
+            HTTPClient verify_client({"url": "https://localhost:" + ssl_port, "timeout": 2s,
+                "ssl_verify_cert": False, "http2": True});
+            verify_client.connect();
+            assertEq("GET, test2, /test2", verify_client.get("/test2"));
+            verify_client.disconnect();
+
+            server.stopListenerID(ssl_info.id);
+        }
     }
 }
 
