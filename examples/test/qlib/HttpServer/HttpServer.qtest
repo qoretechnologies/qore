@@ -292,6 +292,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("recv_callback gzip decode", \recvCallbackGzipDecode());
         addTestCase("chunked gzip decode", \chunkedGzipDecode());
         addTestCase("issue 2805", \issue2805());
+        addTestCase("HTTP/2 preface rejection", \http2PrefaceRejectionTest());
         addTestCase("Test basics", \basicTest());
         addTestCase("Test routing", \routingTest());
         addTestCase("Test status codes", \testStatusCodes());
@@ -622,6 +623,106 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertThrows("HTTP-CLIENT-RECEIVE-ERROR", \mClient.send(), ("", "TEST"));
         mServer.addHttpMethod("TEST");
         assertEq("TEST, , /", mClient.send("", "TEST").body);
+    }
+
+    http2PrefaceRejectionTest() {
+        # Test 1: HTTP/2 cleartext connection preface should be rejected with 501
+        # RFC 7540 Section 3.5: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+        {
+            Socket sock();
+            sock.connect("localhost:" + port);
+            on_exit sock.close();
+
+            # Send HTTP/2 connection preface
+            sock.send("PRI * HTTP/2.0\r\nHost: localhost\r\n\r\n");
+
+            # Read the HTTP response
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(501, resp.status_code, "HTTP/2 cleartext preface should return 501");
+            assertTrue(resp.body =~ /cleartext.*not supported/i || resp.body =~ /h2c.*not supported/i,
+                "error message should mention cleartext/h2c not supported");
+
+            # Verify connection is closed
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "connection should be closed after PRI rejection");
+        }
+
+        # Test 2: PRI method with non-HTTP/2 path should also be rejected
+        {
+            Socket sock();
+            sock.connect("localhost:" + port);
+            on_exit sock.close();
+
+            # Send PRI with a different path
+            sock.send("PRI /some/path HTTP/1.1\r\nHost: localhost\r\n\r\n");
+
+            # Read the HTTP response
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(501, resp.status_code, "PRI method with non-HTTP/2 path should return 501");
+            assertTrue(resp.body =~ /unknown.*unsupported.*method/i,
+                "error message should mention unknown/unsupported method");
+
+            # Verify connection is closed
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "connection should be closed after PRI rejection");
+        }
+
+        # Test 3: Also test with async mode server
+        {
+            Socket sock();
+            sock.connect("localhost:" + asyncPort);
+            on_exit sock.close();
+
+            # Send HTTP/2 connection preface to async server
+            sock.send("PRI * HTTP/2.0\r\nHost: localhost\r\n\r\n");
+
+            # Read the HTTP response
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(501, resp.status_code, "HTTP/2 cleartext preface should return 501 (async mode)");
+            assertTrue(resp.body =~ /cleartext.*h2c.*not supported/i,
+                "error message should mention h2c not supported (async mode)");
+
+            # Verify connection is closed
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "connection should be closed after PRI rejection (async mode)");
+        }
+
+        # Test 4: Verify normal requests still work after rejecting PRI
+        assertEq("GET, normalrequest, /normalrequest", mClient.get("/normalrequest"),
+            "normal requests should still work after PRI rejection");
     }
 
     secondWildcardListener() {
