@@ -202,6 +202,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         };
     }
 
+    #! Returns the number of operations in the cache (useful for testing cleanup)
+    int getCacheSize() {
+        AutoLock al(m);
+        return cache.size();
+    }
+
     #! Set autostop flag
     setAutostop(bool autostop = True) {
         self.autostop = autostop;

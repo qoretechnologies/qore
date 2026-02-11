@@ -474,6 +474,18 @@ public class HttpAsyncSocketIoController {
         };
     }
 
+    #! Returns the total number of operations in all I/O controller caches (useful for testing cleanup)
+    /** This method returns the sum of cache sizes across all I/O threads. A non-zero value
+        after connections are closed indicates a cache leak (poll operations not properly cancelled).
+    */
+    int getTotalCacheSize() {
+        int total = 0;
+        foreach AsyncSocketIoController c in (controllers) {
+            total += c.getCacheSize();
+        }
+        return total;
+    }
+
     #! Submits an accept operation to the controller
     private submitAcceptOp(Socket listener, HttpAsyncTarget target, bool ssl,
             auto cert, auto key, string http_version, string owner) {
