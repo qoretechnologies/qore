@@ -1573,10 +1573,9 @@ public class HttpAsyncSocketIoController {
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error handling HTTP/2 request stream=%d: %s: %s",
                         stream_id, ex.err, ex.desc);
-                    try {
-                        cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                    } catch () {}
-                    # Send 500 error response for this stream — do NOT close the connection
+                    # NOTE: do NOT call cinfo.target.onError() here — that closes the shared
+                    # connection socket which breaks all other streams.  In HTTP/2 multiplexed
+                    # mode, a handler error affects only this stream; send a 500 response.
                     try {
                         cinfo.sock.submitHttp2Response(stream_id, 500,
                             {"content-type": "text/plain"},
@@ -1669,10 +1668,9 @@ public class HttpAsyncSocketIoController {
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error handling HTTP/2 WebSocket CONNECT stream=%d: "
                         "%s: %s", stream_id, ex.err, ex.desc);
-                    try {
-                        cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                    } catch () {}
-                    # Send 500 error response for this stream — do NOT close the connection
+                    # NOTE: do NOT call cinfo.target.onError() here — that closes the shared
+                    # connection socket which breaks all other streams.  In HTTP/2 multiplexed
+                    # mode, a handler error affects only this stream; send a 500 response.
                     try {
                         cinfo.sock.submitHttp2Response(stream_id, 500,
                             {"content-type": "text/plain"},
