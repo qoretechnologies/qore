@@ -82,8 +82,8 @@ struct Http2StreamInfo {
     std::string connect_protocol;  //!< Value of :protocol pseudo-header (e.g., "websocket")
     bool is_connect = false;       //!< True if this is a CONNECT request
 
-    // Headers
-    std::map<std::string, std::string> headers;
+    // Headers (values stored as vectors to support duplicate header names per RFC 7540 Section 8.1.2.5)
+    std::map<std::string, std::vector<std::string>> headers;
 
     // Body data
     std::vector<char> body;
@@ -178,6 +178,21 @@ public:
         const std::map<std::string, std::string>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink);
 
+    //! Submit a request with support for duplicate header names (client-side)
+    /** Uses a vector of pairs to allow multiple entries with the same header name,
+        which is required for HTTP/2 cookie headers per RFC 7540 Section 8.1.2.5.
+        @param method HTTP method
+        @param path Request path
+        @param headers Request headers as name/value pairs (may contain duplicate names)
+        @param body Request body (can be nullptr)
+        @param body_len Length of request body
+        @param xsink Exception sink for error reporting
+        @return stream ID on success, -1 on error
+    */
+    DLLLOCAL int32_t submitRequest(const char* method, const char* path,
+        const std::vector<std::pair<std::string, std::string>>& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink);
+
     //! Submit a response (server-side)
     /** @param stream_id Stream ID for the response
         @param status_code HTTP status code
@@ -189,6 +204,21 @@ public:
     */
     DLLLOCAL int submitResponse(int32_t stream_id, int status_code,
         const std::map<std::string, std::string>& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink);
+
+    //! Submit a response with support for duplicate header names (server-side)
+    /** Uses a vector of pairs to allow multiple entries with the same header name,
+        which is needed for headers like Set-Cookie that must not be combined.
+        @param stream_id Stream ID for the response
+        @param status_code HTTP status code
+        @param headers Response headers as name/value pairs (may contain duplicate names)
+        @param body Response body (can be nullptr)
+        @param body_len Length of response body
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitResponse(int32_t stream_id, int status_code,
+        const std::vector<std::pair<std::string, std::string>>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink);
 
     //! Submit a streaming response (server-side, headers only, deferred body)
@@ -524,5 +554,19 @@ private:
 
 //! Shared pointer type for Http2Session with thread-safe atomic reference counting
 using Http2SessionPtr = std::shared_ptr<Http2Session>;
+
+//! Converts HTTP/2 stream headers to a Qore hash
+/** Handles duplicate header names per RFC 7540 Section 8.1.2.5:
+    - cookie: concatenated with "; " into a single string
+    - Single-value headers: stored as QoreStringNode
+    - Multi-value headers: stored as QoreListNode (matches HTTP/1.1 behavior)
+
+    @param h2_headers HTTP/2 headers map (name -> vector of values)
+    @param lowercase if true, convert header names to lowercase
+    @return new QoreHashNode with the converted headers
+*/
+DLLLOCAL QoreHashNode* h2HeadersToQoreHash(
+    const std::map<std::string, std::vector<std::string>>& h2_headers,
+    bool lowercase = false);
 
 #endif // _QORE_HTTP2_SESSION_H
