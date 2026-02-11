@@ -5608,7 +5608,7 @@ QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
 #include "qore/intern/Http2Session.h"
 
 SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
-        : SocketPollSocketOperationBase(sock), out(xsink) {
+        : SocketPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
 
     // Check if socket is open and valid
@@ -5695,6 +5695,8 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                         // Socket buffer full; poll and retry before completing the operation
                         return getSocketPollInfoHash(xsink, srv);
                     }
+                    // Dequeue the completed stream now so getOutput() is idempotent
+                    cached_stream = h2_session->takeCompletedStream();
                     h2_state = H2S_REQUEST_READY;
                     if (set_non_block) {
                         set_non_block = false;
@@ -5752,6 +5754,8 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                         // Socket buffer full; poll and retry before completing the operation
                         return getSocketPollInfoHash(xsink, srv);
                     }
+                    // Dequeue the completed stream now so getOutput() is idempotent
+                    cached_stream = h2_session->takeCompletedStream();
                     h2_state = H2S_REQUEST_READY;
                     // Goal reached - clear non-block flag so subsequent operations can proceed
                     if (set_non_block) {
@@ -5792,8 +5796,9 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
             }
 
             case H2S_REQUEST_READY:
-                // If there are more completed streams, stay in REQUEST_READY
+                // If there are more completed streams, dequeue the next one
                 if (h2_session->hasCompletedStreams()) {
+                    cached_stream = h2_session->takeCompletedStream();
                     if (set_non_block) {
                         set_non_block = false;
                         sock->priv->clearNonBlock();
@@ -5802,6 +5807,7 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 }
                 // All completed streams consumed - transition back to reading
                 // so the same operation can be reused for multiplexing
+                cached_stream.reset();
                 h2_state = H2S_READING;
                 if (!set_non_block) {
                     if (sock->priv->setNonBlock(xsink)) {
@@ -5819,35 +5825,33 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
 }
 
 QoreValue SocketHttp2ServerPollOperation::getOutput() const {
-    if (h2_state != H2S_REQUEST_READY || !h2_session) {
+    if (h2_state != H2S_REQUEST_READY) {
         return QoreValue();
     }
     if (peer_closed) {
         return QoreValue();
     }
-
-    // Get the completed stream
-    auto stream_info = h2_session->takeCompletedStream();
-    if (!stream_info) {
+    // cached_stream is dequeued in continuePoll() when transitioning to H2S_REQUEST_READY
+    if (!cached_stream) {
         return QoreValue();
     }
     // Skip streams reset at protocol level (e.g., CONNECT without ENABLE_CONNECT_PROTOCOL)
     // The RST_STREAM was already sent by nghttp2 via sendPendingData()
-    if (stream_info->reset) {
+    if (cached_stream->reset) {
         return QoreValue();
     }
 
-    const_cast<SocketHttp2ServerPollOperation*>(this)->stream_id = stream_info->stream_id;
+    const_cast<SocketHttp2ServerPollOperation*>(this)->stream_id = cached_stream->stream_id;
 
-    // Build output hash
-    out = new QoreHashNode(autoTypeInfo);
-    out->setKeyValue("method", new QoreStringNode(stream_info->method), nullptr);
-    out->setKeyValue("path", new QoreStringNode(stream_info->path), nullptr);
-    out->setKeyValue("stream_id", stream_info->stream_id, nullptr);
+    // Build output hash from cached stream info (idempotent - safe to call multiple times)
+    QoreHashNode* result = new QoreHashNode(autoTypeInfo);
+    result->setKeyValue("method", new QoreStringNode(cached_stream->method), nullptr);
+    result->setKeyValue("path", new QoreStringNode(cached_stream->path), nullptr);
+    result->setKeyValue("stream_id", cached_stream->stream_id, nullptr);
 
     // Build headers hash
     QoreHashNode* headers = new QoreHashNode(autoTypeInfo);
-    for (const auto& h : stream_info->headers) {
+    for (const auto& h : cached_stream->headers) {
         std::string lowered_name;
         lowered_name.reserve(h.first.size());
         for (unsigned char ch : h.first) {
@@ -5855,28 +5859,28 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
         }
         headers->setKeyValue(lowered_name.c_str(), new QoreStringNode(h.second), nullptr);
     }
-    out->setKeyValue("headers", headers, nullptr);
+    result->setKeyValue("headers", headers, nullptr);
 
-    // Body as binary - must copy the data since stream_info->body will be destroyed
-    if (!stream_info->body.empty()) {
+    // Body as binary
+    if (!cached_stream->body.empty()) {
         BinaryNode* body = new BinaryNode();
-        body->append(stream_info->body.data(), stream_info->body.size());
-        out->setKeyValue("body", body, nullptr);
+        body->append(cached_stream->body.data(), cached_stream->body.size());
+        result->setKeyValue("body", body, nullptr);
     }
 
     // Add pseudo-headers if present
-    if (!stream_info->authority.empty()) {
-        out->setKeyValue("authority", new QoreStringNode(stream_info->authority), nullptr);
+    if (!cached_stream->authority.empty()) {
+        result->setKeyValue("authority", new QoreStringNode(cached_stream->authority), nullptr);
     }
-    if (!stream_info->scheme.empty()) {
-        out->setKeyValue("scheme", new QoreStringNode(stream_info->scheme), nullptr);
+    if (!cached_stream->scheme.empty()) {
+        result->setKeyValue("scheme", new QoreStringNode(cached_stream->scheme), nullptr);
     }
     // RFC 8441: Add :protocol pseudo-header for extended CONNECT
-    if (!stream_info->connect_protocol.empty()) {
-        headers->setKeyValue(":protocol", new QoreStringNode(stream_info->connect_protocol), nullptr);
+    if (!cached_stream->connect_protocol.empty()) {
+        headers->setKeyValue(":protocol", new QoreStringNode(cached_stream->connect_protocol), nullptr);
     }
 
-    return out.release();
+    return result;
 }
 
 Http2SessionPtr SocketHttp2ServerPollOperation::takeSession() {
