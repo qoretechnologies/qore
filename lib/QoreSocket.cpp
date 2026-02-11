@@ -5849,16 +5849,8 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     result->setKeyValue("path", new QoreStringNode(cached_stream->path), nullptr);
     result->setKeyValue("stream_id", cached_stream->stream_id, nullptr);
 
-    // Build headers hash
-    QoreHashNode* headers = new QoreHashNode(autoTypeInfo);
-    for (const auto& h : cached_stream->headers) {
-        std::string lowered_name;
-        lowered_name.reserve(h.first.size());
-        for (unsigned char ch : h.first) {
-            lowered_name.push_back(std::tolower(ch));
-        }
-        headers->setKeyValue(lowered_name.c_str(), new QoreStringNode(h.second), nullptr);
-    }
+    // Build headers hash (lowercase names, handle duplicate headers per RFC 7540)
+    QoreHashNode* headers = h2HeadersToQoreHash(cached_stream->headers, true);
     result->setKeyValue("headers", headers, nullptr);
 
     // Body as binary
@@ -5913,15 +5905,24 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
     }
     set_non_block = true;
 
-    // Build headers map
-    std::map<std::string, std::string> hdr_map;
+    // Build headers as vector of pairs to support duplicate header names (e.g., set-cookie)
+    std::vector<std::pair<std::string, std::string>> hdr_pairs;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+                hdr_pairs.emplace_back(key, val.get<const QoreStringNode>()->c_str());
+            } else if (val.getType() == NT_LIST) {
+                // Emit separate header entries for each list value
+                const QoreListNode* l = val.get<const QoreListNode>();
+                for (size_t i = 0; i < l->size(); ++i) {
+                    QoreValue lv = l->retrieveEntry(i);
+                    if (lv.getType() == NT_STRING) {
+                        hdr_pairs.emplace_back(key, lv.get<const QoreStringNode>()->c_str());
+                    }
+                }
             }
         }
     }
@@ -5929,6 +5930,11 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
     int rv;
     if (is_connect) {
         // RFC 8441: CONNECT response (WebSocket over HTTP/2) - no body, no END_STREAM
+        // submitConnectResponse still uses map (CONNECT doesn't need duplicate headers)
+        std::map<std::string, std::string> hdr_map;
+        for (const auto& p : hdr_pairs) {
+            hdr_map[p.first] = p.second;
+        }
         if (getenv("QORE_HTTP2_DEBUG")) {
             fprintf(stderr, "HTTP2 DEBUG: send CONNECT response stream=%d status=%d\n",
                 stream_id, status_code);
@@ -5941,7 +5947,7 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
         size_t body_len = body ? body->size() : 0;
         printd(5, "SocketHttp2SendResponsePollOperation() submitting response stream_id=%d status=%d body_len=%zu\n",
             stream_id, status_code, body_len);
-        rv = session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
+        rv = session->submitResponse(stream_id, status_code, hdr_pairs, body_ptr, body_len, xsink);
     }
     if (rv != 0 || *xsink) {
         sock->priv->clearNonBlock();
@@ -6442,13 +6448,9 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
     response->setKeyValue("stream_id", stream_id, xsink);
     response->setKeyValue("status_code", stream->status_code, xsink);
 
-    // Convert headers map to Qore hash
+    // Convert headers map to Qore hash (handle duplicate headers per RFC 7540)
     if (!stream->headers.empty()) {
-        ReferenceHolder<QoreHashNode> headers(new QoreHashNode(autoTypeInfo), xsink);
-        for (const auto& h : stream->headers) {
-            headers->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), xsink);
-        }
-        response->setKeyValue("headers", headers.release(), xsink);
+        response->setKeyValue("headers", h2HeadersToQoreHash(stream->headers), xsink);
     }
 
     // Convert body vector to Qore binary or string based on content-type
@@ -6456,9 +6458,9 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
         // Check if content-type indicates text-based content
         bool is_text = false;
         auto ct_it = stream->headers.find("content-type");
-        if (ct_it != stream->headers.end()) {
+        if (ct_it != stream->headers.end() && !ct_it->second.empty()) {
             // Extract media type (before any parameters like charset)
-            std::string ct = ct_it->second;
+            std::string ct = ct_it->second.back();
             size_t semicolon = ct.find(';');
             if (semicolon != std::string::npos) {
                 ct = ct.substr(0, semicolon);

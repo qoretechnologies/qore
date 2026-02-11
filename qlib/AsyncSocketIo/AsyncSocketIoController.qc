@@ -1239,7 +1239,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         };
         # Always signal the I/O thread to ensure prompt wakeup
         # The cost of extra notifier signals is negligible compared to potential lost wakeups
-        @debug(log(LoggerLevel::INFO, "enqueueCmdLocked(): enqueued command %y args %y (signal)", cmd, args));
         return True;
     }
 
@@ -1260,10 +1259,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             AutoLock al(m);
             signal = sendCmdLocked(cmd, argv);
         }
-        @debug(log(LoggerLevel::INFO, "wrote command %y args %y to the command queue", cmd, argv));
         if (signal) {
             notifier.notify();
-            @debug(log(LoggerLevel::INFO, "notified I/O thread to wake up"));
         }
     }
 

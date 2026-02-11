@@ -92,7 +92,7 @@ public:
     */
     DLLLOCAL Http2ClientPollState(ExceptionSink* xsink, qore_socket_private* sock,
             const char* method, const char* path,
-            const std::map<std::string, std::string>& headers,
+            const std::vector<std::pair<std::string, std::string>>& headers,
             const void* body, size_t body_len, const char* scheme = "https")
             : sock(sock) {
         // Create HTTP/2 session
@@ -145,11 +145,7 @@ public:
         if (!stream || stream->headers.empty()) {
             return nullptr;
         }
-        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
-        for (const auto& h : stream->headers) {
-            rv->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), nullptr);
-        }
-        return rv.release();
+        return h2HeadersToQoreHash(stream->headers);
     }
 
     //! Returns the HTTP status code
@@ -3294,8 +3290,9 @@ int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
             return 0;
         }
 
-        // Convert QoreHashNode headers to std::map<std::string, std::string> for HTTP/2
-        std::map<std::string, std::string> h2_headers;
+        // Convert QoreHashNode headers to vector of pairs for HTTP/2
+        // Using vector<pair> allows duplicate header names (e.g., multiple cookie entries)
+        std::vector<std::pair<std::string, std::string>> h2_headers;
 
         // Set host field automatically if not overridden
         if (!host_override && request_headers) {
@@ -3306,48 +3303,22 @@ int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
             }
         }
 
-        // Convert headers from QoreHashNode to std::map
-        // Note: HTTP/2 header names are converted to lowercase by Http2Session::submitRequest()
+        // Convert headers from QoreHashNode to vector of pairs
+        // HTTP/2 supports multiple header fields with the same name as separate entries
         if (request_headers) {
             ConstHashIterator hi(*request_headers);
             while (hi.next()) {
                 const char* key = hi.getKey();
                 QoreValue val = hi.get();
                 if (val.getType() == NT_STRING) {
-                    h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+                    h2_headers.emplace_back(key, val.get<const QoreStringNode>()->c_str());
                 } else if (val.getType() == NT_LIST) {
-                    // For multi-value headers, HTTP/2 allows multiple header fields with same name
-                    // rather than comma-separated values. However, Http2Session::submitRequest()
-                    // expects a single value per header name in the map. Most headers can be
-                    // comma-joined, but Set-Cookie is an exception per RFC 7230.
-                    // For simplicity, we take only the first value for headers that shouldn't
-                    // be combined, and comma-join the rest.
+                    // Emit separate header entries for each list value
                     const QoreListNode* l = val.get<const QoreListNode>();
-                    if (l->size() > 0) {
-                        // Check if this is a header that shouldn't be comma-combined
-                        // (case-insensitive comparison)
-                        if (!strcasecmp(key, "set-cookie") || !strcasecmp(key, "www-authenticate") ||
-                            !strcasecmp(key, "proxy-authenticate")) {
-                            // Take only the first value - HTTP/2 will need multiple frames
-                            // for multiple values, but our current API doesn't support this
-                            QoreValue lv = l->retrieveEntry(0);
-                            if (lv.getType() == NT_STRING) {
-                                h2_headers[key] = lv.get<const QoreStringNode>()->c_str();
-                            }
-                        } else {
-                            // Join with comma for other headers
-                            QoreStringNode* joined = new QoreStringNode;
-                            for (size_t i = 0; i < l->size(); ++i) {
-                                if (i > 0) {
-                                    joined->concat(", ");
-                                }
-                                QoreValue lv = l->retrieveEntry(i);
-                                if (lv.getType() == NT_STRING) {
-                                    qore_string_private::get(joined)->concat(lv.get<const QoreStringNode>());
-                                }
-                            }
-                            h2_headers[key] = joined->c_str();
-                            joined->deref();
+                    for (size_t i = 0; i < l->size(); ++i) {
+                        QoreValue lv = l->retrieveEntry(i);
+                        if (lv.getType() == NT_STRING) {
+                            h2_headers.emplace_back(key, lv.get<const QoreStringNode>()->c_str());
                         }
                     }
                 }
@@ -4162,12 +4133,8 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             rv->setKeyValue("status_code", stream->status_code, xsink);
             rv->setKeyValue("stream_id", stream_id, xsink);
 
-            // Add response headers
-            ReferenceHolder<QoreHashNode> rh(new QoreHashNode(autoTypeInfo), xsink);
-            for (const auto& h : stream->headers) {
-                rh->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), xsink);
-            }
-            rv->setKeyValue("headers", rh.release(), xsink);
+            // Add response headers (handle duplicate headers per RFC 7540)
+            rv->setKeyValue("headers", h2HeadersToQoreHash(stream->headers), xsink);
 
             // Store stream ID on both HTTPClient and socket for isDataAvailable()
             http_priv->setActiveH2StreamId(stream_id);
@@ -4849,10 +4816,14 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
     response->setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
     response->setKeyValue("http_version", new QoreStringNode("2"), xsink);
 
-    // Add response headers
-    for (const auto& h : stream->headers) {
-        // Convert header name to lowercase for consistency
-        response->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), xsink);
+    // Add response headers (handle duplicate headers per RFC 7540)
+    // Merge into the response hash directly (headers are at the top level)
+    {
+        ReferenceHolder<QoreHashNode> h2h(h2HeadersToQoreHash(stream->headers), xsink);
+        ConstHashIterator hi(*(*h2h));
+        while (hi.next()) {
+            response->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+        }
     }
 
     // Add body if present (must copy data as stream->body will be freed)

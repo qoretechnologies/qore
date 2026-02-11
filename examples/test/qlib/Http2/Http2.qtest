@@ -3329,8 +3329,12 @@ public class Http2Test inherits QUnit::Test {
             return;
         }
 
-        # Test multi-value header handling in HTTP/2 poll operations
-        # This tests the fix for Set-Cookie and similar headers
+        # Test HTTP/2 duplicate header handling per RFC 7540 Section 8.1.2.5
+        # This tests:
+        # 1. Duplicate cookie headers are concatenated with "; " (single string)
+        # 2. Duplicate set-cookie response headers are kept as a list
+        # 3. Duplicate custom headers are kept as a list
+        # 4. Single-value headers remain as plain strings (regression)
 
         Socket server_sock();
         SSLCertificate cert(CertPem);
@@ -3380,13 +3384,15 @@ public class Http2Test inherits QUnit::Test {
                             test_results.server_request_headers = request.headers;
                         }
 
-                        # Send response with multi-value headers
-                        # Note: HTTP/2 allows multiple header fields with the same name
-                        # but our Http2PollOperation might not support sending multiple Set-Cookie
+                        # Send response with duplicate headers:
+                        # - set-cookie: sent as list (multiple entries) per RFC 7540
+                        # - x-multi: sent as list (multiple entries)
+                        # - content-type: single value (regression test)
                         h2op.startSendResponse(200, {
                             "content-type": "text/plain",
-                            "x-custom": "value1",  # Simple header
-                        }, binary("Multi-value test"));
+                            "set-cookie": ("session=abc123; Path=/", "theme=dark; Path=/"),
+                            "x-multi": ("val1", "val2"),
+                        }, binary("OK"));
 
                         iterations = 0;
                         while (h2op.getState() == "sending" && iterations < 100) {
@@ -3405,7 +3411,7 @@ public class Http2Test inherits QUnit::Test {
             server_done.dec();
         }();
 
-        # Client thread - sends request with multi-value headers
+        # Client thread - sends request with duplicate cookie headers and custom headers
         Counter client_done(1);
         background sub() {
             try {
@@ -3415,10 +3421,14 @@ public class Http2Test inherits QUnit::Test {
                 client.acceptAllCertificates(True);
                 client.setHttp2Mode("required");
 
-                # Send request with a header that has multiple values
+                # Send request with:
+                # - cookie: list of values → should be sent as separate HTTP/2 header entries
+                # - x-custom: list of values → should be sent as separate entries
+                # - accept: single value → regression test
                 AbstractPollOperation spop = client.startPollSendRecv("GET", "/multi-header", NOTHING, {
                     "Accept": "text/plain",
-                    "X-Multi": "first, second",  # Comma-separated values
+                    "Cookie": ("a=1", "b=2", "c=3"),
+                    "X-Custom": ("first", "second"),
                 });
 
                 int iterations = 0;
@@ -3441,6 +3451,7 @@ public class Http2Test inherits QUnit::Test {
                     {
                         AutoLock al(result_mutex);
                         test_results.client_status = output.code;
+                        test_results.client_response_headers = output."response-headers";
                     }
                 }
             } catch (hash<ExceptionInfo> ex) {
@@ -3464,10 +3475,42 @@ public class Http2Test inherits QUnit::Test {
             assertTrue(test_results.client_goal_reached ?? False, "client should complete");
             assertEq(200, test_results.client_status ?? 0, "status should be 200");
 
-            # Verify server received the headers correctly
+            # Test 1: Duplicate cookie headers → concatenated with "; " (RFC 7540 Section 8.1.2.5)
+            if (exists test_results.server_request_headers) {
+                assertEq("a=1; b=2; c=3", test_results.server_request_headers.cookie,
+                    "cookie headers should be concatenated with '; '");
+            }
+
+            # Test 2: Single-value header remains as plain string (regression)
             if (exists test_results.server_request_headers) {
                 assertEq("text/plain", test_results.server_request_headers.accept,
-                    "Accept header should be preserved");
+                    "single-value Accept header should be a plain string");
+            }
+
+            # Test 3: Duplicate custom request headers → stored as list
+            if (exists test_results.server_request_headers) {
+                assertEq(("first", "second"), test_results.server_request_headers."x-custom",
+                    "duplicate custom headers should be a list");
+            }
+
+            # Test 4: Duplicate set-cookie response headers → stored as list
+            if (exists test_results.client_response_headers) {
+                assertEq(("session=abc123; Path=/", "theme=dark; Path=/"),
+                    test_results.client_response_headers."set-cookie",
+                    "duplicate set-cookie headers should be a list");
+            }
+
+            # Test 5: Duplicate x-multi response headers → stored as list
+            if (exists test_results.client_response_headers) {
+                assertEq(("val1", "val2"),
+                    test_results.client_response_headers."x-multi",
+                    "duplicate x-multi response headers should be a list");
+            }
+
+            # Test 6: Single-value response header → plain string
+            if (exists test_results.client_response_headers) {
+                assertEq("text/plain", test_results.client_response_headers."content-type",
+                    "single-value content-type should be a plain string");
             }
         }
     }

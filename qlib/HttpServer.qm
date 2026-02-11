@@ -2044,6 +2044,29 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             s.setHttp2ActiveStream(cx."header-info".stream_id);
             on_exit s.setHttp2ActiveStream(-1);
         }
+        # Check for HTTP/2 connection preface (RFC 7540 Section 3.5)
+        # The preface is "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+        # HTTP parser separates this into method="PRI", path="*", protocol="HTTP/2.0" or "2.0"
+        if (hdr.method == "PRI") {
+            string err;
+            # Check if this is an HTTP/2 preface: path="*" and version starts with "2" or "HTTP/2"
+            if (hdr.path == "*" && (hdr.http_version =~ /^2\./ || hdr.http_version =~ /^HTTP\/2\./)) {
+                err = "HTTP/2 cleartext (h2c) direct connection preface is not supported; "
+                    "use HTTP/2 over TLS with ALPN negotiation or HTTP/1.1 Upgrade";
+                listener.logError("HTTP/2 cleartext connection preface received from %s - not supported; "
+                    "client should use HTTPS with ALPN or HTTP/1.1 Upgrade", info.address_desc);
+            } else {
+                err = sprintf("unknown / unsupported HTTP method %n", hdr.method);
+                listener.logError("%s: received from %s via %s", err, info.address_desc,
+                    listener.getListenerSocketInfo().address_desc);
+            }
+            cx.close = True;
+            # Mark response as sent before calling sendHttpError to prevent double response
+            cx."response-sent" = True;
+            sendHttpError(listener, cx, s, 501, err, NOTHING, NOTHING, cx."response-encoding", head);
+            return;
+        }
+
         if (!http_methods{hdr.method}) {
             string err = sprintf("unknown / unsupported HTTP method %n", hdr.method);
             string str = sprintf("%s: received from %s via %s", err, info.address_desc,

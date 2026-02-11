@@ -292,6 +292,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("recv_callback gzip decode", \recvCallbackGzipDecode());
         addTestCase("chunked gzip decode", \chunkedGzipDecode());
         addTestCase("issue 2805", \issue2805());
+        addTestCase("HTTP/2 preface rejection", \http2PrefaceRejectionTest());
         addTestCase("Test basics", \basicTest());
         addTestCase("Test routing", \routingTest());
         addTestCase("Test status codes", \testStatusCodes());
@@ -333,6 +334,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode WebSocket streaming shutdown", \asyncModeWebSocketShutdownTest());
         addTestCase("async mode multiple WebSocket shutdown", \asyncModeMultipleWebSocketShutdownTest());
         addTestCase("async mode mixed streaming shutdown", \asyncModeMixedStreamingShutdownTest());
+        addTestCase("async mode accept replenishment", \asyncModeAcceptReplenishmentTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -622,6 +624,106 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertThrows("HTTP-CLIENT-RECEIVE-ERROR", \mClient.send(), ("", "TEST"));
         mServer.addHttpMethod("TEST");
         assertEq("TEST, , /", mClient.send("", "TEST").body);
+    }
+
+    http2PrefaceRejectionTest() {
+        # Test 1: HTTP/2 cleartext connection preface should be rejected with 501
+        # RFC 7540 Section 3.5: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+        {
+            Socket sock();
+            sock.connect("localhost:" + port);
+            on_exit sock.close();
+
+            # Send HTTP/2 connection preface
+            sock.send("PRI * HTTP/2.0\r\nHost: localhost\r\n\r\n");
+
+            # Read the HTTP response
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(501, resp.status_code, "HTTP/2 cleartext preface should return 501");
+            assertTrue(resp.body =~ /cleartext.*not supported/i || resp.body =~ /h2c.*not supported/i,
+                "error message should mention cleartext/h2c not supported");
+
+            # Verify connection is closed
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "connection should be closed after PRI rejection");
+        }
+
+        # Test 2: PRI method with non-HTTP/2 path should also be rejected
+        {
+            Socket sock();
+            sock.connect("localhost:" + port);
+            on_exit sock.close();
+
+            # Send PRI with a different path
+            sock.send("PRI /some/path HTTP/1.1\r\nHost: localhost\r\n\r\n");
+
+            # Read the HTTP response
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(501, resp.status_code, "PRI method with non-HTTP/2 path should return 501");
+            assertTrue(resp.body =~ /unknown.*unsupported.*method/i,
+                "error message should mention unknown/unsupported method");
+
+            # Verify connection is closed
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "connection should be closed after PRI rejection");
+        }
+
+        # Test 3: Also test with async mode server
+        {
+            Socket sock();
+            sock.connect("localhost:" + asyncPort);
+            on_exit sock.close();
+
+            # Send HTTP/2 connection preface to async server
+            sock.send("PRI * HTTP/2.0\r\nHost: localhost\r\n\r\n");
+
+            # Read the HTTP response
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(501, resp.status_code, "HTTP/2 cleartext preface should return 501 (async mode)");
+            assertTrue(resp.body =~ /cleartext.*h2c.*not supported/i,
+                "error message should mention h2c not supported (async mode)");
+
+            # Verify connection is closed
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "connection should be closed after PRI rejection (async mode)");
+        }
+
+        # Test 4: Verify normal requests still work after rejecting PRI
+        assertEq("GET, normalrequest, /normalrequest", mClient.get("/normalrequest"),
+            "normal requests should still work after PRI rejection");
     }
 
     secondWildcardListener() {
@@ -2442,6 +2544,76 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         }();
         assertTrue(stopped.get(10s) != NOTHING,
             "server.stop() should complete with mixed streaming and HTTP connections");
+    }
+
+    #! Test that accept operations are properly replenished after cancellation
+    /** This test verifies the fix for accept starvation where canceled accept
+        operations would drain the accept pool without replenishment, causing
+        the server to stop accepting new connections.
+    */
+    asyncModeAcceptReplenishmentTest() {
+        Logger logger("async-accept-replenish-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        # Set up a simple handler
+        server.setDefaultHandler("test-handler", new ReqHandler());
+
+        # Add and remove listeners repeatedly to trigger accept operation cancellations
+        # This exercises the accept replenishment path
+        list<hash<auto>> listener_info = ();
+        for (int i = 0; i < 5; ++i) {
+            hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+            listener_info += info;
+            # Make a request to ensure the listener is working
+            HTTPClient client({"url": "http://localhost:" + info.port, "timeout": 2s});
+            client.connect();
+            assertEq("GET, test, /test", client.get("/test"));
+            client.disconnect();
+        }
+
+        # Stop all listeners (this cancels accept operations)
+        foreach hash<auto> info in (listener_info) {
+            server.stopListenerID(info.id);
+        }
+
+        # Add a new listener - this should work if accept replenishment is correct
+        int final_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready after listener churn");
+
+        # Make multiple concurrent requests to verify accept operations are working
+        Counter done(10);
+        bool all_success = True;
+        for (int i = 0; i < 10; ++i) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    HTTPClient client({"url": "http://localhost:" + final_port, "timeout": 5s});
+                    client.connect();
+                    string result = client.get("/test");
+                    if (result != "GET, test, /test") {
+                        all_success = False;
+                    }
+                    client.disconnect();
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose > 1) {
+                        printf("Request failed: %s: %s\n", ex.err, ex.desc);
+                    }
+                    all_success = False;
+                }
+            }();
+        }
+        done.waitForZero(10s);
+        assertEq(0, done.getCount(), "all concurrent requests should complete");
+        assertTrue(all_success, "all requests should succeed after listener add/remove cycles");
     }
 }
 
